@@ -5,6 +5,8 @@ import { auth } from "../firebaseConfig";
 import type { StorefrontSocialLinks, StorefrontLandingContent, StorefrontLegal, TextStyle, TreatProduct } from "../types";
 import { getAvatarCropStyle } from "../src/lib/avatarCrop";
 import { resolveStoreCopy } from "../src/lib/storefrontStoreCopy";
+import { resolvePricingLandingCopy } from "../src/lib/pricingLandingCopy";
+import { resolveTipSectionCopy } from "../src/lib/tipSectionCopy";
 
 // Sun/Moon icons for theme toggle
 const SunIcon = () => (
@@ -31,11 +33,16 @@ const FONT_SIZE_MAP: Record<NonNullable<TextStyle['fontSize']>, string> = {
 };
 
 // Helper to generate inline styles from TextStyle
-function getTextStyleCSS(style?: TextStyle, defaults?: { fontSize?: string; color?: string; fontFamily?: string }): React.CSSProperties {
+function getTextStyleCSS(
+  style?: TextStyle,
+  defaults?: { fontSize?: string; color?: string; fontFamily?: string; fontStyle?: 'normal' | 'italic' }
+): React.CSSProperties {
+  const fontStyle = style?.fontStyle ?? defaults?.fontStyle;
   return {
     fontSize: style?.fontSize ? FONT_SIZE_MAP[style.fontSize] : defaults?.fontSize,
     color: style?.color || defaults?.color,
     fontFamily: style?.fontFamily || defaults?.fontFamily,
+    ...(fontStyle ? { fontStyle } : {}),
   };
 }
 
@@ -223,7 +230,7 @@ interface FanLandingPageProps {
     legal?: StorefrontLegal;
     theme: { primary: string; background: string; text?: string; fontFamily?: string };
     heroLayout?: "default" | "centered" | "split" | "splitRight";
-    monetization?: { monthlyPrice?: number; tipsEnabled?: boolean };
+    monetization?: { monthlyPrice?: number; tipsEnabled?: boolean; freeAccessEnabled?: boolean };
     spicyMode?: boolean;
     rules?: { boundariesText?: string };
     textStyles?: {
@@ -244,7 +251,8 @@ interface FanLandingPageProps {
   };
   onSubscribe: () => void;
   onJoinFree?: () => void;
-  onLogin: () => void;
+  /** Branded fan auth on the storefront (preferred). Falls back to main-site login if omitted. */
+  onOpenFanAuth?: (view: "login" | "signup") => void;
   subscribing: boolean;
   joiningFree?: boolean;
   isLoggedIn: boolean;
@@ -263,7 +271,7 @@ export const FanLandingPage: React.FC<FanLandingPageProps> = ({
   creator,
   onSubscribe,
   onJoinFree,
-  onLogin,
+  onOpenFanAuth,
   subscribing,
   joiningFree = false,
   isLoggedIn,
@@ -311,10 +319,13 @@ export const FanLandingPage: React.FC<FanLandingPageProps> = ({
   const ts = textStyles ?? {};
   
   const landingContent = { ...DEFAULT_LANDING_CONTENT, ...creatorLandingContent };
+  const storeCopy = resolveStoreCopy(landingContent);
   const visibleSocialLinks = getVisibleSocialLinks(socialLinks);
   const monthlyPrice = ((monetization?.monthlyPrice ?? 999) / 100).toFixed(2);
   const boundariesText = rules?.boundariesText || landingContent.boundaryText || "";
   const isFreeAccess = monetization?.freeAccessEnabled === true;
+  const pricingLanding = resolvePricingLandingCopy(landingContent, { isFreeAccess, monthlyPrice });
+  const tipSectionLanding = resolveTipSectionCopy(landingContent, "landing");
 
   const [tipLoading, setTipLoading] = useState(false);
   const [tipError, setTipError] = useState("");
@@ -327,6 +338,15 @@ export const FanLandingPage: React.FC<FanLandingPageProps> = ({
     sectionsTreatsEnabled &&
     !!onGuestPurchaseTreat &&
     (landingTreatsLoading || landingTreatProducts.length > 0);
+
+  const openFanAuthLogin = () => {
+    if (onOpenFanAuth) onOpenFanAuth("login");
+    else window.location.href = "/?login=1";
+  };
+  const openFanAuthSignup = () => {
+    if (onOpenFanAuth) onOpenFanAuth("signup");
+    else window.location.href = "/?signup=1";
+  };
 
   useEffect(() => {
     if (!treatStoreOpen) return;
@@ -439,6 +459,8 @@ export const FanLandingPage: React.FC<FanLandingPageProps> = ({
 
   const heroLayout = creator.heroLayout ?? "default";
   const globalFont = theme?.fontFamily || "Inter, sans-serif";
+  /** Theme font + upright by default (preview used to force italic on promise only). */
+  const heroFont = { fontFamily: globalFont, fontStyle: 'normal' as const };
 
   return (
     <div 
@@ -484,10 +506,10 @@ export const FanLandingPage: React.FC<FanLandingPageProps> = ({
           </button>
           {!isLoggedIn && (
             <>
-              <button type="button" className="fan-landing-nav-link" onClick={onLogin} style={{ color: primary }}>
+              <button type="button" className="fan-landing-nav-link" onClick={openFanAuthSignup} style={{ color: primary }}>
                 Sign up
               </button>
-              <button type="button" className="fan-landing-nav-btn" onClick={onLogin} style={{ color: primary }}>
+              <button type="button" className="fan-landing-nav-btn" onClick={openFanAuthLogin} style={{ color: primary }}>
                 Log in
               </button>
             </>
@@ -587,12 +609,12 @@ export const FanLandingPage: React.FC<FanLandingPageProps> = ({
           {!fullBgItem && (
             <div className="fan-landing-hero-text">
               {showDisplayNameOnLanding !== false && (
-                <h1 className="fan-landing-hero-name" style={getTextStyleCSS(ts.displayName, { color: primary })}>{displayName || "Not For Everyone"}</h1>
+                <h1 className="fan-landing-hero-name" style={getTextStyleCSS(ts.displayName, { color: primary, ...heroFont })}>{displayName || "Not For Everyone"}</h1>
               )}
-              {heroTagline && <p className="fan-landing-hero-tagline" style={getTextStyleCSS(ts.heroTagline, { color: `${textColor}99` })}>{heroTagline}</p>}
-              <p className="fan-landing-hero-promise" style={getTextStyleCSS(ts.heroPromise, { color: primary })}>{heroPromise || "Your access to the real me"}</p>
-              {heroSubline && <p className="fan-landing-hero-subline" style={getTextStyleCSS(ts.heroSubline, { color: `${textColor}cc` })}>{heroSubline}</p>}
-              {heroSubline2 && <p className="fan-landing-hero-subline fan-landing-hero-subline--2" style={getTextStyleCSS(ts.heroSubline2, { color: `${textColor}99` })}>{heroSubline2}</p>}
+              {heroTagline && <p className="fan-landing-hero-tagline" style={getTextStyleCSS(ts.heroTagline, { color: `${textColor}99`, ...heroFont })}>{heroTagline}</p>}
+              <p className="fan-landing-hero-promise" style={getTextStyleCSS(ts.heroPromise, { color: primary, ...heroFont })}>{heroPromise || "Your access to the real me"}</p>
+              {heroSubline && <p className="fan-landing-hero-subline" style={getTextStyleCSS(ts.heroSubline, { color: `${textColor}cc`, ...heroFont })}>{heroSubline}</p>}
+              {heroSubline2 && <p className="fan-landing-hero-subline fan-landing-hero-subline--2" style={getTextStyleCSS(ts.heroSubline2, { color: `${textColor}99`, ...heroFont })}>{heroSubline2}</p>}
               {visibleSocialLinks.length > 0 && (
                 <div className="fan-landing-social-links">
                   {visibleSocialLinks.map((link) => (
@@ -611,12 +633,12 @@ export const FanLandingPage: React.FC<FanLandingPageProps> = ({
             <div className="fan-landing-hero-meta-spacer" aria-hidden />
             <div className="fan-landing-hero-text">
               {showDisplayNameOnLanding !== false && (
-                <h1 className="fan-landing-hero-name" style={getTextStyleCSS(ts.displayName, { color: primary })}>{displayName || "Not For Everyone"}</h1>
+                <h1 className="fan-landing-hero-name" style={getTextStyleCSS(ts.displayName, { color: primary, ...heroFont })}>{displayName || "Not For Everyone"}</h1>
               )}
-              {heroTagline && <p className="fan-landing-hero-tagline" style={getTextStyleCSS(ts.heroTagline, { color: `${textColor}99` })}>{heroTagline}</p>}
-              <p className="fan-landing-hero-promise" style={getTextStyleCSS(ts.heroPromise, { color: primary })}>{heroPromise || "Your access to the real me"}</p>
-              {heroSubline && <p className="fan-landing-hero-subline" style={getTextStyleCSS(ts.heroSubline, { color: `${textColor}cc` })}>{heroSubline}</p>}
-              {heroSubline2 && <p className="fan-landing-hero-subline fan-landing-hero-subline--2" style={getTextStyleCSS(ts.heroSubline2, { color: `${textColor}99` })}>{heroSubline2}</p>}
+              {heroTagline && <p className="fan-landing-hero-tagline" style={getTextStyleCSS(ts.heroTagline, { color: `${textColor}99`, ...heroFont })}>{heroTagline}</p>}
+              <p className="fan-landing-hero-promise" style={getTextStyleCSS(ts.heroPromise, { color: primary, ...heroFont })}>{heroPromise || "Your access to the real me"}</p>
+              {heroSubline && <p className="fan-landing-hero-subline" style={getTextStyleCSS(ts.heroSubline, { color: `${textColor}cc`, ...heroFont })}>{heroSubline}</p>}
+              {heroSubline2 && <p className="fan-landing-hero-subline fan-landing-hero-subline--2" style={getTextStyleCSS(ts.heroSubline2, { color: `${textColor}99`, ...heroFont })}>{heroSubline2}</p>}
               {visibleSocialLinks.length > 0 && (
                 <div className="fan-landing-social-links">
                   {visibleSocialLinks.map((link) => (
@@ -717,36 +739,41 @@ export const FanLandingPage: React.FC<FanLandingPageProps> = ({
                 : `linear-gradient(135deg, ${primary}15 0%, ${primary}05 100%)`, 
               border: `1px solid ${primary}30` 
             }}>
-              <h3 style={{ color: effectiveText }}>{isFreeAccess ? "Free membership" : "Monthly membership"}</h3>
+              <h3 style={{ color: effectiveText }}>{pricingLanding.cardTitle}</h3>
               <p className="fan-landing-price">
                 <span className="fan-landing-amount" style={{ color: primary }}>
-                  {isFreeAccess ? "Free" : `$${monthlyPrice}`}
+                  {pricingLanding.amountDisplay}
                 </span>
               </p>
               <ul style={{ color: isDarkMode ? 'rgba(255,255,255,0.6)' : `${textColor}99` }}>
-                <li>✓ Exclusive content</li>
-                {isFreeAccess ? (
-                  <li>✓ Join instantly</li>
-                ) : (
-                  <li>✓ Cancel anytime</li>
-                )}
+                {pricingLanding.bullets.map((line, i) => (
+                  <li key={i}>✓ {line}</li>
+                ))}
               </ul>
               <button
                 type="button"
                 className="fan-landing-subscribe-btn"
-                onClick={isLoggedIn ? (isFreeAccess ? onJoinFree : onSubscribe) : onLogin}
+                onClick={
+                  isLoggedIn
+                    ? isFreeAccess
+                      ? onJoinFree
+                      : onSubscribe
+                    : isFreeAccess
+                      ? openFanAuthSignup
+                      : openFanAuthLogin
+                }
                 disabled={subscribing || joiningFree}
                 style={{ background: `linear-gradient(135deg, ${primary} 0%, ${primary}dd 100%)` }}
               >
                 {subscribing || joiningFree 
                   ? "Loading..." 
                   : isLoggedIn 
-                    ? (isFreeAccess ? "Join Free" : `Join - $${monthlyPrice}/mo`)
-                    : (isFreeAccess ? "Sign up to Join Free" : "Sign up to Subscribe")
+                    ? pricingLanding.ctaLoggedIn
+                    : pricingLanding.ctaGuest
                 }
               </button>
               <p className="fan-landing-trust-line" style={{ color: isDarkMode ? 'rgba(255,255,255,0.4)' : `${textColor}66` }}>
-                {isFreeAccess ? "🎉 No payment required" : "🔒 Secure payment · Cancel anytime"}
+                {pricingLanding.trustLine}
               </p>
             </article>
           </div>
@@ -761,7 +788,25 @@ export const FanLandingPage: React.FC<FanLandingPageProps> = ({
               }}
               role="status"
             >
-              {treatLinkAccountMessage}
+              <p className="m-0 mb-2 leading-relaxed">{treatLinkAccountMessage}</p>
+              {!isLoggedIn && (
+                <div className="mt-3 space-y-2">
+                  <button
+                    type="button"
+                    className="fan-landing-subscribe-btn w-full sm:w-auto px-5 py-2.5 text-sm font-semibold"
+                    style={{ background: `linear-gradient(135deg, ${primary} 0%, ${primary}dd 100%)` }}
+                    onClick={openFanAuthLogin}
+                  >
+                    Sign in or create account
+                  </button>
+                  <p
+                    className="text-xs m-0 leading-snug"
+                    style={{ color: isDarkMode ? "rgba(255,255,255,0.55)" : `${textColor}88` }}
+                  >
+                    Use the <strong>same email</strong> you entered at checkout. If you signed up with a different email, sign out and sign in with the checkout email.
+                  </p>
+                </div>
+              )}
             </div>
           )}
 
@@ -917,8 +962,8 @@ export const FanLandingPage: React.FC<FanLandingPageProps> = ({
           {/* Tip Section */}
           {(monetization?.tipsEnabled !== false) && (
             <div className="fan-landing-tip-section" style={{ borderTopColor: `${primary}20` }}>
-              <p className="fan-landing-tip-heading" style={{ color: effectiveText }}>Want to show love?</p>
-              <p className="fan-landing-tip-sub" style={{ color: isDarkMode ? 'rgba(255,255,255,0.6)' : `${textColor}99` }}>One-time tip — no subscription</p>
+              <p className="fan-landing-tip-heading" style={{ color: effectiveText }}>{tipSectionLanding.heading}</p>
+              <p className="fan-landing-tip-sub" style={{ color: isDarkMode ? 'rgba(255,255,255,0.6)' : `${textColor}99` }}>{tipSectionLanding.subline}</p>
               <div className="fan-landing-tip-meta">
                 <input
                   type="text"
@@ -1001,8 +1046,8 @@ export const FanLandingPage: React.FC<FanLandingPageProps> = ({
           border: `1px solid ${primary}30` 
         }}>
           <p className="fan-landing-preview-sub" style={{ color: effectiveText }}>Join {displayName || "My Page"}</p>
-          <p className="fan-landing-hero-promise" style={{ color: primary }}>${monthlyPrice}/month</p>
-          <p className="fan-landing-preview-sub" style={{ color: isDarkMode ? 'rgba(255,255,255,0.6)' : `${textColor}99` }}>Exclusive access.</p>
+          <p className="fan-landing-hero-promise" style={{ color: primary }}>{pricingLanding.finalBannerPriceLine}</p>
+          <p className="fan-landing-preview-sub" style={{ color: isDarkMode ? 'rgba(255,255,255,0.6)' : `${textColor}99` }}>{pricingLanding.finalBannerSubline}</p>
           <a href="#pricing" className="fan-landing-cta-btn" style={{ background: `linear-gradient(135deg, ${primary} 0%, ${primary}dd 100%)` }}>
             Join Now
           </a>

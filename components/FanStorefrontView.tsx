@@ -1,7 +1,18 @@
 import React, { useState, useEffect, useCallback, useRef, Fragment } from "react";
 import { auth } from "../firebaseConfig";
-import type { TreatProduct, FanDmThread, FanDmMessage, StorefrontSocialLinks, StorefrontLandingContent, StorefrontLegal, CreatorMonetization, TextStyle } from "../types";
+import type {
+  TreatProduct,
+  FanDmThread,
+  FanDmMessage,
+  StorefrontSocialLinks,
+  StorefrontLandingContent,
+  StorefrontLegal,
+  CreatorMonetization,
+  TextStyle,
+  FanAuthBranding,
+} from "../types";
 import { FanLandingPage } from "./FanLandingPage";
+import { FanAuthModal } from "./FanAuthModal";
 import { FanMemberFeed, FanMemberSaved } from "./FanMemberFeed";
 import { MemberUsernameGateModal } from "./MemberUsernameGateModal";
 import { DEFAULT_PRIVACY_POLICY, DEFAULT_TERMS_OF_SERVICE } from "../constants";
@@ -34,6 +45,10 @@ import { inferIsAudioFromUrl } from "../src/lib/mediaUrlInfer";
 import { FanHubNotificationBell } from "./FanHubNotificationBell";
 import { getAvatarCropStyle } from "../src/lib/avatarCrop";
 import { resolveStoreCopy } from "../src/lib/storefrontStoreCopy";
+import { resolveTipSectionCopy } from "../src/lib/tipSectionCopy";
+import { useAppContext } from "./AppContext";
+import { isConfiguredCustomStorefrontHost } from "../src/lib/storefrontCustomDomain";
+import { usePathname } from "../src/hooks/usePathname";
 
 export type StorefrontCreator = {
   creatorId: string;
@@ -49,7 +64,16 @@ export type StorefrontCreator = {
   socialLinks?: StorefrontSocialLinks;
   landingContent?: StorefrontLandingContent;
   legal?: StorefrontLegal;
-  theme: { primary: string; background: string; text?: string; buttonStyle?: string; fontFamily?: string; accentHover?: string };
+  theme: {
+    primary: string;
+    background: string;
+    text?: string;
+    buttonStyle?: string;
+    fontFamily?: string;
+    accentHover?: string;
+    /** Optional; used for themed borders on member UI */
+    border?: string;
+  };
   heroLayout?: "default" | "centered" | "split" | "splitRight";
   sections: { feed: boolean; treats: boolean; tip?: boolean; messages: boolean; about?: boolean };
   sectionsOrder?: string[];
@@ -80,30 +104,55 @@ export type StorefrontCreator = {
     boundaryTitle?: TextStyle;
     boundaryText?: TextStyle;
   };
+  fanAuthBranding?: FanAuthBranding;
 };
 
-/** Called when App has already determined path is a storefront (/{handle} or /u/{handle} or /link/{handle}). */
+/**
+ * Path → handle + legal subpage.
+ * - Default domain: /{handle}, /{handle}/terms|privacy, legacy /u/ /link/
+ * - Custom domain (VITE_CUSTOM_STOREFRONT_HOSTS): / → handle from API; /terms|/privacy; /{handle}
+ */
 function parseHandleFromPath(): { handle: string | null; subpage: "terms" | "privacy" | null } {
   if (typeof window === "undefined") return { handle: null, subpage: null };
   const path = window.location.pathname.replace(/\/+$/, "") || "/";
   const parts = path.slice(1).split("/").filter(Boolean);
+
+  if (isConfiguredCustomStorefrontHost(window.location.hostname)) {
+    if (parts.length === 0) {
+      return { handle: null, subpage: null };
+    }
+    if (parts.length === 1 && (parts[0] === "terms" || parts[0] === "privacy")) {
+      return { handle: null, subpage: parts[0] as "terms" | "privacy" };
+    }
+    if (parts.length === 1 && /^[a-z0-9_]+$/i.test(parts[0])) {
+      try {
+        return {
+          handle: decodeURIComponent(parts[0]).replace("@", "").toLowerCase().trim(),
+          subpage: null,
+        };
+      } catch {
+        return { handle: parts[0].replace("@", "").toLowerCase().trim(), subpage: null };
+      }
+    }
+    return { handle: null, subpage: null };
+  }
+
   const legacyMatch = path.match(/^\/(?:u|link)\/([^/]+)/);
   const handleSegment = legacyMatch ? legacyMatch[1] : parts[0];
   if (!handleSegment) return { handle: null, subpage: null };
-  
-  // Check for /handle/terms or /handle/privacy subpages
+
   const subpageSegment = parts[1]?.toLowerCase();
-  const subpage = (subpageSegment === "terms" || subpageSegment === "privacy") ? subpageSegment : null;
-  
+  const subpage = subpageSegment === "terms" || subpageSegment === "privacy" ? subpageSegment : null;
+
   try {
-    return { 
+    return {
       handle: decodeURIComponent(handleSegment).replace("@", "").toLowerCase().trim(),
-      subpage 
+      subpage,
     };
   } catch {
-    return { 
+    return {
       handle: handleSegment.replace("@", "").toLowerCase().trim(),
-      subpage 
+      subpage,
     };
   }
 }
@@ -131,6 +180,9 @@ interface TipSectionProps {
   creatorId: string;
   displayName: string;
   primary: string;
+  /** From My Page landing content — same heading as public landing; member-only subline (no “no subscription” default). */
+  tipHeading: string;
+  tipSubline: string;
   tipSelectedPreset: number | null;
   setTipSelectedPreset: (v: number | null) => void;
   tipCustomAmount: string;
@@ -143,6 +195,8 @@ function TipSection({
   creatorId,
   displayName,
   primary,
+  tipHeading,
+  tipSubline,
   tipSelectedPreset,
   setTipSelectedPreset,
   tipCustomAmount,
@@ -202,8 +256,8 @@ function TipSection({
     <div className="tip-section-wrap">
       {/* Hero */}
       <div className="tip-hero-section">
-        <h2 className="tip-hero-title">Show Your Love</h2>
-        <p className="tip-hero-subtitle">No minimum — send what you like.</p>
+        <h2 className="tip-hero-title">{tipHeading}</h2>
+        <p className="tip-hero-subtitle">{tipSubline}</p>
       </div>
 
       {/* Amount Selection */}
@@ -268,8 +322,16 @@ function TipSection({
 }
 
 export const FanStorefrontView: React.FC = () => {
+  const { showToast } = useAppContext();
+  const pathname = usePathname();
   const [handle, setHandle] = useState<string | null>(() => parseHandleFromPath().handle);
   const [legalSubpage, setLegalSubpage] = useState<"terms" | "privacy" | null>(() => parseHandleFromPath().subpage);
+  /** False on custom domain until /api/resolveStorefrontDomain returns */
+  const [handleResolveComplete, setHandleResolveComplete] = useState(() => {
+    if (typeof window === "undefined") return true;
+    const p = parseHandleFromPath();
+    return !!p.handle || !isConfiguredCustomStorefrontHost(window.location.hostname);
+  });
   const [creator, setCreator] = useState<StorefrontCreator | null>(null);
   const [subscribed, setSubscribed] = useState<boolean>(false);
   const [memberUsernameRequired, setMemberUsernameRequired] = useState(false);
@@ -293,9 +355,12 @@ export const FanStorefrontView: React.FC = () => {
   const [landingTreatsLoading, setLandingTreatsLoading] = useState(false);
   const [guestTreatPurchasingId, setGuestTreatPurchasingId] = useState<string | null>(null);
   const [treatLinkMessage, setTreatLinkMessage] = useState<string | null>(null);
+  const pendingGuestLinkBannerShown = useRef(false);
   const [purchasingId, setPurchasingId] = useState<string | null>(null);
   const [subscribing, setSubscribing] = useState(false);
   const [joiningFree, setJoiningFree] = useState(false);
+  const [fanAuthOpen, setFanAuthOpen] = useState(false);
+  const [fanAuthView, setFanAuthView] = useState<"login" | "signup">("login");
   const [dmThread, setDmThread] = useState<FanDmThread | null>(null);
   const [dmMessages, setDmMessages] = useState<FanDmMessage[]>([]);
   const [dmLabels, setDmLabels] = useState<{ fan: string; creator: string } | null>(null);
@@ -325,13 +390,70 @@ export const FanStorefrontView: React.FC = () => {
     void clearNewMessageNotificationBadge(uid, creator.creatorId);
   }, [activeTab, creator?.creatorId]);
 
+  /** Chat off → Messages tab hidden; leave tab if user was on Messages */
   useEffect(() => {
-    const { handle: h, subpage } = parseHandleFromPath();
-    setHandle(h);
-    setLegalSubpage(subpage);
-  }, []);
+    if (!creator?.creatorId) return;
+    const chatOn = creator.monetization?.chatEnabled !== false;
+    if (chatOn || activeTab !== "messages") return;
+    const order = creator.sectionsOrder || ["feed", "treats", "tip", "messages", "about"];
+    const sec = creator.sections ?? {};
+    const next =
+      order.find(
+        (key) =>
+          key !== "saved" &&
+          key !== "messages" &&
+          (sec as Record<string, boolean>)[key] !== false
+      ) ?? "feed";
+    setActiveTab(next as "feed" | "treats" | "messages" | "tip" | "saved" | "about");
+  }, [
+    creator?.creatorId,
+    creator?.monetization?.chatEnabled,
+    creator?.sectionsOrder,
+    creator?.sections,
+    activeTab,
+  ]);
 
   useEffect(() => {
+    const parsed = parseHandleFromPath();
+    setLegalSubpage(parsed.subpage);
+    if (parsed.handle) {
+      setHandle(parsed.handle);
+      setHandleResolveComplete(true);
+      return;
+    }
+    if (!isConfiguredCustomStorefrontHost(window.location.hostname)) {
+      setHandle(null);
+      setHandleResolveComplete(true);
+      return;
+    }
+    setHandleResolveComplete(false);
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(
+          `/api/resolveStorefrontDomain?host=${encodeURIComponent(window.location.hostname)}`
+        );
+        const data = await res.json().catch(() => ({}));
+        if (cancelled) return;
+        if (res.ok && typeof (data as { handle?: string }).handle === "string") {
+          const h = (data as { handle: string }).handle.trim().toLowerCase();
+          setHandle(h || null);
+        } else {
+          setHandle(null);
+        }
+      } catch {
+        if (!cancelled) setHandle(null);
+      } finally {
+        if (!cancelled) setHandleResolveComplete(true);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [pathname]);
+
+  useEffect(() => {
+    if (!handleResolveComplete) return;
     if (!handle) {
       setError("Invalid handle");
       setLoading(false);
@@ -339,6 +461,7 @@ export const FanStorefrontView: React.FC = () => {
     }
 
     let cancelled = false;
+    setLoading(true);
 
     (async () => {
       try {
@@ -367,7 +490,7 @@ export const FanStorefrontView: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, [handle]);
+  }, [handle, handleResolveComplete]);
 
   useEffect(() => {
     const unsub = auth.onAuthStateChanged((u) => setIsLoggedIn(!!u));
@@ -472,6 +595,17 @@ export const FanStorefrontView: React.FC = () => {
     onPublicLanding,
   ]);
 
+  /** Guest checkout returned from Stripe but fan is not signed in yet — prompt before claim can run. */
+  useEffect(() => {
+    if (typeof window === "undefined" || isLoggedIn || pendingGuestLinkBannerShown.current) return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("treat_success") !== "1" || !params.get("session_id")) return;
+    pendingGuestLinkBannerShown.current = true;
+    setTreatLinkMessage(
+      "Payment successful. Sign in or create an account using the same email you used at checkout — we'll link your purchase to this account automatically."
+    );
+  }, [isLoggedIn]);
+
   useEffect(() => {
     if (typeof window === "undefined" || !creator?.creatorId || !isLoggedIn || !auth.currentUser) return;
     const params = new URLSearchParams(window.location.search);
@@ -494,8 +628,8 @@ export const FanStorefrontView: React.FC = () => {
           const merged = (data as { merged?: boolean }).merged;
           setTreatLinkMessage(
             merged
-              ? "Your purchase is linked to your account. You can subscribe anytime for full member access."
-              : "You're all set — this purchase was already on your account."
+              ? "Your purchase is linked to your account. You'll see it in your member area; you can still subscribe anytime for full access."
+              : "You're all set — this purchase was already linked to your account."
           );
           const gen = ++entitlementFetchGen.current;
           try {
@@ -553,8 +687,9 @@ export const FanStorefrontView: React.FC = () => {
       if (!res.ok) throw new Error((data as { error?: string }).error || "Checkout failed");
       const url = (data as { url?: string }).url;
       if (url) window.location.href = url;
-    } catch {
-      alert("Checkout could not start. Please try again.");
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Checkout could not start. Please try again.";
+      showToast?.(msg, "error");
     } finally {
       setGuestTreatPurchasingId(null);
     }
@@ -562,7 +697,8 @@ export const FanStorefrontView: React.FC = () => {
 
   const handleSubscribe = async () => {
     if (!creator?.creatorId || !auth.currentUser) {
-      window.location.href = "/?login=1";
+      setFanAuthView("login");
+      setFanAuthOpen(true);
       return;
     }
     setSubscribing(true);
@@ -591,7 +727,8 @@ export const FanStorefrontView: React.FC = () => {
 
   const handleJoinFree = async () => {
     if (!creator?.creatorId || !auth.currentUser) {
-      window.location.href = "/?login=1";
+      setFanAuthView("signup");
+      setFanAuthOpen(true);
       return;
     }
     setJoiningFree(true);
@@ -788,6 +925,11 @@ export const FanStorefrontView: React.FC = () => {
     const file = e.target.files?.[0];
     e.target.value = "";
     if (!file || !auth.currentUser) return;
+    const videoOn = creator?.monetization?.videoEnabled !== false;
+    if (!videoOn && file.type.startsWith("video/")) {
+      showToast?.("This creator doesn’t accept video attachments in DMs.", "info");
+      return;
+    }
     const caption = dmInput.trim();
     try {
       const { url, attachmentType } = await uploadFanDmAttachment(auth.currentUser.uid, file);
@@ -888,10 +1030,13 @@ export const FanStorefrontView: React.FC = () => {
     );
   }
 
-  const { theme, displayName, avatar, logo, bio, sections, sectionsOrder, rules, landingContent } = creator;
+  const { theme, displayName, avatar, logo, bio, sections, sectionsOrder, rules, landingContent, monetization } = creator;
+  const chatEnabled = monetization?.chatEnabled !== false;
+  const videoEnabled = monetization?.videoEnabled !== false;
   const storeCopy = resolveStoreCopy(landingContent);
   const guidelinesSectionTitle =
     (landingContent?.boundaryTitle && landingContent.boundaryTitle.trim()) || "Community Guidelines";
+  const tipMemberCopy = resolveTipSectionCopy(landingContent, "member");
   const avatarCropStyle: React.CSSProperties = getAvatarCropStyle(creator.avatarObjectPosition);
   const creatorDmPrimary = formatCreatorDmBubblePrimaryLine(displayName, creator.handle);
   const creatorDmSecondary = formatCreatorDmBubbleSecondaryLine(displayName, creator.handle);
@@ -900,9 +1045,10 @@ export const FanStorefrontView: React.FC = () => {
   const bg = theme?.background || defaultBg;
   const primary = theme?.primary || defaultPrimary;
 
-  // Nav tabs: order from sectionsOrder, filtered by sections; always include Saved at the end
+  // Nav tabs: order from sectionsOrder, filtered by sections; hide Messages when chat disabled; always include Saved at the end
   const memberTabKeys = (sectionsOrder || ["feed", "treats", "tip", "messages", "about"])
     .filter((key) => key !== "saved" && (sections as Record<string, boolean>)?.[key] !== false)
+    .filter((key) => key !== "messages" || chatEnabled)
     .concat("saved");
   const navLabels: Record<string, string> = {
     feed: "Home",
@@ -1016,24 +1162,56 @@ export const FanStorefrontView: React.FC = () => {
 
   const showLanding = previewMember ? false : (!isLoggedIn || !subscribed);
 
+  const storefrontTermsPath =
+    typeof window !== "undefined" && isConfiguredCustomStorefrontHost(window.location.hostname)
+      ? "/terms"
+      : `/${creator.handle}/terms`;
+  const storefrontPrivacyPath =
+    typeof window !== "undefined" && isConfiguredCustomStorefrontHost(window.location.hostname)
+      ? "/privacy"
+      : `/${creator.handle}/privacy`;
+
   if (showLanding) {
     return (
-      <FanLandingPage
-        creator={creator}
-        onSubscribe={handleSubscribe}
-        onJoinFree={handleJoinFree}
-        onLogin={() => { window.location.href = "/?login=1"; }}
-        subscribing={subscribing}
-        joiningFree={joiningFree}
-        isLoggedIn={isLoggedIn}
-        publicTreatsOnLanding={creator.publicTreatsOnLanding === true}
-        sectionsTreatsEnabled={creator.sections?.treats !== false}
-        landingTreatProducts={landingTreatsProducts}
-        landingTreatsLoading={landingTreatsLoading}
-        onGuestPurchaseTreat={handleGuestTreatPurchase}
-        guestTreatPurchasingId={guestTreatPurchasingId}
-        treatLinkAccountMessage={treatLinkMessage}
-      />
+      <>
+        <FanLandingPage
+          creator={creator}
+          onSubscribe={handleSubscribe}
+          onJoinFree={handleJoinFree}
+          onOpenFanAuth={(view) => {
+            setFanAuthView(view);
+            setFanAuthOpen(true);
+          }}
+          subscribing={subscribing}
+          joiningFree={joiningFree}
+          isLoggedIn={isLoggedIn}
+          publicTreatsOnLanding={creator.publicTreatsOnLanding === true}
+          sectionsTreatsEnabled={creator.sections?.treats !== false}
+          landingTreatProducts={landingTreatsProducts}
+          landingTreatsLoading={landingTreatsLoading}
+          onGuestPurchaseTreat={handleGuestTreatPurchase}
+          guestTreatPurchasingId={guestTreatPurchasingId}
+          treatLinkAccountMessage={treatLinkMessage}
+        />
+        {fanAuthOpen && (
+          <FanAuthModal
+            isOpen={fanAuthOpen}
+            onClose={() => setFanAuthOpen(false)}
+            initialView={fanAuthView}
+            creatorId={creator.creatorId}
+            displayName={displayName}
+            logo={creator.logo}
+            avatar={creator.avatar}
+            themePrimary={creator.theme?.primary}
+            themeText={creator.theme?.text}
+            fontFamily={creator.theme?.fontFamily}
+            branding={creator.fanAuthBranding ?? null}
+            termsHref={storefrontTermsPath}
+            privacyHref={storefrontPrivacyPath}
+            freeAccessEnabled={creator.monetization?.freeAccessEnabled === true}
+          />
+        )}
+      </>
     );
   }
 
@@ -1050,6 +1228,7 @@ export const FanStorefrontView: React.FC = () => {
         "--fan-accent-hover": theme?.accentHover ?? primary,
         "--fan-bg": bg,
         "--fan-text": theme?.text || "#1f2937",
+        "--fan-border": theme?.border || "rgba(201, 112, 130, 0.2)",
       } as React.CSSProperties}
     >
       {memberUsernameRequired && creator && !previewMember && (
@@ -1357,7 +1536,7 @@ export const FanStorefrontView: React.FC = () => {
                       <input
                         ref={dmFileInputRef}
                         type="file"
-                        accept="image/*,video/*"
+                        accept={videoEnabled ? "image/*,video/*" : "image/*"}
                         className="hidden"
                         onChange={onDmFileSelected}
                       />
@@ -1365,8 +1544,8 @@ export const FanStorefrontView: React.FC = () => {
                         <button
                           type="button"
                           className="fh-dm-compose-icon"
-                          title="Photo or video"
-                          aria-label="Upload photo or video"
+                          title={videoEnabled ? "Photo or video" : "Photo"}
+                          aria-label={videoEnabled ? "Upload photo or video" : "Upload photo"}
                           disabled={dmSending || fanBanned}
                           onClick={() => dmFileInputRef.current?.click()}
                         >
@@ -1417,6 +1596,8 @@ export const FanStorefrontView: React.FC = () => {
                 creatorId={creator.creatorId}
                 displayName={displayName}
                 primary={primary}
+                tipHeading={tipMemberCopy.heading}
+                tipSubline={tipMemberCopy.subline}
                 tipSelectedPreset={tipSelectedPreset}
                 setTipSelectedPreset={setTipSelectedPreset}
                 tipCustomAmount={tipCustomAmount}

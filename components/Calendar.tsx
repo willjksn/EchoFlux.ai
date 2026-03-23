@@ -1686,8 +1686,13 @@ export const Calendar: React.FC = () => {
                          <PlusIcon className="w-5 h-5" />
                          Add Reminder
                     </button>
-                    <button 
+                    <button
+                        type="button"
+                        onClick={() => {
+                            window.location.assign("/fan?tab=purchases");
+                        }}
                         className="px-5 py-2.5 bg-purple-600 dark:bg-purple-500 text-white rounded-lg hover:bg-purple-700 dark:hover:bg-purple-600 text-sm font-semibold flex items-center gap-2 shadow-md transition-all"
+                        title="Open Fan Hub → Purchases to schedule deliveries and sync your calendar"
                     >
                          <PlusIcon className="w-5 h-5" />
                          Schedule store item

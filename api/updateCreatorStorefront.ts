@@ -61,6 +61,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       heroSubline2: body.heroSubline2 !== undefined ? body.heroSubline2 : existingData?.heroSubline2,
 
       textStyles: body.textStyles !== undefined ? body.textStyles : existingData?.textStyles,
+      fanAuthBranding: body.fanAuthBranding !== undefined ? body.fanAuthBranding : existingData?.fanAuthBranding,
 
       // Social Links
       socialLinks: body.socialLinks !== undefined ? body.socialLinks : existingData?.socialLinks,

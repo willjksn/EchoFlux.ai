@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { useAppContext } from "./AppContext";
 import { auth } from "../firebaseConfig";
 
@@ -16,7 +16,7 @@ export const FanHubPayouts: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [connecting, setConnecting] = useState(false);
 
-  const fetchStatus = async () => {
+  const fetchStatus = useCallback(async () => {
     setLoading(true);
     try {
       const token = auth.currentUser ? await auth.currentUser.getIdToken() : null;
@@ -36,11 +36,22 @@ export const FanHubPayouts: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
-    fetchStatus();
-  }, []);
+    void fetchStatus();
+  }, [fetchStatus]);
+
+  /** After Stripe Connect return/refresh URLs, re-fetch and clean query so status updates to green. */
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const p = new URLSearchParams(window.location.search);
+    if (p.get("connect") !== "return" && p.get("connect") !== "refresh") return;
+    void fetchStatus();
+    p.delete("connect");
+    const qs = p.toString();
+    window.history.replaceState({}, "", `${window.location.pathname}${qs ? `?${qs}` : ""}`);
+  }, [fetchStatus]);
 
   const handleConnect = async () => {
     setConnecting(true);
@@ -59,13 +70,12 @@ export const FanHubPayouts: React.FC = () => {
         window.location.href = data.url;
         return;
       }
-      
-      // Check if Stripe Connect is not set up on the platform
+
       if (data.setupRequired) {
         showToast?.("Stripe Connect is not yet enabled for this platform. Please contact support.", "error");
         return;
       }
-      
+
       showToast?.(data.message || "Failed to start Connect onboarding", "error");
     } catch {
       showToast?.("Failed to start Connect", "error");
@@ -86,27 +96,141 @@ export const FanHubPayouts: React.FC = () => {
   const hasAccount = !!status?.stripeConnectAccountId;
   const canCharge = status?.chargesEnabled === true;
   const canPayout = status?.payoutsEnabled === true;
+  const paymentsReady = !isPlatformOwner && canCharge && canPayout;
   const needsOnboarding = hasAccount && !status?.detailsSubmitted;
+  const partialReview =
+    hasAccount && status?.detailsSubmitted && (!canCharge || !canPayout);
+
+  const needsStart = !hasAccount;
+  const connectLabel = connecting
+    ? "Opening Stripe…"
+    : needsStart
+      ? "Connect Stripe"
+      : "Continue Stripe setup";
 
   return (
     <div className="max-w-2xl mx-auto py-8 px-4">
-      <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
-        Payouts
-      </h2>
+      <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">Payouts</h2>
       <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
-        {isPlatformOwner 
+        {isPlatformOwner
           ? "As a platform owner, payments go directly to the main EchoFlux account."
-          : "Connect Stripe to receive payments from subscriptions and one-time purchases."
-        }
+          : "Connect Stripe so subscriptions, tips, and store purchases can reach your bank. Without this, checkout may fail or be blocked for your page."}
       </p>
 
+      {/* —— Creators: green when fully active —— */}
+      {!isPlatformOwner && paymentsReady && (
+        <div
+          className="mb-6 rounded-xl border-2 border-green-400 dark:border-green-600 bg-green-50 dark:bg-green-950/35 px-4 py-5 shadow-sm"
+          role="status"
+          aria-label="Stripe Connect complete"
+        >
+          <div className="flex items-start gap-3">
+            <div
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-green-500 text-white"
+              aria-hidden
+            >
+              <svg className="h-6 w-6" fill="currentColor" viewBox="0 0 20 20">
+                <path
+                  fillRule="evenodd"
+                  d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                  clipRule="evenodd"
+                />
+              </svg>
+            </div>
+            <div className="min-w-0 flex-1">
+              <h3 className="text-base font-semibold text-green-950 dark:text-green-100 m-0 mb-1">
+                You&apos;re ready to get paid
+              </h3>
+              <p className="text-sm text-green-900/90 dark:text-green-200/90 m-0 mb-3">
+                Stripe shows <strong>charges</strong> and <strong>payouts</strong> active. Fans can subscribe, tip, and buy from your store.
+              </p>
+              <ul className="text-sm text-green-900 dark:text-green-100 space-y-1.5 m-0 mb-4 list-none p-0">
+                <li className="flex items-center gap-2 font-medium">
+                  <span className="text-green-600 dark:text-green-400">✓</span>
+                  Charges enabled — you can accept payments
+                </li>
+                <li className="flex items-center gap-2 font-medium">
+                  <span className="text-green-600 dark:text-green-400">✓</span>
+                  Payouts enabled — money can reach your bank
+                </li>
+              </ul>
+              <button
+                type="button"
+                onClick={() => void fetchStatus()}
+                className="text-sm font-medium text-green-800 dark:text-green-200 underline underline-offset-2 hover:no-underline"
+              >
+                Refresh status
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* —— Creators: amber until charges + payouts both on —— */}
+      {!isPlatformOwner && !paymentsReady && (
+        <div
+          className="mb-6 rounded-xl border-2 border-amber-300 dark:border-amber-600/80 bg-amber-50 dark:bg-amber-950/40 px-4 py-5 shadow-sm"
+          role="region"
+          aria-label="Stripe Connect onboarding"
+        >
+          <h3 className="text-base font-semibold text-amber-950 dark:text-amber-100 m-0 mb-2">
+            Get paid by fans
+          </h3>
+          <p className="text-sm text-amber-900/90 dark:text-amber-200/90 m-0 mb-3">
+            Connect <strong>Stripe</strong> so subscriptions, tips, and store purchases reach your account. This page will turn{" "}
+            <strong className="text-green-700 dark:text-green-400">green</strong> when both charges and payouts are active.
+          </p>
+          <ol className="text-sm text-amber-950/85 dark:text-amber-100/85 list-decimal list-inside space-y-1 mb-4 m-0">
+            <li>
+              Click <strong>{needsStart ? "Connect Stripe" : "Continue Stripe setup"}</strong> and complete Stripe&apos;s steps (identity + bank).
+            </li>
+            <li>Return to this <strong>Payouts</strong> tab after Stripe redirects you back.</li>
+            <li>Use <strong>Refresh status</strong> if you just finished and don&apos;t see green yet.</li>
+          </ol>
+          <p className="text-xs text-amber-800 dark:text-amber-300/90 m-0 mb-4">
+            A 10% platform fee is deducted from each fan transaction. Stripe also charges processing fees.
+          </p>
+          <div className="flex flex-wrap items-center gap-3">
+            <button
+              type="button"
+              onClick={() => void handleConnect()}
+              disabled={connecting}
+              className="inline-flex items-center justify-center px-4 py-2.5 rounded-lg text-sm font-semibold text-white bg-amber-600 hover:bg-amber-700 dark:bg-amber-600 dark:hover:bg-amber-500 disabled:opacity-60 fh-btn"
+            >
+              {connectLabel}
+            </button>
+            <button
+              type="button"
+              onClick={() => void fetchStatus()}
+              disabled={loading}
+              className="text-sm font-medium text-amber-900 dark:text-amber-200 underline underline-offset-2 disabled:opacity-50"
+            >
+              Refresh status
+            </button>
+          </div>
+          {needsOnboarding && (
+            <p className="text-xs mt-3 mb-0 text-amber-800 dark:text-amber-300/80">
+              Stripe still needs more information — use Continue Stripe setup to finish.
+            </p>
+          )}
+          {partialReview && !needsOnboarding && (
+            <p className="text-xs mt-3 mb-0 text-amber-800 dark:text-amber-300/80">
+              Stripe may be reviewing your account. Check back soon or refresh status.
+            </p>
+          )}
+        </div>
+      )}
+
       <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6 space-y-4">
-        {/* Platform Owner - no Stripe Connect needed */}
         {isPlatformOwner && (
           <div className="space-y-3">
             <div className="flex items-center gap-2 text-green-600 dark:text-green-400">
               <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                <path
+                  fillRule="evenodd"
+                  d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
+                  clipRule="evenodd"
+                />
               </svg>
               <span className="font-medium">Platform Owner Account</span>
             </div>
@@ -129,64 +253,20 @@ export const FanHubPayouts: React.FC = () => {
             </ul>
           </div>
         )}
-        
-        {/* Regular Creator - needs Stripe Connect */}
-        {!isPlatformOwner && !hasAccount && (
-          <div className="space-y-4">
-            <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
-              <h4 className="font-medium text-blue-800 dark:text-blue-300 mb-2">How it works</h4>
-              <ul className="text-sm text-blue-700 dark:text-blue-400 space-y-1">
-                <li>• Click the button below to start Stripe Connect setup</li>
-                <li>• You'll be taken to Stripe to create or connect your account</li>
-                <li>• Complete the verification steps (takes 5-10 minutes)</li>
-                <li>• Once approved, fans can purchase from your page</li>
-                <li>• Payouts go directly to your bank account</li>
-              </ul>
-              <p className="text-xs text-blue-600 dark:text-blue-500 mt-2">
-                A 10% platform fee is deducted from each transaction.
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={handleConnect}
-              disabled={connecting}
-              className="px-4 py-2 fh-btn disabled:opacity-50 flex items-center gap-2"
-            >
-              {connecting ? (
-                <>
-                  <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                  </svg>
-                  Connecting…
-                </>
-              ) : (
-                <>
-                  <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M13.976 9.15c-2.172-.806-3.356-1.426-3.356-2.409 0-.831.683-1.305 1.901-1.305 2.227 0 4.515.858 6.09 1.631l.89-5.494C18.252.975 15.697 0 12.165 0 9.667 0 7.589.654 6.104 1.872 4.56 3.147 3.757 4.992 3.757 7.218c0 4.039 2.467 5.76 6.476 7.219 2.585.92 3.445 1.574 3.445 2.583 0 .98-.84 1.545-2.354 1.545-1.875 0-4.965-.921-6.99-2.109l-.9 5.555C5.175 22.99 8.385 24 11.714 24c2.641 0 4.843-.624 6.328-1.813 1.664-1.305 2.525-3.236 2.525-5.732 0-4.128-2.524-5.851-6.591-7.305z"/>
-                  </svg>
-                  Connect with Stripe
-                </>
-              )}
-            </button>
-          </div>
-        )}
 
         {!isPlatformOwner && hasAccount && (
           <>
             <div className="flex items-center gap-2 text-gray-700 dark:text-gray-300">
-              <span className="font-medium">Stripe:</span>
-              <span className="text-sm text-gray-500 dark:text-gray-400">
-                Connected ({status.stripeConnectAccountId?.slice(0, 12)}…)
+              <span className="font-medium">Stripe account</span>
+              <span className="text-sm text-gray-500 dark:text-gray-400 font-mono">
+                {status!.stripeConnectAccountId!.slice(0, 14)}…
               </span>
             </div>
-            <ul className="space-y-2 text-sm">
+            <ul className="space-y-2 text-sm border-t border-gray-100 dark:border-gray-700 pt-4">
               <li className="flex items-center gap-2">
                 <span
                   className={
-                    canCharge
-                      ? "text-green-600 dark:text-green-400"
-                      : "text-amber-600 dark:text-amber-400"
+                    canCharge ? "text-green-600 dark:text-green-400" : "text-amber-600 dark:text-amber-400"
                   }
                 >
                   {canCharge ? "✓" : "○"}
@@ -194,15 +274,13 @@ export const FanHubPayouts: React.FC = () => {
                 <span>
                   {canCharge
                     ? "Charges enabled — you can accept payments"
-                    : "Charges not yet enabled — complete onboarding"}
+                    : "Charges not yet enabled — complete onboarding in Stripe"}
                 </span>
               </li>
               <li className="flex items-center gap-2">
                 <span
                   className={
-                    canPayout
-                      ? "text-green-600 dark:text-green-400"
-                      : "text-amber-600 dark:text-amber-400"
+                    canPayout ? "text-green-600 dark:text-green-400" : "text-amber-600 dark:text-amber-400"
                   }
                 >
                   {canPayout ? "✓" : "○"}
@@ -210,21 +288,27 @@ export const FanHubPayouts: React.FC = () => {
                 <span>
                   {canPayout
                     ? "Payouts enabled — you can receive payouts"
-                    : "Payouts not yet enabled — complete verification"}
+                    : "Payouts not yet enabled — complete verification in Stripe"}
                 </span>
               </li>
             </ul>
-            {(needsOnboarding || !canCharge || !canPayout) && (
+            {!paymentsReady && (
               <button
                 type="button"
-                onClick={handleConnect}
+                onClick={() => void handleConnect()}
                 disabled={connecting}
                 className="px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50"
               >
-                {connecting ? "Opening…" : "Complete setup in Stripe"}
+                {connecting ? "Opening…" : "Open Stripe to complete setup"}
               </button>
             )}
           </>
+        )}
+
+        {!isPlatformOwner && !hasAccount && (
+          <p className="text-sm text-gray-500 dark:text-gray-400 m-0">
+            After you connect, your Stripe account ID will appear here with live status from Stripe.
+          </p>
         )}
       </div>
     </div>

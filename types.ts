@@ -206,7 +206,8 @@ export interface CreatorMonetization {
     lockedDefaultPrice?: number; // cents
     tipsEnabled?: boolean;
     chatEnabled?: boolean;
-    videoEnabled?: boolean;      // Live video chat enabled
+    /** Fan DM video file attachments only (not live 1:1 or livestream — see docs/LIVE_VIDEO_AND_STREAMS.md). */
+    videoEnabled?: boolean;
     freeAccessEnabled?: boolean; // Allow fans to join for free (no subscription required)
 }
 
@@ -266,6 +267,35 @@ export interface StorefrontLandingContent {
     publicStoreModalTitle?: string;
     /** Guest modal when there are no products */
     publicStoreModalEmptyMessage?: string;
+
+    // --- Public landing #pricing membership card (optional overrides) ---
+    /** Card heading when paid subscription (default "Monthly membership") */
+    pricingPaidTitle?: string;
+    /** Card heading when free access (default "Free membership") */
+    pricingFreeTitle?: string;
+    /** Large price line when paid (default "$9.99" from dashboard monthly price) */
+    pricingPaidAmountLabel?: string;
+    /** Large price line when free (default "Free") */
+    pricingFreeAmountLabel?: string;
+    /** Bullet lines (✓ added in UI). Empty = built-in defaults for paid vs free */
+    pricingCardBullets?: string[];
+    pricingCtaLoggedInPaid?: string;
+    pricingCtaLoggedInFree?: string;
+    pricingCtaGuestPaid?: string;
+    pricingCtaGuestFree?: string;
+    pricingTrustLinePaid?: string;
+    pricingTrustLineFree?: string;
+    /** Bottom "Join" banner — main line (default paid: $X/month; free: "Free to join") */
+    pricingFinalBannerPriceLine?: string;
+    pricingFinalBannerSubline?: string;
+
+    // --- Tip block (public landing + member Tip tab share heading) ---
+    /** Main heading for tips on landing and in member hub Tip tab (default "Want to show love?") */
+    tipSectionHeading?: string;
+    /** Subline on public landing only (default "One-time tip — no subscription") */
+    tipSectionSublineGuest?: string;
+    /** Subline on member Tip tab only — no "no subscription" wording by default */
+    tipSectionSublineMember?: string;
 }
 
 /** Legal pages configuration */
@@ -276,11 +306,32 @@ export interface StorefrontLegal {
     privacyLastUpdated?: string; // ISO date string
 }
 
+/**
+ * Optional overrides for the fan-facing Log in / Sign up modal on the storefront.
+ * If unset, the modal uses your theme colors — or soft pink/burgundy defaults when the theme is still the built-in indigo.
+ */
+export interface FanAuthBranding {
+    /** e.g. "Inner Circle" — used in subtitles like "Log in to …" */
+    communityName?: string;
+    loginTitle?: string;
+    loginSubtitle?: string;
+    signupTitle?: string;
+    signupSubtitle?: string;
+    /** Modal primary (buttons, links); overrides theme.primary for auth only */
+    primaryColor?: string;
+    /** Headings / labels (burgundy on Stormij) */
+    accentTextColor?: string;
+    /** Active tab background */
+    softTint?: string;
+}
+
 /** Text styling for storefront customization */
 export interface TextStyle {
     fontSize?: 'xs' | 'sm' | 'base' | 'lg' | 'xl' | '2xl' | '3xl';
     color?: string; // hex color
     fontFamily?: string; // font family name
+    /** When set, overrides default upright hero/body text */
+    fontStyle?: 'normal' | 'italic';
 }
 
 /** Fan Hub My Page / storefront settings persisted at creators/{creatorId} */
@@ -373,6 +424,8 @@ export interface CreatorStorefrontSettings {
     onboardingStatus?: string;
     /** When true, visible store products can be purchased on the public landing page without signing in (guest Stripe checkout). */
     publicTreatsOnLanding?: boolean;
+    /** Fan log in / sign up modal: community name, copy, and optional color overrides */
+    fanAuthBranding?: FanAuthBranding;
     updatedAt?: string;  // ISO
 }
 

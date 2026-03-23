@@ -20,6 +20,22 @@ Used by **Fan Hub → My Page** (storefront settings) and the **fan storefront**
 
 ---
 
+## creatorDomains (custom hostname → handle)
+
+**Path:** `creatorDomains/{hostname}`  
+- Document ID = **normalized hostname** (lowercase, no `www.` — e.g. `stormijxo.com`).
+- Used when fans visit a **custom domain** at `/` (no `/{handle}` in the path). The app calls `GET /api/resolveStorefrontDomain?host=…` and then loads the storefront via the same `handle` as `echoflux.ai/{handle}`.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `handle` | string | My Page handle; must match `creatorHandles/{handle}`. |
+| `creatorId` | string? | Optional denormalized uid (for ops/debug). |
+
+**Writes:** Admin SDK / Console only (rules: public read, no client write).  
+**Client hosts:** Listed in env `VITE_CUSTOM_STOREFRONT_HOSTS` (see `docs/STORMIJXO_DOMAIN_PREFLIGHT.md`).
+
+---
+
 ## creators
 
 **Path:** `creators/{creatorId}`  

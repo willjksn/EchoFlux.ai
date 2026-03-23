@@ -90,6 +90,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const textStyles = creatorData?.textStyles || undefined;
     const feedSettings = (creatorData?.feedSettings as { hideLikeCounts?: boolean; hideComments?: boolean; hideLikes?: boolean } | undefined) || undefined;
     const publicTreatsOnLanding = creatorData?.publicTreatsOnLanding === true;
+    const fanAuthBranding = creatorData?.fanAuthBranding || undefined;
 
     const payload = {
       creatorId,
@@ -136,6 +137,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         hideLikes: !!feedSettings.hideLikes,
       } : undefined,
       publicTreatsOnLanding,
+      fanAuthBranding,
     };
 
     return res.status(200).json(payload);

@@ -645,14 +645,24 @@ export const Settings: React.FC = () => {
         }
     };
 
-    // Handle OAuth callback from URL params (single flow for X)
+    // Handle OAuth callback from URL params (X, Meta/Facebook/Instagram, legacy Meta redirect)
     useEffect(() => {
         const params = new URLSearchParams(window.location.search);
         const oauthSuccess = params.get('oauth_success');
+        const connectedLegacy = params.get('connected');
         const oauthError = params.get('error');
         const platform = params.get('platform');
-        const errorMessage = params.get('message');
+        const messageParam = params.get('message');
         const errorDetails = params.get('details');
+
+        // Legacy Meta callback used ?connected=meta — treat like success so users get reload + toast
+        if (!oauthSuccess && connectedLegacy === 'meta' && !oauthError) {
+            const msg = messageParam || 'Facebook and Instagram connection updated.';
+            showToast(msg, 'success');
+            window.history.replaceState({}, '', window.location.pathname);
+            window.location.reload();
+            return;
+        }
 
         if (oauthSuccess) {
             const oauthType = params.get('type');
@@ -680,9 +690,16 @@ export const Settings: React.FC = () => {
             if (oauthType === 'oauth1') {
                 showToast('X media permissions enabled! You can now upload images and videos.', 'success');
             } else {
-                const successMessage = accountName 
-                    ? `${platformName} account (${decodeURIComponent(accountName)}) connected successfully!`
-                    : `${platformName} account connected successfully!`;
+                // Meta OAuth includes ?message= from the server (URLSearchParams already decodes)
+                const metaMsg =
+                    messageParam && oauthSuccess !== 'x'
+                        ? messageParam
+                        : null;
+                const successMessage = metaMsg
+                    ? metaMsg
+                    : accountName
+                      ? `${platformName} account (${accountName}) connected successfully!`
+                      : `${platformName} account connected successfully!`;
                 showToast(successMessage, 'success');
             }
             // Remove query params from URL
@@ -695,6 +712,9 @@ export const Settings: React.FC = () => {
             
             if (oauthError === 'no_instagram_account') {
                 errorMsg = 'No Instagram Business Account found. Your Instagram account must be converted to a Business or Creator account and connected to a Facebook Page. See instructions below.';
+            } else if (oauthError === 'no_pages') {
+                errorMsg =
+                    'Facebook returned no Pages you manage. Use a Facebook login that is an admin of the Page linked to your Instagram Professional account, or create a Page and connect Instagram to it in Meta Business Suite.';
             } else if (oauthError === 'token_exchange_failed') {
                 errorMsg = `Token exchange failed. ${errorDetails ? decodeURIComponent(errorDetails).substring(0, 100) : 'Please try again.'}`;
             } else if (oauthError === 'pages_fetch_failed') {
@@ -702,11 +722,14 @@ export const Settings: React.FC = () => {
             } else if (oauthError === 'oauth_not_configured') {
                 const platformName = platform ? platform.charAt(0).toUpperCase() + platform.slice(1) : 'OAuth';
                 errorMsg = `${platformName} OAuth is not configured. Please contact support or check your environment variables.`;
+            } else if (oauthError === 'not_authenticated') {
+                errorMsg =
+                    'Could not link this Facebook login to your EchoFlux account. Close extra browser tabs, sign in to EchoFlux again, then connect from Settings → Connections (do not open the Meta login URL in a separate tab).';
             } else if (oauthError === 'token_exchange_failed') {
                 const platformName = platform ? platform.charAt(0).toUpperCase() + platform.slice(1) : 'Account';
                 errorMsg = `${platformName} token exchange failed. ${errorDetails ? decodeURIComponent(errorDetails).substring(0, 150) : 'Please check your OAuth configuration and try again.'}`;
-            } else if (errorMessage) {
-                errorMsg = decodeURIComponent(errorMessage);
+            } else if (messageParam) {
+                errorMsg = messageParam;
             } else {
                 errorMsg = `Failed to connect ${platform || 'account'}. Please try again.`;
             }

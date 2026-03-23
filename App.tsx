@@ -46,6 +46,7 @@ import { AdGenerator } from './components/AdGenerator';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { FanStorefrontView } from './components/FanStorefrontView';
 import { KNOWN_APP_ROUTES } from './constants';
+import { isCustomDomainStorefrontPath } from './src/lib/storefrontCustomDomain';
 import { ResetPassword } from './components/ResetPassword';
 import { InviteRequiredPage } from './components/InviteRequiredPage';
 import { isInviteOnlyMode } from './src/utils/inviteOnly';
@@ -238,12 +239,17 @@ const AppContent: React.FC = () => {
     // Otherwise treat as fan storefront: /{handle} (single segment), /{handle}/terms, /{handle}/privacy, or legacy /u/ or /link/ path.
     const normalizedPath = pathname.replace(/\/+$/, '') || '/';
     const isKnownAppRoute = (KNOWN_APP_ROUTES as readonly string[]).includes(normalizedPath);
+    const hostname = typeof window !== 'undefined' ? window.location.hostname : '';
+    /** stormijxo.com → /, /terms, /privacy, /{handle} (see storefrontCustomDomain + creatorDomains map) */
+    const isCustomDomainSf =
+        typeof window !== 'undefined' && isCustomDomainStorefrontPath(pathname, hostname);
     const isStorefrontPath =
         !pathname.startsWith('/api') &&
         !pathname.includes('.') &&
-        ((!isKnownAppRoute && /^\/[^/]+$/.test(pathname)) || 
-         /^\/(?:u|link)\/[^/]+$/.test(pathname) ||
-         /^\/[^/]+\/(terms|privacy)$/.test(pathname)); // /{handle}/terms or /{handle}/privacy
+        (isCustomDomainSf ||
+            ((!isKnownAppRoute && /^\/[^/]+$/.test(pathname)) ||
+                /^\/(?:u|link)\/[^/]+$/.test(pathname) ||
+                /^\/[^/]+\/(terms|privacy)$/.test(pathname))); // /{handle}/terms or /{handle}/privacy
 
     if (isStorefrontPath) {
         return <FanStorefrontView />;
@@ -262,6 +268,50 @@ const AppContent: React.FC = () => {
     const [bypassMaintenance, setBypassMaintenance] = useState(false);
     const [isFinalizingCheckout, setIsFinalizingCheckout] = useState(false);
     const [showCheckoutTransition, setShowCheckoutTransition] = useState(false);
+    const loginFromQueryHandled = useRef(false);
+
+    // Fan storefront "Log in" / "Sign up" → /?login=1 or /?signup=1 — open modal once auth is ready
+    useEffect(() => {
+        if (typeof window === 'undefined') return;
+        if (isAuthLoading) return;
+        const params = new URLSearchParams(window.location.search);
+        const stripLoginSignupParams = () => {
+            let changed = false;
+            if (params.has('login')) {
+                params.delete('login');
+                changed = true;
+            }
+            if (params.has('signup')) {
+                params.delete('signup');
+                changed = true;
+            }
+            if (!changed) return;
+            const q = params.toString();
+            window.history.replaceState({}, '', q ? `${window.location.pathname}?${q}` : window.location.pathname);
+        };
+        if (isAuthenticated) {
+            stripLoginSignupParams();
+            return;
+        }
+        if (loginFromQueryHandled.current) return;
+        const login = params.get('login');
+        const signup = params.get('signup');
+        if (login === '1' || login === 'true') {
+            loginFromQueryHandled.current = true;
+            setLoginModalInitialView('login');
+            setIsLoginModalOpen(true);
+            params.delete('login');
+            const q = params.toString();
+            window.history.replaceState({}, '', q ? `${window.location.pathname}?${q}` : window.location.pathname);
+        } else if (signup === '1' || signup === 'true') {
+            loginFromQueryHandled.current = true;
+            setLoginModalInitialView('signup');
+            setIsLoginModalOpen(true);
+            params.delete('signup');
+            const q = params.toString();
+            window.history.replaceState({}, '', q ? `${window.location.pathname}?${q}` : window.location.pathname);
+        }
+    }, [isAuthLoading, isAuthenticated]);
 
     // Check for checkout transition loading overlay
     useEffect(() => {

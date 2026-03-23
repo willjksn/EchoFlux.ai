@@ -117,10 +117,16 @@ async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
   const existingComments: Comment[] = Array.isArray(postData.comments) ? postData.comments : [];
   const postBody = postData.body ?? postData.caption ?? "";
 
+  const fanUserSnap = await db.collection("users").doc(tokenUser.uid).get();
+  const fanUser = fanUserSnap.data() || {};
+  const memberHandleRaw = typeof fanUser.username === "string" ? fanUser.username.replace(/^@/, "").trim().toLowerCase() : "";
+  const displayFromAuth = String(authorDisplayName ?? tokenUser.displayName ?? "").trim();
+  /** Public label: member handle when set; otherwise legacy fallback (display name) */
+  const usernamePublic = memberHandleRaw || displayFromAuth || "fan";
   const fanComment: Comment = {
     authorId: tokenUser.uid,
-    author: String(authorDisplayName ?? tokenUser.displayName ?? "Fan").trim() || "Fan",
-    username: String(authorDisplayName ?? tokenUser.displayName ?? "Fan").trim() || "Fan",
+    author: displayFromAuth || "Fan",
+    username: usernamePublic,
     text,
   };
   let nextComments: Comment[] = [...existingComments, fanComment];

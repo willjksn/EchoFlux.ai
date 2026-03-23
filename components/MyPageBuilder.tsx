@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useAppContext } from "./AppContext";
-import { doc, getDoc } from "firebase/firestore";
+import { doc, getDoc, setDoc } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { db, storage, auth } from "../firebaseConfig";
 import type { CreatorStorefrontSettings, StorefrontButtonStyle, StorefrontSocialLinks, StorefrontLandingContent, StorefrontLegal, TextStyle } from "../types";
@@ -130,6 +130,25 @@ function formatAvatarPercentPair(x: number, y: number) {
   return `${clampPercent(Math.round(x * 10) / 10, 0, 100)}% ${clampPercent(Math.round(y * 10) / 10, 0, 100)}%`;
 }
 
+/** Firestore rejects nested `undefined`. `JSON.stringify` omits them, but client `setDoc` does not. */
+function stripUndefinedDeep<T>(value: T): T {
+  if (value === undefined || value === null) {
+    return value;
+  }
+  if (Array.isArray(value)) {
+    return value.map((item) => stripUndefinedDeep(item)) as T;
+  }
+  if (typeof value === "object") {
+    const out: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(value)) {
+      if (v === undefined) continue;
+      out[k] = stripUndefinedDeep(v);
+    }
+    return out as T;
+  }
+  return value;
+}
+
 function normalizeForCompare(a: Partial<CreatorStorefrontSettings>): string {
   return JSON.stringify({
     handle: (a.handle ?? "").replace("@", "").toLowerCase().trim(),
@@ -138,6 +157,7 @@ function normalizeForCompare(a: Partial<CreatorStorefrontSettings>): string {
     avatar: a.avatar ?? "",
     avatarObjectPosition: a.avatarObjectPosition ?? "",
     banner: a.banner ?? "",
+    logo: a.logo ?? "",
     showDisplayNameOnLanding: a.showDisplayNameOnLanding !== false,
     heroImage: a.heroImage ?? "",
     heroMedia: Array.isArray(a.heroMedia) ? a.heroMedia : [],
@@ -157,6 +177,7 @@ function normalizeForCompare(a: Partial<CreatorStorefrontSettings>): string {
     monetization: a.monetization ?? {},
     textStyles: a.textStyles ?? {},
     publicTreatsOnLanding: a.publicTreatsOnLanding === true,
+    fanAuthBranding: a.fanAuthBranding ?? {},
   });
 }
 
@@ -395,6 +416,24 @@ const TextStyleControls: React.FC<{
                   )}
                 </div>
               </div>
+              {/* Italic — optional; default is normal/upright */}
+              <div>
+                <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Style</label>
+                <label className="flex items-center gap-2 cursor-pointer text-sm text-gray-800 dark:text-gray-200">
+                  <input
+                    type="checkbox"
+                    className="rounded border-gray-300 dark:border-gray-600"
+                    checked={style?.fontStyle === "italic"}
+                    onChange={(e) => {
+                      const next: TextStyle = { ...(style ?? {}) };
+                      if (e.target.checked) next.fontStyle = "italic";
+                      else delete next.fontStyle;
+                      onChange(next);
+                    }}
+                  />
+                  <span className={style?.fontStyle === "italic" ? "italic" : ""}>Italic</span>
+                </label>
+              </div>
             </div>
           </div>
         </>
@@ -566,6 +605,8 @@ export const MyPageBuilder: React.FC = () => {
         heroTagline: data.heroTagline ?? "",
         heroPromise: data.heroPromise ?? "",
         heroSubline: (data as Record<string, unknown>).heroSubline ?? "",
+        heroSubline2: data.heroSubline2 ?? "",
+        logo: data.logo ?? "",
         socialLinks: data.socialLinks ? { ...DEFAULT_SOCIAL_LINKS, ...data.socialLinks } : { ...DEFAULT_SOCIAL_LINKS },
         landingContent: data.landingContent ? { ...DEFAULT_LANDING_CONTENT, ...data.landingContent } : { ...DEFAULT_LANDING_CONTENT },
         legal: data.legal ? { ...DEFAULT_LEGAL, ...data.legal } : { ...DEFAULT_LEGAL },
@@ -579,6 +620,8 @@ export const MyPageBuilder: React.FC = () => {
         textStyles: data.textStyles ?? {},
         onboardingStatus: data.onboardingStatus,
         updatedAt: data.updatedAt,
+        publicTreatsOnLanding: data.publicTreatsOnLanding === true,
+        fanAuthBranding: data.fanAuthBranding ?? {},
       };
       (merged as Record<string, unknown>).stripeConnectAccountId = (data as Record<string, unknown>).stripeConnectAccountId;
       setSaved(merged);
@@ -610,14 +653,52 @@ export const MyPageBuilder: React.FC = () => {
         const params = new URLSearchParams({ handle: clean });
         if (creatorId) params.set("creatorId", creatorId);
         const res = await fetch(`/api/checkHandleAvailability?${params}`);
-        const data = await res.json().catch(() => ({}));
-        if (data.available === true) {
+        let data: { available?: boolean; message?: string } = {};
+        try {
+          data = (await res.json()) as typeof data;
+        } catch {
+          data = {};
+        }
+        if (res.ok && data.available === true) {
           setHandleCheckStatus("available");
           setHandleCheckMessage("Available");
-        } else {
+          return;
+        }
+        if (res.ok && data.available === false) {
           setHandleCheckStatus("taken");
           setHandleCheckMessage(data.message || "This handle is already taken");
+          return;
         }
+        // Vite local dev: /api/* often 404 — check creatorHandles in Firestore (needs rules: public read)
+        if (!res.ok && db) {
+          try {
+            const snap = await getDoc(doc(db, "creatorHandles", clean));
+            if (!snap.exists()) {
+              setHandleCheckStatus("available");
+              setHandleCheckMessage("Available (local check)");
+              return;
+            }
+            const existing = (snap.data() as { creatorId?: string })?.creatorId;
+            if (creatorId && existing === creatorId) {
+              setHandleCheckStatus("available");
+              setHandleCheckMessage("Your current handle");
+              return;
+            }
+            setHandleCheckStatus("taken");
+            setHandleCheckMessage("This handle is already taken");
+            return;
+          } catch {
+            setHandleCheckStatus("idle");
+            setHandleCheckMessage(
+              res.status === 404
+                ? "Deploy updated Firestore rules, then retry — or set DEV_API_PROXY for live API."
+                : "Could not verify handle"
+            );
+            return;
+          }
+        }
+        setHandleCheckStatus("idle");
+        setHandleCheckMessage("Could not check availability");
       } catch {
         setHandleCheckStatus("idle");
         setHandleCheckMessage("Could not check availability");
@@ -670,7 +751,7 @@ export const MyPageBuilder: React.FC = () => {
     }
     setSaving(true);
     try {
-      const payload = {
+      const payload = stripUndefinedDeep({
         handle: (draft.handle ?? "").replace("@", "").toLowerCase().trim(),
         displayName: draft.displayName,
         bio: draft.bio,
@@ -697,7 +778,8 @@ export const MyPageBuilder: React.FC = () => {
         textStyles: draft.textStyles,
         onboardingStatus: draft.onboardingStatus,
         publicTreatsOnLanding: draft.publicTreatsOnLanding === true,
-      };
+        fanAuthBranding: draft.fanAuthBranding,
+      });
       console.log("[MyPageBuilder] Saving payload:", payload);
       const token = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
       if (!token) {
@@ -712,7 +794,39 @@ export const MyPageBuilder: React.FC = () => {
       });
       const data = await res.json().catch(() => ({}));
       console.log("[MyPageBuilder] Save response:", res.status, data);
-      if (!res.ok) throw new Error((data as { message?: string }).message || `Save failed (${res.status})`);
+      if (!res.ok) {
+        // Vite local dev: API routes return 404 unless proxied — persist to Firestore so My Page still saves
+        if (res.status === 404 && db && creatorId) {
+          console.warn("[MyPageBuilder] /api/updateCreatorStorefront 404 — writing creators/{id} via Firestore (local dev).");
+          const merged = stripUndefinedDeep({
+            ...payload,
+            updatedAt: new Date().toISOString(),
+          }) as Record<string, unknown>;
+          await setDoc(doc(db, "creators", creatorId), merged, { merge: true });
+          const newH = String(payload.handle ?? "")
+            .replace("@", "")
+            .toLowerCase()
+            .trim();
+          const oldH = String(saved.handle ?? "")
+            .replace("@", "")
+            .toLowerCase()
+            .trim();
+          if (newH && newH !== oldH) {
+            showToast?.(
+              "Saved to Firestore. Public handle links may need the deployed API to update fully.",
+              "info"
+            );
+          } else {
+            showToast?.("Changes saved (Firestore — run API or DEV_API_PROXY for full handle sync).", "success");
+          }
+          const updated = { ...draft, ...payload, updatedAt: new Date().toISOString() };
+          setSaved(updated);
+          setDraft(updated);
+          setHandleInput(updated.handle ?? "");
+          return;
+        }
+        throw new Error((data as { message?: string }).message || `Save failed (${res.status})`);
+      }
       const updated = { ...draft, ...payload, updatedAt: new Date().toISOString() };
       setSaved(updated);
       setDraft(updated);
@@ -724,7 +838,7 @@ export const MyPageBuilder: React.FC = () => {
     } finally {
       setSaving(false);
     }
-  }, [creatorId, draft, isDirty, showToast]);
+  }, [creatorId, draft, isDirty, showToast, saved]);
 
   const handleReset = useCallback(() => {
     setDraft({ ...saved });
@@ -906,6 +1020,12 @@ export const MyPageBuilder: React.FC = () => {
       ? `${window.location.origin}/${(draft.handle as string).replace("@", "").toLowerCase().trim()}`
       : "";
 
+  const handleCleanForCheck = handleInput.replace("@", "").toLowerCase().trim();
+  const handleFormatOk =
+    handleCleanForCheck.length >= 3 &&
+    handleCleanForCheck.length <= 20 &&
+    /^[a-z0-9_]+$/.test(handleCleanForCheck);
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -943,10 +1063,23 @@ export const MyPageBuilder: React.FC = () => {
                 className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                 maxLength={20}
               />
-              {handleCheckStatus === "checking" && <span className="text-sm text-gray-500">Checking…</span>}
-              {handleCheckStatus === "available" && <span className="text-sm text-green-600 dark:text-green-400">Available</span>}
-              {handleCheckStatus === "taken" && <span className="text-sm text-red-600 dark:text-red-400">{handleCheckMessage}</span>}
+              {handleCheckStatus === "checking" && <span className="text-sm text-gray-500 dark:text-gray-400">Checking…</span>}
+              {handleCheckStatus === "available" && (
+                <span className="text-sm font-medium text-green-600 dark:text-green-400">Available</span>
+              )}
+              {handleCheckStatus === "taken" && (
+                <span className="text-sm text-red-600 dark:text-red-400">
+                  <span className="font-semibold">Unavailable</span>
+                  <span className="font-normal opacity-90">
+                    {" "}
+                    — {handleCheckMessage || "This handle is already taken"}
+                  </span>
+                </span>
+              )}
             </div>
+            {handleCheckStatus === "idle" && handleFormatOk && handleCheckMessage ? (
+              <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">{handleCheckMessage}</p>
+            ) : null}
             <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">3–20 characters, letters, numbers and underscores only.</p>
           </div>
 
@@ -1971,6 +2104,101 @@ export const MyPageBuilder: React.FC = () => {
             </div>
           </CollapsibleSection>
 
+          <CollapsibleSection title="Fan sign-in branding">
+            <p className="text-xs text-gray-500 dark:text-gray-400 mb-3 pt-2">
+              Log in / Sign up on your storefront uses your theme. If your theme is still the default indigo, fans see a soft pink/burgundy auth modal until you customize colors. Override specific auth colors here (optional).
+            </p>
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Community name</label>
+                <input
+                  type="text"
+                  value={draft.fanAuthBranding?.communityName ?? ""}
+                  onChange={(e) =>
+                    updateDraft({
+                      fanAuthBranding: {
+                        ...draft.fanAuthBranding,
+                        communityName: e.target.value.trim() || undefined,
+                      },
+                    })
+                  }
+                  placeholder='e.g. Inner Circle'
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
+                />
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Auth primary (buttons)</label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="color"
+                      value={
+                        draft.fanAuthBranding?.primaryColor &&
+                        /^#[0-9A-Fa-f]{6}$/.test(draft.fanAuthBranding.primaryColor)
+                          ? draft.fanAuthBranding.primaryColor
+                          : "#d9468c"
+                      }
+                      onChange={(e) =>
+                        updateDraft({
+                          fanAuthBranding: { ...draft.fanAuthBranding, primaryColor: e.target.value },
+                        })
+                      }
+                      className="w-8 h-8 rounded border border-gray-300 dark:border-gray-600 cursor-pointer"
+                    />
+                    <input
+                      type="text"
+                      value={draft.fanAuthBranding?.primaryColor ?? ""}
+                      onChange={(e) =>
+                        updateDraft({
+                          fanAuthBranding: {
+                            ...draft.fanAuthBranding,
+                            primaryColor: e.target.value.trim() || undefined,
+                          },
+                        })
+                      }
+                      placeholder="Leave blank to use theme primary"
+                      className="flex-1 min-w-0 px-2 py-1.5 text-xs border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Headings / labels</label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="color"
+                      value={
+                        draft.fanAuthBranding?.accentTextColor &&
+                        /^#[0-9A-Fa-f]{6}$/.test(draft.fanAuthBranding.accentTextColor)
+                          ? draft.fanAuthBranding.accentTextColor
+                          : "#4a2c2c"
+                      }
+                      onChange={(e) =>
+                        updateDraft({
+                          fanAuthBranding: { ...draft.fanAuthBranding, accentTextColor: e.target.value },
+                        })
+                      }
+                      className="w-8 h-8 rounded border border-gray-300 dark:border-gray-600 cursor-pointer"
+                    />
+                    <input
+                      type="text"
+                      value={draft.fanAuthBranding?.accentTextColor ?? ""}
+                      onChange={(e) =>
+                        updateDraft({
+                          fanAuthBranding: {
+                            ...draft.fanAuthBranding,
+                            accentTextColor: e.target.value.trim() || undefined,
+                          },
+                        })
+                      }
+                      placeholder="Leave blank to use theme text"
+                      className="flex-1 min-w-0 px-2 py-1.5 text-xs border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+          </CollapsibleSection>
+
           {/* Sections */}
           <CollapsibleSection title="Member Sections">
             <div className="space-y-3 pt-4">
@@ -2072,6 +2300,303 @@ export const MyPageBuilder: React.FC = () => {
                   <p className="text-xs text-gray-400 mt-1">per month</p>
                 </div>
               )}
+
+              <div className="pt-3 border-t border-gray-200 dark:border-gray-700 space-y-3">
+                <p className="text-xs font-medium text-gray-600 dark:text-gray-300">Public landing — membership card</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400">
+                  Override the pricing section and bottom “Join” banner. Empty fields use smart defaults (free vs paid). The large price still uses your monthly price above unless you type a custom label.
+                </p>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Card title when paid</label>
+                    <input
+                      type="text"
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
+                      placeholder="Monthly membership"
+                      value={draft.landingContent?.pricingPaidTitle ?? ""}
+                      onChange={(e) =>
+                        updateDraft({
+                          landingContent: {
+                            ...draft.landingContent,
+                            pricingPaidTitle: e.target.value.trim() ? e.target.value : undefined,
+                          },
+                        })
+                      }
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Card title when free access</label>
+                    <input
+                      type="text"
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
+                      placeholder="Free membership"
+                      value={draft.landingContent?.pricingFreeTitle ?? ""}
+                      onChange={(e) =>
+                        updateDraft({
+                          landingContent: {
+                            ...draft.landingContent,
+                            pricingFreeTitle: e.target.value.trim() ? e.target.value : undefined,
+                          },
+                        })
+                      }
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Price line when paid</label>
+                    <input
+                      type="text"
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
+                      placeholder={`$${((draft.monetization?.monthlyPrice ?? DEFAULT_MONETIZATION.monthlyPrice) / 100).toFixed(2)}`}
+                      value={draft.landingContent?.pricingPaidAmountLabel ?? ""}
+                      onChange={(e) =>
+                        updateDraft({
+                          landingContent: {
+                            ...draft.landingContent,
+                            pricingPaidAmountLabel: e.target.value.trim() ? e.target.value : undefined,
+                          },
+                        })
+                      }
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Price line when free</label>
+                    <input
+                      type="text"
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
+                      placeholder="Free"
+                      value={draft.landingContent?.pricingFreeAmountLabel ?? ""}
+                      onChange={(e) =>
+                        updateDraft({
+                          landingContent: {
+                            ...draft.landingContent,
+                            pricingFreeAmountLabel: e.target.value.trim() ? e.target.value : undefined,
+                          },
+                        })
+                      }
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Bullet points (one per line, ✓ added automatically)</label>
+                  <textarea
+                    rows={3}
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm font-mono"
+                    placeholder={"Paid default:\nExclusive content\nCancel anytime\n\nFree default:\nMember perks & updates\nJoin instantly"}
+                    value={(draft.landingContent?.pricingCardBullets ?? []).join("\n")}
+                    onChange={(e) => {
+                      const lines = e.target.value.split("\n").map((s) => s.trim()).filter(Boolean);
+                      updateDraft({
+                        landingContent: {
+                          ...draft.landingContent,
+                          pricingCardBullets: lines.length ? lines : undefined,
+                        },
+                      });
+                    }}
+                  />
+                </div>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Button — signed in, paid</label>
+                    <input
+                      type="text"
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
+                      placeholder="Join - $9.99/mo"
+                      value={draft.landingContent?.pricingCtaLoggedInPaid ?? ""}
+                      onChange={(e) =>
+                        updateDraft({
+                          landingContent: {
+                            ...draft.landingContent,
+                            pricingCtaLoggedInPaid: e.target.value.trim() ? e.target.value : undefined,
+                          },
+                        })
+                      }
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Button — signed in, free</label>
+                    <input
+                      type="text"
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
+                      placeholder="Join Free"
+                      value={draft.landingContent?.pricingCtaLoggedInFree ?? ""}
+                      onChange={(e) =>
+                        updateDraft({
+                          landingContent: {
+                            ...draft.landingContent,
+                            pricingCtaLoggedInFree: e.target.value.trim() ? e.target.value : undefined,
+                          },
+                        })
+                      }
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Button — guest, paid</label>
+                    <input
+                      type="text"
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
+                      placeholder="Sign up to Subscribe"
+                      value={draft.landingContent?.pricingCtaGuestPaid ?? ""}
+                      onChange={(e) =>
+                        updateDraft({
+                          landingContent: {
+                            ...draft.landingContent,
+                            pricingCtaGuestPaid: e.target.value.trim() ? e.target.value : undefined,
+                          },
+                        })
+                      }
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Button — guest, free</label>
+                    <input
+                      type="text"
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
+                      placeholder="Sign up to Join Free"
+                      value={draft.landingContent?.pricingCtaGuestFree ?? ""}
+                      onChange={(e) =>
+                        updateDraft({
+                          landingContent: {
+                            ...draft.landingContent,
+                            pricingCtaGuestFree: e.target.value.trim() ? e.target.value : undefined,
+                          },
+                        })
+                      }
+                    />
+                  </div>
+                </div>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Trust line when paid</label>
+                    <input
+                      type="text"
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
+                      placeholder="🔒 Secure payment · Cancel anytime"
+                      value={draft.landingContent?.pricingTrustLinePaid ?? ""}
+                      onChange={(e) =>
+                        updateDraft({
+                          landingContent: {
+                            ...draft.landingContent,
+                            pricingTrustLinePaid: e.target.value.trim() ? e.target.value : undefined,
+                          },
+                        })
+                      }
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Trust line when free</label>
+                    <input
+                      type="text"
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
+                      placeholder="🎉 No payment required"
+                      value={draft.landingContent?.pricingTrustLineFree ?? ""}
+                      onChange={(e) =>
+                        updateDraft({
+                          landingContent: {
+                            ...draft.landingContent,
+                            pricingTrustLineFree: e.target.value.trim() ? e.target.value : undefined,
+                          },
+                        })
+                      }
+                    />
+                  </div>
+                </div>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Bottom banner — main line</label>
+                    <input
+                      type="text"
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
+                      placeholder="Free to join / $9.99/month"
+                      value={draft.landingContent?.pricingFinalBannerPriceLine ?? ""}
+                      onChange={(e) =>
+                        updateDraft({
+                          landingContent: {
+                            ...draft.landingContent,
+                            pricingFinalBannerPriceLine: e.target.value.trim() ? e.target.value : undefined,
+                          },
+                        })
+                      }
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Bottom banner — subline</label>
+                    <input
+                      type="text"
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
+                      placeholder="Exclusive access."
+                      value={draft.landingContent?.pricingFinalBannerSubline ?? ""}
+                      onChange={(e) =>
+                        updateDraft({
+                          landingContent: {
+                            ...draft.landingContent,
+                            pricingFinalBannerSubline: e.target.value.trim() ? e.target.value : undefined,
+                          },
+                        })
+                      }
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="pt-3 border-t border-gray-200 dark:border-gray-700 space-y-3">
+                <p className="text-xs font-medium text-gray-600 dark:text-gray-300">Tip section (landing + member Tip tab)</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400">
+                  The <strong>heading</strong> appears on your public landing tip block and on the member hub Tip tab. The <strong>guest subline</strong> only shows on the public page (e.g. “no subscription”). The <strong>member subline</strong> only shows after someone has joined — it never uses the guest line unless you type the same text in both.
+                </p>
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Heading (shared)</label>
+                  <input
+                    type="text"
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
+                    placeholder="Want to show love?"
+                    value={draft.landingContent?.tipSectionHeading ?? ""}
+                    onChange={(e) =>
+                      updateDraft({
+                        landingContent: {
+                          ...draft.landingContent,
+                          tipSectionHeading: e.target.value.trim() ? e.target.value : undefined,
+                        },
+                      })
+                    }
+                  />
+                </div>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Subline — public landing only</label>
+                    <input
+                      type="text"
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
+                      placeholder="One-time tip — no subscription"
+                      value={draft.landingContent?.tipSectionSublineGuest ?? ""}
+                      onChange={(e) =>
+                        updateDraft({
+                          landingContent: {
+                            ...draft.landingContent,
+                            tipSectionSublineGuest: e.target.value.trim() ? e.target.value : undefined,
+                          },
+                        })
+                      }
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Subline — member Tip tab only</label>
+                    <input
+                      type="text"
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
+                      placeholder="No minimum — send what you like."
+                      value={draft.landingContent?.tipSectionSublineMember ?? ""}
+                      onChange={(e) =>
+                        updateDraft({
+                          landingContent: {
+                            ...draft.landingContent,
+                            tipSectionSublineMember: e.target.value.trim() ? e.target.value : undefined,
+                          },
+                        })
+                      }
+                    />
+                  </div>
+                </div>
+              </div>
               
               <div className="flex flex-wrap gap-4">
                 <label className="flex items-center gap-2 cursor-pointer">
@@ -2099,9 +2624,15 @@ export const MyPageBuilder: React.FC = () => {
                     onChange={(e) => updateDraft({ monetization: { ...draft.monetization, ...DEFAULT_MONETIZATION, videoEnabled: e.target.checked } })}
                     className="rounded border-gray-300 dark:border-gray-600 text-primary-600"
                   />
-                  <span className="text-sm text-gray-700 dark:text-gray-300">Video</span>
+                  <span className="text-sm text-gray-700 dark:text-gray-300">Video in DMs</span>
                 </label>
               </div>
+              <p className="text-xs text-gray-500 dark:text-gray-400">
+                <strong>Tips</strong> — tip section on the <em>public</em> landing only.{" "}
+                <strong>Chat</strong> — member hub <strong>Messages</strong> tab (turn off to hide it).{" "}
+                <strong>Video in DMs</strong> — video <em>file</em> attachments in messages only (not live 1:1 or livestream; see{" "}
+                <code className="text-[11px]">docs/LIVE_VIDEO_AND_STREAMS.md</code>). Off = photos only; existing video messages still play.
+              </p>
               {(saved as Record<string, unknown>).stripeConnectAccountId == null && (
                 <p className="text-xs text-amber-600 dark:text-amber-400">Connect Stripe in Payouts to receive payments.</p>
               )}

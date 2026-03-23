@@ -30,6 +30,8 @@ const DEFAULTS: ResolvedStoreCopy = {
     "Browse treats without a membership — checkout with your email. If you subscribe later with the same email, your purchases link to your account.",
   publicStoreOpenCtaLabel: "Open treat store",
   publicStoreModalTitle: "Treat store",
+  publicStoreModalEmptyMessage:
+    "No treats are listed for guest checkout yet. Check back soon — or become a member for the full store.",
 };
 
 function pick(lc: StorefrontLandingContent | null | undefined, key: keyof StorefrontLandingContent): string {

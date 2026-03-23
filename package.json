@@ -14,11 +14,15 @@
     "typecheck": "npm run typecheck:app",
     "typecheck:app": "tsc -p tsconfig.app.json",
     "typecheck:api": "tsc -p tsconfig.api.json",
+    "test:e2e": "playwright test",
     "deploy": "firebase deploy --only hosting",
     "migrate:stormij:dry": "npx ts-node --esm scripts/migrate-stormij.ts --dry-run",
     "migrate:stormij": "npx ts-node --esm scripts/migrate-stormij.ts",
     "backfill:fan-hub": "npx ts-node --esm scripts/backfill-fan-hub-preferences.ts",
-    "sync:fan-dm-threads": "npx ts-node --esm scripts/sync-conversations-to-fanDmThreads.ts"
+    "sync:fan-dm-threads": "npx ts-node --esm scripts/sync-conversations-to-fanDmThreads.ts",
+    "reparent:creator": "npx ts-node --esm scripts/reparentCreatorArtifacts.ts",
+    "upsert:creator-domain": "npx ts-node --esm scripts/upsertCreatorDomain.ts",
+    "report:fans-missing-auth": "npx ts-node --esm scripts/reportFansMissingAuth.ts"
   },
   "dependencies": {
     "@google/genai": "^1.0.0",
@@ -47,6 +51,7 @@
     "@types/nodemailer": "^6.4.17",
     "@types/react": "^18.3.1",
     "@types/react-dom": "^18.3.0",
+    "@playwright/test": "^1.49.1",
     "@vitejs/plugin-react": "^4.2.1",
     "autoprefixer": "^10.4.19",
     "postcss": "^8.4.38",

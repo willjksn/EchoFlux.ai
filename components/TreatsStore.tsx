@@ -218,6 +218,17 @@ export const TreatsStore: React.FC = () => {
     fetchProducts();
   }, [fetchProducts]);
 
+  /** After returning from Stripe Checkout (member product). */
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("store_purchase") !== "success") return;
+    showToast?.("Payment successful. Thank you!", "success");
+    params.delete("store_purchase");
+    const qs = params.toString();
+    const path = `${window.location.pathname}${qs ? `?${qs}` : ""}${window.location.hash}`;
+    window.history.replaceState({}, "", path);
+  }, [showToast]);
+
   useEffect(() => {
     if (!creatorId) {
       setTreatsDataReady(false);
@@ -543,12 +554,46 @@ export const TreatsStore: React.FC = () => {
   const handlePurchase = async (productId: string) => {
     const product = visibleProducts.find((p) => p.id === productId);
     if (!product) return;
-    const soldOut = typeof product.quantityLimit === "number" && product.quantityLimit > 0 && (product.soldCount ?? 0) >= product.quantityLimit;
+    const soldOut =
+      typeof product.quantityLimit === "number" &&
+      product.quantityLimit > 0 &&
+      (product.soldCount ?? 0) >= product.quantityLimit;
     if (soldOut) return;
-    
+    if (!auth.currentUser) {
+      showToast?.("Sign in to complete checkout.", "info");
+      return;
+    }
+    if (!creatorId) return;
+
     setPurchaseLoading(productId);
     try {
-      showToast?.("Purchase flow coming soon!", "info");
+      const token = await auth.currentUser.getIdToken(true);
+      const returnUrl = window.location.href;
+      const successUrl = new URL(returnUrl);
+      successUrl.searchParams.set("store_purchase", "success");
+      const res = await fetch("/api/createFanCheckoutSession", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          creatorId,
+          type: "product",
+          productId,
+          successUrl: successUrl.toString(),
+          cancelUrl: returnUrl,
+        }),
+      });
+      const data = (await res.json().catch(() => ({}))) as { url?: string; error?: string };
+      if (!res.ok) {
+        showToast?.(data.error || "Checkout failed", "error");
+        return;
+      }
+      if (data.url) {
+        window.location.href = data.url;
+        return;
+      }
+      showToast?.("No checkout URL returned", "error");
+    } catch (e) {
+      showToast?.(e instanceof Error ? e.message : "Checkout failed", "error");
     } finally {
       setPurchaseLoading(null);
     }
@@ -756,7 +801,23 @@ export const TreatsStore: React.FC = () => {
           {loading ? (
             <p className="treats-loading">Loading…</p>
           ) : displayedProducts.length === 0 ? (
-            <p className="treats-empty">No products yet. Create one above!</p>
+            <div className="treats-empty treats-empty--onboarding">
+              <p className="treats-empty-title">Your store is ready — add your first product</p>
+              <p className="treats-empty-hint">
+                Use <strong>Add product</strong> to set a title, price, and image. Turn on “Show on landing” or “Member store” so fans can buy.
+              </p>
+              <p className="treats-empty-hint">
+                Customize headlines and the public store card on{" "}
+                <button
+                  type="button"
+                  className="treats-empty-link"
+                  onClick={() => window.location.assign("/studio?tab=myPage")}
+                >
+                  My Page
+                </button>
+                .
+              </p>
+            </div>
           ) : (
             <div className="treats-manage-list">
               {displayedProducts.map((p) => {

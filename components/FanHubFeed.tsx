@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
+import { createPortal } from "react-dom";
 import { useAppContext } from "./AppContext";
 import { hasEliteAccess } from "../src/utils/planAccess";
 import {
@@ -22,6 +23,48 @@ import { db } from "../firebaseConfig";
 import type { LockedPostContent } from "../src/lib/lockedPostMedia";
 import { getAvatarCropStyle } from "../src/lib/avatarCrop";
 import { inferIsVideoFromUrl, normalizePostMediaTypes } from "../src/lib/mediaUrlInfer";
+import { ViewPostModalVideo } from "./ViewPostModalVideo";
+import { feedCommentAuthorLabel, feedCommentAuthorInitial } from "../src/lib/feedCommentLabel";
+
+/** Themed multi-media count pill — tints border/background/shadow from creator storefront `theme.primary` */
+function normalizeThemePrimary(hex: string | undefined): string | undefined {
+  if (!hex || typeof hex !== "string") return undefined;
+  let h = hex.trim();
+  if (!h) return undefined;
+  if (!h.startsWith("#")) h = `#${h}`;
+  if (/^#[0-9a-fA-F]{3}$/.test(h)) {
+    const a = h[1];
+    const b = h[2];
+    const c = h[3];
+    h = `#${a}${a}${b}${b}${c}${c}`;
+  }
+  if (!/^#[0-9a-fA-F]{6}$/.test(h)) return undefined;
+  return h;
+}
+
+function feedCardCountThemedStyle(primaryHex: string | undefined): React.CSSProperties | undefined {
+  const hex = normalizeThemePrimary(primaryHex);
+  if (!hex) return undefined;
+  const n = parseInt(hex.slice(1), 16);
+  if (Number.isNaN(n)) return undefined;
+  const r = (n >> 16) & 255;
+  const g = (n >> 8) & 255;
+  const b = n & 255;
+  const bgR = Math.round(255 * 0.78 + r * 0.22);
+  const bgG = Math.round(255 * 0.78 + g * 0.22);
+  const bgB = Math.round(255 * 0.78 + b * 0.22);
+  const tr = Math.max(0, Math.min(255, Math.round(r * 0.52)));
+  const tg = Math.max(0, Math.min(255, Math.round(g * 0.52)));
+  const tb = Math.max(0, Math.min(255, Math.round(b * 0.52)));
+  const textRgb = `rgb(${tr},${tg},${tb})`;
+  return {
+    color: textRgb,
+    borderColor: `rgba(${r},${g},${b},0.38)`,
+    background: `rgb(${bgR},${bgG},${bgB})`,
+    boxShadow: `0 2px 10px rgba(${r},${g},${b},0.16)`,
+    ["--feed-card-count-divider" as string]: `rgba(${tr},${tg},${tb},0.38)`,
+  };
+}
 
 export type FeedVisibilitySettings = {
   hideLikeCounts: boolean;
@@ -258,6 +301,18 @@ const MediaVideoIcon = () => (
   </svg>
 );
 
+const FeedCarouselChevronLeft = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+    <path d="M15 18l-6-6 6-6" />
+  </svg>
+);
+
+const FeedCarouselChevronRight = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+    <path d="M9 18l6-6-6-6" />
+  </svg>
+);
+
 function formatRelative(dateInput: Date | string | { toDate?: () => Date } | null | undefined): string {
   let date: Date | null = null;
   if (dateInput instanceof Date) date = dateInput;
@@ -375,6 +430,7 @@ function FeedCard({
   onDeletePost,
   onToggleVisibility,
   onTogglePin,
+  creatorThemePrimary,
 }: {
   post: FeedPost;
   creatorName: string;
@@ -391,13 +447,46 @@ function FeedCard({
   onDeletePost?: (postId: string) => void;
   onToggleVisibility?: (postId: string, currentStatus: string) => void;
   onTogglePin?: (postId: string, currentlyPinned: boolean) => void;
+  /** From `creators/{id}.theme.primary` — tints the multi-media count badge */
+  creatorThemePrimary?: string;
 }) {
-  const firstUrl = post.mediaUrls?.[0];
+  const countBadgeStyle = useMemo(
+    () => feedCardCountThemedStyle(creatorThemePrimary),
+    [creatorThemePrimary]
+  );
+  const countBadgeClass =
+    countBadgeStyle != null ? "feed-card-count feed-card-count--themed" : "feed-card-count";
+  const viewPostLinkColor = normalizeThemePrimary(creatorThemePrimary);
+
+  const urls = useMemo(
+    () =>
+      Array.isArray(post.mediaUrls)
+        ? post.mediaUrls.filter((u): u is string => typeof u === "string" && !!u.trim())
+        : [],
+    [post.mediaUrls]
+  );
+  const firstUrl = urls[0];
+  const mediaCount = urls.length;
+  const [mediaSlideIndex, setMediaSlideIndex] = useState(0);
+
+  useEffect(() => {
+    setMediaSlideIndex(0);
+  }, [post.id]);
+
+  useEffect(() => {
+    setMediaSlideIndex((i) => Math.min(i, Math.max(0, mediaCount - 1)));
+  }, [mediaCount]);
+
+  const slideIdx = mediaCount > 0 ? Math.min(mediaSlideIndex, mediaCount - 1) : 0;
+  const currentUrl = urls[slideIdx];
+  const currentIsVideo =
+    !!currentUrl &&
+    (post.mediaTypes?.[slideIdx] === "video" || inferIsVideoFromUrl(currentUrl));
+  const showMediaCarousel = mediaCount > 1;
+
   const hasTipGoal = !!(post.tipGoal && typeof post.tipGoal.targetCents === "number" && post.tipGoal.targetCents > 0);
-  const isVideo =
-    post.mediaTypes?.[0] === "video" || (firstUrl ? inferIsVideoFromUrl(firstUrl) : false);
   const mediaTotals = useMemo(() => {
-    const items = Array.isArray(post.mediaUrls) ? post.mediaUrls : [];
+    const items = urls;
     return items.reduce(
       (acc, url, index) => {
         const explicitType = post.mediaTypes?.[index];
@@ -409,7 +498,7 @@ function FeedCard({
       },
       { images: 0, videos: 0 }
     );
-  }, [post.mediaUrls, post.mediaTypes]);
+  }, [urls, post.mediaTypes]);
 
   const dateStr = post.createdAt
     ? typeof post.createdAt === "string"
@@ -422,10 +511,12 @@ function FeedCard({
   const captionStyle = post.captionStyle ?? "static";
   const showCaptionOnMedia = captionStyle !== "static" && post.body?.trim();
   const [commentsOpen, setCommentsOpen] = useState(false);
+  const [modalMediaIndex, setModalMediaIndex] = useState(0);
   const [likeSaving, setLikeSaving] = useState(false);
   const [modalComment, setModalComment] = useState("");
   const [modalCommentSaving, setModalCommentSaving] = useState(false);
   const commentInputRef = useRef<HTMLInputElement | null>(null);
+  const prevCommentsOpenRef = useRef(false);
   const visibleComments = useMemo(() => post.comments.filter((c) => !c.hidden), [post.comments]);
   const isLiked = !!currentUserId && (post.likedBy ?? []).includes(currentUserId);
   const isSaved = savedPostIds.includes(post.id);
@@ -434,6 +525,27 @@ function FeedCard({
   const [feedVideoMuted, setFeedVideoMuted] = useState(true);
   const [adminMenuOpen, setAdminMenuOpen] = useState(false);
   const adminMenuRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!commentsOpen) return;
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prevOverflow;
+    };
+  }, [commentsOpen]);
+
+  /** When the modal opens, start on the same slide as the in-feed carousel (independent index while open). */
+  useEffect(() => {
+    if (commentsOpen && !prevCommentsOpenRef.current) {
+      setModalMediaIndex(slideIdx);
+    }
+    prevCommentsOpenRef.current = commentsOpen;
+  }, [commentsOpen, slideIdx]);
+
+  useEffect(() => {
+    setModalMediaIndex((i) => Math.min(i, Math.max(0, mediaCount - 1)));
+  }, [mediaCount]);
 
   useEffect(() => {
     if (!adminMenuOpen) return;
@@ -455,6 +567,124 @@ function FeedCard({
     if (!v) return;
     v.muted = feedVideoMuted;
   }, [feedVideoMuted]);
+
+  useEffect(() => {
+    const v = feedVideoRef.current;
+    if (!v) return;
+    void v.pause();
+    setFeedVideoPlaying(false);
+  }, [slideIdx]);
+
+  const carouselPrev = useCallback(
+    (e: React.MouseEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (mediaCount <= 1) return;
+      setMediaSlideIndex((i) => Math.max(0, i - 1));
+    },
+    [mediaCount]
+  );
+
+  const carouselNext = useCallback(
+    (e: React.MouseEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (mediaCount <= 1) return;
+      setMediaSlideIndex((i) => Math.min(mediaCount - 1, i + 1));
+    },
+    [mediaCount]
+  );
+
+  const modalCarouselPrev = useCallback(
+    (e: React.MouseEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (mediaCount <= 1) return;
+      setModalMediaIndex((i) => Math.max(0, i - 1));
+    },
+    [mediaCount]
+  );
+
+  const modalCarouselNext = useCallback(
+    (e: React.MouseEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (mediaCount <= 1) return;
+      setModalMediaIndex((i) => Math.min(mediaCount - 1, i + 1));
+    },
+    [mediaCount]
+  );
+
+  const modalIdx = mediaCount > 0 ? Math.min(modalMediaIndex, mediaCount - 1) : 0;
+  const modalUrl = urls[modalIdx];
+  const modalIsVideo =
+    !!modalUrl && (post.mediaTypes?.[modalIdx] === "video" || inferIsVideoFromUrl(modalUrl));
+
+  const videoAreaClick = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    const v = feedVideoRef.current;
+    if (!v) return;
+    if (v.paused) void v.play();
+    else v.pause();
+  }, []);
+
+  const videoAreaKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if (e.key !== "Enter" && e.key !== " ") return;
+    e.preventDefault();
+    const v = feedVideoRef.current;
+    if (!v) return;
+    if (v.paused) void v.play();
+    else v.pause();
+  }, []);
+
+  const renderCountBadge = () =>
+    (mediaTotals.images + mediaTotals.videos) > 1 ? (
+      <span
+        className={countBadgeClass}
+        style={countBadgeStyle}
+        onClick={(e) => e.stopPropagation()}
+        onKeyDown={(e) => e.stopPropagation()}
+      >
+        {mediaTotals.images > 0 && (
+          <span className="feed-card-count-item">
+            <MediaImageIcon />
+            {mediaTotals.images}
+          </span>
+        )}
+        {mediaTotals.videos > 0 && (
+          <span className="feed-card-count-item">
+            <MediaVideoIcon />
+            {mediaTotals.videos}
+          </span>
+        )}
+      </span>
+    ) : null;
+
+  const renderCarouselArrows = () =>
+    showMediaCarousel ? (
+      <>
+        {slideIdx > 0 ? (
+          <button
+            type="button"
+            className="fan-feed-media-carousel-btn fan-feed-media-carousel-btn--prev"
+            aria-label="Previous image or video"
+            onClick={carouselPrev}
+          >
+            <FeedCarouselChevronLeft />
+          </button>
+        ) : null}
+        {slideIdx < mediaCount - 1 ? (
+          <button
+            type="button"
+            className="fan-feed-media-carousel-btn fan-feed-media-carousel-btn--next"
+            aria-label="Next image or video"
+            onClick={carouselNext}
+          >
+            <FeedCarouselChevronRight />
+          </button>
+        ) : null}
+      </>
+    ) : null;
 
   const toggleLike = async () => {
     if (!db || !post.id || !currentUserId || likeSaving) return;
@@ -621,32 +851,20 @@ function FeedCard({
         )}
       </div>
 
-      {firstUrl ? (
-        isVideo ? (
+      {currentUrl ? (
+        currentIsVideo ? (
           <div
             className="feed-card-media-wrap feed-card-media-wrap-video"
             role="button"
             tabIndex={0}
-            onClick={(e) => {
-              e.preventDefault();
-              const v = feedVideoRef.current;
-              if (!v) return;
-              if (v.paused) v.play();
-              else v.pause();
-            }}
-            onKeyDown={(e) => {
-              if (e.key !== "Enter" && e.key !== " ") return;
-              e.preventDefault();
-              const v = feedVideoRef.current;
-              if (!v) return;
-              if (v.paused) v.play();
-              else v.pause();
-            }}
+            onClick={videoAreaClick}
+            onKeyDown={videoAreaKeyDown}
             aria-label={feedVideoPlaying ? "Pause video" : "Play video"}
           >
             <video
+              key={`${post.id}-hub-v-${slideIdx}`}
               ref={feedVideoRef}
-              src={firstUrl.includes("#t=") ? firstUrl : `${firstUrl}#t=0.1`}
+              src={currentUrl.includes("#t=") ? currentUrl : `${currentUrl}#t=0.1`}
               muted={feedVideoMuted}
               playsInline
               className="feed-card-media feed-card-media-video"
@@ -676,45 +894,23 @@ function FeedCard({
             {showCaptionOnMedia && (
               <FeedCardCaptionOverlay caption={post.body} style={captionStyle} size={post.overlayTextSize} />
             )}
-            {(mediaTotals.images + mediaTotals.videos) > 1 && (
-              <span className="feed-card-count">
-                {mediaTotals.images > 0 && (
-                  <span className="feed-card-count-item">
-                    <MediaImageIcon />
-                    {mediaTotals.images}
-                  </span>
-                )}
-                {mediaTotals.videos > 0 && (
-                  <span className="feed-card-count-item">
-                    <MediaVideoIcon />
-                    {mediaTotals.videos}
-                  </span>
-                )}
-              </span>
-            )}
+            {renderCarouselArrows()}
+            {renderCountBadge()}
           </div>
         ) : (
           <div className="feed-card-media-wrap">
-            <img src={firstUrl} alt="" className="feed-card-media" loading="lazy" />
+            <img
+              key={`${post.id}-hub-i-${slideIdx}`}
+              src={currentUrl}
+              alt=""
+              className="feed-card-media"
+              loading={slideIdx === 0 ? "lazy" : "eager"}
+            />
             {showCaptionOnMedia && (
               <FeedCardCaptionOverlay caption={post.body} style={captionStyle} size={post.overlayTextSize} />
             )}
-            {(mediaTotals.images + mediaTotals.videos) > 1 && (
-              <span className="feed-card-count">
-                {mediaTotals.images > 0 && (
-                  <span className="feed-card-count-item">
-                    <MediaImageIcon />
-                    {mediaTotals.images}
-                  </span>
-                )}
-                {mediaTotals.videos > 0 && (
-                  <span className="feed-card-count-item">
-                    <MediaVideoIcon />
-                    {mediaTotals.videos}
-                  </span>
-                )}
-              </span>
-            )}
+            {renderCarouselArrows()}
+            {renderCountBadge()}
           </div>
         )
       ) : null}
@@ -839,7 +1035,7 @@ function FeedCard({
                 ) : (
                   visibleComments.slice(0, 2).map((c, i) => (
                     <div key={i} className="feed-card-comment">
-                      <span className="comment-username">{c.username ?? c.author ?? "user"}</span>
+                      <span className="comment-username">{feedCommentAuthorLabel(c)}</span>
                       {c.text}
                     </div>
                   ))
@@ -896,95 +1092,175 @@ function FeedCard({
         </div>
       )}
 
-      {commentsOpen && (
-        <div className="feed-comments-modal-backdrop" role="presentation" onClick={() => setCommentsOpen(false)}>
+      <div className="feed-card-view-post-footer">
+        <button
+          type="button"
+          className="feed-card-view-post-link"
+          style={viewPostLinkColor ? { color: viewPostLinkColor } : undefined}
+          onClick={() => setCommentsOpen(true)}
+        >
+          View post
+        </button>
+      </div>
+
+      {commentsOpen &&
+        typeof document !== "undefined" &&
+        createPortal(
           <div
-            className="feed-comments-modal"
-            role="dialog"
-            aria-modal="true"
-            aria-label="All comments"
-            onClick={(e) => e.stopPropagation()}
+            className="feed-comments-modal-backdrop feed-comments-modal-backdrop--portal"
+            role="presentation"
+            onClick={() => setCommentsOpen(false)}
           >
-            <div className="feed-comments-modal-head">
-              <h3>Comments</h3>
-              <button type="button" className="feed-comments-modal-close" onClick={() => setCommentsOpen(false)} aria-label="Close comments">
-                ×
-              </button>
-            </div>
-            <div className={`feed-comments-modal-content${firstUrl ? "" : " no-media"}`}>
-              {firstUrl && (
-                <div className="feed-comments-modal-media-wrap">
-                  {isVideo ? (
-                    <video
-                      src={firstUrl.includes("#t=") ? firstUrl : `${firstUrl}#t=0.1`}
-                      controls
-                      playsInline
-                      className="feed-comments-modal-media feed-comments-modal-media-video"
-                      preload="auto"
-                    />
-                  ) : (
-                    <img src={firstUrl} alt="" className="feed-comments-modal-media" />
-                  )}
-                </div>
-              )}
-              <div className="feed-comments-modal-panel">
-                <div className="feed-comments-modal-list">
-                  {visibleComments.length === 0 ? (
-                    <p className="feed-comments-modal-empty">No comments yet.</p>
-                  ) : (
-                    visibleComments.map((c, idx) => {
-                      const authorName = c.username ?? c.author ?? "user";
-                      return (
-                        <div className="feed-comments-modal-item" key={`${idx}-${c.text.slice(0, 12)}`}>
-                          <div className="feed-comments-modal-item-avatar" aria-hidden>
-                            <span>{authorName.charAt(0).toUpperCase()}</span>
-                          </div>
-                          <div className="feed-comments-modal-item-body">
-                            <p className="feed-comments-modal-text">
-                              <span className="comment-username">{authorName}</span>
-                              {c.text}
-                            </p>
-                          </div>
-                        </div>
-                      );
-                    })
-                  )}
-                </div>
-                {currentUserId && (
-                  <form className="feed-comments-modal-compose" onSubmit={submitModalComment}>
-                    <div className="feed-comments-modal-item-avatar feed-comments-modal-compose-avatar" aria-hidden>
-                      {creatorAvatar ? (
-                        <img
-                          src={creatorAvatar}
-                          alt=""
-                          className="feed-comments-modal-compose-avatar-img"
-                          style={getAvatarCropStyle(avatarObjectPosition)}
-                        />
-                      ) : (
-                        <span>{(creatorName || "?").charAt(0).toUpperCase()}</span>
-                      )}
-                    </div>
-                    <div className="feed-comments-modal-compose-input-wrap">
-                      <input
-                        ref={commentInputRef}
-                        type="text"
-                        className="feed-comments-modal-compose-input"
-                        value={modalComment}
-                        onChange={(e) => setModalComment(e.target.value)}
-                        placeholder="Write a comment..."
-                        maxLength={500}
+            <div
+              className="feed-comments-modal feed-comments-modal--stack"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby={`feed-comments-modal-title-${post.id}`}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="feed-comments-modal-head">
+                <p id={`feed-comments-modal-title-${post.id}`} className="feed-comments-modal-head-title">
+                  {creatorName || "Post"}
+                </p>
+                <button type="button" className="feed-comments-modal-close" onClick={() => setCommentsOpen(false)} aria-label="Close">
+                  ×
+                </button>
+              </div>
+              <div className={`feed-comments-modal-content feed-comments-modal-content--stack${firstUrl ? "" : " no-media"}`}>
+                {firstUrl && modalUrl && (
+                  <div
+                    className={`feed-comments-modal-media-wrap${showMediaCarousel ? " feed-comments-modal-media-wrap--carousel" : ""}`}
+                    role={showMediaCarousel ? "group" : undefined}
+                    aria-roledescription={showMediaCarousel ? "carousel" : undefined}
+                    aria-label={showMediaCarousel ? `Post media, slide ${modalIdx + 1} of ${mediaCount}` : undefined}
+                  >
+                    {modalIsVideo ? (
+                      <ViewPostModalVideo
+                        src={modalUrl}
+                        videoKey={`${post.id}-modal-v-${modalIdx}`}
+                        accentHex={viewPostLinkColor}
                       />
-                    </div>
-                    <button type="submit" className="feed-comments-modal-compose-send" disabled={modalCommentSaving || !modalComment.trim()}>
-                      {modalCommentSaving ? "..." : "Post"}
-                    </button>
-                  </form>
+                    ) : (
+                      <img
+                        key={`${post.id}-modal-i-${modalIdx}`}
+                        src={modalUrl}
+                        alt=""
+                        className="feed-comments-modal-media"
+                        loading="eager"
+                      />
+                    )}
+                    {showMediaCarousel ? (
+                      <>
+                        {modalIdx > 0 ? (
+                          <button
+                            type="button"
+                            className="fan-feed-media-carousel-btn fan-feed-media-carousel-btn--prev"
+                            aria-label="Previous image or video"
+                            onClick={modalCarouselPrev}
+                          >
+                            <FeedCarouselChevronLeft />
+                          </button>
+                        ) : null}
+                        {modalIdx < mediaCount - 1 ? (
+                          <button
+                            type="button"
+                            className="fan-feed-media-carousel-btn fan-feed-media-carousel-btn--next"
+                            aria-label="Next image or video"
+                            onClick={modalCarouselNext}
+                          >
+                            <FeedCarouselChevronRight />
+                          </button>
+                        ) : null}
+                        <div className="feed-comments-modal-carousel-dots" role="tablist" aria-label="Slides">
+                          {urls.map((_, i) => (
+                            <button
+                              key={`${post.id}-dot-${i}`}
+                              type="button"
+                              role="tab"
+                              aria-selected={i === modalIdx}
+                              className={`feed-comments-modal-carousel-dot${i === modalIdx ? " feed-comments-modal-carousel-dot--active" : ""}`}
+                              style={
+                                i === modalIdx && viewPostLinkColor
+                                  ? { backgroundColor: viewPostLinkColor }
+                                  : undefined
+                              }
+                              aria-label={`Go to slide ${i + 1}`}
+                              onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                setModalMediaIndex(i);
+                              }}
+                            />
+                          ))}
+                        </div>
+                      </>
+                    ) : null}
+                  </div>
                 )}
+                <div className="feed-comments-modal-panel">
+                  {post.body?.trim() ? (
+                    <div className="feed-comments-modal-post-body">
+                      <p>{post.body}</p>
+                    </div>
+                  ) : null}
+                  <div className="feed-comments-modal-list">
+                    {visibleComments.length === 0 ? (
+                      <p className="feed-comments-modal-empty">No comments yet.</p>
+                    ) : (
+                      visibleComments.map((c, idx) => {
+                        const authorName = feedCommentAuthorLabel(c);
+                        return (
+                          <div className="feed-comments-modal-item" key={`${idx}-${c.text.slice(0, 12)}`}>
+                            <div className="feed-comments-modal-item-avatar" aria-hidden>
+                              <span>{feedCommentAuthorInitial(authorName)}</span>
+                            </div>
+                            <div className="feed-comments-modal-item-body">
+                              <p className="feed-comments-modal-text">
+                                <span className="comment-username">{authorName}</span>
+                                <span className="feed-comments-modal-comment-body">{c.text}</span>
+                              </p>
+                            </div>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+                  {currentUserId && (
+                    <form className="feed-comments-modal-compose" onSubmit={submitModalComment}>
+                      <div className="feed-comments-modal-item-avatar feed-comments-modal-compose-avatar" aria-hidden>
+                        {creatorAvatar ? (
+                          <img
+                            src={creatorAvatar}
+                            alt=""
+                            className="feed-comments-modal-compose-avatar-img"
+                            style={getAvatarCropStyle(avatarObjectPosition)}
+                          />
+                        ) : (
+                          <span>{(creatorName || "?").charAt(0).toUpperCase()}</span>
+                        )}
+                      </div>
+                      <div className="feed-comments-modal-compose-input-wrap">
+                        <input
+                          ref={commentInputRef}
+                          type="text"
+                          className="feed-comments-modal-compose-input"
+                          value={modalComment}
+                          onChange={(e) => setModalComment(e.target.value)}
+                          placeholder="Write a comment..."
+                          maxLength={500}
+                        />
+                      </div>
+                      <button type="submit" className="feed-comments-modal-compose-send" disabled={modalCommentSaving || !modalComment.trim()}>
+                        {modalCommentSaving ? "..." : "Post"}
+                      </button>
+                    </form>
+                  )}
+                </div>
               </div>
             </div>
-          </div>
-        </div>
-      )}
+          </div>,
+          document.body
+        )}
     </article>
   );
 }
@@ -1008,6 +1284,8 @@ export const FanHubFeed: React.FC<{ isAdminMode?: boolean }> = ({ isAdminMode = 
     displayName?: string;
     avatar?: string;
     avatarObjectPosition?: string;
+    /** Storefront theme primary (hex) for feed UI accents */
+    themePrimary?: string;
   }>({});
   const creatorId = user?.id;
   const canUseAIReplies = hasEliteAccess(user);
@@ -1029,11 +1307,14 @@ export const FanHubFeed: React.FC<{ isAdminMode?: boolean }> = ({ isAdminMode = 
       .then((snap) => {
         if (cancelled || !snap.exists()) return;
         const d = snap.data() as Record<string, unknown>;
+        const theme = d.theme as { primary?: string } | undefined;
+        const tp = theme?.primary;
         setCreatorStorefront({
           displayName: typeof d.displayName === "string" ? d.displayName : undefined,
           avatar: typeof d.avatar === "string" ? d.avatar : undefined,
           avatarObjectPosition:
             typeof d.avatarObjectPosition === "string" ? d.avatarObjectPosition : undefined,
+          themePrimary: typeof tp === "string" && tp.trim() ? tp.trim() : undefined,
         });
       })
       .catch(() => {});
@@ -1437,6 +1718,7 @@ export const FanHubFeed: React.FC<{ isAdminMode?: boolean }> = ({ isAdminMode = 
                 onDeletePost={handleDeletePost}
                 onToggleVisibility={handleToggleVisibility}
                 onTogglePin={handleTogglePin}
+                creatorThemePrimary={creatorStorefront.themePrimary}
               />
             ))}
           </div>

@@ -64,7 +64,9 @@ export default async function handler(
       "email",
       "pages_show_list",
       "pages_read_engagement",
+      "pages_read_user_content",
       "pages_manage_posts",
+      "read_insights",
     ].join(",");
 
     const scopesWithInstagram = [
@@ -72,7 +74,9 @@ export default async function handler(
       "email",
       "pages_show_list",
       "pages_read_engagement",
+      "pages_read_user_content",
       "pages_manage_posts",
+      "read_insights",
       "instagram_basic",
       "instagram_content_publish",
       "instagram_manage_comments",
@@ -81,14 +85,20 @@ export default async function handler(
 
     const scopes = connect === "facebook" ? scopesFacebookOnly : scopesWithInstagram;
 
-    // auth_type=reauthenticate: forces user to re-enter password or choose account, so they don't accidentally use someone else's session
+    // Optional: META_OAUTH_AUTH_TYPE=reauthenticate to force password re-entry (stricter; can confuse some Business accounts).
+    const authType = process.env.META_OAUTH_AUTH_TYPE?.trim();
+    const authTypeParam =
+      authType && ["reauthenticate", "rerequest"].includes(authType)
+        ? `&auth_type=${encodeURIComponent(authType)}`
+        : "";
+
     const authUrl = `https://www.facebook.com/v19.0/dialog/oauth?` +
       `client_id=${appId}` +
       `&redirect_uri=${redirectUri}` +
       `&state=${state}` +
       `&response_type=code` +
       `&scope=${encodeURIComponent(scopes)}` +
-      `&auth_type=reauthenticate`;
+      authTypeParam;
 
     res.status(200).json({ authUrl });
     return;
@@ -99,30 +109,10 @@ export default async function handler(
     return;
   }
 
-  // Legacy GET flow (no user binding) - default to full scopes
-  const state = crypto.randomBytes(32).toString("hex");
-  const redirectUri = encodeURIComponent(
-    "https://echoflux.ai/api/oauth/meta/callback"
-  );
-  const scopes = [
-    "public_profile",
-    "email",
-    "pages_show_list",
-    "pages_read_engagement",
-    "pages_manage_posts",
-    "instagram_basic",
-    "instagram_content_publish",
-    "instagram_manage_comments",
-    "instagram_manage_insights",
-  ].join(",");
-
-  const authUrl = `https://www.facebook.com/v19.0/dialog/oauth?` +
-    `client_id=${appId}` +
-    `&redirect_uri=${redirectUri}` +
-    `&state=${state}` +
-    `&response_type=code` +
-    `&scope=${encodeURIComponent(scopes)}` +
-    `&auth_type=reauthenticate`;
-
-  res.redirect(302, authUrl);
+  // GET without a Firestore-bound state cannot map OAuth back to a Firebase user — do not start a broken flow.
+  res.status(405).json({
+    error: "Method not allowed",
+    details:
+      "Meta connect must be started from the app (POST /api/oauth/meta/authorize with Authorization). Opening this URL in a browser tab does not associate the callback with your EchoFlux account.",
+  });
 }

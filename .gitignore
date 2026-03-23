@@ -45,3 +45,7 @@ stormij-service-account.json
 service-account.jsonl
 *.jsonl
 .cursor/
+
+# Playwright / E2E artifacts
+test-results/
+playwright-report/

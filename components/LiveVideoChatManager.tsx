@@ -1,15 +1,23 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useAppContext } from "./AppContext";
 import { auth, db } from "../firebaseConfig";
-import { collection, query, where, onSnapshot, orderBy, getDocs } from "firebase/firestore";
+import { collection, query, onSnapshot, orderBy, getDocs, getDoc, doc } from "firebase/firestore";
 import type { LiveVideoChatSession } from "../types";
 import VideoCallRoom from "./VideoCallRoom";
+import {
+  formatFanDisplayLabel,
+  formatFanPlainMoniker,
+  type FanDisplayInput,
+} from "../src/lib/fanHubDisplay";
 
-// Fan option type for dropdown
+// Fan option for instant call picker — label matches User Management / DM directory (@username when set)
 interface FanOption {
   id: string;
-  displayName: string | null;
   email: string | null;
+  /** Primary line: @handle, display name, or email local part (via fanHub rules) */
+  listLabel: string;
+  /** For Daily / API fanDisplayName — no leading @ */
+  plainMoniker: string;
 }
 
 // Icons for dropdown
@@ -148,21 +156,63 @@ export const LiveVideoChatManager: React.FC<LiveVideoChatManagerProps> = ({
     fetchQuota();
   }, [creatorId]);
 
-  // Load fans from creator's fans collection
+  // Load fans from creators/{id}/fans and merge users/{fanId} so @username shows (same rules as DM member list)
   useEffect(() => {
     if (!creatorId || !db) return;
     setFansLoading(true);
-    
+
+    const mergeFanAndUser = (f: Record<string, unknown>): FanDisplayInput => ({
+      username:
+        (typeof f.username === "string" && f.username.trim() ? f.username : undefined) ?? undefined,
+      displayName:
+        (typeof f.displayName === "string" && f.displayName.trim() ? f.displayName : undefined) ??
+        (typeof f.fanName === "string" && f.fanName.trim() ? f.fanName : undefined),
+      name: typeof f.name === "string" && f.name.trim() ? f.name : undefined,
+      email: typeof f.email === "string" && f.email.trim() ? f.email : undefined,
+    });
+
     getDocs(collection(db, "creators", creatorId, "fans"))
-      .then((snap) => {
-        const list: FanOption[] = snap.docs.map((d) => {
-          const data = d.data();
-          return {
-            id: d.id,
-            displayName: data.displayName || data.fanName || null,
-            email: data.email || null,
-          };
-        });
+      .then(async (snap) => {
+        const list: FanOption[] = await Promise.all(
+          snap.docs.map(async (d) => {
+            const fanId = d.id;
+            const f = d.data() as Record<string, unknown>;
+            let merged: FanDisplayInput = mergeFanAndUser(f);
+            try {
+              const uSnap = await getDoc(doc(db, "users", fanId));
+              if (uSnap.exists()) {
+                const u = uSnap.data() as Record<string, unknown>;
+                merged = {
+                  username:
+                    (typeof u.username === "string" && u.username.trim() ? u.username : merged.username) ??
+                    merged.username,
+                  displayName:
+                    (typeof u.displayName === "string" && u.displayName.trim()
+                      ? u.displayName
+                      : merged.displayName) ?? merged.displayName,
+                  name:
+                    (typeof u.name === "string" && u.name.trim() ? u.name : merged.name) ?? merged.name,
+                  email:
+                    (typeof u.email === "string" && u.email.trim() ? u.email : merged.email) ??
+                    merged.email,
+                };
+              }
+            } catch {
+              /* ignore user doc read errors */
+            }
+            const listLabel = formatFanDisplayLabel(merged, { fallback: "Member" });
+            const plainMoniker =
+              formatFanPlainMoniker(merged) ??
+              (listLabel.startsWith("@") ? listLabel.slice(1) : listLabel);
+            return {
+              id: fanId,
+              email: merged.email ?? null,
+              listLabel,
+              plainMoniker,
+            };
+          })
+        );
+        list.sort((a, b) => a.listLabel.localeCompare(b.listLabel, undefined, { sensitivity: "base" }));
         setFans(list);
       })
       .catch((e) => {
@@ -317,7 +367,7 @@ export const LiveVideoChatManager: React.FC<LiveVideoChatManagerProps> = ({
   const handleSelectFan = useCallback((fan: FanOption | null) => {
     if (fan) {
       setInstantCallFanId(fan.id);
-      setInstantCallFanName(fan.displayName || fan.email || "");
+      setInstantCallFanName(fan.plainMoniker || fan.email || fan.id);
     } else {
       setInstantCallFanId("");
       setInstantCallFanName("");
@@ -330,8 +380,9 @@ export const LiveVideoChatManager: React.FC<LiveVideoChatManagerProps> = ({
     ? fans.filter((f) => {
         const q = fanSearchQuery.toLowerCase();
         return (
-          (f.displayName?.toLowerCase().includes(q)) ||
-          (f.email?.toLowerCase().includes(q)) ||
+          f.listLabel.toLowerCase().includes(q) ||
+          (f.email?.toLowerCase().includes(q) ?? false) ||
+          f.plainMoniker.toLowerCase().includes(q) ||
           f.id.toLowerCase().includes(q)
         );
       })
@@ -340,7 +391,7 @@ export const LiveVideoChatManager: React.FC<LiveVideoChatManagerProps> = ({
   // Get selected fan display
   const selectedFan = fans.find((f) => f.id === instantCallFanId);
   const selectedFanDisplay = selectedFan
-    ? (selectedFan.displayName || selectedFan.email || selectedFan.id)
+    ? selectedFan.listLabel || selectedFan.email || selectedFan.id
     : "";
 
   // Start instant video call
@@ -742,16 +793,16 @@ export const LiveVideoChatManager: React.FC<LiveVideoChatManagerProps> = ({
                                 type="button"
                                 onClick={() => {
                                   handleSelectFan(fan);
-                                  setFanSearchQuery(fan.displayName || fan.email || fan.id);
+                                  setFanSearchQuery(fan.listLabel || fan.email || fan.id);
                                 }}
                                 className="w-full text-left px-4 py-3 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition flex items-center gap-3"
                               >
                                 <div className="w-10 h-10 rounded-full bg-gradient-to-br from-indigo-100 to-violet-100 dark:from-indigo-900/30 dark:to-violet-900/30 flex items-center justify-center text-indigo-600 dark:text-indigo-400 flex-shrink-0 font-semibold">
-                                  {(fan.displayName || fan.email || "?")[0].toUpperCase()}
+                                  {(fan.listLabel || fan.email || "?")[0].toUpperCase()}
                                 </div>
                                 <div className="min-w-0 flex-1">
                                   <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
-                                    {fan.displayName || "Unnamed Fan"}
+                                    {fan.listLabel}
                                   </p>
                                   {fan.email && (
                                     <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
@@ -774,11 +825,11 @@ export const LiveVideoChatManager: React.FC<LiveVideoChatManagerProps> = ({
                 <div className="p-4 rounded-xl bg-gradient-to-br from-indigo-50 to-violet-50 dark:from-indigo-900/20 dark:to-violet-900/20 border border-indigo-200 dark:border-indigo-800">
                   <div className="flex items-center gap-4">
                     <div className="w-14 h-14 rounded-full bg-gradient-to-br from-indigo-400 to-violet-500 flex items-center justify-center text-white text-xl font-bold shadow-lg">
-                      {(selectedFan.displayName || selectedFan.email || "?")[0].toUpperCase()}
+                      {(selectedFan.listLabel || selectedFan.email || "?")[0].toUpperCase()}
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-lg font-bold text-gray-900 dark:text-white truncate">
-                        {selectedFan.displayName || "Unnamed Fan"}
+                        {selectedFan.listLabel}
                       </p>
                       {selectedFan.email && (
                         <p className="text-sm text-gray-600 dark:text-gray-400 truncate">

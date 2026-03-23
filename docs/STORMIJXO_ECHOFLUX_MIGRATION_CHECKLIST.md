@@ -150,15 +150,15 @@ Skip or shorten this phase if live Stormij **already** uses EchoFlux’s Firebas
 - [ ] Firebase Console → Authentication → Settings → **Authorized domains**: add `stormijxo.com` and `www.stormijxo.com`.
 - [ ] Without this, login/signup on the custom domain can fail (`auth/unauthorized-domain`).
 
-### Task 4.3 — App routing for custom domain (implementation task when you approve code changes)
+### Task 4.3 — App routing for custom domain ✅ (code in repo)
 
-Today, storefront routing is handle-based (`/{handle}`). For **`stormijxo.com` only**, you typically want:
+Implemented: **`VITE_CUSTOM_STOREFRONT_HOSTS`**, Firestore **`creatorDomains/{hostname}`**, **`GET /api/resolveStorefrontDomain`**, `App.tsx` + `FanStorefrontView`. See **`docs/STORMIJXO_DOMAIN_PREFLIGHT.md`**.
 
-- [ ] **Root** `/` → Stormij creator storefront **without** requiring `/stormijxo` in the path.
-- [ ] **`/terms`** and **`/privacy`** on the custom domain → same legal pages as `/{handle}/terms` on echoflux.ai.
+Still to do before DNS:
+
+- [ ] Set env + create **`creatorDomains/stormijxo.com`** with the correct `handle`.
+- [ ] **Root** `/` → resolves handle via API; **`/terms`** / **`/privacy`** on the custom domain → same legal pages as on `/{handle}/terms` on echoflux.ai.
 - [ ] **Legacy path** `/project` (if fans bookmarked it): **301 redirect** to `/` or to the canonical storefront path—**must not** break Stripe return URLs (verify Stripe success/cancel URLs).
-
-This requires **Firestore `creatorDomains` mapping** (or equivalent) + small changes to `App.tsx` and `FanStorefrontView`—track as a separate implementation ticket.
 
 ### Task 4.4 — Stripe return URLs after domain change
 

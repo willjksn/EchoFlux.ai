@@ -25,8 +25,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   const origin = (req.headers.origin || req.headers.referer || "").replace(/\/$/, "") || process.env.NEXT_PUBLIC_APP_URL || "https://echoflux.ai";
-  const returnUrl = `${origin}/studio?tab=payouts&connect=return`;
-  const refreshUrl = `${origin}/studio?tab=payouts&connect=refresh`;
+  // Fan Hub is primary entry (/fan); /studio still resolves to Premium Studio for legacy bookmarks
+  const returnUrl = `${origin}/fan?tab=payouts&connect=return`;
+  const refreshUrl = `${origin}/fan?tab=payouts&connect=refresh`;
 
   try {
     const db = getAdminDb();

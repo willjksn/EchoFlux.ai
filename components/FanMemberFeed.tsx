@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import {
   collection,
   getDocs,
@@ -22,8 +22,61 @@ import {
 import { getAvatarCropStyle } from "../src/lib/avatarCrop";
 import { inferIsVideoFromUrl, normalizePostMediaTypes } from "../src/lib/mediaUrlInfer";
 import { DmAudioPlayer } from "./DmAudioPlayer";
+import { ViewPostModalVideo } from "./ViewPostModalVideo";
+import { feedCommentAuthorLabel, feedCommentAuthorInitial } from "../src/lib/feedCommentLabel";
 
 const SAVED_BY_CREATOR_KEY = "savedPostIdsByCreator";
+
+/** Same icons as FanHubFeed / stormij-fanhub — multi-media count badge */
+const MediaImageIcon = () => (
+  <svg
+    className="feed-card-count-icon"
+    xmlns="http://www.w3.org/2000/svg"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    aria-hidden
+  >
+    <rect x="3" y="5" width="18" height="14" rx="2" ry="2" />
+    <circle cx="8.5" cy="10" r="1.5" />
+    <path d="M21 15l-4.5-4.5a1 1 0 0 0-1.4 0L9 16.6" />
+  </svg>
+);
+
+const MediaVideoIcon = () => (
+  <svg
+    className="feed-card-count-icon"
+    xmlns="http://www.w3.org/2000/svg"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    aria-hidden
+  >
+    <rect x="3" y="6" width="13" height="12" rx="2" ry="2" />
+    <path d="M16 10l5-3v10l-5-3z" />
+  </svg>
+);
+
+const CarouselChevronLeft = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+    <path d="M15 18l-6-6 6-6" />
+  </svg>
+);
+
+const CarouselChevronRight = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+    <path d="M9 18l6-6-6-6" />
+  </svg>
+);
+
+/** Visible comments from Firestore (non-hidden) */
+export type FanMemberPostComment = { author: string; text: string };
 
 interface Post {
   id: string;
@@ -33,11 +86,14 @@ interface Post {
   createdAt: Date;
   likesCount: number;
   commentsCount: number;
+  /** Parsed when loading a post doc — used in View post modal */
+  commentsList?: FanMemberPostComment[];
   pinned?: boolean;
   hideComments?: boolean;
   hideLikes?: boolean;
   hideLikeCounts?: boolean;
   lockedContent?: LockedPostContent;
+  audioUrls?: string[];
 }
 
 export interface FanFeedVisibilitySettings {
@@ -137,8 +193,28 @@ function postFromFirestore(docId: string, data: DocumentData): Post | null {
   const audioUrls: string[] = Array.isArray(data.audioUrls)
     ? (data.audioUrls as string[]).filter((u) => typeof u === "string" && u.trim())
     : [];
-  const comments = (data.comments as { text: string }[]) || [];
+  const rawComments = Array.isArray(data.comments) ? (data.comments as unknown[]) : [];
+  const commentsList: FanMemberPostComment[] = [];
+  for (const c of rawComments) {
+    if (!c || typeof c !== "object") continue;
+    const o = c as Record<string, unknown>;
+    if (o.hidden) continue;
+    const text = typeof o.text === "string" ? o.text.trim() : "";
+    if (!text) continue;
+    const author = feedCommentAuthorLabel({
+      username: typeof o.username === "string" ? o.username : undefined,
+      author: typeof o.author === "string" ? o.author : undefined,
+      isCreatorReply: !!o.isCreatorReply,
+    });
+    commentsList.push({ author, text });
+  }
   const lc = parseLockedContent(data.lockedContent);
+  const commentsCountFallback =
+    commentsList.length > 0
+      ? commentsList.length
+      : typeof data.commentsCount === "number"
+        ? data.commentsCount
+        : rawComments.length;
   return {
     id: docId,
     content: (data.body as string) || (data.content as string) || "",
@@ -148,7 +224,8 @@ function postFromFirestore(docId: string, data: DocumentData): Post | null {
     createdAt,
     likesCount:
       typeof data.likeCount === "number" ? data.likeCount : (data.likesCount as number) || 0,
-    commentsCount: comments.length || (data.commentsCount as number) || 0,
+    commentsCount: commentsCountFallback,
+    commentsList: commentsList.length > 0 ? commentsList : undefined,
     pinned: !!(data.pinned as boolean),
     hideComments: data.hideComments as boolean | undefined,
     hideLikes: data.hideLikes as boolean | undefined,
@@ -157,49 +234,507 @@ function postFromFirestore(docId: string, data: DocumentData): Post | null {
   };
 }
 
-function FanMemberPostMedia({ post, primary }: { post: Post; primary: string }) {
+function FanMemberPostMedia({
+  post,
+  primary,
+  variant = "feed",
+  splitModal = false,
+}: {
+  post: Post;
+  primary: string;
+  /** `detail` = larger view-post modal (taller/wider than feed card) */
+  variant?: "feed" | "detail";
+  /** Same media chrome as creator View post (split modal): modal classes + loop video */
+  splitModal?: boolean;
+}) {
   const urls = post.mediaUrls;
   const types = post.mediaTypes;
   const n = urls.length;
-  if (n === 0) return null;
   const lockedCfg = post.lockedContent?.enabled ? post.lockedContent : undefined;
-  const gridClass = n > 1 ? "fan-feed-post-media fan-feed-post-media-grid" : "fan-feed-post-media";
+
+  const [mediaIndex, setMediaIndex] = useState(0);
+
+  useEffect(() => {
+    setMediaIndex(0);
+  }, [post.id]);
+
+  useEffect(() => {
+    setMediaIndex((i) => Math.min(i, Math.max(0, n - 1)));
+  }, [n]);
+
+  const mediaTotals = useMemo(() => {
+    return urls.reduce(
+      (acc, url, index) => {
+        const explicitType = types[index];
+        const detectedType =
+          explicitType === "video" || inferIsVideoFromUrl(url || "") ? "video" : "image";
+        if (detectedType === "video") acc.videos += 1;
+        else acc.images += 1;
+        return acc;
+      },
+      { images: 0, videos: 0 }
+    );
+  }, [urls, types]);
+
+  const goPrev = useCallback(
+    (e: React.MouseEvent) => {
+      e.stopPropagation();
+      e.preventDefault();
+      if (n <= 1) return;
+      setMediaIndex((i) => Math.max(0, i - 1));
+    },
+    [n]
+  );
+
+  const goNext = useCallback(
+    (e: React.MouseEvent) => {
+      e.stopPropagation();
+      e.preventDefault();
+      if (n <= 1) return;
+      setMediaIndex((i) => Math.min(n - 1, i + 1));
+    },
+    [n]
+  );
+
+  const onCarouselKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      if (n <= 1) return;
+      if (e.key === "ArrowLeft") {
+        e.preventDefault();
+        setMediaIndex((i) => Math.max(0, i - 1));
+      } else if (e.key === "ArrowRight") {
+        e.preventDefault();
+        setMediaIndex((i) => Math.min(n - 1, i + 1));
+      }
+    },
+    [n]
+  );
+
+  if (n === 0) return null;
+
+  const idx = Math.min(mediaIndex, n - 1);
+  const currentUrl = urls[idx];
+  const currentIsVideo = types[idx] === "video" || inferIsVideoFromUrl(currentUrl);
+  const lockedCurrent = isMediaSlotLocked(lockedCfg, idx, n);
+
+  const totalSlots = mediaTotals.images + mediaTotals.videos;
+  const showMultiBadge = totalSlots > 1;
+  const showCarousel = n > 1;
+
+  const badgeAria = [
+    mediaTotals.images > 0
+      ? `${mediaTotals.images} ${mediaTotals.images === 1 ? "image" : "images"}`
+      : "",
+    mediaTotals.videos > 0
+      ? `${mediaTotals.videos} ${mediaTotals.videos === 1 ? "video" : "videos"}`
+      : "",
+  ]
+    .filter(Boolean)
+    .join(", ");
+
+  const slideLabel = `Slide ${idx + 1} of ${n}`;
+
+  const rootClass = splitModal
+    ? `feed-comments-modal-media-wrap fan-feed-media-carousel${
+        showCarousel ? " feed-comments-modal-media-wrap--carousel" : ""
+      }${currentIsVideo ? " feed-card-media-wrap-video" : ""}${
+        lockedCurrent ? " fan-feed-media-cell--locked" : ""
+      }`
+    : `feed-card-media-wrap fan-feed-media-carousel${
+        variant === "detail" ? " fan-member-post-media--detail" : ""
+      }${currentIsVideo ? " feed-card-media-wrap-video" : ""}${
+        lockedCurrent ? " fan-feed-media-cell--locked" : ""
+      }`;
+
   return (
-    <div className={gridClass}>
-      {urls.map((url, i) => {
-        const isVideo = types[i] === "video" || inferIsVideoFromUrl(url);
-        const locked = isMediaSlotLocked(lockedCfg, i, n);
-        return (
+    <div
+      role={showCarousel ? "group" : undefined}
+      aria-roledescription={showCarousel ? "carousel" : undefined}
+      aria-label={showCarousel ? `Post media, ${slideLabel}` : undefined}
+      tabIndex={showCarousel ? 0 : undefined}
+      onKeyDown={showCarousel ? onCarouselKeyDown : undefined}
+      className={rootClass}
+    >
+      {showCarousel ? (
+        <span className="sr-only" aria-live="polite">
+          {slideLabel}
+        </span>
+      ) : null}
+      {currentIsVideo ? (
+        lockedCurrent ? (
+          <video
+            key={`${post.id}-v-${idx}`}
+            src={currentUrl}
+            controls={false}
+            className={splitModal ? "feed-comments-modal-media feed-comments-modal-media-video" : "feed-card-media feed-card-media-video"}
+            playsInline
+            preload="metadata"
+          />
+        ) : splitModal ? (
+          <ViewPostModalVideo
+            src={currentUrl}
+            videoKey={`${post.id}-member-modal-v-${idx}`}
+            accentHex={primary}
+          />
+        ) : (
+          <video
+            key={`${post.id}-v-${idx}`}
+            src={currentUrl}
+            controls
+            className="feed-card-media feed-card-media-video"
+            playsInline
+            preload="metadata"
+          />
+        )
+      ) : (
+        <img
+          key={`${post.id}-i-${idx}`}
+          src={currentUrl}
+          alt=""
+          className={splitModal ? "feed-comments-modal-media" : "feed-card-media"}
+          loading={idx === 0 ? "lazy" : "eager"}
+        />
+      )}
+      {lockedCurrent && (
+        <div className="fan-feed-media-lock-overlay">
+          <span className="fan-feed-media-lock-icon" aria-hidden>
+            🔒
+          </span>
+          <span className="fan-feed-media-lock-text" style={{ color: primary }}>
+            {post.lockedContent?.priceCents != null && post.lockedContent.priceCents > 0
+              ? `Unlock $${(post.lockedContent.priceCents / 100).toFixed(2)}`
+              : "Locked"}
+          </span>
+        </div>
+      )}
+      {showCarousel && (
+        <>
+          {idx > 0 ? (
+            <button
+              type="button"
+              className="fan-feed-media-carousel-btn fan-feed-media-carousel-btn--prev"
+              aria-label="Previous image or video"
+              onClick={goPrev}
+            >
+              <CarouselChevronLeft />
+            </button>
+          ) : null}
+          {idx < n - 1 ? (
+            <button
+              type="button"
+              className="fan-feed-media-carousel-btn fan-feed-media-carousel-btn--next"
+              aria-label="Next image or video"
+              onClick={goNext}
+            >
+              <CarouselChevronRight />
+            </button>
+          ) : null}
           <div
-            key={`${post.id}-m-${i}`}
-            className={`fan-feed-media-cell${locked ? " fan-feed-media-cell--locked" : ""}`}
+            className={splitModal ? "feed-comments-modal-carousel-dots" : "fan-feed-media-carousel-dots"}
+            role="tablist"
+            aria-label="Slides"
           >
-            {isVideo ? (
-              <video
-                src={url}
-                controls={!locked}
-                className="fan-feed-media-video"
-                playsInline
-                preload="metadata"
+            {urls.map((_, i) => (
+              <button
+                key={`${post.id}-dot-${i}`}
+                type="button"
+                role="tab"
+                aria-selected={i === idx}
+                className={
+                  splitModal
+                    ? `feed-comments-modal-carousel-dot${i === idx ? " feed-comments-modal-carousel-dot--active" : ""}`
+                    : `fan-feed-media-carousel-dot${i === idx ? " fan-feed-media-carousel-dot--active" : ""}`
+                }
+                style={i === idx ? { backgroundColor: primary } : undefined}
+                aria-label={`Go to slide ${i + 1}`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  e.preventDefault();
+                  setMediaIndex(i);
+                }}
               />
-            ) : (
-              <img src={url} alt="" className="fan-feed-media-image" />
-            )}
-            {locked && (
-              <div className="fan-feed-media-lock-overlay">
-                <span className="fan-feed-media-lock-icon" aria-hidden>
-                  🔒
-                </span>
-                <span className="fan-feed-media-lock-text" style={{ color: primary }}>
-                  {post.lockedContent?.priceCents != null && post.lockedContent.priceCents > 0
-                    ? `Unlock $${(post.lockedContent.priceCents / 100).toFixed(2)}`
-                    : "Locked"}
-                </span>
-              </div>
-            )}
+            ))}
           </div>
-        );
-      })}
+        </>
+      )}
+      {showMultiBadge && (
+        <span className="feed-card-count" aria-label={badgeAria}>
+          {mediaTotals.images > 0 && (
+            <span className="feed-card-count-item">
+              <MediaImageIcon />
+              {mediaTotals.images} {mediaTotals.images === 1 ? "image" : "images"}
+            </span>
+          )}
+          {mediaTotals.videos > 0 && (
+            <span className="feed-card-count-item">
+              <MediaVideoIcon />
+              {mediaTotals.videos} {mediaTotals.videos === 1 ? "video" : "videos"}
+            </span>
+          )}
+        </span>
+      )}
+    </div>
+  );
+}
+
+function useMemberPostDetail(creatorId: string | undefined, viewPostId: string | null) {
+  const [detailPost, setDetailPost] = useState<Post | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+
+  const reload = useCallback(async () => {
+    if (!viewPostId || !creatorId || !db) {
+      setDetailPost(null);
+      setDetailLoading(false);
+      return;
+    }
+    setDetailLoading(true);
+    setDetailPost(null);
+    try {
+      let found: Post | null = null;
+      for (const col of ["fanPosts", "posts"] as const) {
+        const snap = await getDoc(doc(db, "creators", creatorId, col, viewPostId));
+        if (snap.exists()) {
+          const p = postFromFirestore(snap.id, snap.data());
+          if (p) {
+            found = p;
+            break;
+          }
+        }
+      }
+      setDetailPost(found);
+    } finally {
+      setDetailLoading(false);
+    }
+  }, [viewPostId, creatorId]);
+
+  useEffect(() => {
+    void reload();
+  }, [reload]);
+
+  return { detailPost, detailLoading, reload };
+}
+
+function formatPostCalendarDate(date: Date): string {
+  return date.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+}
+
+function FanMemberPostDetailModal({
+  open,
+  onClose,
+  post,
+  loading,
+  displayName,
+  creatorAvatar,
+  creatorAvatarCropStyle,
+  primary,
+  creatorId: _creatorId,
+  fanId,
+  fanPhotoURL,
+  fanDisplayName,
+  feedSettings,
+  commentDraft,
+  setCommentDraft,
+  commentSending,
+  onSubmitComment,
+  onReloadAfterComment,
+  backLabel = "Back to Home",
+}: {
+  open: boolean;
+  onClose: () => void;
+  post: Post | null;
+  loading: boolean;
+  displayName: string;
+  /** Creator storefront avatar (My Page upload) */
+  creatorAvatar?: string;
+  creatorAvatarCropStyle: React.CSSProperties;
+  primary: string;
+  creatorId: string;
+  fanId?: string;
+  /** Fan profile / auth photo for comment compose */
+  fanPhotoURL?: string;
+  fanDisplayName?: string;
+  feedSettings?: FanFeedVisibilitySettings;
+  commentDraft: Record<string, string>;
+  setCommentDraft: React.Dispatch<React.SetStateAction<Record<string, string>>>;
+  commentSending: string | null;
+  /** When omitted (e.g. Saved tab), comments are read-only */
+  onSubmitComment?: (postId: string, afterSuccess?: () => void) => void | Promise<void>;
+  onReloadAfterComment: () => void | Promise<void>;
+  /** e.g. "Back to Saved" on the Saved tab */
+  backLabel?: string;
+}) {
+  useEffect(() => {
+    if (!open) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open, onClose]);
+
+  if (!open) return null;
+
+  const pid = post?.id ?? "";
+  const draft = commentDraft[pid] ?? "";
+  const commentsVisible = post && !post.hideComments && !feedSettings?.hideComments;
+  const hasMedia = !!post && post.mediaUrls.length > 0;
+
+  return (
+    <div
+      className="fan-member-post-modal-backdrop fan-member-post-modal-backdrop--detail"
+      role="presentation"
+      onClick={onClose}
+    >
+      <div
+        className="fan-member-post-modal fan-member-post-modal--detail fan-member-post-modal--viewpost-split"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="fan-member-viewpost-modal-title"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="feed-comments-modal feed-comments-modal--stack">
+          <div className="feed-comments-modal-head">
+            <div className="fan-member-viewpost-head-row">
+              <button type="button" className="fan-member-viewpost-back" onClick={onClose}>
+                ← {backLabel}
+              </button>
+              {creatorAvatar ? (
+                <img
+                  src={creatorAvatar}
+                  alt=""
+                  className="fan-member-viewpost-creator-avatar"
+                  style={creatorAvatarCropStyle}
+                />
+              ) : (
+                <span className="fan-member-viewpost-creator-avatar fan-member-viewpost-creator-avatar--placeholder" aria-hidden>
+                  {displayName.trim().charAt(0).toUpperCase() || "?"}
+                </span>
+              )}
+              <p id="fan-member-viewpost-modal-title" className="feed-comments-modal-head-title">
+                {displayName}
+              </p>
+            </div>
+            <button type="button" className="feed-comments-modal-close" onClick={onClose} aria-label="Close">
+              ×
+            </button>
+          </div>
+
+          {loading ? (
+            <div className="feed-comments-modal-content feed-comments-modal-content--stack no-media fan-member-viewpost-loading-wrap">
+              <p className="fan-member-post-modal-loading">Loading…</p>
+            </div>
+          ) : !post ? (
+            <div className="feed-comments-modal-content feed-comments-modal-content--stack no-media fan-member-viewpost-loading-wrap">
+              <p className="fan-member-post-modal-loading">This post isn&apos;t available.</p>
+            </div>
+          ) : (
+            <div className={`feed-comments-modal-content feed-comments-modal-content--stack${hasMedia ? "" : " no-media"}`}>
+              <span className="sr-only">Post by {displayName}</span>
+              {hasMedia ? <FanMemberPostMedia post={post} primary={primary} splitModal /> : null}
+              <div className="feed-comments-modal-panel">
+                {post.content?.trim() ? (
+                  <div className="feed-comments-modal-post-body">
+                    <p>{post.content}</p>
+                    <p className="fan-member-viewpost-date-inline">{formatPostCalendarDate(post.createdAt)}</p>
+                  </div>
+                ) : (
+                  <div className="feed-comments-modal-post-body feed-comments-modal-post-body--date-only">
+                    <p className="fan-member-viewpost-date-inline">{formatPostCalendarDate(post.createdAt)}</p>
+                  </div>
+                )}
+                {post.audioUrls && post.audioUrls.length > 0 ? (
+                  <div className="fan-member-post-modal-audio fan-member-post-modal-audio--in-split">
+                    {post.audioUrls.map((url) => (
+                      <DmAudioPlayer key={`modal-${post.id}-a-${url.slice(-24)}`} src={url} className="w-full" />
+                    ))}
+                  </div>
+                ) : null}
+                {commentsVisible ? (
+                  <>
+                    <div className="feed-comments-modal-list">
+                      {!post.commentsList?.length ? (
+                        <p className="feed-comments-modal-empty">No comments yet.</p>
+                      ) : (
+                        post.commentsList.map((c, idx) => (
+                          <div className="feed-comments-modal-item" key={`${post.id}-c-${idx}`}>
+                            <div className="feed-comments-modal-item-avatar" aria-hidden>
+                              <span>{feedCommentAuthorInitial(c.author)}</span>
+                            </div>
+                            <div className="feed-comments-modal-item-body">
+                              <p className="feed-comments-modal-text">
+                                <span className="comment-username">{c.author}</span>
+                                <span className="feed-comments-modal-comment-body">{c.text}</span>
+                              </p>
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                    {onSubmitComment ? (
+                      <form
+                        className="feed-comments-modal-compose"
+                        onSubmit={(e) => {
+                          e.preventDefault();
+                          if (fanId && draft.trim()) void onSubmitComment(pid, () => void onReloadAfterComment());
+                        }}
+                      >
+                        <div className="feed-comments-modal-item-avatar feed-comments-modal-compose-avatar" aria-hidden>
+                          {fanId && fanPhotoURL ? (
+                            <img src={fanPhotoURL} alt="" className="feed-comments-modal-compose-avatar-img" />
+                          ) : (
+                            <span>
+                              {fanId
+                                ? (fanDisplayName || "You").trim().charAt(0).toUpperCase() || "?"
+                                : "?"}
+                            </span>
+                          )}
+                        </div>
+                        <div className="feed-comments-modal-compose-input-wrap">
+                          <input
+                            type="text"
+                            className="feed-comments-modal-compose-input"
+                            placeholder={fanId ? "Write a comment..." : "Log in to comment"}
+                            value={draft}
+                            onChange={(e) => setCommentDraft((prev) => ({ ...prev, [pid]: e.target.value }))}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter" && fanId && draft.trim() && onSubmitComment) {
+                                e.preventDefault();
+                                void onSubmitComment(pid, () => void onReloadAfterComment());
+                              }
+                            }}
+                            disabled={!fanId || commentSending === pid}
+                            aria-label="Write a comment"
+                          />
+                        </div>
+                        <button
+                          type="submit"
+                          className="feed-comments-modal-compose-send"
+                          disabled={!fanId || !draft.trim() || commentSending === pid}
+                        >
+                          {commentSending === pid ? "..." : "Post"}
+                        </button>
+                      </form>
+                    ) : (
+                      <p className="feed-comments-modal-empty fan-member-viewpost-readonly-hint">
+                        Use the Home feed to add a comment.
+                      </p>
+                    )}
+                  </>
+                ) : null}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
@@ -237,6 +772,16 @@ export const FanMemberFeed: React.FC<FanMemberFeedProps> = ({
   const [bookmarkSaving, setBookmarkSaving] = useState(false);
   const [commentDraft, setCommentDraft] = useState<Record<string, string>>({});
   const [commentSending, setCommentSending] = useState<string | null>(null);
+  const [viewPostId, setViewPostId] = useState<string | null>(null);
+  const { detailPost, detailLoading, reload: reloadDetailPost } = useMemberPostDetail(creatorId, viewPostId);
+  const [fanPublicProfile, setFanPublicProfile] = useState<{ photoURL?: string; displayName?: string }>({});
+
+  const fanPhotoResolved =
+    fanPublicProfile.photoURL?.trim() || auth.currentUser?.photoURL?.trim() || undefined;
+  const fanNameResolved =
+    fanPublicProfile.displayName?.trim() ||
+    auth.currentUser?.displayName?.trim() ||
+    undefined;
 
   const fetchPosts = useCallback(async () => {
     setLoading(true);
@@ -279,20 +824,48 @@ export const FanMemberFeed: React.FC<FanMemberFeedProps> = ({
   }, [fetchPosts]);
 
   useEffect(() => {
-    if (!fanId || !creatorId || !db) return;
+    if (!fanId || !db) {
+      setFanPublicProfile({});
+      setBookmarkedPosts(new Set());
+      return;
+    }
+    let cancelled = false;
     getDoc(doc(db, "users", fanId))
       .then((snap) => {
-        if (!snap.exists()) return;
+        if (cancelled) return;
+        if (!snap.exists()) {
+          setFanPublicProfile({});
+          setBookmarkedPosts(new Set());
+          return;
+        }
         const data = snap.data() as Record<string, unknown>;
-        const byCreator = (data[SAVED_BY_CREATOR_KEY] as Record<string, string[]>) || {};
-        const ids = byCreator[creatorId];
-        setBookmarkedPosts(new Set(Array.isArray(ids) ? ids : []));
+        if (creatorId) {
+          const byCreator = (data[SAVED_BY_CREATOR_KEY] as Record<string, string[]>) || {};
+          const ids = byCreator[creatorId];
+          setBookmarkedPosts(new Set(Array.isArray(ids) ? ids : []));
+        } else {
+          setBookmarkedPosts(new Set());
+        }
+        const photo =
+          typeof data.photoURL === "string" && data.photoURL.trim()
+            ? data.photoURL.trim()
+            : typeof data.avatar === "string" && data.avatar.trim()
+              ? data.avatar.trim()
+              : undefined;
+        const name =
+          typeof data.displayName === "string" && data.displayName.trim()
+            ? data.displayName.trim()
+            : undefined;
+        setFanPublicProfile({ photoURL: photo, displayName: name });
       })
       .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
   }, [fanId, creatorId]);
 
   const submitComment = useCallback(
-    async (postId: string) => {
+    async (postId: string, afterSuccess?: () => void | Promise<void>) => {
       const text = (commentDraft[postId] ?? "").trim();
       if (!text || !fanId || commentSending) return;
       const token = await auth.currentUser?.getIdToken();
@@ -313,6 +886,7 @@ export const FanMemberFeed: React.FC<FanMemberFeedProps> = ({
         if (data.success) {
           setCommentDraft((prev) => ({ ...prev, [postId]: "" }));
           fetchPosts();
+          await afterSuccess?.();
         }
       } catch (err) {
         console.error("Failed to add comment", err);
@@ -502,6 +1076,24 @@ export const FanMemberFeed: React.FC<FanMemberFeedProps> = ({
                 </button>
               </div>
 
+              <div className="fan-feed-post-footer">
+                {!(feedSettings?.hideComments || post.hideComments) && (
+                  <p className="fan-feed-post-comments-teaser">
+                    {post.commentsCount === 0
+                      ? "No comments yet."
+                      : `${post.commentsCount} comment${post.commentsCount === 1 ? "" : "s"}`}
+                  </p>
+                )}
+                <button
+                  type="button"
+                  className="fan-feed-view-post-link"
+                  style={{ color: primary }}
+                  onClick={() => setViewPostId(post.id)}
+                >
+                  View post
+                </button>
+              </div>
+
               {!(feedSettings?.hideComments || post.hideComments) && expandedComments.has(post.id) && (
                 <div className="fan-feed-comments">
                   <div className="fan-feed-comment-input-wrap">
@@ -533,6 +1125,27 @@ export const FanMemberFeed: React.FC<FanMemberFeedProps> = ({
           ))
         )}
       </div>
+
+      <FanMemberPostDetailModal
+        open={viewPostId !== null}
+        onClose={() => setViewPostId(null)}
+        post={detailPost}
+        loading={detailLoading}
+        displayName={displayName}
+        creatorAvatar={avatar}
+        creatorAvatarCropStyle={avatarCropStyle}
+        primary={primary}
+        creatorId={creatorId}
+        fanId={fanId}
+        fanPhotoURL={fanPhotoResolved}
+        fanDisplayName={fanNameResolved}
+        feedSettings={feedSettings}
+        commentDraft={commentDraft}
+        setCommentDraft={setCommentDraft}
+        commentSending={commentSending}
+        onSubmitComment={submitComment}
+        onReloadAfterComment={reloadDetailPost}
+      />
     </div>
   );
 };
@@ -561,6 +1174,43 @@ export const FanMemberSaved: React.FC<FanMemberSavedProps> = ({
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
   const [unsavingId, setUnsavingId] = useState<string | null>(null);
+  const [viewPostId, setViewPostId] = useState<string | null>(null);
+  const [commentDraft, setCommentDraft] = useState<Record<string, string>>({});
+  const { detailPost, detailLoading, reload: reloadDetailPost } = useMemberPostDetail(creatorId, viewPostId);
+  const [fanPublicProfile, setFanPublicProfile] = useState<{ photoURL?: string; displayName?: string }>({});
+
+  useEffect(() => {
+    if (!fanId || !db) {
+      setFanPublicProfile({});
+      return;
+    }
+    let cancelled = false;
+    getDoc(doc(db, "users", fanId))
+      .then((snap) => {
+        if (cancelled || !snap.exists()) return;
+        const d = snap.data() as Record<string, unknown>;
+        const photo =
+          typeof d.photoURL === "string" && d.photoURL.trim()
+            ? d.photoURL.trim()
+            : typeof d.avatar === "string" && d.avatar.trim()
+              ? d.avatar.trim()
+              : undefined;
+        const name =
+          typeof d.displayName === "string" && d.displayName.trim() ? d.displayName.trim() : undefined;
+        setFanPublicProfile({ photoURL: photo, displayName: name });
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [fanId]);
+
+  const fanPhotoResolved =
+    fanPublicProfile.photoURL?.trim() || auth.currentUser?.photoURL?.trim() || undefined;
+  const fanNameResolved =
+    fanPublicProfile.displayName?.trim() ||
+    auth.currentUser?.displayName?.trim() ||
+    undefined;
 
   const handleUnsave = useCallback(
     async (postId: string) => {
@@ -700,10 +1350,48 @@ export const FanMemberSaved: React.FC<FanMemberSavedProps> = ({
                   <span>{unsavingId === post.id ? "Removing…" : "Saved"}</span>
                 </button>
               </div>
+              <div className="fan-feed-post-footer">
+                {!(feedSettings?.hideComments || post.hideComments) && (
+                  <p className="fan-feed-post-comments-teaser">
+                    {post.commentsCount === 0
+                      ? "No comments yet."
+                      : `${post.commentsCount} comment${post.commentsCount === 1 ? "" : "s"}`}
+                  </p>
+                )}
+                <button
+                  type="button"
+                  className="fan-feed-view-post-link"
+                  style={{ color: primary }}
+                  onClick={() => setViewPostId(post.id)}
+                >
+                  View post
+                </button>
+              </div>
             </article>
           ))
         )}
       </div>
+
+      <FanMemberPostDetailModal
+        open={viewPostId !== null}
+        onClose={() => setViewPostId(null)}
+        post={detailPost}
+        loading={detailLoading}
+        displayName={displayName}
+        creatorAvatar={avatar}
+        creatorAvatarCropStyle={avatarCropStyle}
+        primary={primary}
+        creatorId={creatorId}
+        fanId={fanId}
+        fanPhotoURL={fanPhotoResolved}
+        fanDisplayName={fanNameResolved}
+        feedSettings={feedSettings}
+        commentDraft={commentDraft}
+        setCommentDraft={setCommentDraft}
+        commentSending={null}
+        onReloadAfterComment={reloadDetailPost}
+        backLabel="Back to Saved"
+      />
     </div>
   );
 };

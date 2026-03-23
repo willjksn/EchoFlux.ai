@@ -14,6 +14,8 @@ The migration copies data from Stormij's Firebase to Echoflux's Firebase:
 
 **Important:** This is a ONE-WAY READ-ONLY migration. Stormij's data is NOT modified or deleted.
 
+**Fans and login:** Migrating `members` writes Firestore `fans` docs; it does **not** automatically create **Firebase Auth** users in EchoFlux. For “they shouldn’t have to sign up again”, see **`docs/MIGRATED_FANS_AUTH.md`** (Auth import + incremental `--collection=members`).
+
 ---
 
 ## Prerequisites

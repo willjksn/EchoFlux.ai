@@ -458,9 +458,25 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             Pinterest: null,
             'My Page': null,
           };
-          items.forEach((item) => {
-            if (item.platform) {
-              accounts[item.platform as Platform] = item as SocialAccount;
+          items.forEach((item: any) => {
+            const docId = String(item.id || "").toLowerCase();
+            const fromDoc: Platform | null =
+              docId === "facebook"
+                ? "Facebook"
+                : docId === "instagram"
+                  ? "Instagram"
+                  : docId === "x" || docId === "twitter"
+                    ? "X"
+                    : docId === "pinterest"
+                      ? "Pinterest"
+                      : docId === "linkedin"
+                        ? "LinkedIn"
+                        : docId === "youtube"
+                          ? "YouTube"
+                          : null;
+            const plat = (item.platform as Platform) || fromDoc;
+            if (plat) {
+              accounts[plat] = item as SocialAccount;
             }
           });
           setSocialAccounts(accounts);

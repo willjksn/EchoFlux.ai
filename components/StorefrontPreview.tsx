@@ -13,6 +13,8 @@ import {
   clearNewMessageNotificationBadge,
 } from "./useUnreadNewMessageNotifications";
 import { resolveStoreCopy } from "../src/lib/storefrontStoreCopy";
+import { resolvePricingLandingCopy } from "../src/lib/pricingLandingCopy";
+import { resolveTipSectionCopy } from "../src/lib/tipSectionCopy";
 
 export type StorefrontHeroMediaItem = NonNullable<CreatorStorefrontSettings["heroMedia"]>[number];
 
@@ -28,11 +30,16 @@ const FONT_SIZE_MAP: Record<NonNullable<TextStyle['fontSize']>, string> = {
 };
 
 // Helper to generate inline styles from TextStyle
-function getTextStyleCSS(style?: TextStyle, defaults?: { fontSize?: string; color?: string; fontFamily?: string }): React.CSSProperties {
+function getTextStyleCSS(
+  style?: TextStyle,
+  defaults?: { fontSize?: string; color?: string; fontFamily?: string; fontStyle?: 'normal' | 'italic' }
+): React.CSSProperties {
+  const fontStyle = style?.fontStyle ?? defaults?.fontStyle;
   return {
     fontSize: style?.fontSize ? FONT_SIZE_MAP[style.fontSize] : defaults?.fontSize,
     color: style?.color || defaults?.color,
     fontFamily: style?.fontFamily || defaults?.fontFamily,
+    ...(fontStyle ? { fontStyle } : {}),
   };
 }
 
@@ -257,16 +264,30 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
   const background = theme.background || DEFAULT_BG;
   const textColor = theme.text || DEFAULT_TEXT;
   const isDark = isDarkBackground(background);
+  /** Landing + member preview top bars — same lite pink treat-card chrome */
+  const previewHeaderChrome: React.CSSProperties = {
+    borderBottom: `1px solid ${primary}25`,
+    background: isDark
+      ? `linear-gradient(160deg, rgba(0, 0, 0, 0.35) 0%, ${primary}12 100%)`
+      : `linear-gradient(160deg, #fffef9 0%, ${primary}0d 100%)`,
+    boxShadow: `0 8px 28px ${primary}12`,
+  };
   const cardBg = isDark ? background : `linear-gradient(140deg, rgba(255, 255, 255, 0.94) 0%, ${primary}06 52%, ${primary}08 100%)`;
   const surfaceBg = isDark ? background : "#fff";
 
   // Member nav tabs from sections/sectionsOrder (Saved hidden in preview — only on live storefront)
   const sections = config.sections ?? { feed: true, treats: true, tip: true, messages: true, about: true };
   const sectionsOrder = config.sectionsOrder ?? DEFAULT_SECTION_ORDER;
-  const memberTabs = sectionsOrder.filter(
-    (key) => key !== "saved" && (sections as Record<string, boolean>)?.[key] !== false
-  );
-  const effectiveTab = activeTab === "saved" && !memberTabs.includes("saved") ? "feed" : activeTab;
+  const chatEnabledPreview = config.monetization?.chatEnabled !== false;
+  const memberTabs = sectionsOrder
+    .filter((key) => key !== "saved" && (sections as Record<string, boolean>)?.[key] !== false)
+    .filter((key) => key !== "messages" || chatEnabledPreview);
+  const effectiveTab =
+    activeTab === "saved" && !memberTabs.includes("saved")
+      ? "feed"
+      : activeTab === "messages" && !memberTabs.includes("messages")
+        ? memberTabs[0] ?? "feed"
+        : activeTab;
 
   const unreadMessageTabCount = useUnreadNewMessageNotificationCount(
     previewMode === "member" ? null : false
@@ -320,6 +341,13 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
   const monetization = config.monetization ?? {};
   const monthlyPriceCents = monetization.monthlyPrice ?? 999;
   const monthlyPrice = (monthlyPriceCents / 100).toFixed(2);
+  const isFreeAccessPreview = monetization.freeAccessEnabled === true;
+  const pricingLandingPreview = resolvePricingLandingCopy(landingContent, {
+    isFreeAccess: isFreeAccessPreview,
+    monthlyPrice,
+  });
+  const tipLandingPreview = resolveTipSectionCopy(landingContent, "landing");
+  const tipMemberPreview = resolveTipSectionCopy(landingContent, "member");
 
   const patchHeroItem = useCallback(
     (index: number, patch: Partial<StorefrontHeroMediaItem>) => {
@@ -477,6 +505,7 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
   }, []);
 
   const globalFont = theme.fontFamily || "Inter, sans-serif";
+  const heroTextBase = { fontFamily: globalFont, fontStyle: "normal" as const };
   // CSS variables for theme
   const themeVars = {
     "--preview-primary": primary,
@@ -500,8 +529,8 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
     >
       {previewMode === "landing" && (
         <div className="storefront-preview-landing" style={{ background: isDark ? background : `linear-gradient(135deg, ${background} 0%, #f8fafc 50%, ${background} 100%)` }}>
-          {/* Header */}
-          <header className="flex items-center justify-between px-4 py-2.5 border-b" style={{ borderColor: `${primary}20` }}>
+          {/* Header — same chrome as member preview */}
+          <header className="flex items-center justify-between px-4 py-2.5" style={previewHeaderChrome}>
             <div className="flex items-center gap-2 min-h-[48px]">
               {logo ? (
                 <img src={logo} alt={displayName} className="h-12 w-auto max-w-[240px] object-contain object-left [mix-blend-mode:multiply]" />
@@ -635,24 +664,24 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
                 )}
                 <div className={`${heroLayout === "split" || heroLayout === "splitRight" ? "flex-1 min-w-0 text-left" : "w-full"}`}>
                   {showDisplayNameOnLanding && (
-                    <h1 className="font-bold mb-1" style={getTextStyleCSS(textStyles.displayName, { fontSize: heroLayout === "centered" ? "1.125rem" : "1.25rem", color: textColor, fontFamily: globalFont })}>
+                    <h1 className="font-bold mb-1" style={getTextStyleCSS(textStyles.displayName, { fontSize: heroLayout === "centered" ? "1.125rem" : "1.25rem", color: textColor, ...heroTextBase })}>
                       {displayName}
                     </h1>
                   )}
                   {heroTagline && (
-                    <p className="mb-2" style={getTextStyleCSS(textStyles.heroTagline, { fontSize: "0.75rem", color: `${textColor}99`, fontFamily: globalFont })}>{heroTagline}</p>
+                    <p className="mb-2" style={getTextStyleCSS(textStyles.heroTagline, { fontSize: "0.75rem", color: `${textColor}99`, ...heroTextBase })}>{heroTagline}</p>
                   )}
-                  <p className="italic mb-2" style={getTextStyleCSS(textStyles.heroPromise, { fontSize: "0.875rem", color: primary, fontFamily: globalFont })}>{heroPromise}</p>
+                  <p className="mb-2" style={getTextStyleCSS(textStyles.heroPromise, { fontSize: "0.875rem", color: primary, ...heroTextBase })}>{heroPromise}</p>
                   {heroSubline && (
                     <p
                       className={heroSubline2 ? "mb-1" : "mb-3"}
-                      style={getTextStyleCSS(textStyles.heroSubline, { fontSize: "0.8125rem", color: `${textColor}cc`, fontFamily: globalFont })}
+                      style={getTextStyleCSS(textStyles.heroSubline, { fontSize: "0.8125rem", color: `${textColor}cc`, ...heroTextBase })}
                     >
                       {heroSubline}
                     </p>
                   )}
                   {heroSubline2 && (
-                    <p className="mb-3" style={getTextStyleCSS(textStyles.heroSubline2, { fontSize: "0.75rem", color: `${textColor}99`, fontFamily: globalFont })}>{heroSubline2}</p>
+                    <p className="mb-3" style={getTextStyleCSS(textStyles.heroSubline2, { fontSize: "0.75rem", color: `${textColor}99`, ...heroTextBase })}>{heroSubline2}</p>
                   )}
                   {!heroSubline && !heroSubline2 && <div className="mb-3" />}
                   {socialLinks.length > 0 && (
@@ -671,15 +700,17 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
               <div className="flex gap-3 pt-14 pl-28 pr-4 pb-14">
                 <div className="flex-1 min-w-0">
                   {showDisplayNameOnLanding && (
-                    <h1 className="font-bold mb-0.5" style={getTextStyleCSS(textStyles.displayName, { fontSize: "1.125rem", color: textColor, fontFamily: globalFont })}>{displayName}</h1>
+                    <h1 className="font-bold mb-0.5" style={getTextStyleCSS(textStyles.displayName, { fontSize: "1.125rem", color: textColor, ...heroTextBase })}>{displayName}</h1>
                   )}
-                  {heroTagline && <p className="text-xs mb-0.5" style={{ color: `${textColor}99` }}>{heroTagline}</p>}
-                  <p className="text-xs italic" style={{ color: primary }}>{heroPromise}</p>
+                  {heroTagline && (
+                    <p className="text-xs mb-0.5" style={getTextStyleCSS(textStyles.heroTagline, { fontSize: "0.75rem", color: `${textColor}99`, ...heroTextBase })}>{heroTagline}</p>
+                  )}
+                  <p className="text-xs" style={getTextStyleCSS(textStyles.heroPromise, { fontSize: "0.75rem", color: primary, ...heroTextBase })}>{heroPromise}</p>
                   {heroSubline && (
-                    <p className="text-[11px] mt-0.5 mb-0.5" style={getTextStyleCSS(textStyles.heroSubline, { color: `${textColor}cc`, fontFamily: globalFont })}>{heroSubline}</p>
+                    <p className="text-[11px] mt-0.5 mb-0.5" style={getTextStyleCSS(textStyles.heroSubline, { color: `${textColor}cc`, ...heroTextBase })}>{heroSubline}</p>
                   )}
                   {heroSubline2 && (
-                    <p className="text-[10px] mb-1" style={getTextStyleCSS(textStyles.heroSubline2, { color: `${textColor}99`, fontFamily: globalFont })}>{heroSubline2}</p>
+                    <p className="text-[10px] mb-1" style={getTextStyleCSS(textStyles.heroSubline2, { color: `${textColor}99`, ...heroTextBase })}>{heroSubline2}</p>
                   )}
                   {socialLinks.length > 0 && (
                     <div className="flex gap-2 mt-1">
@@ -773,21 +804,22 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
           {/* Subscribe Card */}
           <section className="px-4 py-4">
             <div className="rounded-xl p-4 text-center" style={{ background: `linear-gradient(135deg, ${primary}15 0%, ${primary}05 100%)`, border: `1px solid ${primary}30` }}>
-              <h3 className="text-sm font-bold mb-1" style={{ color: textColor }}>Monthly membership</h3>
-              <p className="text-2xl font-bold mb-2" style={{ color: primary }}>${monthlyPrice}</p>
+              <h3 className="text-sm font-bold mb-1" style={{ color: textColor }}>{pricingLandingPreview.cardTitle}</h3>
+              <p className="text-2xl font-bold mb-2" style={{ color: primary }}>{pricingLandingPreview.amountDisplay}</p>
               <ul className="text-xs mb-3 space-y-1" style={{ color: `${textColor}99` }}>
-                <li>✓ Exclusive content</li>
-                <li>✓ Cancel anytime</li>
+                {pricingLandingPreview.bullets.map((line, i) => (
+                  <li key={i}>✓ {line}</li>
+                ))}
               </ul>
               <button
                 type="button"
                 className="w-full py-2.5 rounded-lg text-sm font-semibold text-white transition-transform hover:scale-[1.02]"
                 style={{ background: `linear-gradient(135deg, ${primary} 0%, ${primary}dd 100%)` }}
               >
-                Join - ${monthlyPrice}/mo
+                {pricingLandingPreview.ctaLoggedIn}
               </button>
               <p className="text-[10px] mt-2" style={{ color: `${textColor}66` }}>
-                🔒 Secure payment · Cancel anytime
+                {pricingLandingPreview.trustLine}
               </p>
             </div>
           </section>
@@ -832,8 +864,8 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
           {/* Tip Section */}
           <section className="px-4 pb-6 pt-2">
             <div className="pt-6 border-t text-center" style={{ borderColor: `${primary}20` }}>
-              <p className="text-base font-semibold mb-1" style={{ color: textColor }}>Want to show love?</p>
-              <p className="text-sm mb-4" style={{ color: `${textColor}99` }}>One-time tip — no subscription</p>
+              <p className="text-base font-semibold mb-1" style={{ color: textColor }}>{tipLandingPreview.heading}</p>
+              <p className="text-sm mb-4" style={{ color: `${textColor}99` }}>{tipLandingPreview.subline}</p>
               <div className="flex justify-center flex-wrap gap-2 mb-4">
                 {["$3", "$5", "$10", "$20"].map((amt) => (
                   <button
@@ -918,14 +950,7 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
           } as React.CSSProperties}
         >
           {/* Member Header — outside scroll so notification dropdown isn’t clipped */}
-          <header 
-            className="flex items-center justify-between px-4 py-3 flex-shrink-0 gap-2"
-            style={{ 
-              background: isDark ? background : `linear-gradient(135deg, ${primary}08 0%, rgba(255, 255, 255, 0.98) 50%, ${primary}06 100%)`,
-              boxShadow: isDark ? `0 6px 24px rgba(0,0,0,0.2)` : `0 6px 24px ${primary}15`,
-              borderBottom: `1px solid ${isDark ? `${primary}30` : `${primary}20`}`,
-            }}
-          >
+          <header className="flex items-center justify-between px-4 py-3 flex-shrink-0 gap-2" style={previewHeaderChrome}>
             <div className="flex items-center gap-2 min-h-[48px]">
               {logo ? (
                 <img src={logo} alt={displayName} className="h-12 w-auto max-w-[240px] object-contain object-left [mix-blend-mode:multiply]" />
@@ -1290,10 +1315,10 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
                       margin: "0 0 0.35rem",
                     }}
                   >
-                    Show Your Love
+                    {tipMemberPreview.heading}
                   </h2>
                   <p style={{ fontSize: "0.95rem", color: `${textColor}88`, margin: 0 }}>
-                    No minimum — send what you like.
+                    {tipMemberPreview.subline}
                   </p>
                 </div>
                 

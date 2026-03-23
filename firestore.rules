@@ -223,21 +223,34 @@ service cloud.firestore {
     }
 
     /** -------------------------------------------------------
+     *  CREATOR HANDLES (slug -> creatorId)
+     *  - Public read: availability checks + My Page offline validation
+     *  - Writes: Admin SDK only (updateCreatorStorefront transaction)
+     *  ------------------------------------------------------- */
+    match /creatorHandles/{handle} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    /** Custom apex/www hostname → storefront handle (Admin SDK writes only; public read for optional client use). */
+    match /creatorDomains/{host} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    /** -------------------------------------------------------
      *  CREATORS COLLECTION (Fan Hub storefront / My Page)
      *  -------------------------------------------------------
-     *  - Creator can read their own doc (creatorId == auth.uid) for My Page builder
-     *  - Most storefront writes: API (updateCreatorStorefront) via Admin SDK
-     *  - Client exception: FanHubFeed saves `feedSettings` (merge) — must allow owner update/create for that field only
-     *  - Public storefront reads are done via getBioPage API (by handle)
+     *  - Creator can read/write their own doc (My Page builder + FanHubFeed feedSettings)
+     *  - Production: prefer POST /api/updateCreatorStorefront (validates handle + updates creatorHandles)
+     *  - Local dev: client merge to Firestore when API 404 (same rules must allow owner write)
+     *  - Public storefront reads for fans: other paths / APIs
      *  ------------------------------------------------------- */
     match /creators/{creatorId} {
       allow read: if isAuthenticated() && request.auth.uid == creatorId;
 
-      // Block arbitrary client writes; allow only feedSettings mirror from FanHubFeed (matches users.fanHubFeedSettings)
-      allow create: if isOwner(creatorId)
-        && request.resource.data.keys().hasOnly(['feedSettings']);
-      allow update: if isOwner(creatorId)
-        && request.resource.data.diff(resource.data).changedKeys().hasOnly(['feedSettings']);
+      allow create: if isOwner(creatorId);
+      allow update: if isOwner(creatorId);
       allow delete: if false;
 
       /** Fan Hub posts — creators manage; signed-in users read published (member feed / previews). */

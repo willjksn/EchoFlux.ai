@@ -236,14 +236,26 @@ export default async function handler(
       }, { merge: true });
     }
 
-    // Success - redirect to settings or dashboard
+    // Success — use oauth_success so the app shows a toast and reloads (Settings listens for this).
+    // Legacy ?connected=meta was never handled by the client, so users saw no confirmation and stale UI.
     const successMessage = connectMode === "facebook"
       ? "Facebook connected"
       : connectedAccounts.length > 0
         ? `Connected Facebook and Instagram (${connectedAccounts.length} account${connectedAccounts.length > 1 ? "s" : ""})`
         : "Connected Facebook (no Instagram account found)";
 
-    res.redirect(302, `/?connected=meta&accounts=${connectMode === "facebook" ? 0 : connectedAccounts.length}&message=${encodeURIComponent(successMessage)}`);
+    const next = new URLSearchParams();
+    next.set(
+      "oauth_success",
+      connectMode === "instagram" && connectedAccounts.length > 0
+        ? "instagram"
+        : "facebook"
+    );
+    next.set("message", successMessage);
+    if (connectMode === "instagram") {
+      next.set("ig_accounts", String(connectedAccounts.length));
+    }
+    res.redirect(302, `/?${next.toString()}`);
   } catch (error: any) {
     console.error("OAuth callback error:", error);
     res.redirect(302, `/?error=connection_failed&message=${encodeURIComponent(error.message)}`);
