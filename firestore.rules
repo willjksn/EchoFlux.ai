@@ -64,7 +64,11 @@ service cloud.firestore {
         // Invite-grant markers (server-controlled)
         'inviteGrantPlan',
         'inviteGrantExpiresAt',
-        'inviteGrantExpiredAt'
+        'inviteGrantExpiredAt',
+
+        // Fan/member username — set only via Admin API (claimMemberUsername)
+        'username',
+        'usernameUpdatedAt'
       ];
     }
 
@@ -89,12 +93,20 @@ service cloud.firestore {
           'inviteGrantPlan',
           'inviteGrantExpiresAt',
           'inviteGrantExpiredAt'
-        ]));
+        ]))
+        && !request.resource.data.keys().hasAny(['username', 'usernameUpdatedAt']);
     }
 
     function isSafeUserUpdate() {
       // Prevent updating any restricted fields from the client.
       return !(request.resource.data.diff(resource.data).changedKeys().hasAny(restrictedUserFields()));
+    }
+
+    /** Fan Hub post visible to any signed-in user (feed is gated in-app; published = public-ish doc). */
+    function fanPostReadableByAuthenticatedFan() {
+      return !resource.data.keys().hasAny(['status'])
+        || resource.data.status == 'published'
+        || resource.data.status == 'Published';
     }
 
     /** -------------------------------------------------------
@@ -108,6 +120,15 @@ service cloud.firestore {
       // User can read themselves
       allow read: if isOwner(userId);
 
+      // Creators may read a fan's public profile doc only if that fan is linked to them
+      // (OnlyFansFans / Fan Hub enrich: users/{fanId} + creators/.../fans — rules are doc-level).
+      allow read: if isAuthenticated()
+        && request.auth.uid != userId
+        && (
+          exists(/databases/$(database)/documents/users/$(request.auth.uid)/onlyfans_fan_preferences/$(userId))
+          || exists(/databases/$(database)/documents/creators/$(request.auth.uid)/fans/$(userId))
+        );
+
       // User can create their own doc with restricted defaults only
       allow create: if isOwner(userId) && isSafeUserCreate();
 
@@ -117,6 +138,15 @@ service cloud.firestore {
       // Admin override - Admins can read/write any user document
       // This allows Admin users to update plans, roles, and other user fields
       allow read, write: if isAdmin();
+
+      /**
+       * DM muted thread ids (mirror of fanDmThreads.creatorInboxMuted) — written only by Admin API.
+       * Client reads to hide message notifications for muted conversations.
+       */
+      match /dm_muted_threads/{threadId} {
+        allow read: if isOwner(userId);
+        allow write: if false;
+      }
 
       /** ---------------------------------------------------
        * USER SUBCOLLECTIONS (messages, posts, CRM, calendar, voices, strategies, media_library, etc.)
@@ -180,6 +210,119 @@ service cloud.firestore {
      *  ------------------------------------------------------- */
     match /ad_generator_videos/{docId} {
       allow read, write: if isAdmin();
+    }
+
+    /** -------------------------------------------------------
+     *  MEMBER USERNAMES (global handles for fans)
+     *  - Public read for availability checks in Fan Hub
+     *  - Writes only via Admin SDK (api/claimMemberUsername)
+     *  ------------------------------------------------------- */
+    match /usernames/{username} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    /** -------------------------------------------------------
+     *  CREATOR HANDLES (slug -> creatorId)
+     *  - Public read: availability checks + My Page offline validation
+     *  - Writes: Admin SDK only (updateCreatorStorefront transaction)
+     *  ------------------------------------------------------- */
+    match /creatorHandles/{handle} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    /** Custom apex/www hostname → storefront handle (Admin SDK writes only; public read for optional client use). */
+    match /creatorDomains/{host} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    /** -------------------------------------------------------
+     *  CREATORS COLLECTION (Fan Hub storefront / My Page)
+     *  -------------------------------------------------------
+     *  - Creator can read/write their own doc (My Page builder + FanHubFeed feedSettings)
+     *  - Production: prefer POST /api/updateCreatorStorefront (validates handle + updates creatorHandles)
+     *  - Local dev: client merge to Firestore when API 404 (same rules must allow owner write)
+     *  - Public storefront reads for fans: other paths / APIs
+     *  ------------------------------------------------------- */
+    match /creators/{creatorId} {
+      allow read: if isAuthenticated() && request.auth.uid == creatorId;
+
+      allow create: if isOwner(creatorId);
+      allow update: if isOwner(creatorId);
+      allow delete: if false;
+
+      /** Fan Hub posts — creators manage; signed-in users read published (member feed / previews). */
+      match /fanPosts/{postId} {
+        allow read: if isAuthenticated() && (
+          request.auth.uid == creatorId || fanPostReadableByAuthenticatedFan()
+        );
+        allow create: if isOwner(creatorId);
+        allow update, delete: if isOwner(creatorId);
+      }
+
+      /** Legacy mirror under creators */
+      match /posts/{postId} {
+        allow read: if isAuthenticated() && (
+          request.auth.uid == creatorId || fanPostReadableByAuthenticatedFan()
+        );
+        allow create: if isOwner(creatorId);
+        allow update, delete: if isOwner(creatorId);
+      }
+
+      /** Stripe / entitlements mirror — creator manages; fan reads own doc */
+      match /fans/{fanId} {
+        allow read: if isOwner(creatorId) || (isAuthenticated() && request.auth.uid == fanId);
+        allow create, update, delete: if isOwner(creatorId);
+      }
+
+      /** Manual CRM-style fan entries */
+      match /fanUsers/{manualId} {
+        allow read, write: if isOwner(creatorId);
+      }
+
+      /** Treat unlock grants (creator tools) */
+      match /treatGrants/{grantId} {
+        allow read, write: if isOwner(creatorId);
+      }
+
+      /** Live video sessions — creator manages */
+      match /liveVideoChats/{sessionId} {
+        allow read, write: if isOwner(creatorId);
+      }
+
+      /** Subscriber / member mirror under creator (Dashboard fan stats; writes via Admin / webhooks) */
+      match /subscribers/{subscriberId} {
+        allow read: if isOwner(creatorId) || isAdmin();
+        allow write: if false;
+      }
+
+      /** Order mirror for revenue widgets (Dashboard / AdminDashboard; writes via Admin / Stripe) */
+      match /orders/{orderId} {
+        allow read: if isOwner(creatorId) || isAdmin();
+        allow write: if false;
+      }
+    }
+
+    /** -------------------------------------------------------
+     *  TREATS / PRODUCTS (top-level)
+     *  - Creator owns docs (creatorId == auth.uid): full CRUD for manage UI
+     *  - Public read: visible, non-archived (fan storefront can query by creatorId via client if needed)
+     *  - Server API (Admin SDK) also writes; rules mirror same invariants for client fallback (local dev)
+     *  ------------------------------------------------------- */
+    match /products/{productId} {
+      allow read: if resource.data.visible == true && resource.data.archived == false
+        || (isAuthenticated() && resource.data.creatorId == request.auth.uid);
+
+      allow create: if isAuthenticated()
+        && request.resource.data.creatorId == request.auth.uid;
+
+      allow update: if isAuthenticated()
+        && resource.data.creatorId == request.auth.uid
+        && request.resource.data.creatorId == resource.data.creatorId;
+
+      allow delete: if isAuthenticated() && resource.data.creatorId == request.auth.uid;
     }
 
     /** -------------------------------------------------------

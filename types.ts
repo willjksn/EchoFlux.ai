@@ -1,4 +1,5 @@
 import React from 'react';
+import type { LockedPostContent } from './src/lib/lockedPostMedia';
 
 declare global {
   interface AIStudio {
@@ -12,7 +13,7 @@ declare global {
   }
 }
 
-export type Platform = 'Instagram' | 'TikTok' | 'X' | 'Threads' | 'YouTube' | 'LinkedIn' | 'Facebook' | 'Pinterest';
+export type Platform = 'Instagram' | 'TikTok' | 'X' | 'Threads' | 'YouTube' | 'LinkedIn' | 'Facebook' | 'Pinterest' | 'My Page';
 
 export type MessageType = 'DM' | 'Comment';
 // Business categories: Lead, Support, Opportunity, General
@@ -54,7 +55,7 @@ export interface AnalyticsData {
   }[];
 }
 
-export type Page = 'dashboard' | 'analytics' | 'settings' | 'compose' | 'calendar' | 'team' | 'opportunities' | 'profile' | 'about' | 'contact' | 'pricing' | 'clients' | 'faq' | 'terms' | 'privacy' | 'dataDeletion' | 'admin' | 'automation' | 'approvals' | 'bio' | 'strategy' | 'autopilot' | 'ads' | 'mediaLibrary' | 'inbox' | 'onlyfansStudio' | 'emailCenter';
+export type Page = 'dashboard' | 'analytics' | 'settings' | 'compose' | 'calendar' | 'team' | 'opportunities' | 'profile' | 'about' | 'contact' | 'pricing' | 'clients' | 'faq' | 'terms' | 'privacy' | 'dataDeletion' | 'admin' | 'automation' | 'approvals' | 'bio' | 'strategy' | 'autopilot' | 'ads' | 'mediaLibrary' | 'onlyfansStudio' | 'emailCenter' | 'premiumStudioUpgrade' | 'fanHub';
 
 export interface Settings {
     autoReply: boolean;
@@ -66,6 +67,8 @@ export interface Settings {
       humor: number;
       empathy: number;
       spiciness?: number;
+      emojiLevel?: number;
+      profanity?: number;
     };
     voiceMode: boolean;
     prioritizedKeywords: string;
@@ -193,6 +196,424 @@ export interface BioPageConfig {
     emailCapture?: EmailCaptureConfig;
 }
 
+/** Button style for storefront theme */
+export type StorefrontButtonStyle = 'solid' | 'outline' | 'pill';
+
+/** Monetization settings (non-explicit, IG-like) */
+export interface CreatorMonetization {
+    monthlyPrice?: number;       // cents or display value; platform interprets
+    currency?: 'usd';
+    lockedDefaultPrice?: number; // cents
+    tipsEnabled?: boolean;
+    chatEnabled?: boolean;
+    /** Fan DM video file attachments only (not live 1:1 or livestream — see docs/LIVE_VIDEO_AND_STREAMS.md). */
+    videoEnabled?: boolean;
+    freeAccessEnabled?: boolean; // Allow fans to join for free (no subscription required)
+}
+
+/** Social link configuration for a single platform */
+export interface SocialLinkConfig {
+    url: string;
+    show: boolean;
+}
+
+/** All social links for a creator's storefront */
+export interface CustomSocialLink {
+    name: string;
+    url: string;
+    show: boolean;
+    icon?: string;
+}
+
+export interface StorefrontSocialLinks {
+    instagram?: SocialLinkConfig;
+    facebook?: SocialLinkConfig;
+    x?: SocialLinkConfig;
+    tiktok?: SocialLinkConfig;
+    youtube?: SocialLinkConfig;
+    custom?: CustomSocialLink[];
+}
+
+/** Landing page content sections (editable by creator) */
+export interface StorefrontLandingContent {
+    perksTitle?: string;        // "Why This Exists" section title
+    perksText?: string;         // Main text for perks section
+    perksList?: string[];       // Bullet points list
+    previewTitle?: string;      // "What You Get" section title
+    previewText?: string;       // Main text for preview section
+    previewList?: string[];     // Features list
+    energyTitle?: string;       // "The Energy" testimonial section title
+    energyLines?: string[];     // Array of energy/vibe lines
+    boundaryTitle?: string;     // "The Boundary" FAQ section title (also member About tab guidelines heading)
+    boundaryText?: string;      // Boundary/rules text
+    /** Member hub store tab + panel: main title (default "Store") */
+    memberStoreTitle?: string;
+    /** Subtitle under the store panel title */
+    memberStoreSubtitle?: string;
+    /** Empty state when no products (fan-facing) */
+    memberStoreEmptyMessage?: string;
+    /** Loading line in store panel */
+    memberStoreLoadingMessage?: string;
+    /** Public landing promo card (subscribers / preview): headline */
+    storeLandingHeadline?: string;
+    storeLandingDescription?: string;
+    storeLandingCtaLabel?: string;
+    /** Guest checkout card on public landing */
+    publicStoreCardTitle?: string;
+    publicStoreCardDescription?: string;
+    /** Guest "open store" button (count may be appended as " (3)") */
+    publicStoreOpenCtaLabel?: string;
+    /** Title of the guest store modal */
+    publicStoreModalTitle?: string;
+    /** Guest modal when there are no products */
+    publicStoreModalEmptyMessage?: string;
+
+    // --- Public landing #pricing membership card (optional overrides) ---
+    /** Card heading when paid subscription (default "Monthly membership") */
+    pricingPaidTitle?: string;
+    /** Card heading when free access (default "Free membership") */
+    pricingFreeTitle?: string;
+    /** Large price line when paid (default "$9.99" from dashboard monthly price) */
+    pricingPaidAmountLabel?: string;
+    /** Large price line when free (default "Free") */
+    pricingFreeAmountLabel?: string;
+    /** Bullet lines (✓ added in UI). Empty = built-in defaults for paid vs free */
+    pricingCardBullets?: string[];
+    pricingCtaLoggedInPaid?: string;
+    pricingCtaLoggedInFree?: string;
+    pricingCtaGuestPaid?: string;
+    pricingCtaGuestFree?: string;
+    pricingTrustLinePaid?: string;
+    pricingTrustLineFree?: string;
+    /** Bottom "Join" banner — main line (default paid: $X/month; free: "Free to join") */
+    pricingFinalBannerPriceLine?: string;
+    pricingFinalBannerSubline?: string;
+
+    // --- Tip block (public landing + member Tip tab share heading) ---
+    /** Main heading for tips on landing and in member hub Tip tab (default "Want to show love?") */
+    tipSectionHeading?: string;
+    /** Subline on public landing only (default "One-time tip — no subscription") */
+    tipSectionSublineGuest?: string;
+    /** Subline on member Tip tab only — no "no subscription" wording by default */
+    tipSectionSublineMember?: string;
+}
+
+/** Legal pages configuration */
+export interface StorefrontLegal {
+    termsText?: string;
+    termsLastUpdated?: string;  // ISO date string
+    privacyText?: string;
+    privacyLastUpdated?: string; // ISO date string
+}
+
+/**
+ * Optional overrides for the fan-facing Log in / Sign up modal on the storefront.
+ * If unset, the modal uses your theme colors — or soft pink/burgundy defaults when the theme is still the built-in indigo.
+ */
+export interface FanAuthBranding {
+    /** e.g. "Inner Circle" — used in subtitles like "Log in to …" */
+    communityName?: string;
+    loginTitle?: string;
+    loginSubtitle?: string;
+    signupTitle?: string;
+    signupSubtitle?: string;
+    /** Modal primary (buttons, links); overrides theme.primary for auth only */
+    primaryColor?: string;
+    /** Headings / labels (burgundy on Stormij) */
+    accentTextColor?: string;
+    /** Active tab background */
+    softTint?: string;
+}
+
+/** Text styling for storefront customization */
+export interface TextStyle {
+    fontSize?: 'xs' | 'sm' | 'base' | 'lg' | 'xl' | '2xl' | '3xl';
+    color?: string; // hex color
+    fontFamily?: string; // font family name
+    /** When set, overrides default upright hero/body text */
+    fontStyle?: 'normal' | 'italic';
+}
+
+/** Fan Hub My Page / storefront settings persisted at creators/{creatorId} */
+export interface CreatorStorefrontSettings {
+    handle: string; // unique, lowercase, 3-20 chars, alphanumeric + underscore; URL /{handle}
+    displayName?: string;
+    bio?: string;
+    avatar?: string; // image URL - shown on feed posts (profile pic)
+    /** CSS object-position for avatar when shown in circular crop (e.g. full-background hero). E.g. `40% 20%`. */
+    avatarObjectPosition?: string;
+    logo?: string;   // image URL - shown in header (like Stormij XO logo)
+    /** When false, hide display name from landing hero (still shown in header and feed) */
+    showDisplayNameOnLanding?: boolean;
+
+    // Hero Section
+    heroImage?: string;         // Legacy: single hero image URL (used if heroMedia is empty)
+    /** Multiple hero images with optional size. fullBackground = one image as section background. */
+    heroMedia?: {
+        url: string;
+        size?: 'small' | 'medium' | 'large' | 'fullBackground';
+        /** When size is fullBackground: which part of the image is visible (CSS background-position, e.g. `45% 30%`). */
+        backgroundPosition?: string;
+        /** For grid hero images: focal point (CSS object-position, e.g. `50% 25%`). */
+        objectPosition?: string;
+        /** fullBackground only: avatar overlay horizontal offset (CSS length, e.g. `1rem` or `24px`). */
+        landingAvatarLeft?: string;
+        /** fullBackground only: avatar offset from section bottom (CSS length, often negative e.g. `-48px`). */
+        landingAvatarBottom?: string;
+    }[];
+    heroTagline?: string;       // Short tagline under display name
+    heroPromise?: string;       // "Your access to..." promise text
+    heroSubline?: string;       // Extra line after promise text on landing hero
+    heroSubline2?: string;      // Optional second line below heroSubline on landing hero
+    
+    // Text Styling (font size & color per field)
+    textStyles?: {
+        displayName?: TextStyle;
+        bio?: TextStyle;
+        heroTagline?: TextStyle;
+        heroPromise?: TextStyle;
+        heroSubline?: TextStyle;
+        heroSubline2?: TextStyle;
+        perksTitle?: TextStyle;
+        perksText?: TextStyle;
+        previewTitle?: TextStyle;
+        previewText?: TextStyle;
+        energyTitle?: TextStyle;
+        boundaryTitle?: TextStyle;
+        boundaryText?: TextStyle;
+    };
+    
+    // Social Links
+    socialLinks?: StorefrontSocialLinks;
+    
+    // Landing Page Content
+    landingContent?: StorefrontLandingContent;
+    
+    // Legal
+    legal?: StorefrontLegal;
+    
+    theme?: {
+        primary: string;
+        background: string;
+        text?: string;   // hex, default from background contrast
+        textMuted?: string; // hex, muted/secondary text color
+        border?: string;    // hex, border color for cards/sections
+        accentHover?: string; // hex, hover state for accent/primary
+        buttonStyle?: StorefrontButtonStyle; // 'solid' | 'outline' | 'pill'
+        /** Global font family for storefront (e.g. "Inter, sans-serif") */
+        fontFamily?: string;
+        /** Id of a preset (e.g. "default" | "stormij" | "ocean") for quick apply */
+        presetId?: string;
+    };
+    /** Hero section layout on landing: default (image + text stack) | centered (compact) | split (image left, text right) */
+    heroLayout?: 'default' | 'centered' | 'split' | 'splitRight';
+    sections?: {
+        feed: boolean;
+        treats: boolean;
+        tip: boolean;
+        messages: boolean;
+        about?: boolean;
+    };
+    /** Order of section keys for tab bar (e.g. ['feed','treats','messages','about']) */
+    sectionsOrder?: string[];
+    spicyMode?: boolean; // 18+ gate + policy text on storefront
+    rules?: {
+        boundariesText?: string; // About/Boundaries block (markdown or plain)
+    };
+    monetization?: CreatorMonetization;
+    onboardingStatus?: string;
+    /** When true, visible store products can be purchased on the public landing page without signing in (guest Stripe checkout). */
+    publicTreatsOnLanding?: boolean;
+    /** Fan log in / sign up modal: community name, copy, and optional color overrides */
+    fanAuthBranding?: FanAuthBranding;
+    updatedAt?: string;  // ISO
+}
+
+/** Fan Hub store product type (creator-defined product kinds) */
+export type TreatProductType =
+    | 'tip'
+    | 'unlock_media'
+    | 'bundle'
+    | 'chat_session'
+    | 'voice_note_30s'
+    | 'voice_note_60s'
+    | 'private_video_reply'
+    | 'birthday_message'
+    | 'overthinking_response'
+    | 'random_checkin'
+    | 'live_chat_5m'
+    | 'live_chat_15m'
+    | 'live_chat_30m'
+    | 'live_chat_45m'
+    | 'live_chat_60m'
+    | 'live_chat_1h'
+    | 'live_video_5m'
+    | 'live_video_10m'
+    | 'live_video_15m'
+    | 'live_video_30m'
+    | 'live_video_45m'
+    | 'live_video_60m'
+    | 'custom';
+
+/** Locked / PPV block on fan feed posts — alias for `LockedPostContent` in `src/lib/lockedPostMedia.ts`. */
+export type FanHubPostLockedContent = LockedPostContent;
+
+/** Firestore-aligned fields for creator-published fan hub posts (subset; extend as needed). */
+export interface CreatorFanHubPostFirestore {
+  creatorId?: string;
+  body?: string;
+  content?: string;
+  mediaUrls?: string[];
+  mediaTypes?: ("image" | "video")[];
+  audioUrls?: string[];
+  lockedContent?: FanHubPostLockedContent;
+  likeCount?: number;
+  likesCount?: number;
+  likedBy?: string[];
+  comments?: unknown[];
+  commentsCount?: number;
+  status?: "published" | "scheduled" | "draft";
+  pinned?: boolean;
+  hideComments?: boolean;
+  hideLikes?: boolean;
+  /** When true, fans do not see like counts on this post */
+  hideLikeCounts?: boolean;
+  createdAt?: unknown;
+  publishedAt?: unknown;
+}
+
+/** Single product in the fan store (Firestore: products/{productId}). */
+export interface TreatProduct {
+    id: string;
+    creatorId: string;
+    type: TreatProductType;
+    title: string;
+    description?: string;
+    /** Price in cents (e.g. 499 = $4.99) */
+    priceCents: number;
+    /** For unlock_media: media URL or storage path */
+    mediaUrl?: string;
+    /** Card thumbnail/preview image URL */
+    imageUrl?: string;
+    archived: boolean;
+    /** When false, product is hidden everywhere (unpublished) */
+    visible: boolean;
+    /** When false, hidden from public landing store / guest checkout. Default true if omitted. */
+    showOnLandingPage?: boolean;
+    /** When false, hidden from logged-in members’ store tab. Default true if omitted. */
+    showInMemberStore?: boolean;
+    sortOrder?: number;
+    /** For live_video types: duration in minutes */
+    durationMinutes?: number;
+    /** Quantity limit (sold out when soldCount >= quantityLimit) */
+    quantityLimit?: number;
+    /** Number sold */
+    soldCount?: number;
+    createdAt: Date | string;  // ISO or Date
+    updatedAt: Date | string;  // ISO or Date
+}
+
+/** Live Video Chat Session Status */
+export type LiveVideoChatStatus = 
+    | 'pending'      // Fan requested, waiting for creator
+    | 'accepted'     // Creator accepted, room ready
+    | 'active'       // Both parties in call
+    | 'completed'    // Session ended normally
+    | 'declined'     // Creator declined
+    | 'expired'      // Request timed out
+    | 'cancelled';   // Fan cancelled
+
+/** Live Video Chat Session (Firestore: creators/{creatorId}/liveVideoChats/{sessionId}) */
+export interface LiveVideoChatSession {
+    id: string;
+    creatorId: string;
+    fanId: string;
+    fanEmail?: string;
+    fanDisplayName?: string;
+    /** Product ID that was purchased */
+    productId: string;
+    /** Duration purchased in minutes */
+    durationMinutes: number;
+    /** Actual minutes used */
+    minutesUsed: number;
+    /** Amount paid in cents */
+    amountPaidCents: number;
+    /** Creator earnings after commission */
+    creatorEarningsCents: number;
+    status: LiveVideoChatStatus;
+    /** Daily.co room URL */
+    roomUrl?: string;
+    /** Daily.co room name */
+    roomName?: string;
+    /** Optional note from fan when requesting */
+    fanNote?: string;
+    requestedAt: string;  // ISO
+    acceptedAt?: string;  // ISO
+    startedAt?: string;   // ISO
+    endedAt?: string;     // ISO
+    /** Scheduled for later (ISO timestamp) */
+    scheduledFor?: string;
+}
+
+/** Fan entitlement per creator: subscription + unlocked product ids (Firestore: creatorEntitlements/{creatorId}/grants/{fanId}) */
+export interface FanEntitlementGrant {
+    subscription: boolean;
+    unlockedProductIds: string[];
+    updatedAt: string;  // ISO
+}
+
+/** Fan–creator DM thread (Firestore: fanDmThreads/{threadId}); threadId = [creatorId, fanId].sort().join('_') */
+export interface FanDmThread {
+    id: string;
+    creatorId: string;
+    fanId: string;
+    lastMessageAt: string;  // ISO
+    lastMessagePreview?: string;
+    createdAt: string;
+    updatedAt: string;
+    /** True if the fan has sent at least one message (for Requests tab). */
+    fanHasSentMessage?: boolean;
+    /** Creator inbox: pin / mute / manual unread (set via /api/fanDmThreadCreatorInbox). */
+    creatorInboxPinned?: boolean;
+    creatorInboxPinnedAt?: string;
+    creatorInboxMuted?: boolean;
+    creatorMarkedUnread?: boolean;
+    /** For list display: other party display name/avatar (set by API) */
+    otherPartyDisplayName?: string;
+    otherPartyAvatar?: string;
+}
+
+/** Single message in a fan–creator thread (Firestore: fanDmThreads/{threadId}/messages/{messageId}) */
+export interface FanDmMessage {
+    id: string;
+    threadId: string;
+    senderId: string;   // creatorId or fanId
+    content: string;
+    createdAt: string;  // ISO
+    /** True when the recipient has opened the thread (see /api/fanDmMessages mark-as-read). */
+    read?: boolean;
+    /** Optional media (Firebase Storage or CDN URL). */
+    attachmentUrl?: string;
+    attachmentType?: "image" | "video" | "audio";
+    reported?: boolean;
+    reportId?: string;
+}
+
+/** Report for admin review (Firestore: reports/{reportId}) */
+export interface FanDmReport {
+    id: string;
+    creatorId: string;
+    fanId: string;
+    threadId: string;
+    messageId: string;
+    reporterId: string;  // who reported (creator or fan)
+    reason: string;
+    status: 'pending' | 'reviewed' | 'dismissed';
+    createdAt: string;
+    reviewedAt?: string;
+    reviewedBy?: string;
+}
+
 export type Plan = 'Free' | 'Caption' | 'Pro' | 'Elite' | 'Agency' | 'Growth' | 'Starter' | 'OnlyFansStudio';
 
 export interface Client {
@@ -241,12 +662,13 @@ export interface MediaLibraryItem {
   userId: string;
   url: string;
   name: string;
-  type: 'image' | 'video';
+  type: 'image' | 'video' | 'audio';
   mimeType: string;
   size?: number;
   uploadedAt: string;
   usedInPosts?: string[]; // Array of post IDs where this media was used
   tags?: string[];
+  duration?: number; // Duration in seconds for audio/video
   folderId?: string; // Folder ID - defaults to 'general' if not set
 }
 
@@ -357,6 +779,8 @@ export interface User {
     amount: number;
     claimedAt: string;
   }>;
+  /** Global fan / member handle (lowercase); set only via `api/claimMemberUsername` */
+  username?: string;
 }
 
 export interface Notification {
@@ -577,11 +1001,12 @@ export interface ComposeState {
 export interface CalendarEvent {
     id: string;
     title: string;
-    date: string; 
+    date: string;
     type: 'Post' | 'Story' | 'Reel' | 'Email';
     platform: Platform;
     status: 'Scheduled' | 'Draft' | 'Published' | 'In Review';
     thumbnail?: string;
+    description?: string;
 }
 
 export interface CRMNote {
@@ -663,6 +1088,43 @@ export interface StrategyPlan {
             targetMetric?: number;
         }>;
     };
+}
+
+/** Single idea from "What to Post" / generateDailyPostIdeas */
+export interface DailyPostIdea {
+    id: string;
+    format: string;
+    title: string;
+    hook: string;
+    shotList: string[];
+    captionStarter?: string;
+    cta?: string;
+    hashtags: string[];
+    whyThisWorks?: string;
+    trendBased?: boolean;
+    trendContext?: string;
+    placeholderImage?: string;
+    imageSource?: 'unsplash' | 'ai';
+}
+
+/** Settings used when generating daily ideas */
+export interface WhatToPostSettings {
+    platform: string;
+    goal: string;
+    effort: number;
+    format: string;
+    tone: string;
+    useTrends?: boolean;
+    spicyMode?: boolean;
+}
+
+/** Saved idea in Firestore (users/{uid}/savedIdeas) */
+export interface SavedIdea {
+    id: string;
+    creatorId: string;
+    createdAt: string;
+    settings: WhatToPostSettings;
+    idea: DailyPostIdea;
 }
 
 export interface VideoScene {

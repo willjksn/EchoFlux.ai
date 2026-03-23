@@ -12,6 +12,15 @@ Create a file named `.env.local` in the **root directory** of your project (same
 
 **Important:** Never commit `.env.local` to git - it should be in `.gitignore` (it should already be there).
 
+**Optional — proxy `/api` during `npm run dev`:**  
+`vercel dev` may not start on this repo (too many `api/` routes; see `docs/LOCAL_DEV.md`). To hit a real API from localhost, add:
+
+```env
+DEV_API_PROXY=https://your-deployment.vercel.app
+```
+
+(Vite forwards `/api/*` to that origin. Not a `VITE_*` variable.)
+
 ### Step 2: Add your environment variables
 
 Copy this template into your `.env.local` file and fill in your actual values:

@@ -15,9 +15,12 @@ interface RoleplayScenario {
     endingCTA: string;
 }
 
-export const OnlyFansRoleplayIdeas: React.FC = () => {
+export type RoleplayIdeasTab = 'roleplay' | 'persona' | 'interactive' | 'ratings' | 'sexting';
+
+export const OnlyFansRoleplayIdeas: React.FC<{ initialTab?: RoleplayIdeasTab; singleTabMode?: boolean }> = ({ initialTab, singleTabMode }) => {
     const { showToast } = useAppContext();
-    const [activeTab, setActiveTab] = useState<'roleplay' | 'persona' | 'interactive' | 'ratings' | 'sexting'>('roleplay');
+    const [activeTab, setActiveTab] = useState<RoleplayIdeasTab>(initialTab ?? 'roleplay');
+    const effectiveTab = singleTabMode ? (initialTab ?? 'roleplay') : activeTab;
     const [isGenerating, setIsGenerating] = useState(false);
 
     // Roleplay Scenario state
@@ -31,6 +34,9 @@ export const OnlyFansRoleplayIdeas: React.FC = () => {
     // Persona Builder state
     const [personaPrompt, setPersonaPrompt] = useState('');
     const [generatedPersona, setGeneratedPersona] = useState<string>('');
+    const [showPersonaAiHelp, setShowPersonaAiHelp] = useState(false);
+    const [personaAiHelpPrompt, setPersonaAiHelpPrompt] = useState('');
+    const [isPersonaAiHelpGenerating, setIsPersonaAiHelpGenerating] = useState(false);
 
     // Interactive Post Ideas state
     const [interactivePrompt, setInteractivePrompt] = useState('');
@@ -280,6 +286,96 @@ Make it detailed, creative, and tailored for adult content platforms. Format as 
         }
     };
 
+    const handlePersonaAiHelp = async () => {
+        setIsPersonaAiHelpGenerating(true);
+        try {
+            const token = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
+            
+            const currentText = personaPrompt.trim();
+            const userInstruction = personaAiHelpPrompt.trim();
+            
+            let prompt = '';
+            if (!currentText && !userInstruction) {
+                // Start from scratch - help them brainstorm
+                prompt = `You're helping a content creator build their persona for their fan page. They're just getting started and need help figuring out what kind of persona would work for them.
+
+Ask them 3-4 friendly questions to help discover their ideal persona, such as:
+- What's your natural personality like? (playful, nurturing, mysterious, confident, etc.)
+- What are your interests or hobbies that could inform your persona?
+- What kind of connection do you want with your fans? (girlfriend experience, mentor, friend, fantasy figure)
+- Is there a specific vibe or aesthetic you're drawn to?
+
+Write as if you're having a conversation with them. Be warm and helpful. End with a simple prompt they can fill in like: "Based on this, try describing yourself as: [personality type] + [interest/vibe] + [connection style]"`;
+            } else if (currentText && !userInstruction) {
+                // They have some text, help refine it
+                prompt = `The creator has started describing their persona:
+
+"${currentText}"
+
+Help them expand and refine this description. Suggest:
+1. Additional personality traits that would complement what they've written
+2. Specific quirks or unique characteristics that would make the persona memorable
+3. Communication style suggestions (how would this persona talk to fans?)
+4. Content themes that would fit naturally
+
+Write 2-3 short paragraphs of suggestions, then provide an enhanced version of their persona description they can use or modify.`;
+            } else if (userInstruction) {
+                // They have specific instructions
+                prompt = `The creator is building their persona and needs help.
+
+Current description: "${currentText || '(none yet)'}"
+
+Their request: "${userInstruction}"
+
+Help them with what they asked for. If they're asking for ideas, give them 3-5 specific suggestions. If they want refinement, improve their text. If they need inspiration, provide creative directions.
+
+Be helpful, specific, and actionable. Write in a friendly, conversational tone.`;
+            }
+
+            const response = await fetch('/api/generateText', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+                },
+                body: JSON.stringify({
+                    prompt,
+                    context: {
+                        goal: 'persona-assistance',
+                        tone: 'Helpful',
+                        platforms: ['OnlyFans'],
+                    },
+                }),
+            });
+
+            if (!response.ok) {
+                throw new Error('Failed to get AI help');
+            }
+
+            const data = await response.json();
+            const text = data.text || data.caption || '';
+            
+            // If they had no text and no instructions, set this as help guidance
+            // Otherwise, set it as the new persona prompt
+            if (!currentText && !userInstruction) {
+                // Show as guidance, don't replace the prompt
+                setGeneratedPersona(text);
+            } else {
+                // Extract any enhanced description if present, otherwise show the full response
+                setGeneratedPersona(text);
+            }
+            
+            setShowPersonaAiHelp(false);
+            setPersonaAiHelpPrompt('');
+            showToast('AI suggestions ready!', 'success');
+        } catch (error: any) {
+            console.error('Error getting AI help:', error);
+            showToast(error.message || 'Failed to get AI help. Please try again.', 'error');
+        } finally {
+            setIsPersonaAiHelpGenerating(false);
+        }
+    };
+
     const handleGenerateInteractive = async () => {
         if (!interactivePrompt.trim()) {
             showToast('Please describe what kind of interactive posts you want', 'error');
@@ -435,7 +531,7 @@ Format as a numbered list (1-12) with complete prompt text. Make them creative, 
         showToast('Copied to clipboard!', 'success');
     };
 
-    const tabs: { id: typeof activeTab; label: string }[] = [
+    const tabs: { id: RoleplayIdeasTab; label: string }[] = [
         { id: 'roleplay', label: 'Roleplay Scripts' },
         { id: 'sexting', label: 'Chat/Sexting Session' },
         { id: 'persona', label: 'Persona Builder' },
@@ -445,28 +541,39 @@ Format as a numbered list (1-12) with complete prompt text. Make them creative, 
 
     return (
         <div className="max-w-5xl mx-auto">
-            {/* Header */}
+            {/* Header: dynamic when singleTabMode (e.g. Persona Builder, Interactive Prompts) */}
             <div className="mb-6">
                 <div className="flex items-center gap-3 mb-2">
                     <SparklesIcon className="w-8 h-8 text-primary-600 dark:text-primary-400" />
                     <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
-                        Scripts & Roleplay
+                        {singleTabMode && initialTab === 'persona'
+                            ? 'Persona Builder'
+                            : singleTabMode && initialTab === 'interactive'
+                            ? 'Interactive Prompts'
+                            : 'Scripts & Roleplay'}
                     </h1>
                 </div>
                 <p className="text-gray-600 dark:text-gray-400">
-                    Pick a vibe and get scripts, prompts, and scenes ready to use.
+                    {singleTabMode && initialTab === 'persona'
+                        ? 'Create and refine character personas for your content and messaging.'
+                        : singleTabMode && initialTab === 'interactive'
+                        ? 'Generate interactive post prompts to boost engagement.'
+                        : 'Pick a vibe and get scripts, prompts, and scenes ready to use.'}
                 </p>
             </div>
 
-            {/* Important Notice */}
+            {/* Important Notice (hidden when singleTabMode) */}
+            {!singleTabMode && (
             <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4 mb-6">
                 <p className="text-sm text-yellow-800 dark:text-yellow-200">
                     <strong>Note:</strong> These tools generate creative ideas and scripts for content creation. 
                     They do not send messages automatically. You remain in control of all interactions.
                 </p>
             </div>
+            )}
 
-            {/* Tabs */}
+            {/* Tabs (hidden when singleTabMode) */}
+            {!singleTabMode && (
             <div className="flex flex-nowrap gap-2 mb-6 border-b border-gray-200 dark:border-gray-700 overflow-x-auto pb-1">
                 {tabs.map((tab) => (
                     <button
@@ -482,9 +589,10 @@ Format as a numbered list (1-12) with complete prompt text. Make them creative, 
                     </button>
                 ))}
             </div>
+            )}
 
             {/* Roleplay Scenarios Tab */}
-            {activeTab === 'roleplay' && (
+            {effectiveTab === 'roleplay' && (
                 <div className="space-y-6">
                     <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
                         <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
@@ -681,7 +789,7 @@ Format as a numbered list (1-12) with complete prompt text. Make them creative, 
             )}
 
             {/* Persona Builder Tab */}
-            {activeTab === 'persona' && (
+            {effectiveTab === 'persona' && (
                 <div className="space-y-6">
                     <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
                         <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
@@ -689,21 +797,85 @@ Format as a numbered list (1-12) with complete prompt text. Make them creative, 
                         </h2>
                         
                         <div className="space-y-4">
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                    Describe the persona you want to create:
-                                </label>
+                            <div className="relative">
+                                <div className="flex items-center justify-between mb-2">
+                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                        Describe the persona you want to create:
+                                    </label>
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowPersonaAiHelp(!showPersonaAiHelp)}
+                                        className="text-gray-400 hover:text-primary-600 dark:hover:text-primary-400 flex items-center gap-1 text-sm"
+                                        title="Get AI help building your persona"
+                                    >
+                                        <SparklesIcon className="w-4 h-4" />
+                                        <span>AI Help</span>
+                                    </button>
+                                </div>
                                 <textarea
                                     value={personaPrompt}
                                     onChange={(e) => setPersonaPrompt(e.target.value)}
-                                    placeholder="e.g., 'A confident, playful domme with a fitness background' or 'A soft, caring girlfriend experience persona'"
+                                    placeholder="e.g., 'A confident, playful domme with a fitness background' or 'A soft, caring girlfriend experience persona' — or click AI Help to get started!"
                                     className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white resize-y min-h-[100px]"
                                 />
+                                
+                                {/* AI Help Panel */}
+                                {showPersonaAiHelp && (
+                                    <div className="absolute z-20 right-0 top-full mt-2 w-full md:w-96 bg-white dark:bg-gray-800 rounded-lg shadow-xl p-4 border border-gray-200 dark:border-gray-600">
+                                        <div className="mb-3">
+                                            <h4 className="text-sm font-semibold text-gray-900 dark:text-white">AI Persona Assistant</h4>
+                                            <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
+                                                {personaPrompt.trim() 
+                                                    ? "Tell me what you'd like help with, or leave blank to get suggestions for refining what you've written."
+                                                    : "Not sure where to start? Click 'Help me get started' and I'll ask you some questions to discover your ideal persona."
+                                                }
+                                            </p>
+                                        </div>
+                                        <textarea
+                                            value={personaAiHelpPrompt}
+                                            onChange={(e) => setPersonaAiHelpPrompt(e.target.value)}
+                                            placeholder={personaPrompt.trim() 
+                                                ? "e.g., 'Make it more mysterious', 'Add some humor', 'Give me personality trait ideas'..."
+                                                : "e.g., 'I want something playful', 'Help me be more unique', or leave blank to start with questions..."
+                                            }
+                                            rows={3}
+                                            className="w-full p-2 text-sm border rounded-md bg-gray-50 dark:bg-gray-700 border-gray-300 dark:border-gray-600 dark:text-white dark:placeholder-gray-400 resize-y mb-3"
+                                        />
+                                        <div className="flex gap-2">
+                                            <button
+                                                onClick={handlePersonaAiHelp}
+                                                disabled={isPersonaAiHelpGenerating}
+                                                className="flex-1 px-3 py-2 text-sm font-medium text-white bg-primary-600 rounded-md hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1"
+                                            >
+                                                {isPersonaAiHelpGenerating ? (
+                                                    <>
+                                                        <RefreshIcon className="w-4 h-4 animate-spin" />
+                                                        Thinking...
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <SparklesIcon className="w-4 h-4" />
+                                                        {personaPrompt.trim() ? 'Get Suggestions' : 'Help me get started'}
+                                                    </>
+                                                )}
+                                            </button>
+                                            <button
+                                                onClick={() => {
+                                                    setShowPersonaAiHelp(false);
+                                                    setPersonaAiHelpPrompt('');
+                                                }}
+                                                className="px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600"
+                                            >
+                                                Cancel
+                                            </button>
+                                        </div>
+                                    </div>
+                                )}
                             </div>
 
                             <button
                                 onClick={handleGeneratePersona}
-                                disabled={isGenerating}
+                                disabled={isGenerating || !personaPrompt.trim()}
                                 className="w-full px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                             >
                                 {isGenerating ? (
@@ -721,19 +893,27 @@ Format as a numbered list (1-12) with complete prompt text. Make them creative, 
                         </div>
                     </div>
 
-                    {/* Generated Persona */}
+                    {/* Generated Persona / AI Suggestions */}
                     {generatedPersona && (
                         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
                             <div className="flex items-center justify-between mb-4">
                                 <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-                                    Generated Persona
+                                    {personaPrompt.trim() ? 'Generated Persona' : 'AI Suggestions'}
                                 </h3>
-                                <button
-                                    onClick={() => copyToClipboard(generatedPersona)}
-                                    className="text-sm text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300"
-                                >
-                                    Copy
-                                </button>
+                                <div className="flex items-center gap-3">
+                                    <button
+                                        onClick={() => copyToClipboard(generatedPersona)}
+                                        className="text-sm text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300"
+                                    >
+                                        Copy
+                                    </button>
+                                    <button
+                                        onClick={() => setGeneratedPersona('')}
+                                        className="text-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
+                                    >
+                                        Clear
+                                    </button>
+                                </div>
                             </div>
                             <div className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
                                 <pre className="text-gray-900 dark:text-white whitespace-pre-wrap font-sans">
@@ -746,7 +926,7 @@ Format as a numbered list (1-12) with complete prompt text. Make them creative, 
             )}
 
             {/* Interactive Posts Tab */}
-            {activeTab === 'interactive' && (
+            {effectiveTab === 'interactive' && (
                 <div className="space-y-6">
                     <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
                         <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
@@ -814,14 +994,14 @@ Format as a numbered list (1-12) with complete prompt text. Make them creative, 
             )}
 
             {/* Sexting Session Tab */}
-            {activeTab === 'sexting' && (
+            {effectiveTab === 'sexting' && (
                 <div className="space-y-6">
                     <OnlyFansSextingSession />
                 </div>
             )}
 
             {/* Body Ratings Tab */}
-            {activeTab === 'ratings' && (
+            {effectiveTab === 'ratings' && (
                 <div className="space-y-6">
                     <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
                         <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">

@@ -19,10 +19,9 @@ const REQUIRED_VARS = {
     'VITE_FIREBASE_MESSAGING_SENDER_ID',
     'VITE_FIREBASE_APP_ID',
   ],
-  // Backend (Critical for API functions)
-  backend: [
-    'FIREBASE_SERVICE_ACCOUNT_KEY_BASE64',
-  ],
+  // Backend: only list keys that can appear in the **browser** bundle (VITE_*).
+  // Server secrets like FIREBASE_SERVICE_ACCOUNT_KEY_BASE64 are never in import.meta.env — do not warn in the client.
+  backend: [] as string[],
   // AI (Optional but recommended)
   ai: [
     // GEMINI_API_KEY or GOOGLE_API_KEY (at least one)
@@ -59,17 +58,12 @@ export function validateEnvVars(): EnvValidationResult {
     }
   });
 
-  // Check backend vars
+  // Check backend vars (VITE_* only). Server secrets are configured in Vercel, not in the client bundle.
   REQUIRED_VARS.backend.forEach((key) => {
+    if (!key) return;
     if (key.startsWith('VITE_')) {
       if (!import.meta.env[key]) {
         missing.push(key);
-      }
-    } else {
-      // Server-side only - can't check from client, so just warn
-      const hasServerVar = hasProcessEnv && (process as any).env?.[key];
-      if (!hasServerVar) {
-        warnings.push(`${key} (server-side only - verify in Vercel)`);
       }
     }
   });

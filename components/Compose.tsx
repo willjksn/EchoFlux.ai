@@ -20,6 +20,7 @@ import {
   DownloadIcon,
   XMarkIcon,
   CopyIcon,
+  HeartIcon,
 } from './icons/UIIcons';
 import {
   InstagramIcon,
@@ -50,6 +51,7 @@ import { MediaItemState } from '../types';
 import { publishFacebookPost, publishInstagramPost, publishTweet, publishPinterestPin } from '../src/services/socialMediaService';
 import { PinterestBoardSelectionModal } from './PinterestBoardSelectionModal';
 import { hasCalendarAccess } from '../src/utils/planAccess';
+import { Approvals } from './Approvals';
 
 const fileToBase64 = (file: File): Promise<string> => {
   return new Promise((resolve, reject) => {
@@ -78,6 +80,7 @@ const platformIcons: Record<Platform, React.ReactNode> = {
   LinkedIn: <LinkedInIcon />,
   Facebook: <FacebookIcon />,
   Pinterest: <PinterestIcon />,
+  'My Page': <HeartIcon className="w-5 h-5" />,
 };
 
 const emptyPlatforms: Record<Platform, boolean> = {
@@ -89,6 +92,7 @@ const emptyPlatforms: Record<Platform, boolean> = {
   LinkedIn: false,
   Facebook: false,
   Pinterest: false,
+  'My Page': false,
 };
 
 const SpeechRecognition =
@@ -451,12 +455,15 @@ const CaptionGenerator: React.FC = () => {
   
   const goalOptions = useMemo(
     () => [
-      { value: 'engagement', label: 'Increase Engagement' },
-      { value: 'sales', label: 'Drive Sales' },
-      { value: 'awareness', label: 'Build Awareness' },
+      { value: 'engagement', label: 'Engagement' },
+      { value: 'sales', label: 'Sales' },
+      { value: 'awareness', label: 'Awareness' },
+      { value: 'educate', label: 'Educate' },
+      { value: 'entertain', label: 'Entertain' },
+      { value: 'community', label: 'Community' },
       // Followers option: Hide for Business Starter/Growth, show for Agency and all Creators
       ...(showAdvancedOptions
-        ? [{ value: 'followers', label: 'Increase Followers/Fans' }]
+        ? [{ value: 'followers', label: 'Followers' }]
         : [])
     ],
     [showAdvancedOptions]
@@ -467,8 +474,12 @@ const CaptionGenerator: React.FC = () => {
       { value: 'friendly', label: 'Friendly' },
       { value: 'witty', label: 'Witty' },
       { value: 'inspirational', label: 'Inspirational' },
-      { value: 'professional', label: 'Professional' }
-      // Sexy/Explicit tones hidden for now
+      { value: 'professional', label: 'Professional' },
+      { value: 'casual', label: 'Casual' },
+      { value: 'playful', label: 'Playful' },
+      { value: 'bold', label: 'Bold' },
+      { value: 'authentic', label: 'Authentic' },
+      { value: 'flirty', label: 'Flirty' },
     ],
     []
   );
@@ -768,6 +779,52 @@ const CaptionGenerator: React.FC = () => {
       draftLoadedRef.current = false;
     }
   }, [activePage]);
+
+  // Handle repurpose from Strategy planner
+  useEffect(() => {
+    if (activePage !== 'compose' || !user) return;
+    
+    const repurposeData = localStorage.getItem('repurposeFromStrategy');
+    if (!repurposeData) return;
+    
+    try {
+      const data = JSON.parse(repurposeData);
+      localStorage.removeItem('repurposeFromStrategy');
+      
+      if (data.action === 'repurpose' && data.content) {
+        // Create a media item with the caption pre-filled for repurposing
+        const platformKey = (data.originalPlatform || 'Instagram') as Platform;
+        const mediaItem: MediaItemState = {
+          id: `strategy-repurpose-${Date.now()}`,
+          previewUrl: '',
+          data: '',
+          mimeType: 'image/jpeg',
+          type: 'image',
+          results: [],
+          captionText: data.content,
+          postGoal: 'engagement',
+          postTone: 'friendly',
+          selectedPlatforms: {
+            ...emptyPlatforms,
+            [platformKey]: true,
+          },
+        };
+        
+        setComposeState(prev => ({
+          ...prev,
+          mediaItems: [mediaItem],
+        }));
+        
+        draftLoadedRef.current = true;
+        
+        // Show instruction toast
+        showToast('Caption loaded! Click "Repurpose" button below your post to adapt it for other platforms.', 'info');
+      }
+    } catch (error) {
+      console.error('Failed to load repurpose data:', error);
+      localStorage.removeItem('repurposeFromStrategy');
+    }
+  }, [activePage, user, showToast, setComposeState]);
 
   // Load mediaItems from Firestore on mount
   // But only if there's no draft to load (draft loading takes priority)
@@ -2247,6 +2304,7 @@ const CaptionGenerator: React.FC = () => {
         LinkedIn: false,
         Facebook: false,
         Pinterest: false,
+        'My Page': false,
       };
 
       topPlatforms.forEach((platform: Platform) => {
@@ -2537,6 +2595,14 @@ const CaptionGenerator: React.FC = () => {
             useFavoriteHashtags: useFavoriteHashtags && settings.favoriteHashtags ? true : false,
             creatorPersonality: usePersonality ? settings.creatorPersonality || null : null,
             favoriteHashtags: useFavoriteHashtags ? settings.favoriteHashtags || null : null,
+            emojiIntensity: settings.tone?.emojiLevel ?? 50,
+            toneSettings: settings.tone ? {
+              formality: settings.tone.formality,
+              humor: settings.tone.humor,
+              empathy: settings.tone.empathy,
+              spiciness: settings.tone.spiciness,
+              profanity: settings.tone.profanity,
+            } : null,
           });
 
           let generatedResults: CaptionResult[] = [];
@@ -3283,6 +3349,14 @@ const CaptionGenerator: React.FC = () => {
         useFavoriteHashtags: useFavoriteHashtags && settings.favoriteHashtags ? true : false,
         creatorPersonality: usePersonality ? settings.creatorPersonality || null : null,
         favoriteHashtags: useFavoriteHashtags ? settings.favoriteHashtags || null : null,
+        emojiIntensity: settings.tone?.emojiLevel ?? 50,
+        toneSettings: settings.tone ? {
+          formality: settings.tone.formality,
+          humor: settings.tone.humor,
+          empathy: settings.tone.empathy,
+          spiciness: settings.tone.spiciness,
+          profanity: settings.tone.profanity,
+        } : null,
       });
 
       let generatedResults: CaptionResult[] = [];
@@ -3300,16 +3374,18 @@ const CaptionGenerator: React.FC = () => {
         ];
       }
 
-      const firstCaptionText =
-        generatedResults.length > 0
-          ? generatedResults[0].caption +
-            '\n\n' +
-            (generatedResults[0].hashtags || []).join(' ')
-          : '';
+      // Build caption text - only add hashtags if present (My Page/Fan Hub won't have them)
+      let firstCaptionText = '';
+      if (generatedResults.length > 0) {
+        const caption = generatedResults[0].caption || '';
+        const hashtags = (generatedResults[0].hashtags || []).join(' ').trim();
+        firstCaptionText = hashtags ? `${caption}\n\n${hashtags}` : caption;
+      }
 
+      // Only set captionText - don't populate results (AI Suggestions panel)
+      // AI Suggestions should only show when user explicitly asks for AI help
       setComposeState(prev => ({
         ...prev,
-        results: generatedResults,
         captionText: firstCaptionText
       }));
 
@@ -3775,12 +3851,12 @@ const CaptionGenerator: React.FC = () => {
               </div>
               {user?.plan === 'Free' && (
                 <p className="mt-4 text-xs text-gray-500 dark:text-gray-400">
-                  💡 <strong>Tip:</strong> Upgrade to Pro ($29/mo) for 500 captions/month, calendar, Plan My Week, and more—or try the 7-day free trial.
+                  💡 <strong>Tip:</strong> Upgrade to Pro ($19/mo) for 500 captions/month, calendar, Plan My Week, and more—or try the 7-day free trial.
                 </p>
               )}
               {user?.plan === 'Caption' && (
                 <p className="mt-4 text-xs text-gray-500 dark:text-gray-400">
-                  💡 <strong>Tip:</strong> Upgrade to Pro ($29/mo) for 500 captions/month and unlock publishing, scheduling, and more features!
+                  💡 <strong>Tip:</strong> Upgrade to Pro ($19/mo) for 500 captions/month and unlock publishing, scheduling, and more features!
                 </p>
               )}
             </div>
@@ -4129,15 +4205,6 @@ const CaptionGenerator: React.FC = () => {
                   onToggleHashtags={() => setUseFavoriteHashtags(prev => !prev)}
                 />
               ))}
-              {/* Add Image/Video button - Outside the image box */}
-              <button
-                onClick={handleAddMediaBox}
-                className="mt-4 h-24 w-full flex items-center justify-center gap-2 text-primary-600 dark:text-primary-400 bg-white dark:bg-gray-800 border-2 border-dashed border-primary-300 dark:border-primary-700 rounded-xl hover:bg-primary-50 dark:hover:bg-primary-900/30 transition-colors shadow-sm"
-                title="Add Image/Video"
-              >
-                <PlusIcon className="w-6 h-6" />
-                <span className="text-sm font-medium whitespace-nowrap">image/video</span>
-              </button>
             </div>
           </div>
         ) : (
@@ -4177,15 +4244,6 @@ const CaptionGenerator: React.FC = () => {
                 onToggleHashtags={() => setUseFavoriteHashtags(prev => !prev)}
               />
             ))}
-            {/* Add Image/Video button - Outside the image boxes */}
-            <button
-              onClick={handleAddMediaBox}
-              className="h-24 w-full flex flex-col items-center justify-center gap-2 text-primary-600 dark:text-primary-400 bg-white dark:bg-gray-800 border-2 border-dashed border-primary-300 dark:border-primary-700 rounded-xl hover:bg-primary-50 dark:hover:bg-primary-900/30 transition-colors shadow-sm"
-              title="Add Image/Video"
-            >
-              <PlusIcon className="w-6 h-6" />
-              <span className="text-xs font-medium whitespace-nowrap">image/video</span>
-            </button>
           </div>
         )}
       </div>
@@ -4297,45 +4355,48 @@ const CaptionGenerator: React.FC = () => {
                 className="group relative p-4 rounded-lg transition-colors bg-gray-50 dark:bg-gray-700/50 hover:bg-gray-100 dark:hover:bg-gray-700"
               >
                 <div
-                  onClick={() =>
+                  onClick={() => {
+                    const hashtags = (result.hashtags || []).join(' ').trim();
+                    const captionText = hashtags ? `${result.caption}\n\n${hashtags}` : result.caption;
                     setComposeState(prev => ({
                       ...prev,
-                      captionText:
-                        result.caption +
-                        '\n\n' +
-                        (result.hashtags || []).join(' ')
-                    }))
-                  }
+                      captionText
+                    }));
+                  }}
                   className="cursor-pointer"
                 >
                   <p className="text-gray-800 dark:text-gray-200">
                     {result.caption}
                   </p>
-                  <p className="text-primary-600 dark:text-primary-400 mt-2 text-sm">
-                    {(result.hashtags || []).join(' ')}
-                  </p>
+                  {(result.hashtags || []).length > 0 && (
+                    <p className="text-primary-600 dark:text-primary-400 mt-2 text-sm">
+                      {result.hashtags.join(' ')}
+                    </p>
+                  )}
                   <button
                     onClick={e => {
                       e.stopPropagation();
-                      const fullText = `${result.caption}\n\n${(result.hashtags || []).join(' ')}`;
+                      const hashtags = (result.hashtags || []).join(' ').trim();
+                      const fullText = hashtags ? `${result.caption}\n\n${hashtags}` : result.caption;
                       navigator.clipboard.writeText(fullText);
                       showToast('Caption copied to clipboard!', 'success');
                     }}
                     className="mt-3 flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 bg-primary-50 dark:bg-primary-900/30 rounded-md hover:bg-primary-100 dark:hover:bg-primary-900/50"
                   >
-                    <CopyIcon className="w-4 h-4" /> Copy Caption & Hashtags
+                    <CopyIcon className="w-4 h-4" /> {(result.hashtags || []).length > 0 ? 'Copy Caption & Hashtags' : 'Copy Caption'}
                   </button>
                 </div>
                 <div className="absolute top-2 right-2 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                   <button
                     onClick={e => {
                       e.stopPropagation();
-                      const fullText = `${result.caption}\n\n${(result.hashtags || []).join(' ')}`;
+                      const hashtags = (result.hashtags || []).join(' ').trim();
+                      const fullText = hashtags ? `${result.caption}\n\n${hashtags}` : result.caption;
                       navigator.clipboard.writeText(fullText);
                       showToast('Caption copied to clipboard!', 'success');
                     }}
                     className="p-2 bg-white dark:bg-gray-600 rounded-full shadow text-primary-600 dark:text-primary-300"
-                    title="Copy caption and hashtags"
+                    title={result.hashtags?.length ? "Copy caption and hashtags" : "Copy caption"}
                   >
                     <CopyIcon className="w-4 h-4" />
                   </button>
@@ -4474,6 +4535,17 @@ const CaptionGenerator: React.FC = () => {
 
 type ComposeTab = 'captions' | 'image' | 'video';
 
+const COMPOSE_PAGE_PATH = '/compose';
+const COMPOSE_DRAFTS_PATH = '/compose/drafts';
+
+function getComposeMainTabFromPath(): 'create' | 'drafts' {
+  if (typeof window === 'undefined') return 'create';
+  const p = window.location.pathname || '';
+  const path = p.replace(/\/+$/, '');
+  if (path === '/compose/drafts' || path === '/drafts') return 'drafts';
+  return 'create';
+}
+
 const tabs: { id: ComposeTab; label: string; icon: React.ReactNode }[] = [
   { id: 'captions', label: 'Captions', icon: <CaptionIcon /> },
 ];
@@ -4490,6 +4562,30 @@ export const Compose: React.FC = () => {
   } = useAppContext();
   const [activeTab, setActiveTab] = useState<ComposeTab>('captions');
   const [initialPrompt, setInitialPrompt] = useState<string | undefined>(undefined);
+  
+  // Top-level tab: Create | Drafts (synced with /compose and /compose/drafts)
+  const [mainTab, setMainTabState] = useState<'create' | 'drafts'>(getComposeMainTabFromPath);
+
+  const setMainTab = (tab: 'create' | 'drafts') => {
+    setMainTabState(tab);
+    const path = tab === 'drafts' ? COMPOSE_DRAFTS_PATH : COMPOSE_PAGE_PATH;
+    window.history.pushState({}, '', path);
+  };
+
+  // Sync main tab from pathname on mount and on popstate
+  useEffect(() => {
+    const onPopState = () => setMainTabState(getComposeMainTabFromPath());
+    window.addEventListener('popstate', onPopState);
+    return () => window.removeEventListener('popstate', onPopState);
+  }, []);
+
+  useEffect(() => {
+    const tab = getComposeMainTabFromPath();
+    setMainTabState(tab);
+    if (typeof window !== 'undefined' && window.location.pathname === '/drafts') {
+      window.history.replaceState({}, '', COMPOSE_DRAFTS_PATH);
+    }
+  }, []);
   
   // Predict and Repurpose modals (for history viewing)
   const [predictResult, setPredictResult] = useState<any>(null);
@@ -4629,6 +4725,35 @@ export const Compose: React.FC = () => {
 
   return (
     <div className="max-w-7xl mx-auto">
+      <div className="flex border-b border-gray-200 dark:border-gray-700 mb-6">
+        <button
+          type="button"
+          onClick={() => setMainTab('create')}
+          className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
+            mainTab === 'create'
+              ? 'border-primary-600 text-primary-600 dark:text-primary-400'
+              : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
+          }`}
+        >
+          Create
+        </button>
+        <button
+          type="button"
+          onClick={() => setMainTab('drafts')}
+          className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
+            mainTab === 'drafts'
+              ? 'border-primary-600 text-primary-600 dark:text-primary-400'
+              : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
+          }`}
+        >
+          Drafts
+        </button>
+      </div>
+
+      {mainTab === 'drafts' ? (
+        <Approvals />
+      ) : (
+      <>
       <div className="flex justify-center border-b border-gray-200 dark:border-gray-700 mb-8">
         {tabs.map(tab => (
           <button
@@ -4645,11 +4770,11 @@ export const Compose: React.FC = () => {
         ))}
       </div>
       {renderTabContent()}
+      </>
+      )}
     </div>
   );
 };
-
-// Predict Modal Component (shared with MediaBox and CaptionGenerator)
 const PredictModal: React.FC<{ result: any; onClose: () => void; onCopy: (text: string) => void }> = ({ result, onClose, onCopy }) => {
   const ideas = result.ideas || result.postIdeas || result.nextPostIdeas;
   const weeklyMix = Array.isArray(result.weeklyMix) ? result.weeklyMix : [];

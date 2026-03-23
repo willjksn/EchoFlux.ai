@@ -12,7 +12,7 @@ import { AdminFeedbackPanel } from './AdminFeedbackPanel';
 import { AdminFeedbackFormBuilder } from './AdminFeedbackFormBuilder';
 import { InviteCodeManager } from './InviteCodeManager';
 import { WaitlistManager } from './WaitlistManager';
-import { TeamIcon, DollarSignIcon, UserPlusIcon, ArrowUpCircleIcon, ImageIcon, VideoIcon, LockIcon, TrendingIcon, TrashIcon } from './icons/UIIcons';
+import { TeamIcon, DollarSignIcon, UserPlusIcon, ArrowUpCircleIcon, ImageIcon, VideoIcon, LockIcon, TrendingIcon, TrashIcon, HeartIcon, StarIcon, ChatIcon } from './icons/UIIcons';
 import { db, auth } from '../firebaseConfig';
 import { collection, query, orderBy, onSnapshot, setDoc, doc, getDoc, deleteField, getDocs } from 'firebase/firestore';
 import { useAppContext } from './AppContext';
@@ -34,6 +34,7 @@ const DEFAULT_MODEL_USAGE_STATS: ModelUsageStats = {
         'gemini-2.0-flash': 354,
         'gemini-2.0-flash-lite': 267,
         'tavily-web-search': 15,
+        'replicate-flux-dev': 0,
     },
     requestsByTask: {
         caption: 267,
@@ -166,10 +167,206 @@ export const AdminDashboard: React.FC = () => {
     const usersPerPage = 20;
     const [showAddUserModal, setShowAddUserModal] = useState(false);
     
+    // Fan Hub Revenue State
+    const [fanHubRevenue, setFanHubRevenue] = useState<{
+        totalRevenue: number;
+        tips: number;
+        unlocks: number;
+        treats: number;
+        subscriptions: number;
+        echofluxCommission: number;
+        commissionRate: number;
+        topCreators: Array<{ id: string; name: string; email: string; revenue: number; commission: number }>;
+        recentTransactions: Array<{ id: string; creatorName: string; type: string; amount: number; commission: number; timestamp: Date }>;
+    }>({
+        totalRevenue: 0,
+        tips: 0,
+        unlocks: 0,
+        treats: 0,
+        subscriptions: 0,
+        echofluxCommission: 0,
+        commissionRate: 0.10, // 10% default
+        topCreators: [],
+        recentTransactions: [],
+    });
+    const [isLoadingFanHubRevenue, setIsLoadingFanHubRevenue] = useState(true);
+
+    // Video Chat Usage Stats
+    const [videoUsageStats, setVideoUsageStats] = useState<{
+        currentMonth: {
+            totalSessions: number;
+            totalParticipantMinutes: number;
+            estimatedCost: number;
+            totalRevenue: number;
+            totalCommission: number;
+            freeMinutesRemaining: number;
+            isOverFreeTier: boolean;
+            freeTierLimit: number;
+        };
+        totals: {
+            totalSessions: number;
+            totalParticipantMinutes: number;
+            estimatedCost: number;
+            totalRevenue: number;
+            totalCommission: number;
+        };
+    } | null>(null);
+    const [isLoadingVideoStats, setIsLoadingVideoStats] = useState(true);
+    
     // Reset to page 1 when search term changes
     useEffect(() => {
         setCurrentPage(1);
     }, [searchTerm]);
+
+    // Fetch Video Chat Usage Stats
+    useEffect(() => {
+        const fetchVideoStats = async () => {
+            if (currentUser?.role !== 'Admin') return;
+            setIsLoadingVideoStats(true);
+            
+            try {
+                const token = await auth.currentUser?.getIdToken(true);
+                if (!token) return;
+                
+                const res = await fetch('/api/videoUsageStats?months=1', {
+                    headers: { Authorization: `Bearer ${token}` },
+                });
+                
+                if (res.ok) {
+                    const data = await res.json();
+                    setVideoUsageStats(data);
+                }
+            } catch (e) {
+                console.error('Failed to fetch video stats:', e);
+            } finally {
+                setIsLoadingVideoStats(false);
+            }
+        };
+        
+        fetchVideoStats();
+    }, [currentUser?.role]);
+
+    // Fetch Fan Hub Revenue data from all creators
+    useEffect(() => {
+        const fetchFanHubRevenue = async () => {
+            if (currentUser?.role !== 'Admin') return;
+            setIsLoadingFanHubRevenue(true);
+            
+            try {
+                const commissionRate = 0.10; // 10% Echoflux commission
+                let totalRevenue = 0;
+                let tips = 0;
+                let unlocks = 0;
+                let treats = 0;
+                let subscriptions = 0;
+                const creatorRevenues: Record<string, { name: string; email: string; revenue: number }> = {};
+                const allTransactions: Array<{ id: string; creatorId: string; creatorName: string; type: string; amount: number; timestamp: Date }> = [];
+
+                // Get all creators (users who have set up fan pages)
+                const creatorsRef = collection(db, 'creators');
+                const creatorsSnap = await getDocs(creatorsRef);
+                
+                for (const creatorDoc of creatorsSnap.docs) {
+                    const creatorId = creatorDoc.id;
+                    const creatorData = creatorDoc.data();
+                    
+                    // Find the user to get their name/email
+                    const matchingUser = users.find(u => u.id === creatorId);
+                    const creatorName = matchingUser?.name || creatorData.displayName || 'Unknown Creator';
+                    const creatorEmail = matchingUser?.email || '';
+                    
+                    // Initialize creator revenue tracking
+                    if (!creatorRevenues[creatorId]) {
+                        creatorRevenues[creatorId] = { name: creatorName, email: creatorEmail, revenue: 0 };
+                    }
+                    
+                    // Fetch orders for this creator
+                    try {
+                        const ordersRef = collection(db, 'creators', creatorId, 'orders');
+                        const ordersQuery = query(ordersRef, orderBy('createdAt', 'desc'));
+                        const ordersSnap = await getDocs(ordersQuery);
+                        
+                        ordersSnap.docs.forEach(orderDoc => {
+                            const order = orderDoc.data();
+                            const amount = (order.amount || 0) / 100; // Convert cents to dollars
+                            const orderType = order.type || 'purchase';
+                            const orderDate = order.createdAt?.toDate?.() || new Date(order.createdAt);
+                            
+                            totalRevenue += amount;
+                            creatorRevenues[creatorId].revenue += amount;
+                            
+                            // Categorize by type
+                            if (orderType === 'tip') {
+                                tips += amount;
+                            } else if (orderType === 'unlock') {
+                                unlocks += amount;
+                            } else if (orderType === 'subscription') {
+                                subscriptions += amount;
+                            } else {
+                                treats += amount; // Store/treats purchases
+                            }
+                            
+                            // Add to transactions list
+                            allTransactions.push({
+                                id: orderDoc.id,
+                                creatorId,
+                                creatorName,
+                                type: orderType,
+                                amount,
+                                timestamp: orderDate,
+                            });
+                        });
+                    } catch (err) {
+                        // Creator might not have orders collection
+                    }
+                }
+                
+                // Calculate commission
+                const echofluxCommission = totalRevenue * commissionRate;
+                
+                // Get top creators by revenue
+                const topCreators = Object.entries(creatorRevenues)
+                    .map(([id, data]) => ({
+                        id,
+                        name: data.name,
+                        email: data.email,
+                        revenue: data.revenue,
+                        commission: data.revenue * commissionRate,
+                    }))
+                    .sort((a, b) => b.revenue - a.revenue)
+                    .slice(0, 5);
+                
+                // Get recent transactions
+                const recentTransactions = allTransactions
+                    .sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime())
+                    .slice(0, 10)
+                    .map(t => ({
+                        ...t,
+                        commission: t.amount * commissionRate,
+                    }));
+                
+                setFanHubRevenue({
+                    totalRevenue,
+                    tips,
+                    unlocks,
+                    treats,
+                    subscriptions,
+                    echofluxCommission,
+                    commissionRate,
+                    topCreators,
+                    recentTransactions,
+                });
+            } catch (err) {
+                console.error('Error fetching Fan Hub revenue:', err);
+            } finally {
+                setIsLoadingFanHubRevenue(false);
+            }
+        };
+
+        if (users.length > 0) {
+            fetchFanHubRevenue();
+        }
+    }, [currentUser?.role, users]);
 
     // Check if we should open feedback tab (from notification click)
     useEffect(() => {
@@ -737,75 +934,301 @@ export const AdminDashboard: React.FC = () => {
             )}
             {activeTab === 'overview' && (
                 <>
+            {/* Key Metrics - Echoflux Business Overview */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 md:gap-6">
                 <StatCard title="Total Users" value={totalUsers} icon={<TeamIcon />}/>
-                <StatCard title="Simulated MRR" value={`$${simulatedMRR.toLocaleString()}`} icon={<DollarSignIcon />}/>
                 <StatCard title="New Users (30d)" value={newUsersCount} icon={<UserPlusIcon />}/>
-                <StatCard title="Image Generations" value={totalImageGenerations.toLocaleString()} icon={<ImageIcon />}/>
-                <StatCard title="Video Generations" value={totalVideoGenerations.toLocaleString()} icon={<VideoIcon />}/>
+                <div className="bg-gradient-to-br from-blue-500 to-indigo-600 p-4 md:p-6 rounded-xl shadow-md text-white">
+                    <div className="flex items-center gap-3 mb-2">
+                        <div className="p-2 bg-white/20 rounded-full">
+                            <DollarSignIcon className="w-5 h-5" />
+                        </div>
+                        <p className="text-sm font-medium opacity-90">Subscription MRR</p>
+                    </div>
+                    <p className="text-2xl md:text-3xl font-bold">
+                        ${simulatedMRR.toLocaleString()}
+                    </p>
+                    <p className="text-xs opacity-75 mt-1">Monthly recurring revenue</p>
+                </div>
+                <div className="bg-gradient-to-br from-green-500 to-emerald-600 p-4 md:p-6 rounded-xl shadow-md text-white">
+                    <div className="flex items-center gap-3 mb-2">
+                        <div className="p-2 bg-white/20 rounded-full">
+                            <HeartIcon className="w-5 h-5" />
+                        </div>
+                        <p className="text-sm font-medium opacity-90">Fan Hub Revenue</p>
+                    </div>
+                    <p className="text-2xl md:text-3xl font-bold">
+                        {isLoadingFanHubRevenue ? '...' : `$${fanHubRevenue.totalRevenue.toFixed(2)}`}
+                    </p>
+                    <p className="text-xs opacity-75 mt-1">Creator earnings via Stripe</p>
+                </div>
+                <div className="bg-gradient-to-br from-primary-500 to-purple-600 p-4 md:p-6 rounded-xl shadow-md text-white">
+                    <div className="flex items-center gap-3 mb-2">
+                        <div className="p-2 bg-white/20 rounded-full">
+                            <TrendingIcon className="w-5 h-5" />
+                        </div>
+                        <p className="text-sm font-medium opacity-90">Fan Hub Commission</p>
+                    </div>
+                    <p className="text-2xl md:text-3xl font-bold">
+                        {isLoadingFanHubRevenue ? '...' : `$${fanHubRevenue.echofluxCommission.toFixed(2)}`}
+                    </p>
+                    <p className="text-xs opacity-75 mt-1">{(fanHubRevenue.commissionRate * 100).toFixed(0)}% of transactions</p>
+                </div>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                <div className="lg:col-span-2 grid grid-cols-1 gap-6">
-                     <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-md">
-                        <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-4">Plan Distribution</h3>
-                         <div className="space-y-3">
-                            {Object.entries(planDistribution)
-                                .filter(([plan]) => plan !== 'Agency' && plan !== 'Starter' && plan !== 'Growth' && plan !== 'Caption' && plan !== 'Free' && plan !== 'OnlyFansStudio') // Hide Agency, Starter, Growth, Caption, Free, and OnlyFansStudio
-                                .map(([plan, count]) => {
-                                const percentage = totalUsers > 0 ? (Number(count) / totalUsers * 100).toFixed(1) : "0";
-                                return (
-                                    <div key={plan}>
-                                        <div className="flex justify-between text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">
-                                            <span>{plan} Plan</span>
-                                            <span>{count} Users ({percentage}%)</span>
-                                        </div>
-                                        <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2.5">
-                                            <div className="bg-primary-600 h-2.5 rounded-full" style={{ width: `${percentage}%` }}></div>
-                                        </div>
-                                    </div>
-                                );
-                            })}
+            {/* Total Echoflux Revenue Summary */}
+            <div className="bg-gradient-to-r from-gray-900 to-gray-800 dark:from-gray-800 dark:to-gray-700 p-6 rounded-xl shadow-lg text-white">
+                <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                    <div>
+                        <h3 className="text-lg font-bold opacity-90">Total Echoflux Revenue</h3>
+                        <p className="text-sm opacity-70 mt-1">Subscription MRR + Fan Hub Commission</p>
+                    </div>
+                    <div className="text-right">
+                        <p className="text-3xl md:text-4xl font-bold">
+                            ${(simulatedMRR + (isLoadingFanHubRevenue ? 0 : fanHubRevenue.echofluxCommission)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </p>
+                        <p className="text-sm opacity-70 mt-1">per month</p>
+                    </div>
+                </div>
+            </div>
+
+            {/* Fan Hub Revenue Breakdown */}
+            <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-md">
+                <div className="flex items-center justify-between mb-6">
+                    <div>
+                        <h3 className="text-xl font-bold text-gray-900 dark:text-white">Fan Hub Revenue Breakdown</h3>
+                        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Revenue by transaction type (Echoflux earns {(fanHubRevenue.commissionRate * 100).toFixed(0)}%)</p>
+                    </div>
+                </div>
+                
+                {isLoadingFanHubRevenue ? (
+                    <div className="text-center py-8">
+                        <svg className="animate-spin h-8 w-8 text-primary-600 mx-auto" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                    </div>
+                ) : (
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        <div className="p-4 bg-gradient-to-br from-yellow-50 to-yellow-100 dark:from-yellow-900/20 dark:to-yellow-800/20 rounded-lg border border-yellow-200 dark:border-yellow-700">
+                            <div className="flex items-center gap-2 mb-2">
+                                <DollarSignIcon className="w-4 h-4 text-yellow-600 dark:text-yellow-400" />
+                                <p className="text-xs font-medium text-yellow-700 dark:text-yellow-300">Tips</p>
+                            </div>
+                            <p className="text-xl font-bold text-yellow-900 dark:text-yellow-100">${fanHubRevenue.tips.toFixed(2)}</p>
+                            <p className="text-xs text-yellow-600 dark:text-yellow-400 mt-1">
+                                Commission: ${(fanHubRevenue.tips * fanHubRevenue.commissionRate).toFixed(2)}
+                            </p>
+                        </div>
+                        <div className="p-4 bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-900/20 dark:to-purple-800/20 rounded-lg border border-purple-200 dark:border-purple-700">
+                            <div className="flex items-center gap-2 mb-2">
+                                <LockIcon className="w-4 h-4 text-purple-600 dark:text-purple-400" />
+                                <p className="text-xs font-medium text-purple-700 dark:text-purple-300">Content Unlocks</p>
+                            </div>
+                            <p className="text-xl font-bold text-purple-900 dark:text-purple-100">${fanHubRevenue.unlocks.toFixed(2)}</p>
+                            <p className="text-xs text-purple-600 dark:text-purple-400 mt-1">
+                                Commission: ${(fanHubRevenue.unlocks * fanHubRevenue.commissionRate).toFixed(2)}
+                            </p>
+                        </div>
+                        <div className="p-4 bg-gradient-to-br from-pink-50 to-pink-100 dark:from-pink-900/20 dark:to-pink-800/20 rounded-lg border border-pink-200 dark:border-pink-700">
+                            <div className="flex items-center gap-2 mb-2">
+                                <HeartIcon className="w-4 h-4 text-pink-600 dark:text-pink-400" />
+                                <p className="text-xs font-medium text-pink-700 dark:text-pink-300">Fan store</p>
+                            </div>
+                            <p className="text-xl font-bold text-pink-900 dark:text-pink-100">${fanHubRevenue.treats.toFixed(2)}</p>
+                            <p className="text-xs text-pink-600 dark:text-pink-400 mt-1">
+                                Commission: ${(fanHubRevenue.treats * fanHubRevenue.commissionRate).toFixed(2)}
+                            </p>
+                        </div>
+                        <div className="p-4 bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/20 dark:to-blue-800/20 rounded-lg border border-blue-200 dark:border-blue-700">
+                            <div className="flex items-center gap-2 mb-2">
+                                <StarIcon className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                                <p className="text-xs font-medium text-blue-700 dark:text-blue-300">Subscriptions</p>
+                            </div>
+                            <p className="text-xl font-bold text-blue-900 dark:text-blue-100">${fanHubRevenue.subscriptions.toFixed(2)}</p>
+                            <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">
+                                Commission: ${(fanHubRevenue.subscriptions * fanHubRevenue.commissionRate).toFixed(2)}
+                            </p>
                         </div>
                     </div>
-                     <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-md">
-                        <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-4">Top Users by AI Generations</h3>
-                        <ul className="space-y-4">
-                            {topUsers.map(user => (
-                                <li key={user.id} className="flex items-center space-x-3">
-                                    <img src={user.avatar} alt={user.name} className="w-10 h-10 rounded-full" />
-                                    <div className="flex-1">
-                                        <p className="font-semibold text-gray-900 dark:text-white">{user.name}</p>
-                                        <p className="text-sm text-gray-500 dark:text-gray-400">{user.email}</p>
+                )}
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {/* Top Earning Creators */}
+                <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-md">
+                    <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-4">Top Earning Creators</h3>
+                    {isLoadingFanHubRevenue ? (
+                        <div className="text-center py-8 text-gray-500">Loading...</div>
+                    ) : fanHubRevenue.topCreators.length > 0 ? (
+                        <ul className="space-y-3">
+                            {fanHubRevenue.topCreators.map((creator, idx) => (
+                                <li key={creator.id} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+                                    <div className="flex items-center gap-3">
+                                        <span className="text-lg font-bold text-gray-400 w-6">#{idx + 1}</span>
+                                        <div>
+                                            <p className="font-semibold text-gray-900 dark:text-white">{creator.name}</p>
+                                            <p className="text-xs text-gray-500 dark:text-gray-400">{creator.email}</p>
+                                        </div>
                                     </div>
-                                    <span className="font-bold text-lg text-primary-600 dark:text-primary-400">
-                                        {(Number(user.monthlyImageGenerationsUsed ?? 0) + Number(user.monthlyVideoGenerationsUsed ?? 0)).toLocaleString()}
-                                    </span>
+                                    <div className="text-right">
+                                        <p className="font-bold text-green-600 dark:text-green-400">${creator.revenue.toFixed(2)}</p>
+                                        <p className="text-xs text-gray-500 dark:text-gray-400">
+                                            Your cut: ${creator.commission.toFixed(2)}
+                                        </p>
+                                    </div>
                                 </li>
                             ))}
                         </ul>
-                    </div>
+                    ) : (
+                        <div className="text-center py-8 text-gray-500 dark:text-gray-400">
+                            <HeartIcon className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                            <p className="text-sm">No creator revenue yet</p>
+                            <p className="text-xs mt-1">Revenue will appear when creators make sales through their Fan Pages</p>
+                        </div>
+                    )}
                 </div>
+
+                {/* Recent New Users */}
                 <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-md">
-                    <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-4">Recent Activity</h3>
-                    <ul className="space-y-4">
-                        {activityFeed.length > 0 ? activityFeed.map(activity => (
-                             <li key={activity.id} className="flex items-start space-x-3">
-                                <div className="p-2 bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400 rounded-full mt-1">
-                                    {activityIcons[activity.type]}
+                    <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-4">Recent Signups</h3>
+                    <ul className="space-y-3">
+                        {activityFeed.length > 0 ? activityFeed.slice(0, 6).map(activity => (
+                            <li key={activity.id} className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+                                <div className="p-2 bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 rounded-full">
+                                    <UserPlusIcon />
                                 </div>
-                                <div>
-                                    <p className="text-sm text-gray-800 dark:text-gray-200">
-                                        <span className="font-semibold">{activity.user.name}</span> {activity.details}
-                                    </p>
-                                    <p className="text-xs text-gray-400 dark:text-gray-500">{activity.timestamp}</p>
+                                <div className="flex-1">
+                                    <p className="font-semibold text-gray-900 dark:text-white">{activity.user.name}</p>
+                                    <p className="text-xs text-gray-500 dark:text-gray-400">{activity.timestamp}</p>
                                 </div>
                             </li>
                         )) : (
-                            <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-4">No recent activity.</p>
+                            <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-4">No recent signups.</p>
                         )}
                     </ul>
                 </div>
+            </div>
+
+            {/* Recent Transactions */}
+            <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-md">
+                <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-4">Recent Fan Hub Transactions</h3>
+                {isLoadingFanHubRevenue ? (
+                    <div className="text-center py-8 text-gray-500">Loading...</div>
+                ) : fanHubRevenue.recentTransactions.length > 0 ? (
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-left">
+                            <thead className="bg-gray-50 dark:bg-gray-700/50">
+                                <tr>
+                                    <th className="p-3 text-xs font-semibold text-gray-600 dark:text-gray-300">Creator</th>
+                                    <th className="p-3 text-xs font-semibold text-gray-600 dark:text-gray-300">Type</th>
+                                    <th className="p-3 text-xs font-semibold text-gray-600 dark:text-gray-300">Amount</th>
+                                    <th className="p-3 text-xs font-semibold text-gray-600 dark:text-gray-300">Your Commission</th>
+                                    <th className="p-3 text-xs font-semibold text-gray-600 dark:text-gray-300">Date</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {fanHubRevenue.recentTransactions.map(tx => (
+                                    <tr key={tx.id} className="border-b border-gray-100 dark:border-gray-700">
+                                        <td className="p-3 text-sm text-gray-900 dark:text-white">{tx.creatorName}</td>
+                                        <td className="p-3">
+                                            <span className={`px-2 py-1 text-xs font-semibold rounded-full ${
+                                                tx.type === 'tip' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300' :
+                                                tx.type === 'unlock' ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300' :
+                                                tx.type === 'subscription' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300' :
+                                                'bg-pink-100 text-pink-800 dark:bg-pink-900/30 dark:text-pink-300'
+                                            }`}>
+                                                {tx.type}
+                                            </span>
+                                        </td>
+                                        <td className="p-3 text-sm font-semibold text-gray-900 dark:text-white">${tx.amount.toFixed(2)}</td>
+                                        <td className="p-3 text-sm font-semibold text-green-600 dark:text-green-400">${tx.commission.toFixed(2)}</td>
+                                        <td className="p-3 text-sm text-gray-500 dark:text-gray-400">{tx.timestamp.toLocaleDateString()}</td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                ) : (
+                    <div className="text-center py-8 text-gray-500 dark:text-gray-400">
+                        <DollarSignIcon className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                        <p className="text-sm">No transactions yet</p>
+                        <p className="text-xs mt-1">Transactions will appear when fans make purchases</p>
+                    </div>
+                )}
+            </div>
+
+            {/* Video Chat Usage Analytics */}
+            <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-md">
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+                    <div>
+                        <h3 className="text-xl font-bold text-gray-900 dark:text-white">Video Chat Usage (Daily.co)</h3>
+                        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Track video call minutes, costs, and revenue</p>
+                    </div>
+                </div>
+                
+                {isLoadingVideoStats ? (
+                    <div className="text-center py-8">
+                        <svg className="animate-spin h-8 w-8 text-blue-600 mx-auto" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                        </svg>
+                        <p className="mt-4 text-sm text-gray-500 dark:text-gray-400">Loading video usage statistics...</p>
+                    </div>
+                ) : (
+                    <div className="space-y-6">
+                        {/* Free Tier Status Alert */}
+                        <div className={`rounded-lg border px-4 py-3 text-sm ${
+                            videoUsageStats?.currentMonth?.isOverFreeTier
+                                ? 'border-red-200 bg-red-50 text-red-800 dark:border-red-700 dark:bg-red-900/30 dark:text-red-200'
+                                : 'border-green-200 bg-green-50 text-green-800 dark:border-green-700 dark:bg-green-900/30 dark:text-green-200'
+                        }`}>
+                            {videoUsageStats?.currentMonth?.isOverFreeTier ? (
+                                <>⚠️ Over free tier! {(videoUsageStats?.currentMonth?.totalParticipantMinutes || 0).toLocaleString()} / {(videoUsageStats?.currentMonth?.freeTierLimit || 10000).toLocaleString()} minutes used</>
+                            ) : (
+                                <>✓ Within free tier: {(videoUsageStats?.currentMonth?.freeMinutesRemaining || 10000).toLocaleString()} free minutes remaining</>
+                            )}
+                        </div>
+
+                        {/* Stats Grid */}
+                        <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+                            <div className="p-4 bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/20 dark:to-blue-800/20 rounded-lg border border-blue-200 dark:border-blue-700">
+                                <p className="text-xs font-medium text-blue-700 dark:text-blue-300 mb-1">Total Sessions</p>
+                                <p className="text-2xl font-bold text-blue-900 dark:text-blue-100">{videoUsageStats?.currentMonth?.totalSessions || 0}</p>
+                            </div>
+                            <div className="p-4 bg-gradient-to-br from-cyan-50 to-cyan-100 dark:from-cyan-900/20 dark:to-cyan-800/20 rounded-lg border border-cyan-200 dark:border-cyan-700">
+                                <p className="text-xs font-medium text-cyan-700 dark:text-cyan-300 mb-1">Participant Minutes</p>
+                                <p className="text-2xl font-bold text-cyan-900 dark:text-cyan-100">{(videoUsageStats?.currentMonth?.totalParticipantMinutes || 0).toLocaleString()}</p>
+                            </div>
+                            <div className="p-4 bg-gradient-to-br from-red-50 to-red-100 dark:from-red-900/20 dark:to-red-800/20 rounded-lg border border-red-200 dark:border-red-700">
+                                <p className="text-xs font-medium text-red-700 dark:text-red-300 mb-1">Daily.co Cost</p>
+                                <p className="text-2xl font-bold text-red-900 dark:text-red-100">${(videoUsageStats?.currentMonth?.estimatedCost || 0).toFixed(2)}</p>
+                            </div>
+                            <div className="p-4 bg-gradient-to-br from-green-50 to-green-100 dark:from-green-900/20 dark:to-green-800/20 rounded-lg border border-green-200 dark:border-green-700">
+                                <p className="text-xs font-medium text-green-700 dark:text-green-300 mb-1">Fan Revenue</p>
+                                <p className="text-2xl font-bold text-green-900 dark:text-green-100">${((videoUsageStats?.currentMonth?.totalRevenue || 0) / 100).toFixed(2)}</p>
+                            </div>
+                            <div className="p-4 bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-900/20 dark:to-purple-800/20 rounded-lg border border-purple-200 dark:border-purple-700">
+                                <p className="text-xs font-medium text-purple-700 dark:text-purple-300 mb-1">Echoflux Commission</p>
+                                <p className="text-2xl font-bold text-purple-900 dark:text-purple-100">${((videoUsageStats?.currentMonth?.totalCommission || 0) / 100).toFixed(2)}</p>
+                            </div>
+                        </div>
+
+                        {/* Profit Calculation */}
+                        <div className="p-4 bg-gradient-to-r from-gray-50 to-gray-100 dark:from-gray-700/50 dark:to-gray-600/50 rounded-lg border border-gray-200 dark:border-gray-600">
+                            <div className="flex items-center justify-between">
+                                <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Video Chat Net Profit (Commission - Cost)</span>
+                                <span className={`text-xl font-bold ${
+                                    ((videoUsageStats?.currentMonth?.totalCommission || 0) / 100) - (videoUsageStats?.currentMonth?.estimatedCost || 0) >= 0
+                                        ? 'text-green-600 dark:text-green-400'
+                                        : 'text-red-600 dark:text-red-400'
+                                }`}>
+                                    ${(((videoUsageStats?.currentMonth?.totalCommission || 0) / 100) - (videoUsageStats?.currentMonth?.estimatedCost || 0)).toFixed(2)}
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                )}
             </div>
 
             {/* Model Usage Analytics */}
@@ -873,76 +1296,75 @@ export const AdminDashboard: React.FC = () => {
                             </div>
                         </div>
 
-                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                            {/* Requests by Model */}
-                            <div>
-                                <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Requests by Model</h4>
-                                <div className="space-y-2">
-                                    {Object.entries(modelUsageStats.requestsByModel)
-                                        .sort(([, a], [, b]) => (b as number) - (a as number))
-                                        .map(([model, count]) => {
-                                            const countNum = count as number;
-                                            const percentage = modelUsageStats.totalRequests > 0 
-                                                ? (countNum / modelUsageStats.totalRequests * 100).toFixed(1) 
-                                                : '0';
-                                            return (
-                                                <div key={model}>
-                                                    <div className="flex justify-between text-xs mb-1">
-                                                        <span className="text-gray-600 dark:text-gray-400 font-mono">{model}</span>
-                                                        <span className="text-gray-900 dark:text-white font-semibold">{countNum} ({percentage}%)</span>
-                                                    </div>
-                                                    <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
-                                                        <div className="bg-primary-600 h-2 rounded-full" style={{ width: `${percentage}%` }}></div>
-                                                    </div>
-                                                </div>
-                                            );
-                                        })}
-                                </div>
-                            </div>
-
-                            {/* Requests by Task Type */}
-                            <div>
-                                <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Requests by Task Type</h4>
-                                <div className="space-y-2">
-                                    {Object.entries(modelUsageStats.requestsByTask)
-                                        .sort(([, a], [, b]) => (b as number) - (a as number))
-                                        .map(([task, count]) => {
-                                            const countNum = count as number;
-                                            const percentage = modelUsageStats.totalRequests > 0 
-                                                ? (countNum / modelUsageStats.totalRequests * 100).toFixed(1) 
-                                                : '0';
-                                            return (
-                                                <div key={task}>
-                                                    <div className="flex justify-between text-xs mb-1">
-                                                        <span className="text-gray-600 dark:text-gray-400 capitalize">{task.replace('-', ' ')}</span>
-                                                        <span className="text-gray-900 dark:text-white font-semibold">{countNum} ({percentage}%)</span>
-                                                    </div>
-                                                    <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
-                                                        <div className="bg-emerald-600 h-2 rounded-full" style={{ width: `${percentage}%` }}></div>
-                                                    </div>
-                                                </div>
-                                            );
-                                        })}
-                                </div>
-                            </div>
-
-                        </div>
-
-                        {/* Cost Tier Breakdown */}
+                        {/* Requests by Model */}
                         <div>
-                            <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Requests by Cost Tier</h4>
-                            <div className="grid grid-cols-3 gap-4">
-                                <div className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600">
-                                    <p className="text-xs text-gray-600 dark:text-gray-400 mb-1">Low Cost</p>
-                                    <p className="text-xl font-bold text-gray-900 dark:text-white">{modelUsageStats.requestsByCostTier.low.toLocaleString()}</p>
-                                </div>
-                                <div className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600">
-                                    <p className="text-xs text-gray-600 dark:text-gray-400 mb-1">Medium Cost</p>
-                                    <p className="text-xl font-bold text-gray-900 dark:text-white">{modelUsageStats.requestsByCostTier.medium.toLocaleString()}</p>
-                                </div>
-                                <div className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600">
-                                    <p className="text-xs text-gray-600 dark:text-gray-400 mb-1">High Cost</p>
-                                    <p className="text-xl font-bold text-gray-900 dark:text-white">{modelUsageStats.requestsByCostTier.high.toLocaleString()}</p>
+                            <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Requests by Model</h4>
+                            <div className="space-y-2">
+                                {Object.entries(modelUsageStats.requestsByModel)
+                                    .sort(([, a], [, b]) => (b as number) - (a as number))
+                                    .map(([model, count]) => {
+                                        const countNum = count as number;
+                                        const percentage = modelUsageStats.totalRequests > 0 
+                                            ? (countNum / modelUsageStats.totalRequests * 100).toFixed(1) 
+                                            : '0';
+                                        // Estimate cost for Replicate FLUX Dev (~$0.025 per image)
+                                        const isReplicate = model === 'replicate-flux-dev' || model === 'replicate-flux-schnell' || model === 'replicate-sdxl';
+                                        const estimatedCost = isReplicate ? countNum * 0.025 : null;
+                                        return (
+                                            <div key={model}>
+                                                <div className="flex justify-between text-xs mb-1">
+                                                    <span className="text-gray-600 dark:text-gray-400 font-mono flex items-center gap-1">
+                                                        {isReplicate && (
+                                                            <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                                                <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+                                                                <circle cx="8.5" cy="8.5" r="1.5" />
+                                                                <polyline points="21 15 16 10 5 21" />
+                                                            </svg>
+                                                        )}
+                                                        {model}
+                                                    </span>
+                                                    <span className="text-gray-900 dark:text-white font-semibold">
+                                                        {countNum} ({percentage}%)
+                                                        {estimatedCost !== null && (
+                                                            <span className="text-orange-600 dark:text-orange-400 ml-2">
+                                                                ~${estimatedCost.toFixed(2)}
+                                                            </span>
+                                                        )}
+                                                    </span>
+                                                </div>
+                                                <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                                                    <div className={`h-2 rounded-full ${isReplicate ? 'bg-orange-500' : 'bg-primary-600'}`} style={{ width: `${percentage}%` }}></div>
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                
+                                {/* Daily.co Video Chat Usage - Always visible */}
+                                <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-600">
+                                    <div>
+                                        <div className="flex justify-between text-xs mb-1">
+                                            <span className="text-gray-600 dark:text-gray-400 font-mono flex items-center gap-1">
+                                                <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                                    <polygon points="23 7 16 12 23 17 23 7" />
+                                                    <rect x="1" y="5" width="15" height="14" rx="2" ry="2" />
+                                                </svg>
+                                                daily.co (video chat)
+                                            </span>
+                                            <span className="text-gray-900 dark:text-white font-semibold">
+                                                {videoUsageStats?.currentMonth?.totalSessions || 0} sessions · {videoUsageStats?.currentMonth?.totalParticipantMinutes || 0} min
+                                            </span>
+                                        </div>
+                                        <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                                            <div 
+                                                className={`h-2 rounded-full ${videoUsageStats?.currentMonth?.isOverFreeTier ? 'bg-red-500' : 'bg-cyan-500'}`} 
+                                                style={{ width: `${Math.min(100, ((videoUsageStats?.currentMonth?.totalParticipantMinutes || 0) / (videoUsageStats?.currentMonth?.freeTierLimit || 10000)) * 100)}%` }}
+                                            ></div>
+                                        </div>
+                                        <div className="flex justify-between text-xs mt-1 text-gray-500 dark:text-gray-400">
+                                            <span>{videoUsageStats?.currentMonth?.isOverFreeTier ? '⚠️ Over free tier' : '✓ Within free tier'}</span>
+                                            <span>${(videoUsageStats?.currentMonth?.estimatedCost || 0).toFixed(2)} cost</span>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -1049,100 +1471,6 @@ export const AdminDashboard: React.FC = () => {
                 )}
             </div>
 
-            {/* Premium Content Studio AI Model Usage */}
-            {modelUsageStats && (
-                <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-md mt-6">
-                    <div className="flex items-center justify-between mb-6">
-                        <div>
-                            <h3 className="text-xl font-bold text-gray-900 dark:text-white">Premium Content Studio AI Model Usage</h3>
-                            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Track AI usage specifically for Premium Content Studio features</p>
-                        </div>
-                    </div>
-
-                    {(() => {
-                        // Filter Premium Content Studio-related tasks
-                        // Note: Some features (Content Brain, Roleplay) may use shared task types (caption, strategy, etc.)
-                        // that are also used by the main app, so they appear in the general analytics
-                        const premiumContentStudioTasks = ['sexting_session'];
-                        const premiumContentStudioStats = {
-                            totalRequests: 0,
-                            totalCost: 0,
-                            requestsByTask: {} as Record<string, number>,
-                            requestsByDay: [] as Array<{ date: string; count: number; cost: number }>,
-                        };
-
-                        // Calculate Premium Content Studio stats from modelUsageStats
-                        premiumContentStudioTasks.forEach(task => {
-                            const count = modelUsageStats.requestsByTask[task as keyof typeof modelUsageStats.requestsByTask] as number || 0;
-                            if (count > 0) {
-                                premiumContentStudioStats.totalRequests += count;
-                                premiumContentStudioStats.requestsByTask[task] = count;
-                            }
-                        });
-
-                        // Calculate cost using average cost per request (more accurate than fixed estimate)
-                        // Premium Content Studio tasks use medium tier, so we use the overall average cost per request
-                        premiumContentStudioStats.totalCost = premiumContentStudioStats.totalRequests * modelUsageStats.averageCostPerRequest;
-
-                        if (premiumContentStudioStats.totalRequests === 0) {
-                            return (
-                                <div className="text-center py-8 text-gray-500 dark:text-gray-400">
-                                    <p className="text-sm">No Premium Content Studio AI usage data yet</p>
-                                    <p className="text-xs mt-1">Usage will appear here when creators use Premium Content Studio AI features</p>
-                                    <p className="text-xs mt-2 text-gray-400 dark:text-gray-500">Note: Some features (Content Brain, Roleplay) may use shared task types that appear in general analytics</p>
-                                </div>
-                            );
-                        }
-
-                        return (
-                            <div className="space-y-6">
-                                {/* Key Metrics */}
-                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                    <div className="p-4 bg-gradient-to-br from-pink-50 to-pink-100 dark:from-pink-900/20 dark:to-pink-800/20 rounded-lg border border-pink-200 dark:border-pink-700">
-                                        <p className="text-xs font-medium text-pink-700 dark:text-pink-300 mb-1">Total Premium Content Studio Requests</p>
-                                        <p className="text-2xl font-bold text-pink-900 dark:text-pink-100">{premiumContentStudioStats.totalRequests.toLocaleString()}</p>
-                                    </div>
-                                    <div className="p-4 bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-900/20 dark:to-purple-800/20 rounded-lg border border-purple-200 dark:border-purple-700">
-                                        <p className="text-xs font-medium text-purple-700 dark:text-purple-300 mb-1">Total Premium Content Studio Cost</p>
-                                        <p className="text-2xl font-bold text-purple-900 dark:text-purple-100">${premiumContentStudioStats.totalCost.toFixed(2)}</p>
-                                    </div>
-                                    <div className="p-4 bg-gradient-to-br from-indigo-50 to-indigo-100 dark:from-indigo-900/20 dark:to-indigo-800/20 rounded-lg border border-indigo-200 dark:border-indigo-700">
-                                        <p className="text-xs font-medium text-indigo-700 dark:text-indigo-300 mb-1">Avg Cost/Request</p>
-                                        <p className="text-2xl font-bold text-indigo-900 dark:text-indigo-100">${(premiumContentStudioStats.totalCost / premiumContentStudioStats.totalRequests).toFixed(4)}</p>
-                                    </div>
-                                </div>
-
-                                {/* Premium Content Studio Tasks Breakdown */}
-                                <div>
-                                    <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Premium Content Studio Features Usage</h4>
-                                    <div className="space-y-2">
-                                        {Object.entries(premiumContentStudioStats.requestsByTask)
-                                            .sort(([, a], [, b]) => (b as number) - (a as number))
-                                            .map(([task, count]) => {
-                                                const countNum = count as number;
-                                                const percentage = premiumContentStudioStats.totalRequests > 0 
-                                                    ? (countNum / premiumContentStudioStats.totalRequests * 100).toFixed(1) 
-                                                    : '0';
-                                                const taskLabel = task === 'sexting_session' ? 'Sexting Session Assistant' : task;
-                                                return (
-                                                    <div key={task}>
-                                                        <div className="flex justify-between text-xs mb-1">
-                                                            <span className="text-gray-600 dark:text-gray-400 capitalize">{taskLabel}</span>
-                                                            <span className="text-gray-900 dark:text-white font-semibold">{countNum} ({percentage}%)</span>
-                                                        </div>
-                                                        <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
-                                                            <div className="bg-pink-600 h-2 rounded-full" style={{ width: `${percentage}%` }}></div>
-                                                        </div>
-                                                    </div>
-                                                );
-                                            })}
-                                    </div>
-                                </div>
-                            </div>
-                        );
-                    })()}
-                </div>
-            )}
                 </>
             )}
             {activeTab === 'users' && (

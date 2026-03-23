@@ -31,6 +31,7 @@ const platformIcons: Record<Platform, React.ReactElement<{ className?: string }>
   LinkedIn: <LinkedInIcon />,
   Facebook: <FacebookIcon />,
   Pinterest: <PinterestIcon />,
+  'My Page': <HeartIcon />,
 };
 
 interface ProcessedMedia {

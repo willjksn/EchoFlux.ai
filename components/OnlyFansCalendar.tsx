@@ -11,7 +11,7 @@ export interface OnlyFansCalendarEvent {
     id: string;
     title: string;
     date: string; // ISO string
-    reminderType: 'post' | 'shoot'; // post = upload reminder, shoot = filming reminder
+    reminderType: 'post' | 'shoot' | 'treat'; // post = upload reminder, shoot = filming reminder, treat = scheduled treat
     contentType: 'free' | 'paid' | 'custom'; // free, paid, or custom content
     description?: string;
     reminderTime?: string; // Time for the reminder (e.g., "8:00 PM")
@@ -20,6 +20,12 @@ export interface OnlyFansCalendarEvent {
     customStatus?: 'ordered' | 'in-progress' | 'delivered' | 'cancelled'; // Status for custom content
     fanId?: string; // ID of the fan this custom is for
     fanName?: string; // Name of the fan this custom is for
+    fanEmail?: string; // Email of the fan (for treats)
+    // Treat-specific fields
+    treatPurchaseId?: string; // Reference to the purchase
+    treatType?: 'video_call' | 'chat_session' | 'voice_note' | 'custom_video' | 'other';
+    treatDurationMinutes?: number; // Duration for video/chat sessions
+    treatStatus?: 'scheduled' | 'confirmed' | 'in_progress' | 'completed' | 'cancelled';
 }
 
 // Combined event type for display (posts or reminders)
@@ -27,14 +33,20 @@ interface CombinedEvent {
     id: string;
     title: string;
     date: string;
-    type: 'post' | 'reminder';
+    type: 'post' | 'reminder' | 'treat';
     status?: 'Draft' | 'Scheduled' | 'Published';
-    reminderType?: 'post' | 'shoot';
+    reminderType?: 'post' | 'shoot' | 'treat';
     contentType?: 'free' | 'paid' | 'custom';
     post?: Post | null;
     reminder?: OnlyFansCalendarEvent | null;
     thumbnail?: string;
     customStatus?: 'ordered' | 'in-progress' | 'delivered' | 'cancelled';
+    // Treat-specific display fields
+    treatType?: 'video_call' | 'chat_session' | 'voice_note' | 'custom_video' | 'other';
+    treatDurationMinutes?: number;
+    treatStatus?: 'scheduled' | 'confirmed' | 'in_progress' | 'completed' | 'cancelled';
+    fanName?: string;
+    fanEmail?: string;
 }
 
 const daysOfWeek = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -68,7 +80,7 @@ export const OnlyFansCalendar: React.FC<OnlyFansCalendarProps> = ({ onNavigateTo
     // Reminder form state
     const [eventTitle, setEventTitle] = useState('');
     const [eventDescription, setEventDescription] = useState('');
-    const [eventReminderType, setEventReminderType] = useState<'post' | 'shoot'>('post');
+    const [eventReminderType, setEventReminderType] = useState<'post' | 'shoot' | 'treat'>('post');
     const [eventContentType, setEventContentType] = useState<'free' | 'paid' | 'custom'>('free');
     const [eventCustomStatus, setEventCustomStatus] = useState<'ordered' | 'in-progress' | 'delivered' | 'cancelled'>('ordered');
     const [eventDate, setEventDate] = useState('');
@@ -107,15 +119,15 @@ export const OnlyFansCalendar: React.FC<OnlyFansCalendarProps> = ({ onNavigateTo
     const combinedEvents = useMemo(() => {
         const events: CombinedEvent[] = [];
         
-        // Add posts with OnlyFans platform
+        // Add posts with OnlyFans or My Page platform (Fan Hub posts)
         if (posts && Array.isArray(posts)) {
-            const onlyFansPosts = posts.filter(p => 
+            const fanHubPosts = posts.filter(p => 
                 p.scheduledDate && 
                 (p.status === 'Scheduled' || p.status === 'Published' || p.status === 'Draft') &&
-                p.platforms && (p.platforms as any[]).includes('OnlyFans')
+                p.platforms && ((p.platforms as any[]).includes('OnlyFans') || (p.platforms as any[]).includes('My Page'))
             );
             
-            onlyFansPosts.forEach(post => {
+            fanHubPosts.forEach(post => {
                 // Get preview URL - prefer mediaUrl, fallback to mediaUrls array
                 let previewUrl = post.mediaUrl || (Array.isArray(post.mediaUrls) ? post.mediaUrls[0] : undefined);
                 
@@ -146,17 +158,24 @@ export const OnlyFansCalendar: React.FC<OnlyFansCalendarProps> = ({ onNavigateTo
             });
         }
         
-        // Add reminders
+        // Add reminders and treats
         reminders.forEach(reminder => {
+            const isTreat = reminder.reminderType === 'treat' || !!reminder.treatPurchaseId;
             events.push({
-                id: `reminder-${reminder.id}`,
+                id: isTreat ? `treat-${reminder.id}` : `reminder-${reminder.id}`,
                 title: reminder.title,
                 date: reminder.date,
-                type: 'reminder',
+                type: isTreat ? 'treat' : 'reminder',
                 reminderType: reminder.reminderType,
                 contentType: reminder.contentType,
                 customStatus: reminder.customStatus,
                 reminder: reminder,
+                // Treat-specific fields
+                treatType: reminder.treatType,
+                treatDurationMinutes: reminder.treatDurationMinutes,
+                treatStatus: reminder.treatStatus,
+                fanName: reminder.fanName,
+                fanEmail: reminder.fanEmail,
             });
         });
         
@@ -258,10 +277,10 @@ export const OnlyFansCalendar: React.FC<OnlyFansCalendarProps> = ({ onNavigateTo
         setSelectedEvent(null);
     };
 
-    // Handle event click (post or reminder)
+    // Handle event click (post, reminder, or treat)
     const handleEventClick = (event: CombinedEvent) => {
-        if (event.type === 'reminder') {
-            // Open reminder edit modal
+        if (event.type === 'reminder' || event.type === 'treat') {
+            // Open reminder/treat edit modal
             const reminder = event.reminder!;
             setSelectedEvent(event);
             setEventTitle(reminder.title);
@@ -272,7 +291,7 @@ export const OnlyFansCalendar: React.FC<OnlyFansCalendarProps> = ({ onNavigateTo
             setEventDate(toLocalDateKey(new Date(reminder.date)));
             setEventTime(reminder.reminderTime || '20:00');
             setSelectedFanId(reminder.fanId || null);
-            setSelectedFanName(reminder.fanName || null);
+            setSelectedFanName(reminder.fanName || reminder.fanEmail || null);
             setIsCreatingReminder(true);
         } else {
             // Open post modal
@@ -535,7 +554,7 @@ export const OnlyFansCalendar: React.FC<OnlyFansCalendarProps> = ({ onNavigateTo
 
     // Reset edit state when modal closes
     useEffect(() => {
-        if (!selectedEvent || selectedEvent.type === 'reminder') {
+        if (!selectedEvent || selectedEvent.type === 'reminder' || selectedEvent.type === 'treat') {
             setIsEditing(false);
             setIsRegenerating(false);
             setEditDate('');
@@ -746,6 +765,29 @@ export const OnlyFansCalendar: React.FC<OnlyFansCalendarProps> = ({ onNavigateTo
                                                                 text: 'text-orange-700 dark:text-orange-300'
                                                             };
                                                         }
+                                                    } else if (event.type === 'treat') {
+                                                        // Treat colors based on treat type and status
+                                                        const treatColors = {
+                                                            video_call: {
+                                                                bg: 'bg-gradient-to-r from-fuchsia-50 to-pink-50 dark:from-fuchsia-900/30 dark:to-pink-900/30',
+                                                                border: 'border-l-4 border-fuchsia-500 dark:border-fuchsia-400',
+                                                                dot: 'bg-fuchsia-500 dark:bg-fuchsia-400',
+                                                                text: 'text-fuchsia-700 dark:text-fuchsia-300'
+                                                            },
+                                                            chat_session: {
+                                                                bg: 'bg-gradient-to-r from-indigo-50 to-blue-50 dark:from-indigo-900/30 dark:to-blue-900/30',
+                                                                border: 'border-l-4 border-indigo-500 dark:border-indigo-400',
+                                                                dot: 'bg-indigo-500 dark:bg-indigo-400',
+                                                                text: 'text-indigo-700 dark:text-indigo-300'
+                                                            },
+                                                            default: {
+                                                                bg: 'bg-gradient-to-r from-purple-50 to-violet-50 dark:from-purple-900/30 dark:to-violet-900/30',
+                                                                border: 'border-l-4 border-purple-500 dark:border-purple-400',
+                                                                dot: 'bg-purple-500 dark:bg-purple-400',
+                                                                text: 'text-purple-700 dark:text-purple-300'
+                                                            }
+                                                        };
+                                                        colors = treatColors[event.treatType as keyof typeof treatColors] || treatColors.default;
                                                     } else {
                                                         colors = statusColors.Draft;
                                                     }
@@ -856,6 +898,11 @@ export const OnlyFansCalendar: React.FC<OnlyFansCalendarProps> = ({ onNavigateTo
                                                                             {event.reminderType === 'shoot' ? '🎬' : '📤'}
                                                                         </span>
                                                                     )}
+                                                                    {event.type === 'treat' && (
+                                                                        <span className="text-sm sm:text-xs">
+                                                                            {event.treatType === 'video_call' ? '📹' : event.treatType === 'chat_session' ? '💬' : '🎁'}
+                                                                        </span>
+                                                                    )}
                                                                     <span className={`truncate font-semibold text-sm sm:text-[11px] md:text-[11px] ${colors.text}`} title={event.title}>
                                                                         {event.title}
                                                                     </span>
@@ -873,6 +920,26 @@ export const OnlyFansCalendar: React.FC<OnlyFansCalendarProps> = ({ onNavigateTo
                                                                     {event.type === 'post' && event.contentType && (
                                                                         <span className="text-[9px] sm:text-[8px] px-1.5 py-0.5 rounded-full font-semibold flex-shrink-0 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 uppercase">
                                                                             {event.contentType}
+                                                                        </span>
+                                                                    )}
+                                                                    {event.type === 'treat' && event.treatDurationMinutes && (
+                                                                        <span className="text-[9px] sm:text-[8px] px-1.5 py-0.5 rounded-full font-semibold flex-shrink-0 bg-fuchsia-100 dark:bg-fuchsia-900/50 text-fuchsia-700 dark:text-fuchsia-300">
+                                                                            {event.treatDurationMinutes}min
+                                                                        </span>
+                                                                    )}
+                                                                    {event.type === 'treat' && event.treatStatus && (
+                                                                        <span className={`text-[9px] sm:text-[8px] px-1.5 py-0.5 rounded-full font-semibold flex-shrink-0 ${
+                                                                            event.treatStatus === 'completed'
+                                                                                ? 'bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300'
+                                                                                : event.treatStatus === 'confirmed'
+                                                                                ? 'bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300'
+                                                                                : event.treatStatus === 'in_progress'
+                                                                                ? 'bg-yellow-100 dark:bg-yellow-900/50 text-yellow-700 dark:text-yellow-300'
+                                                                                : event.treatStatus === 'cancelled'
+                                                                                ? 'bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300'
+                                                                                : 'bg-purple-100 dark:bg-purple-900/50 text-purple-700 dark:text-purple-300'
+                                                                        }`}>
+                                                                            {event.treatStatus === 'in_progress' ? 'Live' : event.treatStatus}
                                                                         </span>
                                                                     )}
                                                                 </div>
@@ -1108,8 +1175,6 @@ export const OnlyFansCalendar: React.FC<OnlyFansCalendarProps> = ({ onNavigateTo
                                                 <option value="witty">Witty</option>
                                                 <option value="inspirational">Inspirational</option>
                                                 <option value="professional">Professional</option>
-                                                <option value="sexy-bold">Sexy / Bold</option>
-                                                <option value="sexy-explicit">Sexy / Explicit</option>
                                             </select>
                                         </div>
 
@@ -1203,7 +1268,11 @@ export const OnlyFansCalendar: React.FC<OnlyFansCalendarProps> = ({ onNavigateTo
                     <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full max-h-[90vh] overflow-y-auto">
                         <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
                             <h3 className="text-xl font-bold text-gray-900 dark:text-white">
-                                {selectedEvent?.reminder ? 'Edit Reminder' : 'Create Reminder'}
+                                {selectedEvent?.type === 'treat' 
+                                    ? `${selectedEvent.treatType === 'video_call' ? '📹 Video Call' : selectedEvent.treatType === 'chat_session' ? '💬 Chat Session' : '🎁 Treat'} Details`
+                                    : selectedEvent?.reminder 
+                                        ? 'Edit Reminder' 
+                                        : 'Create Reminder'}
                             </h3>
                             <button
                                 onClick={resetReminderForm}
@@ -1214,7 +1283,58 @@ export const OnlyFansCalendar: React.FC<OnlyFansCalendarProps> = ({ onNavigateTo
                         </div>
 
                         <div className="p-6 space-y-4">
-                            {/* Reminder Type */}
+                            {/* Treat-specific info banner */}
+                            {selectedEvent?.type === 'treat' && (
+                                <div className={`p-4 rounded-lg border ${
+                                    selectedEvent.treatType === 'video_call' 
+                                        ? 'bg-fuchsia-50 dark:bg-fuchsia-900/20 border-fuchsia-200 dark:border-fuchsia-800'
+                                        : selectedEvent.treatType === 'chat_session'
+                                            ? 'bg-indigo-50 dark:bg-indigo-900/20 border-indigo-200 dark:border-indigo-800'
+                                            : 'bg-purple-50 dark:bg-purple-900/20 border-purple-200 dark:border-purple-800'
+                                }`}>
+                                    <div className="flex items-center gap-3">
+                                        <span className="text-2xl">
+                                            {selectedEvent.treatType === 'video_call' ? '📹' : selectedEvent.treatType === 'chat_session' ? '💬' : '🎁'}
+                                        </span>
+                                        <div>
+                                            <p className={`font-semibold ${
+                                                selectedEvent.treatType === 'video_call' 
+                                                    ? 'text-fuchsia-700 dark:text-fuchsia-300'
+                                                    : selectedEvent.treatType === 'chat_session'
+                                                        ? 'text-indigo-700 dark:text-indigo-300'
+                                                        : 'text-purple-700 dark:text-purple-300'
+                                            }`}>
+                                                {selectedEvent.treatType === 'video_call' ? 'Video Call' : selectedEvent.treatType === 'chat_session' ? 'Chat Session' : 'Treat'} 
+                                                {selectedEvent.treatDurationMinutes && ` • ${selectedEvent.treatDurationMinutes} min`}
+                                            </p>
+                                            <p className="text-sm text-gray-600 dark:text-gray-400">
+                                                with {selectedEvent.fanName || selectedEvent.fanEmail || 'Fan'}
+                                            </p>
+                                        </div>
+                                    </div>
+                                    {selectedEvent.treatStatus && (
+                                        <div className="mt-2 flex items-center gap-2">
+                                            <span className="text-xs text-gray-500">Status:</span>
+                                            <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                                                selectedEvent.treatStatus === 'completed'
+                                                    ? 'bg-green-100 text-green-700'
+                                                    : selectedEvent.treatStatus === 'confirmed'
+                                                        ? 'bg-blue-100 text-blue-700'
+                                                        : selectedEvent.treatStatus === 'in_progress'
+                                                            ? 'bg-yellow-100 text-yellow-700'
+                                                            : selectedEvent.treatStatus === 'cancelled'
+                                                                ? 'bg-red-100 text-red-700'
+                                                                : 'bg-purple-100 text-purple-700'
+                                            }`}>
+                                                {selectedEvent.treatStatus === 'in_progress' ? 'In Progress' : selectedEvent.treatStatus}
+                                            </span>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
+                            {/* Reminder Type - only show for non-treat events */}
+                            {selectedEvent?.type !== 'treat' && (
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                                     Reminder *
@@ -1249,8 +1369,10 @@ export const OnlyFansCalendar: React.FC<OnlyFansCalendarProps> = ({ onNavigateTo
                                         : 'Reminder to film/create content'}
                                 </p>
                             </div>
+                            )}
 
-                            {/* Content Type */}
+                            {/* Content Type - only show for non-treat events */}
+                            {selectedEvent?.type !== 'treat' && (
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                                     Drop Type *
@@ -1291,9 +1413,10 @@ export const OnlyFansCalendar: React.FC<OnlyFansCalendarProps> = ({ onNavigateTo
                                     </button>
                                 </div>
                             </div>
+                            )}
 
-                            {/* Custom Status (only show when Custom is selected) */}
-                            {eventContentType === 'custom' && (
+                            {/* Custom Status (only show when Custom is selected and not a treat) */}
+                            {eventContentType === 'custom' && selectedEvent?.type !== 'treat' && (
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                                         Status *
@@ -1400,7 +1523,7 @@ export const OnlyFansCalendar: React.FC<OnlyFansCalendarProps> = ({ onNavigateTo
                                     className="flex-1 px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 flex items-center justify-center gap-2"
                                 >
                                     <CheckCircleIcon className="w-4 h-4" />
-                                    {selectedEvent?.reminder ? 'Update' : 'Create'}
+                                    {selectedEvent?.type === 'treat' ? 'Save Changes' : selectedEvent?.reminder ? 'Update' : 'Create'}
                                 </button>
                             </div>
                         </div>

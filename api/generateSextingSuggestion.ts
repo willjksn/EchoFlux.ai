@@ -70,6 +70,7 @@ async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
     const tone = sessionContext?.tone || "Teasing";
     const fanName = sessionContext?.fanName || "Fan";
     let explicitnessLevel = 7;
+    let toneSettings: { formality?: number; humor?: number; empathy?: number; spiciness?: number; profanity?: number; emojiLevel?: number } = {};
     try {
       const db = getAdminDb();
       const userDoc = await db.collection("users").doc(user.uid).get();
@@ -77,8 +78,12 @@ async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
       if (typeof userData?.explicitnessLevel === "number") {
         explicitnessLevel = userData.explicitnessLevel;
       }
+      // Get tone settings from user settings
+      if (userData?.settings?.tone) {
+        toneSettings = userData.settings.tone;
+      }
     } catch (error) {
-      console.warn("[generateSextingSuggestion] failed to load explicitness:", error);
+      console.warn("[generateSextingSuggestion] failed to load user settings:", error);
     }
 
     const toneLower = String(tone).toLowerCase();
@@ -119,6 +124,15 @@ REQUIREMENTS:
         }
     }
 
+    // Build tone style guidance
+    const toneStyleGuidance = Object.keys(toneSettings).length > 0 ? `
+WRITING STYLE PREFERENCES (apply to all suggestions):
+${toneSettings.formality !== undefined ? `- Formality (${toneSettings.formality}/100): ${toneSettings.formality < 30 ? 'Very casual, use slang' : toneSettings.formality < 50 ? 'Casual' : toneSettings.formality < 70 ? 'Balanced' : 'More polished'}` : ''}
+${toneSettings.humor !== undefined ? `- Humor (${toneSettings.humor}/100): ${toneSettings.humor < 30 ? 'Serious' : toneSettings.humor < 50 ? 'Light humor' : toneSettings.humor < 70 ? 'Playful' : 'Very funny'}` : ''}
+${toneSettings.empathy !== undefined ? `- Warmth (${toneSettings.empathy}/100): ${toneSettings.empathy < 30 ? 'Direct' : toneSettings.empathy < 50 ? 'Friendly' : toneSettings.empathy < 70 ? 'Warm' : 'Very caring'}` : ''}
+${toneSettings.profanity !== undefined && toneSettings.profanity > 0 ? `- Profanity (${toneSettings.profanity}/100): ${toneSettings.profanity < 30 ? 'Mild swearing OK' : toneSettings.profanity < 50 ? 'Moderate swearing' : 'Frequent swearing'}` : '- Keep language clean unless context calls for it'}
+` : '';
+
     const prompt = `
 You are an explicit sexting co-pilot for premium creator platforms (OnlyFans / Fansly / Fanvue).
 Generate 4-6 short, message-ready suggestions the creator can send immediately.
@@ -128,6 +142,7 @@ Session context:
 - Tone: ${tone}
 - Fan name: ${fanName}
 - Explicitness level: ${explicitnessLevel}/10 — ${explicitnessContext}
+${toneStyleGuidance}
 ${personalityContext ? `${personalityContext}
 
 CREATOR PERSONALITY (USE WHEN RELEVANT - CONSISTENT WITH COMPOSE AND PREMIUM CONTENT STUDIO):
@@ -192,7 +207,7 @@ Guidelines:
       // Fallback: split lines
       suggestions = raw
         .split("\n")
-        .map((s) => s.replace(/^[-*]\s*/, "").trim())
+        .map((s: string) => s.replace(/^[-*]\s*/, "").trim())
         .filter(Boolean);
     }
 

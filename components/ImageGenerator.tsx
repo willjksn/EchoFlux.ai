@@ -1,9 +1,9 @@
 import React, { useState, useRef } from 'react';
 import { generateImage, generateCaptions, saveGeneratedContent } from '../src/services/geminiService';
-import { SparklesIcon, ImageIcon, ComposeIcon as CaptionIcon, SendIcon, TrashIcon, RedoIcon, EditIcon, MobileIcon, CalendarIcon, DownloadIcon, CheckCircleIcon } from './icons/UIIcons';
+import { SparklesIcon, ImageIcon, ComposeIcon as CaptionIcon, SendIcon, TrashIcon, RedoIcon, EditIcon, MobileIcon, CalendarIcon, DownloadIcon, CheckCircleIcon, HeartIcon } from './icons/UIIcons';
 import { useAppContext } from './AppContext';
 import { Platform, CalendarEvent } from '../types';
-import { InstagramIcon, TikTokIcon, ThreadsIcon, XIcon, YouTubeIcon, LinkedInIcon, FacebookIcon } from './icons/PlatformIcons';
+import { InstagramIcon, TikTokIcon, ThreadsIcon, XIcon, YouTubeIcon, LinkedInIcon, FacebookIcon, PinterestIcon } from './icons/PlatformIcons';
 import { UpgradePrompt } from './UpgradePrompt';
 import { db, storage } from '../firebaseConfig';
 import { collection, addDoc, setDoc, doc } from 'firebase/firestore';
@@ -113,6 +113,8 @@ const platformIcons: Record<Platform, React.ReactNode> = {
   YouTube: <YouTubeIcon />,
   LinkedIn: <LinkedInIcon />,
   Facebook: <FacebookIcon />,
+  Pinterest: <PinterestIcon />,
+  'My Page': <HeartIcon />,
 };
 
 export const ImageGenerator: React.FC<ImageGeneratorProps> = ({ onGenerate, usageLeft, initialPrompt, onGenerateCaptions }) => {
@@ -127,7 +129,7 @@ export const ImageGenerator: React.FC<ImageGeneratorProps> = ({ onGenerate, usag
     const [caption, setCaption] = useState('');
     const [isCaptionLoading, setIsCaptionLoading] = useState(false);
     const [selectedPlatforms, setSelectedPlatforms] = useState<Record<Platform, boolean>>({
-        Instagram: false, TikTok: false, X: false, Threads: false, YouTube: false, LinkedIn: false, Facebook: false, Pinterest: false
+        Instagram: false, TikTok: false, X: false, Threads: false, YouTube: false, LinkedIn: false, Facebook: false, Pinterest: false, 'My Page': false
     });
     const [uploadedImage, setUploadedImage] = useState<{ data: string; mimeType: string; previewUrl: string } | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
@@ -411,7 +413,7 @@ export const ImageGenerator: React.FC<ImageGeneratorProps> = ({ onGenerate, usag
         setCaption('');
         setPrompt('');
         handleClearImage();
-        setSelectedPlatforms({ Instagram: false, TikTok: false, X: false, Threads: false, YouTube: false, LinkedIn: false, Facebook: false, Pinterest: false });
+        setSelectedPlatforms({ Instagram: false, TikTok: false, X: false, Threads: false, YouTube: false, LinkedIn: false, Facebook: false, Pinterest: false, 'My Page': false });
         } catch (e) {
             console.error("Publish error:", e);
             showToast("Failed to publish image.", 'error');

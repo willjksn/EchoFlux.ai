@@ -1015,9 +1015,11 @@ const WeeklyPlanFormatter: React.FC<{ plan: any } & WeeklyPlanActionHandlers> = 
 
 type OnlyFansContentBrainProps = {
     initialTab?: ContentType;
+    /** When true, show only the initial tab content (no tab bar). Used when Premium Studio → New Ideas shows only Content Ideas. */
+    singleTabMode?: boolean;
 };
 
-export const OnlyFansContentBrain: React.FC<OnlyFansContentBrainProps> = ({ initialTab }) => {
+export const OnlyFansContentBrain: React.FC<OnlyFansContentBrainProps> = ({ initialTab, singleTabMode }) => {
     // All hooks must be called unconditionally at the top
     const context = useAppContext();
     const user = context?.user;
@@ -1027,8 +1029,17 @@ export const OnlyFansContentBrain: React.FC<OnlyFansContentBrainProps> = ({ init
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [activeTab, setActiveTab] = useState<ContentType>(initialTab ?? 'captions');
-    const platformOptions: Array<'OnlyFans' | 'Fansly' | 'Fanvue'> = ['OnlyFans', 'Fansly', 'Fanvue'];
-    const [selectedPlatform, setSelectedPlatform] = useState<'OnlyFans' | 'Fansly' | 'Fanvue'>('OnlyFans');
+    const effectiveTab = singleTabMode ? (initialTab ?? 'postIdeas') : activeTab;
+    const platformOptions: Array<'Instagram' | 'Facebook' | 'X' | 'My Page'> = ['Instagram', 'Facebook', 'X', 'My Page'];
+    const platformOptionsDmOnly: Array<'My Page'> = ['My Page'];
+    const [selectedPlatform, setSelectedPlatform] = useState<'Instagram' | 'Facebook' | 'X' | 'My Page'>('Instagram');
+
+    // When showing DM Session only (singleTabMode + messaging), force My Page and no platform selector
+    useEffect(() => {
+        if (singleTabMode && initialTab === 'messaging') {
+            setSelectedPlatform('My Page');
+        }
+    }, [singleTabMode, initialTab]);
     const [isGenerating, setIsGenerating] = useState(false);
     
     // Caption generation state
@@ -1093,10 +1104,23 @@ export const OnlyFansContentBrain: React.FC<OnlyFansContentBrainProps> = ({ init
     const [mediaCaptionPrompt, setMediaCaptionPrompt] = useState('');
     const [generatedMediaCaptions, setGeneratedMediaCaptions] = useState<{caption: string; hashtags: string[]}[]>([]);
     
-    // Post ideas state
+    // Post ideas state - persist in localStorage
     const [postIdeaPrompt, setPostIdeaPrompt] = useState('');
-    const [generatedPostIdeas, setGeneratedPostIdeas] = useState<string[]>([]);
+    const [generatedPostIdeas, setGeneratedPostIdeas] = useState<string[]>(() => {
+        if (typeof window !== 'undefined') {
+            const saved = localStorage.getItem('premiumStudio_postIdeas');
+            return saved ? JSON.parse(saved) : [];
+        }
+        return [];
+    });
     const [useCreatorPersonalityPostIdeas, setUseCreatorPersonalityPostIdeas] = useState(false);
+    
+    // Persist post ideas to localStorage when they change
+    useEffect(() => {
+        if (generatedPostIdeas.length > 0) {
+            localStorage.setItem('premiumStudio_postIdeas', JSON.stringify(generatedPostIdeas));
+        }
+    }, [generatedPostIdeas]);
     
     // Shoot concepts state
     const [shootConceptPrompt, setShootConceptPrompt] = useState('');
@@ -1133,9 +1157,10 @@ export const OnlyFansContentBrain: React.FC<OnlyFansContentBrainProps> = ({ init
     const [generatedMonetizationPlan, setGeneratedMonetizationPlan] = useState<any>(null);
 
     // Subscriber messaging toolkit
-    const [messageType, setMessageType] = useState<'Welcome sequence' | 'Renewal reminder' | 'PPV follow-up' | 'Win-back'>(`Welcome sequence`);
+    const [messageType, setMessageType] = useState<'Welcome sequence' | 'Renewal reminder' | 'PPV follow-up' | 'Win-back' | 'New drop' | 'New treats in store' | 'Custom'>(`Welcome sequence`);
+    const [customMessageSubject, setCustomMessageSubject] = useState('');
     const [messageContext, setMessageContext] = useState('');
-    const [messageTone, setMessageTone] = useState<'Warm' | 'Flirty' | 'Direct' | 'Explicit'>(`Warm`);
+    const [messageTone, setMessageTone] = useState<'Warm' | 'Flirty' | 'Direct' | 'Bold'>(`Warm`);
     const [generatedMessages, setGeneratedMessages] = useState<string>('');
     const [selectedFanId, setSelectedFanId] = useState<string | null>(null);
     const [useCreatorPersonalityMessaging, setUseCreatorPersonalityMessaging] = useState(false);
@@ -1826,6 +1851,21 @@ export const OnlyFansContentBrain: React.FC<OnlyFansContentBrainProps> = ({ init
                 useCreatorPersonalityPostIdeas && creatorPersonality ? `CREATOR PERSONALITY:\n${creatorPersonality}` : null,
             ].filter(Boolean).join('\n');
             
+            // Platform-specific format guidance
+            const isMyPage = selectedPlatform === 'My Page';
+            const formatGuidance = isMyPage 
+                ? `CRITICAL FORMAT RESTRICTION FOR MY PAGE:
+- ONLY use these formats: photo, video, text, poll
+- NEVER suggest: reels, carousels, stories, swipeable content - these DO NOT exist on My Page
+- My Page is a simple feed similar to OnlyFans, NOT Instagram
+- Focus on: single photo posts, video posts, text updates with emojis, or poll questions
+- Each idea should specify if it's a photo, video, text post, or poll`
+                : selectedPlatform === 'X' 
+                ? `For X/Twitter: Use formats like tweets, threads, polls, or short videos. Keep it concise and punchy.`
+                : selectedPlatform === 'Facebook'
+                ? `For Facebook: Use formats like photos, videos, posts, or live streams. Focus on shareable content.`
+                : `For Instagram: You can suggest reels, carousels, photos, or stories. Specify the format for each idea.`;
+
             const response = await fetch('/api/generateText', {
                 method: 'POST',
                 headers: {
@@ -1834,9 +1874,12 @@ export const OnlyFansContentBrain: React.FC<OnlyFansContentBrainProps> = ({ init
                 },
                 body: JSON.stringify({
                     prompt: `Generate 10 creative post ideas tailored for ${selectedPlatform} based on: ${postIdeaPrompt}. 
-                    Each idea should be specific, engaging, and tailored for adult content creators. 
-                    When natural, include a ${selectedPlatform} mention (e.g., "join me on ${selectedPlatform}") but only if it fits. 
-                    Format as a numbered list with brief descriptions.${settingsContext ? `\n\n${settingsContext}` : ''}`,
+                    
+${formatGuidance}
+
+Each idea should be specific, engaging, and tailored for adult content creators. 
+When natural, include a ${selectedPlatform} mention (e.g., "join me on ${selectedPlatform}") but only if it fits. 
+Format as a numbered list with brief descriptions. For each idea, clearly specify the format (${isMyPage ? 'photo/video/text/poll' : 'reel/carousel/photo/story/video'}).${settingsContext ? `\n\n${settingsContext}` : ''}`,
                     context: {
                         goal: 'content-ideas',
                         tone: 'Explicit/Adult Content',
@@ -2956,10 +2999,12 @@ NATURAL PERSONALIZATION GUIDELINES:
                 personalityContext += `\n\nCREATOR PERSONALITY:\n${creatorPersonality}`;
             }
 
+            const effectiveMessageType = messageType === 'Custom' ? customMessageSubject || 'Custom message' : messageType;
+            
             const prompt = `
 Create a subscriber messaging toolkit for a ${selectedPlatform} creator.
 
-Type: ${messageType}
+Type: ${effectiveMessageType}
 Tone: ${messageTone}
 Context: ${messageContext || 'None provided'}
 ${personalityContext ? personalityContext : ''}
@@ -2998,6 +3043,9 @@ Output format:
 - If Renewal reminder: 3 messages (soft → direct)
 - If PPV follow-up: 3 messages (soft nudge → last call)
 - If Win-back: 3 messages (friendly → offer → last check-in)
+- If New drop: 3 messages (teaser → announcement → reminder)
+- If New treats in store: 3 messages (announcement → highlight → limited time)
+- If Custom/other: 3 messages tailored to the specific subject (intro → details → call-to-action)
 `.trim();
 
             // Load emoji settings
@@ -3033,7 +3081,7 @@ Output format:
             // Usage tracking (best-effort)
             try {
                 const { logUsageEvent } = await import('../src/services/usageEvents');
-                await logUsageEvent(user.id, 'of_generate_subscriber_messages', { messageType, tone: messageTone });
+                await logUsageEvent(user.id, 'of_generate_subscriber_messages', { messageType: effectiveMessageType, tone: messageTone });
             } catch {
                 // ignore
             }
@@ -4234,18 +4282,21 @@ Output format:
     }, [showMediaVaultModal]);
 
     const allTabs: { id: ContentType; label: string }[] = [
-        { id: 'trends', label: 'Find Trends' },
-        { id: 'weeklyPlan', label: 'Plan My Week' },
-        { id: 'captions', label: 'Captions' },
-        { id: 'postIdeas', label: 'Content Ideas' },
-        { id: 'shootConcepts', label: 'Shoot Ideas' },
+        { id: 'postIdeas', label: 'New Ideas' },
         { id: 'monetizationPlanner', label: 'Drops & PPV' },
-        { id: 'messaging', label: 'DM Sessions' },
+        { id: 'messaging', label: 'DM Session' },
+        { id: 'captions', label: 'Teasers' },
         { id: 'mediaCaptions', label: 'Image/Video Captions' }, // Hidden but kept for stability
-        { id: 'guides', label: 'Playbooks' },
+        { id: 'guides', label: 'Playbooks' }, // Hidden but kept for stability
+        { id: 'trends', label: 'Find Trends' }, // Hidden - now integrated into New Ideas
+        { id: 'weeklyPlan', label: 'Plan My Week' }, // Hidden but kept for stability
+        { id: 'shootConcepts', label: 'Shoot Ideas' }, // Hidden - merged with New Ideas
     ];
-    // Filter out mediaCaptions and guides tabs (history is now in captions tab)
-    const tabs = allTabs.filter(tab => tab.id !== 'mediaCaptions' && tab.id !== 'guides') as { id: ContentType; label: string }[];
+    // Filter tabs to show only: New Ideas, Drops & PPV, DM Session, Teasers
+    // Note: Persona Builder is handled separately via OnlyFansRoleplayIdeas component
+    const tabs = allTabs.filter(tab => 
+        ['postIdeas', 'monetizationPlanner', 'messaging', 'captions'].includes(tab.id)
+    ) as { id: ContentType; label: string }[];
 
     // Show loading state
     if (isLoading) {
@@ -4288,10 +4339,10 @@ Output format:
             <div className="flex items-center justify-between flex-wrap gap-3">
                 <div>
                     <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Platform</h3>
-                    <p className="text-sm text-gray-600 dark:text-gray-400">Pick where you’re posting this week.</p>
+                    <p className="text-sm text-gray-600 dark:text-gray-400">Where you’re posting.</p>
                 </div>
                 <div className="flex flex-wrap gap-2">
-                    {platformOptions.map((platform) => (
+                    {(effectiveTab === 'messaging' ? platformOptionsDmOnly : platformOptions).map((platform) => (
                         <button
                             key={platform}
                             onClick={() => setSelectedPlatform(platform)}
@@ -4311,16 +4362,28 @@ Output format:
 
     return (
         <div className="max-w-5xl mx-auto">
-            {/* Header */}
+            {/* Header: dynamic when singleTabMode by effectiveTab */}
             <div className="mb-6">
                 <div className="flex items-center gap-3 mb-2">
                     <SparklesIcon className="w-8 h-8 text-primary-600 dark:text-primary-400" />
                     <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
-                        Content Ideas
+                        {singleTabMode && effectiveTab === 'monetizationPlanner'
+                            ? 'Drops & PPV'
+                            : singleTabMode && effectiveTab === 'messaging'
+                            ? 'DM Session'
+                            : singleTabMode && effectiveTab === 'shootConcepts'
+                            ? 'Shoot Ideas'
+                            : 'Content Ideas'}
                     </h1>
                 </div>
                 <p className="text-gray-600 dark:text-gray-400">
-                    Plan drops, write captions, and map the week in creator language.
+                    {singleTabMode && effectiveTab === 'monetizationPlanner'
+                            ? 'Plan drops and PPV strategy with a balanced content mix.'
+                            : singleTabMode && effectiveTab === 'messaging'
+                            ? 'Subscriber messaging toolkit for retention and PPV conversions.'
+                            : singleTabMode && effectiveTab === 'shootConcepts'
+                            ? 'Photoshoot and concept ideas tailored to your niche and audience.'
+                            : "Get fresh post ideas and prompts for where you're posting."}
                 </p>
             </div>
 
@@ -4337,7 +4400,8 @@ Output format:
                 </div>
             )}
 
-            {/* Tabs */}
+            {/* Tabs (hidden when singleTabMode, e.g. Premium Studio → New Ideas) */}
+            {!singleTabMode && (
             <div className="flex gap-2 mb-6 border-b border-gray-200 dark:border-gray-700 overflow-x-auto overflow-y-hidden">
                 <div className="flex gap-2 min-w-max">
                     {tabs.map((tab) => (
@@ -4355,9 +4419,10 @@ Output format:
                     ))}
                 </div>
             </div>
+            )}
 
             {/* Captions Tab */}
-            {activeTab === 'captions' && (
+            {effectiveTab === 'captions' && (
                 <div className="space-y-6">
                     <PlatformTargetingCard />
 
@@ -4864,7 +4929,7 @@ Output format:
                             {/* Generate Captions Button - Always Visible */}
                             <div className="flex gap-2">
                                 <button
-                                    onClick={handleGenerateCaptions}
+                                    onClick={() => handleGenerateCaptions()}
                                     disabled={isGenerating}
                                     className="flex-1 px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                                 >
@@ -5387,16 +5452,22 @@ Output format:
                     </div>
 
                     <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
-                        <div className="flex items-center justify-between mb-4">
-                            <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
-                                Generate Post Ideas
-                            </h2>
-                            {savedPostIdeas.length > 0 && (
-                                <span className="text-sm text-gray-500 dark:text-gray-400">
-                                    {savedPostIdeas.length} saved
-                                </span>
-                            )}
-                        </div>
+                            <div className="flex items-center justify-between mb-4">
+                                <div>
+                                    <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
+                                        Generate New Ideas
+                                    </h2>
+                                    <p className="text-sm text-gray-500 dark:text-gray-400 flex items-center gap-1.5 mt-1">
+                                        <span className="text-orange-500">🔥</span>
+                                        Powered by current trends in your niche
+                                    </p>
+                                </div>
+                                {savedPostIdeas.length > 0 && (
+                                    <span className="text-sm text-gray-500 dark:text-gray-400">
+                                        {savedPostIdeas.length} saved
+                                    </span>
+                                )}
+                            </div>
                         
                         <div className="space-y-4">
                             <div className="relative">
@@ -5416,7 +5487,7 @@ Output format:
                                 <textarea
                                     value={postIdeaPrompt}
                                     onChange={(e) => setPostIdeaPrompt(e.target.value)}
-                                    placeholder="e.g., 'Interactive content to boost engagement' or 'Behind-the-scenes content ideas'"
+                                    placeholder="e.g., 'Interactive content (polls, fan choice, Q&A)' or 'Behind-the-scenes content ideas'"
                                     className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white resize-y min-h-[100px]"
                                 />
                                 {aiHelpField === 'postIdeas' && (
@@ -5512,27 +5583,94 @@ Output format:
                         </div>
                     </div>
 
-                    {/* Generated Post Ideas */}
+                    {/* Generated Post Ideas - Visual Cards */}
                     {Array.isArray(generatedPostIdeas) && generatedPostIdeas.length > 0 && (
                         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
-                            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-                                Post Ideas
-                            </h3>
-                            <div className="space-y-3">
-                                {generatedPostIdeas.map((idea, index) => (
-                                    <div
-                                        key={index}
-                                        className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600"
-                                    >
-                                        <p className="text-gray-900 dark:text-white">{idea}</p>
-                                        <button
-                                            onClick={() => copyToClipboard(idea)}
-                                            className="mt-2 text-sm text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300"
+                            <div className="flex items-center justify-between mb-4">
+                                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                                    New Ideas
+                                </h3>
+                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-orange-100 dark:bg-orange-900/40 text-orange-700 dark:text-orange-300 text-xs font-medium">
+                                    🔥 Trend-powered
+                                </span>
+                            </div>
+                            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                                {generatedPostIdeas.map((idea, index) => {
+                                    // Platform-specific formats
+                                    const platformFormats: Record<string, string[]> = {
+                                        'Instagram': ['Reel', 'Carousel', 'Photo', 'Story'],
+                                        'Facebook': ['Photo', 'Video', 'Post', 'Live'],
+                                        'X': ['Tweet', 'Thread', 'Poll', 'Video'],
+                                        'My Page': ['Photo', 'Video', 'Text', 'Poll'],
+                                    };
+                                    const formats = platformFormats[selectedPlatform] || platformFormats['Instagram'];
+                                    const format = formats[index % formats.length];
+                                    const formatStyles: Record<string, { gradient: string; icon: string; aspect: string }> = {
+                                        'Reel': { gradient: 'from-purple-500 via-pink-500 to-orange-400', icon: '▶️', aspect: 'h-36' },
+                                        'Carousel': { gradient: 'from-blue-500 to-purple-500', icon: '◀ ▶', aspect: 'h-36' },
+                                        'Photo': { gradient: 'from-pink-500 via-purple-500 to-indigo-500', icon: '📷', aspect: 'h-36' },
+                                        'Story': { gradient: 'from-orange-400 via-pink-500 to-purple-500', icon: '○', aspect: 'h-36' },
+                                        'Video': { gradient: 'from-purple-600 via-pink-500 to-red-500', icon: '🎬', aspect: 'h-36' },
+                                        'Text': { gradient: 'from-indigo-500 via-purple-500 to-pink-500', icon: '✍️', aspect: 'h-36' },
+                                        'Poll': { gradient: 'from-teal-500 via-cyan-500 to-blue-500', icon: '📊', aspect: 'h-36' },
+                                        'Tweet': { gradient: 'from-gray-800 via-gray-700 to-gray-600', icon: '💬', aspect: 'h-36' },
+                                        'Thread': { gradient: 'from-blue-600 via-blue-500 to-cyan-500', icon: '🧵', aspect: 'h-36' },
+                                        'Post': { gradient: 'from-blue-600 to-blue-400', icon: '📝', aspect: 'h-36' },
+                                        'Live': { gradient: 'from-red-500 via-pink-500 to-orange-500', icon: '🔴', aspect: 'h-36' },
+                                    };
+                                    const style = formatStyles[format] || formatStyles['Photo'];
+                                    const isTrending = index < 2;
+                                    
+                                    // Function to use this idea - navigates to Fan Hub Posts with caption pre-filled
+                                    const handleUseIdea = () => {
+                                        // Store caption in localStorage for Fan Hub Posts to pick up
+                                        localStorage.setItem('fanHubPendingCaption', idea);
+                                        // Navigate to Fan Hub Posts tab
+                                        window.location.href = '/fan?tab=posts';
+                                    };
+                                    
+                                    return (
+                                        <div
+                                            key={index}
+                                            className="rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden hover:shadow-md transition-shadow"
                                         >
-                                            Copy
-                                        </button>
-                                    </div>
-                                ))}
+                                            {/* Visual Preview Header - taller with better padding */}
+                                            <div className={`relative ${style.aspect} bg-gradient-to-br ${style.gradient} flex flex-col justify-between p-3`}>
+                                                {/* Format badge row */}
+                                                <div className="flex items-center gap-1.5">
+                                                    <span className="px-2 py-1 bg-black/30 backdrop-blur-sm rounded-md text-white text-xs font-bold">
+                                                        {format.toUpperCase()}
+                                                    </span>
+                                                    {isTrending && (
+                                                        <span className="px-2 py-1 bg-orange-500/90 backdrop-blur-sm rounded-md text-white text-xs font-bold">
+                                                            🔥 Trending
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                {/* Hook preview - centered with better text handling */}
+                                                <div className="flex-1 flex items-center justify-center px-2 py-2">
+                                                    <p className="text-white font-semibold text-sm leading-snug drop-shadow-lg text-center" style={{ wordBreak: 'break-word' }}>
+                                                        "{idea.length > 100 ? idea.slice(0, 100) + '...' : idea}"
+                                                    </p>
+                                                </div>
+                                                {/* Format icon */}
+                                                <div className="text-white/60 text-lg text-right">
+                                                    {style.icon}
+                                                </div>
+                                            </div>
+                                            {/* Content - full text visible */}
+                                            <div className="p-3 bg-gray-50 dark:bg-gray-700/50">
+                                                <p className="text-xs text-gray-600 dark:text-gray-300 mb-3 line-clamp-3">{idea}</p>
+                                                <button
+                                                    onClick={handleUseIdea}
+                                                    className="w-full py-2 text-xs font-semibold text-white bg-primary-600 hover:bg-primary-700 rounded-lg transition-colors"
+                                                >
+                                                    Use in Post →
+                                                </button>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
                             </div>
                         </div>
                     )}
@@ -6345,7 +6483,7 @@ Output format:
             {/* Monetization Planner Tab */}
             {activeTab === 'monetizationPlanner' && (
                 <div className="space-y-6">
-                    <PlatformTargetingCard />
+                    {!singleTabMode && <PlatformTargetingCard />}
 
                     {/* Saved Monetization Plans History */}
                     <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4">
@@ -6670,16 +6808,16 @@ Output format:
             {/* Messaging Tab */}
             {activeTab === 'messaging' && (
                 <div className="space-y-6">
-                    <PlatformTargetingCard />
+                    {!singleTabMode && <PlatformTargetingCard />}
+
                     <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
                         <div className="flex items-center justify-between mb-4">
                             <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
                                 Subscriber Messaging Toolkit
                             </h2>
-                            <span className="text-xs text-gray-500 dark:text-gray-400">copy/paste templates</span>
                         </div>
                         <p className="text-sm text-gray-600 dark:text-gray-400 mb-6">
-                            Generate short message sequences that improve retention and PPV conversions (manual sending).
+                            Generate short message sequences that improve retention and PPV conversions.
                         </p>
 
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -6694,8 +6832,23 @@ Output format:
                                     <option value="Renewal reminder">Renewal reminder</option>
                                     <option value="PPV follow-up">PPV follow-up</option>
                                     <option value="Win-back">Win-back</option>
+                                    <option value="New drop">New drop</option>
+                                    <option value="New treats in store">New treats in store</option>
+                                    <option value="Custom">Custom...</option>
                                 </select>
                             </div>
+                            {messageType === 'Custom' && (
+                                <div>
+                                    <label className="block text-xs font-semibold text-gray-600 dark:text-gray-300 mb-1">Custom subject</label>
+                                    <input
+                                        type="text"
+                                        value={customMessageSubject}
+                                        onChange={(e) => setCustomMessageSubject(e.target.value)}
+                                        placeholder="e.g., Flash sale, Birthday special, New content theme..."
+                                        className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                                    />
+                                </div>
+                            )}
                             <div>
                                 <label className="block text-xs font-semibold text-gray-600 dark:text-gray-300 mb-1">Tone</label>
                                 <select
@@ -6706,7 +6859,7 @@ Output format:
                                     <option value="Warm">Warm</option>
                                     <option value="Flirty">Flirty</option>
                                     <option value="Direct">Direct</option>
-                                    <option value="Explicit">Explicit</option>
+                                    <option value="Bold">Bold</option>
                                 </select>
                             </div>
                             <div className="md:col-span-3 relative">

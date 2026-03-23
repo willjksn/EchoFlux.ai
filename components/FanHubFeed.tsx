@@ -1,0 +1,1761 @@
+import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
+import { createPortal } from "react-dom";
+import { useAppContext } from "./AppContext";
+import { hasEliteAccess } from "../src/utils/planAccess";
+import {
+  collection,
+  query,
+  orderBy,
+  limit,
+  getDocs,
+  doc,
+  runTransaction,
+  getDoc,
+  serverTimestamp,
+  updateDoc,
+  deleteDoc,
+  setDoc,
+  deleteField,
+  type QueryDocumentSnapshot,
+  type DocumentData,
+} from "firebase/firestore";
+import { db } from "../firebaseConfig";
+import type { LockedPostContent } from "../src/lib/lockedPostMedia";
+import { getAvatarCropStyle } from "../src/lib/avatarCrop";
+import { inferIsVideoFromUrl, normalizePostMediaTypes } from "../src/lib/mediaUrlInfer";
+import { ViewPostModalVideo } from "./ViewPostModalVideo";
+import { feedCommentAuthorLabel, feedCommentAuthorInitial } from "../src/lib/feedCommentLabel";
+
+/** Themed multi-media count pill — tints border/background/shadow from creator storefront `theme.primary` */
+function normalizeThemePrimary(hex: string | undefined): string | undefined {
+  if (!hex || typeof hex !== "string") return undefined;
+  let h = hex.trim();
+  if (!h) return undefined;
+  if (!h.startsWith("#")) h = `#${h}`;
+  if (/^#[0-9a-fA-F]{3}$/.test(h)) {
+    const a = h[1];
+    const b = h[2];
+    const c = h[3];
+    h = `#${a}${a}${b}${b}${c}${c}`;
+  }
+  if (!/^#[0-9a-fA-F]{6}$/.test(h)) return undefined;
+  return h;
+}
+
+function feedCardCountThemedStyle(primaryHex: string | undefined): React.CSSProperties | undefined {
+  const hex = normalizeThemePrimary(primaryHex);
+  if (!hex) return undefined;
+  const n = parseInt(hex.slice(1), 16);
+  if (Number.isNaN(n)) return undefined;
+  const r = (n >> 16) & 255;
+  const g = (n >> 8) & 255;
+  const b = n & 255;
+  const bgR = Math.round(255 * 0.78 + r * 0.22);
+  const bgG = Math.round(255 * 0.78 + g * 0.22);
+  const bgB = Math.round(255 * 0.78 + b * 0.22);
+  const tr = Math.max(0, Math.min(255, Math.round(r * 0.52)));
+  const tg = Math.max(0, Math.min(255, Math.round(g * 0.52)));
+  const tb = Math.max(0, Math.min(255, Math.round(b * 0.52)));
+  const textRgb = `rgb(${tr},${tg},${tb})`;
+  return {
+    color: textRgb,
+    borderColor: `rgba(${r},${g},${b},0.38)`,
+    background: `rgb(${bgR},${bgG},${bgB})`,
+    boxShadow: `0 2px 10px rgba(${r},${g},${b},0.16)`,
+    ["--feed-card-count-divider" as string]: `rgba(${tr},${tg},${tb},0.38)`,
+  };
+}
+
+export type FeedVisibilitySettings = {
+  hideLikeCounts: boolean;
+  hideComments: boolean;
+  hideLikes: boolean;
+  /** Elite: AI auto-reply to comments (max 2 replies per fan per post; random chance for non-supporters) */
+  autoReplyAI?: boolean;
+  /** Elite: 0–100, chance to reply to a comment when not from a tipper/buyer (e.g. 25 = 25%) */
+  autoReplyChance?: number;
+};
+
+export type FeedPost = {
+  id: string;
+  body: string;
+  mediaUrls: string[];
+  mediaTypes?: ("image" | "video")[];
+  audioUrls?: string[];
+  createdAt?: { toDate: () => Date } | string;
+  likeCount: number;
+  likedBy?: string[];
+  comments: { username?: string; author?: string; text: string; hidden?: boolean; authorId?: string; isCreatorReply?: boolean }[];
+  captionStyle?: "static" | "scroll-up" | "scroll-across" | "dissolve";
+  overlayText?: string;
+  overlayTextColor?: string;
+  overlayTextSize?: number;
+  overlayHighlight?: boolean;
+  overlayItalic?: boolean;
+  hideComments?: boolean;
+  hideLikes?: boolean;
+  hideLikeCounts?: boolean;
+  showTipButton?: boolean;
+  poll?: { question: string; options: string[]; optionVotes?: number[] };
+  tipGoal?: { description: string; targetCents: number; raisedCents: number };
+  lockedContent?: LockedPostContent;
+  status?: "published" | "scheduled" | "draft";
+  pinned?: boolean;
+  pinnedAt?: { toDate: () => Date } | string;
+  calendarDate?: string;
+  calendarTime?: string;
+  scheduledAt?: { toDate: () => Date } | Date | null;
+  publishedAt?: { toDate: () => Date } | Date | null;
+};
+
+function feedPostCreatedMs(p: FeedPost): number {
+  const c = p.createdAt;
+  if (!c) return 0;
+  if (typeof c === "string") return new Date(c).getTime() || 0;
+  try {
+    return (c as { toDate?: () => Date }).toDate?.()?.getTime() ?? 0;
+  } catch {
+    return 0;
+  }
+}
+
+/** Map Firestore doc → FeedPost; supports Compose (`content`, `Published`) + Fan Hub Posts (`fanPosts`). */
+function firestoreDocToFeedPost(docSnap: QueryDocumentSnapshot<DocumentData>, isAdminMode: boolean): FeedPost | null {
+  const d = docSnap.data();
+  const raw = d.status;
+  const s = String(raw ?? "published").trim().toLowerCase();
+  let status: NonNullable<FeedPost["status"]> = "published";
+  if (s === "draft") status = "draft";
+  else if (s === "scheduled") status = "scheduled";
+  else status = "published";
+  if (!isAdminMode && status !== "published") return null;
+
+  const createdRaw = d.createdAt ?? d.publishedAt;
+  let createdAt: FeedPost["createdAt"] = new Date().toISOString();
+  if (
+    createdRaw &&
+    typeof createdRaw === "object" &&
+    "toDate" in createdRaw &&
+    typeof (createdRaw as { toDate: () => Date }).toDate === "function"
+  ) {
+    createdAt = createdRaw as { toDate: () => Date };
+  } else if (typeof createdRaw === "string") {
+    createdAt = createdRaw;
+  }
+
+  let rawMediaUrls: string[] = Array.isArray(d.mediaUrls)
+    ? (d.mediaUrls as string[]).filter((u): u is string => typeof u === "string" && !!u.trim())
+    : [];
+  if (rawMediaUrls.length === 0 && d.mediaUrl) {
+    rawMediaUrls = [String(d.mediaUrl)];
+  }
+
+  return {
+    id: docSnap.id,
+    body: (d.body as string) ?? (d.caption as string) ?? (d.content as string) ?? "",
+    mediaUrls: rawMediaUrls,
+    mediaTypes: normalizePostMediaTypes(rawMediaUrls, (d.mediaTypes as string[]) ?? []),
+    audioUrls: (d.audioUrls as string[]) ?? [],
+    createdAt,
+    likeCount: typeof d.likeCount === "number" ? d.likeCount : typeof d.likesCount === "number" ? d.likesCount : 0,
+    likedBy: (d.likedBy as string[]) ?? [],
+    comments: (d.comments as FeedPost["comments"]) ?? [],
+    captionStyle: (d.captionStyle as FeedPost["captionStyle"]) ?? "static",
+    overlayTextSize: typeof d.overlayTextSize === "number" ? d.overlayTextSize : 18,
+    hideComments: !!d.hideComments,
+    hideLikes: !!d.hideLikes,
+    hideLikeCounts: !!d.hideLikeCounts,
+    showTipButton: d.showTipButton !== false,
+    poll: d.poll as FeedPost["poll"] | undefined,
+    tipGoal: d.tipGoal as FeedPost["tipGoal"] | undefined,
+    lockedContent: d.lockedContent as FeedPost["lockedContent"] | undefined,
+    status,
+    pinned: !!d.pinned,
+    pinnedAt: d.pinnedAt as FeedPost["pinnedAt"],
+  };
+}
+
+const EditIcon = () => (
+  <svg className="admin-action-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+  </svg>
+);
+
+const DeleteIcon = () => (
+  <svg className="admin-action-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <polyline points="3 6 5 6 21 6" />
+    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+  </svg>
+);
+
+const ToggleVisibilityIcon = ({ visible }: { visible: boolean }) => (
+  visible ? (
+    <svg className="admin-action-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+      <circle cx="12" cy="12" r="3" />
+    </svg>
+  ) : (
+    <svg className="admin-action-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" />
+      <line x1="1" y1="1" x2="23" y2="23" />
+    </svg>
+  )
+);
+
+const DotsMenuIcon = () => (
+  <svg className="admin-dots-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+    <circle cx="12" cy="5" r="2" />
+    <circle cx="12" cy="12" r="2" />
+    <circle cx="12" cy="19" r="2" />
+  </svg>
+);
+
+const PinIcon = () => (
+  <svg className="admin-action-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M12 17v5" />
+    <path d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78 9.02a1 1 0 0 0 1.78.91l1.78-9.02a2 2 0 0 1 1.11-1.79z" />
+    <path d="M15 10.76a2 2 0 0 0 1.11 1.79l1.78 9.02a1 1 0 0 1-1.78.91l-1.78-9.02a2 2 0 0 0-1.11-1.79z" />
+    <path d="M5 8h14v6a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V8z" />
+    <path d="M12 2v4" />
+  </svg>
+);
+
+const HeartOutline = () => (
+  <svg className="heart-outline" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
+  </svg>
+);
+
+const HeartFilled = () => (
+  <svg className="heart-filled" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+    <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
+  </svg>
+);
+
+const CommentIcon = () => (
+  <svg className="feed-card-comment-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+  </svg>
+);
+
+const BookmarkOutline = () => (
+  <svg className="bookmark-outline" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />
+  </svg>
+);
+
+const BookmarkFilled = () => (
+  <svg className="bookmark-filled" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+    <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />
+  </svg>
+);
+
+const GridIcon = () => (
+  <svg className="icon-grid" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <rect x="3" y="3" width="7" height="7" />
+    <rect x="14" y="3" width="7" height="7" />
+    <rect x="3" y="14" width="7" height="7" />
+    <rect x="14" y="14" width="7" height="7" />
+  </svg>
+);
+
+const TipIcon = () => (
+  <span className="feed-card-tip-icon feed-card-tip-dollar" aria-hidden>$</span>
+);
+
+const PlayIcon = () => (
+  <svg className="feed-card-play-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+    <path d="M8 5v14l11-7L8 5z" />
+  </svg>
+);
+
+const VolumeOnIcon = () => (
+  <svg className="feed-card-sound-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+    <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+    <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
+    <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />
+  </svg>
+);
+
+const VolumeOffIcon = () => (
+  <svg className="feed-card-sound-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+    <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+    <line x1="23" y1="9" x2="17" y2="15" />
+    <line x1="17" y1="9" x2="23" y2="15" />
+  </svg>
+);
+
+const MediaImageIcon = () => (
+  <svg className="feed-card-count-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+    <rect x="3" y="5" width="18" height="14" rx="2" ry="2" />
+    <circle cx="8.5" cy="10" r="1.5" />
+    <path d="M21 15l-4.5-4.5a1 1 0 0 0-1.4 0L9 16.6" />
+  </svg>
+);
+
+const MediaVideoIcon = () => (
+  <svg className="feed-card-count-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+    <rect x="3" y="6" width="13" height="12" rx="2" ry="2" />
+    <path d="M16 10l5-3v10l-5-3z" />
+  </svg>
+);
+
+const FeedCarouselChevronLeft = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+    <path d="M15 18l-6-6 6-6" />
+  </svg>
+);
+
+const FeedCarouselChevronRight = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+    <path d="M9 18l6-6-6-6" />
+  </svg>
+);
+
+function formatRelative(dateInput: Date | string | { toDate?: () => Date } | null | undefined): string {
+  let date: Date | null = null;
+  if (dateInput instanceof Date) date = dateInput;
+  else if (typeof dateInput === "string") date = new Date(dateInput);
+  else if (dateInput && typeof (dateInput as { toDate?: () => Date }).toDate === "function")
+    date = (dateInput as { toDate: () => Date }).toDate();
+  if (!date || Number.isNaN(date.getTime())) return "";
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  if (diffMs < 0) return date.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+  if (diffMs < 60000) return "Just now";
+  if (diffMs < 3600000) return `${Math.floor(diffMs / 60000)} min${Math.floor(diffMs / 60000) !== 1 ? "s" : ""}`;
+  if (diffMs < 86400000) return `${Math.floor(diffMs / 3600000)} hr${Math.floor(diffMs / 3600000) !== 1 ? "s" : ""}`;
+  if (diffMs < 604800000) return `${Math.floor(diffMs / 86400000)} day${Math.floor(diffMs / 86400000) !== 1 ? "s" : ""}`;
+  return date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+}
+
+const DEMO_POSTS: FeedPost[] = [
+  {
+    id: "demo-1",
+    body: "Good morning everyone 🌸 Starting the day with some coffee and journaling. What's everyone up to today?",
+    mediaUrls: ["https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?w=600&h=800&fit=crop"],
+    mediaTypes: ["image"],
+    audioUrls: [],
+    createdAt: new Date(Date.now() - 1000 * 60 * 30).toISOString(),
+    likeCount: 42,
+    likedBy: [],
+    comments: [
+      { username: "sarah_m", text: "Love this! ☕" },
+      { username: "jake22", text: "Same here, coffee is life" },
+    ],
+    showTipButton: true,
+  },
+  {
+    id: "demo-2",
+    body: "Behind the scenes from yesterday's shoot 📸 We had so much fun with this one. Can't wait to share more!",
+    mediaUrls: ["https://images.unsplash.com/photo-1516575334481-f85287c2c82d?w=600&h=800&fit=crop"],
+    mediaTypes: ["image"],
+    audioUrls: [],
+    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 4).toISOString(),
+    likeCount: 128,
+    likedBy: [],
+    comments: [
+      { username: "photofan", text: "These are amazing!" },
+      { username: "creativemind", text: "Can't wait to see more 🔥" },
+      { username: "artlover", text: "Stunning work as always" },
+    ],
+    showTipButton: true,
+  },
+  {
+    id: "demo-3",
+    body: "Quick life update: Been working on something really exciting that I'll share with you all soon. Hint: it involves a trip ✈️",
+    mediaUrls: ["https://images.unsplash.com/photo-1488646953014-85cb44e25828?w=600&h=800&fit=crop"],
+    mediaTypes: ["image"],
+    audioUrls: [],
+    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24).toISOString(),
+    likeCount: 89,
+    likedBy: [],
+    comments: [
+      { username: "traveler99", text: "Where are you going?!" },
+    ],
+    showTipButton: true,
+  },
+  {
+    id: "demo-4",
+    body: "Thinking about doing a Q&A session this week. Drop your questions below and I'll answer them in my next post 💬\n\nNo question is off limits (within reason 😉)",
+    mediaUrls: [],
+    mediaTypes: [],
+    audioUrls: [],
+    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 48).toISOString(),
+    likeCount: 156,
+    likedBy: [],
+    comments: [
+      { username: "curious_cat", text: "What's your morning routine?" },
+      { username: "newfan", text: "How did you get started?" },
+      { username: "longtime_supporter", text: "What's your favorite memory from this year?" },
+    ],
+    showTipButton: true,
+  },
+  {
+    id: "demo-5",
+    body: "New content dropping this weekend! 🎉 Make sure your notifications are on so you don't miss it.",
+    mediaUrls: ["https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=600&h=800&fit=crop"],
+    mediaTypes: ["image"],
+    audioUrls: [],
+    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 72).toISOString(),
+    likeCount: 203,
+    likedBy: [],
+    comments: [],
+    showTipButton: true,
+  },
+];
+
+function FeedCardCaptionOverlay({ caption, style: captionStyle, size }: { caption: string; style?: string; size?: number }) {
+  if (!caption?.trim()) return null;
+  return (
+    <div className={`feed-card-caption-overlay feed-card-caption-overlay-${captionStyle || "static"}`} aria-hidden>
+      <span className="feed-card-caption-overlay-text" style={size != null && size > 0 ? { fontSize: `${size}px` } : undefined}>{caption}</span>
+    </div>
+  );
+}
+
+function FeedCard({
+  post,
+  creatorName,
+  creatorAvatar,
+  avatarObjectPosition,
+  currentUserId,
+  savedPostIds,
+  onLikeUpdated,
+  onCommentsUpdated,
+  onSavedUpdated,
+  isAdminMode,
+  onEditPost,
+  onDeletePost,
+  onToggleVisibility,
+  onTogglePin,
+  creatorThemePrimary,
+}: {
+  post: FeedPost;
+  creatorName: string;
+  creatorAvatar?: string;
+  /** Matches storefront / My Page circular crop */
+  avatarObjectPosition?: string;
+  currentUserId?: string;
+  savedPostIds: string[];
+  onLikeUpdated?: (postId: string, likedBy: string[], likeCount: number) => void;
+  onCommentsUpdated?: (postId: string, comments: FeedPost["comments"]) => void;
+  onSavedUpdated?: (savedIds: string[]) => void;
+  isAdminMode?: boolean;
+  onEditPost?: (postId: string) => void;
+  onDeletePost?: (postId: string) => void;
+  onToggleVisibility?: (postId: string, currentStatus: string) => void;
+  onTogglePin?: (postId: string, currentlyPinned: boolean) => void;
+  /** From `creators/{id}.theme.primary` — tints the multi-media count badge */
+  creatorThemePrimary?: string;
+}) {
+  const countBadgeStyle = useMemo(
+    () => feedCardCountThemedStyle(creatorThemePrimary),
+    [creatorThemePrimary]
+  );
+  const countBadgeClass =
+    countBadgeStyle != null ? "feed-card-count feed-card-count--themed" : "feed-card-count";
+  const viewPostLinkColor = normalizeThemePrimary(creatorThemePrimary);
+
+  const urls = useMemo(
+    () =>
+      Array.isArray(post.mediaUrls)
+        ? post.mediaUrls.filter((u): u is string => typeof u === "string" && !!u.trim())
+        : [],
+    [post.mediaUrls]
+  );
+  const firstUrl = urls[0];
+  const mediaCount = urls.length;
+  const [mediaSlideIndex, setMediaSlideIndex] = useState(0);
+
+  useEffect(() => {
+    setMediaSlideIndex(0);
+  }, [post.id]);
+
+  useEffect(() => {
+    setMediaSlideIndex((i) => Math.min(i, Math.max(0, mediaCount - 1)));
+  }, [mediaCount]);
+
+  const slideIdx = mediaCount > 0 ? Math.min(mediaSlideIndex, mediaCount - 1) : 0;
+  const currentUrl = urls[slideIdx];
+  const currentIsVideo =
+    !!currentUrl &&
+    (post.mediaTypes?.[slideIdx] === "video" || inferIsVideoFromUrl(currentUrl));
+  const showMediaCarousel = mediaCount > 1;
+
+  const hasTipGoal = !!(post.tipGoal && typeof post.tipGoal.targetCents === "number" && post.tipGoal.targetCents > 0);
+  const mediaTotals = useMemo(() => {
+    const items = urls;
+    return items.reduce(
+      (acc, url, index) => {
+        const explicitType = post.mediaTypes?.[index];
+        const detectedType =
+          explicitType === "video" || inferIsVideoFromUrl(url || "") ? "video" : "image";
+        if (detectedType === "video") acc.videos += 1;
+        else acc.images += 1;
+        return acc;
+      },
+      { images: 0, videos: 0 }
+    );
+  }, [urls, post.mediaTypes]);
+
+  const dateStr = post.createdAt
+    ? typeof post.createdAt === "string"
+      ? formatRelative(post.createdAt)
+      : (post.createdAt as { toDate: () => Date }).toDate
+        ? formatRelative((post.createdAt as { toDate: () => Date }).toDate())
+        : ""
+    : "";
+
+  const captionStyle = post.captionStyle ?? "static";
+  const showCaptionOnMedia = captionStyle !== "static" && post.body?.trim();
+  const [commentsOpen, setCommentsOpen] = useState(false);
+  const [modalMediaIndex, setModalMediaIndex] = useState(0);
+  const [likeSaving, setLikeSaving] = useState(false);
+  const [modalComment, setModalComment] = useState("");
+  const [modalCommentSaving, setModalCommentSaving] = useState(false);
+  const commentInputRef = useRef<HTMLInputElement | null>(null);
+  const prevCommentsOpenRef = useRef(false);
+  const visibleComments = useMemo(() => post.comments.filter((c) => !c.hidden), [post.comments]);
+  const isLiked = !!currentUserId && (post.likedBy ?? []).includes(currentUserId);
+  const isSaved = savedPostIds.includes(post.id);
+  const feedVideoRef = useRef<HTMLVideoElement | null>(null);
+  const [feedVideoPlaying, setFeedVideoPlaying] = useState(false);
+  const [feedVideoMuted, setFeedVideoMuted] = useState(true);
+  const [adminMenuOpen, setAdminMenuOpen] = useState(false);
+  const adminMenuRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!commentsOpen) return;
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prevOverflow;
+    };
+  }, [commentsOpen]);
+
+  /** When the modal opens, start on the same slide as the in-feed carousel (independent index while open). */
+  useEffect(() => {
+    if (commentsOpen && !prevCommentsOpenRef.current) {
+      setModalMediaIndex(slideIdx);
+    }
+    prevCommentsOpenRef.current = commentsOpen;
+  }, [commentsOpen, slideIdx]);
+
+  useEffect(() => {
+    setModalMediaIndex((i) => Math.min(i, Math.max(0, mediaCount - 1)));
+  }, [mediaCount]);
+
+  useEffect(() => {
+    if (!adminMenuOpen) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (adminMenuRef.current && !adminMenuRef.current.contains(e.target as Node)) {
+        setAdminMenuOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [adminMenuOpen]);
+
+  const isPublished = post.status === "published" || !post.status;
+  const isDraft = post.status === "draft";
+  const isScheduled = post.status === "scheduled";
+
+  useEffect(() => {
+    const v = feedVideoRef.current;
+    if (!v) return;
+    v.muted = feedVideoMuted;
+  }, [feedVideoMuted]);
+
+  useEffect(() => {
+    const v = feedVideoRef.current;
+    if (!v) return;
+    void v.pause();
+    setFeedVideoPlaying(false);
+  }, [slideIdx]);
+
+  const carouselPrev = useCallback(
+    (e: React.MouseEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (mediaCount <= 1) return;
+      setMediaSlideIndex((i) => Math.max(0, i - 1));
+    },
+    [mediaCount]
+  );
+
+  const carouselNext = useCallback(
+    (e: React.MouseEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (mediaCount <= 1) return;
+      setMediaSlideIndex((i) => Math.min(mediaCount - 1, i + 1));
+    },
+    [mediaCount]
+  );
+
+  const modalCarouselPrev = useCallback(
+    (e: React.MouseEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (mediaCount <= 1) return;
+      setModalMediaIndex((i) => Math.max(0, i - 1));
+    },
+    [mediaCount]
+  );
+
+  const modalCarouselNext = useCallback(
+    (e: React.MouseEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (mediaCount <= 1) return;
+      setModalMediaIndex((i) => Math.min(mediaCount - 1, i + 1));
+    },
+    [mediaCount]
+  );
+
+  const modalIdx = mediaCount > 0 ? Math.min(modalMediaIndex, mediaCount - 1) : 0;
+  const modalUrl = urls[modalIdx];
+  const modalIsVideo =
+    !!modalUrl && (post.mediaTypes?.[modalIdx] === "video" || inferIsVideoFromUrl(modalUrl));
+
+  const videoAreaClick = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    const v = feedVideoRef.current;
+    if (!v) return;
+    if (v.paused) void v.play();
+    else v.pause();
+  }, []);
+
+  const videoAreaKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if (e.key !== "Enter" && e.key !== " ") return;
+    e.preventDefault();
+    const v = feedVideoRef.current;
+    if (!v) return;
+    if (v.paused) void v.play();
+    else v.pause();
+  }, []);
+
+  const renderCountBadge = () =>
+    (mediaTotals.images + mediaTotals.videos) > 1 ? (
+      <span
+        className={countBadgeClass}
+        style={countBadgeStyle}
+        onClick={(e) => e.stopPropagation()}
+        onKeyDown={(e) => e.stopPropagation()}
+      >
+        {mediaTotals.images > 0 && (
+          <span className="feed-card-count-item">
+            <MediaImageIcon />
+            {mediaTotals.images}
+          </span>
+        )}
+        {mediaTotals.videos > 0 && (
+          <span className="feed-card-count-item">
+            <MediaVideoIcon />
+            {mediaTotals.videos}
+          </span>
+        )}
+      </span>
+    ) : null;
+
+  const renderCarouselArrows = () =>
+    showMediaCarousel ? (
+      <>
+        {slideIdx > 0 ? (
+          <button
+            type="button"
+            className="fan-feed-media-carousel-btn fan-feed-media-carousel-btn--prev"
+            aria-label="Previous image or video"
+            onClick={carouselPrev}
+          >
+            <FeedCarouselChevronLeft />
+          </button>
+        ) : null}
+        {slideIdx < mediaCount - 1 ? (
+          <button
+            type="button"
+            className="fan-feed-media-carousel-btn fan-feed-media-carousel-btn--next"
+            aria-label="Next image or video"
+            onClick={carouselNext}
+          >
+            <FeedCarouselChevronRight />
+          </button>
+        ) : null}
+      </>
+    ) : null;
+
+  const toggleLike = async () => {
+    if (!db || !post.id || !currentUserId || likeSaving) return;
+    setLikeSaving(true);
+    try {
+      const postRef = doc(db, "posts", post.id);
+      let nextLikedBy = post.likedBy ?? [];
+      let nextLikeCount = post.likeCount ?? 0;
+      await runTransaction(db, async (tx) => {
+        const snap = await tx.get(postRef);
+        if (!snap.exists()) throw new Error("Post not found.");
+        const data = snap.data() as Record<string, unknown>;
+        const existingLikedBy = Array.isArray(data.likedBy)
+          ? (data.likedBy as unknown[]).map((v) => String(v))
+          : [];
+        const hasLiked = existingLikedBy.includes(currentUserId);
+        nextLikedBy = hasLiked ? existingLikedBy.filter((v) => v !== currentUserId) : [...existingLikedBy, currentUserId];
+        nextLikeCount = nextLikedBy.length;
+        tx.update(postRef, { likedBy: nextLikedBy, likeCount: nextLikeCount });
+      });
+      onLikeUpdated?.(post.id, nextLikedBy, nextLikeCount);
+    } finally {
+      setLikeSaving(false);
+    }
+  };
+
+  const submitModalComment = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!db || !post.id || !currentUserId) return;
+    const text = modalComment.trim();
+    if (!text || modalCommentSaving) return;
+    setModalCommentSaving(true);
+    try {
+      const postRef = doc(db, "posts", post.id);
+      const username = creatorName || "User";
+      let nextComments: FeedPost["comments"] = post.comments;
+      await runTransaction(db, async (tx) => {
+        const snap = await tx.get(postRef);
+        if (!snap.exists()) throw new Error("Post not found.");
+        const data = snap.data() as Record<string, unknown>;
+        const existing = Array.isArray(data.comments) ? (data.comments as FeedPost["comments"]) : [];
+        nextComments = [...existing, { username, author: username, text: text.slice(0, 500), authorId: currentUserId, isCreatorReply: true }];
+        tx.update(postRef, { comments: nextComments });
+      });
+      onCommentsUpdated?.(post.id, nextComments);
+      setModalComment("");
+    } finally {
+      setModalCommentSaving(false);
+    }
+  };
+
+  const toggleSavePost = async () => {
+    if (!db || !currentUserId || !post.id) return;
+    const userRef = doc(db, "users", currentUserId);
+    let nextSaved = savedPostIds;
+    await runTransaction(db, async (tx) => {
+      const snap = await tx.get(userRef);
+      const data = snap.exists() ? (snap.data() as Record<string, unknown>) : {};
+      const existing = Array.isArray(data.savedPostIds)
+        ? (data.savedPostIds as unknown[]).map((v) => String(v))
+        : [];
+      const has = existing.includes(post.id);
+      nextSaved = has ? existing.filter((id) => id !== post.id) : [...existing, post.id];
+      tx.set(
+        userRef,
+        {
+          savedPostIds: nextSaved,
+          updatedAt: serverTimestamp(),
+        },
+        { merge: true }
+      );
+    });
+    onSavedUpdated?.(nextSaved);
+  };
+
+  return (
+    <article className={`feed-card${commentsOpen ? " comments-open" : ""}${!firstUrl ? " feed-card-text-only" : ""}${isAdminMode ? " feed-card-admin" : ""}${isDraft ? " feed-card-draft" : ""}${isScheduled ? " feed-card-scheduled" : ""}`}>
+      <div className="feed-card-header">
+        <div className="feed-card-avatar">
+          {creatorAvatar ? (
+            <img
+              src={creatorAvatar}
+              alt=""
+              className="feed-card-avatar-img"
+              style={getAvatarCropStyle(avatarObjectPosition)}
+            />
+          ) : (
+            <span className="feed-card-avatar-initial" aria-hidden>
+              {(creatorName || "?")[0].toUpperCase()}
+            </span>
+          )}
+        </div>
+        <div className="feed-card-creator">
+          <span className="feed-card-username">{creatorName || "Creator"}</span>
+          {isAdminMode && (isDraft || isScheduled) && (
+            <span className={`feed-card-status-badge${isDraft ? " draft" : " scheduled"}`}>
+              {isDraft ? "Draft" : "Scheduled"}
+            </span>
+          )}
+        </div>
+        <span className="feed-card-time">{dateStr}</span>
+        
+        {isAdminMode && (
+          <div className="feed-card-header-menu-wrap" ref={adminMenuRef}>
+            <button
+              type="button"
+              className="feed-card-dots-btn"
+              aria-label="Post options"
+              aria-expanded={adminMenuOpen}
+              aria-haspopup="true"
+              onClick={() => setAdminMenuOpen(!adminMenuOpen)}
+            >
+              <DotsMenuIcon />
+            </button>
+            {adminMenuOpen && (
+              <div className="feed-card-admin-menu">
+                <button
+                  type="button"
+                  className="feed-card-admin-menu-item"
+                  onClick={() => {
+                    setAdminMenuOpen(false);
+                    onTogglePin?.(post.id, !!post.pinned);
+                  }}
+                >
+                  <PinIcon />
+                  {post.pinned ? "Unpin from profile" : "Pin to profile"}
+                </button>
+                <button
+                  type="button"
+                  className="feed-card-admin-menu-item"
+                  onClick={() => {
+                    setAdminMenuOpen(false);
+                    onEditPost?.(post.id);
+                  }}
+                >
+                  <EditIcon />
+                  Edit Post
+                </button>
+                <button
+                  type="button"
+                  className="feed-card-admin-menu-item"
+                  onClick={() => {
+                    setAdminMenuOpen(false);
+                    onToggleVisibility?.(post.id, post.status || "published");
+                  }}
+                >
+                  <ToggleVisibilityIcon visible={isPublished} />
+                  {isPublished ? "Unpublish" : "Publish"}
+                </button>
+                <button
+                  type="button"
+                  className="feed-card-admin-menu-item feed-card-admin-menu-item-danger"
+                  onClick={() => {
+                    setAdminMenuOpen(false);
+                    onDeletePost?.(post.id);
+                  }}
+                >
+                  <DeleteIcon />
+                  Delete
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {currentUrl ? (
+        currentIsVideo ? (
+          <div
+            className="feed-card-media-wrap feed-card-media-wrap-video"
+            role="button"
+            tabIndex={0}
+            onClick={videoAreaClick}
+            onKeyDown={videoAreaKeyDown}
+            aria-label={feedVideoPlaying ? "Pause video" : "Play video"}
+          >
+            <video
+              key={`${post.id}-hub-v-${slideIdx}`}
+              ref={feedVideoRef}
+              src={currentUrl.includes("#t=") ? currentUrl : `${currentUrl}#t=0.1`}
+              muted={feedVideoMuted}
+              playsInline
+              className="feed-card-media feed-card-media-video"
+              preload="auto"
+              onPlay={() => setFeedVideoPlaying(true)}
+              onPause={() => setFeedVideoPlaying(false)}
+              onVolumeChange={(e) => setFeedVideoMuted(e.currentTarget.muted)}
+            />
+            {!feedVideoPlaying && (
+              <span className="feed-card-play-overlay" aria-hidden>
+                <PlayIcon />
+              </span>
+            )}
+            <button
+              type="button"
+              className={`feed-card-sound-toggle${feedVideoMuted ? " muted" : ""}`}
+              aria-label={feedVideoMuted ? "Unmute video" : "Mute video"}
+              title={feedVideoMuted ? "Unmute" : "Mute"}
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                setFeedVideoMuted((prev) => !prev);
+              }}
+            >
+              {feedVideoMuted ? <VolumeOffIcon /> : <VolumeOnIcon />}
+            </button>
+            {showCaptionOnMedia && (
+              <FeedCardCaptionOverlay caption={post.body} style={captionStyle} size={post.overlayTextSize} />
+            )}
+            {renderCarouselArrows()}
+            {renderCountBadge()}
+          </div>
+        ) : (
+          <div className="feed-card-media-wrap">
+            <img
+              key={`${post.id}-hub-i-${slideIdx}`}
+              src={currentUrl}
+              alt=""
+              className="feed-card-media"
+              loading={slideIdx === 0 ? "lazy" : "eager"}
+            />
+            {showCaptionOnMedia && (
+              <FeedCardCaptionOverlay caption={post.body} style={captionStyle} size={post.overlayTextSize} />
+            )}
+            {renderCarouselArrows()}
+            {renderCountBadge()}
+          </div>
+        )
+      ) : null}
+
+      {Array.isArray(post.audioUrls) && post.audioUrls.length > 0 && (
+        <div className="feed-card-body" style={{ paddingTop: firstUrl ? 0 : undefined }}>
+          {post.audioUrls.map((url, index) => (
+            <audio
+              key={`post-audio-${post.id}-${index}`}
+              src={url}
+              controls
+              controlsList="nodownload noplaybackrate noremoteplayback"
+              onContextMenu={(e) => e.preventDefault()}
+              style={{ width: "100%", marginTop: index === 0 ? 0 : "0.5rem" }}
+            />
+          ))}
+        </div>
+      )}
+
+      {firstUrl && !post.hideLikes && (
+        <div className="feed-card-actions">
+          <span className="feed-card-action-group">
+            <button
+              type="button"
+              className={`feed-card-action-btn${isLiked ? " liked" : ""}`}
+              aria-label="Like"
+              onClick={toggleLike}
+              disabled={!currentUserId || likeSaving}
+            >
+              <HeartOutline />
+              <HeartFilled />
+            </button>
+            <span className="feed-card-action-count">{post.likeCount ?? 0}</span>
+          </span>
+          {!post.hideComments && (
+            <button type="button" className="feed-card-action-group feed-card-action-link" aria-label="Comments" onClick={() => setCommentsOpen(true)}>
+              <CommentIcon />
+              <span className="feed-card-action-count">{visibleComments.length}</span>
+            </button>
+          )}
+          {post.showTipButton !== false && !hasTipGoal && (
+            <button
+              type="button"
+              className="feed-card-action-group feed-card-action-link feed-card-send-tip"
+              aria-label="Send tip"
+            >
+              <TipIcon />
+              <span className="feed-card-send-tip-text">SEND TIP</span>
+            </button>
+          )}
+          <button
+            type="button"
+            className={`feed-card-action-btn bookmark-btn${isSaved ? " bookmarked" : ""}`}
+            aria-label={isSaved ? "Unsave post" : "Save post"}
+            onClick={toggleSavePost}
+            disabled={!currentUserId}
+          >
+            <BookmarkOutline />
+            <BookmarkFilled />
+          </button>
+        </div>
+      )}
+
+      <div className="feed-card-body">
+        <p className="feed-card-caption">
+          <span className="caption-username">{creatorName}</span>
+          {post.body || ""}
+        </p>
+        {post.poll && post.poll.question && post.poll.options?.length >= 2 && (
+          <div className="feed-card-poll">
+            <p className="feed-card-poll-question">{post.poll.question}</p>
+            <ul className="feed-card-poll-options">
+              {(() => {
+                const votes = post.poll.optionVotes ?? post.poll.options.map(() => 0);
+                const total = votes.reduce((a, b) => a + b, 0);
+                return post.poll.options.map((opt, i) => {
+                  const v = votes[i] ?? 0;
+                  const pct = total > 0 ? Math.round((v / total) * 100) : 0;
+                  return (
+                    <li key={i} className="feed-card-poll-option">
+                      <span className="feed-card-poll-option-label">{opt}</span>
+                      <span className="feed-card-poll-option-meta">
+                        {total > 0 ? `${pct}%` : "0%"}
+                      </span>
+                      {total > 0 && (
+                        <div className="feed-card-poll-option-bar" style={{ width: `${pct}%` }} aria-hidden />
+                      )}
+                    </li>
+                  );
+                });
+              })()}
+            </ul>
+          </div>
+        )}
+        {post.tipGoal && post.tipGoal.targetCents > 0 && (
+          <div className="feed-card-tip-goal">
+            <p className="feed-card-tip-goal-desc">{post.tipGoal.description}</p>
+            <div className="feed-card-tip-goal-bar-wrap">
+              <div
+                className="feed-card-tip-goal-bar-fill"
+                style={{
+                  width: `${Math.min(100, (post.tipGoal.raisedCents / post.tipGoal.targetCents) * 100)}%`,
+                }}
+              />
+            </div>
+            <p className="feed-card-tip-goal-raised">
+              ${(post.tipGoal.raisedCents / 100).toFixed(2)} of ${(post.tipGoal.targetCents / 100).toFixed(2)}
+            </p>
+          </div>
+        )}
+        {!post.hideComments && (
+          <>
+            {visibleComments.length > 0 && (
+              <button type="button" className="feed-card-view-comments" onClick={() => setCommentsOpen(true)}>
+                View all {visibleComments.length} comments
+              </button>
+            )}
+            {(firstUrl || visibleComments.length > 0) && (
+              <div className="feed-card-comments-list">
+                {visibleComments.length === 0 ? (
+                  <div className="feed-card-comment feed-card-comment-empty">No comments yet.</div>
+                ) : (
+                  visibleComments.slice(0, 2).map((c, i) => (
+                    <div key={i} className="feed-card-comment">
+                      <span className="comment-username">{feedCommentAuthorLabel(c)}</span>
+                      {c.text}
+                    </div>
+                  ))
+                )}
+              </div>
+            )}
+          </>
+        )}
+      </div>
+
+      {!firstUrl && !post.hideLikes && (
+        <div className="feed-card-text-only-footer">
+          <div className="feed-card-actions">
+            <span className="feed-card-action-group">
+              <button
+                type="button"
+                className={`feed-card-action-btn${isLiked ? " liked" : ""}`}
+                aria-label="Like"
+                onClick={toggleLike}
+                disabled={!currentUserId || likeSaving}
+              >
+                <HeartOutline />
+                <HeartFilled />
+              </button>
+              <span className="feed-card-action-count">{post.likeCount ?? 0}</span>
+            </span>
+            {!post.hideComments && (
+              <button type="button" className="feed-card-action-group feed-card-action-link" aria-label="Comments" onClick={() => setCommentsOpen(true)}>
+                <CommentIcon />
+                <span className="feed-card-action-count">{visibleComments.length}</span>
+              </button>
+            )}
+            {post.showTipButton !== false && !hasTipGoal && (
+              <button
+                type="button"
+                className="feed-card-action-group feed-card-action-link feed-card-send-tip"
+                aria-label="Send tip"
+              >
+                <TipIcon />
+                <span className="feed-card-send-tip-text">SEND TIP</span>
+              </button>
+            )}
+            <button
+              type="button"
+              className={`feed-card-action-btn bookmark-btn${isSaved ? " bookmarked" : ""}`}
+              aria-label={isSaved ? "Unsave post" : "Save post"}
+              onClick={toggleSavePost}
+              disabled={!currentUserId}
+            >
+              <BookmarkOutline />
+              <BookmarkFilled />
+            </button>
+          </div>
+        </div>
+      )}
+
+      <div className="feed-card-view-post-footer">
+        <button
+          type="button"
+          className="feed-card-view-post-link"
+          style={viewPostLinkColor ? { color: viewPostLinkColor } : undefined}
+          onClick={() => setCommentsOpen(true)}
+        >
+          View post
+        </button>
+      </div>
+
+      {commentsOpen &&
+        typeof document !== "undefined" &&
+        createPortal(
+          <div
+            className="feed-comments-modal-backdrop feed-comments-modal-backdrop--portal"
+            role="presentation"
+            onClick={() => setCommentsOpen(false)}
+          >
+            <div
+              className="feed-comments-modal feed-comments-modal--stack"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby={`feed-comments-modal-title-${post.id}`}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="feed-comments-modal-head">
+                <p id={`feed-comments-modal-title-${post.id}`} className="feed-comments-modal-head-title">
+                  {creatorName || "Post"}
+                </p>
+                <button type="button" className="feed-comments-modal-close" onClick={() => setCommentsOpen(false)} aria-label="Close">
+                  ×
+                </button>
+              </div>
+              <div className={`feed-comments-modal-content feed-comments-modal-content--stack${firstUrl ? "" : " no-media"}`}>
+                {firstUrl && modalUrl && (
+                  <div
+                    className={`feed-comments-modal-media-wrap${showMediaCarousel ? " feed-comments-modal-media-wrap--carousel" : ""}`}
+                    role={showMediaCarousel ? "group" : undefined}
+                    aria-roledescription={showMediaCarousel ? "carousel" : undefined}
+                    aria-label={showMediaCarousel ? `Post media, slide ${modalIdx + 1} of ${mediaCount}` : undefined}
+                  >
+                    {modalIsVideo ? (
+                      <ViewPostModalVideo
+                        src={modalUrl}
+                        videoKey={`${post.id}-modal-v-${modalIdx}`}
+                        accentHex={viewPostLinkColor}
+                      />
+                    ) : (
+                      <img
+                        key={`${post.id}-modal-i-${modalIdx}`}
+                        src={modalUrl}
+                        alt=""
+                        className="feed-comments-modal-media"
+                        loading="eager"
+                      />
+                    )}
+                    {showMediaCarousel ? (
+                      <>
+                        {modalIdx > 0 ? (
+                          <button
+                            type="button"
+                            className="fan-feed-media-carousel-btn fan-feed-media-carousel-btn--prev"
+                            aria-label="Previous image or video"
+                            onClick={modalCarouselPrev}
+                          >
+                            <FeedCarouselChevronLeft />
+                          </button>
+                        ) : null}
+                        {modalIdx < mediaCount - 1 ? (
+                          <button
+                            type="button"
+                            className="fan-feed-media-carousel-btn fan-feed-media-carousel-btn--next"
+                            aria-label="Next image or video"
+                            onClick={modalCarouselNext}
+                          >
+                            <FeedCarouselChevronRight />
+                          </button>
+                        ) : null}
+                        <div className="feed-comments-modal-carousel-dots" role="tablist" aria-label="Slides">
+                          {urls.map((_, i) => (
+                            <button
+                              key={`${post.id}-dot-${i}`}
+                              type="button"
+                              role="tab"
+                              aria-selected={i === modalIdx}
+                              className={`feed-comments-modal-carousel-dot${i === modalIdx ? " feed-comments-modal-carousel-dot--active" : ""}`}
+                              style={
+                                i === modalIdx && viewPostLinkColor
+                                  ? { backgroundColor: viewPostLinkColor }
+                                  : undefined
+                              }
+                              aria-label={`Go to slide ${i + 1}`}
+                              onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                setModalMediaIndex(i);
+                              }}
+                            />
+                          ))}
+                        </div>
+                      </>
+                    ) : null}
+                  </div>
+                )}
+                <div className="feed-comments-modal-panel">
+                  {post.body?.trim() ? (
+                    <div className="feed-comments-modal-post-body">
+                      <p>{post.body}</p>
+                    </div>
+                  ) : null}
+                  <div className="feed-comments-modal-list">
+                    {visibleComments.length === 0 ? (
+                      <p className="feed-comments-modal-empty">No comments yet.</p>
+                    ) : (
+                      visibleComments.map((c, idx) => {
+                        const authorName = feedCommentAuthorLabel(c);
+                        return (
+                          <div className="feed-comments-modal-item" key={`${idx}-${c.text.slice(0, 12)}`}>
+                            <div className="feed-comments-modal-item-avatar" aria-hidden>
+                              <span>{feedCommentAuthorInitial(authorName)}</span>
+                            </div>
+                            <div className="feed-comments-modal-item-body">
+                              <p className="feed-comments-modal-text">
+                                <span className="comment-username">{authorName}</span>
+                                <span className="feed-comments-modal-comment-body">{c.text}</span>
+                              </p>
+                            </div>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+                  {currentUserId && (
+                    <form className="feed-comments-modal-compose" onSubmit={submitModalComment}>
+                      <div className="feed-comments-modal-item-avatar feed-comments-modal-compose-avatar" aria-hidden>
+                        {creatorAvatar ? (
+                          <img
+                            src={creatorAvatar}
+                            alt=""
+                            className="feed-comments-modal-compose-avatar-img"
+                            style={getAvatarCropStyle(avatarObjectPosition)}
+                          />
+                        ) : (
+                          <span>{(creatorName || "?").charAt(0).toUpperCase()}</span>
+                        )}
+                      </div>
+                      <div className="feed-comments-modal-compose-input-wrap">
+                        <input
+                          ref={commentInputRef}
+                          type="text"
+                          className="feed-comments-modal-compose-input"
+                          value={modalComment}
+                          onChange={(e) => setModalComment(e.target.value)}
+                          placeholder="Write a comment..."
+                          maxLength={500}
+                        />
+                      </div>
+                      <button type="submit" className="feed-comments-modal-compose-send" disabled={modalCommentSaving || !modalComment.trim()}>
+                        {modalCommentSaving ? "..." : "Post"}
+                      </button>
+                    </form>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>,
+          document.body
+        )}
+    </article>
+  );
+}
+
+export const FanHubFeed: React.FC<{ isAdminMode?: boolean }> = ({ isAdminMode = false }) => {
+  const { user, setActivePage, showToast, openPaymentModal } = useAppContext();
+  const [posts, setPosts] = useState<FeedPost[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [savedPostIds, setSavedPostIds] = useState<string[]>([]);
+  const [viewMode, setViewMode] = useState<"feed" | "grid">("feed");
+  const [deletingPostId, setDeletingPostId] = useState<string | null>(null);
+  const [feedSettings, setFeedSettings] = useState<FeedVisibilitySettings>({
+    hideLikeCounts: false,
+    hideComments: false,
+    hideLikes: false,
+    autoReplyAI: false,
+    autoReplyChance: 25,
+  });
+  const [feedSettingsSaving, setFeedSettingsSaving] = useState(false);
+  const [creatorStorefront, setCreatorStorefront] = useState<{
+    displayName?: string;
+    avatar?: string;
+    avatarObjectPosition?: string;
+    /** Storefront theme primary (hex) for feed UI accents */
+    themePrimary?: string;
+  }>({});
+  const creatorId = user?.id;
+  const canUseAIReplies = hasEliteAccess(user);
+  const creatorName =
+    creatorStorefront.displayName?.trim() ||
+    (user as { displayName?: string })?.displayName?.trim() ||
+    "Creator";
+  const creatorAvatar =
+    creatorStorefront.avatar?.trim() || (user as { photoURL?: string })?.photoURL || undefined;
+  const avatarObjectPosition = creatorStorefront.avatarObjectPosition;
+
+  useEffect(() => {
+    if (!creatorId || !db) {
+      setCreatorStorefront({});
+      return;
+    }
+    let cancelled = false;
+    getDoc(doc(db, "creators", creatorId))
+      .then((snap) => {
+        if (cancelled || !snap.exists()) return;
+        const d = snap.data() as Record<string, unknown>;
+        const theme = d.theme as { primary?: string } | undefined;
+        const tp = theme?.primary;
+        setCreatorStorefront({
+          displayName: typeof d.displayName === "string" ? d.displayName : undefined,
+          avatar: typeof d.avatar === "string" ? d.avatar : undefined,
+          avatarObjectPosition:
+            typeof d.avatarObjectPosition === "string" ? d.avatarObjectPosition : undefined,
+          themePrimary: typeof tp === "string" && tp.trim() ? tp.trim() : undefined,
+        });
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [creatorId]);
+
+  useEffect(() => {
+    const loadPosts = async () => {
+      if (!creatorId) {
+        setPosts(DEMO_POSTS);
+        setLoading(false);
+        return;
+      }
+      
+      try {
+        const userQ = query(collection(db, "users", creatorId, "posts"), orderBy("createdAt", "desc"), limit(50));
+        const userSnap = await getDocs(userQ);
+
+        let fanSnap: Awaited<ReturnType<typeof getDocs>> | null = null;
+        try {
+          const fanQ = query(
+            collection(db, "creators", creatorId, "fanPosts"),
+            orderBy("createdAt", "desc"),
+            limit(50)
+          );
+          fanSnap = await getDocs(fanQ);
+        } catch (fanErr) {
+          console.warn("Fan Hub: fanPosts query failed (index may be missing):", fanErr);
+        }
+
+        const byId = new Map<string, FeedPost>();
+        userSnap.forEach((docSnap) => {
+          const fp = firestoreDocToFeedPost(docSnap, isAdminMode);
+          if (fp) byId.set(fp.id, fp);
+        });
+        fanSnap?.forEach((docSnap) => {
+          const fp = firestoreDocToFeedPost(docSnap, isAdminMode);
+          if (fp) byId.set(fp.id, fp);
+        });
+
+        const list = Array.from(byId.values());
+        list.sort((a, b) => {
+          if (a.pinned && !b.pinned) return -1;
+          if (!a.pinned && b.pinned) return 1;
+          return feedPostCreatedMs(b) - feedPostCreatedMs(a);
+        });
+        setPosts(list.length > 0 ? list : DEMO_POSTS);
+      } catch (err) {
+        console.warn("Could not load posts, using demo data:", err);
+        setPosts(DEMO_POSTS);
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    loadPosts();
+  }, [creatorId, isAdminMode]);
+
+  useEffect(() => {
+    if (!db || !creatorId) {
+      setSavedPostIds([]);
+      return;
+    }
+    getDoc(doc(db, "users", creatorId))
+      .then((snap) => {
+        const d = snap.exists() ? snap.data() : {};
+        const ids = Array.isArray(d.savedPostIds) ? (d.savedPostIds as unknown[]).map((v) => String(v)) : [];
+        setSavedPostIds(ids);
+        const fs = (d.fanHubFeedSettings as Partial<FeedVisibilitySettings>) || {};
+        setFeedSettings({
+          hideLikeCounts: !!fs.hideLikeCounts,
+          hideComments: !!fs.hideComments,
+          hideLikes: !!fs.hideLikes,
+          autoReplyAI: !!fs.autoReplyAI,
+          autoReplyChance: typeof fs.autoReplyChance === "number" ? Math.max(0, Math.min(100, fs.autoReplyChance)) : 25,
+        });
+      })
+      .catch(() => setSavedPostIds([]));
+  }, [creatorId]);
+
+  const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingSettingsRef = useRef<FeedVisibilitySettings | null>(null);
+
+  const persistFeedSettings = useCallback(
+    async (toSave: FeedVisibilitySettings) => {
+      if (!db || !creatorId) return;
+      setFeedSettingsSaving(true);
+      try {
+        await setDoc(doc(db, "users", creatorId), { fanHubFeedSettings: toSave }, { merge: true });
+        await setDoc(doc(db, "creators", creatorId), { feedSettings: toSave }, { merge: true });
+      } catch (err) {
+        console.error("Failed to save feed settings", err);
+        showToast?.("Failed to save visibility settings", "error");
+      } finally {
+        setFeedSettingsSaving(false);
+      }
+    },
+    [creatorId, showToast]
+  );
+
+  useEffect(() => {
+    return () => {
+      if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+    };
+  }, []);
+
+  const saveFeedSettings = useCallback(
+    (next: FeedVisibilitySettings, options?: { debounce?: boolean }) => {
+      if (!db || !creatorId) return;
+      const previous = feedSettings;
+      setFeedSettings(next);
+
+      if (options?.debounce) {
+        pendingSettingsRef.current = next;
+        if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+        saveTimeoutRef.current = setTimeout(() => {
+          saveTimeoutRef.current = null;
+          const toSave = pendingSettingsRef.current;
+          pendingSettingsRef.current = null;
+          if (toSave) void persistFeedSettings(toSave);
+        }, 300);
+        return;
+      }
+
+      if (feedSettingsSaving) return;
+      setFeedSettingsSaving(true);
+      (async () => {
+        try {
+          await setDoc(doc(db, "users", creatorId), { fanHubFeedSettings: next }, { merge: true });
+          await setDoc(doc(db, "creators", creatorId), { feedSettings: next }, { merge: true });
+        } catch (err) {
+          console.error("Failed to save feed settings", err);
+          setFeedSettings(previous);
+          showToast?.("Failed to save visibility settings", "error");
+        } finally {
+          setFeedSettingsSaving(false);
+        }
+      })();
+    },
+    [creatorId, feedSettingsSaving, feedSettings, showToast, persistFeedSettings]
+  );
+
+  const handleLikeUpdated = useCallback((postId: string, likedBy: string[], likeCount: number) => {
+    setPosts((prev) => prev.map((p) => (p.id === postId ? { ...p, likedBy, likeCount } : p)));
+  }, []);
+
+  const handleCommentsUpdated = useCallback((postId: string, comments: FeedPost["comments"]) => {
+    setPosts((prev) => prev.map((p) => (p.id === postId ? { ...p, comments } : p)));
+  }, []);
+
+  const handleSavedUpdated = useCallback((savedIds: string[]) => {
+    setSavedPostIds(savedIds);
+  }, []);
+
+  const handleEditPost = useCallback((postId: string) => {
+    // Navigate to compose page with edit mode
+    // Store the post ID to edit in sessionStorage for the compose page to pick up
+    sessionStorage.setItem("editPostId", postId);
+    setActivePage?.("compose");
+  }, [setActivePage]);
+
+  const handleDeletePost = useCallback(async (postId: string) => {
+    if (!db || !creatorId || deletingPostId) return;
+    if (!confirm("Delete this post? This cannot be undone.")) return;
+    
+    setDeletingPostId(postId);
+    try {
+      const refs = [
+        doc(db, "posts", postId),
+        doc(db, "users", creatorId, "posts", postId),
+        doc(db, "creators", creatorId, "posts", postId),
+        doc(db, "creators", creatorId, "fanPosts", postId),
+      ];
+      await Promise.all(refs.map((r) => deleteDoc(r).catch(() => undefined)));
+      setPosts((prev) => prev.filter((p) => p.id !== postId));
+    } catch (err) {
+      console.error("Failed to delete post:", err);
+      alert("Failed to delete post. Please try again.");
+    } finally {
+      setDeletingPostId(null);
+    }
+  }, [creatorId, deletingPostId]);
+
+  const handleToggleVisibility = useCallback(async (postId: string, currentStatus: string) => {
+    if (!db || !creatorId) return;
+    
+    const newStatus = currentStatus === "published" ? "draft" : "published";
+    try {
+      const refs = [
+        doc(db, "posts", postId),
+        doc(db, "users", creatorId, "posts", postId),
+        doc(db, "creators", creatorId, "posts", postId),
+        doc(db, "creators", creatorId, "fanPosts", postId),
+      ];
+      await Promise.all(
+        refs.map(async (r) => {
+          const s = await getDoc(r);
+          if (s.exists()) await updateDoc(r, { status: newStatus });
+        })
+      );
+      setPosts((prev) => prev.map((p) => (p.id === postId ? { ...p, status: newStatus } : p)));
+    } catch (err) {
+      console.error("Failed to toggle visibility:", err);
+      alert("Failed to update post status. Please try again.");
+    }
+  }, [creatorId]);
+
+  const handleTogglePin = useCallback(
+    async (postId: string, currentlyPinned: boolean) => {
+      if (!db || !creatorId) return;
+      const newPinned = !currentlyPinned;
+      setPosts((prev) => {
+        const next = prev.map((p) => {
+          if (p.id === postId) return { ...p, pinned: newPinned };
+          if (newPinned && p.pinned) return { ...p, pinned: false };
+          return p;
+        });
+        next.sort((a, b) => (a.pinned && !b.pinned ? -1 : !a.pinned && b.pinned ? 1 : 0));
+        return next;
+      });
+      try {
+        const syncPin = async (pid: string, pinned: boolean) => {
+          const refs = [
+            doc(db, "posts", pid),
+            doc(db, "users", creatorId, "posts", pid),
+            doc(db, "creators", creatorId, "posts", pid),
+            doc(db, "creators", creatorId, "fanPosts", pid),
+          ];
+          const updates = pinned
+            ? { pinned: true, pinnedAt: serverTimestamp() }
+            : { pinned: false, pinnedAt: deleteField() };
+          await Promise.all(
+            refs.map(async (r) => {
+              const s = await getDoc(r);
+              if (s.exists()) await updateDoc(r, updates);
+            })
+          );
+        };
+        if (newPinned) {
+          const otherPinned = posts.filter((p) => p.pinned && p.id !== postId);
+          await Promise.all(otherPinned.map((p) => syncPin(p.id, false)));
+          await syncPin(postId, true);
+        } else {
+          await syncPin(postId, false);
+        }
+      } catch (err) {
+        console.error("Failed to toggle pin:", err);
+        setPosts((prev) => {
+          const list = prev.map((p) => (p.id === postId ? { ...p, pinned: currentlyPinned } : p));
+          list.sort((a, b) => (a.pinned && !b.pinned ? -1 : !a.pinned && b.pinned ? 1 : 0));
+          return list;
+        });
+        showToast?.("Failed to update pin", "error");
+      }
+    },
+    [creatorId, posts, showToast]
+  );
+
+  const [visibilityOpen, setVisibilityOpen] = useState(false);
+  const visibilityRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (!visibilityOpen) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (visibilityRef.current && !visibilityRef.current.contains(e.target as Node)) setVisibilityOpen(false);
+    };
+    document.addEventListener("click", handleClickOutside, true);
+    return () => document.removeEventListener("click", handleClickOutside, true);
+  }, [visibilityOpen]);
+
+  return (
+    <div className="fan-hub-feed-chrome">
+    <main className="member-feed-main" aria-label="Fan Hub posts">
+      <div className="feed-header-wrap">
+        <div className="feed-header">
+          <button
+            type="button"
+            className="feed-view-toggle"
+            title={viewMode === "feed" ? "Switch to grid view" : "Switch to feed view"}
+            aria-label={viewMode === "feed" ? "Switch to grid view" : "Switch to feed view"}
+            onClick={() => setViewMode(viewMode === "feed" ? "grid" : "feed")}
+          >
+            <GridIcon />
+          </button>
+          <div className="feed-header-right">
+            {isAdminMode && (
+              <div className="feed-header-visibility-dropdown" ref={visibilityRef}>
+                <button
+                  type="button"
+                  className="feed-header-visibility-btn"
+                  onClick={() => setVisibilityOpen((o) => !o)}
+                  aria-expanded={visibilityOpen}
+                  aria-haspopup="true"
+                >
+                  Visibility
+                </button>
+                {visibilityOpen && (
+                  <div className="feed-header-visibility-popover" aria-label="Visibility for fans">
+                    <span className="feed-header-visibility-label">Visibility for fans</span>
+                    <label className="feed-header-checkbox">
+                      <input
+                        type="checkbox"
+                        checked={feedSettings.hideLikeCounts}
+                        onChange={(e) => saveFeedSettings({ ...feedSettings, hideLikeCounts: e.target.checked })}
+                      />
+                      <span>Hide like counts</span>
+                    </label>
+                    <label className="feed-header-checkbox">
+                      <input
+                        type="checkbox"
+                        checked={feedSettings.hideComments}
+                        onChange={(e) => saveFeedSettings({ ...feedSettings, hideComments: e.target.checked })}
+                      />
+                      <span>Hide comments</span>
+                    </label>
+                    <label className="feed-header-checkbox">
+                      <input
+                        type="checkbox"
+                        checked={feedSettings.hideLikes}
+                        onChange={(e) => saveFeedSettings({ ...feedSettings, hideLikes: e.target.checked })}
+                      />
+                      <span>Hide likes</span>
+                    </label>
+                    {/* Elite: AI comment replies */}
+                    <div className="feed-header-ai-replies mt-3 pt-3 border-t border-gray-200 dark:border-gray-600">
+                      <span className="feed-header-visibility-label block mb-2">AI comment replies</span>
+                      {canUseAIReplies ? (
+                        <>
+                          <label className="feed-header-checkbox">
+                            <input
+                              type="checkbox"
+                              checked={!!feedSettings.autoReplyAI}
+                              onChange={(e) => saveFeedSettings({ ...feedSettings, autoReplyAI: e.target.checked })}
+                            />
+                            <span>Reply to comments with AI (your tone, max 2 per fan per post)</span>
+                          </label>
+                          {feedSettings.autoReplyAI && (
+                            <div className="mt-2">
+                              <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">
+                                Reply chance for other comments (fans who tipped or bought treats are always prioritized): {feedSettings.autoReplyChance ?? 25}%
+                              </label>
+                              <input
+                                type="range"
+                                min={0}
+                                max={100}
+                                step={5}
+                                value={feedSettings.autoReplyChance ?? 25}
+                                onChange={(e) => saveFeedSettings({ ...feedSettings, autoReplyChance: Number(e.target.value) }, { debounce: true })}
+                                className="w-full h-2 rounded-lg appearance-none bg-gray-200 dark:bg-gray-600 fh-range"
+                              />
+                            </div>
+                          )}
+                        </>
+                      ) : (
+                        <>
+                          <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Elite only — upgrade to unlock AI replies.</p>
+                          <button
+                            type="button"
+                            className="text-xs font-medium fh-link hover:underline"
+                            onClick={() => { openPaymentModal?.({ name: "Elite", price: 79, cycle: "monthly" }); }}
+                          >
+                            Upgrade to Elite
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+            <button type="button" className="feed-saved-link">
+              Saved Posts ({savedPostIds.length})
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {loading && <p className="feed-loading">Loading…</p>}
+
+      {viewMode === "feed" ? (
+        <>
+          {!loading && posts.length === 0 && (
+            <p className="feed-empty">No posts yet. Create content to show here.</p>
+          )}
+          <div className="feed-list">
+            {!loading && posts.map((post) => (
+              <FeedCard
+                key={post.id}
+                post={post}
+                creatorName={creatorName}
+                creatorAvatar={creatorAvatar}
+                avatarObjectPosition={avatarObjectPosition}
+                currentUserId={creatorId}
+                savedPostIds={savedPostIds}
+                onLikeUpdated={handleLikeUpdated}
+                onCommentsUpdated={handleCommentsUpdated}
+                onSavedUpdated={handleSavedUpdated}
+                isAdminMode={isAdminMode}
+                onEditPost={handleEditPost}
+                onDeletePost={handleDeletePost}
+                onToggleVisibility={handleToggleVisibility}
+                onTogglePin={handleTogglePin}
+                creatorThemePrimary={creatorStorefront.themePrimary}
+              />
+            ))}
+          </div>
+        </>
+      ) : (
+        <>
+          {!loading && posts.length === 0 && (
+            <p className="feed-empty">No posts yet. Create content to show here.</p>
+          )}
+          <div className="feed-grid">
+            {!loading && posts.map((post) => {
+              const firstUrl = post.mediaUrls?.[0];
+              const isVideo =
+                post.mediaTypes?.[0] === "video" || (firstUrl ? inferIsVideoFromUrl(firstUrl) : false);
+              return (
+                <button
+                  key={post.id}
+                  type="button"
+                  className="feed-grid-item"
+                  onClick={() => setViewMode("feed")}
+                >
+                  {firstUrl ? (
+                    isVideo ? (
+                      <video src={firstUrl} muted playsInline preload="metadata" />
+                    ) : (
+                      <img src={firstUrl} alt="" loading="lazy" />
+                    )
+                  ) : (
+                    <div className="feed-grid-item-text">{post.body?.slice(0, 100)}</div>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        </>
+      )}
+    </main>
+    </div>
+  );
+};

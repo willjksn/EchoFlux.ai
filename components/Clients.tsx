@@ -2,10 +2,10 @@
 
 import React, { useState } from 'react';
 import { Client, TeamMember, Platform, SocialStats } from '../types';
-import { BriefcaseIcon, LinkIcon, CheckCircleIcon } from './icons/UIIcons';
+import { BriefcaseIcon, LinkIcon, CheckCircleIcon, HeartIcon } from './icons/UIIcons';
 import { useAppContext } from './AppContext';
 import { defaultSettings } from '../constants';
-import { InstagramIcon, TikTokIcon, XIcon, ThreadsIcon, YouTubeIcon, LinkedInIcon, FacebookIcon } from './icons/PlatformIcons';
+import { InstagramIcon, TikTokIcon, XIcon, ThreadsIcon, YouTubeIcon, LinkedInIcon, FacebookIcon, PinterestIcon } from './icons/PlatformIcons';
 
 
 interface AddClientModalProps {
@@ -22,6 +22,8 @@ const platformIcons: Record<Platform, React.ReactNode> = {
   YouTube: <YouTubeIcon />,
   LinkedIn: <LinkedInIcon />,
   Facebook: <FacebookIcon />,
+  Pinterest: <PinterestIcon />,
+  'My Page': <HeartIcon />,
 };
 
 const AddClientModal: React.FC<AddClientModalProps> = ({ isOpen, onClose, onSave }) => {
@@ -29,7 +31,7 @@ const AddClientModal: React.FC<AddClientModalProps> = ({ isOpen, onClose, onSave
     const [email, setEmail] = useState('');
     const [plan, setPlan] = useState<'Free' | 'Pro' | 'Elite'>('Pro');
     const [connectedAccounts, setConnectedAccounts] = useState<Record<Platform, boolean>>({
-        Instagram: false, TikTok: false, X: false, Threads: false, YouTube: false, LinkedIn: false, Facebook: false, Pinterest: false
+        Instagram: false, TikTok: false, X: false, Threads: false, YouTube: false, LinkedIn: false, Facebook: false, Pinterest: false, 'My Page': false
     });
     
     if (!isOpen) return null;
@@ -68,7 +70,7 @@ const AddClientModal: React.FC<AddClientModalProps> = ({ isOpen, onClose, onSave
         setName('');
         setEmail('');
         setPlan('Pro');
-        setConnectedAccounts({ Instagram: false, TikTok: false, X: false, Threads: false, YouTube: false, LinkedIn: false, Facebook: false, Pinterest: false });
+        setConnectedAccounts({ Instagram: false, TikTok: false, X: false, Threads: false, YouTube: false, LinkedIn: false, Facebook: false, Pinterest: false, 'My Page': false });
     };
     
     const toggleAccount = (platform: Platform) => {

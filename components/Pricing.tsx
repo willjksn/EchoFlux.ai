@@ -16,48 +16,50 @@ const allCreatorTiers = [
         priceAnnually: 0,
         description: 'For individuals testing the studio.',
         features: [
-            '1 weekly plan (basic)',
-            '10 caption ideas',
-            'Fair-use AI limits & rate limits',
-            'Bio Link Page (1 link)',
-            'My Vault',
-            '100 MB Storage'
+            '10 AI caption generations',
+            'Content calendar',
+            'My Vault (100 MB storage)',
+            'Fair-use AI limits'
         ],
         isRecommended: false
     },
     {
         name: 'Pro',
-        priceMonthly: 29,
-        priceAnnually: 23,
-        description: 'For creators building their brand.',
+        priceMonthly: 19,
+        priceAnnually: 15,
+        description: 'Everything you need to create content and monetize with Fan Hub.',
         features: [
-            'Plan My Week',
-            '2 content strategies / month',
-            'Live trend research',
-            '500 caption ideas',
-            'Fair-use AI limits & queued heavy tasks',
-            'Bio Link Page (5 links)',
-            'My Vault',
-            'My Schedule',
-            '5 GB Storage'
+            'AI captions (fair use)',
+            'Content strategy & trends',
+            'Content calendar with reminders',
+            'My Vault (5 GB storage)',
+            'Fan Hub storefront',
+            'Subscriptions, tips, and store',
+            'Fan messages',
+            '100 video chat minutes/month',
+            'Basic analytics',
+            'Stripe payouts (10% platform fee)',
+            'Chat session & AI comment replies (upgrade to Elite to unlock)'
         ],
         isRecommended: false
     },
     {
         name: 'Elite',
-        priceMonthly: 79,
-        priceAnnually: 63,
-        description: 'For monetized creators maximizing revenue.',
+        priceMonthly: 39,
+        priceAnnually: 31,
+        description: 'For serious creators who want advanced tools and more video time.',
         features: [
-            'Advanced Plan My Week options',
-            '5 content strategies / month',
-            'Enhanced live trend research',
-            '1,500 caption ideas',
-            'Fair-use AI limits & priority queueing',
-            'Bio Link Page (unlimited links)',
-            'My Vault',
-            'My Schedule',
-            '10 GB Storage',
+            'Everything in Pro',
+            'Premium Studio tools',
+            'Advanced content planning',
+            'Chat session planner',
+            'AI Chat Bot in chat sessions (auto-reply as you)',
+            'AI comment replies on feed (prioritize tippers & buyers)',
+            '250 video chat minutes/month',
+            'Advanced fan analytics',
+            'VIP fan management',
+            '10 GB storage',
+            'Priority support'
         ],
         isRecommended: true
     },
@@ -185,10 +187,10 @@ export const Pricing: React.FC<PricingProps> = ({ onGetStartedClick, onNavigateR
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                 <div className="text-center">
                     <h2 className="text-3xl font-extrabold text-gray-900 dark:text-white sm:text-4xl">
-                        Built for Monetized Creators
+                        Simple, Transparent Pricing
                     </h2>
                     <p className="mt-4 text-lg text-gray-500 dark:text-gray-400">
-                        Start with a 7-day free trial of Pro or Elite. No charge until the trial ends. Cancel anytime.
+                        Start with a 7-day free trial. No charge until the trial ends. Cancel anytime.
                     </p>
                 </div>
 

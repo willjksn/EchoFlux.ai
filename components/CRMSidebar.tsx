@@ -1,9 +1,9 @@
 
 import React, { useState, useEffect } from 'react';
 import { useAppContext } from './AppContext';
-import { XMarkIcon, TagIcon, NoteIcon, ClockIcon, PlusIcon, TrashIcon, SparklesIcon } from './icons/UIIcons';
+import { XMarkIcon, TagIcon, NoteIcon, ClockIcon, PlusIcon, TrashIcon, SparklesIcon, HeartIcon } from './icons/UIIcons';
 import { Platform } from '../types';
-import { InstagramIcon, TikTokIcon, XIcon, ThreadsIcon, YouTubeIcon, LinkedInIcon, FacebookIcon } from './icons/PlatformIcons';
+import { InstagramIcon, TikTokIcon, XIcon, ThreadsIcon, YouTubeIcon, LinkedInIcon, FacebookIcon, PinterestIcon } from './icons/PlatformIcons';
 import { generateCRMSummary } from '../src/services/geminiService';
 
 const platformIcons: Record<Platform, React.ReactNode> = {
@@ -13,8 +13,9 @@ const platformIcons: Record<Platform, React.ReactNode> = {
   Threads: <ThreadsIcon />,
   YouTube: <YouTubeIcon />,
   LinkedIn: <LinkedInIcon />,
-  // FIX: Added missing Facebook icon to satisfy the 'Platform' type.
   Facebook: <FacebookIcon />,
+  Pinterest: <PinterestIcon />,
+  'My Page': <HeartIcon />,
 };
 
 export const CRMSidebar: React.FC = () => {

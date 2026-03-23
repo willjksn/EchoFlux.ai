@@ -26,6 +26,8 @@ export async function updateUserSocialStats(
       YouTube: { followers: 0, following: 0 },
       LinkedIn: { followers: 0, following: 0 },
       Facebook: { followers: 0, following: 0 },
+      Pinterest: { followers: 0, following: 0 },
+      'My Page': { followers: 0, following: 0 },
     };
 
     // Check if any accounts are OAuth-connected

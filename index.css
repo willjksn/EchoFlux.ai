@@ -235,6 +235,50 @@ html.dark *::-webkit-scrollbar-thumb:hover,
   background: #6b7280 !important;
 }
 
+/* Global focus ring styling - use app primary color instead of browser default */
+*:focus {
+  outline: none;
+}
+
+*:focus-visible {
+  outline: 2px solid #3b82f6; /* primary-500 blue */
+  outline-offset: 2px;
+}
+
+/* For inputs, textareas, and selects - use ring instead of outline for better Tailwind compatibility */
+input:focus,
+textarea:focus,
+select:focus,
+button:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px #3b82f6; /* primary-500 blue ring */
+}
+
+/* Dark mode focus styling */
+.dark input:focus,
+.dark textarea:focus,
+.dark select:focus,
+.dark button:focus-visible,
+html.dark input:focus,
+html.dark textarea:focus,
+html.dark select:focus,
+html.dark button:focus-visible {
+  box-shadow: 0 0 0 2px #60a5fa; /* primary-400 for better visibility in dark mode */
+}
+
+/* Fan Hub pages - use creator's theme color via CSS variable */
+.stormij-theme input:focus,
+.stormij-theme textarea:focus,
+.stormij-theme select:focus,
+.stormij-theme button:focus-visible {
+  box-shadow: 0 0 0 2px var(--fan-primary, #6366f1);
+}
+
+.stormij-theme *:focus-visible {
+  outline: 2px solid var(--fan-primary, #6366f1);
+  outline-offset: 2px;
+}
+
 /* Animation utilities */
 .animate-fade-in {
   animation: fadeIn 0.5s ease-out;

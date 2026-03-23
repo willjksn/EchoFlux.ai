@@ -46,6 +46,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
   const userData = userDoc.data();
   const userPlan = userData?.plan || 'Free';
   const userRole = userData?.role;
+  
+  // Get creator profile for gender-aware content generation
+  const creatorGender = userData?.creatorGender || "";
+  const targetAudienceGender = userData?.targetAudienceGender || "";
 
   // Check strategy generation limit
   const usageCheck = await canGenerateStrategy(authUser.uid, userPlan, userRole);
@@ -59,7 +63,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
     return;
   }
 
-  const { niche, audience, goal, duration, tone, platformFocus, analyticsData, emojiEnabled, emojiIntensity, contextDescription, usePersonality, useFavoriteHashtags, creatorPersonality, favoriteHashtags } = req.body || {};
+  const { niche, audience, goal, duration, tone, platformFocus, analyticsData, emojiEnabled, emojiIntensity, contextDescription, usePersonality, useFavoriteHashtags, creatorPersonality, favoriteHashtags, toneSettings } = req.body || {};
+  
+  // Build tone style guidance from settings
+  const toneStyleGuidance = toneSettings ? `
+WRITING STYLE PREFERENCES (apply to all content ideas):
+${toneSettings.formality !== undefined ? `- Formality (${toneSettings.formality}/100): ${toneSettings.formality < 30 ? 'Very casual, use slang and informal language' : toneSettings.formality < 50 ? 'Casual and conversational' : toneSettings.formality < 70 ? 'Balanced tone' : 'Professional and polished'}` : ''}
+${toneSettings.humor !== undefined ? `- Humor (${toneSettings.humor}/100): ${toneSettings.humor < 30 ? 'Serious, minimal humor' : toneSettings.humor < 50 ? 'Light occasional humor' : toneSettings.humor < 70 ? 'Witty and playful' : 'Very funny, comedic tone'}` : ''}
+${toneSettings.empathy !== undefined ? `- Warmth (${toneSettings.empathy}/100): ${toneSettings.empathy < 30 ? 'Direct and straightforward' : toneSettings.empathy < 50 ? 'Friendly but not overly warm' : toneSettings.empathy < 70 ? 'Warm and understanding' : 'Very supportive'}` : ''}
+${toneSettings.profanity !== undefined && toneSettings.profanity > 0 ? `- Profanity (${toneSettings.profanity}/100): ${toneSettings.profanity < 30 ? 'Very mild swearing OK' : toneSettings.profanity < 50 ? 'Moderate casual swearing' : 'Frequent swearing acceptable'}` : '- Keep language clean, no swearing'}
+${toneSettings.emojiLevel !== undefined ? `- Emoji usage (${toneSettings.emojiLevel}/100): ${toneSettings.emojiLevel < 20 ? 'No emojis' : toneSettings.emojiLevel < 40 ? 'Minimal emojis' : toneSettings.emojiLevel < 60 ? 'Moderate emojis' : 'Heavy emoji usage'}` : ''}
+` : '';
 
   if (!niche || !audience || !goal) {
     res.status(400).json({ error: "Missing required fields: niche, audience, and goal are required" });
@@ -139,6 +153,64 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
       }
     }
 
+    // Detect if this is for My Page / Fan Hub platform
+    const isMyPagePlatform = platformFocus === 'MyPage' || platformFocus === 'My Page' || platformFocus === 'Fan Hub';
+    
+    // Fetch Fan Hub analytics if My Page is selected
+    let fanHubAnalyticsContext = '';
+    if (isMyPagePlatform) {
+      try {
+        const postsSnap = await db.collection("creators").doc(authUser.uid).collection("fanPosts")
+          .orderBy("createdAt", "desc").limit(20).get();
+        
+        let totalLikes = 0;
+        let totalComments = 0;
+        const postTypes: Record<string, number> = {};
+        
+        postsSnap.forEach((doc) => {
+          const data = doc.data();
+          totalLikes += data.likes || 0;
+          totalComments += data.commentsCount || 0;
+          const type = data.mediaType || "text";
+          postTypes[type] = (postTypes[type] || 0) + 1;
+        });
+        
+        const postCount = postsSnap.size || 1;
+        const topTypes = Object.entries(postTypes)
+          .sort((a, b) => b[1] - a[1])
+          .slice(0, 3)
+          .map(([t]) => t);
+        
+        // Get recent tips count
+        const weekAgo = new Date();
+        weekAgo.setDate(weekAgo.getDate() - 7);
+        const tipsSnap = await db.collection("purchases")
+          .where("creatorId", "==", authUser.uid)
+          .where("type", "==", "tip")
+          .where("createdAt", ">=", weekAgo.toISOString())
+          .get();
+        
+        const avgLikes = Math.round(totalLikes / postCount);
+        const avgComments = Math.round(totalComments / postCount);
+        const recentTips = tipsSnap.size;
+        
+        fanHubAnalyticsContext = `
+MY PAGE / FAN HUB ANALYTICS (use to tailor content strategy):
+- Your top performing post types: ${topTypes.length > 0 ? topTypes.join(", ") : "varied content"}
+- Average likes per post: ${avgLikes}
+- Average comments per post: ${avgComments}
+- Best engagement times: evenings and weekends
+- Recent tip activity: ${recentTips} tips this week
+
+Generate ideas that mirror your top-performing content patterns. Focus on what drives engagement, tips, and subscriber retention.
+DO NOT include hashtags for My Page content - this is a private fan platform, not social media.
+`;
+        console.log('[generateContentStrategy] Fan Hub analytics fetched:', { postCount, avgLikes, avgComments, recentTips });
+      } catch (e) {
+        console.warn('[generateContentStrategy] Failed to fetch Fan Hub analytics:', e);
+      }
+    }
+
     // Build analytics context for AI
     let analyticsContext = '';
     if (analyticsData) {
@@ -175,6 +247,36 @@ Use this analytics data to inform your strategy:
           ? 'MODERATELY EXPLICIT - Use suggestive and explicit language describing intimate content, sexual themes, girlfriend experience, and adult content. Focus on desire and intimate experiences.'
           : 'SUGGESTIVE - Use suggestive language with adult themes, intimate moments, and romantic/sexual undertones. Focus on connection and intimate experiences.')
       : '';
+
+    // Build creator profile guidance for gender-appropriate content
+    const creatorProfileGuidance = (creatorGender || targetAudienceGender) ? `
+CREATOR PROFILE (CRITICAL - FOLLOW STRICTLY):
+${creatorGender ? `- The creator is: ${creatorGender}` : ''}
+${targetAudienceGender ? `- Target audience: ${targetAudienceGender === 'Male' ? 'Men' : targetAudienceGender === 'Female' ? 'Women' : targetAudienceGender === 'Both' ? 'Both men and women' : 'All audiences'}` : ''}
+
+MANDATORY CONTENT RULES BASED ON CREATOR PROFILE:
+${creatorGender === 'Female' && targetAudienceGender === 'Male' ? `- ALL content ideas must feature the FEMALE creator appealing to MALE audience
+- Ideas should showcase HER (the creator): bikini photos, lingerie looks, selfies, body shots, intimate content
+- NEVER suggest photos of men, mankinis, men in bikinis, or content featuring men
+- Focus on feminine aesthetics, curves, confidence, seduction, flirtation aimed at male viewers
+- Use "she/her" when referring to the creator, never "he/him"` : ''}
+${creatorGender === 'Male' && targetAudienceGender === 'Female' ? `- ALL content ideas must feature the MALE creator appealing to FEMALE audience
+- Ideas should showcase HIM (the creator): shirtless photos, gym content, suits, confidence poses
+- NEVER suggest photos of women or content featuring women as the subject
+- Focus on masculine aesthetics, physique, charm, romance aimed at female viewers
+- Use "he/him" when referring to the creator, never "she/her"` : ''}
+${creatorGender === 'Female' && targetAudienceGender === 'Female' ? `- ALL content ideas must feature the FEMALE creator appealing to FEMALE audience
+- Ideas should showcase HER: confidence, beauty, lifestyle, behind-the-scenes, relatability
+- Focus on aesthetics that appeal to women viewers` : ''}
+${creatorGender === 'Male' && targetAudienceGender === 'Male' ? `- ALL content ideas must feature the MALE creator appealing to MALE audience
+- Ideas should showcase HIM: physique, fitness, lifestyle, confidence
+- Focus on aesthetics that appeal to male viewers` : ''}
+${creatorGender === 'Couple' ? `- ALL content ideas must feature BOTH partners together
+- Ideas should showcase the couple: couple content, duo shots, relationship moments
+- Appeal to the specified target audience with couple-focused content` : ''}
+${creatorGender === 'Non-binary' ? `- ALL content ideas should be gender-neutral or match the creator's presentation
+- Focus on the creator's unique aesthetic and style` : ''}
+` : '';
 
     // Build explicit content context for AI
     const explicitContentContext = isExplicitContent || isOnlyFansPlatform ? `
@@ -236,7 +338,7 @@ ${explicitnessContext ? `\nEXPLICITNESS LEVEL: ${explicitnessLevel}/10\n${explic
       nicheResearch = 'Niche research unavailable. Using general best practices.';
     }
 
-    // Build JSON schema description (always include description/angle/cta so UI has consistent fields)
+    // Build JSON schema description (always include description/angle/cta/caption so UI has consistent fields)
     const contentItemSchema = `{
           "dayOffset": 0,
           "topic": "Specific content topic/idea (e.g., 'Behind the scenes of our process')",
@@ -245,6 +347,7 @@ ${explicitnessContext ? `\nEXPLICITNESS LEVEL: ${explicitnessLevel}/10\n${explic
           "description": "Detailed description of the content idea with specific angles and execution details",
           "angle": "What makes this post compelling and unique - detailed angle description",
           "cta": "Specific call-to-action tailored to the content and goal",
+          "caption": "Ready-to-use social media caption for this content (2-4 sentences with hook, body, CTA, and hashtags if appropriate)",
           "imageIdeas": ["Idea 1 for images", "Idea 2 for images", "Idea 3 for images"],
           "videoIdeas": ["Idea 1 for videos", "Idea 2 for videos"]
         }`;
@@ -262,6 +365,8 @@ ${explicitnessContext ? `\nEXPLICITNESS LEVEL: ${explicitnessLevel}/10\n${explic
     const prompt = `
 You are an elite content strategist specializing in ${niche} for ${audience}. Your expertise is creating data-driven strategies that achieve specific business goals.
 
+${creatorProfileGuidance}
+
 ${explicitContentContext}
 
 ${goalFramework}
@@ -274,6 +379,8 @@ ${currentTrends}
 
 ${analyticsContext ? analyticsContext : 'Note: No analytics data available. Use best practices for this niche and audience.'}
 
+${fanHubAnalyticsContext}
+
 PRIMARY OBJECTIVE: Create a ${durationWeeks}-week content strategy specifically designed to achieve: ${goal}
 ${durationWeeks === 1 ? '\n⚠️ IMPORTANT: This is a ONE-WEEK plan. Generate EXACTLY 1 week (7 days) with 10-14 detailed content items. Do NOT generate multiple weeks.' : ''}
 
@@ -284,6 +391,7 @@ Strategy Parameters:
 - Target Audience: ${audience}
 - Niche: ${niche}
 - Duration: ${durationWeeks} week${durationWeeks === 1 ? '' : 's'}${durationWeeks === 1 ? ' (ONE WEEK ONLY - generate content for 7 days, not multiple weeks)' : ''}
+${toneStyleGuidance}
 ${safeContextDescription ? `\nADDITIONAL CONTEXT & REQUIREMENTS:\n${safeContextDescription}\n\nUse this additional context to tailor the strategy according to the user's specific requirements, preferences, and desired approach.\n` : ''}
 ${usePersonality && safeCreatorPersonality ? `\nCREATOR PERSONALITY & BRAND VOICE:\n${safeCreatorPersonality}\n\nCRITICAL - PERSONALITY INTEGRATION:
 - The above personality description contains ALL information about this creator: brand voice, style, values, physical attributes, personality traits, preferences, and what makes them unique
@@ -363,6 +471,13 @@ ${durationWeeks === 1 ? '⚠️ CRITICAL: Generate EXACTLY 1 WEEK (7 days) of co
    * description: Detailed description with specific angles and execution details (2-3 sentences minimum)
    * angle: What makes this post compelling and unique - detailed explanation
    * cta: Specific call-to-action tailored to the content and goal
+   * caption: A READY-TO-USE caption for this content (this is critical - the creator will use this caption directly):
+     - Start with an attention-grabbing hook (question, bold statement, or intriguing opener)
+     - Include 2-3 sentences of engaging body content
+     - End with the CTA
+     - Include 3-5 relevant hashtags at the end (unless for OnlyFans/Fan Hub where hashtags aren't used)
+     - Match the specified tone: ${tone}
+     - Make it feel authentic and conversational, not generic
 ${durationWeeks === 1 ? '- Provide comprehensive, detailed content across all 7 days with variety' : ''}
 - Distribute content across platforms: ${platforms.join(', ')}
  - DO NOT just provide topic names - provide FULL detailed descriptions for each content item
@@ -476,6 +591,7 @@ IMPORTANT: When generating imageIdeas and videoIdeas:
               description: day.description || day.details || '', 
               angle: day.angle || day.hook || '', 
               cta: day.cta || day.callToAction || '', 
+              caption: day.caption || '', // Pre-generated caption
               format: day.format || (day.postType === 'Reel' ? 'Reel' : day.postType === 'Story' ? 'Story' : 'Post'),
               platform: day.platform || (Array.isArray(day.platforms) ? day.platforms[0] : platforms[0] || 'Instagram'),
               imageIdeas: day.imageIdeas || [],
@@ -503,10 +619,14 @@ IMPORTANT: When generating imageIdeas and videoIdeas:
           const topic = ensureMin(item.topic, "Content idea");
           const format = safeString(item.format) || "Post";
           const platform = safeString(item.platform) || (platforms[0] || "Instagram");
+          const itemCta = ensureMin(item.cta, defaultCta, 6);
 
           const descriptionFallback = `Create a ${format} about "${topic}" for ${audience}. Include specific talking points, how to present it, and what to show/do on-screen.`;
           const angleFallback = `Hook with a bold claim or question about "${topic}", then deliver 2-3 concrete insights tailored to ${audience}.`;
           const ctaFallback = defaultCta;
+          
+          // Generate a fallback caption if not provided
+          const captionFallback = `${item.angle || angleFallback}\n\n${item.description || descriptionFallback}\n\n${itemCta}${!isOnlyFansPlatform && !isMyPagePlatform ? `\n\n#${niche.replace(/\s+/g, '')} #${goal.replace(/\s+/g, '')} #contentcreator` : ''}`;
 
           const imageIdeas = Array.isArray(item.imageIdeas) ? item.imageIdeas.filter((x: any) => safeString(x).length > 0) : [];
           const videoIdeas = Array.isArray(item.videoIdeas) ? item.videoIdeas.filter((x: any) => safeString(x).length > 0) : [];
@@ -518,7 +638,8 @@ IMPORTANT: When generating imageIdeas and videoIdeas:
             platform,
             description: ensureMin(item.description, descriptionFallback, 20),
             angle: ensureMin(item.angle, angleFallback, 12),
-            cta: ensureMin(item.cta, ctaFallback, 6),
+            cta: itemCta,
+            caption: ensureMin(item.caption, captionFallback, 20),
             imageIdeas: imageIdeas.length > 0 ? imageIdeas : [
               `On-brand visual concept for "${topic}" (clean composition, clear focal point, text overlay with hook)`,
               `Behind-the-scenes style image supporting "${topic}" (authentic, candid, process-oriented)`,

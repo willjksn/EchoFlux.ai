@@ -1,8 +1,7 @@
 import React from 'react';
 import { Page } from '../types';
-import { DashboardIcon, AnalyticsIcon, SettingsIcon, LogoIcon, ComposeIcon, TrendingIcon, TeamIcon, RocketIcon, BriefcaseIcon, AdminIcon, CalendarIcon, KanbanIcon, GlobeIcon, TargetIcon, SparklesIcon, ImageIcon, ChatIcon } from './icons/UIIcons';
+import { DashboardIcon, SettingsIcon, LogoIcon, ComposeIcon, AdminIcon, CalendarIcon, TargetIcon, SparklesIcon, ImageIcon, HeartIcon } from './icons/UIIcons';
 import { useAppContext } from './AppContext';
-import { INBOX_ENABLED } from '../constants';
 
 interface NavItemProps {
   page: Page;
@@ -45,79 +44,45 @@ export const Sidebar: React.FC = () => {
   const isBusiness = user.userType === 'Business';
   const autopilotLabel = isBusiness ? 'Marketing Manager' : 'AI Autopilot';
 
+  // Premium Studio: one nav item for Pro/Elite/Agency. Pro -> upgrade screen; Elite/Agency/OnlyFansStudio -> full studio.
+  const hasFanHubAccess = ['Pro', 'Elite', 'Agency'].includes(user.plan);
+  const hasPremiumStudioAccess = user.plan === 'Elite' || user.plan === 'Agency' || user.plan === 'OnlyFansStudio';
+
   const allNavItems: (Omit<NavItemProps, 'page' | 'label'> & { page: Page | 'admin', label: string })[] = [
-    { page: 'dashboard', icon: <DashboardIcon />, label: 'Dashboard' },
-    { page: 'inbox', icon: <ChatIcon />, label: 'Inbox' },
-    { page: 'opportunities', icon: <TrendingIcon />, label: 'Find Trends', tourId: 'tour-step-opportunities-nav' },
-    { page: 'strategy', icon: <TargetIcon />, label: 'Plan My Week' },
-    { page: 'compose', icon: <ComposeIcon />, label: 'Write Captions', tourId: 'tour-step-3-compose-nav' },
-    { page: 'calendar', icon: <CalendarIcon />, label: 'My Schedule' },
-    { page: 'approvals', icon: <KanbanIcon />, label: 'Drafts' },
-    { page: 'mediaLibrary', icon: <ImageIcon />, label: 'My Vault' },
-    { page: 'bio', icon: <GlobeIcon />, label: 'Bio Link Page' },
-    { page: 'onlyfansStudio', icon: <SparklesIcon />, label: 'Premium Content Studio' },
-    { page: 'emailCenter', icon: <ComposeIcon />, label: 'Email Center' },
+    // MAIN
+    { page: 'dashboard', icon: <DashboardIcon />, label: 'Dashboard', tourId: 'tour-step-1-dashboard' },
+    { page: 'strategy', icon: <TargetIcon />, label: 'What to Post' },
+    { page: 'compose', icon: <ComposeIcon />, label: 'Create Post', tourId: 'tour-step-3-compose-nav' },
+    { page: 'calendar', icon: <CalendarIcon />, label: 'Calendar' },
+    { page: 'mediaLibrary', icon: <ImageIcon />, label: 'Vault' },
+    ...(hasFanHubAccess ? [{ page: (hasPremiumStudioAccess ? 'onlyfansStudio' : 'premiumStudioUpgrade') as Page, icon: <SparklesIcon />, label: 'Premium Studio' }] : []),
+    ...((hasFanHubAccess || hasPremiumStudioAccess) ? [{ page: 'fanHub' as Page, icon: <HeartIcon />, label: 'Fan Hub', tourId: 'tour-step-fanhub-nav' }] : []),
     { page: 'settings', icon: <SettingsIcon />, label: 'Settings' },
     { page: 'admin', icon: <AdminIcon />, label: 'Admin' },
-    // Hidden items (filtered out by navItems logic)
-    { page: 'analytics', icon: <AnalyticsIcon />, label: "What's Working", tourId: 'tour-step-2-analytics-nav' },
-    { page: 'ads', icon: <SparklesIcon />, label: 'Ad Ideas' },
-    { page: 'team', icon: <TeamIcon />, label: 'Team', tourId: 'tour-step-team-nav' },
-    { page: 'clients', icon: <BriefcaseIcon />, label: 'Clients', tourId: 'tour-step-clients-nav' },
   ];
 
   const navItems = allNavItems.filter(item => {
-      // Caption plan: Only Compose and Settings
-      if (user.plan === 'Caption') {
-          return item.page === 'compose' || item.page === 'settings';
-      }
-      
-      // OnlyFans Studio plan: Only OnlyFans Studio (Settings are within OnlyFans Studio)
-      if (user.plan === 'OnlyFansStudio') {
-          return item.page === 'onlyfansStudio';
-      }
-      
+      if (user.plan === 'Caption') return item.page === 'compose' || item.page === 'settings';
+      if (user.plan === 'OnlyFansStudio') return item.page === 'onlyfansStudio' || item.page === 'fanHub';
       switch (item.page) {
-          case 'analytics':
-              // Hide Analytics in offline studio mode (depends on live social data)
-              return false;
-          case 'calendar':
-              return user.plan !== 'Free';
-          case 'bio':
-              // All plans can access Link-in-Bio (Free: 1 link, Pro: 5, Elite: unlimited)
-              return true;
+          case 'dashboard':
           case 'strategy':
-              // Free plan gets basic strategy (Gemini only, no live research)
-              return true; // All plans can access Strategy
-          case 'opportunities':
-              // Opportunities/Trends: Creator feature, also available to Agency (Business or Creator) since they manage creators
-              if (user.userType === 'Business' && user.plan !== 'Agency') {
-                  return false;
-              }
-              // Creator users OR Agency plan: Pro, Elite, Agency plans
-              return ['Pro', 'Elite', 'Agency'].includes(user.plan);
-          case 'ads':
-              // Hide Ad Generator for now while focusing on studio mode
-              return false;
-          case 'approvals':
-              return ['Elite', 'Agency'].includes(user.plan);
-          case 'inbox':
-              return INBOX_ENABLED;
-          case 'team':
-          case 'clients':
-              // Hide team/clients for now (creator focus); admins handled above
-              return false;
-          case 'onlyfansStudio':
-              // Premium Content Studio hidden for now
-              return false;
-          case 'emailCenter':
-              // Email Center is exposed for Admin users
-              return user.role === 'Admin';
+          case 'compose':
+          case 'settings':
+          case 'mediaLibrary':
+              return true;
           case 'admin':
-              // Admin page is only visible to Admin users
               return user.role === 'Admin';
+          case 'calendar':
+              return user.plan !== 'Free' && ['Pro', 'Elite', 'Agency'].includes(user.plan);
+          case 'onlyfansStudio':
+              return hasPremiumStudioAccess;
+          case 'premiumStudioUpgrade':
+              return hasFanHubAccess && !hasPremiumStudioAccess;
+          case 'fanHub':
+              return hasFanHubAccess || hasPremiumStudioAccess;
           default:
-              return true; 
+              return false;
       }
   }) as NavItemProps[];
 

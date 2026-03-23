@@ -47,10 +47,46 @@ const MODEL_COSTS: Record<string, { input: number; output: number }> = {
   'gemini-1.5-pro': { input: 1.25, output: 5.00 },
 };
 
+// Fixed costs per run for non-token-based models
+const FIXED_COSTS: Record<string, number> = {
+  'replicate-sdxl': 0.002, // ~$0.002 per image (legacy)
+  'replicate-flux-schnell': 0.003, // ~$0.003 per image ($3/1000)
+  'replicate-flux-dev': 0.025, // ~$0.025 per image
+  'tavily-web-search': 0.001, // ~$0.001 per search
+};
+
 export function estimateCost(modelName: string, inputTokens: number = 0, outputTokens: number = 0): number {
+  // Check for fixed-cost models first
+  if (FIXED_COSTS[modelName]) {
+    return FIXED_COSTS[modelName];
+  }
+  
   const costs = MODEL_COSTS[modelName] || MODEL_COSTS['gemini-2.0-flash'];
   const inputCost = (inputTokens / 1_000_000) * costs.input;
   const outputCost = (outputTokens / 1_000_000) * costs.output;
   return inputCost + outputCost;
+}
+
+/**
+ * Track Replicate image generation
+ */
+export async function trackReplicateUsage(userId: string, imageCount: number = 1, success: boolean = true, error?: string): Promise<void> {
+  try {
+    const usageLog = {
+      userId,
+      taskType: 'image_generation' as TaskType,
+      modelName: 'replicate-flux-dev',
+      costTier: 'medium' as const,
+      timestamp: new Date().toISOString(),
+      estimatedCost: FIXED_COSTS['replicate-flux-dev'] * imageCount,
+      success,
+      error,
+      imageCount, // Track number of images generated
+    };
+
+    await getAdminDb().collection('model_usage_logs').add(usageLog);
+  } catch (err) {
+    console.error('Failed to track Replicate usage:', err);
+  }
 }
 

@@ -36,14 +36,18 @@ const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 setPersistence(auth, browserLocalPersistence);
 
-// Force token refresh on page load — prevents 401 from Cloud Functions
+// Warm the ID token cache on sign-in. Do **not** use getIdToken(true) here — it hits
+// securetoken.googleapis.com on every callback and can exhaust Firebase Auth quotas
+// (auth/quota-exceeded), especially with React dev + many components also forcing refresh.
 onAuthStateChanged(auth, async (user) => {
   if (user) {
     try {
-      await user.getIdToken(true); // refresh token
-      console.log("🔥 Firebase Auth Ready — Token refreshed");
+      await user.getIdToken(); // use cached token; SDK refreshes when expired
+      if (import.meta.env.DEV) {
+        console.log("🔥 Firebase Auth ready (ID token cached)");
+      }
     } catch (e) {
-      console.error("Failed refreshing token:", e);
+      console.error("Failed to get ID token:", e);
     }
   }
 });

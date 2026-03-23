@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { AutopilotCampaign, Post, Platform } from '../types';
-import { XMarkIcon, CalendarIcon, CheckCircleIcon, SparklesIcon, ClipboardCheckIcon } from './icons/UIIcons';
-import { InstagramIcon, TikTokIcon, XIcon, ThreadsIcon, YouTubeIcon, LinkedInIcon, FacebookIcon } from './icons/PlatformIcons';
+import { XMarkIcon, CalendarIcon, CheckCircleIcon, SparklesIcon, ClipboardCheckIcon, HeartIcon } from './icons/UIIcons';
+import { InstagramIcon, TikTokIcon, XIcon, ThreadsIcon, YouTubeIcon, LinkedInIcon, FacebookIcon, PinterestIcon } from './icons/PlatformIcons';
 import { generateMockPerformance } from '../src/services/campaignPerformanceService';
 import { useAppContext } from './AppContext';
 
@@ -21,6 +21,8 @@ const platformIcons: Record<Platform, React.ReactNode> = {
   YouTube: <YouTubeIcon />,
   LinkedIn: <LinkedInIcon />,
   Facebook: <FacebookIcon />,
+  Pinterest: <PinterestIcon />,
+  'My Page': <HeartIcon />,
 };
 
 export const AutopilotCampaignDetailModal: React.FC<AutopilotCampaignDetailModalProps> = ({

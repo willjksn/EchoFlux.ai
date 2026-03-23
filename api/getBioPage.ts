@@ -110,8 +110,42 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         customLinks,
       };
     };
+
+    // 1) Try creators collection by handle (Fan Hub My Page storefront)
+    const creatorsRef = db.collection("creators");
+    let creatorsSnap;
+    try {
+      creatorsSnap = await creatorsRef.where("handle", "==", cleanUsername).limit(1).get();
+    } catch (e) {
+      // Index may not exist yet; fall through to users
+      creatorsSnap = { empty: true, docs: [] };
+    }
+    if (!creatorsSnap.empty) {
+      const creatorData = creatorsSnap.docs[0].data();
+      const theme = creatorData.theme || {};
+      const bioFromCreator = {
+        username: cleanUsername,
+        displayName: creatorData.displayName || cleanUsername,
+        verified: false,
+        bio: '',
+        avatar: creatorData.avatar || '',
+        socialLinks: [],
+        customLinks: [],
+        theme: {
+          backgroundColor: theme.background || '#fff2f8',
+          pageBackgroundColor: theme.background || '#fff2f8',
+          cardBackgroundColor: theme.background || '#fff2f8',
+          buttonColor: theme.primary || '#d4558b',
+          textColor: theme.primary || '#d4558b',
+          pageTextColor: theme.text || '#2f1a24',
+          buttonTextColor: '#ffffff',
+          buttonStyle: 'rounded' as const,
+        },
+      };
+      return res.status(200).json({ bioPage: bioFromCreator });
+    }
     
-    // Query users collection by username in bioPage
+    // 2) Fall back: users collection by bioPage.username (legacy)
     const usersRef = db.collection("users");
     
     let userDoc;

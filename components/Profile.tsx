@@ -600,40 +600,6 @@ export const Profile: React.FC = () => {
                     </div>
                  )}
 
-                 {canEdit && user.userType === 'Creator' && (
-                    <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4 pt-4 border-t dark:border-gray-700">
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Niche</label>
-                            {isEditing && editableUser ? (
-                                <input 
-                                    type="text" 
-                                    name="niche" 
-                                    value={editableUser.niche || ''} 
-                                    onChange={handleInputChange} 
-                                    className="w-full p-3 border-2 border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all" 
-                                    placeholder="Enter your niche"
-                                />
-                            ) : (
-                                <p className="text-gray-900 dark:text-white font-semibold">{user.niche || 'Not set'}</p>
-                            )}
-                        </div>
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Target Audience</label>
-                            {isEditing && editableUser ? (
-                                <input 
-                                    type="text" 
-                                    name="audience" 
-                                    value={editableUser.audience || ''} 
-                                    onChange={handleInputChange} 
-                                    className="w-full p-3 border-2 border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all" 
-                                    placeholder="Enter target audience"
-                                />
-                            ) : (
-                                <p className="text-gray-900 dark:text-white font-semibold">{user.audience || 'Not set'}</p>
-                            )}
-                        </div>
-                    </div>
-                 )}
                  {/* ------------------------- */}
 
                  {canEdit && (
@@ -650,51 +616,57 @@ export const Profile: React.FC = () => {
                  )}
             </SettingsSection>
             
-                {/* Usage Statistics */}
+                {/* Account Overview */}
                 {canEdit && (
-                    <SettingsSection title="Usage Statistics">
+                    <SettingsSection title="Account Overview">
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                             <div className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
-                                <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">Caption Generations</p>
-                                <p className="text-2xl font-bold text-gray-900 dark:text-white">
-                                    {user.monthlyCaptionGenerationsUsed || 0}
-                                </p>
-                                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">This month</p>
-                            </div>
-                            <div className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
-                                <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">Strategies Used</p>
-                                <p className="text-2xl font-bold text-gray-900 dark:text-white">
-                                    {(user as any).monthlyStrategyGenerationsUsed || 0} / {user.plan === 'Elite' ? 5 : user.plan === 'Pro' ? 2 : 1}
-                                </p>
-                                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Resets monthly</p>
-                            </div>
-                            <div className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
-                                <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">Bio Link Clicks</p>
-                                <p className="text-2xl font-bold text-gray-900 dark:text-white">
-                                    {(user as any).linkInBioClicksMonth ?? 0}
+                                <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">Member Since</p>
+                                <p className="text-xl font-bold text-gray-900 dark:text-white">
+                                    {user.createdAt ? new Date(user.createdAt).toLocaleDateString('en-US', { month: 'short', year: 'numeric' }) : 'N/A'}
                                 </p>
                                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                                    CTR: {((user as any).linkInBioCtrMonth ?? null) != null ? `${Math.round(((user as any).linkInBioCtrMonth || 0) * 100)}%` : '—'} · Resets monthly
+                                    {user.createdAt ? `${Math.floor((Date.now() - new Date(user.createdAt).getTime()) / (1000 * 60 * 60 * 24))} days` : ''}
                                 </p>
                             </div>
-                            {(user.monthlyAdGenerationsUsed || user.monthlyVideoAdGenerationsUsed) && (
-                                <>
-                                    <div className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
-                                        <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">Text Ads Generated</p>
-                                        <p className="text-2xl font-bold text-gray-900 dark:text-white">
-                                            {user.monthlyAdGenerationsUsed || 0}
-                                        </p>
-                                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">This month</p>
-                                    </div>
-                                    <div className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
-                                        <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">Video Ads Generated</p>
-                                        <p className="text-2xl font-bold text-gray-900 dark:text-white">
-                                            {user.monthlyVideoAdGenerationsUsed || 0}
-                                        </p>
-                                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">This month</p>
-                                    </div>
-                                </>
-                            )}
+                            <div className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+                                <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">Current Plan</p>
+                                <p className="text-xl font-bold text-primary-600 dark:text-primary-400">
+                                    {user.plan || 'Free'}
+                                </p>
+                                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                    {user.plan === 'Free' ? 'Upgrade for more features' : 'Active subscription'}
+                                </p>
+                            </div>
+                            <div className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+                                <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">Account Status</p>
+                                <p className="text-xl font-bold text-emerald-600 dark:text-emerald-400">
+                                    Active
+                                </p>
+                                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                    {user.userType || 'Creator'} account
+                                </p>
+                            </div>
+                        </div>
+                        <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="p-4 bg-gradient-to-br from-primary-50 to-primary-100 dark:from-primary-900/20 dark:to-primary-800/20 rounded-lg border border-primary-200 dark:border-primary-800">
+                                <p className="text-sm text-primary-700 dark:text-primary-300 mb-1">AI Generations This Month</p>
+                                <p className="text-2xl font-bold text-primary-800 dark:text-primary-200">
+                                    {(user.monthlyCaptionGenerationsUsed || 0) + ((user as any).monthlyRepliesUsed || 0)}
+                                </p>
+                                <p className="text-xs text-primary-600 dark:text-primary-400 mt-1">
+                                    Captions & AI replies
+                                </p>
+                            </div>
+                            <div className="p-4 bg-gradient-to-br from-emerald-50 to-emerald-100 dark:from-emerald-900/20 dark:to-emerald-800/20 rounded-lg border border-emerald-200 dark:border-emerald-800">
+                                <p className="text-sm text-emerald-700 dark:text-emerald-300 mb-1">Posts Scheduled</p>
+                                <p className="text-2xl font-bold text-emerald-800 dark:text-emerald-200">
+                                    {(user as any).monthlyPostsScheduled || 0}
+                                </p>
+                                <p className="text-xs text-emerald-600 dark:text-emerald-400 mt-1">
+                                    This month
+                                </p>
+                            </div>
                         </div>
                     </SettingsSection>
                 )}

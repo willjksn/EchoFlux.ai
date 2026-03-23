@@ -1,0 +1,1226 @@
+import React, { useState, useEffect, useCallback, useMemo } from "react";
+import { useAppContext } from "./AppContext";
+import { auth, db } from "../firebaseConfig";
+import {
+  collection,
+  query,
+  where,
+  getDocs,
+  onSnapshot,
+  doc,
+  updateDoc,
+  addDoc,
+  deleteDoc,
+  type QueryDocumentSnapshot,
+} from "firebase/firestore";
+import type { TreatProduct, TreatProductType } from "../types";
+import { SparklesIcon, CalendarIcon } from "./icons/UIIcons";
+import { useCreatorStoreCopy } from "../src/hooks/useCreatorStoreCopy";
+
+function formatPrice(cents: number | null | undefined): string {
+  const n = Number(cents);
+  if (!Number.isFinite(n)) return "—";
+  return "$" + (n / 100).toFixed(2);
+}
+
+/** Safe dollars string for treat form inputs (handles missing / odd API types). */
+function treatProductToPriceDollarString(product: TreatProduct | null | undefined): string {
+  if (!product) return "";
+  const raw = (product as { priceCents?: unknown }).priceCents;
+  const n = typeof raw === "number" ? raw : Number(raw);
+  if (!Number.isFinite(n)) return "";
+  return (n / 100).toFixed(2);
+}
+
+/** Firestore rejects `undefined` in update payloads. */
+function firestoreSafePatch(raw: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(raw)) {
+    if (v !== undefined) out[k] = v;
+  }
+  return out;
+}
+
+function treatProductQuantityString(product: TreatProduct | null | undefined): string {
+  if (product == null) return "";
+  const q = product.quantityLimit;
+  if (q == null) return "";
+  return String(q);
+}
+
+/** Map Firestore product doc → TreatProduct (API + client fallback). */
+function firestoreDocToTreatProduct(d: QueryDocumentSnapshot): TreatProduct {
+  const x = d.data();
+  const createdRaw = x.createdAt;
+  const updatedRaw = x.updatedAt;
+  const createdAt =
+    createdRaw && typeof (createdRaw as { toDate?: () => Date }).toDate === "function"
+      ? (createdRaw as { toDate: () => Date }).toDate().toISOString()
+      : String(createdRaw ?? "");
+  const updatedAt =
+    updatedRaw && typeof (updatedRaw as { toDate?: () => Date }).toDate === "function"
+      ? (updatedRaw as { toDate: () => Date }).toDate().toISOString()
+      : String(updatedRaw ?? "");
+  return {
+    id: d.id,
+    creatorId: String(x.creatorId ?? ""),
+    type: ((x.type as TreatProductType) || "custom") as TreatProductType,
+    title: String(x.title ?? ""),
+    description: typeof x.description === "string" ? x.description : undefined,
+    priceCents: Number(x.priceCents) || 0,
+    mediaUrl: typeof x.mediaUrl === "string" ? x.mediaUrl : undefined,
+    imageUrl: typeof x.imageUrl === "string" ? x.imageUrl : undefined,
+    archived: !!x.archived,
+    visible: x.visible !== false,
+    showOnLandingPage: x.showOnLandingPage !== false,
+    showInMemberStore: x.showInMemberStore !== false,
+    sortOrder: typeof x.sortOrder === "number" ? x.sortOrder : undefined,
+    quantityLimit: typeof x.quantityLimit === "number" ? x.quantityLimit : undefined,
+    soldCount: typeof x.soldCount === "number" ? x.soldCount : undefined,
+    createdAt,
+    updatedAt,
+  };
+}
+
+function formatScheduledDate(dateStr: string): string {
+  const [y, m, d] = dateStr.split("-").map(Number);
+  const date = new Date(y, (m ?? 1) - 1, d ?? 1);
+  return date.toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric", year: "numeric" });
+}
+
+function formatScheduledTime(timeStr: string): string {
+  if (!timeStr || !timeStr.trim()) return "";
+  const [h, min] = timeStr.split(":").map(Number);
+  const hour = h ?? 0;
+  const minute = min ?? 0;
+  if (hour === 0 && minute === 0) return "12:00 AM";
+  if (hour < 12) return `${hour}:${String(minute).padStart(2, "0")} AM`;
+  if (hour === 12) return `12:${String(minute).padStart(2, "0")} PM`;
+  return `${hour - 12}:${String(minute).padStart(2, "0")} PM`;
+}
+
+type ScheduledPurchase = {
+  id: string;
+  productName: string;
+  scheduledDate?: string;
+  scheduledTime?: string;
+  scheduledAt?: Date;
+  status: string;
+};
+
+type UpcomingSession = {
+  id: string;
+  durationMinutes: number;
+  scheduledStart?: Date;
+  status: string;
+  memberEmail?: string;
+};
+
+type ViewMode = "fan" | "manage";
+
+const GiftIcon = () => (
+  <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <polyline points="20 12 20 22 4 22 4 12" />
+    <rect x="2" y="7" width="20" height="5" />
+    <line x1="12" y1="22" x2="12" y2="7" />
+    <path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z" />
+    <path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z" />
+  </svg>
+);
+
+const CheckCircleIcon = () => (
+  <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+    <polyline points="22 4 12 14.01 9 11.01" />
+  </svg>
+);
+
+const SettingsIcon = () => (
+  <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="12" cy="12" r="3" />
+    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
+  </svg>
+);
+
+export const TreatsStore: React.FC = () => {
+  const { user, showToast } = useAppContext();
+  /** Align with API / Firestore rules (Firebase uid). */
+  const creatorId = auth.currentUser?.uid ?? user?.id;
+  const [products, setProducts] = useState<TreatProduct[]>([]);
+  const [loading, setLoading] = useState(true);
+  /** Defer purchases/sessions listeners until products request finishes so the tab feels fast. */
+  const [treatsDataReady, setTreatsDataReady] = useState(false);
+  const [editing, setEditing] = useState<TreatProduct | null>(null);
+  const [showForm, setShowForm] = useState(false);
+  const [saving, setSaving] = useState(false);
+  /** Row-level PATCH (publish / placement) so other cards don’t disable or flash. */
+  const [patchingId, setPatchingId] = useState<string | null>(null);
+  const [showArchived, setShowArchived] = useState(false);
+  const [viewMode, setViewMode] = useState<ViewMode>("fan");
+  const [purchaseLoading, setPurchaseLoading] = useState<string | null>(null);
+  const storeCopy = useCreatorStoreCopy(creatorId);
+
+  const [scheduledTreats, setScheduledTreats] = useState<ScheduledPurchase[]>([]);
+  const [upcomingSessions, setUpcomingSessions] = useState<UpcomingSession[]>([]);
+
+  const fetchProducts = useCallback(async (opts?: { quiet?: boolean }) => {
+    if (!creatorId) return;
+    const quiet = opts?.quiet === true;
+    if (!quiet) {
+      setLoading(true);
+      setTreatsDataReady(false);
+    }
+    try {
+      // Avoid getIdToken(true) here — forced refresh adds seconds on every Store tab visit.
+      const token = auth.currentUser ? await auth.currentUser.getIdToken() : null;
+      const res = await fetch(
+        `/api/products?creatorId=${encodeURIComponent(creatorId)}&includeArchived=true`,
+        { headers: token ? { Authorization: `Bearer ${token}` } : {} }
+      );
+      if (res.ok) {
+        const data = await res.json();
+        setProducts((data.products as TreatProduct[]) || []);
+        return;
+      }
+      const data = await res.json().catch(() => ({}));
+      throw new Error((data as { error?: string }).error || `Failed to load products (${res.status})`);
+    } catch (e) {
+      console.warn("Products API error (trying Firestore fallback):", e);
+      if (!db) {
+        setProducts([]);
+        return;
+      }
+      try {
+        const q = query(collection(db, "products"), where("creatorId", "==", creatorId));
+        const snap = await getDocs(q);
+        let list = snap.docs.map(firestoreDocToTreatProduct);
+        list.sort((a, b) => {
+          const orderDiff = (a.sortOrder ?? 0) - (b.sortOrder ?? 0);
+          if (orderDiff !== 0) return orderDiff;
+          const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+          const bTime = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+          return bTime - aTime;
+        });
+        setProducts(list);
+      } catch (fe) {
+        console.warn("Firestore products load failed:", fe);
+        setProducts([]);
+      }
+    } finally {
+      if (!quiet) {
+        setLoading(false);
+        setTreatsDataReady(true);
+      }
+    }
+  }, [creatorId]);
+
+  useEffect(() => {
+    fetchProducts();
+  }, [fetchProducts]);
+
+  /** After returning from Stripe Checkout (member product). */
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("store_purchase") !== "success") return;
+    showToast?.("Payment successful. Thank you!", "success");
+    params.delete("store_purchase");
+    const qs = params.toString();
+    const path = `${window.location.pathname}${qs ? `?${qs}` : ""}${window.location.hash}`;
+    window.history.replaceState({}, "", path);
+  }, [showToast]);
+
+  useEffect(() => {
+    if (!creatorId) {
+      setTreatsDataReady(false);
+      setScheduledTreats([]);
+      setUpcomingSessions([]);
+    }
+  }, [creatorId]);
+
+  useEffect(() => {
+    if (!db || !creatorId || !treatsDataReady) {
+      if (!creatorId || !treatsDataReady) setScheduledTreats([]);
+      return;
+    }
+    const q = query(
+      collection(db, "purchases"),
+      where("creatorId", "==", creatorId),
+      where("scheduleStatus", "==", "scheduled")
+    );
+    return onSnapshot(
+      q,
+      (snap) => {
+        const list: ScheduledPurchase[] = [];
+        snap.forEach((d) => {
+          const data = d.data();
+          list.push({
+            id: d.id,
+            productName: (data.productName as string) || "Product",
+            scheduledDate: data.scheduledDate as string | undefined,
+            scheduledTime: data.scheduledTime as string | undefined,
+            scheduledAt: data.scheduledAt?.toDate?.() as Date | undefined,
+            status: (data.scheduleStatus as string) || "scheduled",
+          });
+        });
+        list.sort((a, b) => {
+          const ta = a.scheduledAt?.getTime() ?? 0;
+          const tb = b.scheduledAt?.getTime() ?? 0;
+          return ta - tb;
+        });
+        setScheduledTreats(list);
+      },
+      () => setScheduledTreats([])
+    );
+  }, [creatorId, treatsDataReady]);
+
+  useEffect(() => {
+    if (!db || !creatorId || !treatsDataReady) {
+      if (!creatorId || !treatsDataReady) setUpcomingSessions([]);
+      return;
+    }
+    const q = query(
+      collection(db, "chatSessions"),
+      where("creatorId", "==", creatorId)
+    );
+    return onSnapshot(
+      q,
+      (snap) => {
+        const now = Date.now();
+        const list: UpcomingSession[] = [];
+        snap.forEach((d) => {
+          const data = d.data();
+          const status = (data.status as string) || "pending";
+          if (status === "ended" || status === "cancelled") return;
+          const scheduledStart = data.scheduledStart?.toDate?.() as Date | undefined;
+          const start = scheduledStart?.getTime() ?? 0;
+          if (start > now || status === "active") {
+            list.push({
+              id: d.id,
+              durationMinutes: (data.durationMinutes as number) || 15,
+              scheduledStart,
+              status,
+              memberEmail: data.memberEmail as string | undefined,
+            });
+          }
+        });
+        list.sort((a, b) => {
+          const ta = a.scheduledStart?.getTime() ?? 0;
+          const tb = b.scheduledStart?.getTime() ?? 0;
+          return ta - tb;
+        });
+        setUpcomingSessions(list);
+      },
+      () => setUpcomingSessions([])
+    );
+  }, [creatorId, treatsDataReady]);
+
+  const createProductViaFirestore = useCallback(
+    async (payload: {
+      type: TreatProductType;
+      title: string;
+      description?: string;
+      priceCents: number;
+      mediaUrl?: string;
+      visible: boolean;
+      showOnLandingPage?: boolean;
+      showInMemberStore?: boolean;
+      quantityLimit?: number;
+    }) => {
+      if (!db || !creatorId || !auth.currentUser) return false;
+      const now = new Date().toISOString();
+      const docData: Record<string, unknown> = {
+        creatorId,
+        type: payload.type,
+        title: payload.title,
+        description: payload.description?.trim() ? payload.description.trim() : null,
+        priceCents: Math.max(0, payload.priceCents),
+        mediaUrl: payload.mediaUrl?.trim() ? payload.mediaUrl.trim() : null,
+        imageUrl: null,
+        archived: false,
+        visible: payload.visible,
+        showOnLandingPage: payload.showOnLandingPage !== false,
+        showInMemberStore: payload.showInMemberStore !== false,
+        sortOrder: 0,
+        soldCount: 0,
+        createdAt: now,
+        updatedAt: now,
+      };
+      if (payload.quantityLimit != null && Number.isFinite(payload.quantityLimit)) {
+        docData.quantityLimit = Math.max(0, Math.floor(payload.quantityLimit));
+      }
+      await addDoc(collection(db, "products"), docData);
+      return true;
+    },
+    [creatorId]
+  );
+
+  const handleCreate = async (payload: {
+    type: TreatProductType;
+    title: string;
+    description?: string;
+    priceCents: number;
+    mediaUrl?: string;
+    visible: boolean;
+    showOnLandingPage?: boolean;
+    showInMemberStore?: boolean;
+    quantityLimit?: number;
+  }) => {
+    if (!creatorId) return;
+    setSaving(true);
+    const body = JSON.stringify({
+      creatorId,
+      type: payload.type,
+      title: payload.title,
+      description: payload.description || undefined,
+      priceCents: payload.priceCents,
+      mediaUrl: payload.mediaUrl,
+      visible: payload.visible,
+      showOnLandingPage: payload.showOnLandingPage !== false,
+      showInMemberStore: payload.showInMemberStore !== false,
+      quantityLimit: payload.quantityLimit,
+    });
+
+    const finishOk = (msg: string) => {
+      showToast?.(msg, "success");
+      setShowForm(false);
+      void fetchProducts();
+    };
+
+    try {
+      const token = auth.currentUser ? await auth.currentUser.getIdToken() : null;
+      let res: Response;
+      try {
+        res = await fetch("/api/products", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+          body,
+        });
+      } catch {
+        if (await createProductViaFirestore(payload)) {
+          finishOk("Product added (saved directly — API unreachable; use Vercel dev or DEV_API_PROXY for API mode).");
+          return;
+        }
+        throw new Error("Network error and could not save to database.");
+      }
+
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) {
+        finishOk("Product added");
+        return;
+      }
+
+      if (res.status === 404 && (await createProductViaFirestore(payload))) {
+        finishOk("Product added (saved directly — /api not running locally; deploy or use vercel dev).");
+        return;
+      }
+
+      throw new Error((data as { error?: string }).error || `Failed to create (${res.status})`);
+    } catch (e) {
+      showToast?.(e instanceof Error ? e.message : "Failed to create product", "error");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleUpdate = async (
+    productId: string,
+    updates: Partial<{
+      title: string;
+      description: string;
+      priceCents: number;
+      mediaUrl: string;
+      imageUrl: string;
+      visible: boolean;
+      showOnLandingPage: boolean;
+      showInMemberStore: boolean;
+      archived: boolean;
+      type: TreatProductType;
+      quantityLimit: number;
+    }>,
+    options?: { useGlobalSaving?: boolean }
+  ) => {
+    const useGlobalSaving = options?.useGlobalSaving !== false;
+    if (useGlobalSaving) setSaving(true);
+    else setPatchingId(productId);
+    try {
+      const token = auth.currentUser ? await auth.currentUser.getIdToken() : null;
+      let res: Response;
+      try {
+        res = await fetch(`/api/products?id=${encodeURIComponent(productId)}`, {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+          body: JSON.stringify(updates),
+        });
+      } catch {
+        if (db) {
+          const patch = firestoreSafePatch({ ...updates, updatedAt: new Date().toISOString() });
+          await updateDoc(doc(db, "products", productId), patch);
+          if (useGlobalSaving) showToast?.("Updated (direct database — API unreachable)", "success");
+          setEditing(null);
+          void fetchProducts({ quiet: !useGlobalSaving });
+          return;
+        }
+        throw new Error("Network error");
+      }
+      const data = (await res.json().catch(() => ({}))) as { product?: TreatProduct; error?: string };
+      if (res.ok && data.product) {
+        setProducts((prev) => prev.map((pr) => (pr.id === productId ? { ...pr, ...data.product! } : pr)));
+        if (useGlobalSaving) showToast?.("Updated", "success");
+        setEditing(null);
+        return;
+      }
+      if (res.ok) {
+        void fetchProducts({ quiet: true });
+        if (useGlobalSaving) showToast?.("Updated", "success");
+        setEditing(null);
+        return;
+      }
+      if (res.status === 404 && db) {
+        const patch = firestoreSafePatch({ ...updates, updatedAt: new Date().toISOString() });
+        await updateDoc(doc(db, "products", productId), patch);
+        if (useGlobalSaving) showToast?.("Updated (direct database)", "success");
+        setEditing(null);
+        void fetchProducts({ quiet: true });
+        return;
+      }
+      throw new Error(data.error || "Failed to update");
+    } catch (e) {
+      showToast?.(e instanceof Error ? e.message : "Failed to update", "error");
+      void fetchProducts({ quiet: true });
+    } finally {
+      setSaving(false);
+      setPatchingId(null);
+    }
+  };
+
+  const handleDelete = async (productId: string) => {
+    if (!window.confirm("Delete this product? This cannot be undone.")) return;
+    try {
+      const token = auth.currentUser ? await auth.currentUser.getIdToken() : null;
+      let res: Response;
+      try {
+        res = await fetch(`/api/products?id=${encodeURIComponent(productId)}`, {
+          method: "DELETE",
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        });
+      } catch {
+        if (db) {
+          await deleteDoc(doc(db, "products", productId));
+          showToast?.("Product deleted (direct database)", "success");
+          setEditing(null);
+          void fetchProducts({ quiet: true });
+          return;
+        }
+        throw new Error("Network error");
+      }
+      if (res.ok) {
+        showToast?.("Product deleted", "success");
+        setEditing(null);
+        void fetchProducts({ quiet: true });
+        return;
+      }
+      if (res.status === 404 && db) {
+        await deleteDoc(doc(db, "products", productId));
+        showToast?.("Product deleted (direct database)", "success");
+        setEditing(null);
+        void fetchProducts({ quiet: true });
+        return;
+      }
+      const data = await res.json().catch(() => ({}));
+      throw new Error((data as { error?: string }).error || "Failed to delete");
+    } catch (e) {
+      showToast?.(e instanceof Error ? e.message : "Failed to delete", "error");
+    }
+  };
+
+  const handleMarkDelivered = async (purchaseId: string) => {
+    try {
+      await updateDoc(doc(db, "purchases", purchaseId), {
+        scheduleStatus: "delivered",
+        deliveredAt: new Date(),
+      });
+      showToast?.("Marked as delivered", "success");
+    } catch {
+      showToast?.("Failed to update", "error");
+    }
+  };
+
+  const handlePurchase = async (productId: string) => {
+    const product = visibleProducts.find((p) => p.id === productId);
+    if (!product) return;
+    const soldOut =
+      typeof product.quantityLimit === "number" &&
+      product.quantityLimit > 0 &&
+      (product.soldCount ?? 0) >= product.quantityLimit;
+    if (soldOut) return;
+    if (!auth.currentUser) {
+      showToast?.("Sign in to complete checkout.", "info");
+      return;
+    }
+    if (!creatorId) return;
+
+    setPurchaseLoading(productId);
+    try {
+      const token = await auth.currentUser.getIdToken(true);
+      const returnUrl = window.location.href;
+      const successUrl = new URL(returnUrl);
+      successUrl.searchParams.set("store_purchase", "success");
+      const res = await fetch("/api/createFanCheckoutSession", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          creatorId,
+          type: "product",
+          productId,
+          successUrl: successUrl.toString(),
+          cancelUrl: returnUrl,
+        }),
+      });
+      const data = (await res.json().catch(() => ({}))) as { url?: string; error?: string };
+      if (!res.ok) {
+        showToast?.(data.error || "Checkout failed", "error");
+        return;
+      }
+      if (data.url) {
+        window.location.href = data.url;
+        return;
+      }
+      showToast?.("No checkout URL returned", "error");
+    } catch (e) {
+      showToast?.(e instanceof Error ? e.message : "Checkout failed", "error");
+    } finally {
+      setPurchaseLoading(null);
+    }
+  };
+
+  const displayedProducts = useMemo(() => {
+    const filtered = showArchived ? products : products.filter((p) => !p.archived);
+    return filtered;
+  }, [products, showArchived]);
+
+  const visibleProducts = useMemo(
+    () => products.filter((p) => !p.archived && p.visible && p.showInMemberStore !== false),
+    [products]
+  );
+
+  // Use actual products only - no demo data
+  const displayTreats = visibleProducts;
+
+  if (!creatorId) {
+    return (
+      <main className="treats-main">
+        <p className="treats-empty">Sign in to manage your store.</p>
+      </main>
+    );
+  }
+
+  return (
+    <main className="treats-main">
+      <div className={`treats-top-row${viewMode === "fan" ? " treats-top-row--fan-only" : ""}`}>
+        {viewMode === "manage" ? (
+          <section className="treats-store-header">
+            <h1 className="treats-title">Store</h1>
+            <p className="treats-subhead">
+              Manage products, pricing, and visibility. Use <strong>Store</strong> preview to see what fans see (name and copy come from My Page).
+            </p>
+          </section>
+        ) : null}
+
+        <div className="treats-view-toggle">
+          <button
+            type="button"
+            className={`treats-view-btn${viewMode === "fan" ? " active" : ""}`}
+            onClick={() => setViewMode("fan")}
+          >
+            <GiftIcon />
+            Store
+          </button>
+          <button
+            type="button"
+            className={`treats-view-btn${viewMode === "manage" ? " active" : ""}`}
+            onClick={() => setViewMode("manage")}
+          >
+            <SettingsIcon />
+            Manage
+          </button>
+        </div>
+      </div>
+
+      {viewMode === "fan" ? (
+        <>
+          {upcomingSessions.length > 0 && (
+            <section className="treats-scheduled-section">
+              <h2 className="treats-section-title">Upcoming chat sessions</h2>
+              <div className="treats-scheduled-list">
+                {upcomingSessions.map((s) => (
+                  <div key={s.id} className="treats-scheduled-card treats-scheduled-session">
+                    <p className="treats-scheduled-card-title">
+                      Live chat ({s.durationMinutes} min)
+                      {s.status === "active" && <span className="treats-live-badge">Live Now</span>}
+                    </p>
+                    <p className="treats-scheduled-card-meta">
+                      {s.scheduledStart
+                        ? s.scheduledStart.toLocaleString(undefined, {
+                            weekday: "long",
+                            month: "long",
+                            day: "numeric",
+                            year: "numeric",
+                            hour: "numeric",
+                            minute: "2-digit",
+                            hour12: true,
+                          })
+                        : "Time pending"}
+                    </p>
+                    {s.memberEmail && (
+                      <p className="treats-scheduled-card-sub">{s.memberEmail}</p>
+                    )}
+                    <button type="button" className="treats-scheduled-card-btn">
+                      Open chat session
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
+
+          {scheduledTreats.length > 0 && (
+            <section className="treats-scheduled-section">
+              <h2 className="treats-section-title">Scheduled for delivery</h2>
+              <div className="treats-scheduled-list">
+                {scheduledTreats.map((p) => (
+                  <div key={p.id} className="treats-scheduled-card treats-scheduled-treat">
+                    <p className="treats-scheduled-card-title">{p.productName}</p>
+                    <p className="treats-scheduled-card-meta">
+                      {p.scheduledDate && formatScheduledDate(p.scheduledDate)}
+                      {p.scheduledTime && ` at ${formatScheduledTime(p.scheduledTime)}`}
+                    </p>
+                    <button
+                      type="button"
+                      className="treats-scheduled-card-action"
+                      onClick={() => handleMarkDelivered(p.id)}
+                    >
+                      <CheckCircleIcon /> Mark delivered
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
+
+          <div className="treats-fan-shell">
+            <div className="treats-stormij-panel">
+              <header className="treats-stormij-panel-header">
+                <h2 className="treats-stormij-panel-title">{storeCopy.memberStoreTitle}</h2>
+                <p className="treats-stormij-panel-sub">{storeCopy.memberStoreSubtitle}</p>
+                <div className="treats-stormij-panel-rule" aria-hidden />
+              </header>
+              {loading ? (
+                <p className="treats-stormij-panel-state">{storeCopy.memberStoreLoadingMessage}</p>
+              ) : displayTreats.length === 0 ? (
+                <p className="treats-stormij-panel-state treats-stormij-panel-state--empty">
+                  {storeCopy.memberStoreEmptyMessage}
+                </p>
+              ) : (
+                <div className="treats-stormij-grid">
+                  {displayTreats.map((p) => {
+                    const soldOut =
+                      typeof p.quantityLimit === "number" &&
+                      p.quantityLimit > 0 &&
+                      (p.soldCount ?? 0) >= p.quantityLimit;
+                    const qtyLeft =
+                      typeof p.quantityLimit === "number" && p.quantityLimit > 0
+                        ? p.quantityLimit - (p.soldCount ?? 0)
+                        : null;
+                    return (
+                      <article
+                        key={p.id}
+                        className={`treats-stormij-card${soldOut ? " treats-stormij-card--sold-out" : ""}`}
+                      >
+                        <div className="treats-stormij-card-row1">
+                          <h3 className="treats-stormij-card-title">{p.title}</h3>
+                          <div className="treats-stormij-card-price-block">
+                            <span className="treats-stormij-card-price">{formatPrice(p.priceCents)}</span>
+                            <span className="treats-stormij-card-heart" aria-hidden>
+                              ♡
+                            </span>
+                          </div>
+                        </div>
+                        {p.description ? (
+                          <p className="treats-stormij-card-desc">{p.description}</p>
+                        ) : null}
+                        <div className="treats-stormij-card-footer">
+                          <span className="treats-stormij-card-stock">
+                            {soldOut ? "Sold out" : qtyLeft !== null ? `${qtyLeft} left` : "Available"}
+                          </span>
+                          <button
+                            type="button"
+                            className="treats-stormij-card-purchase"
+                            disabled={soldOut || purchaseLoading !== null}
+                            onClick={() => void handlePurchase(p.id)}
+                          >
+                            {purchaseLoading === p.id ? "…" : soldOut ? "Sold out" : "Purchase"}
+                          </button>
+                        </div>
+                      </article>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        </>
+      ) : (
+        <>
+          <div className="treats-manage-toolbar">
+            <button
+              type="button"
+              className={`treats-archive-btn${showArchived ? " treats-archive-btn--active" : ""}`}
+              onClick={() => setShowArchived((v) => !v)}
+            >
+              {showArchived ? "Hide archived" : "Show archived"}
+            </button>
+            <button
+              type="button"
+              className="treats-add-btn"
+              onClick={() => {
+                setEditing(null);
+                setShowForm(true);
+              }}
+            >
+              <SparklesIcon className="w-5 h-5" />
+              Add product
+            </button>
+          </div>
+
+          {loading ? (
+            <p className="treats-loading">Loading…</p>
+          ) : displayedProducts.length === 0 ? (
+            <div className="treats-empty treats-empty--onboarding">
+              <p className="treats-empty-title">Your store is ready — add your first product</p>
+              <p className="treats-empty-hint">
+                Use <strong>Add product</strong> to set a title, price, and image. Turn on “Show on landing” or “Member store” so fans can buy.
+              </p>
+              <p className="treats-empty-hint">
+                Customize headlines and the public store card on{" "}
+                <button
+                  type="button"
+                  className="treats-empty-link"
+                  onClick={() => window.location.assign("/studio?tab=myPage")}
+                >
+                  My Page
+                </button>
+                .
+              </p>
+            </div>
+          ) : (
+            <div className="treats-manage-list">
+              {displayedProducts.map((p) => {
+                const isEditing = editing?.id === p.id;
+                const qtyLeft = typeof p.quantityLimit === "number" ? p.quantityLimit - (p.soldCount || 0) : null;
+
+                return (
+                  <div
+                    key={p.id}
+                    className={`treat-manage-card${p.archived ? " archived" : ""}${isEditing ? " editing" : ""}`}
+                  >
+                    {isEditing ? (
+                      <InlineEditForm
+                        product={p}
+                        onSave={(payload) =>
+                          handleUpdate(p.id, {
+                            type: payload.type,
+                            title: payload.title,
+                            description: payload.description,
+                            priceCents: payload.priceCents,
+                            imageUrl: payload.imageUrl,
+                            visible: payload.visible,
+                            quantityLimit: payload.quantityLimit,
+                          })
+                        }
+                        onCancel={() => setEditing(null)}
+                        saving={saving}
+                      />
+                    ) : (
+                      <>
+                        <div className="treat-manage-card-content">
+                          <h3 className="treat-manage-card-title">{p.title}</h3>
+                          <div className="treat-manage-card-meta">
+                            <span className="treat-manage-card-price">{formatPrice(p.priceCents)}</span>
+                            {qtyLeft !== null && (
+                              <>
+                                <span className="treat-manage-card-sep">·</span>
+                                <span className="treat-manage-card-qty">{qtyLeft} left</span>
+                              </>
+                            )}
+                          </div>
+                          {p.description && <p className="treat-manage-card-desc">{p.description}</p>}
+                        </div>
+                        <div className="treat-manage-card-right">
+                          <div className="treat-manage-card-actions treat-manage-card-actions--row">
+                            <button
+                              type="button"
+                              className="treat-manage-btn"
+                              disabled={patchingId === p.id}
+                              onClick={() =>
+                                void handleUpdate(p.id, { visible: !p.visible }, { useGlobalSaving: false })
+                              }
+                            >
+                              {p.visible ? "Unpublish" : "Publish"}
+                            </button>
+                            <button
+                              type="button"
+                              className="treat-manage-btn"
+                              disabled={patchingId === p.id}
+                              onClick={() => {
+                                setShowForm(false);
+                                setEditing(p);
+                              }}
+                            >
+                              Edit
+                            </button>
+                            <button
+                              type="button"
+                              className="treat-manage-btn danger"
+                              disabled={patchingId === p.id}
+                              onClick={() => handleDelete(p.id)}
+                            >
+                              Delete
+                            </button>
+                          </div>
+                          <div
+                            className={`treat-manage-placement${!p.visible ? " treat-manage-placement--disabled" : ""}`}
+                            aria-disabled={!p.visible}
+                          >
+                            <span className="treat-manage-placement-label">Show where</span>
+                            <div className="treat-manage-toggle-row">
+                              <button
+                                type="button"
+                                className={`treat-manage-toggle${p.showOnLandingPage !== false ? " treat-manage-toggle--on" : ""}`}
+                                disabled={!p.visible || patchingId === p.id}
+                                onClick={() =>
+                                  void handleUpdate(
+                                    p.id,
+                                    { showOnLandingPage: !(p.showOnLandingPage !== false) },
+                                    { useGlobalSaving: false }
+                                  )
+                                }
+                              >
+                                Landing store
+                                <span className="treat-manage-toggle-state">
+                                  {p.showOnLandingPage !== false ? "On" : "Off"}
+                                </span>
+                              </button>
+                              <button
+                                type="button"
+                                className={`treat-manage-toggle${p.showInMemberStore !== false ? " treat-manage-toggle--on" : ""}`}
+                                disabled={!p.visible || patchingId === p.id}
+                                onClick={() =>
+                                  void handleUpdate(
+                                    p.id,
+                                    { showInMemberStore: !(p.showInMemberStore !== false) },
+                                    { useGlobalSaving: false }
+                                  )
+                                }
+                              >
+                                Member tab
+                                <span className="treat-manage-toggle-state">
+                                  {p.showInMemberStore !== false ? "On" : "Off"}
+                                </span>
+                              </button>
+                            </div>
+                            {!p.visible ? (
+                              <p className="treat-manage-placement-hint">Publish the treat to choose where it appears.</p>
+                            ) : null}
+                          </div>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </>
+      )}
+
+      {showForm && (
+        <ProductForm
+          key="treats-add-product"
+          product={null}
+          onSave={handleCreate}
+          onClose={() => {
+            setShowForm(false);
+          }}
+          saving={saving}
+        />
+      )}
+    </main>
+  );
+};
+
+const InlineEditForm: React.FC<{
+  product: TreatProduct;
+  onSave: (payload: {
+    type: TreatProductType;
+    title: string;
+    description?: string;
+    priceCents: number;
+    imageUrl?: string;
+    visible: boolean;
+    quantityLimit?: number;
+  }) => Promise<void>;
+  onCancel: () => void;
+  saving: boolean;
+}> = ({ product, onSave, onCancel, saving }) => {
+  const [title, setTitle] = useState(product.title);
+  const [priceDollars, setPriceDollars] = useState(() => treatProductToPriceDollarString(product));
+  const [description, setDescription] = useState(product.description ?? "");
+  const [imageUrl, setImageUrl] = useState(product.imageUrl ?? "");
+  const [quantityLimit, setQuantityLimit] = useState(() => treatProductQuantityString(product));
+
+  const onInlinePriceChange = (raw: string) => {
+    if (raw === "") {
+      setPriceDollars("");
+      return;
+    }
+    if (/^\d*\.?\d*$/.test(raw)) setPriceDollars(raw);
+  };
+  const onInlineQtyChange = (raw: string) => {
+    if (raw === "") {
+      setQuantityLimit("");
+      return;
+    }
+    if (/^\d+$/.test(raw)) setQuantityLimit(raw);
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!title.trim()) return;
+    await onSave({
+      type: product.type,
+      title: title.trim(),
+      description: description.trim() || undefined,
+      priceCents: Math.round(parseFloat(priceDollars || "0") * 100),
+      mediaUrl: product.mediaUrl,
+      imageUrl: imageUrl.trim() || undefined,
+      visible: product.visible,
+      quantityLimit: quantityLimit ? parseInt(quantityLimit, 10) : undefined,
+    });
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="treat-inline-form">
+      <div className="treat-inline-field">
+        <label>Name</label>
+        <input
+          type="text"
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          required
+          placeholder="Product name"
+        />
+      </div>
+      <div className="treat-inline-field">
+        <label>Price ($)</label>
+        <input
+          type="text"
+          inputMode="decimal"
+          autoComplete="off"
+          value={priceDollars}
+          onChange={(e) => onInlinePriceChange(e.target.value)}
+          placeholder="0.00"
+        />
+      </div>
+      <div className="treat-inline-field">
+        <label>Description</label>
+        <textarea
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
+          rows={2}
+          placeholder="What does the fan get?"
+        />
+      </div>
+      <div className="treat-inline-field">
+        <label>Card image URL (optional)</label>
+        <input
+          type="url"
+          value={imageUrl}
+          onChange={(e) => setImageUrl(e.target.value)}
+          placeholder="https://…"
+        />
+      </div>
+      <div className="treat-inline-field">
+        <label>Quantity left (decremented on each purchase)</label>
+        <input
+          type="text"
+          inputMode="numeric"
+          autoComplete="off"
+          value={quantityLimit}
+          onChange={(e) => onInlineQtyChange(e.target.value)}
+          placeholder="Unlimited (leave blank)"
+        />
+      </div>
+      <div className="treat-inline-actions">
+        <button type="submit" className="treat-inline-save" disabled={saving}>
+          {saving ? "Saving…" : "Save"}
+        </button>
+        <button type="button" className="treat-inline-cancel" onClick={onCancel} disabled={saving}>
+          Cancel
+        </button>
+      </div>
+    </form>
+  );
+};
+
+const ProductForm: React.FC<{
+  product: TreatProduct | null;
+  onSave: (payload: {
+    type: TreatProductType;
+    title: string;
+    description?: string;
+    priceCents: number;
+    mediaUrl?: string;
+    visible: boolean;
+    showOnLandingPage?: boolean;
+    showInMemberStore?: boolean;
+    quantityLimit?: number;
+  }) => Promise<void>;
+  onClose: () => void;
+  saving: boolean;
+}> = ({ product, onSave, onClose, saving }) => {
+  const type: TreatProductType = "custom";
+  const [title, setTitle] = useState(() => product?.title ?? "");
+  const [description, setDescription] = useState(() => product?.description ?? "");
+  /** Dollar string while typing — do not normalize on every keystroke (breaks cursor / decimals). */
+  const [priceDollars, setPriceDollars] = useState(() => treatProductToPriceDollarString(product));
+  const [mediaUrl, setMediaUrl] = useState(() => (product?.mediaUrl != null ? String(product.mediaUrl) : ""));
+  const [quantityLimit, setQuantityLimit] = useState(() => treatProductQuantityString(product));
+
+  const onPriceDollarsChange = (raw: string) => {
+    if (raw === "") {
+      setPriceDollars("");
+      return;
+    }
+    // Allow typing partial values: "", "1", "12.", "12.5", "0.99"
+    if (/^\d*\.?\d*$/.test(raw)) {
+      setPriceDollars(raw);
+    }
+  };
+
+  const onQuantityChange = (raw: string) => {
+    if (raw === "") {
+      setQuantityLimit("");
+      return;
+    }
+    if (/^\d+$/.test(raw)) {
+      setQuantityLimit(raw);
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const cents = Math.round(parseFloat(priceDollars || "0") * 100) || 0;
+    if (!title.trim()) return;
+    await onSave({
+      type,
+      title: title.trim(),
+      description: description.trim() || undefined,
+      priceCents: cents,
+      mediaUrl: String(mediaUrl ?? "").trim() || undefined,
+      visible: true,
+      quantityLimit: quantityLimit.trim() ? parseInt(quantityLimit, 10) : undefined,
+    });
+  };
+
+  return (
+    <div className="treats-form-backdrop" onClick={onClose}>
+      <div className="treats-form-modal" onClick={(e) => e.stopPropagation()}>
+        <div className="treats-form-header">
+          <h2>{product ? "Edit product" : "Add product"}</h2>
+          <button type="button" className="treats-form-close" onClick={onClose}>
+            ×
+          </button>
+        </div>
+        <form onSubmit={handleSubmit} className="treats-form-body">
+          <div className="treats-form-field">
+            <label>Title *</label>
+            <input
+              type="text"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              required
+              placeholder="e.g. 30-Second Voice Note"
+            />
+          </div>
+          <div className="treats-form-field">
+            <label>Description</label>
+            <textarea
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              rows={2}
+              placeholder="What does the fan get?"
+            />
+          </div>
+          <div className="treats-form-row">
+            <div className="treats-form-field">
+              <label>Price ($)</label>
+              <input
+                type="text"
+                inputMode="decimal"
+                autoComplete="off"
+                value={priceDollars}
+                onChange={(e) => onPriceDollarsChange(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key !== "ArrowUp" && e.key !== "ArrowDown") return;
+                  e.preventDefault();
+                  const cur = parseFloat(priceDollars || "0");
+                  const base = Number.isFinite(cur) ? cur : 0;
+                  const step = 0.01;
+                  const next = e.key === "ArrowUp" ? base + step : Math.max(0, base - step);
+                  setPriceDollars(next.toFixed(2));
+                }}
+                placeholder="0.00"
+              />
+            </div>
+            <div className="treats-form-field">
+              <label>Quantity limit</label>
+              <input
+                type="text"
+                inputMode="numeric"
+                autoComplete="off"
+                value={quantityLimit}
+                onChange={(e) => onQuantityChange(e.target.value)}
+                placeholder="Unlimited (leave blank)"
+              />
+            </div>
+          </div>
+          {type === "unlock_media" && (
+            <div className="treats-form-field">
+              <label>Media URL</label>
+              <input
+                type="url"
+                value={mediaUrl}
+                onChange={(e) => setMediaUrl(e.target.value)}
+                placeholder="https://..."
+              />
+            </div>
+          )}
+          <div className="treats-form-actions">
+            <button type="button" className="treats-form-cancel" onClick={onClose}>
+              Cancel
+            </button>
+            <button type="submit" className="treats-form-submit" disabled={saving || !title.trim()}>
+              {saving ? "Saving..." : product ? "Update" : "Add"}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+};

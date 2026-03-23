@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { LogoIcon, SparklesIcon, AutomationIcon, ChatIcon, AnalyticsIcon, CalendarIcon, RefreshIcon, GlobeIcon, UserIcon, TargetIcon, DashboardIcon, FilmIcon, MicrophoneWaveIcon, RocketIcon, TrendingIcon, ImageIcon, KanbanIcon } from './icons/UIIcons';
+import { LogoIcon, SparklesIcon, ChatIcon, AnalyticsIcon, CalendarIcon, GlobeIcon, UserIcon, TargetIcon, FilmIcon, RocketIcon, TrendingIcon, ImageIcon, HeartIcon } from './icons/UIIcons';
 import { InstagramIcon, TikTokIcon, XIcon, FacebookIcon, YouTubeIcon } from './icons/PlatformIcons';
 import { Pricing } from './Pricing';
 import { ReviewsSection } from './ReviewsSection';
@@ -67,6 +67,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onGetSta
             </div>
             <div className="hidden md:flex items-center justify-end md:flex-1 lg:w-0 space-x-8">
                 <button onClick={() => handleScroll('features')} className="text-base font-medium text-gray-500 hover:text-gray-900 dark:text-gray-300 dark:hover:text-white">Features</button>
+                <button onClick={() => handleScroll('fan-hub')} className="text-base font-medium text-gray-500 hover:text-gray-900 dark:text-gray-300 dark:hover:text-white">Fan Hub</button>
                 <button onClick={() => handleScroll('pricing')} className="text-base font-medium text-gray-500 hover:text-gray-900 dark:text-gray-300 dark:hover:text-white">Pricing</button>
                 <button onClick={onLoginClick} className="whitespace-nowrap text-base font-medium text-gray-500 hover:text-gray-900 dark:text-gray-300 dark:hover:text-white">Sign in</button>
                 <button onClick={handleGetStarted} className="whitespace-nowrap inline-flex items-center justify-center px-4 py-2 border border-transparent rounded-md shadow-sm text-base font-medium text-white bg-primary-600 hover:bg-primary-700">Get Started</button>
@@ -100,18 +101,19 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onGetSta
                   <div className="min-w-0 max-w-full overflow-hidden">
                     <div className="inline-flex items-center rounded-full bg-primary-50 px-3 py-1 text-xs font-medium text-primary-700 ring-1 ring-inset ring-primary-200 backdrop-blur dark:bg-white/10 dark:text-primary-100 dark:ring-white/20">
                       <span className="mr-1.5 h-1.5 w-1.5 rounded-full bg-emerald-500 dark:bg-emerald-400 animate-pulse" />
-                      Planning Studio for revenue-focused creators
+                      All-in-one creator platform
                     </div>
 
                     <h1 className="mt-6 text-4xl font-extrabold tracking-tight text-gray-900 dark:text-white sm:text-5xl lg:text-6xl max-w-full break-words">
-                      <span className="block">The creators who plan consistently</span>
+                      <span className="block">Build your brand.</span>
                       <span className="block text-primary-700 dark:text-primary-200">
-                        earn 3x more.
+                        Grow your audience.
                       </span>
                     </h1>
 
                     <p className="mt-6 max-w-xl text-lg text-gray-700 dark:text-primary-100 sm:text-xl max-w-full break-words">
-                      Turn content ideas into recurring revenue. Plan exclusive content, engage subscribers, and maximize your revenue—all in one powerful studio. Scale from content calendar to consistent income (manual posting, account-safe).
+                      EchoFlux is the all-in-one platform for creators. Plan content with AI, build your Fan Hub storefront, 
+                      connect with your audience, and monetize your passion — all in one place.
                     </p>
 
                     <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center">
@@ -119,18 +121,18 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onGetSta
                         onClick={handleGetStarted}
                         className="inline-flex items-center justify-center rounded-md bg-white px-8 py-3 text-base font-semibold text-primary-700 shadow-sm transition hover:bg-primary-50"
                       >
-                        Get started for free
+                        Get started free
                       </button>
                       <button
-                        onClick={() => handleScroll('features')}
+                        onClick={() => handleScroll('fan-hub')}
                         className="inline-flex items-center justify-center rounded-md border border-primary-200 bg-white px-8 py-3 text-base font-medium text-primary-700 shadow-sm transition hover:bg-primary-50 dark:border-white/30 dark:bg-white/5 dark:text-white dark:hover:bg-white/10"
                       >
-                        Explore features
+                        Explore Fan Hub
                       </button>
                     </div>
 
                     <div className="mt-4 text-sm text-gray-700 dark:text-primary-100/90">
-                      Want the 7-day trial? Choose Pro or Elite below.
+                      7-day free trial on Pro and Elite plans.
                     </div>
 
                     {inviteOnlyMode ? (
@@ -150,9 +152,9 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onGetSta
                       </>
                     ) : (
                       <div className="mt-6 rounded-xl border border-gray-200 bg-white p-4 text-gray-900 shadow-sm dark:border-white/20 dark:bg-white/5 dark:text-white">
-                        <div className="text-base font-semibold">Try EchoFlux.ai out</div>
+                        <div className="text-base font-semibold">Start building today</div>
                         <div className="mt-2 text-sm text-gray-700 dark:text-primary-100/90">
-                          Sign up to start planning content. If you have an invite code, enter it on the signup screen.
+                          Sign up to create your Fan Hub, plan content, and start growing your audience.
                         </div>
                       </div>
                     )}
@@ -164,18 +166,18 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onGetSta
                         </div>
                         <div className="flex flex-wrap items-center gap-2 sm:gap-3 text-xs text-gray-700 dark:text-primary-100/90 min-w-0">
                           <span className="inline-flex items-center rounded-full bg-primary-50 border border-primary-200 px-3 py-1.5 whitespace-nowrap font-medium text-primary-700 shadow-sm dark:bg-white/20 dark:border-white/30 dark:text-white dark:shadow-lg flex-shrink-0">
-                            Start free (no card)
+                            Free to start
                           </span>
                           <span className="inline-flex items-center rounded-full bg-primary-50 border border-primary-200 px-3 py-1.5 whitespace-nowrap font-medium text-primary-700 shadow-sm dark:bg-white/20 dark:border-white/30 dark:text-white dark:shadow-lg flex-shrink-0">
-                            7-day trial on Pro/Elite
+                            Your own storefront
                           </span>
                           <span className="inline-flex items-center rounded-full bg-primary-50 border border-primary-200 px-3 py-1.5 whitespace-nowrap font-medium text-primary-700 shadow-sm dark:bg-white/20 dark:border-white/30 dark:text-white dark:shadow-lg flex-shrink-0">
-                            Cancel anytime
+                            Built-in monetization
                           </span>
                         </div>
                       </div>
                       <div className="text-sm text-gray-700 dark:text-primary-100">
-                        <span>Trusted by creators scaling their revenue and subscriber base</span>
+                        <span>Trusted by creators building their brands and communities</span>
                       </div>
                     </div>
                   </div>
@@ -189,11 +191,11 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onGetSta
                           <span className="flex h-2 w-2 items-center justify-center">
                             <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 dark:bg-emerald-400" />
                           </span>
-                          Planning Studio
+                          Creator Dashboard
                         </span>
                         <span className="inline-flex items-center gap-1 whitespace-nowrap">
                           <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 dark:bg-emerald-400" />
-                          Active · next 14 days
+                          Live
                         </span>
                       </div>
 
@@ -201,42 +203,42 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onGetSta
                         <div className="grid grid-cols-3 gap-2 sm:gap-4 text-center text-xs text-gray-800 dark:text-gray-200">
                           <div className="rounded-xl bg-gray-50 dark:bg-white/5 p-2 sm:p-3 min-w-0">
                             <p className="text-[0.65rem] sm:text-[0.7rem] uppercase tracking-wide text-primary-600/80 dark:text-primary-200/80">
-                              Scheduled
+                              Members
+                            </p>
+                            <p className="mt-1 text-base sm:text-2xl font-bold text-gray-900 dark:text-white break-words">847</p>
+                            <p className="mt-1 text-[0.65rem] sm:text-[0.7rem] text-gray-600 dark:text-gray-300">+24 this week</p>
+                          </div>
+                          <div className="rounded-xl bg-gray-50 dark:bg-white/5 p-2 sm:p-3 min-w-0">
+                            <p className="text-[0.65rem] sm:text-[0.7rem] uppercase tracking-wide text-primary-600/80 dark:text-primary-200/80">
+                              Revenue
+                            </p>
+                            <p className="mt-1 text-base sm:text-2xl font-bold text-gray-900 dark:text-white break-words">$4,280</p>
+                            <p className="mt-1 text-[0.65rem] sm:text-[0.7rem] text-gray-600 dark:text-gray-300 leading-tight">this month</p>
+                          </div>
+                          <div className="rounded-xl bg-gray-50 dark:bg-white/5 p-2 sm:p-3 min-w-0">
+                            <p className="text-[0.65rem] sm:text-[0.7rem] uppercase tracking-wide text-primary-600/80 dark:text-primary-200/80">
+                              Posts
                             </p>
                             <p className="mt-1 text-base sm:text-2xl font-bold text-gray-900 dark:text-white break-words">32</p>
-                            <p className="mt-1 text-[0.65rem] sm:text-[0.7rem] text-gray-600 dark:text-gray-300">posts</p>
-                          </div>
-                          <div className="rounded-xl bg-gray-50 dark:bg-white/5 p-2 sm:p-3 min-w-0">
-                            <p className="text-[0.65rem] sm:text-[0.7rem] uppercase tracking-wide text-primary-600/80 dark:text-primary-200/80">
-                              Engagement
-                            </p>
-                            <p className="mt-1 text-base sm:text-2xl font-bold text-gray-900 dark:text-white break-words">+184%</p>
-                            <p className="mt-1 text-[0.65rem] sm:text-[0.7rem] text-gray-600 dark:text-gray-300 leading-tight">last 30 days</p>
-                          </div>
-                          <div className="rounded-xl bg-gray-50 dark:bg-white/5 p-2 sm:p-3 min-w-0">
-                            <p className="text-[0.65rem] sm:text-[0.7rem] uppercase tracking-wide text-primary-600/80 dark:text-primary-200/80">
-                              Leads
-                            </p>
-                            <p className="mt-1 text-base sm:text-2xl font-bold text-gray-900 dark:text-white break-words">241</p>
-                            <p className="mt-1 text-[0.65rem] sm:text-[0.7rem] text-gray-600 dark:text-gray-300">captured</p>
+                            <p className="mt-1 text-[0.65rem] sm:text-[0.7rem] text-gray-600 dark:text-gray-300">scheduled</p>
                           </div>
                         </div>
 
                         <div className="rounded-xl bg-gray-50 dark:bg-white/5 p-3 text-xs text-gray-800 dark:text-gray-200">
                           <div className="flex items-center justify-between">
-                            <span className="font-medium">This week&apos;s focus</span>
-                            <span className="text-[0.7rem] text-primary-700 dark:text-primary-100">Plan My Week · Creator</span>
+                            <span className="font-medium">Your Fan Hub</span>
+                            <span className="text-[0.7rem] text-primary-700 dark:text-primary-100">echoflux.ai/yourname</span>
                           </div>
                           <ul className="mt-2 space-y-1 text-[0.7rem] text-gray-600 dark:text-gray-300">
-                            <li>• Personalized content roadmap with image/video ideas</li>
-                            <li>• Caption ideas and content packs ready to copy</li>
-                            <li>• My Vault with reusable assets</li>
-                            <li>• Analytics-style insights guiding content decisions</li>
+                            <li>• Customizable storefront with your branding</li>
+                            <li>• Subscriptions, tips, and digital products</li>
+                            <li>• Direct messages with your fans</li>
+                            <li>• Video chat sessions</li>
                           </ul>
                         </div>
 
                         <div className="flex items-center justify-between border-t border-gray-200 dark:border-white/10 pt-3 text-[0.7rem] text-gray-600 dark:text-gray-300">
-                          <span>Plan here · post manually to your favorite platforms</span>
+                          <span>Plan content · Post to socials</span>
                           <div className="flex items-center space-x-2 text-gray-700 dark:text-white/80">
                             <InstagramIcon className="h-4 w-4" />
                             <TikTokIcon className="h-4 w-4" />
@@ -258,42 +260,139 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onGetSta
           <ReviewsSection />
         </div>
 
+        {/* Fan Hub Section */}
+        <div id="fan-hub" className="bg-gradient-to-br from-primary-50 to-purple-50 dark:from-gray-800 dark:to-gray-900 py-24">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="text-center mb-16">
+              <div className="inline-flex items-center rounded-full bg-primary-100 px-4 py-1.5 text-sm font-medium text-primary-700 dark:bg-primary-900/50 dark:text-primary-300 mb-4">
+                <HeartIcon className="w-4 h-4 mr-2" />
+                Fan Hub
+              </div>
+              <h2 className="text-4xl font-extrabold text-gray-900 dark:text-white sm:text-5xl">
+                Your storefront. Your community.
+              </h2>
+              <p className="mt-4 text-xl text-gray-600 dark:text-gray-300 max-w-3xl mx-auto">
+                Create a beautiful, customizable page where your fans can subscribe, tip, buy exclusive content, 
+                and connect with you directly.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+              {/* Subscriptions */}
+              <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-lg border border-gray-100 dark:border-gray-700 hover:shadow-xl transition-shadow">
+                <div className="w-12 h-12 bg-primary-100 dark:bg-primary-900/50 rounded-xl flex items-center justify-center mb-4">
+                  <UserIcon className="w-6 h-6 text-primary-600 dark:text-primary-400" />
+                </div>
+                <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">Monthly Subscriptions</h3>
+                <p className="text-gray-600 dark:text-gray-400">
+                  Build recurring revenue with paid memberships. Fans subscribe to access your exclusive content and community.
+                </p>
+              </div>
+
+              {/* Tips */}
+              <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-lg border border-gray-100 dark:border-gray-700 hover:shadow-xl transition-shadow">
+                <div className="w-12 h-12 bg-green-100 dark:bg-green-900/50 rounded-xl flex items-center justify-center mb-4">
+                  <HeartIcon className="w-6 h-6 text-green-600 dark:text-green-400" />
+                </div>
+                <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">Tips & Support</h3>
+                <p className="text-gray-600 dark:text-gray-400">
+                  Let fans show their appreciation with one-time tips. No subscription required — anyone can support you.
+                </p>
+              </div>
+
+              {/* Fan store */}
+              <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-lg border border-gray-100 dark:border-gray-700 hover:shadow-xl transition-shadow">
+                <div className="w-12 h-12 bg-purple-100 dark:bg-purple-900/50 rounded-xl flex items-center justify-center mb-4">
+                  <SparklesIcon className="w-6 h-6 text-purple-600 dark:text-purple-400" />
+                </div>
+                <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">Fan store</h3>
+                <p className="text-gray-600 dark:text-gray-400">
+                  Sell digital products, exclusive content bundles, personalized messages, and more in your own store.
+                </p>
+              </div>
+
+              {/* Direct Messages */}
+              <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-lg border border-gray-100 dark:border-gray-700 hover:shadow-xl transition-shadow">
+                <div className="w-12 h-12 bg-blue-100 dark:bg-blue-900/50 rounded-xl flex items-center justify-center mb-4">
+                  <ChatIcon className="w-6 h-6 text-blue-600 dark:text-blue-400" />
+                </div>
+                <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">Direct Messages</h3>
+                <p className="text-gray-600 dark:text-gray-400">
+                  Connect with your fans through private messages. Build relationships and engage your community personally.
+                </p>
+              </div>
+
+              {/* Video Chat */}
+              <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-lg border border-gray-100 dark:border-gray-700 hover:shadow-xl transition-shadow">
+                <div className="w-12 h-12 bg-rose-100 dark:bg-rose-900/50 rounded-xl flex items-center justify-center mb-4">
+                  <FilmIcon className="w-6 h-6 text-rose-600 dark:text-rose-400" />
+                </div>
+                <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">Video Chat Sessions</h3>
+                <p className="text-gray-600 dark:text-gray-400">
+                  Offer paid 1-on-1 video calls with fans. Perfect for coaching, Q&A sessions, or exclusive experiences.
+                </p>
+              </div>
+
+              {/* Custom Branding */}
+              <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-lg border border-gray-100 dark:border-gray-700 hover:shadow-xl transition-shadow">
+                <div className="w-12 h-12 bg-amber-100 dark:bg-amber-900/50 rounded-xl flex items-center justify-center mb-4">
+                  <GlobeIcon className="w-6 h-6 text-amber-600 dark:text-amber-400" />
+                </div>
+                <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">Your Brand, Your Way</h3>
+                <p className="text-gray-600 dark:text-gray-400">
+                  Customize colors, fonts, and layout. Add your logo, hero image, and social links. It's your page.
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-12 text-center">
+              <button
+                onClick={handleGetStarted}
+                className="inline-flex items-center justify-center rounded-lg bg-primary-600 px-8 py-4 text-lg font-semibold text-white shadow-lg hover:bg-primary-700 transition"
+              >
+                Create your Fan Hub
+              </button>
+              <p className="mt-3 text-sm text-gray-500 dark:text-gray-400">
+                Free to set up. Only pay when you start earning.
+              </p>
+            </div>
+          </div>
+        </div>
+
         {/* Who We Serve Section */}
         <div className="bg-gray-100 dark:bg-gray-800 py-16">
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                 <div className="text-center mb-12">
-                    <h2 className="text-3xl font-extrabold text-gray-900 dark:text-white">Built for Creators</h2>
-                    <p className="mt-4 text-xl text-gray-500 dark:text-gray-400">Everything you need to launch, grow, and monetize with confidence.</p>
+                    <h2 className="text-3xl font-extrabold text-gray-900 dark:text-white">Built for Every Creator</h2>
+                    <p className="mt-4 text-xl text-gray-500 dark:text-gray-400">Whether you're just starting out or scaling your brand, EchoFlux has the tools you need.</p>
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-1 gap-8">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                    <div className="bg-white dark:bg-gray-900 p-8 rounded-2xl shadow-lg border-t-4 border-blue-500 hover:-translate-y-1 transition-transform">
+                        <div className="flex items-center justify-center w-16 h-16 bg-blue-100 dark:bg-blue-900/50 text-blue-600 dark:text-blue-400 rounded-full mb-6 mx-auto">
+                            <RocketIcon className="w-8 h-8" />
+                        </div>
+                        <h3 className="text-xl font-bold text-center text-gray-900 dark:text-white mb-4">Growing Creators</h3>
+                        <p className="text-gray-600 dark:text-gray-300 text-center">
+                            Build your audience with AI-powered content planning. Create engaging posts for Instagram, TikTok, X, and Facebook.
+                        </p>
+                    </div>
                     <div className="bg-white dark:bg-gray-900 p-8 rounded-2xl shadow-lg border-t-4 border-purple-500 hover:-translate-y-1 transition-transform">
                         <div className="flex items-center justify-center w-16 h-16 bg-purple-100 dark:bg-purple-900/50 text-purple-600 dark:text-purple-400 rounded-full mb-6 mx-auto">
                             <UserIcon className="w-8 h-8" />
                         </div>
-                        <h3 className="text-2xl font-bold text-center text-gray-900 dark:text-white mb-4">For Creators</h3>
-                        <p className="text-gray-600 dark:text-gray-300 text-center mb-6">
-                            Build your personal brand, grow your subscriber base, and maximize your revenue potential. Everything you need to scale from content idea to consistent income—all in one powerful platform.
+                        <h3 className="text-xl font-bold text-center text-gray-900 dark:text-white mb-4">Community Builders</h3>
+                        <p className="text-gray-600 dark:text-gray-300 text-center">
+                            Create your Fan Hub storefront and build a loyal community. Connect with fans through messages, posts, and exclusive content.
                         </p>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-8">
-                            <div className="space-y-4">
-                                <h4 className="font-semibold text-gray-900 dark:text-white text-lg">Content Creation</h4>
-                                <ul className="space-y-3 text-sm text-gray-500 dark:text-gray-400">
-                                    <li className="flex items-start"><SparklesIcon className="w-4 h-4 mr-2 text-purple-500 mt-0.5 flex-shrink-0" /> <span>AI Content Assistant with conversion-optimized captions</span></li>
-                                    <li className="flex items-start"><TargetIcon className="w-4 h-4 mr-2 text-purple-500 mt-0.5 flex-shrink-0" /> <span>Multi-week content roadmaps & strategic content planning</span></li>
-                                    <li className="flex items-start"><ImageIcon className="w-4 h-4 mr-2 text-purple-500 mt-0.5 flex-shrink-0" /> <span>My Vault for organizing exclusive content assets</span></li>
-                                    <li className="flex items-start"><CalendarIcon className="w-4 h-4 mr-2 text-purple-500 mt-0.5 flex-shrink-0" /> <span>Strategic content calendar to maximize subscriber engagement</span></li>
-                                </ul>
-                            </div>
-                            <div className="space-y-4">
-                                <h4 className="font-semibold text-gray-900 dark:text-white text-lg">Growth & Monetization</h4>
-                                <ul className="space-y-3 text-sm text-gray-500 dark:text-gray-400">
-                                    <li className="flex items-start"><div className="w-4 h-4 mr-2 text-purple-500 mt-0.5 flex-shrink-0 flex items-center"><AnalyticsIcon /></div> <span>Revenue & Engagement Analytics</span></li>
-                                    <li className="flex items-start"><GlobeIcon className="w-4 h-4 mr-2 text-purple-500 mt-0.5 flex-shrink-0" /> <span>Bio Link Page with subscriber capture</span></li>
-                                    <li className="flex items-start"><ChatIcon className="w-4 h-4 mr-2 text-purple-500 mt-0.5 flex-shrink-0" /> <span>AI Chatting Sessions for personalized fan engagement</span></li>
-                                    <li className="flex items-start"><SparklesIcon className="w-4 h-4 mr-2 text-purple-500 mt-0.5 flex-shrink-0" /> <span>Subscriber conversion optimization tools</span></li>
-                                </ul>
-                            </div>
+                    </div>
+                    <div className="bg-white dark:bg-gray-900 p-8 rounded-2xl shadow-lg border-t-4 border-green-500 hover:-translate-y-1 transition-transform">
+                        <div className="flex items-center justify-center w-16 h-16 bg-green-100 dark:bg-green-900/50 text-green-600 dark:text-green-400 rounded-full mb-6 mx-auto">
+                            <TrendingIcon className="w-8 h-8" />
                         </div>
+                        <h3 className="text-xl font-bold text-center text-gray-900 dark:text-white mb-4">Monetizing Creators</h3>
+                        <p className="text-gray-600 dark:text-gray-300 text-center">
+                            Turn your audience into revenue. Subscriptions, tips, digital products, and video sessions — all powered by Stripe.
+                        </p>
                     </div>
                 </div>
             </div>
@@ -303,34 +402,37 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onGetSta
         <div id="features" className="bg-white dark:bg-gray-900 py-24">
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                 <div className="lg:text-center">
-                    <h2 className="text-base text-primary-600 font-semibold tracking-wide uppercase">Features</h2>
-                    <p className="mt-2 text-3xl leading-8 font-extrabold tracking-tight text-gray-900 dark:text-white sm:text-4xl">Your AI Content Studio</p>
+                    <h2 className="text-base text-primary-600 font-semibold tracking-wide uppercase">AI Content Tools</h2>
+                    <p className="mt-2 text-3xl leading-8 font-extrabold tracking-tight text-gray-900 dark:text-white sm:text-4xl">Create Smarter, Not Harder</p>
                     <p className="mt-4 max-w-2xl text-xl text-gray-500 dark:text-gray-400 lg:mx-auto">
-                        Turn ideas into revenue-driving content plans, organize them strategically, and scale your subscriber base with AI-powered tools.
+                        AI-powered tools to help you create content, stay consistent, and grow your audience across all platforms.
                     </p>
                 </div>
                 <div className="mt-12">
                     <dl className="space-y-10 md:space-y-0 md:grid md:grid-cols-2 lg:grid-cols-3 md:gap-x-8 md:gap-y-10">
-                        <Feature icon={<TargetIcon />} title="Plan My Week">
-                           Generate weekly content plans tailored to your niche and goals. See your ideas organized as planned content on your schedule.
+                        <Feature icon={<SparklesIcon />} title="AI Captions">
+                           Generate scroll-stopping captions with trending hashtags. Optimized for Instagram, TikTok, X, Facebook, and your Fan Hub.
                         </Feature>
-                        <Feature icon={<KanbanIcon />} title="Drafts">
-                           Save and organize your content drafts. Review, edit, and copy revenue-focused content packs before you publish.
+                        <Feature icon={<TargetIcon />} title="Content Strategy">
+                           Get AI-generated content ideas and posting strategies based on current trends and what works for your niche.
                         </Feature>
-                        <Feature icon={<CalendarIcon />} title="My Schedule">
-                           See every planned post on a beautiful calendar. Click any slot to open the content, adjust timing, and copy captions/scripts.
+                        <Feature icon={<CalendarIcon />} title="Content Calendar">
+                           See all your planned posts in one beautiful calendar. Organize your content schedule and never miss a post.
                         </Feature>
                         <Feature icon={<ImageIcon />} title="My Vault">
-                           Upload and organize images and videos in your personal media library. Reuse assets across your content and keep everything in one place.
+                           Upload and organize your images, videos, and audio files. Reuse assets across your social posts and Fan Hub.
                         </Feature>
-                        <Feature icon={<GlobeIcon />} title="Bio Link Page">
-                           Build a beautiful, creator-branded bio page with links and subscriber capture to convert visitors into paying fans.
+                        <Feature icon={<HeartIcon />} title="Fan Hub Storefront">
+                           Your personalized page where fans subscribe, tip, buy products, and connect with you directly.
                         </Feature>
-                        <Feature icon={<ChatIcon />} title="Creator Assistant & Ideas">
-                           Ask questions, generate new content angles, and brainstorm revenue-driving content ideas with a creator-focused AI assistant inside the app.
+                        <Feature icon={<ChatIcon />} title="AI Assistant">
+                           Get content ideas, brainstorm angles, and generate captions with a creator-focused AI assistant built into the app.
                         </Feature>
-                        <Feature icon={<AnalyticsIcon />} title="What's Working">
-                           Copy & Post Packs for manual posting. Promo packs for drops. What’s Working keeps performance notes in one place.
+                        <Feature icon={<ChatIcon />} title="AI Chat Bot (Elite)">
+                           In chat sessions, auto-reply to fans as you with an AI Chat Bot that matches your tone. Click to enable; Pro users see an upgrade prompt to unlock.
+                        </Feature>
+                        <Feature icon={<SparklesIcon />} title="AI Comment Replies (Elite)">
+                           Auto-reply to feed comments in your voice. Prioritize fans who tip or buy treats; control reply chance with a slider. Pro users see an upgrade prompt to unlock.
                         </Feature>
                     </dl>
                 </div>
@@ -341,32 +443,30 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onGetSta
         <div className="py-24 bg-gray-50 dark:bg-gray-800 overflow-hidden">
             <div className="relative max-w-xl mx-auto px-4 sm:px-6 lg:px-8 lg:max-w-7xl">
                  <div className="lg:text-center">
-                     <h2 className="text-3xl leading-8 font-extrabold tracking-tight text-gray-900 dark:text-white sm:text-4xl">Go Live in 3 Simple Steps</h2>
+                     <h2 className="text-3xl leading-8 font-extrabold tracking-tight text-gray-900 dark:text-white sm:text-4xl">Get Started in Minutes</h2>
                 </div>
                 <div className="relative mt-12 lg:mt-24 lg:grid lg:grid-cols-3 lg:gap-8 lg:items-center">
                     <div className="relative">
-                        <h3 className="text-2xl font-extrabold text-gray-900 dark:text-white tracking-tight sm:text-3xl">1. Set Up Your Profile</h3>
-                        <p className="mt-3 text-lg text-gray-500 dark:text-gray-400">Tell EchoFlux.ai about your niche, audience, and goals—whether you're building your brand, growing your following, or monetizing with subscribers. AI generates content tailored to your path.</p>
+                        <h3 className="text-2xl font-extrabold text-gray-900 dark:text-white tracking-tight sm:text-3xl">1. Create Your Account</h3>
+                        <p className="mt-3 text-lg text-gray-500 dark:text-gray-400">Sign up free and set up your creator profile. Tell us about your niche, goals, and the platforms you use.</p>
                     </div>
 
                     <div className="mt-10 -mx-4 relative lg:mt-0" aria-hidden="true">
-                        <svg className="absolute left-1/2 -translate-x-1/2 translate-y-16 lg:hidden" width="784" height="404" fill="none" viewBox="0 0 784 404"><path d="M404 392c-204.64 0-392-167.36-392-392" stroke="url(#ca9a2958-9e73-4171-8914-a3f5a5763919)" stroke-width="2" stroke-linecap="round"/></svg>
                         <div className="text-5xl text-primary-500 mx-auto text-center font-extrabold">&rarr;</div>
                     </div>
 
                     <div className="relative">
-                        <h3 className="text-2xl font-extrabold text-gray-900 dark:text-white tracking-tight sm:text-3xl">2. Plan Your Content</h3>
-                        <p className="mt-3 text-lg text-gray-500 dark:text-gray-400">Generate multi-week content roadmaps with Strategy, or quick weekly plans with Plan My Week. Plan exclusive content, drops, and subscriber-focused campaigns that drive revenue.</p>
+                        <h3 className="text-2xl font-extrabold text-gray-900 dark:text-white tracking-tight sm:text-3xl">2. Build Your Fan Hub</h3>
+                        <p className="mt-3 text-lg text-gray-500 dark:text-gray-400">Customize your storefront with your branding. Set up subscriptions, products, and tip options. Your page goes live instantly.</p>
                     </div>
 
                      <div className="mt-10 -mx-4 relative lg:mt-0" aria-hidden="true">
-                        <svg className="absolute left-1/2 -translate-x-1/2 translate-y-16 lg:hidden" width="784" height="404" fill="none" viewBox="0 0 784 404"><path d="M404 392c-204.64 0-392-167.36-392-392" stroke="url(#ca9a2958-9e73-4171-8914-a3f5a5763919)" stroke-width="2" stroke-linecap="round"/></svg>
                         <div className="text-5xl text-primary-500 mx-auto text-center font-extrabold">&rarr;</div>
                     </div>
 
                     <div className="relative">
-                        <h3 className="text-2xl font-extrabold text-gray-900 dark:text-white tracking-tight sm:text-3xl">3. Create & Schedule</h3>
-                        <p className="mt-3 text-lg text-gray-500 dark:text-gray-400">Generate revenue-optimized captions in Write Captions, schedule everything on My Schedule, and copy content to post manually. Perfect for all creators—from building your brand to maximizing subscriber revenue.</p>
+                        <h3 className="text-2xl font-extrabold text-gray-900 dark:text-white tracking-tight sm:text-3xl">3. Grow & Monetize</h3>
+                        <p className="mt-3 text-lg text-gray-500 dark:text-gray-400">Use AI tools to plan content, post to social platforms, and drive fans to your Fan Hub. Watch your community and revenue grow.</p>
                     </div>
                 </div>
             </div>
@@ -386,7 +486,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onGetSta
                         <LogoIcon />
                         <span className="ml-2 text-xl font-bold" style={{ color: '#2563eb' }}>EchoFlux.ai</span>
                      </button>
-                    <p className="text-gray-500 dark:text-gray-400 text-base">AI Content Studio & Content Planner for creators.</p>
+                    <p className="text-gray-500 dark:text-gray-400 text-base">The all-in-one creator platform. AI content tools + Fan Hub storefront.</p>
                     <div className="flex space-x-6">
                         <a href="https://x.com/echoflux_ai" target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-gray-500 dark:hover:text-gray-300 transition-colors" aria-label="Follow us on X">
                             <span className="sr-only">X</span>
@@ -413,12 +513,12 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onGetSta
                 <div className="mt-12 grid grid-cols-2 gap-8 xl:mt-0 xl:col-span-2">
                     <div className="md:grid md:grid-cols-2 md:gap-8">
                         <div>
-                            <h3 className="text-sm font-semibold text-gray-500 dark:text-gray-400 tracking-wider uppercase">Products</h3>
+                            <h3 className="text-sm font-semibold text-gray-500 dark:text-gray-400 tracking-wider uppercase">Platform</h3>
                             <ul className="mt-4 space-y-4">
-                                <li><button onClick={() => onNavigateRequest('dashboard')} className="text-base text-gray-500 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white text-left">Command Center</button></li>
-                                <li><button onClick={() => onNavigateRequest('compose')} className="text-base text-gray-500 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white text-left">Write Captions</button></li>
-                                <li><button onClick={() => onNavigateRequest('bio')} className="text-base text-gray-500 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white text-left">Bio Link Page</button></li>
-                                <li><button onClick={() => onNavigateRequest('analytics')} className="text-base text-gray-500 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white text-left">What's Working</button></li>
+                                <li><button onClick={() => onNavigateRequest('fanHub')} className="text-base text-gray-500 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white text-left">Fan Hub</button></li>
+                                <li><button onClick={() => onNavigateRequest('compose')} className="text-base text-gray-500 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white text-left">AI Captions</button></li>
+                                <li><button onClick={() => onNavigateRequest('calendar')} className="text-base text-gray-500 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white text-left">Content Calendar</button></li>
+                                <li><button onClick={() => onNavigateRequest('mediaLibrary')} className="text-base text-gray-500 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white text-left">My Vault</button></li>
                             </ul>
                         </div>
                         <div className="mt-12 md:mt-0">
@@ -434,7 +534,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onGetSta
                 </div>
             </div>
             <div className="mt-12 border-t border-gray-200 dark:border-gray-700 pt-8 md:flex md:items-center md:justify-between">
-                <p className="text-base text-gray-400 md:order-1">&copy; 2025 EchoFlux.ai. All rights reserved.</p>
+                <p className="text-base text-gray-400 md:order-1">&copy; 2026 EchoFlux.ai. All rights reserved.</p>
                 <div className="mt-8 md:mt-0 md:order-2 flex space-x-6">
                     <a href="/terms-of-service.html" className="text-base text-gray-400 hover:text-gray-500 dark:hover:text-gray-300">Terms</a>
                     <a href="/privacy-policy.html" className="text-base text-gray-400 hover:text-gray-500 dark:hover:text-gray-300">Privacy</a>
@@ -465,7 +565,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onGetSta
                   <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-800 dark:bg-gray-900">
                     <h3 className="text-2xl font-bold text-gray-900 dark:text-white">Support</h3>
                     <p className="mt-2 text-gray-600 dark:text-gray-400">
-                      Email us anytime and we’ll get back to you as fast as we can.
+                      Email us anytime and we'll get back to you as fast as we can.
                     </p>
                     <div className="mt-4">
                       <a

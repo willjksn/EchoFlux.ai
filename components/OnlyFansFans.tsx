@@ -1,8 +1,54 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useAppContext } from './AppContext';
+import { usePremiumStudioTab, type PendingFansTabSelection } from './PremiumStudioLayout';
 import { UserIcon, SearchIcon, StarIcon, SparklesIcon, TrashIcon, EditIcon, PlusIcon, XMarkIcon } from './icons/UIIcons';
 import { auth, db } from '../firebaseConfig';
 import { collection, getDocs, doc, getDoc, setDoc, deleteDoc, updateDoc, query, orderBy, limit, Timestamp, where } from 'firebase/firestore';
+import { fanHubListLabel, safeUsernameForHandle } from '../src/lib/fanHubDisplay';
+
+function usernameFromFanDoc(fd: Record<string, unknown>): string | null {
+  const keys = ['username', 'memberUsername', 'handle', 'instagram_handle', 'instagramHandle'] as const;
+  for (const k of keys) {
+    const v = fd[k];
+    if (typeof v === 'string' && v.trim()) {
+      return safeUsernameForHandle(v.replace(/^@/, ''));
+    }
+  }
+  return null;
+}
+
+function normDisplayLabel(s: string): string {
+  return s.trim().toLowerCase().replace(/\s+/g, ' ');
+}
+
+/** Match DM thread → Fans grid row by uid first, then display label / email on preferences. */
+function findFanForPendingSelection(fans: Fan[], pending: PendingFansTabSelection): Fan | undefined {
+  const id = pending.fanId.trim();
+  let m = fans.find((f) => f.id === id);
+  if (m) return m;
+  m = fans.find((f) => f.id.toLowerCase() === id.toLowerCase());
+  if (m) return m;
+
+  const label = pending.displayLabel?.trim();
+  if (!label) return undefined;
+  const n = normDisplayLabel(label);
+  const nBare = n.startsWith('@') ? n.slice(1) : n;
+
+  m = fans.find((f) => normDisplayLabel(f.name) === n);
+  if (m) return m;
+  m = fans.find((f) => normDisplayLabel(f.name) === nBare);
+  if (m) return m;
+
+  for (const f of fans) {
+    const pref = f.preferences as { email?: string };
+    const em = typeof pref.email === 'string' ? pref.email.trim() : '';
+    if (em) {
+      const en = normDisplayLabel(em);
+      if (en === n || em.toLowerCase() === label.toLowerCase()) return f;
+    }
+  }
+  return undefined;
+}
 
 type FanActivityType = 'session' | 'rating' | 'content' | 'calendar' | 'media';
 
@@ -19,9 +65,9 @@ interface Fan {
     id: string;
     name: string;
     preferences: {
-        preferredTone?: 'soft' | 'dominant' | 'playful' | 'dirty' | 'Very Explicit';
+        preferredTone?: 'soft' | 'dominant' | 'playful' | 'dirty' | 'Bold';
         favoriteSessionType?: string;
-        communicationStyle?: 'casual' | 'formal' | 'flirty' | 'direct' | 'like Explicit';
+        communicationStyle?: 'casual' | 'formal' | 'flirty' | 'direct' | 'like Bold';
         totalSessions?: number;
         spendingLevel?: number;
         subscriptionTier?: 'Free' | 'Paid';
@@ -47,6 +93,7 @@ interface Fan {
 
 export const OnlyFansFans: React.FC = () => {
     const { user, showToast } = useAppContext();
+    const fanHubTab = usePremiumStudioTab();
     const [fans, setFans] = useState<Fan[]>([]);
     const [selectedFan, setSelectedFan] = useState<Fan | null>(null);
     const [fanSearchQuery, setFanSearchQuery] = useState('');
@@ -99,6 +146,8 @@ export const OnlyFansFans: React.FC = () => {
     });
     const [isSavingFan, setIsSavingFan] = useState(false);
     const [showActivities, setShowActivities] = useState(false);
+    const [blockingFanId, setBlockingFanId] = useState<string | null>(null);
+    const fanDetailsPanelRef = useRef<HTMLDivElement | null>(null);
 
     // Load custom content for a specific fan
     const loadCustomContent = async (fanId: string) => {
@@ -136,40 +185,95 @@ export const OnlyFansFans: React.FC = () => {
         }
     };
 
-    // Load fans
+    // Load fans (enrich from users/{fanId} + creators/.../fans so labels match User Management / ab5360d rules)
     const loadFans = async () => {
         if (!user?.id) return;
         setIsLoading(true);
         try {
             const fansSnap = await getDocs(collection(db, 'users', user.id, 'onlyfans_fan_preferences'));
-            const fansList = fansSnap.docs.map(doc => {
-                const data = doc.data();
-                return {
-                    id: doc.id,
-                    name: data.name || doc.id,
-                    preferences: {
-                        ...data,
-                        spendingLevel: data.spendingLevel || (data.totalSpent ? Math.min(5, Math.max(1, Math.ceil(data.totalSpent / 200))) : 0),
-                        totalSessions: data.totalSessions || 0,
-                        isBigSpender: data.isBigSpender || (data.spendingLevel && data.spendingLevel >= 4) || false,
-                        isLoyalFan: data.isLoyalFan || (data.totalSessions && data.totalSessions >= 5) || false,
-                        subscriptionTier: (() => {
-                            // Migrate old 'VIP' or 'Regular' tiers to 'Paid' or 'Free'
-                            const tier = data.subscriptionTier;
-                            if (tier === 'VIP' || tier === 'Regular') {
-                                return 'Paid';
+            const docs = fansSnap.docs;
+            const CHUNK = 25;
+            const fansList: Fan[] = [];
+            for (let i = 0; i < docs.length; i += CHUNK) {
+                const chunk = docs.slice(i, i + CHUNK);
+                const part = await Promise.all(
+                    chunk.map(async (docSnap) => {
+                        const data = docSnap.data();
+                        const fanId = docSnap.id;
+                        let username: string | null = null;
+                        let displayName: string | null =
+                            typeof data.displayName === 'string' && data.displayName.trim()
+                                ? data.displayName.trim()
+                                : null;
+                        let email: string | null = typeof data.email === 'string' ? data.email : null;
+
+                        try {
+                            const [uSnap, fSnap] = await Promise.all([
+                                getDoc(doc(db, 'users', fanId)),
+                                getDoc(doc(db, 'creators', user.id, 'fans', fanId)),
+                            ]);
+                            if (fSnap.exists()) {
+                                const fd = fSnap.data() as Record<string, unknown>;
+                                const fromFan = usernameFromFanDoc(fd);
+                                if (fromFan) username = fromFan;
+                                if (!displayName && typeof fd.displayName === 'string' && fd.displayName.trim()) {
+                                    displayName = fd.displayName.trim();
+                                }
+                                if (!email && typeof fd.email === 'string' && fd.email) email = fd.email;
                             }
-                            return tier || (data.totalSessions >= 3 ? 'Paid' : 'Free');
-                        })(),
-                        isVIP: data.isVIP || false,  // Only use checkbox value, not auto-set from spending
-                        lastSessionDate: data.lastSessionDate?.toDate ? data.lastSessionDate.toDate().toISOString() : (data.lastSessionDate || undefined),
-                        engagementHistory: data.engagementHistory || [],
-                        notes: data.notes || '',
-                        reminders: data.reminders || [],
-                        tags: data.tags || []
-                    }
-                };
-            });
+                            if (uSnap.exists()) {
+                                const ud = uSnap.data() as Record<string, unknown>;
+                                const uu =
+                                    typeof ud.username === 'string' && ud.username.trim()
+                                        ? safeUsernameForHandle(ud.username)
+                                        : null;
+                                if (uu) username = uu;
+                                if (!displayName && typeof ud.displayName === 'string' && ud.displayName.trim()) {
+                                    displayName = ud.displayName.trim();
+                                }
+                                if (!email && typeof ud.email === 'string' && ud.email) email = ud.email;
+                            }
+                        } catch (e) {
+                            console.warn('OnlyFansFans: enrich fan row', fanId, e);
+                        }
+
+                        const prefName = typeof data.name === 'string' ? data.name : null;
+                        const listName = fanHubListLabel(username, displayName, email, prefName);
+
+                        return {
+                            id: fanId,
+                            name: listName,
+                            preferences: {
+                                ...data,
+                                spendingLevel:
+                                    data.spendingLevel ||
+                                    (data.totalSpent ? Math.min(5, Math.max(1, Math.ceil(data.totalSpent / 200))) : 0),
+                                totalSessions: data.totalSessions || 0,
+                                isBigSpender:
+                                    data.isBigSpender || (data.spendingLevel && data.spendingLevel >= 4) || false,
+                                isLoyalFan:
+                                    data.isLoyalFan || (data.totalSessions && data.totalSessions >= 5) || false,
+                                subscriptionTier: (() => {
+                                    const tier = data.subscriptionTier;
+                                    if (tier === 'VIP' || tier === 'Regular') {
+                                        return 'Paid';
+                                    }
+                                    return tier || (data.totalSessions >= 3 ? 'Paid' : 'Free');
+                                })(),
+                                isVIP: data.isVIP || false,
+                                lastSessionDate: data.lastSessionDate?.toDate
+                                    ? data.lastSessionDate.toDate().toISOString()
+                                    : data.lastSessionDate || undefined,
+                                engagementHistory: data.engagementHistory || [],
+                                notes: data.notes || '',
+                                reminders: data.reminders || [],
+                                tags: data.tags || [],
+                            },
+                        };
+                    })
+                );
+                fansList.push(...part);
+            }
             setFans(fansList);
         } catch (error) {
             console.error('Error loading fans:', error);
@@ -178,6 +282,56 @@ export const OnlyFansFans: React.FC = () => {
             setIsLoading(false);
         }
     };
+
+    const handleBlockFan = async (fanId: string) => {
+        if (!window.confirm('Block this fan? They will no longer be able to message or purchase.')) return;
+        setBlockingFanId(fanId);
+        try {
+            const token = auth.currentUser ? await auth.currentUser.getIdToken() : null;
+            const res = await fetch('/api/blockFan', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+                },
+                body: JSON.stringify({ fanId }),
+            });
+            if (!res.ok) {
+                const data = await res.json().catch(() => ({}));
+                throw new Error((data as { error?: string }).error || 'Failed to block');
+            }
+            showToast?.('Fan blocked', 'success');
+            setSelectedFan(null);
+            await loadFans();
+        } catch (e) {
+            showToast?.(e instanceof Error ? e.message : 'Failed to block', 'error');
+        } finally {
+            setBlockingFanId(null);
+        }
+    };
+
+    // Messages tab → “Fan card”: open the same Fan Details panel as the Fans grid.
+    useEffect(() => {
+        const pending = fanHubTab?.pendingFansTabSelection;
+        const clearPending = fanHubTab?.clearPendingFansTabSelection;
+        if (!pending || !clearPending) return;
+        if (isLoading) return;
+        const match = findFanForPendingSelection(fans, pending);
+        if (match) {
+            setSelectedFan(match);
+            setViewMode('grid');
+            clearPending();
+            requestAnimationFrame(() => {
+                fanDetailsPanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            });
+            return;
+        }
+        showToast?.(
+            "Couldn’t open that fan card from this thread. Try refreshing the Fans tab, or confirm this member is linked to your hub.",
+            'info'
+        );
+        clearPending();
+    }, [fanHubTab?.pendingFansTabSelection, fanHubTab?.clearPendingFansTabSelection, fans, isLoading, showToast]);
 
     // Load session history from database
     const loadSessionHistory = async (fanId: string, forceExpand: boolean = false) => {
@@ -659,7 +813,7 @@ export const OnlyFansFans: React.FC = () => {
                     <div className="flex items-center gap-3">
                         <SparklesIcon className="w-8 h-8 text-primary-600 dark:text-primary-400" />
                         <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
-                            Fan Management
+                            Fans
                         </h1>
                     </div>
                     <button
@@ -876,17 +1030,17 @@ export const OnlyFansFans: React.FC = () => {
                                                 <div className="mt-2 flex flex-wrap gap-1">
                                                     {prefs.favoriteSessionType && (
                                                         <span className="text-xs bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 px-1.5 py-0.5 rounded">
-                                                            ⭐ {prefs.favoriteSessionType.split(' ')[0]}
+                                                            ⭐ {prefs.favoriteSessionType === 'Explicit' ? 'Bold' : prefs.favoriteSessionType.split(' ')[0]}
                                                         </span>
                                                     )}
                                                     {prefs.preferredTone && (
                                                         <span className="text-xs bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 px-1.5 py-0.5 rounded">
-                                                            🎭 {prefs.preferredTone}
+                                                            🎭 {prefs.preferredTone === 'Very Explicit' ? 'Bold' : prefs.preferredTone}
                                                         </span>
                                                     )}
                                                     {prefs.communicationStyle && (
                                                         <span className="text-xs bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 px-1.5 py-0.5 rounded">
-                                                            💬 {prefs.communicationStyle}
+                                                            💬 {prefs.communicationStyle === 'like Explicit' ? 'Like Bold' : prefs.communicationStyle}
                                                         </span>
                                                     )}
                                                 </div>
@@ -981,7 +1135,7 @@ export const OnlyFansFans: React.FC = () => {
 
             {/* Selected Fan Details Panel */}
             {selectedFan && viewMode === 'grid' && (
-                <div className="mt-6 bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
+                <div ref={fanDetailsPanelRef} className="mt-6 bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
                     <div className="flex items-center justify-between mb-4">
                         <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
                             Fan Details: {selectedFan.name}
@@ -1024,6 +1178,17 @@ export const OnlyFansFans: React.FC = () => {
                             className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
                             rows={3}
                         />
+                    </div>
+
+                    <div className="mb-4">
+                        <button
+                            type="button"
+                            onClick={() => void handleBlockFan(selectedFan.id)}
+                            disabled={blockingFanId === selectedFan.id}
+                            className="w-full py-2.5 rounded-lg text-sm font-medium text-red-600 dark:text-red-400 border border-red-200 dark:border-red-900/50 hover:bg-red-50 dark:hover:bg-red-950/30 disabled:opacity-50"
+                        >
+                            {blockingFanId === selectedFan.id ? 'Blocking…' : 'Block fan'}
+                        </button>
                     </div>
 
                     {/* Last 5 Activities */}
@@ -1429,7 +1594,7 @@ export const OnlyFansFans: React.FC = () => {
                                         Preferred Tone
                                     </label>
                                     <select
-                                        value={newFanPreferredTone}
+                                        value={newFanPreferredTone === 'Very Explicit' ? 'Bold' : newFanPreferredTone}
                                         onChange={(e) => setNewFanPreferredTone(e.target.value)}
                                         className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                                     >
@@ -1438,7 +1603,7 @@ export const OnlyFansFans: React.FC = () => {
                                         <option value="dominant">Dominant</option>
                                         <option value="playful">Playful</option>
                                         <option value="dirty">Dirty</option>
-                                        <option value="Very Explicit">Very Explicit</option>
+                                        <option value="Bold">Bold</option>
                                     </select>
                                 </div>
 
@@ -1447,7 +1612,7 @@ export const OnlyFansFans: React.FC = () => {
                                         Favorite Session Type
                                     </label>
                                     <select
-                                        value={newFanFavoriteSessionType}
+                                        value={newFanFavoriteSessionType === 'Explicit' ? 'Bold' : newFanFavoriteSessionType}
                                         onChange={(e) => setNewFanFavoriteSessionType(e.target.value)}
                                         className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                                     >
@@ -1456,7 +1621,7 @@ export const OnlyFansFans: React.FC = () => {
                                         <option value="GFE-style interaction">GFE-style interaction</option>
                                         <option value="Tease & anticipation">Tease & anticipation</option>
                                         <option value="Roleplay">Roleplay</option>
-                                        <option value="Explicit">Explicit</option>
+                                        <option value="Bold">Bold</option>
                                         <option value="Check-in / reconnect">Check-in / reconnect</option>
                                         <option value="High-engagement paid chat">High-engagement paid chat</option>
                                     </select>
@@ -1467,7 +1632,7 @@ export const OnlyFansFans: React.FC = () => {
                                         Communication Style
                                     </label>
                                     <select
-                                        value={newFanCommunicationStyle}
+                                        value={newFanCommunicationStyle === 'like Explicit' ? 'like Bold' : newFanCommunicationStyle}
                                         onChange={(e) => setNewFanCommunicationStyle(e.target.value)}
                                         className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                                     >
@@ -1476,7 +1641,7 @@ export const OnlyFansFans: React.FC = () => {
                                         <option value="formal">Formal & Polite</option>
                                         <option value="flirty">Flirty & Playful</option>
                                         <option value="direct">Direct & To-the-point</option>
-                                        <option value="like Explicit">Like Explicit</option>
+                                        <option value="like Bold">Like Bold</option>
                                     </select>
                                 </div>
 
@@ -1490,7 +1655,7 @@ export const OnlyFansFans: React.FC = () => {
                                     {[
                                         { key: 'noFacePhotos', label: 'No face photos' },
                                         { key: 'noRealName', label: 'No real name usage' },
-                                        { key: 'explicitContentOnly', label: 'Explicit content only' },
+                                        { key: 'explicitContentOnly', label: 'Bold content only' },
                                         { key: 'noCustomRequests', label: 'No custom content requests' },
                                         { key: 'timeBoundaryOnly', label: 'Time-bound sessions only' },
                                     ].map(({ key, label }) => (
@@ -1806,7 +1971,7 @@ export const OnlyFansFans: React.FC = () => {
                                         Preferred Tone
                                     </label>
                                     <select
-                                        value={newFanPreferredTone}
+                                        value={newFanPreferredTone === 'Very Explicit' ? 'Bold' : newFanPreferredTone}
                                         onChange={(e) => setNewFanPreferredTone(e.target.value)}
                                         className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                                     >
@@ -1815,7 +1980,7 @@ export const OnlyFansFans: React.FC = () => {
                                         <option value="dominant">Dominant</option>
                                         <option value="playful">Playful</option>
                                         <option value="dirty">Dirty</option>
-                                        <option value="Very Explicit">Very Explicit</option>
+                                        <option value="Bold">Bold</option>
                                     </select>
                                 </div>
 
@@ -1824,7 +1989,7 @@ export const OnlyFansFans: React.FC = () => {
                                         Favorite Session Type
                                     </label>
                                     <select
-                                        value={newFanFavoriteSessionType}
+                                        value={newFanFavoriteSessionType === 'Explicit' ? 'Bold' : newFanFavoriteSessionType}
                                         onChange={(e) => setNewFanFavoriteSessionType(e.target.value)}
                                         className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                                     >
@@ -1833,7 +1998,7 @@ export const OnlyFansFans: React.FC = () => {
                                         <option value="GFE-style interaction">GFE-style interaction</option>
                                         <option value="Tease & anticipation">Tease & anticipation</option>
                                         <option value="Roleplay">Roleplay</option>
-                                        <option value="Explicit">Explicit</option>
+                                        <option value="Bold">Bold</option>
                                         <option value="Check-in / reconnect">Check-in / reconnect</option>
                                         <option value="High-engagement paid chat">High-engagement paid chat</option>
                                     </select>
@@ -1844,7 +2009,7 @@ export const OnlyFansFans: React.FC = () => {
                                         Communication Style
                                     </label>
                                     <select
-                                        value={newFanCommunicationStyle}
+                                        value={newFanCommunicationStyle === 'like Explicit' ? 'like Bold' : newFanCommunicationStyle}
                                         onChange={(e) => setNewFanCommunicationStyle(e.target.value)}
                                         className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                                     >
@@ -1853,7 +2018,7 @@ export const OnlyFansFans: React.FC = () => {
                                         <option value="formal">Formal & Polite</option>
                                         <option value="flirty">Flirty & Playful</option>
                                         <option value="direct">Direct & To-the-point</option>
-                                        <option value="like Explicit">Like Explicit</option>
+                                        <option value="like Bold">Like Bold</option>
                                     </select>
                                 </div>
 
@@ -1867,7 +2032,7 @@ export const OnlyFansFans: React.FC = () => {
                                     {[
                                         { key: 'noFacePhotos', label: 'No face photos' },
                                         { key: 'noRealName', label: 'No real name usage' },
-                                        { key: 'explicitContentOnly', label: 'Explicit content only' },
+                                        { key: 'explicitContentOnly', label: 'Bold content only' },
                                         { key: 'noCustomRequests', label: 'No custom content requests' },
                                         { key: 'timeBoundaryOnly', label: 'Time-bound sessions only' },
                                     ].map(({ key, label }) => (

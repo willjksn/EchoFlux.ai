@@ -1,0 +1,247 @@
+/* Creator-branded fan login/signup (storefront) — Stormij-style shell */
+
+.fan-auth-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  background: rgba(45, 28, 32, 0.45);
+  backdrop-filter: blur(4px);
+}
+
+.fan-auth-card {
+  position: relative;
+  width: 100%;
+  max-width: 420px;
+  max-height: min(90vh, 720px);
+  overflow-y: auto;
+  background: #fffef9;
+  border-radius: 22px;
+  box-shadow: 0 24px 60px rgba(80, 40, 60, 0.2), 0 0 0 1px rgba(212, 85, 139, 0.12);
+  padding: 1.75rem 1.5rem 1.5rem;
+}
+
+.fan-auth-close {
+  position: absolute;
+  top: 12px;
+  right: 14px;
+  width: 36px;
+  height: 36px;
+  border: none;
+  background: transparent;
+  font-size: 1.5rem;
+  line-height: 1;
+  color: #6b5a5e;
+  cursor: pointer;
+  border-radius: 10px;
+}
+.fan-auth-close:hover {
+  background: rgba(0, 0, 0, 0.06);
+}
+
+.fan-auth-logo-wrap {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 0.75rem;
+}
+.fan-auth-logo {
+  max-height: 56px;
+  max-width: 120px;
+  object-fit: contain;
+}
+
+.fan-auth-title {
+  font-size: 1.35rem;
+  font-weight: 700;
+  text-align: center;
+  margin: 0 0 0.35rem;
+  letter-spacing: -0.02em;
+}
+
+.fan-auth-subtitle {
+  font-size: 0.9rem;
+  text-align: center;
+  margin: 0 0 1.1rem;
+  line-height: 1.4;
+}
+
+.fan-auth-tabs {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1.25rem;
+}
+
+.fan-auth-tab {
+  flex: 1;
+  padding: 0.55rem 0.75rem;
+  border-radius: 999px;
+  border: 1.5px solid transparent;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  background: #fff;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.fan-auth-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.fan-auth-label {
+  font-size: 0.78rem;
+  font-weight: 700;
+  margin-top: 0.5rem;
+}
+
+.fan-auth-hint {
+  font-size: 0.72rem;
+  color: #6b5a5e;
+  margin: 0 0 0.15rem;
+  line-height: 1.35;
+}
+
+.fan-auth-input {
+  width: 100%;
+  padding: 0.65rem 0.85rem;
+  border: 1.5px solid rgba(74, 44, 44, 0.2);
+  border-radius: 12px;
+  font-size: 0.95rem;
+  background: #fff;
+  outline: none;
+  box-sizing: border-box;
+}
+.fan-auth-input:focus {
+  border-color: var(--fan-auth-primary, #d9468c);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--fan-auth-primary, #d9468c) 22%, transparent);
+}
+
+.fan-auth-password-row {
+  display: flex;
+  align-items: stretch;
+  gap: 0.35rem;
+}
+.fan-auth-input--grow {
+  flex: 1;
+}
+
+.fan-auth-show {
+  flex-shrink: 0;
+  padding: 0 0.75rem;
+  border: 1.5px solid rgba(74, 44, 44, 0.2);
+  border-radius: 12px;
+  background: #fff;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--fan-auth-accent, #4a2c2c);
+  cursor: pointer;
+}
+
+.fan-auth-err {
+  font-size: 0.75rem;
+  color: #b91c1c;
+  margin: 0.15rem 0 0;
+}
+
+.fan-auth-text-btn {
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--fan-auth-primary, #d9468c);
+  cursor: pointer;
+  text-align: left;
+  margin-top: 0.25rem;
+}
+
+.fan-auth-forgot-link {
+  align-self: flex-end;
+  margin-top: 0.15rem;
+}
+
+.fan-auth-check-row {
+  display: flex;
+  gap: 0.5rem;
+  align-items: flex-start;
+  margin-top: 0.65rem;
+  font-size: 0.82rem;
+  line-height: 1.45;
+  cursor: pointer;
+}
+
+.fan-auth-link {
+  font-weight: 700;
+  text-decoration: none;
+}
+.fan-auth-link:hover {
+  text-decoration: underline;
+}
+
+.fan-auth-divider {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin: 1rem 0 0.75rem;
+  color: #9a8a8e;
+  font-size: 0.8rem;
+}
+.fan-auth-divider::before,
+.fan-auth-divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: rgba(74, 44, 44, 0.15);
+}
+
+.fan-auth-submit {
+  width: 100%;
+  margin-top: 0.5rem;
+  padding: 0.85rem 1rem;
+  border: none;
+  border-radius: 14px;
+  font-size: 1rem;
+  font-weight: 700;
+  color: #fff;
+  cursor: pointer;
+  box-shadow: 0 8px 20px rgba(217, 70, 140, 0.35);
+}
+.fan-auth-submit:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+.fan-auth-google {
+  width: 100%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.7rem 1rem;
+  border: 1.5px solid rgba(74, 44, 44, 0.18);
+  border-radius: 14px;
+  background: #fff;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #3d3537;
+  cursor: pointer;
+}
+.fan-auth-google:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.fan-auth-google-icon {
+  width: 20px;
+  height: 20px;
+}
+
+.fan-auth-forgot-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}

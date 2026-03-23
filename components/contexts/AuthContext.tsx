@@ -270,7 +270,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             try {
                 const path = window.location.pathname || '/';
                 const isAuthenticatedRoute = path.startsWith('/dashboard') ||
-                    path.startsWith('/inbox') ||
                     path.startsWith('/analytics') ||
                     path.startsWith('/settings') ||
                     path.startsWith('/write-captions') ||
@@ -298,7 +297,11 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     path.startsWith('/emailCenter') ||
                     path.startsWith('/premium-content-studio') ||
                     path.startsWith('/premiumcontentstudio') ||
-                    path.startsWith('/onlyfansStudio');
+                    path.startsWith('/onlyfansStudio') ||
+                    path.startsWith('/premium-studio-upgrade') ||
+                    path.startsWith('/studio') ||
+                    path.startsWith('/fan') ||
+                    path.startsWith('/fan-hub');
                 if (isAuthenticatedRoute) {
                     window.history.replaceState({}, '', '/');
                 }

@@ -6,7 +6,8 @@
     <link rel="icon" type="image/png" sizes="32x32" href="/logo.png" />
     <link rel="icon" type="image/png" sizes="192x192" href="/logo.png" />
     <link rel="apple-touch-icon" href="/logo.png" />
-    <link rel="manifest" href="/manifest.json" />
+    <!-- Inline manifest avoids a separate fetch (Vercel preview protection can 401 /manifest.json). -->
+    <link rel="manifest" href="data:application/json;charset=utf-8,%7B%22name%22%3A%22EchoFlux.ai%22%2C%22short_name%22%3A%22EchoFlux%22%2C%22description%22%3A%22EchoFlux.ai%20-%20Social%20media%20management%22%2C%22start_url%22%3A%22%2F%22%2C%22display%22%3A%22standalone%22%2C%22background_color%22%3A%22%23ffffff%22%2C%22theme_color%22%3A%22%232563eb%22%2C%22icons%22%3A%5B%7B%22src%22%3A%22%2Flogo.png%22%2C%22sizes%22%3A%22192x192%22%2C%22type%22%3A%22image%2Fpng%22%2C%22purpose%22%3A%22any%22%7D%2C%7B%22src%22%3A%22%2Flogo.png%22%2C%22sizes%22%3A%22512x512%22%2C%22type%22%3A%22image%2Fpng%22%2C%22purpose%22%3A%22any%22%7D%5D%7D" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>EchoFlux.ai</title>
 
@@ -14,7 +15,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Cormorant+Garamond:ital,wght@0,400;0,600;1,400&family=DM+Sans:wght@400;500;600;700&family=Roboto:wght@400;500;700&family=Open+Sans:wght@400;600;700&family=Lato:wght@400;700&family=Montserrat:wght@400;500;600;700&family=Poppins:wght@400;500;600;700&family=Nunito:wght@400;600;700&family=Raleway:wght@400;500;600;700&family=Ubuntu:wght@400;500;700&family=Playfair+Display:wght@400;600;700&family=Merriweather:wght@400;700&family=Lora:wght@400;600;700&family=Crimson+Text:wght@400;600;700&family=Oswald:wght@400;500;600;700&family=Bebas+Neue&family=Abril+Fatface&family=Righteous&family=Lobster&family=Pacifico&family=Dancing+Script:wght@400;700&family=Great+Vibes&family=Satisfy&family=Permanent+Marker&family=Caveat:wght@400;700&family=Fira+Code:wght@400;500;700&display=swap"
       rel="stylesheet"
     />
 

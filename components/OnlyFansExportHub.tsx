@@ -5,6 +5,7 @@ import { auth, db } from '../firebaseConfig';
 import { collection, addDoc, getDocs, deleteDoc, doc, query, orderBy, Timestamp, setDoc, limit } from 'firebase/firestore';
 import { OnlyFansCalendarEvent } from './OnlyFansCalendar';
 import { FanSelector } from './FanSelector';
+import { SendToPanel } from './SendToPanel';
 
 interface ExportPackage {
     id?: string;
@@ -1133,6 +1134,17 @@ export const OnlyFansExportHub: React.FC = () => {
                     </div>
                 </div>
             </div>
+
+            {/* Send To: Draft / Calendar / Feed / Message Campaign */}
+            <SendToPanel
+                payload={{
+                    content: [caption, ppvText, dmScripts].filter(Boolean).join('\n\n') || caption,
+                    mediaUrls: mediaUrls.length > 0 ? mediaUrls : undefined,
+                    mediaUrl: mediaUrls[0],
+                    messages: dmScripts.trim() ? dmScripts.split(/\n\n+/).filter(Boolean) : undefined,
+                }}
+                className="mb-4 sm:mb-6"
+            />
 
             {/* Saved Packages - Mobile Optimized */}
             {exportPackages.length > 0 && (

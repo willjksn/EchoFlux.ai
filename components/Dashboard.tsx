@@ -6,7 +6,9 @@ import { DashboardIcon, FlagIcon, SearchIcon, StarIcon, CalendarIcon, SparklesIc
 import { useAppContext } from './AppContext';
 import { updateUserSocialStats } from '../src/services/socialStatsService';
 import { auth, db } from '../firebaseConfig';
+import { collection, query, orderBy, limit as firestoreLimit, getDocs, where, Timestamp } from 'firebase/firestore';
 import { ContentGapAnalysis } from './ContentGapAnalysis';
+import { LiveVideoChatManager } from './LiveVideoChatManager';
 import { FeedbackSurveyModal, type FeedbackMilestone } from './FeedbackSurveyModal';
 import { CustomFeedbackFormModal } from './CustomFeedbackFormModal';
 import { isInviteOnlyMode } from '../src/utils/inviteOnly';
@@ -21,6 +23,7 @@ const platformFilterIcons: { [key in Platform]: React.ReactNode } = {
   LinkedIn: <LinkedInIcon />,
   Facebook: <FacebookIcon />,
   Pinterest: <PinterestIcon />,
+  'My Page': <HeartIcon />,
 };
 
 // ... (Keep helper components FilterButton, QuickAction, UpcomingEventCard unchanged) ...
@@ -55,7 +58,7 @@ const UpcomingEventCard: React.FC<{ event: CalendarEvent; onClick: () => void }>
 };
 
 export const Dashboard: React.FC = () => {
-  const { messages, selectedClient, user, dashboardNavState, clearDashboardNavState, settings, setSettings, setActivePage, calendarEvents, posts, setComposeContext, updateMessage, deleteMessage, categorizeAllMessages, openCRM, ensureCRMProfile, setUser, socialAccounts, showToast } = useAppContext();
+  const { messages, selectedClient, user, dashboardNavState, clearDashboardNavState, settings, setSettings, setActivePage, calendarEvents, posts, setComposeContext, updateMessage, deleteMessage, categorizeAllMessages, openCRM, ensureCRMProfile, setUser, socialAccounts, showToast, openPaymentModal } = useAppContext();
   const [comparisonView, setComparisonView] = useState<'WoW' | 'MoM'>('WoW');
   const [isUpdatingStats, setIsUpdatingStats] = useState(false);
   const [isPlanningWeek, setIsPlanningWeek] = useState(false);
@@ -72,6 +75,141 @@ export const Dashboard: React.FC = () => {
       notes?: string;
     }>
   >([]);
+
+  // Fan Hub Dashboard State
+  const [fanHubStats, setFanHubStats] = useState<{
+    newMembers: number;
+    totalMembers: number;
+    recentActivity: Array<{ id: string; type: 'signup' | 'tip' | 'unlock' | 'purchase'; userName: string; amount?: number; timestamp: Date }>;
+    topPosts: Array<{ id: string; caption: string; likes: number; comments: number; mediaUrl?: string }>;
+    weeklyRevenue: number;
+    monthlyRevenue: number;
+  }>({
+    newMembers: 0,
+    totalMembers: 0,
+    recentActivity: [],
+    topPosts: [],
+    weeklyRevenue: 0,
+    monthlyRevenue: 0,
+  });
+  const [loadingFanHub, setLoadingFanHub] = useState(false);
+
+  // Fetch Fan Hub data for dashboard
+  useEffect(() => {
+    const fetchFanHubData = async () => {
+      if (!user?.id) return;
+      setLoadingFanHub(true);
+      
+      try {
+        const now = new Date();
+        const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+        const monthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+
+        // Fetch recent subscribers/members
+        const subscribersRef = collection(db, 'creators', user.id, 'subscribers');
+        const recentSubsQuery = query(
+          subscribersRef,
+          orderBy('createdAt', 'desc'),
+          firestoreLimit(10)
+        );
+        const subscribersSnap = await getDocs(recentSubsQuery);
+        const subscribers = subscribersSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        
+        const newMembersThisWeek = subscribers.filter((sub: any) => {
+          const createdAt = sub.createdAt?.toDate?.() || new Date(sub.createdAt);
+          return createdAt >= weekAgo;
+        }).length;
+
+        // Fetch orders for revenue and activity
+        const ordersRef = collection(db, 'creators', user.id, 'orders');
+        const recentOrdersQuery = query(
+          ordersRef,
+          orderBy('createdAt', 'desc'),
+          firestoreLimit(50)
+        );
+        const ordersSnap = await getDocs(recentOrdersQuery);
+        const orders = ordersSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+        // Calculate revenue
+        let weeklyRev = 0;
+        let monthlyRev = 0;
+        const recentActivity: typeof fanHubStats.recentActivity = [];
+
+        orders.forEach((order: any) => {
+          const orderDate = order.createdAt?.toDate?.() || new Date(order.createdAt);
+          const amount = order.amount || 0;
+          
+          if (orderDate >= weekAgo) weeklyRev += amount;
+          if (orderDate >= monthAgo) monthlyRev += amount;
+          
+          // Build activity feed
+          if (recentActivity.length < 5) {
+            let activityType: 'tip' | 'unlock' | 'purchase' = 'purchase';
+            if (order.type === 'tip') activityType = 'tip';
+            else if (order.type === 'unlock') activityType = 'unlock';
+            
+            recentActivity.push({
+              id: order.id,
+              type: activityType,
+              userName: order.fanEmail || order.customerEmail || 'Anonymous',
+              amount: amount / 100,
+              timestamp: orderDate,
+            });
+          }
+        });
+
+        // Add recent signups to activity
+        subscribers.slice(0, 3).forEach((sub: any) => {
+          const createdAt = sub.createdAt?.toDate?.() || new Date(sub.createdAt);
+          if (recentActivity.length < 5) {
+            recentActivity.push({
+              id: sub.id,
+              type: 'signup',
+              userName: sub.email || 'New Member',
+              timestamp: createdAt,
+            });
+          }
+        });
+
+        // Sort activity by timestamp
+        recentActivity.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
+
+        // Fetch top posts this week
+        const postsRef = collection(db, 'creators', user.id, 'fanPosts');
+        const topPostsQuery = query(
+          postsRef,
+          orderBy('likesCount', 'desc'),
+          firestoreLimit(3)
+        );
+        const postsSnap = await getDocs(topPostsQuery);
+        const topPosts = postsSnap.docs.map(doc => {
+          const data = doc.data();
+          return {
+            id: doc.id,
+            caption: data.caption || '',
+            likes: data.likesCount || 0,
+            comments: data.commentsCount || 0,
+            mediaUrl: data.mediaUrls?.[0] || undefined,
+          };
+        });
+
+        setFanHubStats({
+          newMembers: newMembersThisWeek,
+          totalMembers: subscribersSnap.size,
+          recentActivity: recentActivity.slice(0, 5),
+          topPosts,
+          weeklyRevenue: weeklyRev / 100,
+          monthlyRevenue: monthlyRev / 100,
+        });
+      } catch (err) {
+        console.error('Error fetching fan hub data:', err);
+      } finally {
+        setLoadingFanHub(false);
+      }
+    };
+
+    fetchFanHubData();
+  }, [user?.id]);
 
   // Load and filter weekly suggestions from localStorage on mount
   useEffect(() => {
@@ -114,6 +252,12 @@ export const Dashboard: React.FC = () => {
   const [generatedIdeas, setGeneratedIdeas] = useState<any[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<'trending' | 'engagement' | 'niche' | null>(null);
   const [showIdeasModal, setShowIdeasModal] = useState(false);
+
+  // Dashboard mode: Social (default) / Monetized (Premium Studio only; Pro sees upgrade when selecting Monetized)
+  const [dashboardMode, setDashboardMode] = useState<'social' | 'monetized'>('social');
+  const hasMonetizedAccess = user?.plan === 'Elite' || user?.plan === 'Agency' || user?.plan === 'OnlyFansStudio';
+  const isPro = user?.plan === 'Pro';
+  const hasFanHubAccess = ['Pro', 'Elite', 'Agency'].includes(user?.plan ?? '');
 
   // Admin-only daily dashboard flag & lightweight metrics
   const isAdmin = user?.role === 'Admin';
@@ -1152,21 +1296,27 @@ export const Dashboard: React.FC = () => {
             </div>
           )}
 
-          {/* Studio Mode Banner */}
-          <div className="bg-gradient-to-r from-primary-600 to-purple-600 dark:from-primary-600 dark:to-purple-700 p-4 rounded-xl shadow-lg text-white flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-            <div>
-              <h2 className="text-lg font-bold">AI Content Studio mode</h2>
-              <p className="text-sm text-primary-100/90">
-                Plan campaigns, generate content packs, and organize everything on your calendar. Post to social sites manually (account‑safe).
-              </p>
-            </div>
-            <div className="flex items-center gap-2 text-xs text-primary-100/80">
-              <SparklesIcon className="w-4 h-4" />
-              <span>Best flow: Find Trends → Plan My Week → Write Captions → Schedule</span>
+          {/* Welcome Banner */}
+          <div className="bg-gradient-to-r from-primary-600 to-purple-600 dark:from-primary-600 dark:to-purple-700 p-5 rounded-xl shadow-lg text-white">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+              <div>
+                <h2 className="text-xl font-bold mb-1">Welcome back{user?.name ? `, ${user.name.split(' ')[0]}` : ''}!</h2>
+                <p className="text-sm text-primary-100/90">
+                  Create content for social media and manage your fan page all in one place.
+                </p>
+              </div>
+              <button
+                onClick={() => setActivePage('compose')}
+                className="px-4 py-2 bg-white/20 hover:bg-white/30 rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
+              >
+                <SparklesIcon className="w-4 h-4" />
+                Create Post
+              </button>
             </div>
           </div>
 
-          {/* Planning Highlights */}
+          {/* Planning Highlights - Hidden to reduce dashboard clutter */}
+          {false && (
           <div className="bg-gradient-to-r from-primary-500 to-primary-600 dark:from-primary-600 dark:to-primary-700 p-6 rounded-xl shadow-lg text-white">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-2xl font-bold">Today’s Planning Snapshot</h2>
@@ -1191,179 +1341,193 @@ export const Dashboard: React.FC = () => {
               </div>
             </div>
           </div>
-
-          {/* Quick Actions - Enhanced */}
-          <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
-             <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">Quick Actions</h3>
-             <div className="flex flex-wrap justify-center gap-4">
-                  {(!isBusiness || user?.plan === 'Agency') && (
-                    <QuickAction
-                      label="Find Trends"
-                      icon={<TrendingIcon className="w-6 h-6" />}
-                      color="bg-gradient-to-br from-pink-500 to-rose-500"
-                      onClick={() => setActivePage('opportunities')}
-                    />
-                  )}
-                  {user?.plan !== 'Free' && (
-                    <>
-                      <QuickAction
-                        label={isBusiness ? 'Marketing Plan' : 'Plan My Week'}
-                        icon={<TargetIcon className="w-6 h-6" />}
-                        color="bg-gradient-to-br from-blue-500 to-cyan-500"
-                        onClick={() => setActivePage('strategy')}
-                      />
-                      <QuickAction
-                        label="Write Captions"
-                        icon={<SparklesIcon className="w-6 h-6" />}
-                        color="bg-gradient-to-br from-purple-500 to-indigo-600"
-                        onClick={() => setActivePage('compose')}
-                      />
-                      <QuickAction
-                        label="View Schedule"
-                        icon={<CalendarIcon className="w-6 h-6" />}
-                        color="bg-gradient-to-br from-orange-400 to-red-500"
-                        onClick={() => setActivePage('calendar')}
-                      />
-                    </>
-                  )}
-             </div>
-          </div>
-
-          {/* Content Gap Analysis Widget */}
-          {user?.plan !== 'Free' && (
-            <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
-              <div className="flex items-center justify-between mb-4">
-                <div>
-                  <h3 className="text-lg font-bold text-gray-900 dark:text-white">Insights</h3>
-                  <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                    See what's missing in your mix
-                  </p>
-                </div>
-              </div>
-              <ContentGapAnalysis />
-            </div>
           )}
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-              {/* Upcoming Schedule */}
-              <div className={`bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 ${user?.plan === 'Free' ? 'opacity-50' : ''}`}>
-                   <div className="flex items-center justify-between mb-4">
-                        <h3 className="text-lg font-bold text-gray-900 dark:text-white">Upcoming Schedule</h3>
-                        {user?.plan === 'Free' ? (
-                          <span className="text-sm text-gray-400 dark:text-gray-500 cursor-not-allowed">View Schedule</span>
-                        ) : (
-                          <button onClick={() => setActivePage('calendar')} className="text-sm text-primary-600 hover:underline">View Schedule</button>
-                        )}
-                   </div>
-                   <div className="space-y-3">
-                        {upcomingEvents.length > 0 ? (
-                            upcomingEvents.map(event => <UpcomingEventCard key={event.id} event={event} onClick={() => handleEventClick(event)} />)
-                        ) : (
-                            <div className="text-center py-8 bg-gray-50 dark:bg-gray-800 rounded-lg border border-dashed border-gray-300 dark:border-gray-700">
-                                <p className="text-gray-500 text-sm">No upcoming planned content.</p>
-                                {user?.plan === 'Free' ? (
-                                    <span className="mt-2 text-gray-400 dark:text-gray-500 text-sm cursor-not-allowed">Start a weekly plan</span>
-                                ) : (
-                                    <button onClick={() => setActivePage('strategy')} className="mt-2 text-primary-600 text-sm font-medium">Start a weekly plan</button>
-                                )}
-                            </div>
-                        )}
-                   </div>
-              </div>
-              
-              {/* Weekly Plan Suggestions */}
-              <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
-                   <div className="flex items-center justify-between mb-4">
-                        <h3 className="text-lg font-bold text-gray-900 dark:text-white">Weekly Plan</h3>
-                        {user?.plan === 'Free' && weeklyPlanUsage && weeklyPlanUsage.remaining <= 0 ? (
-                          <span className="text-sm text-gray-400 dark:text-gray-500 cursor-not-allowed">Limit Reached</span>
-                        ) : (
-                          <button
-                            onClick={handlePlanMyWeek}
-                            disabled={isPlanningWeek || (user?.plan === 'Free' && !!weeklyPlanUsage && weeklyPlanUsage.remaining <= 0)}
-                            className="text-sm text-primary-600 hover:underline disabled:opacity-50 disabled:cursor-not-allowed"
-                          >
-                            {isPlanningWeek ? 'Planning…' : 'Regenerate'}
-                          </button>
-                        )}
-                   </div>
-                   {user?.plan === 'Free' && weeklyPlanUsage && (
-                     <div className="mb-3 text-xs text-gray-500 dark:text-gray-400">
-                       {weeklyPlanUsage.remaining > 0 
-                         ? `${weeklyPlanUsage.remaining} weekly plan${weeklyPlanUsage.remaining === 1 ? '' : 's'} remaining this month`
-                         : 'Monthly limit reached. Upgrade to Pro or Elite for more weekly plans.'}
-                     </div>
-                   )}
-                   <div className="space-y-3">
-                        {isPlanningWeek && (
-                          <p className="text-sm text-gray-500 dark:text-gray-400">Building your weekly plan…</p>
-                        )}
-                        {!isPlanningWeek && weeklySuggestions.length === 0 && (
-                          <div className="text-center py-8 bg-gray-50 dark:bg-gray-800 rounded-lg border border-dashed border-gray-300 dark:border-gray-700">
-                              <p className="text-gray-500 text-sm">Let the assistant suggest a content pack for the next 7 days.</p>
-                              {user?.plan === 'Free' && weeklyPlanUsage && weeklyPlanUsage.remaining <= 0 ? (
-                                <button
-                                  onClick={() => setActivePage('pricing')}
-                                  className="mt-2 inline-flex items-center justify-center px-4 py-2 text-sm font-medium text-white bg-primary-600 rounded-md hover:bg-primary-700"
-                                >
-                                  Upgrade for More Weekly Plans
-                                </button>
-                              ) : (
-                                <button
-                                  onClick={handlePlanMyWeek}
-                                  disabled={isPlanningWeek || (user?.plan === 'Free' && !!weeklyPlanUsage && weeklyPlanUsage.remaining <= 0)}
-                                  className="mt-2 inline-flex items-center justify-center px-4 py-2 text-sm font-medium text-white bg-primary-600 rounded-md hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                                >
-                                  Plan my week
-                                </button>
-                              )}
-                          </div>
-                        )}
-                        {!isPlanningWeek && weeklySuggestions.length > 0 && (
-                          <div className="space-y-3">
-                            {weeklySuggestions.map((s, idx) => (
-                              <div
-                                key={`${s.date}-${idx}`}
-                                className="p-3 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700"
-                              >
-                                <div className="flex items-center justify-between mb-1">
-                                  <span className="text-xs font-semibold text-gray-500 dark:text-gray-400">
-                                    {s.dayLabel} · {s.date}
-                                  </span>
-                                  {s.suggestedTimeWindow && (
-                                    <span className="text-xs text-primary-600 dark:text-primary-400">
-                                      {s.suggestedTimeWindow}
-                                    </span>
-                                  )}
-                                </div>
-                                <p className="text-sm font-semibold text-gray-900 dark:text-white">
-                                  {s.theme}
-                                </p>
-                                <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
-                                  {s.postIdea}
-                                </p>
-                                {s.captionOutline && (
-                                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                                    {s.captionOutline}
-                                  </p>
-                                )}
-                                {Array.isArray(s.recommendedPlatforms) && s.recommendedPlatforms.length > 0 && (
-                                  <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-1">
-                                    Platforms: {s.recommendedPlatforms.join(', ')}
-                                  </p>
-                                )}
-                                {s.notes && (
-                                  <p className="text-[11px] text-gray-400 dark:text-gray-500 mt-1 italic">
-                                    {s.notes}
-                                  </p>
-                                )}
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                   </div>
-              </div>
+          {/* Quick Actions - Matching Sidebar */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+            <QuickAction
+              label="Create Post"
+              icon={<SparklesIcon className="w-5 h-5" />}
+              color="bg-gradient-to-br from-purple-500 to-indigo-600"
+              onClick={() => setActivePage('compose')}
+            />
+            <QuickAction
+              label="Calendar"
+              icon={<CalendarIcon className="w-5 h-5" />}
+              color="bg-gradient-to-br from-orange-400 to-red-500"
+              onClick={() => setActivePage('calendar')}
+            />
+            <QuickAction
+              label="Premium Studio"
+              icon={<StarIcon className="w-5 h-5" />}
+              color="bg-gradient-to-br from-pink-500 to-rose-500"
+              onClick={() => setActivePage('onlyfansStudio')}
+            />
+            <QuickAction
+              label="Fan Hub"
+              icon={<HeartIcon className="w-5 h-5" />}
+              color="bg-gradient-to-br from-primary-500 to-purple-600"
+              onClick={() => setActivePage('fanHub')}
+            />
+            <QuickAction
+              label="Settings"
+              icon={<UserIcon className="w-5 h-5" />}
+              color="bg-gradient-to-br from-gray-500 to-gray-700"
+              onClick={() => setActivePage('settings')}
+            />
           </div>
+
+          {/* Fan Hub Overview */}
+          <div className="bg-gradient-to-br from-primary-500 to-purple-600 dark:from-primary-600 dark:to-purple-700 p-6 rounded-xl shadow-lg text-white">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <HeartIcon className="w-6 h-6" />
+                <h3 className="text-xl font-bold">Fan Hub Overview</h3>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+              <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4">
+                <p className="text-sm opacity-90 mb-1">Total Members</p>
+                <p className="text-3xl font-bold">{loadingFanHub ? '–' : fanHubStats.totalMembers}</p>
+              </div>
+              <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4">
+                <p className="text-sm opacity-90 mb-1">New This Week</p>
+                <p className="text-3xl font-bold">{loadingFanHub ? '–' : `+${fanHubStats.newMembers}`}</p>
+              </div>
+              <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4">
+                <p className="text-sm opacity-90 mb-1">Weekly Revenue</p>
+                <p className="text-3xl font-bold">{loadingFanHub ? '–' : `$${fanHubStats.weeklyRevenue.toFixed(0)}`}</p>
+              </div>
+              <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4">
+                <p className="text-sm opacity-90 mb-1">Monthly Revenue</p>
+                <p className="text-3xl font-bold">{loadingFanHub ? '–' : `$${fanHubStats.monthlyRevenue.toFixed(0)}`}</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Live Video Chat Requests (compact widget) */}
+          {user?.id && (
+            <LiveVideoChatManager creatorId={user.id} compact />
+          )}
+
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Recent Fan Activity */}
+            <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-bold text-gray-900 dark:text-white">Recent Activity</h3>
+                <button onClick={() => setActivePage('fanHub')} className="text-sm text-primary-600 hover:underline">View All</button>
+              </div>
+              <div className="space-y-3">
+                {loadingFanHub ? (
+                  <p className="text-sm text-gray-500 dark:text-gray-400">Loading...</p>
+                ) : fanHubStats.recentActivity.length > 0 ? (
+                  fanHubStats.recentActivity.map((activity) => (
+                    <div key={activity.id} className="flex items-center gap-3 p-2 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+                      <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white ${
+                        activity.type === 'signup' ? 'bg-green-500' :
+                        activity.type === 'tip' ? 'bg-yellow-500' :
+                        activity.type === 'unlock' ? 'bg-purple-500' : 'bg-pink-500'
+                      }`}>
+                        {activity.type === 'signup' && <UserIcon className="w-4 h-4" />}
+                        {activity.type === 'tip' && <DollarSignIcon className="w-4 h-4" />}
+                        {activity.type === 'unlock' && <StarIcon className="w-4 h-4" />}
+                        {activity.type === 'purchase' && <HeartIcon className="w-4 h-4" />}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
+                          {activity.type === 'signup' ? 'New member joined' :
+                           activity.type === 'tip' ? `Tip received` :
+                           activity.type === 'unlock' ? 'Content unlocked' : 'Store purchase'}
+                        </p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                          {activity.userName.includes('@') ? activity.userName.split('@')[0] : activity.userName}
+                          {activity.amount ? ` • $${activity.amount.toFixed(2)}` : ''}
+                        </p>
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <div className="text-center py-6 bg-gray-50 dark:bg-gray-700/30 rounded-lg border border-dashed border-gray-300 dark:border-gray-600">
+                    <HeartIcon className="w-8 h-8 mx-auto text-gray-400 mb-2" />
+                    <p className="text-gray-500 dark:text-gray-400 text-sm">No recent activity</p>
+                    <button onClick={() => setActivePage('fanHub')} className="mt-2 text-primary-600 text-sm font-medium">
+                      Set up your Fan Page
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Top Content This Week */}
+            <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-bold text-gray-900 dark:text-white">Top Content</h3>
+                <button onClick={() => setActivePage('fanHub')} className="text-sm text-primary-600 hover:underline">View Posts</button>
+              </div>
+              <div className="space-y-3">
+                {loadingFanHub ? (
+                  <p className="text-sm text-gray-500 dark:text-gray-400">Loading...</p>
+                ) : fanHubStats.topPosts.length > 0 ? (
+                  fanHubStats.topPosts.map((post, idx) => (
+                    <div key={post.id} className="flex items-start gap-3 p-2 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+                      <div className="w-8 h-8 bg-primary-100 dark:bg-primary-900/30 rounded-lg flex items-center justify-center text-primary-600 dark:text-primary-400 font-bold text-sm">
+                        #{idx + 1}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm text-gray-900 dark:text-white line-clamp-2">
+                          {post.caption || 'No caption'}
+                        </p>
+                        <div className="flex items-center gap-3 mt-1">
+                          <span className="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1">
+                            <HeartIcon className="w-3 h-3" /> {post.likes}
+                          </span>
+                          <span className="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1">
+                            <ChatIcon className="w-3 h-3" /> {post.comments}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <div className="text-center py-6 bg-gray-50 dark:bg-gray-700/30 rounded-lg border border-dashed border-gray-300 dark:border-gray-600">
+                    <SparklesIcon className="w-8 h-8 mx-auto text-gray-400 mb-2" />
+                    <p className="text-gray-500 dark:text-gray-400 text-sm">No posts yet</p>
+                    <button onClick={() => setActivePage('fanHub')} className="mt-2 text-primary-600 text-sm font-medium">
+                      Create your first post
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Upcoming Schedule */}
+            <div className={`bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 ${user?.plan === 'Free' ? 'opacity-50' : ''}`}>
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-bold text-gray-900 dark:text-white">Upcoming Schedule</h3>
+                {user?.plan === 'Free' ? (
+                  <span className="text-sm text-gray-400 dark:text-gray-500 cursor-not-allowed">View</span>
+                ) : (
+                  <button onClick={() => setActivePage('calendar')} className="text-sm text-primary-600 hover:underline">View All</button>
+                )}
+              </div>
+              <div className="space-y-3">
+                {upcomingEvents.length > 0 ? (
+                  upcomingEvents.slice(0, 3).map(event => <UpcomingEventCard key={event.id} event={event} onClick={() => handleEventClick(event)} />)
+                ) : (
+                  <div className="text-center py-6 bg-gray-50 dark:bg-gray-700/30 rounded-lg border border-dashed border-gray-300 dark:border-gray-600">
+                    <CalendarIcon className="w-8 h-8 mx-auto text-gray-400 mb-2" />
+                    <p className="text-gray-500 dark:text-gray-400 text-sm">No upcoming content</p>
+                    {user?.plan !== 'Free' && (
+                      <button onClick={() => setActivePage('strategy')} className="mt-2 text-primary-600 text-sm font-medium">
+                        Plan your week
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+
 
           {/* Enhanced Metrics Section - hidden in AI Content Studio mode */}
           {false && (
@@ -1447,164 +1611,9 @@ export const Dashboard: React.FC = () => {
           )}
           
           
-          {/* Fixed Layout Row: Top Content This Week and Recent Activity - Always Together */}
+          {/* Recent Activity and AI Insights Row */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
-            {/* Content Performance Widget - Creator & Agency Only */}
-            {(() => {
-              // Show for Creators OR Business Agency (since Agency manages creators)
-              const shouldShowContentPerformance = !isBusiness || user?.plan === 'Agency';
-              
-              // Get posts from this week (last 7 days)
-              const oneWeekAgo = new Date();
-              oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
-              
-              const recentPosts = posts
-                .filter(p => {
-                  if (p.status !== 'Published') return false;
-                  // Use timestamp, scheduledDate, or createdAt to determine post date
-                  const postDate = p.timestamp 
-                    ? new Date(p.timestamp)
-                    : p.scheduledDate 
-                    ? new Date(p.scheduledDate)
-                    : p.createdAt 
-                    ? new Date(p.createdAt)
-                    : null;
-                  if (!postDate || isNaN(postDate.getTime())) return false;
-                  return postDate >= oneWeekAgo;
-                })
-                .sort((a, b) => {
-                  // Sort by date (most recent first)
-                  const dateA = a.timestamp ? new Date(a.timestamp).getTime() : 
-                               a.scheduledDate ? new Date(a.scheduledDate).getTime() :
-                               a.createdAt ? new Date(a.createdAt).getTime() : 0;
-                  const dateB = b.timestamp ? new Date(b.timestamp).getTime() : 
-                               b.scheduledDate ? new Date(b.scheduledDate).getTime() :
-                               b.createdAt ? new Date(b.createdAt).getTime() : 0;
-                  return dateB - dateA;
-                })
-                .slice(0, 3);
-              
-              // Calculate engagement - use consistent seed based on post ID for stable values
-              const calculateMockEngagement = (postId: string, postContent: string) => {
-                // Use both post ID and content hash for more stable but varied engagement
-                const idSeed = postId.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
-                const contentSeed = postContent.substring(0, 20).split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
-                const combinedSeed = idSeed + contentSeed;
-                
-                return {
-                  likes: Math.floor((combinedSeed % 500) + 100),
-                  comments: Math.floor((combinedSeed % 50) + 10),
-                  shares: Math.floor((combinedSeed % 30) + 5),
-                  views: Math.floor((combinedSeed % 5000) + 1000)
-                };
-              };
-              
-              if (shouldShowContentPerformance) {
-                const hasContent = recentPosts.length > 0;
-                return (
-                  <div className={`bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 flex flex-col transition-all duration-300 ${
-                    hasContent ? 'p-6 min-h-[400px]' : 'p-4 py-3'
-                  }`}>
-                    <div className={`flex items-center justify-between ${hasContent ? 'mb-4' : 'mb-0'}`}>
-                      <h3 className="text-lg font-bold text-gray-900 dark:text-white">Top Content This Week</h3>
-                      {hasContent && (
-                        <button onClick={() => setActivePage('analytics')} className="text-sm text-primary-600 hover:underline">View Analytics</button>
-                      )}
-                    </div>
-                    {hasContent ? (
-                      <div className="space-y-3 flex-1">
-                        {recentPosts.map(post => {
-                          const engagement = calculateMockEngagement(post.id, post.content || '');
-                          const totalEngagement = engagement.likes + engagement.comments + engagement.shares;
-                          return (
-                            <div key={post.id} className="p-3 bg-gradient-to-r from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-900/20 rounded-lg border border-purple-200 dark:border-purple-700">
-                              <p className="text-sm font-medium text-gray-900 dark:text-white mb-2 truncate">{post.content?.substring(0, 60) || 'Post'}...</p>
-                              <div className="flex items-center justify-between text-xs text-gray-600 dark:text-gray-400">
-                                <div className="flex items-center gap-3">
-                                  <span className="flex items-center gap-1">
-                                    <HeartIcon className="w-4 h-4" /> {engagement.likes}
-                                  </span>
-                                  <span className="flex items-center gap-1">
-                                    <ChatIcon className="w-4 h-4" /> {engagement.comments}
-                                  </span>
-                                  <span>{new Intl.NumberFormat('en-US', { notation: "compact" }).format(engagement.views)} views</span>
-                                </div>
-                                <span className="text-primary-600 dark:text-primary-400 font-semibold">{totalEngagement} total</span>
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    ) : (
-                      <div className="py-1">
-                        <p className="text-sm text-gray-500 dark:text-gray-400">No posts this week</p>
-                      </div>
-                    )}
-                  </div>
-                );
-              }
-              return null;
-            })()}
-            
-            {/* Campaign Performance Widget - Business Starter/Growth Only (replaces Top Content for Business) */}
-            {isBusiness && user?.plan !== 'Agency' && (() => {
-              // Show top performing campaigns/posts for business
-              const recentPosts = posts
-                .filter(p => p.status === 'Published')
-                .sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime())
-                .slice(0, 3);
-              
-              const calculateMockMetrics = (postId: string) => {
-                const seed = postId.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
-                return {
-                  reach: Math.floor((seed % 10000) + 2000),
-                  clicks: Math.floor((seed % 500) + 50),
-                  leads: Math.floor((seed % 20) + 2),
-                  engagement: Math.floor((seed % 300) + 50)
-                };
-              };
-              
-              return (
-                <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 h-full flex flex-col min-h-[400px]">
-                  <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-lg font-bold text-gray-900 dark:text-white">Top Campaigns This Week</h3>
-                    <button onClick={() => setActivePage('analytics')} className="text-sm text-primary-600 hover:underline">View Analytics</button>
-                  </div>
-                  {recentPosts.length > 0 ? (
-                    <div className="space-y-3 flex-1">
-                      {recentPosts.map(post => {
-                        const metrics = calculateMockMetrics(post.id);
-                        return (
-                          <div key={post.id} className="p-3 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 rounded-lg border border-blue-200 dark:border-blue-700">
-                            <p className="text-sm font-medium text-gray-900 dark:text-white mb-2 truncate">{post.content.substring(0, 60)}...</p>
-                            <div className="flex items-center justify-between text-xs text-gray-600 dark:text-gray-400">
-                              <div className="flex items-center gap-3">
-                                <span className="flex items-center gap-1">
-                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg> {new Intl.NumberFormat('en-US', { notation: "compact" }).format(metrics.reach)} reach
-                                </span>
-                                <span className="flex items-center gap-1">
-                                  <LinkIcon className="w-4 h-4" /> {metrics.clicks} clicks
-                                </span>
-                                <span className="flex items-center gap-1">
-                                  <BriefcaseIcon className="w-4 h-4" /> {metrics.leads} leads
-                                </span>
-                              </div>
-                              <span className="text-primary-600 dark:text-primary-400 font-semibold">{metrics.engagement} engagement</span>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  ) : (
-                    <div className="flex-1 flex items-center justify-center">
-                      <p className="text-sm text-gray-500 dark:text-gray-400">No campaigns this week</p>
-                    </div>
-                  )}
-                </div>
-              );
-            })()}
-            
-            {/* Recent Activity - Always in Same Row as Top Content/Campaigns */}
+            {/* Recent Activity */}
             {(() => {
               // Generate activity timeline from posts, messages, and campaigns
               const activities: Array<{ id: string; type: string; message: string; timestamp: Date; icon: React.ReactNode }> = [];
@@ -1683,6 +1692,164 @@ export const Dashboard: React.FC = () => {
                 </div>
               );
             })()}
+            
+            {/* AI Insights & Recommendations Panel */}
+            {user.plan !== 'Free' && (() => {
+              // Generate actionable recommendations based on user data
+              const recommendations: Array<{ type: 'success' | 'info' | 'warning' | 'tip'; title: string; description: string; action?: () => void; actionLabel?: string }> = [];
+              const effectivePlan = (user?.plan ?? 'Free') as Plan;
+              
+              // Check posting frequency based on the most relevant timestamp.
+              const getPostActivityDate = (p: any) => {
+                const ts = p?.publishedAt || p?.updatedAt || p?.scheduledDate || p?.createdAt;
+                const d = ts ? new Date(ts) : new Date(0);
+                return isNaN(d.getTime()) ? new Date(0) : d;
+              };
+              const weekAgo = new Date();
+              weekAgo.setDate(weekAgo.getDate() - 7);
+              const postsThisWeek = posts.filter((p: any) => {
+                if (p?.status !== 'Published') return false;
+                return getPostActivityDate(p) > weekAgo;
+              }).length;
+              
+              if (postsThisWeek < 3) {
+                recommendations.push({
+                  type: 'tip',
+                  title: 'Increase Posting Frequency',
+                  description: `You've posted ${postsThisWeek} times this week. Consistent posting improves engagement.`,
+                  action: () => setActivePage('compose'),
+                  actionLabel: 'Create Post'
+                });
+              }
+              
+              // Check upcoming schedule
+              const upcomingCount = effectiveCalendarEvents.filter(e => {
+                if (!e?.date) return false;
+                if ((e as any).type === 'Reminder' || (e as any).reminderType) return false;
+                if (e.status !== 'Scheduled' && e.status !== 'Published' && e.status !== 'Draft') return false;
+                const eventDate = new Date(e.date);
+                return !isNaN(eventDate.getTime()) && eventDate > new Date();
+              }).length;
+              
+              if (upcomingCount === 0) {
+                recommendations.push({
+                  type: 'warning',
+                  title: 'No Upcoming Posts',
+                  description: 'Schedule content ahead of time to maintain consistent presence.',
+                  action: () => setActivePage('compose'),
+                  actionLabel: 'Schedule Post'
+                });
+              }
+
+              // Check drafts
+              const draftsCount = posts.filter(p => p.status === 'Draft').length;
+              if (draftsCount > 0) {
+                recommendations.push({
+                  type: 'info',
+                  title: 'Drafts Ready to Polish',
+                  description: `You have ${draftsCount} draft${draftsCount === 1 ? '' : 's'} to review before scheduling.`,
+                  action: () => setActivePage('approvals'),
+                  actionLabel: 'Review drafts'
+                });
+              }
+              
+              // AI Content tip
+              if (effectivePlan !== 'Free') {
+                recommendations.push({
+                  type: 'tip',
+                  title: 'Try AI Content Generation',
+                  description: 'Upload images or videos and let AI generate captions tailored to your content and platforms.',
+                  action: () => setActivePage('compose'),
+                  actionLabel: 'Generate Captions'
+                });
+              }
+              
+              // Success recommendation if posting consistently
+              if (postsThisWeek >= 5 && upcomingCount >= 3) {
+                recommendations.push({
+                  type: 'success',
+                  title: 'Great Consistency! 🎉',
+                  description: `You've posted ${postsThisWeek} times this week and have ${upcomingCount} posts scheduled. Keep it up!`
+                });
+              }
+              
+              // Default recommendation if no others
+              if (recommendations.length === 0) {
+                recommendations.push({
+                  type: 'tip',
+                  title: 'Explore Analytics',
+                  description: 'Check your analytics to see what content performs best and optimize your strategy.',
+                  action: () => setActivePage('analytics'),
+                  actionLabel: 'View Analytics'
+                });
+              }
+              
+              const displayRecommendations = recommendations.slice(0, 4);
+              
+              const getIcon = (type: string) => {
+                switch(type) {
+                  case 'success': return <CheckCircleIcon className="w-4 h-4" />;
+                  case 'warning': return <FlagIcon className="w-4 h-4" />;
+                  case 'info': return <SparklesIcon className="w-4 h-4" />;
+                  default: return <SparklesIcon className="w-4 h-4" />;
+                }
+              };
+              
+              const getGradientClasses = (type: string) => {
+                switch(type) {
+                  case 'success': return 'from-emerald-50 to-green-50 dark:from-emerald-900/30 dark:to-green-900/20 border-emerald-200 dark:border-emerald-700/50';
+                  case 'warning': return 'from-amber-50 to-yellow-50 dark:from-amber-900/30 dark:to-yellow-900/20 border-amber-200 dark:border-amber-700/50';
+                  case 'info': return 'from-blue-50 to-cyan-50 dark:from-blue-900/30 dark:to-cyan-900/20 border-blue-200 dark:border-blue-700/50';
+                  default: return 'from-purple-50 to-indigo-50 dark:from-purple-900/30 dark:to-indigo-900/20 border-purple-200 dark:border-purple-700/50';
+                }
+              };
+              
+              const getTextColor = (type: string) => {
+                switch(type) {
+                  case 'success': return 'text-emerald-700 dark:text-emerald-300';
+                  case 'warning': return 'text-amber-700 dark:text-amber-300';
+                  case 'info': return 'text-blue-700 dark:text-blue-300';
+                  default: return 'text-purple-700 dark:text-purple-300';
+                }
+              };
+              
+              return displayRecommendations.length > 0 ? (
+                <div className="bg-white dark:bg-gray-800 p-4 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
+                  <div className="flex items-center gap-2 mb-3">
+                    <div className="p-1.5 bg-gradient-to-br from-primary-500 to-primary-600 rounded-lg">
+                      <SparklesIcon className="w-4 h-4 text-white" />
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-bold text-gray-900 dark:text-white">AI Insights</h3>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">Smart Recommendations</p>
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    {displayRecommendations.map((rec, idx) => (
+                      <div key={idx} className={`p-2.5 rounded-lg border bg-gradient-to-r ${getGradientClasses(rec.type)}`}>
+                        <div className="flex items-start gap-2">
+                          <div className={`flex-shrink-0 mt-0.5 ${getTextColor(rec.type)}`}>
+                            {getIcon(rec.type)}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className={`font-semibold text-xs mb-0.5 ${getTextColor(rec.type)}`}>{rec.title}</p>
+                            <p className="text-xs text-gray-600 dark:text-gray-400 leading-relaxed">{rec.description}</p>
+                            {rec.action && rec.actionLabel && (
+                              <button
+                                onClick={rec.action}
+                                className={`text-xs font-semibold ${getTextColor(rec.type)} hover:opacity-80 transition-opacity flex items-center gap-1 mt-1`}
+                              >
+                                {rec.actionLabel} →
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : null;
+            })()}
           </div>
           
           {/* Additional Business Widgets - Separate Row */}
@@ -1755,645 +1922,6 @@ export const Dashboard: React.FC = () => {
             </div>
           )}
           
-          {/* First Row: Goals & Milestones, Best Posting Times, Quick Stats */}
-          {user.plan !== 'Free' && (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {/* Goals & Milestones Widget */}
-              {(() => {
-              // Calculate goals progress using user-defined goals or defaults
-              const currentFollowers = currentStats ? Object.values(currentStats).reduce((sum, stats) => sum + (stats?.followers || 0), 0) : 0;
-              const goalFollowers = user?.goals?.followerGoal || Math.ceil(currentFollowers * 1.5); // kept for future analytics-focused mode
-              const followersProgress = goalFollowers > 0 ? Math.min((currentFollowers / goalFollowers) * 100, 100) : 0;
-              
-              // Count ALL posts created this month (use timestamp, scheduledDate, or createdAt)
-              const postsThisMonth = posts.filter(p => {
-                // Try multiple date fields to ensure we count all posts
-                const postDate = p.timestamp 
-                  ? new Date(p.timestamp)
-                  : p.scheduledDate 
-                  ? new Date(p.scheduledDate)
-                  : p.createdAt 
-                  ? new Date(p.createdAt)
-                  : null;
-                
-                if (!postDate || isNaN(postDate.getTime())) {
-                  return false; // Skip posts with invalid dates
-                }
-                
-                const now = new Date();
-                return postDate.getMonth() === now.getMonth() && 
-                       postDate.getFullYear() === now.getFullYear();
-              }).length;
-              const goalPosts = user?.goals?.monthlyPostsGoal || 30; // Use user goal or default to 30 posts/month
-              const postsProgress = goalPosts > 0 ? Math.min((postsThisMonth / goalPosts) * 100, 100) : 0;
-              
-              return (
-                <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
-                  <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-lg font-bold text-gray-900 dark:text-white">Goals & Milestones</h3>
-                    <button
-                      onClick={() => setActivePage('settings')}
-                      className="text-sm text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300 font-medium"
-                    >
-                      Edit Goals
-                    </button>
-                  </div>
-                  <div className="space-y-4">
-                    {/* Posts Goal */}
-                    <div>
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Posts This Month</span>
-                        <span className="text-sm font-semibold text-gray-900 dark:text-white">
-                          {postsThisMonth} / {goalPosts}
-                        </span>
-                      </div>
-                      <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2.5 overflow-hidden">
-                        <div 
-                          className="bg-gradient-to-r from-emerald-500 to-green-600 h-full transition-all duration-500" 
-                          style={{ width: `${postsProgress}%` }}
-                        ></div>
-                      </div>
-                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                        {Math.round(postsProgress)}% complete
-                      </p>
-                    </div>
-                    
-                    {/* Monthly Leads Goal - Business Only (hidden in AI Content Studio mode) */}
-                    {false && isBusiness && (() => {
-                      const leadMessages = messages.filter(m => m.category === 'Lead' && !m.isArchived);
-                      const currentLeads = leadMessages.filter(m => {
-                        const msgDate = new Date(m.timestamp);
-                        const now = new Date();
-                        return msgDate.getMonth() === now.getMonth() && msgDate.getFullYear() === now.getFullYear();
-                      }).length;
-                      const goalLeads = user?.goals?.monthlyLeadsGoal || 50; // Use user goal or default to 50 leads/month
-                      const leadsProgress = goalLeads > 0 ? Math.min((currentLeads / goalLeads) * 100, 100) : 0;
-                      
-                      return (
-                        <div>
-                          <div className="flex items-center justify-between mb-2">
-                            <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Leads This Month</span>
-                            <span className="text-sm font-semibold text-gray-900 dark:text-white">
-                              {currentLeads} / {goalLeads}
-                            </span>
-                          </div>
-                          <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2.5 overflow-hidden">
-                            <div 
-                              className="bg-gradient-to-r from-blue-500 to-indigo-600 h-full transition-all duration-500" 
-                              style={{ width: `${leadsProgress}%` }}
-                            ></div>
-                          </div>
-                          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                            {Math.round(leadsProgress)}% complete
-                          </p>
-                        </div>
-                      );
-                    })()}
-                    
-                    {/* Milestone badges - only based on content goal in studio mode */}
-                    {(postsProgress >= 100) && (
-                      <div className="pt-3 border-t border-gray-200 dark:border-gray-700">
-                        <div className="flex items-center gap-2 text-sm text-green-600 dark:text-green-400">
-                          <CheckCircleIcon className="w-5 h-5" />
-                          <span className="font-semibold">🎉 Goal Achieved!</span>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </div>
-                );
-                })()}
-                
-                {/* Quick Stats Widget - Always shows next to Goals & Milestones for paid users */}
-                {(() => {
-              // Calculate quick stats (content-focused)
-              const totalPosts = posts.length;
-              const publishedPosts = posts.filter(p => p.status === 'Published').length;
-              const scheduledPosts = posts.filter(p => p.status === 'Scheduled').length;
-              const draftPosts = posts.filter(p => p.status === 'Draft').length;
-              
-              return (
-                <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
-                  <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-lg font-bold text-gray-900 dark:text-white">Quick Stats</h3>
-                  </div>
-                  <div className="space-y-4">
-                    {/* Post Status Breakdown */}
-                    <div>
-                      <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">Post Status</p>
-                      <div className="space-y-2">
-                        <div className="flex items-center justify-between">
-                          <span className="text-xs text-gray-600 dark:text-gray-400">Published</span>
-                          <span className="text-sm font-semibold text-green-600 dark:text-green-400">{publishedPosts}</span>
-                        </div>
-                        <div className="flex items-center justify-between">
-                          <span className="text-xs text-gray-600 dark:text-gray-400">Scheduled</span>
-                          <span className="text-sm font-semibold text-blue-600 dark:text-blue-400">{scheduledPosts}</span>
-                        </div>
-                        <div className="flex items-center justify-between">
-                          <span className="text-xs text-gray-600 dark:text-gray-400">Drafts</span>
-                          <span className="text-sm font-semibold text-gray-600 dark:text-gray-400">{draftPosts}</span>
-                        </div>
-                      </div>
-                    </div>
-                    
-                    {/* Total Posts */}
-                    <div className="pt-3 border-t border-gray-200 dark:border-gray-700">
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Total Posts</span>
-                        <span className="text-lg font-bold text-gray-900 dark:text-white">{totalPosts}</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-                );
-                })()}
-              
-              {/* Best Posting Times - Dynamic Based on User Data */}
-              {(() => {
-            // Analyze user's actual posting patterns and engagement
-            // Prefer calendar-derived events so the widget matches what users see on the Calendar.
-            const allCalendarItems = (effectiveCalendarEvents || []).filter(e => {
-              if (!e?.date) return false;
-              if ((e as any).type === 'Reminder' || (e as any).reminderType) return false;
-              return e.status === 'Published' || e.status === 'Scheduled';
-            });
-            
-            // Group posts by day of week and time
-            const dayTimeMap: Record<string, { count: number }> = {};
-            const daysOfWeek = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-            
-            allCalendarItems.forEach(item => {
-              const date = new Date(item.date);
-              if (isNaN(date.getTime())) return;
-              const dayName = daysOfWeek[date.getDay()];
-              const hour = date.getHours();
-              
-              // Round to nearest hour slot (6AM, 9AM, 12PM, 3PM, 6PM, 9PM)
-              const timeSlots = [6, 9, 12, 15, 18, 21];
-              const nearestSlot = timeSlots.reduce((prev, curr) => 
-                Math.abs(curr - hour) < Math.abs(prev - hour) ? curr : prev
-              );
-              
-              const timeKey = `${dayName}-${nearestSlot}`;
-              if (!dayTimeMap[timeKey]) {
-                dayTimeMap[timeKey] = { count: 0 };
-              }
-              
-              dayTimeMap[timeKey].count++;
-            });
-            
-            // Calculate best times per day
-            const bestTimes = daysOfWeek.map(day => {
-              const daySlots = Object.keys(dayTimeMap)
-                .filter(key => key.startsWith(day))
-                .map(key => ({
-                  time: parseInt(key.split('-')[1]),
-                  ...dayTimeMap[key],
-                }))
-                .sort((a, b) => {
-                  return b.count - a.count;
-                })
-                .slice(0, 3); // Top 3 times per day
-              
-              // Format times
-              const formattedTimes = daySlots.map(slot => {
-                const hour = slot.time;
-                const period = hour >= 12 ? 'PM' : 'AM';
-                const displayHour = hour > 12 ? hour - 12 : hour === 0 ? 12 : hour;
-                return `${displayHour}:00 ${period}`;
-              });
-              
-              // Determine engagement level
-              const totalPosts = daySlots.reduce((sum, slot) => sum + slot.count, 0);
-              
-              let engagement: 'High' | 'Medium' | 'Low' = 'Low';
-              if (totalPosts >= 5) {
-                engagement = 'High';
-              } else if (totalPosts >= 2) {
-                engagement = 'Medium';
-              }
-              
-              // If no data, use generic recommendations
-              if (formattedTimes.length === 0) {
-                if (['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'].includes(day)) {
-                  return { day, times: ['9:00 AM', '12:00 PM', '6:00 PM'], engagement: 'High' as const };
-                } else {
-                  return { day, times: ['10:00 AM', '2:00 PM'], engagement: 'Medium' as const };
-                }
-              }
-              
-              return { day, times: formattedTimes, engagement };
-            });
-            
-            return (
-              <div className="bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-700 p-3 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-600">
-                <div className="flex items-center gap-2 mb-3">
-                  <div className="p-1.5 bg-gradient-to-br from-orange-500 to-red-500 rounded-lg">
-                    <TrendingIcon className="w-4 h-4 text-white" />
-                  </div>
-                  <div className="flex-1">
-                    <h3 className="text-sm font-bold text-gray-900 dark:text-white">Best Posting Times</h3>
-                    <p className="text-[10px] text-gray-500 dark:text-gray-400">Optimal times for maximum engagement</p>
-                  </div>
-                </div>
-                
-                {/* Best Times List */}
-                <div className="space-y-1.5 max-h-[280px] overflow-y-auto custom-scrollbar">
-                  {bestTimes.map((dayData, index) => (
-                    <div key={index} className="bg-white dark:bg-gray-800 rounded-lg p-2 border border-gray-200 dark:border-gray-600">
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="text-xs font-semibold text-gray-900 dark:text-white">{dayData.day}</span>
-                        <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${
-                          dayData.engagement === 'High' 
-                            ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' 
-                            : 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400'
-                        }`}>
-                          {dayData.engagement}
-                        </span>
-                      </div>
-                      <div className="flex flex-wrap gap-1.5">
-                        {dayData.times.map((time, timeIndex) => (
-                          <div
-                            key={timeIndex}
-                            className="px-2 py-1 bg-primary-50 dark:bg-primary-900/20 text-primary-700 dark:text-primary-300 rounded-md text-xs font-medium"
-                          >
-                            {time}
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-                
-                {/* Summary */}
-                <div className="mt-2 pt-2 border-t border-gray-200 dark:border-gray-600">
-                  <div className="flex items-center gap-1.5 text-xs text-gray-600 dark:text-gray-400">
-                    <TrendingIcon className="w-3 h-3 text-primary-600 dark:text-primary-400" />
-                    <span className="font-medium">
-                      {allCalendarItems.length > 0 
-                        ? 'Based on your calendar plan' 
-                        : 'Tip:'}
-                    </span>
-                    <span className="text-[10px]">
-                      {allCalendarItems.length > 0
-                        ? 'Calculated from scheduled & published items'
-                        : 'Weekdays 9 AM - 6 PM'}
-                    </span>
-                  </div>
-                </div>
-              </div>
-            );
-          })()}
-            </div>
-          )}
-          
-          {/* Second Row: AI Insights and Content Ideas */}
-          {user.plan !== 'Free' && (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            
-            {/* AI Insights & Recommendations Panel - Redesigned */}
-            {(() => {
-              // Generate actionable recommendations based on user data
-              const recommendations: Array<{ type: 'success' | 'info' | 'warning' | 'tip'; title: string; description: string; action?: () => void; actionLabel?: string }> = [];
-              const effectivePlan = (user?.plan ?? 'Free') as Plan;
-              
-              // Check posting frequency based on the most relevant timestamp.
-              // createdAt doesn't change when you publish, so prefer publishedAt.
-              const getPostActivityDate = (p: any) => {
-                const ts =
-                  p?.publishedAt ||
-                  p?.updatedAt ||
-                  p?.scheduledDate ||
-                  p?.createdAt;
-                const d = ts ? new Date(ts) : new Date(0);
-                return isNaN(d.getTime()) ? new Date(0) : d;
-              };
-              const weekAgo = new Date();
-              weekAgo.setDate(weekAgo.getDate() - 7);
-              const postsThisWeek = posts.filter((p: any) => {
-                if (p?.status !== 'Published') return false;
-                return getPostActivityDate(p) > weekAgo;
-              }).length;
-              
-              if (postsThisWeek < 3) {
-                recommendations.push({
-                  type: 'tip',
-                  title: 'Increase Posting Frequency',
-                  description: `You've posted ${postsThisWeek} times this week. Consistent posting improves engagement.`,
-                  action: () => setActivePage('compose'),
-                  actionLabel: 'Create Post'
-                });
-              }
-              
-              // Check upcoming schedule
-              const upcomingCount = effectiveCalendarEvents.filter(e => {
-                if (!e?.date) return false;
-                if ((e as any).type === 'Reminder' || (e as any).reminderType) return false;
-                if (e.status !== 'Scheduled' && e.status !== 'Published' && e.status !== 'Draft') return false;
-                const eventDate = new Date(e.date);
-                return !isNaN(eventDate.getTime()) && eventDate > new Date();
-              }).length;
-              
-              if (upcomingCount === 0) {
-                recommendations.push({
-                  type: 'warning',
-                  title: 'No Upcoming Posts',
-                  description: 'Schedule content ahead of time to maintain consistent presence.',
-                  action: () => setActivePage('compose'),
-                  actionLabel: 'Schedule Post'
-                });
-              }
-
-              // In offline/studio mode we don't have an Inbox. Replace message nudges with draft/workflow nudges.
-              const draftsCount = posts.filter(p => p.status === 'Draft').length;
-              if (draftsCount > 0) {
-                recommendations.push({
-                  type: 'info',
-                  title: 'Drafts Ready to Polish',
-                  description: `You have ${draftsCount} draft${draftsCount === 1 ? '' : 's'} to review before scheduling.`,
-                  action: () => setActivePage('approvals'),
-                  actionLabel: 'Review drafts'
-                });
-              }
-              
-              // Automation page is not part of the current tester-ready workflow; route users to Compose instead.
-              if (effectivePlan !== 'Free') {
-                recommendations.push({
-                  type: 'tip',
-                  title: 'Try AI Content Generation',
-                  description: 'Upload images or videos and let AI generate captions tailored to your content and platforms.',
-                  action: () => setActivePage('compose'),
-                  actionLabel: 'Generate Captions'
-                });
-              }
-              
-              // Success recommendation if posting consistently
-              if (postsThisWeek >= 5 && upcomingCount >= 3) {
-                recommendations.push({
-                  type: 'success',
-                  title: 'Great Consistency! 🎉',
-                  description: `You've posted ${postsThisWeek} times this week and have ${upcomingCount} posts scheduled. Keep it up!`
-                });
-              }
-              
-              // Default recommendation if no others
-              if (recommendations.length === 0) {
-                recommendations.push({
-                  type: 'tip',
-                  title: 'Explore Analytics',
-                  description: 'Check your analytics to see what content performs best and optimize your strategy.',
-                  action: () => setActivePage('analytics'),
-                  actionLabel: 'View Analytics'
-                });
-              }
-              
-              // Limit to 5 recommendations for taller box
-              const displayRecommendations = recommendations.slice(0, 5);
-              
-              const getIcon = (type: string) => {
-                switch(type) {
-                  case 'success': return <CheckCircleIcon className="w-5 h-5" />;
-                  case 'warning': return <FlagIcon className="w-5 h-5" />;
-                  case 'info': return <SparklesIcon className="w-5 h-5" />;
-                  default: return <SparklesIcon className="w-5 h-5" />;
-                }
-              };
-              
-              const getGradientClasses = (type: string) => {
-                switch(type) {
-                  case 'success': return 'from-emerald-50 to-green-50 dark:from-emerald-900/30 dark:to-green-900/20 border-emerald-200 dark:border-emerald-700/50';
-                  case 'warning': return 'from-amber-50 to-yellow-50 dark:from-amber-900/30 dark:to-yellow-900/20 border-amber-200 dark:border-amber-700/50';
-                  case 'info': return 'from-blue-50 to-cyan-50 dark:from-blue-900/30 dark:to-cyan-900/20 border-blue-200 dark:border-blue-700/50';
-                  default: return 'from-purple-50 to-indigo-50 dark:from-purple-900/30 dark:to-indigo-900/20 border-purple-200 dark:border-purple-700/50';
-                }
-              };
-              
-              const getTextColor = (type: string) => {
-                switch(type) {
-                  case 'success': return 'text-emerald-700 dark:text-emerald-300';
-                  case 'warning': return 'text-amber-700 dark:text-amber-300';
-                  case 'info': return 'text-blue-700 dark:text-blue-300';
-                  default: return 'text-purple-700 dark:text-purple-300';
-                }
-              };
-              
-              return displayRecommendations.length > 0 ? (
-                <div className="bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-700 p-5 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-600">
-                  <div className="flex items-center gap-3 mb-4">
-                    <div className="p-2 bg-gradient-to-br from-primary-500 to-primary-600 rounded-xl">
-                      <SparklesIcon className="w-5 h-5 text-white" />
-                    </div>
-                    <div>
-                      <h3 className="text-base font-bold text-gray-900 dark:text-white">AI Insights</h3>
-                      <p className="text-xs text-gray-500 dark:text-gray-400">Smart Recommendations</p>
-                    </div>
-                  </div>
-                  <div className="space-y-2.5 max-h-[500px] overflow-y-auto custom-scrollbar">
-                    {displayRecommendations.map((rec, idx) => (
-                      <div key={idx} className={`p-3.5 rounded-xl border bg-gradient-to-r ${getGradientClasses(rec.type)} backdrop-blur-sm hover:shadow-md transition-all`}>
-                        <div className="flex items-start gap-2.5">
-                          <div className={`flex-shrink-0 mt-0.5 ${getTextColor(rec.type)}`}>
-                            {getIcon(rec.type)}
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <p className={`font-semibold text-xs mb-1 ${getTextColor(rec.type)}`}>{rec.title}</p>
-                            <p className="text-xs text-gray-600 dark:text-gray-400 mb-2 leading-relaxed">{rec.description}</p>
-                            {rec.action && rec.actionLabel && (
-                              <button
-                                onClick={rec.action}
-                                className={`text-xs font-semibold ${getTextColor(rec.type)} hover:opacity-80 transition-opacity flex items-center gap-1`}
-                              >
-                                {rec.actionLabel} →
-                              </button>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ) : null;
-            })()}
-            
-            {/* Content Suggestions Panel - Phase 3 Feature 4 */}
-            {(() => {
-              // Generate content suggestions based on user's niche, recent posts, and performance
-              const niche = isBusiness ? user?.businessType : user?.niche;
-              const recentPosts = posts.filter(p => p.status === 'Published').slice(0, 5);
-              // Note: State hooks (isGeneratingIdeas, generatedIdeas, selectedCategory, showIdeasModal) 
-              // and handleGenerateIdeas function are now at the top level of the Dashboard component
-              
-              // Generate mock suggestions based on user type and niche
-              const generateSuggestions = (): Array<{ title: string; description: string; type: 'trending' | 'engagement' | 'niche' }> => {
-                const suggestions: Array<{ title: string; description: string; type: 'trending' | 'engagement' | 'niche' }> = [];
-                
-                if (isBusiness) {
-                  suggestions.push(
-                    {
-                      title: `Showcase ${niche || 'your business'} success story`,
-                      description: `Share a customer testimonial or case study to build trust.`,
-                      type: 'engagement'
-                    },
-                    {
-                      title: `Behind-the-scenes of ${niche || 'your operations'}`,
-                      description: `Give followers a peek into your business process.`,
-                      type: 'niche'
-                    },
-                    {
-                      title: `Industry tip or best practice`,
-                      description: `Position yourself as an expert by sharing valuable insights.`,
-                      type: 'trending'
-                    }
-                  );
-                } else {
-                  suggestions.push(
-                    {
-                      title: `Share a ${niche || 'personal'} milestone or achievement`,
-                      description: `Celebrate your progress with your audience.`,
-                      type: 'engagement'
-                    },
-                    {
-                      title: `Create ${niche || 'engaging'} behind-the-scenes content`,
-                      description: `Show your creative process or daily routine.`,
-                      type: 'niche'
-                    },
-                    {
-                      title: `Jump on trending ${niche || 'topic'} challenge`,
-                      description: `Participate in a trending challenge in your niche.`,
-                      type: 'trending'
-                    }
-                  );
-                }
-                
-                // If they have recent posts, suggest building on what worked
-                if (recentPosts.length > 0) {
-                  suggestions.push({
-                    title: 'Build on your best performing content',
-                    description: `Create a follow-up or series based on your successful posts.`,
-                    type: 'engagement'
-                  });
-                }
-                
-                return suggestions.slice(0, 5);
-              };
-              
-              const suggestions = generateSuggestions();
-              
-              const getTypeBadge = (type: string) => {
-                switch(type) {
-                  case 'trending': return { 
-                    label: 'Trending', 
-                    gradient: 'from-rose-500 to-pink-500',
-                    bg: 'bg-rose-50 dark:bg-rose-900/20',
-                    text: 'text-rose-700 dark:text-rose-300',
-                    border: 'border-rose-200 dark:border-rose-700/50',
-                    category: 'trending' as const
-                  };
-                  case 'engagement': return { 
-                    label: 'High Engagement', 
-                    gradient: 'from-blue-500 to-cyan-500',
-                    bg: 'bg-blue-50 dark:bg-blue-900/20',
-                    text: 'text-blue-700 dark:text-blue-300',
-                    border: 'border-blue-200 dark:border-blue-700/50',
-                    category: 'engagement' as const
-                  };
-                  default: return { 
-                    label: 'Niche', 
-                    gradient: 'from-purple-500 to-indigo-500',
-                    bg: 'bg-purple-50 dark:bg-purple-900/20',
-                    text: 'text-purple-700 dark:text-purple-300',
-                    border: 'border-purple-200 dark:border-purple-700/50',
-                    category: 'niche' as const
-                  };
-                }
-              };
-              
-              return suggestions.length > 0 ? (
-                <div className="bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-700 p-5 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-600">
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="flex items-center gap-3">
-                      <div className="p-2 bg-gradient-to-br from-violet-500 to-purple-600 rounded-xl">
-                        <SparklesIcon className="w-5 h-5 text-white" />
-                      </div>
-                      <div>
-                        <h3 className="text-base font-bold text-gray-900 dark:text-white">Content Ideas</h3>
-                        <p className="text-xs text-gray-500 dark:text-gray-400">AI-Powered Suggestions</p>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="space-y-2.5 max-h-[500px] overflow-y-auto custom-scrollbar">
-                    {suggestions.map((suggestion, idx) => {
-                      const badge = getTypeBadge(suggestion.type);
-                      return (
-                        <div 
-                          key={idx}
-                          className={`group p-3.5 rounded-xl border ${badge.bg} ${badge.border} hover:shadow-lg transition-all cursor-pointer backdrop-blur-sm`}
-                          onClick={() => {
-                            setComposeContext({
-                              topic: suggestion.title,
-                              media: null,
-                              results: [],
-                              captionText: suggestion.title + ': ' + suggestion.description,
-                              postGoal: 'engagement',
-                              postTone: 'friendly'
-                            });
-                            setActivePage('compose');
-                          }}
-                        >
-                          <div className="flex items-start gap-3">
-                            <div className={`flex-shrink-0 p-1.5 bg-gradient-to-br ${badge.gradient} rounded-lg`}>
-                              <SparklesIcon className="w-3.5 h-3.5 text-white" />
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-2 mb-1.5">
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleGenerateIdeas(badge.category);
-                                  }}
-                                  className={`text-[10px] font-semibold px-2 py-0.5 rounded-md ${badge.text} ${badge.bg} border ${badge.border} hover:opacity-80 transition-opacity cursor-pointer`}
-                                  disabled={isGeneratingIdeas}
-                                >
-                                  {badge.label}
-                                </button>
-                              </div>
-                              <p className={`font-semibold text-xs mb-1 ${badge.text}`}>
-                                {suggestion.title}
-                              </p>
-                              <p className="text-xs text-gray-600 dark:text-gray-400 leading-relaxed">
-                                {suggestion.description}
-                              </p>
-                            </div>
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setComposeContext({
-                                  topic: suggestion.title,
-                                  media: null,
-                                  results: [],
-                                  captionText: suggestion.title + ': ' + suggestion.description,
-                                  postGoal: 'engagement',
-                                  postTone: 'friendly'
-                                });
-                                setActivePage('compose');
-                              }}
-                              className={`flex-shrink-0 p-1.5 bg-gradient-to-br ${badge.gradient} text-white rounded-lg hover:opacity-90 transition-opacity opacity-0 group-hover:opacity-100`}
-                              title="Create post from this suggestion"
-                            >
-                              <SparklesIcon className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              ) : null;
-            })()}
-          </div>
-          )}
-          
           {/* Fan Engagement Hub - Creator & Agency Only */}
           {(() => {
             // Show for Creators OR Business Agency (since Agency manages creators)
@@ -2410,8 +1938,8 @@ export const Dashboard: React.FC = () => {
               <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="text-lg font-bold text-gray-900 dark:text-white">Fan Engagement Hub</h3>
-                  {!OFFLINE_MODE && (
-                    <button onClick={() => setActivePage('inbox')} className="text-sm text-primary-600 hover:underline">View Inbox</button>
+                  {hasFanHubAccess && (
+                    <button onClick={() => setActivePage('fanHub')} className="text-sm text-primary-600 hover:underline">Fan Hub Messages</button>
                   )}
                 </div>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
@@ -2448,8 +1976,8 @@ export const Dashboard: React.FC = () => {
               <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="text-lg font-bold text-gray-900 dark:text-white">Customer Engagement Hub</h3>
-                  {!OFFLINE_MODE && (
-                    <button onClick={() => setActivePage('inbox')} className="text-sm text-primary-600 hover:underline">View Inbox</button>
+                  {hasFanHubAccess && (
+                    <button onClick={() => setActivePage('fanHub')} className="text-sm text-primary-600 hover:underline">Fan Hub Messages</button>
                   )}
                 </div>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
@@ -2738,7 +2266,8 @@ export const Dashboard: React.FC = () => {
               YouTube: 0,
               LinkedIn: 0,
               Facebook: 0,
-              Pinterest: 0
+              Pinterest: 0,
+              'My Page': 0
             };
             
             leadsThisMonth.forEach(lead => {
@@ -2776,14 +2305,11 @@ export const Dashboard: React.FC = () => {
                     </div>
                   </div>
                   <button
-                    onClick={() => {
-                      setFilters(prev => ({ ...prev, category: 'Lead' }));
-                      if (!OFFLINE_MODE) setActivePage('inbox');
-                    }}
-                    className={`text-sm font-medium ${OFFLINE_MODE ? 'text-gray-400 dark:text-gray-500 cursor-not-allowed' : 'text-primary-600 dark:text-primary-400 hover:underline'}`}
-                    disabled={OFFLINE_MODE}
+                    onClick={() => setFilters(prev => ({ ...prev, category: 'Lead' }))}
+                    className="text-sm font-medium text-gray-500 dark:text-gray-400 cursor-default"
+                    disabled
                   >
-                    {OFFLINE_MODE ? 'Leads inbox (coming soon)' : 'View All Leads →'}
+                    Leads (social inbox removed)
                   </button>
                 </div>
                 
@@ -3403,328 +2929,247 @@ export const Dashboard: React.FC = () => {
     <div id="tour-step-1-dashboard" className="space-y-6 max-w-7xl mx-auto w-full">
       <div className="flex items-center justify-between gap-3">
         <div>
-          <h2 className="text-3xl font-bold text-gray-900 dark:text-white">Admin Daily Dashboard</h2>
-          <p className="text-sm text-gray-500 dark:text-gray-400">Growth-focused view without user posts or scheduled content.</p>
+          <h2 className="text-3xl font-bold text-gray-900 dark:text-white">Echoflux Command Center</h2>
+          <p className="text-sm text-gray-500 dark:text-gray-400">Real-time business metrics and platform health</p>
         </div>
-        <span className="text-xs px-3 py-1 rounded-full bg-primary-100 dark:bg-primary-900/40 text-primary-700 dark:text-primary-200">
-          Admin view
-        </span>
+        <button
+          onClick={() => setActivePage('admin')}
+          className="px-4 py-2 text-sm font-medium bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors"
+        >
+          Full Admin Panel →
+        </button>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700">
-          <span className="text-xs text-gray-600 dark:text-gray-400">Signups (24h)</span>
-          <span className="text-sm font-semibold text-gray-900 dark:text-white">
-            {isLoadingAdminSignupCounts ? '—' : adminSignupCounts.last24h.toLocaleString()}
-          </span>
+      {/* Revenue Overview Banner */}
+      <div className="bg-gradient-to-r from-gray-900 to-gray-800 dark:from-gray-800 dark:to-gray-700 p-6 rounded-xl shadow-lg text-white">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+          <div>
+            <p className="text-sm opacity-70 mb-1">Total Users</p>
+            <p className="text-3xl font-bold">{userEngagementData?.conversionFunnel?.total?.toLocaleString() ?? '—'}</p>
+            <p className="text-xs opacity-60 mt-1">
+              +{isLoadingAdminSignupCounts ? '—' : adminSignupCounts.last7d} this week
+            </p>
+          </div>
+          <div>
+            <p className="text-sm opacity-70 mb-1">Subscription MRR</p>
+            <p className="text-3xl font-bold text-blue-300">
+              ${userEngagementData ? ((userEngagementData.conversionFunnel.pro * 29) + (userEngagementData.conversionFunnel.elite * 79)).toLocaleString() : '—'}
+            </p>
+            <p className="text-xs opacity-60 mt-1">Pro + Elite plans</p>
+          </div>
+          <div>
+            <p className="text-sm opacity-70 mb-1">Fan Hub Commission</p>
+            <p className="text-3xl font-bold text-green-300">$0.00</p>
+            <p className="text-xs opacity-60 mt-1">10% of creator earnings</p>
+          </div>
+          <div className="border-l border-white/20 pl-6">
+            <p className="text-sm opacity-70 mb-1">Total Revenue</p>
+            <p className="text-3xl font-bold text-primary-300">
+              ${userEngagementData ? ((userEngagementData.conversionFunnel.pro * 29) + (userEngagementData.conversionFunnel.elite * 79)).toLocaleString() : '—'}
+            </p>
+            <p className="text-xs opacity-60 mt-1">Monthly</p>
+          </div>
         </div>
-        <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700">
-          <span className="text-xs text-gray-600 dark:text-gray-400">Signups (7d)</span>
-          <span className="text-sm font-semibold text-gray-900 dark:text-white">
-            {isLoadingAdminSignupCounts ? '—' : adminSignupCounts.last7d.toLocaleString()}
-          </span>
+      </div>
+
+      {/* Quick Stats Row */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-3">
+        <div className="p-3 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
+          <p className="text-xs text-gray-500 dark:text-gray-400">Signups (24h)</p>
+          <p className="text-xl font-bold text-gray-900 dark:text-white">
+            {isLoadingAdminSignupCounts ? '—' : adminSignupCounts.last24h}
+          </p>
         </div>
-        <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700">
-          <span className="text-xs text-gray-600 dark:text-gray-400">Failed payments (24h)</span>
+        <div className="p-3 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
+          <p className="text-xs text-gray-500 dark:text-gray-400">Signups (7d)</p>
+          <p className="text-xl font-bold text-gray-900 dark:text-white">
+            {isLoadingAdminSignupCounts ? '—' : adminSignupCounts.last7d}
+          </p>
+        </div>
+        <div className="p-3 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
+          <p className="text-xs text-gray-500 dark:text-gray-400">Pro Users</p>
+          <p className="text-xl font-bold text-primary-600 dark:text-primary-400">
+            {userEngagementData?.conversionFunnel?.pro ?? '—'}
+          </p>
+        </div>
+        <div className="p-3 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
+          <p className="text-xs text-gray-500 dark:text-gray-400">Elite Users</p>
+          <p className="text-xl font-bold text-purple-600 dark:text-purple-400">
+            {userEngagementData?.conversionFunnel?.elite ?? '—'}
+          </p>
+        </div>
+        <div className="p-3 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
+          <p className="text-xs text-gray-500 dark:text-gray-400">Conversion Rate</p>
+          <p className="text-xl font-bold text-green-600 dark:text-green-400">
+            {userEngagementData && userEngagementData.conversionFunnel.total > 0 
+              ? `${((userEngagementData.conversionFunnel.pro + userEngagementData.conversionFunnel.elite) / userEngagementData.conversionFunnel.total * 100).toFixed(1)}%`
+              : '—'}
+          </p>
+        </div>
+        <div className="p-3 bg-red-50 dark:bg-red-900/20 rounded-lg border border-red-200 dark:border-red-700">
+          <p className="text-xs text-red-600 dark:text-red-400">Failed Payments</p>
           <button
             onClick={() => setBillingModal({ type: 'failed', items: adminBilling.failed })}
-            className="text-sm font-semibold text-primary-600 dark:text-primary-300 hover:underline"
+            className="text-xl font-bold text-red-700 dark:text-red-300 hover:underline"
           >
             {isLoadingAdminBilling ? '…' : adminBilling.failed.length}
           </button>
         </div>
       </div>
 
-      {/* OnlyFans admin metrics intentionally hidden to keep the admin daily dashboard focused. */}
-
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="p-4 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm">
-          <div className="flex items-center justify-between mb-2">
-            <p className="text-sm font-medium text-gray-700 dark:text-gray-200">Signups (24h)</p>
-            <UserIcon className="w-5 h-5 text-primary-500" />
-          </div>
-          <p className="text-2xl font-bold text-gray-900 dark:text-white">
-            {isLoadingAdminSignupCounts ? '—' : adminSignupCounts.last24h.toLocaleString()}
-          </p>
-          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-            {adminSignupError ? adminSignupError : `Last 7d: ${adminSignupCounts.last7d.toLocaleString()}`}
-          </p>
-        </div>
-
-        <div className="p-4 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm">
-          <div className="flex items-center justify-between mb-2">
-            <p className="text-sm font-medium text-gray-700 dark:text-gray-200">Feature Adoption</p>
-            <TrendingIcon className="w-5 h-5 text-primary-500" />
-          </div>
-          <p className="text-2xl font-bold text-gray-900 dark:text-white">
-            {isLoadingUserEngagement ? '—' : userEngagementData ? `${userEngagementData.featureAdoption.anyFeature}` : '—'}
-          </p>
-          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-            {isLoadingUserEngagement ? 'Loading...' : userEngagementData 
-              ? `${userEngagementData.conversionFunnel.total > 0 ? (userEngagementData.featureAdoption.anyFeature / userEngagementData.conversionFunnel.total * 100).toFixed(1) : 0}% of users activated`
-              : 'No data'}
-          </p>
-        </div>
-
-        <div className="p-4 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm">
-          <div className="flex items-center justify-between mb-2">
-            <p className="text-sm font-medium text-gray-700 dark:text-gray-200">Feedback & inbox</p>
-            <ChatIcon className="w-5 h-5 text-primary-500" />
-          </div>
-          <p className="text-2xl font-bold text-gray-900 dark:text-white">{pendingFeedbackForms.length}</p>
-          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-            Open messages: {messages.filter(m => !m.isArchived).length}
-          </p>
-        </div>
-
-        <div className="p-4 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm">
-          <div className="flex items-center justify-between mb-2">
-            <p className="text-sm font-medium text-gray-700 dark:text-gray-200">System signals</p>
-            <DashboardIcon className="w-5 h-5 text-primary-500" />
-          </div>
-          <p className="text-2xl font-bold text-gray-900 dark:text-white">
-            {messages.filter(m => m.isFlagged && !m.isArchived).length}
-          </p>
-          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Flagged/priority messages</p>
-        </div>
-      </div>
-
+      {/* Main Content Grid */}
+      {/* Main Content Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* User Health & Engagement */}
         <div className="lg:col-span-2 p-5 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm">
           <div className="flex items-center justify-between mb-4">
-            <div>
-              <h3 className="text-lg font-bold text-gray-900 dark:text-white">User Engagement & Health</h3>
-              <p className="text-sm text-gray-500 dark:text-gray-400">Track user behavior, conversion, and feature adoption.</p>
+            <h3 className="text-lg font-bold text-gray-900 dark:text-white">User Health & Engagement</h3>
+          </div>
+          
+          {isLoadingUserEngagement ? (
+            <div className="text-center py-8">
+              <svg className="animate-spin h-6 w-6 text-primary-600 mx-auto mb-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+              </svg>
             </div>
-            <button
-              onClick={() => setActivePage('admin')}
-              className="text-sm text-primary-600 dark:text-primary-300 font-semibold hover:underline"
-            >
-              View Details →
-            </button>
-          </div>
-          <div className="space-y-4">
-            {isLoadingUserEngagement ? (
-              <div className="text-center py-8">
-                <svg className="animate-spin h-6 w-6 text-primary-600 mx-auto mb-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                </svg>
-                <p className="text-sm text-gray-500 dark:text-gray-400">Loading engagement metrics…</p>
+          ) : userEngagementData ? (
+            <div className="space-y-5">
+              {/* Health Indicators */}
+              <div className="grid grid-cols-2 gap-4">
+                <div className="p-3 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-700">
+                  <p className="text-xs text-green-700 dark:text-green-300 mb-1">Paying Users</p>
+                  <p className="text-2xl font-bold text-green-900 dark:text-green-100">
+                    {userEngagementData.conversionFunnel.pro + userEngagementData.conversionFunnel.elite}
+                  </p>
+                  <p className="text-xs text-green-600 dark:text-green-400 mt-1">
+                    {userEngagementData.conversionFunnel.total > 0 
+                      ? `${((userEngagementData.conversionFunnel.pro + userEngagementData.conversionFunnel.elite) / userEngagementData.conversionFunnel.total * 100).toFixed(1)}% conversion`
+                      : '—'}
+                  </p>
+                </div>
+                <div className="p-3 bg-red-50 dark:bg-red-900/20 rounded-lg border border-red-200 dark:border-red-700">
+                  <p className="text-xs text-red-700 dark:text-red-300 mb-1">Churn Risk</p>
+                  <p className="text-2xl font-bold text-red-900 dark:text-red-100">
+                    {userEngagementData.churnRisk}
+                  </p>
+                  <p className="text-xs text-red-600 dark:text-red-400 mt-1">Inactive 30d+</p>
+                </div>
               </div>
-            ) : userEngagementData ? (
-              <>
-                {/* Conversion Funnel */}
-                <div>
-                  <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Conversion Funnel</h4>
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm text-gray-600 dark:text-gray-400">Pro</span>
-                      <div className="flex items-center gap-3">
-                        <div className="w-32 bg-gray-200 dark:bg-gray-700 rounded-full h-2">
-                          <div 
-                            className="bg-primary-500 h-2 rounded-full" 
-                            style={{ width: `${userEngagementData.conversionFunnel.total > 0 ? (userEngagementData.conversionFunnel.pro / userEngagementData.conversionFunnel.total * 100) : 0}%` }}
-                          ></div>
-                        </div>
-                        <span className="text-sm font-semibold text-gray-900 dark:text-white w-12 text-right">
-                          {userEngagementData.conversionFunnel.pro}
-                        </span>
+
+              {/* Plan Breakdown */}
+              <div>
+                <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Plan Breakdown</h4>
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-gray-600 dark:text-gray-400">Pro ($19/mo)</span>
+                    <div className="flex items-center gap-3">
+                      <div className="w-24 bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                        <div 
+                          className="bg-primary-500 h-2 rounded-full" 
+                          style={{ width: `${userEngagementData.conversionFunnel.total > 0 ? (userEngagementData.conversionFunnel.pro / userEngagementData.conversionFunnel.total * 100) : 0}%` }}
+                        ></div>
                       </div>
+                      <span className="text-sm font-semibold text-gray-900 dark:text-white w-8 text-right">
+                        {userEngagementData.conversionFunnel.pro}
+                      </span>
                     </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm text-gray-600 dark:text-gray-400">Elite</span>
-                      <div className="flex items-center gap-3">
-                        <div className="w-32 bg-gray-200 dark:bg-gray-700 rounded-full h-2">
-                          <div 
-                            className="bg-purple-500 h-2 rounded-full" 
-                            style={{ width: `${userEngagementData.conversionFunnel.total > 0 ? (userEngagementData.conversionFunnel.elite / userEngagementData.conversionFunnel.total * 100) : 0}%` }}
-                          ></div>
-                        </div>
-                        <span className="text-sm font-semibold text-gray-900 dark:text-white w-12 text-right">
-                          {userEngagementData.conversionFunnel.elite}
-                        </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-gray-600 dark:text-gray-400">Elite ($39/mo)</span>
+                    <div className="flex items-center gap-3">
+                      <div className="w-24 bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                        <div 
+                          className="bg-purple-500 h-2 rounded-full" 
+                          style={{ width: `${userEngagementData.conversionFunnel.total > 0 ? (userEngagementData.conversionFunnel.elite / userEngagementData.conversionFunnel.total * 100) : 0}%` }}
+                        ></div>
                       </div>
-                    </div>
-                    <div className="pt-2 border-t border-gray-200 dark:border-gray-700">
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Total Users</span>
-                        <span className="text-sm font-bold text-gray-900 dark:text-white">
-                          {userEngagementData.conversionFunnel.total}
-                        </span>
-                      </div>
-                      {userEngagementData.conversionFunnel.total > 0 && (
-                        <div className="flex items-center justify-between mt-1">
-                          <span className="text-xs text-gray-500 dark:text-gray-400">Conversion Rate</span>
-                          <span className="text-xs font-semibold text-primary-600 dark:text-primary-400">
-                            {((userEngagementData.conversionFunnel.pro + userEngagementData.conversionFunnel.elite) / userEngagementData.conversionFunnel.total * 100).toFixed(1)}%
-                          </span>
-                        </div>
-                      )}
+                      <span className="text-sm font-semibold text-gray-900 dark:text-white w-8 text-right">
+                        {userEngagementData.conversionFunnel.elite}
+                      </span>
                     </div>
                   </div>
                 </div>
+              </div>
 
-                {/* Feature Adoption */}
-                <div>
-                  <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Feature Adoption</h4>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600">
-                      <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">AI Captions</p>
-                      <p className="text-lg font-bold text-gray-900 dark:text-white">
-                        {userEngagementData.featureAdoption.captions}
-                      </p>
-                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                        {userEngagementData.conversionFunnel.total > 0 
-                          ? `${(userEngagementData.featureAdoption.captions / userEngagementData.conversionFunnel.total * 100).toFixed(1)}% of users`
-                          : '—'}
-                      </p>
-                    </div>
-                    <div className="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600">
-                      <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Ad Image Gen</p>
-                      <p className="text-lg font-bold text-gray-900 dark:text-white">
-                        {userEngagementData.featureAdoption.adImages}
-                      </p>
-                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Total generated</p>
-                    </div>
-                    <div className="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600">
-                      <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Ad Video Gen</p>
-                      <p className="text-lg font-bold text-gray-900 dark:text-white">
-                        {userEngagementData.featureAdoption.adVideos}
-                      </p>
-                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Total generated</p>
-                    </div>
-                    <div className="p-3 bg-primary-50 dark:bg-primary-900/20 rounded-lg border border-primary-200 dark:border-primary-700">
-                      <p className="text-xs text-primary-700 dark:text-primary-300 mb-1">Any Feature</p>
-                      <p className="text-lg font-bold text-primary-900 dark:text-primary-100">
-                        {userEngagementData.featureAdoption.anyFeature}
-                      </p>
-                      <p className="text-xs text-primary-600 dark:text-primary-400 mt-1">
-                        {userEngagementData.conversionFunnel.total > 0 
-                          ? `${(userEngagementData.featureAdoption.anyFeature / userEngagementData.conversionFunnel.total * 100).toFixed(1)}% activated`
-                          : '—'}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Churn Risk & Most Active */}
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="p-3 bg-red-50 dark:bg-red-900/20 rounded-lg border border-red-200 dark:border-red-700">
-                    <p className="text-xs text-red-700 dark:text-red-300 mb-1">Churn Risk</p>
-                    <p className="text-2xl font-bold text-red-900 dark:text-red-100">
-                      {userEngagementData.churnRisk}
-                    </p>
-                    <p className="text-xs text-red-600 dark:text-red-400 mt-1">
-                      Inactive users (30d+)
-                    </p>
-                  </div>
-                  <div className="p-3 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-700">
-                    <p className="text-xs text-green-700 dark:text-green-300 mb-1">Most Active</p>
-                    <p className="text-2xl font-bold text-green-900 dark:text-green-100">
-                      {userEngagementData.mostActiveUsers.length}
-                    </p>
-                    <p className="text-xs text-green-600 dark:text-green-400 mt-1">
-                      Top users by usage
-                    </p>
-                  </div>
-                </div>
-
-                {/* Most Active Users List */}
-                {userEngagementData.mostActiveUsers.length > 0 && (
+              {/* Revenue Potential */}
+              <div className="p-4 bg-gradient-to-r from-primary-50 to-purple-50 dark:from-primary-900/20 dark:to-purple-900/20 rounded-lg border border-primary-200 dark:border-primary-700">
+                <div className="flex items-center justify-between">
                   <div>
-                    <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Top Active Users</h4>
-                    <div className="space-y-2">
-                      {userEngagementData.mostActiveUsers.map((activeUser, idx) => (
-                        <div key={activeUser.id} className="flex items-center justify-between p-2 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600">
-                          <div className="flex items-center gap-2">
-                            <span className="text-xs font-bold text-gray-400 dark:text-gray-500 w-4">#{idx + 1}</span>
-                            <div>
-                              <p className="text-sm font-medium text-gray-900 dark:text-white">{activeUser.name}</p>
-                              <p className="text-xs text-gray-500 dark:text-gray-400">{activeUser.plan} Plan</p>
-                            </div>
-                          </div>
-                          <span className="text-sm font-semibold text-primary-600 dark:text-primary-400">
-                            {activeUser.totalUsage.toLocaleString()} uses
-                          </span>
-                        </div>
-                      ))}
-                    </div>
+                    <p className="text-sm font-medium text-gray-700 dark:text-gray-300">Monthly Subscription Revenue</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                      {userEngagementData.conversionFunnel.pro} Pro × $19 + {userEngagementData.conversionFunnel.elite} Elite × $39
+                    </p>
                   </div>
-                )}
-              </>
-            ) : (
-              <div className="text-center py-8 text-gray-500 dark:text-gray-400">
-                <p className="text-sm">No engagement data available</p>
+                  <p className="text-2xl font-bold text-primary-600 dark:text-primary-400">
+                    ${((userEngagementData.conversionFunnel.pro * 19) + (userEngagementData.conversionFunnel.elite * 39)).toLocaleString()}
+                  </p>
+                </div>
               </div>
-            )}
-          </div>
+            </div>
+          ) : (
+            <div className="text-center py-8 text-gray-500">No data available</div>
+          )}
         </div>
 
+        {/* Operations Panel */}
         <div className="p-5 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm space-y-5">
           <div>
-            <div className="flex items-center justify-between mb-3">
-              <div>
-                <h3 className="text-lg font-bold text-gray-900 dark:text-white">Ops signals (today)</h3>
-                <p className="text-xs text-gray-500 dark:text-gray-400">Daily snapshot</p>
-              </div>
-              <CheckCircleIcon className="w-5 h-5 text-primary-500" />
-            </div>
-            <div className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm text-gray-800 dark:text-gray-200">
-              <div className="flex items-center justify-between">
-                <span className="text-gray-600 dark:text-gray-400">New signups</span>
-                <span className="font-semibold">{isLoadingAdminSignupCounts ? '—' : adminSignupCounts.last24h}</span>
-              </div>
-              <div className="flex items-center justify-between">
+            <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-3">Operations</h3>
+            <div className="space-y-2 text-sm">
+              <div className="flex items-center justify-between p-2 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
                 <span className="text-gray-600 dark:text-gray-400">Open messages</span>
-                <span className="font-semibold">{messages.filter(m => !m.isArchived).length}</span>
+                <span className="font-semibold text-gray-900 dark:text-white">{messages.filter(m => !m.isArchived).length}</span>
               </div>
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between p-2 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
                 <span className="text-gray-600 dark:text-gray-400">Pending feedback</span>
-                <span className="font-semibold">{pendingFeedbackForms.length}</span>
+                <span className="font-semibold text-gray-900 dark:text-white">{pendingFeedbackForms.length}</span>
               </div>
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between p-2 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
                 <span className="text-gray-600 dark:text-gray-400">Flagged messages</span>
-                <span className="font-semibold">{messages.filter(m => m.isFlagged && !m.isArchived).length}</span>
+                <span className="font-semibold text-gray-900 dark:text-white">{messages.filter(m => m.isFlagged && !m.isArchived).length}</span>
               </div>
-              <div className="flex items-center justify-between">
-                <span className="text-gray-600 dark:text-gray-400">Invites (available)</span>
-                <span className="font-semibold">
-                  {adminInviteStats?.available ?? (adminInviteStats ? 0 : '—')}
-                </span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-gray-600 dark:text-gray-400">Feedback total</span>
-                <span className="font-semibold">
-                  {adminFeedbackStats?.total ?? (adminFeedbackStats ? 0 : '—')}
+              <div className="flex items-center justify-between p-2 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+                <span className="text-gray-600 dark:text-gray-400">Invites available</span>
+                <span className="font-semibold text-gray-900 dark:text-white">
+                  {adminInviteStats?.available ?? '—'}
                 </span>
               </div>
             </div>
           </div>
 
           <div>
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Billing guardrails</h3>
-              {adminBillingError && <span className="text-xs text-red-500 dark:text-red-400">{adminBillingError}</span>}
-            </div>
-            <div className="space-y-2 text-sm text-gray-800 dark:text-gray-200">
-              <div className="flex items-center justify-between">
-                <span className="text-gray-600 dark:text-gray-400">Failed payments (24h)</span>
+            <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-3">Billing</h3>
+            <div className="space-y-2 text-sm">
+              <div className="flex items-center justify-between p-2 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+                <span className="text-gray-600 dark:text-gray-400">Failed payments</span>
                 <button
                   onClick={() => setBillingModal({ type: 'failed', items: adminBilling.failed })}
-                  className="font-semibold text-primary-600 dark:text-primary-300 hover:underline"
+                  className="font-semibold text-red-600 dark:text-red-400 hover:underline"
                 >
                   {isLoadingAdminBilling ? '…' : adminBilling.failed.length}
                 </button>
               </div>
-              <div className="flex items-center justify-between">
-                <span className="text-gray-600 dark:text-gray-400">Renewals (next 7d)</span>
+              <div className="flex items-center justify-between p-2 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+                <span className="text-gray-600 dark:text-gray-400">Renewals (7d)</span>
                 <button
                   onClick={() => setBillingModal({ type: 'renewals', items: adminBilling.renewals })}
-                  className="font-semibold text-primary-600 dark:text-primary-300 hover:underline"
+                  className="font-semibold text-primary-600 dark:text-primary-400 hover:underline"
                 >
                   {isLoadingAdminBilling ? '…' : adminBilling.renewals.length}
                 </button>
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-3">Feedback</h3>
+            <div className="space-y-2 text-sm">
+              <div className="flex items-center justify-between p-2 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+                <span className="text-gray-600 dark:text-gray-400">Total received</span>
+                <span className="font-semibold text-gray-900 dark:text-white">
+                  {adminFeedbackStats?.total ?? '—'}
+                </span>
               </div>
             </div>
           </div>
@@ -3845,10 +3290,122 @@ export const Dashboard: React.FC = () => {
     return renderAdminDashboardView();
   }
 
+  const handleMonetizedClick = () => {
+    setDashboardMode('monetized');
+  };
+
+  const navigateToStudioTab = (tab: string) => {
+    setActivePage('onlyfansStudio');
+    if (typeof window !== 'undefined') {
+      window.history.pushState({}, '', `/studio?tab=${encodeURIComponent(tab)}`);
+    }
+  };
+
+  // Monetized mode: Pro sees Fan Hub cards; Elite/Agency/OnlyFansStudio see all cards including Premium Studio features
+  const showMonetizedCards = dashboardMode === 'monetized' && (hasMonetizedAccess || hasFanHubAccess);
+  const hasPremiumStudioFeatures = hasMonetizedAccess; // Drops & PPV, Funnel Teasers are Elite+ only
+
+  const ELITE_ONLY_BULLETS = [
+    'Drops & PPV',
+    'Funnel Teasers',
+    'Persona',
+    'Prompts',
+    'Money Calendar',
+  ];
+
   return (
     <div id="tour-step-1-dashboard" className="space-y-6 max-w-7xl mx-auto w-full">
-      {renderCommandCenter()}
+      {/* Dashboard Mode Toggle: Social / Monetized (Pro sees upgrade when selecting Monetized) */}
+      {!isAdmin && (hasMonetizedAccess || isPro) && (
+        <div className="flex items-center gap-2 p-2 rounded-lg bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 w-fit">
+          <button
+            type="button"
+            onClick={() => setDashboardMode('social')}
+            className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${dashboardMode === 'social' ? 'bg-primary-600 text-white' : 'text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700'}`}
+          >
+            Social
+          </button>
+          <button
+            type="button"
+            onClick={handleMonetizedClick}
+            className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${dashboardMode === 'monetized' ? 'bg-primary-600 text-white' : 'text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700'}`}
+          >
+            Monetized
+          </button>
+        </div>
+      )}
+
+      {/* Monetized mode: Show cards based on plan access */}
+      {showMonetizedCards && (
+        <div className="space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {/* Elite+ only: Drops & PPV */}
+            {hasPremiumStudioFeatures && (
+              <button type="button" onClick={() => navigateToStudioTab('drops')} className="flex flex-col items-start p-5 rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 hover:shadow-md transition-all text-left">
+                <SparklesIcon className="w-8 h-8 text-primary-600 dark:text-primary-400 mb-2" />
+                <span className="font-semibold text-gray-900 dark:text-white">Drops & PPV</span>
+                <span className="text-sm text-gray-500 dark:text-gray-400 mt-1">Plan and price drops</span>
+              </button>
+            )}
+            {/* Pro+ : DM Session */}
+            <button type="button" onClick={() => setActivePage('fanHub')} className="flex flex-col items-start p-5 rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 hover:shadow-md transition-all text-left">
+              <ChatIcon className="w-8 h-8 text-primary-600 dark:text-primary-400 mb-2" />
+              <span className="font-semibold text-gray-900 dark:text-white">DM Session</span>
+              <span className="text-sm text-gray-500 dark:text-gray-400 mt-1">Fan messages & engagement</span>
+            </button>
+            {/* Elite+ only: Funnel Teasers */}
+            {hasPremiumStudioFeatures && (
+              <button type="button" onClick={() => navigateToStudioTab('teasers')} className="flex flex-col items-start p-5 rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 hover:shadow-md transition-all text-left">
+                <RocketIcon className="w-8 h-8 text-primary-600 dark:text-primary-400 mb-2" />
+                <span className="font-semibold text-gray-900 dark:text-white">Funnel Teasers</span>
+                <span className="text-sm text-gray-500 dark:text-gray-400 mt-1">IG/X/TikTok teasers + CTAs</span>
+              </button>
+            )}
+            {/* Pro+ : Fans */}
+            <button type="button" onClick={() => setActivePage('fanHub')} className="flex flex-col items-start p-5 rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 hover:shadow-md transition-all text-left">
+              <UserIcon className="w-8 h-8 text-primary-600 dark:text-primary-400 mb-2" />
+              <span className="font-semibold text-gray-900 dark:text-white">Fans</span>
+              <span className="text-sm text-gray-500 dark:text-gray-400 mt-1">Top fans & notes</span>
+            </button>
+            {/* Pro+ : Analytics */}
+            <button type="button" onClick={() => setActivePage('fanHub')} className="flex flex-col items-start p-5 rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 hover:shadow-md transition-all text-left">
+              <TrendingIcon className="w-8 h-8 text-primary-600 dark:text-primary-400 mb-2" />
+              <span className="font-semibold text-gray-900 dark:text-white">Analytics</span>
+              <span className="text-sm text-gray-500 dark:text-gray-400 mt-1">What&apos;s working</span>
+            </button>
+            {/* Pro+ : Payouts */}
+            <button type="button" onClick={() => setActivePage('fanHub')} className="flex flex-col items-start p-5 rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 hover:shadow-md transition-all text-left">
+              <DollarSignIcon className="w-8 h-8 text-primary-600 dark:text-primary-400 mb-2" />
+              <span className="font-semibold text-gray-900 dark:text-white">Payouts</span>
+              <span className="text-sm text-gray-500 dark:text-gray-400 mt-1">Connect & manage payouts</span>
+            </button>
+          </div>
+          
+          {/* Pro users: Show upgrade prompt for Elite features */}
+          {!hasPremiumStudioFeatures && (
+            <div className="bg-gradient-to-r from-primary-50 to-indigo-50 dark:from-primary-900/20 dark:to-indigo-900/20 rounded-xl border border-primary-200 dark:border-primary-700 p-4">
+              <div className="flex items-start gap-3">
+                <SparklesIcon className="w-6 h-6 text-primary-600 dark:text-primary-400 flex-shrink-0 mt-0.5" />
+                <div className="flex-1">
+                  <h3 className="font-semibold text-gray-900 dark:text-white text-sm">Unlock Premium Studio</h3>
+                  <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
+                    Upgrade to Elite for {ELITE_ONLY_BULLETS.join(', ')}, and more.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => openPaymentModal?.({ name: 'Elite', price: 79, cycle: 'monthly' })}
+                    className="mt-2 px-3 py-1.5 bg-primary-600 text-white text-xs font-semibold rounded-lg hover:bg-primary-700 transition-colors"
+                  >
+                    Upgrade to Elite
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {dashboardMode === 'social' && renderCommandCenter()}
     </div>
   );
 };
-

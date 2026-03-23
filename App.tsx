@@ -27,9 +27,7 @@ import { AdminDashboard } from './components/AdminDashboard';
 import Automation from './components/Automation';
 import { Calendar } from './components/Calendar';
 import MediaLibrary from './components/MediaLibrary';
-import { Approvals } from './components/Approvals';
 import { EmailCenterPage } from './components/EmailCenterPage';
-import { Inbox } from './components/Inbox';
 import { CreatorOnboardingModal } from './components/CreatorOnboardingModal';
 import { PlanSelectorModal } from './components/PlanSelectorModal';
 import { MaintenancePage } from './components/MaintenancePage';
@@ -44,14 +42,18 @@ import { PublicAnnouncementBanner } from './components/PublicAnnouncementBanner'
 import { Page, UserType, Plan } from './types';
 import { Pricing } from './components/Pricing';
 import { CRMSidebar } from './components/CRMSidebar';
-import { BioPageBuilder } from './components/BioPageBuilder';
 import { AdGenerator } from './components/AdGenerator';
 import { ErrorBoundary } from './components/ErrorBoundary';
-import { BioPageView } from './components/BioPageView';
+import { FanStorefrontView } from './components/FanStorefrontView';
+import { KNOWN_APP_ROUTES } from './constants';
+import { isCustomDomainStorefrontPath } from './src/lib/storefrontCustomDomain';
 import { ResetPassword } from './components/ResetPassword';
 import { InviteRequiredPage } from './components/InviteRequiredPage';
 import { isInviteOnlyMode } from './src/utils/inviteOnly';
 import { lazy, Suspense } from 'react';
+import { PremiumStudioUpgrade } from './components/PremiumStudioUpgrade';
+import { PremiumStudioLayout } from './components/PremiumStudioLayout';
+import { WhatToPost } from './components/WhatToPost';
 
 // Lazy load heavy components for code splitting
 const Strategy = lazy(() => import('./components/Strategy').then(module => ({ default: module.Strategy })));
@@ -60,7 +62,6 @@ const Autopilot = lazy(() => import('./components/Autopilot'));
 
 const pageTitles: Record<Page, string> = {
     dashboard: 'Dashboard',
-    inbox: 'Inbox',
     analytics: "What's Working",
     settings: 'Settings',
     compose: 'Write Captions',
@@ -80,12 +81,14 @@ const pageTitles: Record<Page, string> = {
     admin: 'Admin Dashboard',
     automation: 'Automation',
     bio: 'Bio Link Page',
-    strategy: 'Plan My Week',
+    strategy: 'What to Post',
     ads: 'Ad Ideas',
     mediaLibrary: 'My Vault',
     autopilot: 'AI Autopilot',
     onlyfansStudio: 'Premium Content Studio',
     emailCenter: 'Email Center',
+    premiumStudioUpgrade: 'Unlock Premium Studio',
+    fanHub: 'Fan Hub',
 };
 
 const MainContent: React.FC = () => {
@@ -93,6 +96,7 @@ const MainContent: React.FC = () => {
     const context = useAppContext();
     const user = context?.user;
     const activePage = context?.activePage || 'dashboard';
+    const [strategyViewMode, setStrategyViewMode] = useState<'simple' | 'advanced'>('simple');
 
     // Check if context is available
     if (!context) {
@@ -115,7 +119,6 @@ const MainContent: React.FC = () => {
     try {
         switch (activePage) {
             case 'dashboard': return <Dashboard />;
-            case 'inbox': return <Inbox />;
             case 'analytics': return (
                 <ErrorBoundary>
                     <Analytics />
@@ -124,9 +127,15 @@ const MainContent: React.FC = () => {
             case 'settings': return <Settings />;
             case 'compose': return <Compose />;
             case 'calendar': return <Calendar />;
-            case 'approvals': return <Approvals />;
             case 'team': return <Team />;
-            case 'opportunities': return <Opportunities />;
+            case 'opportunities': {
+                // Trends/Opportunities page has been integrated into What to Post
+                // Redirect to strategy page (What to Post)
+                if (typeof window !== 'undefined') {
+                    context.setActivePage('strategy');
+                }
+                return <WhatToPost onOpenAdvanced={() => setStrategyViewMode('advanced')} />;
+            }
             case 'profile': return <Profile />;
             case 'about': return <About />;
             case 'contact': return <Contact />;
@@ -138,12 +147,31 @@ const MainContent: React.FC = () => {
             case 'dataDeletion': return <DataDeletion />;
             case 'admin': return user?.role === 'Admin' ? <AdminDashboard /> : <Dashboard />;
             case 'automation': return <Automation />;
-            case 'bio': return <BioPageBuilder />;
-            case 'strategy': return (
-                <Suspense fallback={<div className="p-6 text-center text-gray-500 dark:text-gray-400">Loading Strategy...</div>}>
-                    <Strategy />
-                </Suspense>
-            );
+            case 'bio': {
+                const hasAccess = user?.plan === 'Elite' || user?.plan === 'Agency' || user?.plan === 'OnlyFansStudio';
+                if (!hasAccess) return <PremiumStudioUpgrade />;
+                // Only set default URL if no tab param already present
+                if (typeof window !== 'undefined' && !window.location.search.includes('tab=')) {
+                    window.history.replaceState({}, '', '/studio?tab=myPage');
+                }
+                return (
+                    <Suspense fallback={<div className="p-6 text-center text-gray-500 dark:text-gray-400">Loading...</div>}>
+                        <PremiumStudioLayout>
+                            <OnlyFansStudio />
+                        </PremiumStudioLayout>
+                    </Suspense>
+                );
+            }
+            case 'strategy': {
+                if (strategyViewMode === 'advanced') {
+                    return (
+                        <Suspense fallback={<div className="p-6 text-center text-gray-500 dark:text-gray-400">Loading Strategy...</div>}>
+                            <Strategy onBackToSimple={() => setStrategyViewMode('simple')} />
+                        </Suspense>
+                    );
+                }
+                return <WhatToPost onOpenAdvanced={() => setStrategyViewMode('advanced')} />;
+            }
             case 'ads': return <AdGenerator />;
             case 'mediaLibrary': return <MediaLibrary />;
             case 'autopilot': return (
@@ -151,12 +179,36 @@ const MainContent: React.FC = () => {
                     <Autopilot />
                 </Suspense>
             );
-            case 'onlyfansStudio': return (
-                <Suspense fallback={<div className="p-6 text-center text-gray-500 dark:text-gray-400">Loading OnlyFans Studio...</div>}>
-                    <OnlyFansStudio />
-                </Suspense>
-            );
+            case 'onlyfansStudio': {
+                const hasPremiumStudioAccess = user?.plan === 'Elite' || user?.plan === 'Agency' || user?.plan === 'OnlyFansStudio';
+                if (!hasPremiumStudioAccess) {
+                    return <PremiumStudioUpgrade />;
+                }
+                return (
+                    <Suspense fallback={<div className="p-6 text-center text-gray-500 dark:text-gray-400">Loading Premium Studio...</div>}>
+                        <PremiumStudioLayout section="studio">
+                            <OnlyFansStudio mode="studio" />
+                        </PremiumStudioLayout>
+                    </Suspense>
+                );
+            }
             case 'emailCenter': return <EmailCenterPage />;
+            case 'premiumStudioUpgrade': return <PremiumStudioUpgrade />;
+            case 'fanHub': {
+                const hasAccess = user?.plan === 'Elite' || user?.plan === 'Agency' || user?.plan === 'OnlyFansStudio';
+                if (!hasAccess) return <PremiumStudioUpgrade />;
+                // Only set default URL if no tab param already present
+                if (typeof window !== 'undefined' && !window.location.search.includes('tab=')) {
+                    window.history.replaceState({}, '', '/fan?tab=myPage');
+                }
+                return (
+                    <Suspense fallback={<div className="p-6 text-center text-gray-500 dark:text-gray-400">Loading...</div>}>
+                        <PremiumStudioLayout section="fanHub">
+                            <OnlyFansStudio mode="fanHub" />
+                        </PremiumStudioLayout>
+                    </Suspense>
+                );
+            }
             default: return <Dashboard />;
         }
     } catch (error: any) {
@@ -183,19 +235,24 @@ const AppContent: React.FC = () => {
     // This should be checked BEFORE authentication to allow public access
     const pathname = window.location.pathname;
     
-    // Exclude known app routes and API routes to avoid conflicts
-    const knownRoutes = ['/', '/dashboard', '/inbox', '/analytics', '/settings', '/write-captions', '/compose', '/my-schedule', '/calendar', '/drafts', '/approvals', '/team', '/find-trends', '/opportunities', '/profile', '/about', '/contact', '/pricing', '/clients', '/faq', '/terms', '/privacy', '/dataDeletion', '/admin', '/automation', '/bio-link-page', '/bio', '/plan-my-week', '/strategy', '/ads', '/my-vault', '/mediaLibrary', '/autopilot', '/premium-content-studio', '/premiumcontentstudio', '/onlyfansStudio', '/email-center', '/emailCenter', '/reset-password'];
-    
-    // Check if it's a direct username path (not a known route) or legacy /u/ or /link/ path
-    // Also exclude paths that start with /api or contain dots (likely static files)
-    const isPublicBioPage = (
-        !pathname.startsWith('/api') && 
-        !pathname.includes('.') && 
-        (!knownRoutes.includes(pathname) && /^\/[^/]+$/.test(pathname))
-    ) || /^\/(?:u|link)\/[^/]+$/.test(pathname);
-    
-    if (isPublicBioPage) {
-        return <BioPageView />;
+    // If path matches a known app route, let the rest of App handle activePage routing.
+    // Otherwise treat as fan storefront: /{handle} (single segment), /{handle}/terms, /{handle}/privacy, or legacy /u/ or /link/ path.
+    const normalizedPath = pathname.replace(/\/+$/, '') || '/';
+    const isKnownAppRoute = (KNOWN_APP_ROUTES as readonly string[]).includes(normalizedPath);
+    const hostname = typeof window !== 'undefined' ? window.location.hostname : '';
+    /** stormijxo.com → /, /terms, /privacy, /{handle} (see storefrontCustomDomain + creatorDomains map) */
+    const isCustomDomainSf =
+        typeof window !== 'undefined' && isCustomDomainStorefrontPath(pathname, hostname);
+    const isStorefrontPath =
+        !pathname.startsWith('/api') &&
+        !pathname.includes('.') &&
+        (isCustomDomainSf ||
+            ((!isKnownAppRoute && /^\/[^/]+$/.test(pathname)) ||
+                /^\/(?:u|link)\/[^/]+$/.test(pathname) ||
+                /^\/[^/]+\/(terms|privacy)$/.test(pathname))); // /{handle}/terms or /{handle}/privacy
+
+    if (isStorefrontPath) {
+        return <FanStorefrontView />;
     }
     
     // Check maintenance mode FIRST - before any hooks or other logic
@@ -211,6 +268,50 @@ const AppContent: React.FC = () => {
     const [bypassMaintenance, setBypassMaintenance] = useState(false);
     const [isFinalizingCheckout, setIsFinalizingCheckout] = useState(false);
     const [showCheckoutTransition, setShowCheckoutTransition] = useState(false);
+    const loginFromQueryHandled = useRef(false);
+
+    // Fan storefront "Log in" / "Sign up" → /?login=1 or /?signup=1 — open modal once auth is ready
+    useEffect(() => {
+        if (typeof window === 'undefined') return;
+        if (isAuthLoading) return;
+        const params = new URLSearchParams(window.location.search);
+        const stripLoginSignupParams = () => {
+            let changed = false;
+            if (params.has('login')) {
+                params.delete('login');
+                changed = true;
+            }
+            if (params.has('signup')) {
+                params.delete('signup');
+                changed = true;
+            }
+            if (!changed) return;
+            const q = params.toString();
+            window.history.replaceState({}, '', q ? `${window.location.pathname}?${q}` : window.location.pathname);
+        };
+        if (isAuthenticated) {
+            stripLoginSignupParams();
+            return;
+        }
+        if (loginFromQueryHandled.current) return;
+        const login = params.get('login');
+        const signup = params.get('signup');
+        if (login === '1' || login === 'true') {
+            loginFromQueryHandled.current = true;
+            setLoginModalInitialView('login');
+            setIsLoginModalOpen(true);
+            params.delete('login');
+            const q = params.toString();
+            window.history.replaceState({}, '', q ? `${window.location.pathname}?${q}` : window.location.pathname);
+        } else if (signup === '1' || signup === 'true') {
+            loginFromQueryHandled.current = true;
+            setLoginModalInitialView('signup');
+            setIsLoginModalOpen(true);
+            params.delete('signup');
+            const q = params.toString();
+            window.history.replaceState({}, '', q ? `${window.location.pathname}?${q}` : window.location.pathname);
+        }
+    }, [isAuthLoading, isAuthenticated]);
 
     // Check for checkout transition loading overlay
     useEffect(() => {
@@ -259,11 +360,12 @@ const AppContent: React.FC = () => {
 
         const path = window.location.pathname || '/';
         const isProtectedRoute = path === '/dashboard' ||
-            path === '/inbox' ||
             path === '/analytics' ||
             path === '/settings' ||
             path === '/write-captions' ||
             path === '/compose' ||
+            path === '/compose/drafts' ||
+            path === '/drafts' ||
             path === '/my-schedule' ||
             path === '/calendar' ||
             path === '/drafts' ||
@@ -287,7 +389,11 @@ const AppContent: React.FC = () => {
             path === '/emailCenter' ||
             path === '/premium-content-studio' ||
             path === '/premiumcontentstudio' ||
-            path === '/onlyfansStudio';
+            path === '/onlyfansStudio' ||
+            path === '/premium-studio-upgrade' ||
+            path === '/studio' ||
+            path === '/fan' ||
+            path === '/fan-hub';
 
         if (isProtectedRoute) {
             window.history.replaceState({}, '', '/');
@@ -745,7 +851,7 @@ const AppContent: React.FC = () => {
         finalize();
     }, [isAuthenticated, user, isFinalizingCheckout, setUser, showToast]);
 
-    const handleOnboardingComplete = async () => {
+    const handleOnboardingComplete = async (opts?: { openFanHub?: boolean }) => {
         if (user) {
             await setUser({ ...user, hasCompletedOnboarding: true });
         }
@@ -753,7 +859,11 @@ const AppContent: React.FC = () => {
         try {
             localStorage.setItem('settingsActiveTab', 'ai-training');
         } catch {}
-        setActivePage('settings');
+        if (opts?.openFanHub) {
+            setActivePage('fanHub');
+        } else {
+            setActivePage('settings');
+        }
         setTimeout(() => startTour(), 600);
     };
     

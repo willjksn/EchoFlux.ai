@@ -2,8 +2,8 @@
 import React, { useState, useEffect } from 'react';
 import { findTrends, generateCaptions, generateContentStrategy } from "../src/services/geminiService"
 import { Opportunity, Platform, HashtagSet } from '../types';
-import { SparklesIcon, TrendingIcon, HashtagIcon, TrashIcon, XMarkIcon, RocketIcon, TargetIcon, DownloadIcon } from './icons/UIIcons';
-import { InstagramIcon, TikTokIcon, XIcon, ThreadsIcon, YouTubeIcon, LinkedInIcon, FacebookIcon } from './icons/PlatformIcons';
+import { SparklesIcon, TrendingIcon, HashtagIcon, TrashIcon, XMarkIcon, RocketIcon, TargetIcon, DownloadIcon, HeartIcon } from './icons/UIIcons';
+import { InstagramIcon, TikTokIcon, XIcon, ThreadsIcon, YouTubeIcon, LinkedInIcon, FacebookIcon, PinterestIcon } from './icons/PlatformIcons';
 import { useAppContext } from './AppContext';
 import { UpgradePrompt } from './UpgradePrompt';
 import { BrandSuggestions } from './BrandSuggestions';
@@ -18,6 +18,8 @@ const platformIcons: { [key in Platform]: React.ReactNode } = {
   YouTube: <YouTubeIcon />,
   LinkedIn: <LinkedInIcon />,
   Facebook: <FacebookIcon />,
+  Pinterest: <PinterestIcon />,
+  'My Page': <HeartIcon />,
 };
 
 export const Opportunities: React.FC = () => {
@@ -49,6 +51,12 @@ export const Opportunities: React.FC = () => {
         if (!isCreatorOrAgency) return false;
         // Available on Pro, Elite, and Agency plans
         return ['Pro', 'Elite', 'Agency'].includes(user?.plan || '');
+    })();
+
+    // Create Content button: Only available for Elite, Agency, and Admins (not Pro)
+    const canCreateContent = (() => {
+        if (user?.role === 'Admin') return true;
+        return ['Elite', 'Agency'].includes(user?.plan || '');
     })();
 
     // Load saved scan from localStorage on mount
@@ -309,26 +317,30 @@ Generate multiple compelling captions (at least 5) that leverage this trend. Eac
         showToast('Captions downloaded!', 'success');
     };
 
-    // Handle Send to Strategy
+    // Handle Send to Strategy - navigates to Advanced Planner with pre-filled data
     const handleSendToStrategy = () => {
         if (!selectedOpportunity) return;
         
-        // Save opportunity context for Strategy
+        // Save opportunity context for Strategy (Advanced Planner)
         const inferredNiche = niche || (selectedOpportunity as any).category || selectedOpportunity.title || '';
-        localStorage.setItem(`opportunity_for_strategy_${user.id}`, JSON.stringify({
+        const opportunityData = {
             opportunity: selectedOpportunity,
             niche: inferredNiche,
             platformFocus: selectedOpportunity.platform,
-            // Provide a reasonable default audience without overwriting "audience" with a platform name.
-            // The Strategy page can still be edited before generating.
-            audience: inferredNiche ? `People interested in ${inferredNiche}` : 'General Audience'
-        }));
+            // Provide a reasonable default audience
+            audience: inferredNiche ? `People interested in ${inferredNiche}` : 'General Audience',
+            // Include additional context from the opportunity
+            contextDescription: `Create content around: ${selectedOpportunity.title}\n\n${selectedOpportunity.description || ''}${selectedOpportunity.bestPractices ? `\n\nBest practices: ${selectedOpportunity.bestPractices}` : ''}${selectedOpportunity.relatedHashtags?.length ? `\n\nRelated hashtags: ${selectedOpportunity.relatedHashtags.join(', ')}` : ''}`
+        };
+        
+        localStorage.setItem(`opportunity_for_strategy_${user.id}`, JSON.stringify(opportunityData));
         
         setShowContentModal(false);
+        // Navigate to Strategy (Advanced Planner) page
         setActivePage('strategy');
         // Ensure Strategy picks up the payload even if it is already mounted
         window.dispatchEvent(new CustomEvent('strategyOpportunityReceived'));
-        showToast('Opportunity sent to Strategy! Generate your roadmap.', 'success');
+        showToast('Opportunity sent to Advanced Planner! Fields have been auto-populated.', 'success');
     };
 
     // Handle Manual Create
@@ -723,19 +735,32 @@ Generate multiple compelling captions (at least 5) that leverage this trend. Eac
                                              </div>
                                          )}
                                          
-                                         <div className="flex gap-2">
-                                             <button
-                                                 onClick={() => {
-                                                     setSelectedOpportunity(result);
-                                                     // Save to localStorage for persistence
-                                                     localStorage.setItem(`selected_opportunity_${user.id}`, JSON.stringify(result));
-                                                     setShowContentModal(true);
-                                                 }}
-                                                 className="flex-1 px-4 py-2 bg-gradient-to-r from-primary-600 to-primary-500 text-white rounded-lg hover:from-primary-700 hover:to-primary-600 text-sm font-semibold shadow-sm transition-all"
-                                             >
-                                                 Create Content →
-                                             </button>
-                                         </div>
+                                        <div className="flex gap-2">
+                                            <button
+                                                onClick={() => {
+                                                    if (!canCreateContent) {
+                                                        showToast('Upgrade to Elite to create content from trends', 'info');
+                                                        return;
+                                                    }
+                                                    setSelectedOpportunity(result);
+                                                    // Save to localStorage for persistence
+                                                    if (user?.id) {
+                                                        localStorage.setItem(`selected_opportunity_${user.id}`, JSON.stringify(result));
+                                                    }
+                                                    setShowContentModal(true);
+                                                }}
+                                                disabled={!canCreateContent}
+                                                className={`flex-1 px-4 py-2 text-sm font-semibold shadow-sm transition-all rounded-lg ${
+                                                    canCreateContent
+                                                        ? 'bg-gradient-to-r from-primary-600 to-primary-500 text-white hover:from-primary-700 hover:to-primary-600'
+                                                        : 'bg-gray-200 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed'
+                                                }`}
+                                                title={!canCreateContent ? 'Upgrade to Elite to create content from trends' : undefined}
+                                            >
+                                                Create Content →
+                                                {!canCreateContent && <span className="ml-1 text-xs">(Elite)</span>}
+                                            </button>
+                                        </div>
                                      </div>
                                      );
                                  }) : (

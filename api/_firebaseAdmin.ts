@@ -1,9 +1,24 @@
 import admin from "firebase-admin";
 
 let app: admin.app.App | null = null;
+/** Firestore rejects `undefined` in writes; settings() must run once before other Firestore use. */
+let firestoreSettingsApplied = false;
+
+function ensureFirestoreIgnoreUndefined(appInstance: admin.app.App) {
+  if (firestoreSettingsApplied) return;
+  try {
+    appInstance.firestore().settings({ ignoreUndefinedProperties: true });
+    firestoreSettingsApplied = true;
+  } catch (e) {
+    console.warn("Firestore settings(ignoreUndefinedProperties):", e);
+  }
+}
 
 export function getAdminApp(): admin.app.App {
-  if (app) return app;
+  if (app) {
+    ensureFirestoreIgnoreUndefined(app);
+    return app;
+  }
 
   // Fix for ESM: check existing apps
   try {
@@ -52,7 +67,8 @@ export function getAdminApp(): admin.app.App {
     if (!app) {
       throw new Error("Failed to initialize Firebase Admin app");
     }
-    
+
+    ensureFirestoreIgnoreUndefined(app);
     return app;
   } catch (initError: any) {
     console.error("Firebase Admin initialization error:", initError);

@@ -38,5 +38,14 @@ engagesuite.zip
 .env.*
 !.env.example
 serviceAccount/
+# Local Firebase credential dumps (never commit)
+echoflux-service-account.json
+stormij-service-account.json
+*-service-account.json
 service-account.jsonl
 *.jsonl
+.cursor/
+
+# Playwright / E2E artifacts
+test-results/
+playwright-report/

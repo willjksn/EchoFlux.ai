@@ -18,6 +18,11 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({ user, 
     const [showPassword, setShowPassword] = useState(false);
     const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
     const [isSendingReset, setIsSendingReset] = useState(false);
+    
+    // Video minutes grant state
+    const [grantVideoMinutes, setGrantVideoMinutes] = useState(0);
+    const [isGrantingVideoMinutes, setIsGrantingVideoMinutes] = useState(false);
+    const [videoQuota, setVideoQuota] = useState<{ monthlyMinutesLimit: number; minutesUsedThisMonth: number; bonusMinutes: number } | null>(null);
 
     useEffect(() => {
         setEditedUser(user);
@@ -42,6 +47,62 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({ user, 
         };
         loadRewards();
     }, [user?.id]);
+
+    // Fetch video quota for the user
+    useEffect(() => {
+        const loadVideoQuota = async () => {
+            if (!user?.id) return;
+            try {
+                const token = await auth.currentUser?.getIdToken(true);
+                const res = await fetch(`/api/videoUsageStats?creatorId=${user.id}`, {
+                    headers: token ? { Authorization: `Bearer ${token}` } : {},
+                });
+                if (res.ok) {
+                    const data = await res.json();
+                    setVideoQuota(data.quota);
+                }
+            } catch (e) {
+                console.error('Failed to load video quota:', e);
+            }
+        };
+        loadVideoQuota();
+    }, [user?.id]);
+
+    const handleGrantVideoMinutes = async () => {
+        if (!user?.id || grantVideoMinutes <= 0) return;
+        setIsGrantingVideoMinutes(true);
+        try {
+            const token = await auth.currentUser?.getIdToken(true);
+            if (!token) {
+                showToast?.('You must be signed in', 'error');
+                return;
+            }
+            const res = await fetch('/api/videoUsageStats?action=addMinutes', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    Authorization: `Bearer ${token}`,
+                },
+                body: JSON.stringify({
+                    creatorId: user.id,
+                    minutes: grantVideoMinutes,
+                }),
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok || !data?.success) {
+                showToast?.(data?.error || 'Failed to grant video minutes', 'error');
+                return;
+            }
+            showToast?.(`Granted ${grantVideoMinutes} video minutes to ${user.name}`, 'success');
+            setGrantVideoMinutes(0);
+            // Refresh quota display
+            setVideoQuota(prev => prev ? { ...prev, bonusMinutes: (prev.bonusMinutes || 0) + grantVideoMinutes } : null);
+        } catch (err: any) {
+            showToast?.(err?.message || 'Failed to grant video minutes', 'error');
+        } finally {
+            setIsGrantingVideoMinutes(false);
+        }
+    };
 
     const rewardSummary = useMemo(() => {
         const rewards = Array.isArray((editedUser as any).manualReferralRewards)
@@ -232,6 +293,73 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({ user, 
                         </button>
                         <p className="mt-2 text-xs text-gray-500 dark:text-gray-400 text-center">
                             Manually grant referral rewards (generations, free months, or storage)
+                        </p>
+                    </div>
+
+                    {/* Grant Video Minutes Section */}
+                    <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+                        <p className="text-sm font-semibold text-gray-900 dark:text-white mb-2">Grant Video Minutes</p>
+                        {videoQuota && (
+                            <div className="mb-3 p-3 bg-cyan-50 dark:bg-cyan-900/20 rounded-lg border border-cyan-200 dark:border-cyan-800">
+                                <div className="grid grid-cols-3 gap-2 text-xs">
+                                    <div>
+                                        <span className="text-cyan-700 dark:text-cyan-300 block">Monthly Limit</span>
+                                        <span className="font-semibold text-cyan-900 dark:text-cyan-100">
+                                            {videoQuota.monthlyMinutesLimit === -1 ? 'Unlimited' : `${videoQuota.monthlyMinutesLimit} min`}
+                                        </span>
+                                    </div>
+                                    <div>
+                                        <span className="text-cyan-700 dark:text-cyan-300 block">Used</span>
+                                        <span className="font-semibold text-cyan-900 dark:text-cyan-100">{videoQuota.minutesUsedThisMonth} min</span>
+                                    </div>
+                                    <div>
+                                        <span className="text-cyan-700 dark:text-cyan-300 block">Bonus</span>
+                                        <span className="font-semibold text-cyan-900 dark:text-cyan-100">{videoQuota.bonusMinutes} min</span>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                        <div className="flex gap-2">
+                            <input
+                                type="number"
+                                min={1}
+                                max={1000}
+                                value={grantVideoMinutes || ''}
+                                onChange={e => setGrantVideoMinutes(Number(e.target.value))}
+                                placeholder="Minutes to grant"
+                                className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
+                            />
+                            <button
+                                type="button"
+                                onClick={handleGrantVideoMinutes}
+                                disabled={grantVideoMinutes <= 0 || isGrantingVideoMinutes}
+                                className="px-4 py-2 bg-cyan-600 hover:bg-cyan-700 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-md transition-colors font-medium flex items-center gap-2"
+                            >
+                                {isGrantingVideoMinutes ? (
+                                    <>
+                                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                                        Granting...
+                                    </>
+                                ) : (
+                                    <>
+                                        <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                            <polygon points="23 7 16 12 23 17 23 7" />
+                                            <rect x="1" y="5" width="15" height="14" rx="2" ry="2" />
+                                        </svg>
+                                        Grant
+                                    </>
+                                )}
+                            </button>
+                        </div>
+                        <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                            Quick:{' '}
+                            <button onClick={() => setGrantVideoMinutes(50)} className="text-cyan-600 hover:underline">50 min</button>
+                            {' · '}
+                            <button onClick={() => setGrantVideoMinutes(100)} className="text-cyan-600 hover:underline">100 min</button>
+                            {' · '}
+                            <button onClick={() => setGrantVideoMinutes(250)} className="text-cyan-600 hover:underline">250 min</button>
+                            {' · '}
+                            <button onClick={() => setGrantVideoMinutes(500)} className="text-cyan-600 hover:underline">500 min</button>
                         </p>
                     </div>
 

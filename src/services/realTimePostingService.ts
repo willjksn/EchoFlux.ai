@@ -637,6 +637,24 @@ function calculateContentTypeEngagement(contentType: ContentType, platform: Plat
       story: 68,
       text: 75,
     },
+    Pinterest: {
+      reel: 70,
+      short_video: 65,
+      carousel: 80,
+      single_image: 85,
+      video: 60,
+      story: 50,
+      text: 40,
+    },
+    'My Page': {
+      reel: 70,
+      short_video: 70,
+      carousel: 70,
+      single_image: 70,
+      video: 70,
+      story: 70,
+      text: 70,
+    },
   };
   
   return scores[platform]?.[contentType] || 60;
@@ -707,6 +725,20 @@ function getIndustryBenchmarkData(platform: Platform, contentType?: ContentType)
       platform: 'Facebook',
       optimalHours: [10, 11, 12],
       optimalDays: [2, 3, 4], // Tue-Thu
+      dataSource: 'industry',
+      timestamp: new Date().toISOString(),
+    },
+    Pinterest: {
+      platform: 'Pinterest',
+      optimalHours: [14, 15, 16, 20, 21],
+      optimalDays: [0, 6], // Sat-Sun
+      dataSource: 'industry',
+      timestamp: new Date().toISOString(),
+    },
+    'My Page': {
+      platform: 'My Page',
+      optimalHours: [10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20],
+      optimalDays: [0, 1, 2, 3, 4, 5, 6],
       dataSource: 'industry',
       timestamp: new Date().toISOString(),
     },

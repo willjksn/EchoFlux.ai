@@ -165,12 +165,14 @@ firebase init
 npm run dev
 ```
 
-Or use Vercel's local dev server (recommended for API routes):
+Or use Vercel's local dev server (API routes):
 ```bash
 npm run dev:vercel
 ```
 
-This starts the app at `http://localhost:5173` (Vite default) or the port Vercel assigns.
+**Note:** This repository has many `api/*.ts` files; `vercel dev` may fail with a **128 builds** validation error. If it does, use `npm run dev` with **`DEV_API_PROXY`** in `.env.local` (see `docs/LOCAL_DEV.md`) or test on a Vercel Preview URL.
+
+This starts the app at `http://localhost:3000` (this project's Vite port) or the port Vercel assigns.
 
 ### 2. Open in Browser
 Open `http://localhost:5173` in your browser.

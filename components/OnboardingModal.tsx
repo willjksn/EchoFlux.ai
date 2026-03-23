@@ -11,7 +11,7 @@ import {
   FacebookIcon,
   PinterestIcon,
 } from "./icons/PlatformIcons";
-import { LogoIcon } from "./icons/UIIcons";
+import { LogoIcon, HeartIcon } from "./icons/UIIcons";
 
 export interface OnboardingModalProps {
   onComplete: () => void;
@@ -25,6 +25,8 @@ const platformIcons: Record<Platform, React.ReactNode> = {
   YouTube: <YouTubeIcon />,
   LinkedIn: <LinkedInIcon />,
   Facebook: <FacebookIcon />,
+  Pinterest: <PinterestIcon />,
+  'My Page': <HeartIcon />,
 };
 
 export const OnboardingModal: React.FC<OnboardingModalProps> = ({
