@@ -11,12 +11,12 @@
     "skipLibCheck": true
   },
   "include": [
-    "api/**/*.ts"
+    "api/**/*.ts",
+    "src/lib/storefrontHeroNormalize.ts"
   ],
   "exclude": [
     "node_modules",
     "dist",
-    "components",
-    "src"
+    "components"
   ]
 }

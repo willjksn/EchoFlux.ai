@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef, Fragment } from "react";
 import { auth } from "../firebaseConfig";
+import { collection, doc, getDoc, getDocs, query, where } from "firebase/firestore";
 import type {
   TreatProduct,
   FanDmThread,
@@ -10,6 +11,7 @@ import type {
   CreatorMonetization,
   TextStyle,
   FanAuthBranding,
+  LandingSectionListMarker,
 } from "../types";
 import { FanLandingPage } from "./FanLandingPage";
 import { FanAuthModal } from "./FanAuthModal";
@@ -49,6 +51,7 @@ import { resolveTipSectionCopy } from "../src/lib/tipSectionCopy";
 import { useAppContext } from "./AppContext";
 import { isConfiguredCustomStorefrontHost } from "../src/lib/storefrontCustomDomain";
 import { usePathname } from "../src/hooks/usePathname";
+import { db } from "../firebaseConfig";
 
 export type StorefrontCreator = {
   creatorId: string;
@@ -56,11 +59,16 @@ export type StorefrontCreator = {
   displayName: string;
   bio?: string;
   avatar?: string;
+  avatarUrl?: string;
   avatarObjectPosition?: string;
   logo?: string;
+  logoUrl?: string;
   heroImage?: string;
+  heroImageUrl?: string;
   heroTagline?: string;
   heroPromise?: string;
+  heroSubline?: string;
+  heroSubline2?: string;
   socialLinks?: StorefrontSocialLinks;
   landingContent?: StorefrontLandingContent;
   legal?: StorefrontLegal;
@@ -154,6 +162,24 @@ function parseHandleFromPath(): { handle: string | null; subpage: "terms" | "pri
       handle: handleSegment.replace("@", "").toLowerCase().trim(),
       subpage,
     };
+  }
+}
+
+function normalizeFirebaseStorageObjectPath(url: string): string {
+  try {
+    const u = new URL(url);
+    if (!u.hostname.includes("firebasestorage.googleapis.com")) return url;
+    const marker = "/o/";
+    const idx = u.pathname.indexOf(marker);
+    if (idx < 0) return url;
+    const head = u.pathname.slice(0, idx + marker.length);
+    const rawObject = u.pathname.slice(idx + marker.length);
+    const decoded = decodeURIComponent(rawObject);
+    const reencoded = encodeURIComponent(decoded);
+    if (reencoded === rawObject) return url;
+    return `${u.origin}${head}${reencoded}${u.search}`;
+  } catch {
+    return url;
   }
 }
 
@@ -337,6 +363,7 @@ export const FanStorefrontView: React.FC = () => {
   const [memberUsernameRequired, setMemberUsernameRequired] = useState(false);
   const [cancelMembershipLoading, setCancelMembershipLoading] = useState(false);
   const [cancelMembershipMessage, setCancelMembershipMessage] = useState<string | null>(null);
+  const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const [entitlementLoading, setEntitlementLoading] = useState(false);
   /** Bumps when entitlement effect re-runs so stale async completions don't leave loading stuck. */
   const entitlementFetchGen = useRef(0);
@@ -376,13 +403,52 @@ export const FanStorefrontView: React.FC = () => {
   const [dmVoiceMeterStream, setDmVoiceMeterStream] = useState<MediaStream | null>(null);
   const [dmVoiceMeterKey, setDmVoiceMeterKey] = useState(0);
   const [fanBanned, setFanBanned] = useState(false);
+  const profileMenuRef = useRef<HTMLDivElement | null>(null);
 
   const urlParams = typeof window !== "undefined" ? new URLSearchParams(window.location.search) : null;
   const previewMember = urlParams?.get("preview") === "member";
+  /** Logged-in members normally skip landing; creators use this to see the public landing while signed in. */
+  const forcePublicLanding = urlParams?.get("landing") === "1";
 
   const unreadMessageTabCount = useUnreadNewMessageNotificationCount(
     isLoggedIn && creator ? creator.creatorId : false
   );
+
+  const storefrontVisualScore = useCallback((data: Record<string, unknown> | null | undefined): number => {
+    if (!data) return -1;
+    let score = 0;
+    if (typeof data.logo === "string" && data.logo.trim()) score += 8;
+    if (typeof data.logoUrl === "string" && data.logoUrl.trim()) score += 8;
+    if (typeof data.avatar === "string" && data.avatar.trim()) score += 5;
+    if (typeof data.avatarUrl === "string" && data.avatarUrl.trim()) score += 5;
+    if (Array.isArray(data.heroMedia) && data.heroMedia.length > 0) score += 6;
+    if (typeof data.heroImage === "string" && data.heroImage.trim()) score += 4;
+    if (typeof data.heroImageUrl === "string" && data.heroImageUrl.trim()) score += 4;
+    if (typeof data.heroTagline === "string" && data.heroTagline.trim()) score += 2;
+    if (typeof data.heroPromise === "string" && data.heroPromise.trim()) score += 2;
+    if (data.landingContent && typeof data.landingContent === "object") score += 8;
+    if (data.textStyles && typeof data.textStyles === "object") score += 8;
+    if (data.rules && typeof data.rules === "object") score += 4;
+    if (data.theme && typeof data.theme === "object") score += 3;
+    if (typeof data.displayName === "string" && data.displayName.trim()) score += 2;
+    return score;
+  }, []);
+
+  const hasVisibleSocialLinks = useCallback((socialLinks: StorefrontSocialLinks | undefined): boolean => {
+    if (!socialLinks || typeof socialLinks !== "object") return false;
+    const hasUrl = (url?: string) => typeof url === "string" && url.trim().length > 0;
+    if (hasUrl(socialLinks.instagram?.url) && socialLinks.instagram?.show !== false) return true;
+    if (hasUrl(socialLinks.x?.url) && socialLinks.x?.show !== false) return true;
+    if (hasUrl(socialLinks.tiktok?.url) && socialLinks.tiktok?.show !== false) return true;
+    if (hasUrl(socialLinks.youtube?.url) && socialLinks.youtube?.show !== false) return true;
+    if (hasUrl(socialLinks.facebook?.url) && socialLinks.facebook?.show !== false) return true;
+    const legacyTwitter = (socialLinks as StorefrontSocialLinks & { twitter?: { url?: string; show?: boolean } }).twitter;
+    if (hasUrl(legacyTwitter?.url) && legacyTwitter?.show !== false) return true;
+    if (Array.isArray(socialLinks.custom)) {
+      return socialLinks.custom.some((c) => hasUrl(c?.url) && c?.show !== false);
+    }
+    return false;
+  }, []);
 
   useEffect(() => {
     const uid = auth.currentUser?.uid;
@@ -475,7 +541,240 @@ export const FanStorefrontView: React.FC = () => {
           return;
         }
         const data = await res.json();
-        setCreator(data as StorefrontCreator);
+        let resolved = data as StorefrontCreator;
+        const missingVisuals =
+          !String(resolved.logo ?? "").trim() &&
+          !String(resolved.logoUrl ?? "").trim() &&
+          !String(resolved.avatar ?? "").trim() &&
+          !String(resolved.heroImage ?? "").trim() &&
+          !String(resolved.heroImageUrl ?? "").trim() &&
+          (!Array.isArray(resolved.heroMedia) || resolved.heroMedia.length === 0);
+
+        if (db) {
+          try {
+            const q = query(collection(db, "creators"), where("handle", "==", handle));
+            const snapByHandle = await getDocs(q);
+            if (!snapByHandle.empty) {
+              let best = snapByHandle.docs[0].data() as Record<string, unknown>;
+              let bestScore = storefrontVisualScore(best);
+              for (const d of snapByHandle.docs.slice(1)) {
+                const cand = d.data() as Record<string, unknown>;
+                const s = storefrontVisualScore(cand);
+                if (s > bestScore) {
+                  best = cand;
+                  bestScore = s;
+                }
+              }
+              const resolvedHasLogo =
+                String((resolved as { logo?: string }).logo ?? "").trim() !== "" ||
+                String((resolved as { logoUrl?: string }).logoUrl ?? "").trim() !== "";
+              if (bestScore > storefrontVisualScore(resolved as unknown as Record<string, unknown>) || !resolvedHasLogo) {
+                resolved = {
+                  ...resolved,
+                  logo:
+                    resolved.logo ||
+                    (typeof best.logo === "string" ? best.logo : undefined) ||
+                    (typeof best.logoUrl === "string" ? best.logoUrl : undefined),
+                  logoUrl:
+                    resolved.logoUrl ||
+                    (typeof best.logoUrl === "string" ? best.logoUrl : undefined),
+                  avatar:
+                    resolved.avatar ||
+                    (typeof best.avatar === "string" ? best.avatar : undefined) ||
+                    (typeof best.avatarUrl === "string" ? best.avatarUrl : undefined),
+                  avatarObjectPosition:
+                    resolved.avatarObjectPosition ||
+                    (typeof best.avatarObjectPosition === "string" ? best.avatarObjectPosition : undefined),
+                  heroImage:
+                    resolved.heroImage ||
+                    (typeof best.heroImage === "string" ? best.heroImage : undefined) ||
+                    (typeof best.heroImageUrl === "string" ? best.heroImageUrl : undefined),
+                  heroImageUrl:
+                    resolved.heroImageUrl ||
+                    (typeof best.heroImageUrl === "string" ? best.heroImageUrl : undefined),
+                  heroMedia:
+                    (Array.isArray(resolved.heroMedia) && resolved.heroMedia.length > 0)
+                      ? resolved.heroMedia
+                      : (Array.isArray(best.heroMedia) ? (best.heroMedia as StorefrontCreator["heroMedia"]) : undefined),
+                  heroTagline:
+                    resolved.heroTagline ||
+                    (typeof best.heroTagline === "string" ? best.heroTagline : undefined),
+                  heroPromise:
+                    resolved.heroPromise ||
+                    (typeof best.heroPromise === "string" ? best.heroPromise : undefined),
+                  heroSubline:
+                    resolved.heroSubline ||
+                    (typeof best.heroSubline === "string" ? best.heroSubline : undefined),
+                  heroSubline2:
+                    resolved.heroSubline2 ||
+                    (typeof best.heroSubline2 === "string" ? best.heroSubline2 : undefined),
+                  displayName:
+                    resolved.displayName ||
+                    (typeof best.displayName === "string" ? best.displayName : undefined),
+                  bio:
+                    resolved.bio ||
+                    (typeof best.bio === "string" ? best.bio : undefined),
+                  socialLinks:
+                    (hasVisibleSocialLinks(resolved.socialLinks as StorefrontSocialLinks | undefined)
+                      ? resolved.socialLinks
+                      : undefined) ||
+                    (best.socialLinks as StorefrontCreator["socialLinks"] | undefined),
+                  landingContent:
+                    resolved.landingContent ||
+                    (best.landingContent as StorefrontCreator["landingContent"] | undefined),
+                  textStyles:
+                    resolved.textStyles ||
+                    (best.textStyles as StorefrontCreator["textStyles"] | undefined),
+                  rules:
+                    resolved.rules ||
+                    (best.rules as StorefrontCreator["rules"] | undefined),
+                  theme:
+                    resolved.theme ||
+                    (best.theme as StorefrontCreator["theme"] | undefined),
+                  heroLayout:
+                    resolved.heroLayout ||
+                    (best.heroLayout as StorefrontCreator["heroLayout"] | undefined),
+                  showDisplayNameOnLanding:
+                    typeof best.showDisplayNameOnLanding === "boolean"
+                      ? (best.showDisplayNameOnLanding as boolean)
+                      : resolved.showDisplayNameOnLanding,
+                };
+              }
+            }
+          } catch {
+            // Optional fallback only; keep API payload when Firestore read is unavailable.
+          }
+        }
+        // Strong fallback for creator-owned storefront while signed in:
+        // use the signed-in creator doc directly when it matches this handle.
+        if (db && auth.currentUser?.uid) {
+          try {
+            const ownDoc = await getDoc(doc(db, "creators", auth.currentUser.uid));
+            if (ownDoc.exists()) {
+              const own = ownDoc.data() as Record<string, unknown>;
+              const ownHandle =
+                (typeof own.handle === "string" ? own.handle : "")
+                  .replace("@", "")
+                  .toLowerCase()
+                  .trim();
+              if (ownHandle === handle) {
+                resolved = {
+                  ...resolved,
+                  creatorId: auth.currentUser.uid,
+                  logo:
+                    resolved.logo ||
+                    (typeof own.logo === "string" ? own.logo : undefined) ||
+                    (typeof own.logoUrl === "string" ? own.logoUrl : undefined),
+                  logoUrl:
+                    resolved.logoUrl ||
+                    (typeof own.logoUrl === "string" ? own.logoUrl : undefined),
+                  avatar:
+                    resolved.avatar ||
+                    (typeof own.avatar === "string" ? own.avatar : undefined) ||
+                    (typeof own.avatarUrl === "string" ? own.avatarUrl : undefined),
+                  avatarObjectPosition:
+                    resolved.avatarObjectPosition ||
+                    (typeof own.avatarObjectPosition === "string" ? own.avatarObjectPosition : undefined),
+                  heroImage:
+                    resolved.heroImage ||
+                    (typeof own.heroImage === "string" ? own.heroImage : undefined) ||
+                    (typeof own.heroImageUrl === "string" ? own.heroImageUrl : undefined),
+                  heroImageUrl:
+                    resolved.heroImageUrl ||
+                    (typeof own.heroImageUrl === "string" ? own.heroImageUrl : undefined),
+                  heroMedia:
+                    (Array.isArray(resolved.heroMedia) && resolved.heroMedia.length > 0)
+                      ? resolved.heroMedia
+                      : (Array.isArray(own.heroMedia) ? (own.heroMedia as StorefrontCreator["heroMedia"]) : undefined),
+                  heroTagline:
+                    resolved.heroTagline ||
+                    (typeof own.heroTagline === "string" ? own.heroTagline : undefined),
+                  heroPromise:
+                    resolved.heroPromise ||
+                    (typeof own.heroPromise === "string" ? own.heroPromise : undefined),
+                  heroSubline:
+                    resolved.heroSubline ||
+                    (typeof own.heroSubline === "string" ? own.heroSubline : undefined),
+                  heroSubline2:
+                    resolved.heroSubline2 ||
+                    (typeof own.heroSubline2 === "string" ? own.heroSubline2 : undefined),
+                  displayName:
+                    resolved.displayName ||
+                    (typeof own.displayName === "string" ? own.displayName : undefined),
+                  bio:
+                    resolved.bio ||
+                    (typeof own.bio === "string" ? own.bio : undefined),
+                  socialLinks:
+                    (hasVisibleSocialLinks(resolved.socialLinks as StorefrontSocialLinks | undefined)
+                      ? resolved.socialLinks
+                      : undefined) ||
+                    (own.socialLinks as StorefrontCreator["socialLinks"] | undefined),
+                  landingContent:
+                    resolved.landingContent ||
+                    (own.landingContent as StorefrontCreator["landingContent"] | undefined),
+                  textStyles:
+                    resolved.textStyles ||
+                    (own.textStyles as StorefrontCreator["textStyles"] | undefined),
+                  rules:
+                    resolved.rules ||
+                    (own.rules as StorefrontCreator["rules"] | undefined),
+                  theme:
+                    resolved.theme ||
+                    (own.theme as StorefrontCreator["theme"] | undefined),
+                  heroLayout:
+                    resolved.heroLayout ||
+                    (own.heroLayout as StorefrontCreator["heroLayout"] | undefined),
+                  showDisplayNameOnLanding:
+                    typeof own.showDisplayNameOnLanding === "boolean"
+                      ? (own.showDisplayNameOnLanding as boolean)
+                      : resolved.showDisplayNameOnLanding,
+                };
+              }
+            }
+          } catch {
+            // Optional fallback only.
+          }
+        }
+        // Member/live fallback too: if logo is missing but the signed-in creator doc for this handle has one,
+        // merge it so header branding stays consistent with My Page save state.
+        if (db && auth.currentUser?.uid) {
+          const resolvedHasLogoNow =
+            String((resolved as { logo?: string }).logo ?? "").trim() !== "" ||
+            String((resolved as { logoUrl?: string }).logoUrl ?? "").trim() !== "";
+          if (!resolvedHasLogoNow) {
+            try {
+              const ownDoc = await getDoc(doc(db, "creators", auth.currentUser.uid));
+              if (ownDoc.exists()) {
+                const own = ownDoc.data() as Record<string, unknown>;
+                const ownHandle =
+                  (typeof own.handle === "string" ? own.handle : "")
+                    .replace("@", "")
+                    .toLowerCase()
+                    .trim();
+                const ownLogo =
+                  (typeof own.logo === "string" ? own.logo.trim() : "") ||
+                  (typeof own.logoUrl === "string" ? own.logoUrl.trim() : "");
+                if (ownHandle === handle && ownLogo) {
+                  resolved = {
+                    ...resolved,
+                    logo: ownLogo,
+                    logoUrl: ownLogo,
+                  };
+                }
+              }
+            } catch {
+              // Optional fallback only.
+            }
+          }
+        }
+        const resolvedLogo = String((resolved as { logo?: string }).logo ?? "").trim();
+        const resolvedLogoUrl = String((resolved as { logoUrl?: string }).logoUrl ?? "").trim();
+        if (!resolvedLogo && resolvedLogoUrl) {
+          resolved = { ...resolved, logo: resolvedLogoUrl };
+        } else if (resolvedLogo && !resolvedLogoUrl) {
+          resolved = { ...resolved, logoUrl: resolvedLogo };
+        }
+        setCreator(resolved);
         setError(null);
       } catch (e) {
         if (!cancelled) {
@@ -490,12 +789,31 @@ export const FanStorefrontView: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, [handle, handleResolveComplete]);
+  }, [handle, handleResolveComplete, storefrontVisualScore, hasVisibleSocialLinks, isLoggedIn, forcePublicLanding]);
 
   useEffect(() => {
     const unsub = auth.onAuthStateChanged((u) => setIsLoggedIn(!!u));
     return () => unsub();
   }, []);
+
+  useEffect(() => {
+    if (!profileMenuOpen) return;
+    const onPointerDown = (event: MouseEvent) => {
+      if (!profileMenuRef.current) return;
+      if (!profileMenuRef.current.contains(event.target as Node)) {
+        setProfileMenuOpen(false);
+      }
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setProfileMenuOpen(false);
+    };
+    window.addEventListener("mousedown", onPointerDown);
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      window.removeEventListener("mousedown", onPointerDown);
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, [profileMenuOpen]);
 
   useEffect(() => {
     if (!creator?.creatorId || !isLoggedIn) {
@@ -560,7 +878,6 @@ export const FanStorefrontView: React.FC = () => {
   useEffect(() => {
     if (
       !creator?.creatorId ||
-      !creator.publicTreatsOnLanding ||
       creator.sections?.treats === false ||
       !onPublicLanding
     ) {
@@ -590,7 +907,6 @@ export const FanStorefrontView: React.FC = () => {
     };
   }, [
     creator?.creatorId,
-    creator?.publicTreatsOnLanding,
     creator?.sections?.treats,
     onPublicLanding,
   ]);
@@ -816,6 +1132,31 @@ export const FanStorefrontView: React.FC = () => {
     }
   };
 
+  const handleOpenProfile = () => {
+    setProfileMenuOpen(false);
+    setActiveTab("about");
+  };
+
+  const handleSendProblem = () => {
+    setProfileMenuOpen(false);
+    const subject = encodeURIComponent(`Problem report for @${creator?.handle ?? ""}`);
+    const body = encodeURIComponent(
+      `Creator: @${creator?.handle ?? ""}\nPage: ${typeof window !== "undefined" ? window.location.href : ""}\n\nDescribe the issue:`
+    );
+    window.location.href = `mailto:support@engagesuite.ai?subject=${subject}&body=${body}`;
+  };
+
+  const handleLogout = async () => {
+    setProfileMenuOpen(false);
+    try {
+      await auth.signOut();
+      setIsLoggedIn(false);
+      if (creator?.handle) window.location.href = `/${creator.handle}`;
+    } catch {
+      showToast("Could not log out. Try again.", "error");
+    }
+  };
+
   const fetchDmThreadAndMessages = useCallback(async () => {
     if (!creator?.creatorId || !auth.currentUser || activeTab !== "messages") return;
     setDmLoading(true);
@@ -1007,6 +1348,31 @@ export const FanStorefrontView: React.FC = () => {
   /* Neutral theme defaults - creators should customize */
   const defaultBg = "#fafafa";
   const defaultPrimary = "#6366f1";
+  const headerLogoRaw =
+    (creator?.logo && String(creator.logo).trim()) ||
+    (creator?.logoUrl && String(creator.logoUrl).trim()) ||
+    "";
+  const headerLogoCandidates = React.useMemo(() => {
+    if (!headerLogoRaw) return [] as string[];
+    const normalized = normalizeFirebaseStorageObjectPath(headerLogoRaw);
+    return normalized !== headerLogoRaw ? [headerLogoRaw, normalized] : [headerLogoRaw];
+  }, [headerLogoRaw]);
+  const [headerLogoIndex, setHeaderLogoIndex] = useState(0);
+  const [headerLogoFailed, setHeaderLogoFailed] = useState(false);
+  useEffect(() => {
+    setHeaderLogoIndex(0);
+    setHeaderLogoFailed(false);
+  }, [headerLogoRaw]);
+  const headerLogoSrc = headerLogoCandidates[headerLogoIndex];
+  const showHeaderLogo = Boolean(headerLogoSrc) && !headerLogoFailed;
+  const onHeaderLogoError = useCallback(() => {
+    const next = headerLogoIndex + 1;
+    if (next < headerLogoCandidates.length) {
+      setHeaderLogoIndex(next);
+      return;
+    }
+    setHeaderLogoFailed(true);
+  }, [headerLogoIndex, headerLogoCandidates.length]);
 
   if (loading) {
     return (
@@ -1031,11 +1397,29 @@ export const FanStorefrontView: React.FC = () => {
   }
 
   const { theme, displayName, avatar, logo, bio, sections, sectionsOrder, rules, landingContent, monetization } = creator;
+  const creatorAvatarRaw =
+    (typeof avatar === "string" && avatar.trim() ? avatar.trim() : "") ||
+    (typeof creator.avatarUrl === "string" && creator.avatarUrl.trim() ? creator.avatarUrl.trim() : "");
+  const creatorAvatar = creatorAvatarRaw
+    ? normalizeFirebaseStorageObjectPath(creatorAvatarRaw) || creatorAvatarRaw
+    : "";
+  const memberAvatar = auth.currentUser?.photoURL || creatorAvatar || "";
+  const memberAvatarInitial = (auth.currentUser?.displayName || auth.currentUser?.email || "U").trim().charAt(0).toUpperCase();
   const chatEnabled = monetization?.chatEnabled !== false;
   const videoEnabled = monetization?.videoEnabled !== false;
   const storeCopy = resolveStoreCopy(landingContent);
   const guidelinesSectionTitle =
     (landingContent?.boundaryTitle && landingContent.boundaryTitle.trim()) || "Community Guidelines";
+  const rulesBoundariesRaw = rules?.boundariesText;
+  const guidelinesFromRulesOnly =
+    typeof rulesBoundariesRaw === "string" && rulesBoundariesRaw.trim() !== "";
+  const memberGuidelinesIntro = guidelinesFromRulesOnly
+    ? rulesBoundariesRaw.trim()
+    : (landingContent?.boundaryText || "").trim();
+  const memberGuidelinesLines = guidelinesFromRulesOnly
+    ? []
+    : (landingContent?.boundaryLines ?? []).filter((l) => String(l).trim());
+  const showMemberGuidelines = !!(memberGuidelinesIntro || memberGuidelinesLines.length > 0);
   const tipMemberCopy = resolveTipSectionCopy(landingContent, "member");
   const avatarCropStyle: React.CSSProperties = getAvatarCropStyle(creator.avatarObjectPosition);
   const creatorDmPrimary = formatCreatorDmBubblePrimaryLine(displayName, creator.handle);
@@ -1048,8 +1432,7 @@ export const FanStorefrontView: React.FC = () => {
   // Nav tabs: order from sectionsOrder, filtered by sections; hide Messages when chat disabled; always include Saved at the end
   const memberTabKeys = (sectionsOrder || ["feed", "treats", "tip", "messages", "about"])
     .filter((key) => key !== "saved" && (sections as Record<string, boolean>)?.[key] !== false)
-    .filter((key) => key !== "messages" || chatEnabled)
-    .concat("saved");
+    .filter((key) => key !== "messages" || chatEnabled);
   const navLabels: Record<string, string> = {
     feed: "Home",
     treats: storeCopy.memberStoreTitle,
@@ -1098,8 +1481,8 @@ export const FanStorefrontView: React.FC = () => {
             {/* Header */}
             <div className="mb-6 pb-6 border-b" style={{ borderColor: `${primary}22` }}>
               <div className="flex items-center gap-3 mb-3">
-                {avatar && (
-                  <img src={avatar} alt="" className="w-10 h-10 rounded-full object-cover" style={avatarCropStyle} />
+                {creatorAvatar && (
+                  <img src={creatorAvatar} alt="" className="w-10 h-10 rounded-full object-cover" style={avatarCropStyle} />
                 )}
                 <span className="text-sm font-medium" style={{ color: "#666" }}>{displayName}</span>
               </div>
@@ -1160,7 +1543,11 @@ export const FanStorefrontView: React.FC = () => {
     );
   }
 
-  const showLanding = previewMember ? false : (!isLoggedIn || !subscribed);
+  const isViewingOwnStorefront =
+    !!creator?.creatorId && !!auth.currentUser?.uid && auth.currentUser.uid === creator.creatorId;
+  const showLanding = previewMember
+    ? false
+    : forcePublicLanding || isViewingOwnStorefront || !isLoggedIn || !subscribed;
 
   const storefrontTermsPath =
     typeof window !== "undefined" && isConfiguredCustomStorefrontHost(window.location.hostname)
@@ -1192,6 +1579,9 @@ export const FanStorefrontView: React.FC = () => {
           onGuestPurchaseTreat={handleGuestTreatPurchase}
           guestTreatPurchasingId={guestTreatPurchasingId}
           treatLinkAccountMessage={treatLinkMessage}
+          termsHref={storefrontTermsPath}
+          privacyHref={storefrontPrivacyPath}
+          homeHref="/"
         />
         {fanAuthOpen && (
           <FanAuthModal
@@ -1200,7 +1590,7 @@ export const FanStorefrontView: React.FC = () => {
             initialView={fanAuthView}
             creatorId={creator.creatorId}
             displayName={displayName}
-            logo={creator.logo}
+            logo={creator.logo || creator.logoUrl}
             avatar={creator.avatar}
             themePrimary={creator.theme?.primary}
             themeText={creator.theme?.text}
@@ -1242,102 +1632,132 @@ export const FanStorefrontView: React.FC = () => {
       )}
       {/* Member Header */}
       <header
-        className="storefront-member-header"
+        className="storefront-member-header storefront-member-header--leftnav"
         style={{ backgroundColor: `${primary}14` }}
       >
-        <div className="storefront-header-left">
-          {logo ? (
-            <img src={logo} alt={displayName} className="storefront-header-logo" />
-          ) : avatar ? (
-            <img src={avatar} alt="" className="storefront-header-avatar" style={avatarCropStyle} />
-          ) : (
-            <div className="storefront-header-avatar storefront-header-avatar-fallback" style={{ background: primary }}>
-              {displayName?.charAt(0) || "?"}
-            </div>
-          )}
-          {!logo && <span className="storefront-header-name">{displayName}</span>}
-        </div>
-        <nav className="storefront-header-nav">
-          {memberTabKeys.map((key) => {
-            const isTip = key === "tip";
-            return (
-              <button
-                key={key}
-                type="button"
-                onClick={() => setActiveTab(key)}
-                className={`storefront-nav-btn ${isTip ? "storefront-nav-tip" : ""} ${activeTab === key ? "active" : ""}`}
-                title={key === "saved" ? "Saved posts" : undefined}
-              >
-                {key === "feed" && (
-                  <svg className="storefront-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
-                    <polyline points="9 22 9 12 15 12 15 22" />
-                  </svg>
-                )}
-                {key === "treats" && (
-                  <svg className="storefront-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <polyline points="20 12 20 22 4 22 4 12" />
-                    <rect x="2" y="7" width="20" height="5" />
-                    <line x1="12" y1="22" x2="12" y2="7" />
-                    <path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z" />
-                    <path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z" />
-                  </svg>
-                )}
-                {key === "tip" && (
-                  <svg className="storefront-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
-                  </svg>
-                )}
-                {key === "messages" && (
-                  <svg className="storefront-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-                  </svg>
-                )}
-                {key === "saved" && (
-                  <svg className="storefront-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />
-                  </svg>
-                )}
-                {key === "about" && (
-                  <svg className="storefront-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <circle cx="12" cy="12" r="10" />
-                    <path d="M12 16v-4M12 8h.01" />
-                  </svg>
-                )}
-                <span className="inline-flex items-center gap-1">
-                  {navLabels[key] || key}
-                  {key === "messages" && unreadMessageTabCount > 0 ? (
-                    <span
-                      className="min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-bold leading-none inline-flex items-center justify-center text-white"
-                      style={{ backgroundColor: primary }}
-                      aria-label={`${unreadMessageTabCount} unread messages`}
-                    >
-                      {unreadMessageTabCount > 9 ? "9+" : unreadMessageTabCount}
-                    </span>
-                  ) : null}
-                </span>
-              </button>
-            );
-          })}
-          <div className="storefront-header-actions">
-            {isLoggedIn && (
-              <FanHubNotificationBell
-                accentColor={primary}
-                iconColor={theme?.text || "#6f4858"}
-                className="storefront-header-notify-bell"
+        <div className="storefront-member-header-row flex items-center justify-between px-4 sm:px-6 py-3 gap-2 min-w-0 max-w-[1360px] mx-auto w-full">
+          <div className="storefront-header-left">
+            {showHeaderLogo ? (
+              <img
+                key={headerLogoSrc}
+                src={headerLogoSrc}
+                alt={displayName}
+                className="storefront-header-logo"
+                onError={onHeaderLogoError}
               />
+            ) : (
+              <div className="storefront-header-wordmark" aria-label={`${displayName} logo`}>
+                <span className="storefront-header-wordmark-main">
+                  {creator.handle?.toLowerCase() === "stormijxo" ? "STORMI J XO" : (displayName || "Creator").toUpperCase()}
+                </span>
+                <span className="storefront-header-wordmark-sub">
+                  {(creator.fanAuthBranding?.communityName || "Inner Circle").trim() || "Inner Circle"}
+                </span>
+              </div>
             )}
-            <button
-              type="button"
-              onClick={handleCancelMembership}
-              disabled={cancelMembershipLoading}
-              className="storefront-cancel-membership-btn"
-              title="Cancel membership at end of billing period"
-            >
-              {cancelMembershipLoading ? "Canceling…" : "Cancel membership"}
-            </button>
           </div>
-        </nav>
+          <nav className="storefront-header-nav">
+            {memberTabKeys.map((key) => {
+              const isTip = key === "tip";
+              return (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => setActiveTab(key)}
+                  className={`storefront-nav-btn ${isTip ? "storefront-nav-tip" : ""} ${activeTab === key ? "active" : ""}`}
+                  title={key === "saved" ? "Saved posts" : undefined}
+                >
+                  {key === "feed" && (
+                    <svg className="storefront-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+                      <polyline points="9 22 9 12 15 12 15 22" />
+                    </svg>
+                  )}
+                  {key === "treats" && (
+                    <svg className="storefront-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <polyline points="20 12 20 22 4 22 4 12" />
+                      <rect x="2" y="7" width="20" height="5" />
+                      <line x1="12" y1="22" x2="12" y2="7" />
+                      <path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z" />
+                      <path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z" />
+                    </svg>
+                  )}
+                  {key === "tip" && (
+                    <svg className="storefront-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
+                    </svg>
+                  )}
+                  {key === "messages" && (
+                    <svg className="storefront-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+                    </svg>
+                  )}
+                  {key === "saved" && (
+                    <svg className="storefront-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />
+                    </svg>
+                  )}
+                  {key === "about" && (
+                    <svg className="storefront-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <circle cx="12" cy="12" r="10" />
+                      <path d="M12 16v-4M12 8h.01" />
+                    </svg>
+                  )}
+                  <span className="inline-flex items-center gap-1">
+                    {navLabels[key] || key}
+                    {key === "messages" && unreadMessageTabCount > 0 ? (
+                      <span
+                        className="min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-bold leading-none inline-flex items-center justify-center text-white"
+                        style={{ backgroundColor: primary }}
+                        aria-label={`${unreadMessageTabCount} unread messages`}
+                      >
+                        {unreadMessageTabCount > 9 ? "9+" : unreadMessageTabCount}
+                      </span>
+                    ) : null}
+                  </span>
+                </button>
+              );
+            })}
+            <div className="storefront-header-actions">
+              {isLoggedIn && (
+                <FanHubNotificationBell
+                  accentColor={primary}
+                  iconColor={theme?.text || "#6f4858"}
+                  className="storefront-header-notify-bell"
+                />
+              )}
+              <div className="storefront-profile-menu-wrap" ref={profileMenuRef}>
+                <button
+                  type="button"
+                  className="storefront-profile-menu-trigger"
+                  onClick={() => setProfileMenuOpen((v) => !v)}
+                  aria-haspopup="menu"
+                  aria-expanded={profileMenuOpen}
+                  title="Profile menu"
+                >
+                  {memberAvatar ? (
+                    <img src={memberAvatar} alt="" className="storefront-profile-menu-avatar" style={avatarCropStyle} />
+                  ) : (
+                    <span className="storefront-profile-menu-avatar storefront-profile-menu-avatar-fallback">{memberAvatarInitial}</span>
+                  )}
+                </button>
+                {profileMenuOpen && (
+                  <div className="storefront-profile-menu-dropdown" role="menu">
+                    <button type="button" role="menuitem" className="storefront-profile-menu-item" onClick={handleOpenProfile}>
+                      Your profile
+                    </button>
+                    <button type="button" role="menuitem" className="storefront-profile-menu-item" onClick={handleSendProblem}>
+                      Send a problem
+                    </button>
+                    <button type="button" role="menuitem" className="storefront-profile-menu-item" onClick={handleLogout}>
+                      Log out
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          </nav>
+        </div>
       </header>
 
       {cancelMembershipMessage && (
@@ -1352,18 +1772,19 @@ export const FanStorefrontView: React.FC = () => {
               <FanMemberFeed
                 creatorId={creator.creatorId}
                 displayName={displayName}
-                avatar={avatar}
+                avatar={creatorAvatar}
                 avatarObjectPosition={creator.avatarObjectPosition}
                 primary={primary}
                 feedSettings={creator.feedSettings}
                 fanId={auth.currentUser?.uid}
+                onOpenSaved={() => setActiveTab("saved")}
               />
             )}
             {activeTab === "saved" && (
               <FanMemberSaved
                 creatorId={creator.creatorId}
                 displayName={displayName}
-                avatar={avatar}
+                avatar={creatorAvatar}
                 avatarObjectPosition={creator.avatarObjectPosition}
                 primary={primary}
                 feedSettings={creator.feedSettings}
@@ -1614,13 +2035,37 @@ export const FanStorefrontView: React.FC = () => {
                     <p className="fan-member-about-bio">{bio}</p>
                   </div>
                 )}
-                {(rules?.boundariesText ?? landingContent?.boundaryText) && (
+                {showMemberGuidelines ? (
                   <div className="fan-member-about-section">
                     <h3 className="fan-member-about-heading">{guidelinesSectionTitle}</h3>
-                    <p className="fan-member-about-text">{rules?.boundariesText || landingContent?.boundaryText}</p>
+                    {memberGuidelinesIntro ? <p className="fan-member-about-text">{memberGuidelinesIntro}</p> : null}
+                    {memberGuidelinesLines.length > 0 ? (
+                      <ul className="list-none m-0 mt-2 p-0 space-y-2">
+                        {memberGuidelinesLines.map((line, i) => {
+                          const marker: LandingSectionListMarker =
+                            landingContent?.boundaryLinesMarker ?? "check";
+                          if (marker === "none") {
+                            return (
+                              <li key={i} className="text-sm leading-relaxed" style={{ color: "var(--fan-text-muted)" }}>
+                                {line}
+                              </li>
+                            );
+                          }
+                          const glyph = marker === "heart" ? "♥" : marker === "dot" ? "•" : "✓";
+                          return (
+                            <li key={i} className="flex gap-2 items-start text-sm leading-relaxed">
+                              <span className="shrink-0 w-4 text-center" style={{ color: primary }}>
+                                {glyph}
+                              </span>
+                              <span style={{ color: "var(--fan-text-muted)" }}>{line}</span>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    ) : null}
                   </div>
-                )}
-                {!bio && !rules?.boundariesText && !landingContent?.boundaryText && (
+                ) : null}
+                {!bio && !showMemberGuidelines && (
                   <p className="fan-member-empty">No about or guidelines added yet.</p>
                 )}
               </div>

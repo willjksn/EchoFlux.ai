@@ -136,9 +136,13 @@ export const FAN_HUB_THEME_PRESETS: FanHubThemePreset[] = [
 
 /** Hero layout options for storefront landing page */
 export const HERO_LAYOUT_OPTIONS: { value: 'default' | 'centered' | 'split' | 'splitRight'; label: string; description: string }[] = [
-  { value: 'default', label: 'Default', description: 'Hero image and text stacked (centered)' },
-  { value: 'centered', label: 'Centered', description: 'Compact centered hero' },
-  { value: 'split', label: 'Image left', description: 'Hero photo on the left, text on the right' },
+  {
+    value: 'default',
+    label: 'Default',
+    description: 'Hero photo beside text (image left) when you have hero art; stacked when you don’t',
+  },
+  { value: 'centered', label: 'Centered', description: 'Compact stacked hero (image above text)' },
+  { value: 'split', label: 'Image left', description: 'Same as default when you have photos — always side-by-side' },
   { value: 'splitRight', label: 'Image right', description: 'Text on the left, hero photo on the right' },
 ];
 

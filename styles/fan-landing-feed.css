@@ -1256,7 +1256,7 @@
 .fan-feed-post-content p {
   margin: 0;
   color: var(--fan-text);
-  font-size: 0.95rem;
+  font-size: 0.84rem;
   line-height: 1.6;
   white-space: pre-wrap;
 }
@@ -1465,7 +1465,7 @@
 /* Footer: comment teaser + View post (Stormij-style) */
 .fan-feed-post-footer {
   padding: 0.65rem 1rem 0.9rem;
-  border-top: 1px solid rgba(201, 112, 130, 0.1);
+  border-top: 0;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
@@ -1474,9 +1474,27 @@
 
 .fan-feed-post-comments-teaser {
   margin: 0;
-  font-size: 0.8125rem;
+  font-size: 0.75rem;
   color: #9ca3af;
   line-height: 1.4;
+}
+
+.fan-feed-view-comments-link {
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  font-size: 0.8rem;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  text-decoration: none;
+  font-family: inherit;
+  color: #9ca3af;
+}
+
+.fan-feed-view-comments-link:hover {
+  text-decoration: underline;
+  color: #6b7280;
 }
 
 .fan-feed-view-post-link {
@@ -1484,16 +1502,17 @@
   border: none;
   padding: 0;
   cursor: pointer;
-  font-size: 0.9rem;
-  font-weight: 700;
+  font-size: 0.8rem;
+  font-weight: 600;
   letter-spacing: 0.01em;
   text-decoration: none;
   font-family: inherit;
-  color: var(--fan-primary, #c97082);
+  color: #6b7280;
 }
 
 .fan-feed-view-post-link:hover {
   text-decoration: underline;
+  color: #4b5563;
 }
 
 /* Full post modal (member feed / saved) — default backdrop (legacy narrow sheet) */

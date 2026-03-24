@@ -1,9 +1,18 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useAppContext } from "./AppContext";
-import { doc, getDoc, setDoc } from "firebase/firestore";
+import { collection, doc, getDoc, getDocs, query, setDoc, where } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { db, storage, auth } from "../firebaseConfig";
-import type { CreatorStorefrontSettings, StorefrontButtonStyle, StorefrontSocialLinks, StorefrontLandingContent, StorefrontLegal, TextStyle } from "../types";
+import type {
+  CreatorStorefrontSettings,
+  StorefrontButtonStyle,
+  StorefrontSocialLinks,
+  StorefrontLandingContent,
+  StorefrontLegal,
+  TextStyle,
+  PresetFontSize,
+  LandingSectionListMarker,
+} from "../types";
 import { STOREFRONT_CONTENT_POLICY, DEFAULT_PRIVACY_POLICY, DEFAULT_TERMS_OF_SERVICE, FAN_HUB_THEME_PRESETS, HERO_LAYOUT_OPTIONS, HERO_MEDIA_SIZE_OPTIONS } from "../constants";
 import { getAvatarCropStyle } from "../src/lib/avatarCrop";
 import {
@@ -63,13 +72,14 @@ const DEFAULT_LANDING_CONTENT: StorefrontLandingContent = {
     "Special treats and surprises",
   ],
   previewTitle: "What You Get",
-  previewText: "As a member, you get access to content I can only share here.",
+  previewText: "Inside the Inner Circle:",
   previewList: [
     "Daily posts and updates",
     "Exclusive photos and videos",
     "Personal messages",
     "Live sessions and Q&As",
   ],
+  previewFooterLines: ["Nothing explicit.", "Nothing fake.", "Nothing forced."],
   energyTitle: "The Vibe",
   energyLines: [
     "Authentic and real.",
@@ -181,6 +191,68 @@ function normalizeForCompare(a: Partial<CreatorStorefrontSettings>): string {
   });
 }
 
+/**
+ * Same normalization as `loadSettings` → preview always matches what Firestore save / public API return,
+ * even when `draft` only has partial updates from individual fields.
+ */
+function buildStorefrontPreviewConfig(draft: Partial<CreatorStorefrontSettings>): Partial<CreatorStorefrontSettings> {
+  const heroMedia =
+    Array.isArray(draft.heroMedia) && draft.heroMedia.length > 0
+      ? draft.heroMedia
+      : draft.heroImage
+        ? [{ url: String(draft.heroImage), size: "medium" as const }]
+        : [];
+  return {
+    handle: draft.handle ?? "",
+    displayName: draft.displayName ?? "",
+    bio: draft.bio ?? "",
+    avatar: draft.avatar ?? (draft as Record<string, unknown>).avatarUrl,
+    avatarObjectPosition: draft.avatarObjectPosition,
+    showDisplayNameOnLanding: draft.showDisplayNameOnLanding !== false,
+    heroImage: draft.heroImage ?? "",
+    heroMedia,
+    heroTagline: draft.heroTagline ?? "",
+    heroPromise: draft.heroPromise ?? "",
+    heroSubline: draft.heroSubline ?? "",
+    heroSubline2: draft.heroSubline2 ?? "",
+    logo:
+      (draft.logo && String(draft.logo).trim()) ||
+      (draft.logoUrl && String(draft.logoUrl).trim()) ||
+      "",
+    socialLinks: draft.socialLinks ? { ...DEFAULT_SOCIAL_LINKS, ...draft.socialLinks } : { ...DEFAULT_SOCIAL_LINKS },
+    landingContent: draft.landingContent ? { ...DEFAULT_LANDING_CONTENT, ...draft.landingContent } : { ...DEFAULT_LANDING_CONTENT },
+    legal: draft.legal ? { ...DEFAULT_LEGAL, ...draft.legal } : { ...DEFAULT_LEGAL },
+    theme: draft.theme ? { ...DEFAULT_THEME, ...draft.theme } : { ...DEFAULT_THEME },
+    heroLayout: draft.heroLayout ?? "default",
+    sections: draft.sections ? { ...DEFAULT_SECTIONS, ...draft.sections } : { ...DEFAULT_SECTIONS },
+    sectionsOrder: draft.sectionsOrder ?? DEFAULT_SECTIONS_ORDER,
+    spicyMode: draft.spicyMode ?? false,
+    rules: draft.rules ?? {},
+    monetization: draft.monetization ? { ...DEFAULT_MONETIZATION, ...draft.monetization } : { ...DEFAULT_MONETIZATION },
+    textStyles: draft.textStyles ?? {},
+    onboardingStatus: draft.onboardingStatus,
+    updatedAt: draft.updatedAt,
+    publicTreatsOnLanding: draft.publicTreatsOnLanding === true,
+    fanAuthBranding: draft.fanAuthBranding ?? {},
+  };
+}
+
+function storefrontVisualScore(data: Record<string, unknown> | null | undefined): number {
+  if (!data) return -1;
+  let score = 0;
+  if (typeof data.logo === "string" && data.logo.trim()) score += 8;
+  if (typeof data.logoUrl === "string" && data.logoUrl.trim()) score += 8;
+  if (typeof data.avatar === "string" && data.avatar.trim()) score += 5;
+  if (typeof data.avatarUrl === "string" && data.avatarUrl.trim()) score += 5;
+  if (Array.isArray(data.heroMedia) && data.heroMedia.length > 0) score += 6;
+  if (typeof data.heroImage === "string" && data.heroImage.trim()) score += 4;
+  if (typeof data.heroImageUrl === "string" && data.heroImageUrl.trim()) score += 4;
+  if (typeof data.heroTagline === "string" && data.heroTagline.trim()) score += 2;
+  if (typeof data.heroPromise === "string" && data.heroPromise.trim()) score += 2;
+  if (typeof data.updatedAt === "string" && data.updatedAt.trim()) score += 1;
+  return score;
+}
+
 // Social media icons
 const InstagramIcon = () => (
   <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
@@ -213,7 +285,7 @@ const YouTubeIcon = () => (
 );
 
 // Font size options for text styling (with pixel labels)
-const FONT_SIZE_OPTIONS: { value: TextStyle['fontSize']; label: string }[] = [
+const FONT_SIZE_OPTIONS: { value: PresetFontSize; label: string }[] = [
   { value: 'xs', label: '12px' },
   { value: 'sm', label: '14px' },
   { value: 'base', label: '16px' },
@@ -274,9 +346,12 @@ const FONT_FAMILY_OPTIONS: { value: string; label: string; style: string }[] = [
 const TextStyleControls: React.FC<{
   style?: TextStyle;
   onChange: (style: TextStyle) => void;
-  defaultSize?: TextStyle['fontSize'];
+  defaultSize?: PresetFontSize;
 }> = ({ style, onChange, defaultSize = 'base' }) => {
   const [showControls, setShowControls] = useState(false);
+  const isPresetFontSize = (value?: string): value is PresetFontSize =>
+    Boolean(value && FONT_SIZE_OPTIONS.some((opt) => opt.value === value));
+  const customFontSize = isPresetFontSize(style?.fontSize) ? "" : (style?.fontSize ?? "");
   
   return (
     <div className="relative inline-flex items-center">
@@ -386,6 +461,21 @@ const TextStyleControls: React.FC<{
                     </button>
                   ))}
                 </div>
+                <div className="mt-2">
+                  <input
+                    type="text"
+                    value={customFontSize}
+                    onChange={(e) => {
+                      const raw = e.target.value.trim();
+                      onChange({ ...style, fontSize: raw || undefined });
+                    }}
+                    placeholder="Custom size (e.g. 22px, 1.35rem)"
+                    className="w-full px-2 py-1.5 text-xs border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                  />
+                  <p className="mt-1 text-[11px] text-gray-500 dark:text-gray-400">
+                    Supports px, rem, em, %, vw, vh
+                  </p>
+                </div>
               </div>
               {/* Color */}
               <div>
@@ -489,6 +579,7 @@ export const MyPageBuilder: React.FC = () => {
     "off" | "panBg" | "panAvatar" | "focusPhoto"
   >("off");
   const [previewFocusPhotoSlot, setPreviewFocusPhotoSlot] = useState(0);
+  const previewScrollRef = useRef<HTMLDivElement>(null);
 
   const heroGridSlotCount = useMemo(
     () => (draft.heroMedia ?? []).filter((m) => m.size !== "fullBackground").length,
@@ -505,6 +596,11 @@ export const MyPageBuilder: React.FC = () => {
     startOx: number;
     startOy: number;
   } | null>(null);
+
+  useEffect(() => {
+    const el = previewScrollRef.current;
+    if (el) el.scrollTop = 0;
+  }, [previewMode, draft.handle]);
 
   const onBuilderAvatarPanPointerDown = useCallback(
     (e: React.PointerEvent<HTMLDivElement>) => {
@@ -606,7 +702,10 @@ export const MyPageBuilder: React.FC = () => {
         heroPromise: data.heroPromise ?? "",
         heroSubline: (data as Record<string, unknown>).heroSubline ?? "",
         heroSubline2: data.heroSubline2 ?? "",
-        logo: data.logo ?? "",
+        logo:
+          (data.logo && String(data.logo).trim()) ||
+          ((data as { logoUrl?: string }).logoUrl && String((data as { logoUrl?: string }).logoUrl).trim()) ||
+          "",
         socialLinks: data.socialLinks ? { ...DEFAULT_SOCIAL_LINKS, ...data.socialLinks } : { ...DEFAULT_SOCIAL_LINKS },
         landingContent: data.landingContent ? { ...DEFAULT_LANDING_CONTENT, ...data.landingContent } : { ...DEFAULT_LANDING_CONTENT },
         legal: data.legal ? { ...DEFAULT_LEGAL, ...data.legal } : { ...DEFAULT_LEGAL },
@@ -623,6 +722,61 @@ export const MyPageBuilder: React.FC = () => {
         publicTreatsOnLanding: data.publicTreatsOnLanding === true,
         fanAuthBranding: data.fanAuthBranding ?? {},
       };
+      const handleForLookup = String(merged.handle ?? "").replace("@", "").toLowerCase().trim();
+      const missingVisuals =
+        !String(merged.logo ?? "").trim() &&
+        !String((merged as { logoUrl?: string }).logoUrl ?? "").trim() &&
+        !String(merged.avatar ?? "").trim() &&
+        !String(merged.heroImage ?? "").trim() &&
+        !Array.isArray(merged.heroMedia);
+
+      if (db && handleForLookup && missingVisuals) {
+        try {
+          const snapByHandle = await getDocs(
+            query(collection(db, "creators"), where("handle", "==", handleForLookup))
+          );
+          if (!snapByHandle.empty) {
+            let best = snapByHandle.docs[0].data() as Record<string, unknown>;
+            let bestScore = storefrontVisualScore(best);
+            for (const d of snapByHandle.docs.slice(1)) {
+              const cand = d.data() as Record<string, unknown>;
+              const s = storefrontVisualScore(cand);
+              if (s > bestScore) {
+                best = cand;
+                bestScore = s;
+              }
+            }
+            if (bestScore > storefrontVisualScore(merged as Record<string, unknown>)) {
+              merged.logo =
+                (String(merged.logo ?? "").trim() ||
+                  (typeof best.logo === "string" ? best.logo.trim() : "") ||
+                  (typeof best.logoUrl === "string" ? best.logoUrl.trim() : "")) || "";
+              merged.avatar =
+                (String(merged.avatar ?? "").trim() ||
+                  (typeof best.avatar === "string" ? best.avatar.trim() : "") ||
+                  (typeof best.avatarUrl === "string" ? best.avatarUrl.trim() : "")) || "";
+              merged.avatarObjectPosition =
+                merged.avatarObjectPosition ??
+                (typeof best.avatarObjectPosition === "string" ? best.avatarObjectPosition : undefined);
+              if ((!merged.heroMedia || merged.heroMedia.length === 0) && Array.isArray(best.heroMedia)) {
+                merged.heroMedia = best.heroMedia as NonNullable<CreatorStorefrontSettings["heroMedia"]>;
+              }
+              if (!String(merged.heroImage ?? "").trim()) {
+                merged.heroImage =
+                  (typeof best.heroImage === "string" && best.heroImage.trim()) ||
+                  (typeof best.heroImageUrl === "string" && best.heroImageUrl.trim()) ||
+                  "";
+              }
+              if (!String(merged.heroTagline ?? "").trim() && typeof best.heroTagline === "string") merged.heroTagline = best.heroTagline;
+              if (!String(merged.heroPromise ?? "").trim() && typeof best.heroPromise === "string") merged.heroPromise = best.heroPromise;
+              if (!String(merged.heroSubline ?? "").trim() && typeof best.heroSubline === "string") merged.heroSubline = best.heroSubline;
+              if (!String(merged.heroSubline2 ?? "").trim() && typeof best.heroSubline2 === "string") merged.heroSubline2 = best.heroSubline2;
+            }
+          }
+        } catch {
+          // Best-effort fallback only; keep primary doc data.
+        }
+      }
       (merged as Record<string, unknown>).stripeConnectAccountId = (data as Record<string, unknown>).stripeConnectAccountId;
       setSaved(merged);
       setDraft(merged);
@@ -633,11 +787,12 @@ export const MyPageBuilder: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [creatorId, showToast]);
+    // showToast intentionally omitted — unstable identity was re-running this effect and wiping draft (e.g. new logo upload).
+  }, [creatorId]);
 
   useEffect(() => {
-    loadSettings();
-  }, [loadSettings]);
+    void loadSettings();
+  }, [creatorId, loadSettings]);
 
   const checkHandle = useCallback(
     async (value: string) => {
@@ -827,6 +982,18 @@ export const MyPageBuilder: React.FC = () => {
         }
         throw new Error((data as { message?: string }).message || `Save failed (${res.status})`);
       }
+      // Best-effort client-side handle mapping sync for legacy mismatches (no-op if rules deny).
+      try {
+        const cleanHandle = String(payload.handle ?? "")
+          .replace("@", "")
+          .toLowerCase()
+          .trim();
+        if (db && creatorId && cleanHandle) {
+          await setDoc(doc(db, "creatorHandles", cleanHandle), { creatorId }, { merge: true });
+        }
+      } catch (handleSyncErr) {
+        console.warn("[MyPageBuilder] creatorHandles sync skipped:", handleSyncErr);
+      }
       const updated = { ...draft, ...payload, updatedAt: new Date().toISOString() };
       setSaved(updated);
       setDraft(updated);
@@ -874,7 +1041,42 @@ export const MyPageBuilder: React.FC = () => {
       const storageRef = ref(storage, path);
       await uploadBytes(storageRef, file, { contentType: file.type });
       const url = await getDownloadURL(storageRef);
-      updateDraft({ logo: url });
+      updateDraft({ logo: url, logoUrl: url });
+
+      // Persist immediately so live landing can render logo without waiting for full form save.
+      try {
+        const cleanHandle = String(draft.handle ?? "")
+          .replace("@", "")
+          .toLowerCase()
+          .trim();
+        // Best-effort client-side handle mapping repair.
+        if (db && creatorId && cleanHandle) {
+          await setDoc(doc(db, "creatorHandles", cleanHandle), { creatorId }, { merge: true });
+        }
+        const token = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
+        if (token) {
+          const res = await fetch("/api/updateCreatorStorefront", {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+            body: JSON.stringify({
+              handle: (draft.handle ?? "").replace("@", "").toLowerCase().trim(),
+              logo: url,
+              logoUrl: url,
+            }),
+          });
+
+          // Local dev fallback when /api route isn't available
+          if (!res.ok && res.status === 404 && db && creatorId) {
+            await setDoc(
+              doc(db, "creators", creatorId),
+              { logo: url, logoUrl: url, updatedAt: new Date().toISOString() },
+              { merge: true }
+            );
+          }
+        }
+      } catch (persistErr) {
+        console.warn("[MyPageBuilder] Logo auto-persist failed; keep using Save button.", persistErr);
+      }
     } catch (err) {
       console.error(err);
       showToast?.("Failed to upload logo", "error");
@@ -990,12 +1192,11 @@ export const MyPageBuilder: React.FC = () => {
     });
   };
 
-  // Helper to update landing content
-  const updateLandingContent = (field: keyof StorefrontLandingContent, value: string | string[]) => {
+  // Helper to update landing content (merge only — do not spread full defaults or other fields reset)
+  const updateLandingContent = <K extends keyof StorefrontLandingContent>(field: K, value: StorefrontLandingContent[K]) => {
     updateDraft({
       landingContent: {
-        ...draft.landingContent,
-        ...DEFAULT_LANDING_CONTENT,
+        ...(draft.landingContent ?? DEFAULT_LANDING_CONTENT),
         [field]: value,
       },
     });
@@ -1025,6 +1226,8 @@ export const MyPageBuilder: React.FC = () => {
     handleCleanForCheck.length >= 3 &&
     handleCleanForCheck.length <= 20 &&
     /^[a-z0-9_]+$/.test(handleCleanForCheck);
+
+  const storefrontPreviewConfig = useMemo(() => buildStorefrontPreviewConfig(draft), [draft]);
 
   if (loading) {
     return (
@@ -1185,7 +1388,9 @@ export const MyPageBuilder: React.FC = () => {
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Header Logo</label>
-                  <p className="text-xs text-gray-400 mb-1">Shown in page header. Wide logos work best.</p>
+                  <p className="text-xs text-gray-400 mb-1">
+                    Click the box below to upload — it appears in the landing header (left of Sign up / Log in) in the preview and on your live page after you save.
+                  </p>
                   <p className="text-[11px] text-gray-400 mb-2">Optimal: 400×100px or similar 3:1–4:1 ratio (wide, not square).</p>
                   <label className="flex flex-col items-center justify-center w-full min-h-[100px] h-28 rounded-lg border-2 border-dashed border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-900/50 cursor-pointer hover:border-primary-500 overflow-hidden p-2">
                     {draft.logo ? (
@@ -1683,6 +1888,37 @@ export const MyPageBuilder: React.FC = () => {
                     <EmojiButton onSelect={(emoji) => updateLandingContent("perksText", (draft.landingContent?.perksText ?? "") + emoji)} />
                   </div>
                 </div>
+                <div className="mt-3 space-y-2">
+                  <label className="block text-xs font-medium text-gray-500 dark:text-gray-400">
+                    Extra lines (one per line, optional)
+                  </label>
+                  <textarea
+                    rows={4}
+                    placeholder="Each line appears under your description. Leave empty for description only (e.g. “Why This Exists” with no list)."
+                    value={(draft.landingContent?.perksList ?? []).join("\n")}
+                    onChange={(e) => {
+                      const raw = e.target.value;
+                      const lines = raw.length === 0 ? [] : raw.split("\n");
+                      updateLandingContent("perksList", lines);
+                    }}
+                    className="w-full px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                  />
+                  <div>
+                    <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Bullet style for those lines</label>
+                    <select
+                      className="w-full px-2 py-1.5 text-xs border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                      value={draft.landingContent?.perksListMarker ?? "none"}
+                      onChange={(e) =>
+                        updateLandingContent("perksListMarker", e.target.value as LandingSectionListMarker)
+                      }
+                    >
+                      <option value="none">None — plain lines</option>
+                      <option value="heart">Heart</option>
+                      <option value="check">Check (✓)</option>
+                      <option value="dot">Dot</option>
+                    </select>
+                  </div>
+                </div>
               </div>
 
               {/* Preview Section */}
@@ -1706,7 +1942,7 @@ export const MyPageBuilder: React.FC = () => {
                   <EmojiButton onSelect={(emoji) => updateLandingContent("previewTitle", (draft.landingContent?.previewTitle ?? "") + emoji)} />
                 </div>
                 <div className="flex items-center justify-between mb-1">
-                  <span className="text-xs text-gray-500 dark:text-gray-400">Description</span>
+                  <span className="text-xs text-gray-500 dark:text-gray-400">Subline under title (pink)</span>
                   <TextStyleControls
                     style={draft.textStyles?.previewText}
                     onChange={(style) => updateTextStyle('previewText', style)}
@@ -1717,13 +1953,60 @@ export const MyPageBuilder: React.FC = () => {
                   <textarea
                     value={draft.landingContent?.previewText ?? DEFAULT_LANDING_CONTENT.previewText}
                     onChange={(e) => updateLandingContent("previewText", e.target.value)}
-                    placeholder="Main text"
+                    placeholder="Inside the Inner Circle:"
                     rows={2}
                     className="w-full px-3 py-1.5 pr-12 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                   />
                   <div className="absolute right-2 top-1.5">
                     <EmojiButton onSelect={(emoji) => updateLandingContent("previewText", (draft.landingContent?.previewText ?? "") + emoji)} />
                   </div>
+                </div>
+                <div className="mt-3 space-y-2">
+                  <label className="block text-xs font-medium text-gray-500 dark:text-gray-400">
+                    Feature lines (one per line, optional)
+                  </label>
+                  <textarea
+                    rows={4}
+                    placeholder="Each line is a row under your description (e.g. “What You Get” perks)."
+                    value={(draft.landingContent?.previewList ?? []).join("\n")}
+                    onChange={(e) => {
+                      const raw = e.target.value;
+                      const lines = raw.length === 0 ? [] : raw.split("\n");
+                      updateLandingContent("previewList", lines);
+                    }}
+                    className="w-full px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                  />
+                  <div>
+                    <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Bullet style for those lines</label>
+                    <select
+                      className="w-full px-2 py-1.5 text-xs border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                      value={draft.landingContent?.previewListMarker ?? "heart"}
+                      onChange={(e) =>
+                        updateLandingContent("previewListMarker", e.target.value as LandingSectionListMarker)
+                      }
+                    >
+                      <option value="none">None — plain lines</option>
+                      <option value="heart">Heart</option>
+                      <option value="check">Check (✓)</option>
+                      <option value="dot">Dot</option>
+                    </select>
+                  </div>
+                </div>
+                <div className="mt-3 space-y-2">
+                  <label className="block text-xs font-medium text-gray-500 dark:text-gray-400">
+                    Footer lines (italic, below list — one per line)
+                  </label>
+                  <textarea
+                    rows={3}
+                    placeholder={"Nothing explicit.\nNothing fake.\nNothing forced."}
+                    value={(draft.landingContent?.previewFooterLines ?? []).join("\n")}
+                    onChange={(e) => {
+                      const raw = e.target.value;
+                      const lines = raw.length === 0 ? [] : raw.split("\n");
+                      updateLandingContent("previewFooterLines", lines);
+                    }}
+                    className="w-full px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                  />
                 </div>
               </div>
 
@@ -1767,7 +2050,34 @@ export const MyPageBuilder: React.FC = () => {
                     }} />
                   </div>
                 </div>
-                <p className="text-xs text-gray-400 mt-1">One line per row</p>
+                <div className="mt-2">
+                  <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Bullet style for each line</label>
+                  <select
+                    className="w-full px-2 py-1.5 text-xs border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                    value={draft.landingContent?.energyLinesMarker ?? "heart"}
+                    onChange={(e) =>
+                      updateLandingContent("energyLinesMarker", e.target.value as LandingSectionListMarker)
+                    }
+                  >
+                    <option value="none">None — plain lines</option>
+                    <option value="heart">Heart</option>
+                    <option value="check">Check (✓)</option>
+                    <option value="dot">Dot</option>
+                  </select>
+                </div>
+                <div className="mt-2">
+                  <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+                    Closing line (bold, accent color — optional)
+                  </label>
+                  <input
+                    type="text"
+                    value={draft.landingContent?.energyClosingLine ?? ""}
+                    onChange={(e) => updateLandingContent("energyClosingLine", e.target.value)}
+                    placeholder='e.g. And that is different.'
+                    className="w-full px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                  />
+                </div>
+                <p className="text-xs text-gray-400 mt-1">One line per row in the box above.</p>
               </div>
 
               {/* Boundary Section */}
@@ -1793,7 +2103,7 @@ export const MyPageBuilder: React.FC = () => {
                   <EmojiButton onSelect={(emoji) => updateLandingContent("boundaryTitle", (draft.landingContent?.boundaryTitle ?? "") + emoji)} />
                 </div>
                 <div className="flex items-center justify-between mb-1">
-                  <span className="text-xs text-gray-500 dark:text-gray-400">Description</span>
+                  <span className="text-xs text-gray-500 dark:text-gray-400">Intro paragraph (optional if you use lines below)</span>
                   <TextStyleControls
                     style={draft.textStyles?.boundaryText}
                     onChange={(style) => updateTextStyle('boundaryText', style)}
@@ -1804,12 +2114,43 @@ export const MyPageBuilder: React.FC = () => {
                   <textarea
                     value={draft.landingContent?.boundaryText ?? DEFAULT_LANDING_CONTENT.boundaryText}
                     onChange={(e) => updateLandingContent("boundaryText", e.target.value)}
-                    placeholder="Your boundaries and rules"
+                    placeholder="Opening copy above the list (or use lines only, like the membership card)"
                     rows={2}
                     className="w-full px-3 py-1.5 pr-12 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                   />
                   <div className="absolute right-2 top-1.5">
                     <EmojiButton onSelect={(emoji) => updateLandingContent("boundaryText", (draft.landingContent?.boundaryText ?? "") + emoji)} />
+                  </div>
+                </div>
+                <div className="mt-3 space-y-2">
+                  <label className="block text-xs font-medium text-gray-500 dark:text-gray-400">
+                    Guideline lines (one per line, optional — tier-style list under the intro)
+                  </label>
+                  <textarea
+                    rows={4}
+                    placeholder={"e.g.\nDo not screenshot.\nStay chill."}
+                    value={(draft.landingContent?.boundaryLines ?? []).join("\n")}
+                    onChange={(e) => {
+                      const raw = e.target.value;
+                      const lines = raw.length === 0 ? [] : raw.split("\n");
+                      updateLandingContent("boundaryLines", lines);
+                    }}
+                    className="w-full px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                  />
+                  <div>
+                    <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Bullet style for those lines</label>
+                    <select
+                      className="w-full px-2 py-1.5 text-xs border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                      value={draft.landingContent?.boundaryLinesMarker ?? "check"}
+                      onChange={(e) =>
+                        updateLandingContent("boundaryLinesMarker", e.target.value as LandingSectionListMarker)
+                      }
+                    >
+                      <option value="none">None — plain lines</option>
+                      <option value="heart">Heart</option>
+                      <option value="check">Check (✓)</option>
+                      <option value="dot">Dot</option>
+                    </select>
                   </div>
                 </div>
               </div>
@@ -2235,9 +2576,9 @@ export const MyPageBuilder: React.FC = () => {
               ))}
               <label className="flex items-center justify-between gap-3 cursor-pointer group pt-2 border-t border-gray-200 dark:border-gray-600">
                 <div>
-                  <span className="text-sm text-gray-700 dark:text-gray-300">Show store on public landing</span>
+                  <span className="text-sm text-gray-700 dark:text-gray-300">Guest checkout on landing</span>
                   <p className="text-xs text-gray-400 dark:text-gray-500">
-                    Lets visitors buy visible products without signing in (Stripe collects email). Requires Store enabled above.
+                    The treat-store promo already shows on your landing when Store is enabled. Enable this to let visitors buy without signing in (Stripe collects email).
                   </p>
                 </div>
                 <input
@@ -2377,18 +2718,22 @@ export const MyPageBuilder: React.FC = () => {
                   </div>
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Bullet points (one per line, ✓ added automatically)</label>
+                  <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+                    Membership card bullets (one per line — always shown with ✓ on the landing)
+                  </label>
                   <textarea
                     rows={3}
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm font-mono"
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
                     placeholder={"Paid default:\nExclusive content\nCancel anytime\n\nFree default:\nMember perks & updates\nJoin instantly"}
                     value={(draft.landingContent?.pricingCardBullets ?? []).join("\n")}
                     onChange={(e) => {
-                      const lines = e.target.value.split("\n").map((s) => s.trim()).filter(Boolean);
+                      const raw = e.target.value;
+                      const lines = raw.length === 0 ? [] : raw.split("\n");
+                      const hasContent = lines.some((l) => String(l).trim());
                       updateDraft({
                         landingContent: {
                           ...draft.landingContent,
-                          pricingCardBullets: lines.length ? lines : undefined,
+                          pricingCardBullets: hasContent ? lines : undefined,
                         },
                       });
                     }}
@@ -2813,22 +3158,32 @@ export const MyPageBuilder: React.FC = () => {
                 Member
               </button>
               {draft.handle?.trim() && draft.handle !== "preview" && (
-                <button
-                  type="button"
-                  onClick={() => window.open(`/${draft.handle}?preview=member`, "_blank")}
-                  className="px-2 py-1.5 rounded-lg text-xs font-medium bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 flex items-center gap-1"
-                  title={`Open /${draft.handle} in new tab`}
-                >
-                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                  </svg>
-                </button>
+                <>
+                  <button
+                    type="button"
+                    onClick={() => window.open(`/${draft.handle}?landing=1`, "_blank")}
+                    className="px-2 py-1.5 rounded-lg text-xs font-medium bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700"
+                    title="Open public landing (?landing=1 — use while signed in to preview like a visitor)"
+                  >
+                    Live
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => window.open(`/${draft.handle}?preview=member`, "_blank")}
+                    className="px-2 py-1.5 rounded-lg text-xs font-medium bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 flex items-center gap-1"
+                    title="Open member shell preview (?preview=member)"
+                  >
+                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                    </svg>
+                  </button>
+                </>
               )}
             </div>
           </div>
-          <div className="min-h-0 lg:flex-1 lg:overflow-auto">
+          <div ref={previewScrollRef} className="min-h-0 lg:flex-1 lg:overflow-auto">
             <StorefrontPreview
-              config={draft}
+              config={storefrontPreviewConfig}
               previewMode={previewMode}
               previewFraming={{ tool: previewFramingTool, focusPhotoSlot: previewFocusPhotoSlot }}
               onHeroMediaItemPatch={(index, patch) => {

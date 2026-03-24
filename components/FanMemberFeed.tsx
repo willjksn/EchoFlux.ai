@@ -112,6 +112,8 @@ interface FanMemberFeedProps {
   feedSettings?: FanFeedVisibilitySettings;
   /** Logged-in fan's uid; when set, bookmarks are persisted and loaded from Firestore */
   fanId?: string;
+  /** Optional member-header shortcut to open Saved tab. */
+  onOpenSaved?: () => void;
 }
 
 const DEMO_POSTS: Post[] = [
@@ -392,6 +394,7 @@ function FanMemberPostMedia({
           src={currentUrl}
           alt=""
           className={splitModal ? "feed-comments-modal-media" : "feed-card-media"}
+          style={!splitModal && variant === "feed" ? { objectFit: "cover", objectPosition: "center top" } : undefined}
           loading={idx === 0 ? "lazy" : "eager"}
         />
       )}
@@ -762,8 +765,10 @@ export const FanMemberFeed: React.FC<FanMemberFeedProps> = ({
   primary = "#6366f1",
   feedSettings,
   fanId,
+  onOpenSaved,
 }) => {
   const avatarCropStyle: React.CSSProperties = getAvatarCropStyle(avatarObjectPosition);
+  const creatorAvatarSrc = typeof avatar === "string" && avatar.trim() ? avatar.trim() : undefined;
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
   const [likedPosts, setLikedPosts] = useState<Set<string>>(new Set());
@@ -879,7 +884,7 @@ export const FanMemberFeed: React.FC<FanMemberFeedProps> = ({
             creatorId,
             postId,
             text,
-            authorDisplayName: auth.currentUser?.displayName ?? undefined,
+            authorDisplayName: fanNameResolved ?? auth.currentUser?.displayName ?? undefined,
           }),
         });
         const data = await res.json().catch(() => ({}));
@@ -894,7 +899,7 @@ export const FanMemberFeed: React.FC<FanMemberFeedProps> = ({
         setCommentSending(null);
       }
     },
-    [creatorId, fanId, commentDraft, commentSending, fetchPosts]
+    [creatorId, fanId, commentDraft, commentSending, fanNameResolved, fetchPosts]
   );
 
   const toggleBookmark = useCallback(
@@ -974,9 +979,31 @@ export const FanMemberFeed: React.FC<FanMemberFeedProps> = ({
 
   return (
     <div className="fan-member-feed">
-      <div className="fan-feed-header">
-        <h2 className="fan-feed-title">Latest Posts</h2>
-        <p className="fan-feed-subtitle">Exclusive content for members only</p>
+      <div className="fan-hub-feed-chrome -mx-1 mb-1">
+        <div className="feed-header-wrap">
+          <div className="feed-header">
+            <button
+              type="button"
+              className="feed-view-toggle"
+              title="Saved posts grid"
+              aria-label="Saved posts grid"
+              aria-pressed={false}
+              onClick={onOpenSaved}
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <rect x="3" y="3" width="7" height="7" rx="1" />
+                <rect x="14" y="3" width="7" height="7" rx="1" />
+                <rect x="3" y="14" width="7" height="7" rx="1" />
+                <rect x="14" y="14" width="7" height="7" rx="1" />
+              </svg>
+            </button>
+            <div className="feed-header-right">
+              <button type="button" className="feed-saved-link" onClick={onOpenSaved}>
+                Saved Posts ({bookmarkedPosts.size})
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
 
       <div className="fan-feed-posts">
@@ -986,30 +1013,19 @@ export const FanMemberFeed: React.FC<FanMemberFeedProps> = ({
           </div>
         ) : (
           posts.map((post) => (
-            <article key={post.id} className="fan-feed-post">
-              <div className="fan-feed-post-header">
-                <div className="fan-feed-post-avatar">
-                  {avatar ? (
-                    <img src={avatar} alt="" className="fan-feed-avatar-img" style={avatarCropStyle} />
+            <article key={post.id} className="feed-card">
+              <div className="feed-card-header">
+                <div className="feed-card-avatar">
+                  {creatorAvatarSrc ? (
+                    <img src={creatorAvatarSrc} alt="" className="feed-card-avatar-img" style={avatarCropStyle} />
                   ) : (
-                    <span className="fan-feed-avatar-placeholder">{displayName?.charAt(0) || "?"}</span>
+                    <span className="feed-card-avatar-initial">{displayName?.charAt(0) || "?"}</span>
                   )}
                 </div>
-                <div className="fan-feed-post-meta">
-                  <span className="fan-feed-post-author">{displayName}</span>
-                  <span className="fan-feed-post-time">{formatTimeAgo(post.createdAt)}</span>
+                <div className="feed-card-creator">
+                  <span className="feed-card-username">{displayName}</span>
                 </div>
-                <button type="button" className="fan-feed-post-menu" aria-label="More options">
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                    <circle cx="12" cy="5" r="2" />
-                    <circle cx="12" cy="12" r="2" />
-                    <circle cx="12" cy="19" r="2" />
-                  </svg>
-                </button>
-              </div>
-
-              <div className="fan-feed-post-content">
-                <p>{post.content}</p>
+                <span className="feed-card-time">{formatTimeAgo(post.createdAt)}</span>
               </div>
 
               <FanMemberPostMedia post={post} primary={primary} />
@@ -1022,39 +1038,42 @@ export const FanMemberFeed: React.FC<FanMemberFeedProps> = ({
                 </div>
               ) : null}
 
-              <div className="fan-feed-post-actions">
+              <div className="feed-card-actions">
                 {!(feedSettings?.hideLikes || post.hideLikes) && (
                   <button
                     type="button"
-                    className={`fan-feed-action-btn ${likedPosts.has(post.id) ? "fan-feed-action-active" : ""}`}
+                    className="feed-card-action-link"
                     onClick={() => toggleLike(post.id)}
                     style={likedPosts.has(post.id) ? { color: primary } : undefined}
                   >
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill={likedPosts.has(post.id) ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill={likedPosts.has(post.id) ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2">
                       <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
                     </svg>
-                    {!(feedSettings?.hideLikeCounts || post.hideLikeCounts) && (
-                      <span>{post.likesCount + (likedPosts.has(post.id) ? 1 : 0)}</span>
-                    )}
+                    {!(feedSettings?.hideLikeCounts || post.hideLikeCounts) && <span className="feed-card-action-count">{post.likesCount + (likedPosts.has(post.id) ? 1 : 0)}</span>}
                   </button>
                 )}
 
                 {!(feedSettings?.hideComments || post.hideComments) && (
                   <button
                     type="button"
-                    className="fan-feed-action-btn"
+                    className="feed-card-action-link"
                     onClick={() => toggleComments(post.id)}
                   >
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                       <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" />
                     </svg>
-                    <span>{post.commentsCount}</span>
+                    <span className="feed-card-action-count">{post.commentsCount}</span>
                   </button>
                 )}
 
+                <button type="button" className="feed-card-send-tip">
+                  <span className="tip-currency">$</span>
+                  <span>SEND TIP</span>
+                </button>
+
                 <button
                   type="button"
-                  className={`fan-feed-action-btn ${bookmarkedPosts.has(post.id) ? "fan-feed-action-active" : ""}`}
+                  className={`feed-card-action-btn bookmark-btn ${bookmarkedPosts.has(post.id) ? "liked" : ""}`}
                   onClick={() => toggleBookmark(post.id)}
                   disabled={bookmarkSaving}
                   style={bookmarkedPosts.has(post.id) ? { color: primary } : undefined}
@@ -1064,35 +1083,44 @@ export const FanMemberFeed: React.FC<FanMemberFeedProps> = ({
                     <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />
                   </svg>
                 </button>
-
-                <button type="button" className="fan-feed-action-btn fan-feed-share-btn">
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <circle cx="18" cy="5" r="3" />
-                    <circle cx="6" cy="12" r="3" />
-                    <circle cx="18" cy="19" r="3" />
-                    <line x1="8.59" y1="13.51" x2="15.42" y2="17.49" />
-                    <line x1="15.41" y1="6.51" x2="8.59" y2="10.49" />
-                  </svg>
-                </button>
               </div>
 
-              <div className="fan-feed-post-footer">
-                {!(feedSettings?.hideComments || post.hideComments) && (
-                  <p className="fan-feed-post-comments-teaser">
-                    {post.commentsCount === 0
-                      ? "No comments yet."
-                      : `${post.commentsCount} comment${post.commentsCount === 1 ? "" : "s"}`}
-                  </p>
-                )}
-                <button
-                  type="button"
-                  className="fan-feed-view-post-link"
-                  style={{ color: primary }}
-                  onClick={() => setViewPostId(post.id)}
-                >
-                  View post
-                </button>
+              <div className="feed-card-body">
+                <p>
+                  <span style={{ fontWeight: 600, color: primary, marginRight: "0.35rem" }}>{displayName}</span>
+                  {post.content}
+                </p>
               </div>
+
+              {!(feedSettings?.hideComments || post.hideComments) && (
+                <div className="fan-feed-post-footer">
+                  {post.commentsCount > 0 && (
+                    <button
+                      type="button"
+                      className="fan-feed-view-comments-link"
+                      onClick={() => setViewPostId(post.id)}
+                    >
+                      View all {post.commentsCount} comments
+                    </button>
+                  )}
+                  {post.commentsCount === 0 && (post.commentsList ?? []).length === 0 && (
+                    <p className="fan-feed-post-comments-teaser">No comments yet.</p>
+                  )}
+                  {(post.commentsList ?? []).slice(0, 2).map((c, idx) => (
+                    <p key={`${post.id}-inline-c-${idx}`} className="m-0 text-sm" style={{ color: "var(--fan-text, #1f2937)" }}>
+                      <span style={{ fontWeight: 600, marginRight: "0.35rem" }}>{c.author}</span>
+                      {c.text}
+                    </p>
+                  ))}
+                  <button
+                    type="button"
+                    className="fan-feed-view-post-link"
+                    onClick={() => setViewPostId(post.id)}
+                  >
+                    View post
+                  </button>
+                </div>
+              )}
 
               {!(feedSettings?.hideComments || post.hideComments) && expandedComments.has(post.id) && (
                 <div className="fan-feed-comments">
@@ -1171,6 +1199,7 @@ export const FanMemberSaved: React.FC<FanMemberSavedProps> = ({
   fanId,
 }) => {
   const avatarCropStyle: React.CSSProperties = getAvatarCropStyle(avatarObjectPosition);
+  const creatorAvatarSrc = typeof avatar === "string" && avatar.trim() ? avatar.trim() : undefined;
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
   const [unsavingId, setUnsavingId] = useState<string | null>(null);
@@ -1320,8 +1349,8 @@ export const FanMemberSaved: React.FC<FanMemberSavedProps> = ({
             <article key={post.id} className="fan-feed-post">
               <div className="fan-feed-post-header">
                 <div className="fan-feed-post-avatar">
-                  {avatar ? (
-                    <img src={avatar} alt="" className="fan-feed-avatar-img" style={avatarCropStyle} />
+                  {creatorAvatarSrc ? (
+                    <img src={creatorAvatarSrc} alt="" className="fan-feed-avatar-img" style={avatarCropStyle} />
                   ) : (
                     <span className="fan-feed-avatar-placeholder">{displayName?.charAt(0) || "?"}</span>
                   )}
@@ -1330,9 +1359,6 @@ export const FanMemberSaved: React.FC<FanMemberSavedProps> = ({
                   <span className="fan-feed-post-author">{displayName}</span>
                   <span className="fan-feed-post-time">{formatTimeAgo(post.createdAt)}</span>
                 </div>
-              </div>
-              <div className="fan-feed-post-content">
-                <p>{post.content}</p>
               </div>
               <FanMemberPostMedia post={post} primary={primary} />
               <div className="fan-feed-post-actions">
@@ -1350,23 +1376,41 @@ export const FanMemberSaved: React.FC<FanMemberSavedProps> = ({
                   <span>{unsavingId === post.id ? "Removing…" : "Saved"}</span>
                 </button>
               </div>
-              <div className="fan-feed-post-footer">
-                {!(feedSettings?.hideComments || post.hideComments) && (
-                  <p className="fan-feed-post-comments-teaser">
-                    {post.commentsCount === 0
-                      ? "No comments yet."
-                      : `${post.commentsCount} comment${post.commentsCount === 1 ? "" : "s"}`}
-                  </p>
-                )}
-                <button
-                  type="button"
-                  className="fan-feed-view-post-link"
-                  style={{ color: primary }}
-                  onClick={() => setViewPostId(post.id)}
-                >
-                  View post
-                </button>
+              <div className="fan-feed-post-content">
+                <p>
+                  <span style={{ fontWeight: 600, color: primary, marginRight: "0.35rem" }}>{displayName}</span>
+                  {post.content}
+                </p>
               </div>
+              {!(feedSettings?.hideComments || post.hideComments) && (
+                <div className="fan-feed-post-footer">
+                  {post.commentsCount > 0 && (
+                    <button
+                      type="button"
+                      className="fan-feed-view-comments-link"
+                      onClick={() => setViewPostId(post.id)}
+                    >
+                      View all {post.commentsCount} comments
+                    </button>
+                  )}
+                  {post.commentsCount === 0 && (post.commentsList ?? []).length === 0 && (
+                    <p className="fan-feed-post-comments-teaser">No comments yet.</p>
+                  )}
+                  {(post.commentsList ?? []).slice(0, 2).map((c, idx) => (
+                    <p key={`${post.id}-saved-inline-c-${idx}`} className="m-0 text-sm" style={{ color: "var(--fan-text, #1f2937)" }}>
+                      <span style={{ fontWeight: 600, marginRight: "0.35rem" }}>{c.author}</span>
+                      {c.text}
+                    </p>
+                  ))}
+                  <button
+                    type="button"
+                    className="fan-feed-view-post-link"
+                    onClick={() => setViewPostId(post.id)}
+                  >
+                    View post
+                  </button>
+                </div>
+              )}
             </article>
           ))
         )}

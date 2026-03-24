@@ -1,6 +1,7 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { getAdminDb } from "./_firebaseAdmin.js";
 import { enforceRateLimit } from "./_rateLimit.js";
+import { normalizeHeroMediaForStorefront } from "../src/lib/storefrontHeroNormalize.js";
 
 /**
  * Resolve creator by handle for fan storefront (echoflux.ai/{handle}).
@@ -54,25 +55,71 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       creatorId = (handleDoc.data() as { creatorId?: string })?.creatorId ?? null;
     }
 
-    // 2) Fallback: query creators by handle
-    if (!creatorId) {
-      const creatorsRef = db.collection("creators");
-      let creatorsSnap;
-      try {
-        creatorsSnap = await creatorsRef.where("handle", "==", cleanHandle).limit(1).get();
-      } catch (e) {
-        creatorsSnap = { empty: true, docs: [] };
-      }
-      if (!creatorsSnap.empty) {
-        const doc = creatorsSnap.docs[0];
-        creatorId = doc.id;
-        creatorData = doc.data() as Record<string, unknown>;
-      }
-    } else {
-      // We have creatorId from creatorHandles; load creator doc
+    // Helper: prefer richer storefront docs when duplicate handles exist (legacy migrations).
+    const storefrontScore = (data: Record<string, unknown> | null | undefined): number => {
+      if (!data) return -1;
+      let score = 0;
+      if (typeof data.logo === "string" && data.logo.trim()) score += 8;
+      if (typeof data.logoUrl === "string" && data.logoUrl.trim()) score += 8;
+      if (typeof data.avatar === "string" && data.avatar.trim()) score += 5;
+      if (typeof data.avatarUrl === "string" && data.avatarUrl.trim()) score += 5;
+      if (Array.isArray(data.heroMedia) && data.heroMedia.length > 0) score += 6;
+      if (typeof data.heroImage === "string" && data.heroImage.trim()) score += 4;
+      if (typeof data.heroImageUrl === "string" && data.heroImageUrl.trim()) score += 4;
+      if (data.landingContent && typeof data.landingContent === "object") score += 3;
+      if (data.theme && typeof data.theme === "object") score += 2;
+      if (typeof data.displayName === "string" && data.displayName.trim()) score += 2;
+      if (typeof data.updatedAt === "string" && data.updatedAt.trim()) score += 1;
+      return score;
+    };
+
+    // 2) Query creators by handle (always), then choose best match.
+    const creatorsRef = db.collection("creators");
+    let creatorsSnap: { empty: boolean; docs: Array<{ id: string; data: () => FirebaseFirestore.DocumentData }> } = {
+      empty: true,
+      docs: [],
+    };
+    try {
+      creatorsSnap = await creatorsRef.where("handle", "==", cleanHandle).limit(10).get();
+    } catch {
+      creatorsSnap = { empty: true, docs: [] };
+    }
+
+    if (creatorId) {
+      // We have creatorId from creatorHandles; load that doc first.
       const creatorDoc = await db.collection("creators").doc(creatorId).get();
       if (creatorDoc.exists) {
         creatorData = creatorDoc.data() as Record<string, unknown>;
+      }
+    }
+
+    // If mapping is missing/stale, or another doc clearly has richer storefront data, use that.
+    if (!creatorsSnap.empty) {
+      let bestDoc = creatorsSnap.docs[0];
+      let bestData = bestDoc.data() as Record<string, unknown>;
+      let bestScore = storefrontScore(bestData);
+
+      for (const d of creatorsSnap.docs.slice(1)) {
+        const data = d.data() as Record<string, unknown>;
+        const s = storefrontScore(data);
+        if (s > bestScore) {
+          bestDoc = d;
+          bestData = data;
+          bestScore = s;
+        }
+      }
+
+      const mappedHandle =
+        typeof creatorData?.handle === "string" ? String(creatorData.handle).replace("@", "").toLowerCase().trim() : "";
+      const mappedScore = storefrontScore(creatorData);
+      const mappedLooksStale =
+        !creatorData ||
+        mappedHandle !== cleanHandle ||
+        (bestDoc.id !== creatorId && bestScore > mappedScore);
+
+      if (!creatorId || mappedLooksStale) {
+        creatorId = bestDoc.id;
+        creatorData = bestData;
       }
     }
 
@@ -92,6 +139,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const publicTreatsOnLanding = creatorData?.publicTreatsOnLanding === true;
     const fanAuthBranding = creatorData?.fanAuthBranding || undefined;
 
+    const cd = creatorData as Record<string, unknown>;
+    const heroMediaNorm = normalizeHeroMediaForStorefront(
+      cd?.heroMedia,
+      cd?.heroImage,
+      cd?.heroImageUrl
+    );
+    const heroImageResolved =
+      (typeof cd?.heroImage === "string" && cd.heroImage.trim()) ||
+      (typeof cd?.heroImageUrl === "string" && (cd.heroImageUrl as string).trim()) ||
+      heroMediaNorm[0]?.url ||
+      undefined;
+
     const payload = {
       creatorId,
       handle: cleanHandle,
@@ -99,10 +158,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       bio: (creatorData?.bio as string) || undefined,
       avatar: (creatorData?.avatar as string) || (creatorData?.avatarUrl as string) || undefined,
       avatarObjectPosition: (creatorData?.avatarObjectPosition as string) || undefined,
-      logo: (creatorData?.logo as string) || undefined,
+      logo: (creatorData?.logo as string) || (creatorData?.logoUrl as string) || undefined,
       showDisplayNameOnLanding: (creatorData?.showDisplayNameOnLanding as boolean) !== false,
-      heroImage: (creatorData?.heroImage as string) || undefined,
-      heroMedia: Array.isArray(creatorData?.heroMedia) ? creatorData.heroMedia : undefined,
+      heroImage: heroImageResolved,
+      /** Raw legacy field (optional); prefer `heroImage` + `heroMedia` which are normalized above. */
+      heroImageUrl:
+        typeof cd.heroImageUrl === "string" && (cd.heroImageUrl as string).trim()
+          ? (cd.heroImageUrl as string).trim()
+          : undefined,
+      heroMedia: heroMediaNorm.length > 0 ? heroMediaNorm : undefined,
       heroTagline: (creatorData?.heroTagline as string) || undefined,
       heroPromise: (creatorData?.heroPromise as string) || undefined,
       heroSubline: (creatorData?.heroSubline as string) || undefined,

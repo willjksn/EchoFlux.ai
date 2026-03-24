@@ -53,6 +53,40 @@ interface UIContextType {
 
 const UIContext = createContext<UIContextType | undefined>(undefined);
 
+/** Query keys we must keep when syncing path (OAuth/Stripe return URLs land on `/` then become `/dashboard`). */
+const RETURN_PARAM_KEYS = new Set([
+  'oauth_success',
+  'error',
+  'connected',
+  'platform',
+  'message',
+  'details',
+  'type',
+  'account',
+  'ig_accounts',
+  'reason',
+  'session_id',
+  'payment',
+  'canceled',
+]);
+
+function mergePathPreservingReturnParams(targetPath: string): string {
+  if (typeof window === 'undefined') return targetPath;
+  const search = window.location.search;
+  if (!search || search.length <= 1) return targetPath;
+  const incoming = new URLSearchParams(search);
+  const keep = new URLSearchParams();
+  for (const [k, v] of incoming.entries()) {
+    if (RETURN_PARAM_KEYS.has(k)) keep.append(k, v);
+  }
+  if (keep.toString() === '') return targetPath;
+  const u = new URL(targetPath, window.location.origin);
+  for (const [k, v] of keep.entries()) {
+    u.searchParams.append(k, v);
+  }
+  return u.pathname + u.search;
+}
+
 export const UIProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
     const { user } = useAuth();
     
@@ -258,7 +292,7 @@ export const UIProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
 
         const pathToPush = activePageState === 'bio' ? '/studio?tab=myPage' : activePageState === 'fanHub' ? '/fan?tab=myPage' : targetPath;
         if (currentPath !== targetPathNormalized) {
-            window.history.pushState({}, '', pathToPush);
+            window.history.pushState({}, '', mergePathPreservingReturnParams(pathToPush));
         }
     }, [activePageState, user?.id]);
 

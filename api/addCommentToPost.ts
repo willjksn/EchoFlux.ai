@@ -119,14 +119,27 @@ async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
 
   const fanUserSnap = await db.collection("users").doc(tokenUser.uid).get();
   const fanUser = fanUserSnap.data() || {};
-  const memberHandleRaw = typeof fanUser.username === "string" ? fanUser.username.replace(/^@/, "").trim().toLowerCase() : "";
-  const displayFromAuth = String(authorDisplayName ?? tokenUser.displayName ?? "").trim();
-  /** Public label: member handle when set; otherwise legacy fallback (display name) */
-  const usernamePublic = memberHandleRaw || displayFromAuth || "fan";
+  const firstString = (...values: unknown[]): string =>
+    values.find((v) => typeof v === "string" && v.trim()) as string;
+
+  const memberHandleCandidate = firstString(
+    fanUser.username,
+    fanUser.userName,
+    fanUser.memberUsername,
+    fanUser.handle
+  );
+  const memberHandleRaw = String(memberHandleCandidate ?? "")
+    .replace(/^@/, "")
+    .trim()
+    .toLowerCase();
+  const usernamePublic = /^[a-z0-9_]{2,32}$/i.test(memberHandleRaw) ? memberHandleRaw : "";
+  const displayFromAuth = String(
+    firstString(authorDisplayName, fanUser.displayName, tokenUser.displayName, fanUser.name) ?? ""
+  ).trim();
   const fanComment: Comment = {
     authorId: tokenUser.uid,
-    author: displayFromAuth || "Fan",
-    username: usernamePublic,
+    author: displayFromAuth || (usernamePublic ? `@${usernamePublic}` : "Fan"),
+    username: usernamePublic || undefined,
     text,
   };
   let nextComments: Comment[] = [...existingComments, fanComment];

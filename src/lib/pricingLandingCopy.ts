@@ -49,7 +49,7 @@ export function resolvePricingLandingCopy(
       : (lc.pricingCtaGuestPaid?.trim() || "Sign up to Subscribe"),
     trustLine: isFreeAccess
       ? (lc.pricingTrustLineFree?.trim() || "🎉 No payment required")
-      : (lc.pricingTrustLinePaid?.trim() || "🔒 Secure payment · Cancel anytime"),
+      : (lc.pricingTrustLinePaid?.trim() || "🔒 Secure payment via Stripe · ✓ Cancel anytime"),
     finalBannerPriceLine: lc.pricingFinalBannerPriceLine?.trim()
       ? lc.pricingFinalBannerPriceLine.trim()
       : isFreeAccess

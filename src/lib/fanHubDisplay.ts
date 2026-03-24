@@ -275,14 +275,14 @@ export function formatCreatorDmBubblePrimaryLine(
   return "You";
 }
 
-/** Second line: STORMIJ-style handle when we also show a real name. */
+/**
+ * Previously showed a second line (uppercase handle, Stormij-style).
+ * EchoFlux bubbles use only the primary line (display name) — no duplicate @handle under the name.
+ */
 export function formatCreatorDmBubbleSecondaryLine(
-  displayName?: string | null,
-  username?: string | null
+  _displayName?: string | null,
+  _username?: string | null
 ): string | null {
-  const n = (displayName || "").trim();
-  const u = safeUsernameForHandle(username);
-  if (n && u) return formatCreatorOutgoingDmBadge(username, null);
   return null;
 }
 

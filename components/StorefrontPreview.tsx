@@ -1,5 +1,48 @@
 import React, { useState, useRef, useCallback, useMemo, useEffect } from "react";
-import type { CreatorStorefrontSettings, StorefrontSocialLinks, StorefrontLandingContent, TextStyle } from "../types";
+import type {
+  CreatorStorefrontSettings,
+  StorefrontSocialLinks,
+  StorefrontLandingContent,
+  TextStyle,
+  PresetFontSize,
+  LandingSectionListMarker,
+} from "../types";
+
+/** When set, landing preview uses real auth, checkout, tips, and footer links (public storefront). */
+export interface StorefrontPreviewLiveLanding {
+  isLoggedIn: boolean;
+  isFreeAccess: boolean;
+  onOpenSignup: () => void;
+  onOpenLogin: () => void;
+  onSubscribe: () => void;
+  onJoinFree?: () => void;
+  subscribing: boolean;
+  joiningFree: boolean;
+  isDarkMode: boolean;
+  onToggleDarkMode: () => void;
+  homeHref?: string;
+  termsHref: string;
+  privacyHref: string;
+  /** Shown under perks copy (e.g. bio). */
+  bio?: string;
+  tipHandle: string;
+  onTipHandleChange: (v: string) => void;
+  tipCustomAmount: string;
+  onTipCustomAmountChange: (v: string) => void;
+  onTipPresetDollars: (dollars: number) => void;
+  onTipCustomSubmit: () => void;
+  tipLoading: boolean;
+  tipError: string;
+  tipsEnabled: boolean;
+  /** Defaults to 5,10,25… to match public landing */
+  tipPresetDollars?: number[];
+  showGuestTreatsCard: boolean;
+  onOpenGuestTreats: () => void;
+  landingTreatsLoading: boolean;
+  landingTreatProductCount: number;
+  treatLinkAccountMessage: string | null;
+  onTreatLinkSignIn?: () => void;
+}
 import { getAvatarCropStyle } from "../src/lib/avatarCrop";
 import {
   clampPan,
@@ -15,11 +58,12 @@ import {
 import { resolveStoreCopy } from "../src/lib/storefrontStoreCopy";
 import { resolvePricingLandingCopy } from "../src/lib/pricingLandingCopy";
 import { resolveTipSectionCopy } from "../src/lib/tipSectionCopy";
+import { normalizeHeroMediaForStorefront } from "../src/lib/storefrontHeroNormalize";
 
 export type StorefrontHeroMediaItem = NonNullable<CreatorStorefrontSettings["heroMedia"]>[number];
 
 // Font size mapping for text styles
-const FONT_SIZE_MAP: Record<NonNullable<TextStyle['fontSize']>, string> = {
+const FONT_SIZE_MAP: Record<PresetFontSize, string> = {
   'xs': '0.75rem',
   'sm': '0.875rem',
   'base': '1rem',
@@ -29,18 +73,140 @@ const FONT_SIZE_MAP: Record<NonNullable<TextStyle['fontSize']>, string> = {
   '3xl': '1.875rem',
 };
 
+/** Default when `*Marker` is unset (saved pages without the new field). */
+function resolveListMarker(
+  configured: LandingSectionListMarker | undefined,
+  section: "perks" | "preview" | "energy" | "boundary"
+): LandingSectionListMarker {
+  if (configured !== undefined) return configured;
+  if (section === "perks") return "none";
+  if (section === "boundary") return "check";
+  return "heart";
+}
+
+/** Short gradient bar under section titles (creator primary). */
+function LandingCardTitleAccent({
+  as: Tag = "h2",
+  titleStyle,
+  primary,
+  children,
+  align = "left",
+}: {
+  as?: "h2" | "h3";
+  titleStyle: React.CSSProperties;
+  primary: string;
+  children: React.ReactNode;
+  align?: "left" | "center";
+}) {
+  return (
+    <div className={align === "center" ? "text-center mb-4" : "text-left mb-4"}>
+      <Tag className={`font-bold m-0 ${Tag === "h3" ? "tracking-tight" : ""}`} style={titleStyle}>
+        {children}
+      </Tag>
+      <div
+        className={`mt-2 h-1 w-16 rounded-full ${align === "center" ? "mx-auto" : ""}`}
+        style={{
+          background: `linear-gradient(90deg, ${primary} 0%, ${primary}dd 55%, ${primary}44 100%)`,
+        }}
+        aria-hidden
+      />
+    </div>
+  );
+}
+
+function LandingListHeart({ color, size = 11 }: { color: string; size?: number }) {
+  return (
+    <span className="inline-flex shrink-0 mt-[0.25rem] leading-none" aria-hidden>
+      <svg width={size} height={size} viewBox="0 0 24 24" className="shrink-0">
+        <path
+          fill={color}
+          d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"
+        />
+      </svg>
+    </span>
+  );
+}
+
+function LandingListMarkerGlyph({ marker, color }: { marker: LandingSectionListMarker; color: string }) {
+  if (marker === "none") return null;
+  if (marker === "check") {
+    return (
+      <span className="shrink-0 w-4 text-center text-sm font-light leading-none mt-0.5" style={{ color }} aria-hidden>
+        ✓
+      </span>
+    );
+  }
+  if (marker === "dot") {
+    return (
+      <span
+        className="mt-[0.35rem] h-1.5 w-1.5 shrink-0 rounded-full"
+        style={{ background: color, boxShadow: `0 0 0 1px ${color}33` }}
+        aria-hidden
+      />
+    );
+  }
+  return <LandingListHeart color={color} />;
+}
+
+/** Builder preview landing column. */
+const LANDING_MAIN_MAX = "max-w-[720px] mx-auto w-full";
+/** Builder preview header row. */
+const LANDING_HEADER_MAX = "max-w-[720px] mx-auto w-full";
+
+/** Normalize Firebase Storage /o/{object} path encoding for legacy URLs. */
+function normalizeFirebaseStorageObjectPath(url: string): string {
+  try {
+    const u = new URL(url);
+    if (!u.hostname.includes("firebasestorage.googleapis.com")) return url;
+    const marker = "/o/";
+    const idx = u.pathname.indexOf(marker);
+    if (idx < 0) return url;
+    const head = u.pathname.slice(0, idx + marker.length);
+    const rawObject = u.pathname.slice(idx + marker.length);
+    const decoded = decodeURIComponent(rawObject);
+    const reencoded = encodeURIComponent(decoded);
+    if (reencoded === rawObject) return url;
+    return `${u.origin}${head}${reencoded}${u.search}`;
+  } catch {
+    return url;
+  }
+}
+
 // Helper to generate inline styles from TextStyle
 function getTextStyleCSS(
   style?: TextStyle,
   defaults?: { fontSize?: string; color?: string; fontFamily?: string; fontStyle?: 'normal' | 'italic' }
 ): React.CSSProperties {
+  const rawFontSize = style?.fontSize as unknown;
+  const mappedFontSize =
+    typeof rawFontSize === "string" && rawFontSize in FONT_SIZE_MAP
+      ? FONT_SIZE_MAP[rawFontSize as keyof typeof FONT_SIZE_MAP]
+      : undefined;
+  const customFontSize =
+    typeof rawFontSize === "string" &&
+    /^-?\d*\.?\d+(px|rem|em|%|vw|vh)$/.test(rawFontSize.trim())
+      ? rawFontSize.trim()
+      : undefined;
   const fontStyle = style?.fontStyle ?? defaults?.fontStyle;
   return {
-    fontSize: style?.fontSize ? FONT_SIZE_MAP[style.fontSize] : defaults?.fontSize,
+    fontSize: mappedFontSize ?? customFontSize ?? defaults?.fontSize,
     color: style?.color || defaults?.color,
     fontFamily: style?.fontFamily || defaults?.fontFamily,
     ...(fontStyle ? { fontStyle } : {}),
   };
+}
+
+function scaleCssLength(
+  value: React.CSSProperties["fontSize"],
+  factor: number
+): React.CSSProperties["fontSize"] {
+  if (typeof value !== "string") return value;
+  const trimmed = value.trim();
+  const match = trimmed.match(/^(-?\d*\.?\d+)(px|rem|em)$/);
+  if (!match) return value;
+  const num = Number(match[1]);
+  if (!Number.isFinite(num)) return value;
+  return `${num * factor}${match[2]}`;
 }
 
 export type PreviewMode = "landing" | "member";
@@ -58,6 +224,8 @@ export interface StorefrontPreviewProps {
   onHeroMediaItemPatch?: (index: number, patch: Partial<StorefrontHeroMediaItem>) => void;
   /** Update circular avatar crop (CSS object-position, e.g. `45% 30%`). */
   onAvatarObjectPositionChange?: (objectPosition: string) => void;
+  /** Public fan page: wire buttons to FanAuth + Stripe (My Page preview stays dummy). */
+  liveLanding?: StorefrontPreviewLiveLanding;
 }
 
 // Neutral theme defaults - creators should customize
@@ -99,13 +267,14 @@ const DEFAULT_LANDING_CONTENT: StorefrontLandingContent = {
     "Special treats and surprises",
   ],
   previewTitle: "What You Get",
-  previewText: "As a member, you get access to content I can only share here.",
+  previewText: "Inside the Inner Circle:",
   previewList: [
     "Daily posts and updates",
     "Exclusive photos and videos",
     "Personal messages",
     "Live sessions and Q&As",
   ],
+  previewFooterLines: ["Nothing explicit.", "Nothing fake.", "Nothing forced."],
   energyTitle: "The Vibe",
   energyLines: [
     "Authentic and real.",
@@ -118,8 +287,10 @@ const DEFAULT_LANDING_CONTENT: StorefrontLandingContent = {
 
 // Social icons
 const InstagramIcon = () => (
-  <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
-    <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/>
+  <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="3" y="3" width="18" height="18" rx="5" ry="5" />
+    <circle cx="12" cy="12" r="4" />
+    <circle cx="17.5" cy="6.5" r="1.25" fill="currentColor" stroke="none" />
   </svg>
 );
 
@@ -160,30 +331,47 @@ const GlobeIcon = () => (
 function getVisibleSocialLinks(socialLinks?: StorefrontSocialLinks) {
   if (!socialLinks) return [];
   const links: { key: string; url: string; icon: React.ReactNode; name?: string }[] = [];
-  
-  if (socialLinks.instagram?.show && socialLinks.instagram.url) {
-    links.push({ key: "instagram", url: socialLinks.instagram.url, icon: <InstagramIcon /> });
-  }
-  if (socialLinks.x?.show && socialLinks.x.url) {
-    links.push({ key: "x", url: socialLinks.x.url, icon: <XIcon /> });
-  }
-  if (socialLinks.tiktok?.show && socialLinks.tiktok.url) {
-    links.push({ key: "tiktok", url: socialLinks.tiktok.url, icon: <TikTokIcon /> });
-  }
-  if (socialLinks.youtube?.show && socialLinks.youtube.url) {
-    links.push({ key: "youtube", url: socialLinks.youtube.url, icon: <YouTubeIcon /> });
-  }
-  if (socialLinks.facebook?.show && socialLinks.facebook.url) {
-    links.push({ key: "facebook", url: socialLinks.facebook.url, icon: <FacebookIcon /> });
-  }
-  
+
+  const hasUrl = (raw?: string) => typeof raw === "string" && raw.trim() !== "";
+  const normalizeExternalUrl = (raw: string) => {
+    const trimmed = raw.trim();
+    if (!trimmed) return "";
+    if (/^[a-zA-Z][a-zA-Z\d+\-.]*:/.test(trimmed) || trimmed.startsWith("//")) return trimmed;
+    return `https://${trimmed.replace(/^\/+/, "")}`;
+  };
+  const includeIfVisible = (
+    key: string,
+    icon: React.ReactNode,
+    cfg?: { url?: string; show?: boolean },
+    name?: string
+  ) => {
+    if (!cfg || cfg.show === false || !hasUrl(cfg.url)) return;
+    const normalized = normalizeExternalUrl(cfg.url!);
+    if (!normalized) return;
+    links.push({ key, url: normalized, icon, name });
+  };
+
+  includeIfVisible("instagram", <InstagramIcon />, socialLinks.instagram);
+  includeIfVisible("x", <XIcon />, socialLinks.x);
+  includeIfVisible("tiktok", <TikTokIcon />, socialLinks.tiktok);
+  includeIfVisible("youtube", <YouTubeIcon />, socialLinks.youtube);
+  includeIfVisible("facebook", <FacebookIcon />, socialLinks.facebook);
+  // Backward compatibility for old records that stored twitter instead of x.
+  includeIfVisible(
+    "x",
+    <XIcon />,
+    (socialLinks as StorefrontSocialLinks & { twitter?: { url?: string; show?: boolean } }).twitter
+  );
+
   // Add custom social links
   if (socialLinks.custom && Array.isArray(socialLinks.custom)) {
     socialLinks.custom.forEach((custom, index) => {
-      if (custom.show && custom.url) {
+      if (custom.show !== false && hasUrl(custom.url)) {
+        const normalized = normalizeExternalUrl(custom.url);
+        if (!normalized) return;
         links.push({ 
           key: `custom-${index}`, 
-          url: custom.url, 
+          url: normalized, 
           icon: <GlobeIcon />,
           name: custom.name || "Link"
         });
@@ -248,6 +436,7 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
   previewFraming,
   onHeroMediaItemPatch,
   onAvatarObjectPositionChange,
+  liveLanding,
 }) => {
   const [activeTab, setActiveTab] = useState<string>("home");
   const [tipAmount, setTipAmount] = useState<string>("");
@@ -258,12 +447,31 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
   const avatarPanRef = useRef<{ startClientX: number; startClientY: number; startOx: number; startOy: number } | null>(null);
   const focusDragRef = useRef<{ startClientX: number; startClientY: number; startOx: number; startOy: number } | null>(null);
 
-  const theme = config.theme ?? {};
+  const theme: Partial<NonNullable<CreatorStorefrontSettings["theme"]>> = config.theme ?? {};
   const primary = theme.primary || DEFAULT_PRIMARY;
   const accentHover = theme.accentHover ?? primary;
   const background = theme.background || DEFAULT_BG;
   const textColor = theme.text || DEFAULT_TEXT;
   const isDark = isDarkBackground(background);
+  const live = liveLanding;
+  const liveLogoScale = 1.95;
+  const liveAuthScale = 1.15;
+  const liveAuthShiftLeftPx = 56;
+  // Match stormijxo.com: full-width header row, but centered readable content column.
+  const landingMainMaxClass = LANDING_MAIN_MAX;
+  const landingHeaderMaxClass = live ? "max-w-[1360px] mx-auto w-full" : LANDING_HEADER_MAX;
+  const fanDark = Boolean(live?.isDarkMode);
+  const landingPageText = live && fanDark ? "#f5f5f5" : textColor;
+  const landingPageMuted = live && fanDark ? "rgba(255,255,255,0.6)" : `${textColor}99`;
+  const landingPageMutedStrong = live && fanDark ? "rgba(255,255,255,0.8)" : `${textColor}cc`;
+  const landingPageGradient =
+    live && fanDark
+      ? "linear-gradient(135deg, #0f0f0f 0%, #1a1a1a 50%, #0f0f0f 100%)"
+      : isDark
+        ? background
+        : /* Soft pink wash so white cards read like the reference (pale pink field behind white UI). */
+          `linear-gradient(165deg, ${primary}12 0%, ${background} 38%, #fffefb 62%, ${primary}08 100%)`;
+  const tipPresetsLive = live?.tipPresetDollars ?? [5, 10, 25, 50, 100, 250];
   /** Landing + member preview top bars — same lite pink treat-card chrome */
   const previewHeaderChrome: React.CSSProperties = {
     borderBottom: `1px solid ${primary}25`,
@@ -274,6 +482,64 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
   };
   const cardBg = isDark ? background : `linear-gradient(140deg, rgba(255, 255, 255, 0.94) 0%, ${primary}06 52%, ${primary}08 100%)`;
   const surfaceBg = isDark ? background : "#fff";
+  const landingCardBg =
+    live && fanDark
+      ? "linear-gradient(140deg, rgba(30, 30, 30, 0.94) 0%, rgba(25, 25, 30, 0.86) 52%, rgba(20, 20, 25, 0.82) 100%)"
+      : cardBg;
+  const landingCardBorder =
+    live && fanDark ? "1px solid rgba(255,255,255,0.1)" : isDark ? `1px solid ${primary}30` : `1px solid ${primary}18`;
+  const headerChromeLanding: React.CSSProperties =
+    live && fanDark
+      ? {
+          borderBottom: `1px solid ${primary}30`,
+          backgroundColor: "rgba(20, 20, 20, 0.95)",
+          boxShadow: `0 8px 28px ${primary}12`,
+        }
+      : previewHeaderChrome;
+  const landingFaint = live && fanDark ? "rgba(255,255,255,0.4)" : `${textColor}66`;
+
+  /** Live storefront: larger type in the four landing content cards (same max column width). */
+  const landingCardTitleFs = live ? "1.0625rem" : "0.875rem";
+  const landingCardBodyFs = live ? "1.0625rem" : "0.875rem";
+  const landingCardListFs = live ? "1rem" : "0.875rem";
+  const landingCardPreviewSerifTitleFs = live ? "1.625rem" : "1.375rem";
+  const landingCardPreviewSubFs = live ? "1rem" : "0.875rem";
+  const landingCardPreviewFooterFs = live ? "0.875rem" : "0.75rem";
+
+  /** Same shell as monthly subscribe card (light + dark). */
+  const landingPromoCardShell = (extra?: React.CSSProperties): React.CSSProperties => ({
+    background:
+      fanDark || isDark
+        ? `linear-gradient(135deg, ${primary}22 0%, rgba(0,0,0,0.28) 100%)`
+        : `linear-gradient(135deg, ${primary}15 0%, ${primary}05 100%)`,
+    border: `1px solid ${fanDark || isDark ? `${primary}40` : `${primary}30`}`,
+    ...extra,
+  });
+
+  /** Stormij-style: pale pink “stage” behind the white membership card (light mode). Full width of column. */
+  const landingPricingBackdrop: React.CSSProperties =
+    fanDark || isDark
+      ? {}
+      : {
+          background: `linear-gradient(180deg, ${primary}18 0%, ${primary}0a 45%, transparent 100%)`,
+          borderRadius: "1rem",
+          padding: "1.25rem 0",
+        };
+
+  /** White card + light pink border + soft pink glow (reference: monthly membership). */
+  const landingPricingCardChrome: React.CSSProperties =
+    fanDark || isDark
+      ? {
+          ...landingPromoCardShell({
+            boxShadow: `0 12px 40px rgba(0,0,0,0.35), 0 0 0 1px ${primary}35`,
+          }),
+        }
+      : {
+          /* Matches `fan-landing-feed.css` `.fan-landing-tier-card` */
+          background: `linear-gradient(160deg, #ffffff 0%, rgba(255, 244, 249, 0.95) 100%)`,
+          border: `1px solid ${primary}`,
+          boxShadow: `0 12px 34px ${primary}3d, 0 0 0 1px ${primary}14`,
+        };
 
   // Member nav tabs from sections/sectionsOrder (Saved hidden in preview — only on live storefront)
   const sections = config.sections ?? { feed: true, treats: true, tip: true, messages: true, about: true };
@@ -304,16 +570,44 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
   const avatar = config.avatar;
   /** Same crop for every circular avatar in the preview. */
   const avatarCropStyle: React.CSSProperties = getAvatarCropStyle(config.avatarObjectPosition);
-  const logo = config.logo;
+  const cfgLogo = config as { logo?: string; logoUrl?: string };
+  const logo =
+    (cfgLogo.logo && String(cfgLogo.logo).trim()) ||
+    (cfgLogo.logoUrl && String(cfgLogo.logoUrl).trim()) ||
+    undefined;
+  const [logoImageFailed, setLogoImageFailed] = useState(false);
+  const logoCandidates = useMemo(() => {
+    if (!logo) return [] as string[];
+    const normalized = normalizeFirebaseStorageObjectPath(logo);
+    return normalized !== logo ? [logo, normalized] : [logo];
+  }, [logo]);
+  const [logoCandidateIndex, setLogoCandidateIndex] = useState(0);
+  const logoSrc = logoCandidates[logoCandidateIndex];
+  useEffect(() => {
+    setLogoImageFailed(false);
+    setLogoCandidateIndex(0);
+  }, [logo]);
+  const showLogoImage = Boolean(logoSrc) && !logoImageFailed;
+  const onLogoError = useCallback(() => {
+    const next = logoCandidateIndex + 1;
+    if (next < logoCandidates.length) {
+      setLogoCandidateIndex(next);
+      return;
+    }
+    setLogoImageFailed(true);
+  }, [logoCandidateIndex, logoCandidates.length]);
   const showDisplayNameOnLanding = config.showDisplayNameOnLanding !== false;
-  const heroMedia = (config.heroMedia && config.heroMedia.length > 0)
-    ? config.heroMedia
-    : (config.heroImage ? [{ url: config.heroImage, size: "medium" as const }] : []);
+  const cfgHeroUrl = (config as { heroImageUrl?: string }).heroImageUrl;
+  const heroMedia = useMemo(
+    () => normalizeHeroMediaForStorefront(config.heroMedia, config.heroImage, cfgHeroUrl),
+    [config.heroMedia, config.heroImage, cfgHeroUrl]
+  );
   const fullBgIndex = useMemo(
     () => heroMedia.findIndex((m) => m.size === "fullBackground"),
     [heroMedia]
   );
   const fullBgItem = fullBgIndex >= 0 ? heroMedia[fullBgIndex] : undefined;
+  const isFullBgLayout = Boolean(fullBgItem);
   const heroImages = heroMedia.filter((m) => m.size !== "fullBackground");
   const heroSlots = useMemo(
     () => heroMedia.map((m, idx) => ({ m, idx })).filter((x) => x.m.size !== "fullBackground"),
@@ -324,19 +618,75 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
     previewFraming != null &&
     Boolean(onHeroMediaItemPatch || onAvatarObjectPositionChange);
 
-  const heroImage = heroImages[0]?.url ?? config.heroImage;
+  const heroImage =
+    heroImages[0]?.url ??
+    (typeof config.heroImage === "string" && config.heroImage.trim() ? config.heroImage.trim() : undefined) ??
+    (typeof cfgHeroUrl === "string" && cfgHeroUrl.trim() ? cfgHeroUrl.trim() : undefined);
   const heroTagline = config.heroTagline ?? "";
-  const heroPromise = config.heroPromise ?? "Your access to the real me";
+  /** Empty string from forms/Firestore should fall back like the public page. */
+  const heroPromise =
+    typeof config.heroPromise === "string" && config.heroPromise.trim() !== ""
+      ? config.heroPromise.trim()
+      : "Your access to the real me";
   const heroSubline = config.heroSubline ?? "";
   const heroSubline2 = config.heroSubline2 ?? "";
   const heroLayout = config.heroLayout ?? "default";
+  /**
+   * "Default" used to mean stacked + centered, which made live landings look like a narrow column
+   * (name + taglines) even when a hero photo existed. Match the intended storefront hero: photo
+   * beside copy (same as explicit "Image left") whenever there is hero art and not full-background mode.
+   * Use "Centered" in My Page for a stacked compact hero with images.
+   */
+  const heroLayoutEffective = useMemo(() => {
+    if (heroLayout !== "default") return heroLayout;
+    if (fullBgIndex >= 0) return "default";
+    const hasHeroVisual =
+      heroSlots.length > 0 ||
+      Boolean(heroImage);
+    if (hasHeroVisual) return "split";
+    return "default";
+  }, [heroLayout, fullBgIndex, heroSlots.length, heroImage]);
+  /** Side-by-side hero: image column must not use `w-full` or it steals the whole row and squeezes copy to ~100px. */
+  const isHeroSplit =
+    heroLayoutEffective === "split" || heroLayoutEffective === "splitRight";
+  const heroMediaGridClassName = useMemo(() => {
+    const n = heroSlots.length;
+    const base = "grid gap-2";
+    if (n === 0) return base;
+    if (isHeroSplit) {
+      if (n === 1) return `${base} shrink-0 w-auto max-w-[320px]`;
+      if (n === 2) return `${base} grid-cols-2 shrink-0 w-auto max-w-[420px]`;
+      if (n === 3) return `${base} grid-cols-3 shrink-0 w-auto max-w-[480px]`;
+      if (n === 4) return `${base} grid-cols-2 shrink-0 w-auto max-w-[420px]`;
+      return `${base} grid-cols-3 shrink-0 w-auto max-w-[480px]`;
+    }
+    if (n === 1) return `${base} w-full max-w-[320px] mx-auto`;
+    if (n === 2) return `${base} grid-cols-2 max-w-[420px] mx-auto w-full`;
+    if (n === 3) return `${base} grid-cols-3 max-w-[480px] mx-auto w-full`;
+    if (n === 4) return `${base} grid-cols-2 max-w-[420px] mx-auto w-full`;
+    return `${base} grid-cols-3 max-w-[480px] mx-auto w-full`;
+  }, [heroSlots.length, isHeroSplit]);
   const textStyles = config.textStyles ?? {};
   
   const landingContent = { ...DEFAULT_LANDING_CONTENT, ...config.landingContent };
+  const perksListMarker = resolveListMarker(landingContent.perksListMarker, "perks");
+  const previewListMarker = resolveListMarker(landingContent.previewListMarker, "preview");
+  const energyLinesMarker = resolveListMarker(landingContent.energyLinesMarker, "energy");
+  const boundaryLinesMarker = resolveListMarker(landingContent.boundaryLinesMarker, "boundary");
   const storeCopy = resolveStoreCopy(landingContent);
   const socialLinks = getVisibleSocialLinks(config.socialLinks);
   
   const boundariesText = config.rules?.boundariesText ?? landingContent.boundaryText ?? "";
+  /** Rules dashboard text replaces landing guidelines entirely when non-empty. */
+  const rulesBoundariesRaw = config.rules?.boundariesText;
+  const guidelinesFromRulesOnly =
+    typeof rulesBoundariesRaw === "string" && rulesBoundariesRaw.trim() !== "";
+  const boundaryIntroMerged = guidelinesFromRulesOnly
+    ? rulesBoundariesRaw.trim()
+    : (landingContent.boundaryText || "").trim();
+  const boundaryLinesFiltered = guidelinesFromRulesOnly
+    ? []
+    : (landingContent.boundaryLines ?? []).filter((l) => String(l).trim());
   const spicyMode = config.spicyMode ?? false;
   const monetization = config.monetization ?? {};
   const monthlyPriceCents = monetization.monthlyPrice ?? 999;
@@ -506,6 +856,16 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
 
   const globalFont = theme.fontFamily || "Inter, sans-serif";
   const heroTextBase = { fontFamily: globalFont, fontStyle: "normal" as const };
+  const scaleHeroSplitTextStyle = useCallback(
+    (style: React.CSSProperties, hasCustomSize?: boolean): React.CSSProperties => {
+      if (!(live && isHeroSplit && hasCustomSize)) return style;
+      return {
+        ...style,
+        fontSize: scaleCssLength(style.fontSize, 1.5),
+      };
+    },
+    [live, isHeroSplit]
+  );
   // CSS variables for theme
   const themeVars = {
     "--preview-primary": primary,
@@ -516,38 +876,157 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
 
   return (
     <div
-      className={`stormij-theme min-h-[400px] rounded-xl border border-gray-200 dark:border-gray-700 shadow-inner ${
+      className={`stormij-theme ${
+        live
+          ? previewMode === "landing"
+            ? "min-h-screen w-full fan-storefront-live"
+            : "min-h-[400px] rounded-xl border border-gray-200 dark:border-gray-700 shadow-inner"
+          : `min-h-[400px] rounded-xl border border-gray-200 dark:border-gray-700 shadow-inner`
+      } ${
         previewMode === "member"
           ? "flex flex-col overflow-hidden max-h-[min(85vh,900px)]"
-          : "overflow-auto"
-      } ${className}`}
-      style={{ 
+          : live
+            ? ""
+            : "overflow-auto"
+      } ${live && previewMode === "landing" ? "overflow-x-hidden" : ""} ${className}`}
+      style={{
         ...themeVars,
         fontFamily: globalFont,
-        backgroundColor: previewMode === "landing" ? background : background,
+        backgroundColor: previewMode === "landing" && !live ? background : background,
       }}
     >
       {previewMode === "landing" && (
-        <div className="storefront-preview-landing" style={{ background: isDark ? background : `linear-gradient(135deg, ${background} 0%, #f8fafc 50%, ${background} 100%)` }}>
-          {/* Header — same chrome as member preview */}
-          <header className="flex items-center justify-between px-4 py-2.5" style={previewHeaderChrome}>
-            <div className="flex items-center gap-2 min-h-[48px]">
-              {logo ? (
-                <img src={logo} alt={displayName} className="h-12 w-auto max-w-[240px] object-contain object-left [mix-blend-mode:multiply]" />
+        <div
+          className="storefront-preview-landing fan-landing-page"
+          style={{
+            background: landingPageGradient,
+            color: landingPageText,
+            minHeight: live ? "100vh" : undefined,
+          }}
+        >
+          {/* Header — full-width chrome (Stormij-style); inner row is edge-to-edge with horizontal padding */}
+          <header className="w-full" style={headerChromeLanding}>
+            <div
+              className={`flex items-center justify-between ${live && isFullBgLayout ? "px-2 sm:px-3" : "px-4 sm:px-6"} py-3 gap-2 min-w-0 ${live && isFullBgLayout ? "w-full" : landingHeaderMaxClass}`}
+            >
+            {live ? (
+              <a
+                href={live.homeHref ?? "/"}
+                className="flex items-center gap-2 min-h-[56px] min-w-0 flex-1 no-underline text-inherit"
+              >
+                {showLogoImage ? (
+                  <img
+                    key={logoSrc}
+                    src={logoSrc}
+                    alt={displayName}
+                    className={`${live ? "h-12 max-h-12 max-w-[620px]" : "h-14 max-h-14 max-w-[320px]"} w-auto object-contain object-left flex-shrink-0`}
+                    style={live ? { transform: `scale(${liveLogoScale})`, transformOrigin: "left center" } : undefined}
+                    onError={onLogoError}
+                  />
+                ) : avatar ? (
+                  <img
+                    src={avatar}
+                    alt=""
+                    className="w-8 h-8 rounded-full object-cover flex-shrink-0"
+                    style={{ border: `2px solid ${primary}40`, ...avatarCropStyle }}
+                  />
+                ) : (
+                  <div
+                    className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-semibold text-white flex-shrink-0"
+                    style={{ background: primary }}
+                  >
+                    {displayName?.charAt(0) || "?"}
+                  </div>
+                )}
+                {!showLogoImage && (
+                  <span className="text-sm font-semibold truncate min-w-0" style={{ color: primary, letterSpacing: "0.01em" }}>
+                    {displayName || "My Page"}
+                  </span>
+                )}
+              </a>
+            ) : (
+              <div
+                className="flex items-center gap-2 min-h-[56px] min-w-0 flex-1"
+                aria-label="Storefront preview"
+              >
+                {showLogoImage ? (
+                  <img
+                    key={logoSrc}
+                    src={logoSrc}
+                    alt={displayName}
+                    className={`${live ? "h-12 max-h-12 max-w-[620px]" : "h-14 max-h-14 max-w-[320px]"} w-auto object-contain object-left flex-shrink-0`}
+                    style={live ? { transform: `scale(${liveLogoScale})`, transformOrigin: "left center" } : undefined}
+                    onError={onLogoError}
+                  />
+                ) : avatar ? (
+                  <img
+                    src={avatar}
+                    alt=""
+                    className="w-8 h-8 rounded-full object-cover flex-shrink-0"
+                    style={{ border: `2px solid ${primary}40`, ...avatarCropStyle }}
+                  />
+                ) : (
+                  <div
+                    className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-semibold text-white flex-shrink-0"
+                    style={{ background: primary }}
+                  >
+                    {displayName?.charAt(0) || "?"}
+                  </div>
+                )}
+                {!showLogoImage && (
+                  <span className="text-sm font-semibold truncate min-w-0" style={{ color: primary, letterSpacing: "0.01em" }}>
+                    {displayName || "My Page"}
+                  </span>
+                )}
+              </div>
+            )}
+            <div
+              className="flex gap-2 sm:gap-3 items-center flex-shrink-0 ml-2"
+              style={
+                live
+                  ? {
+                      transform: isFullBgLayout
+                        ? `scale(${liveAuthScale})`
+                        : `translateX(-${liveAuthShiftLeftPx}px) scale(${liveAuthScale})`,
+                      transformOrigin: "right center",
+                    }
+                  : undefined
+              }
+            >
+              {live ? (
+                <>
+                  <button
+                    type="button"
+                    className="text-sm font-medium hover:underline"
+                    style={{ color: primary }}
+                    onClick={live.onOpenSignup}
+                  >
+                    Sign up
+                  </button>
+                  <button
+                    type="button"
+                    className="text-sm leading-none px-4 py-2 rounded-full border bg-white/70 hover:bg-white/90 dark:bg-white/5 dark:hover:bg-white/10 transition-colors"
+                    style={{ color: primary, borderColor: `${primary}66` }}
+                    onClick={live.onOpenLogin}
+                  >
+                    Log in
+                  </button>
+                </>
               ) : (
-                <span
-                  className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0"
-                  style={{ background: `${primary}22`, color: primary }}
-                  aria-hidden
-                >
-                  {(displayName || "?")[0].toUpperCase()}
-                </span>
+                <>
+                  <button type="button" className="text-sm font-medium hover:underline" style={{ color: primary }}>
+                    Sign up
+                  </button>
+                  <button
+                    type="button"
+                    className="text-sm leading-none px-4 py-2 rounded-full border bg-white/70 hover:bg-white/90 dark:bg-white/5 dark:hover:bg-white/10 transition-colors"
+                    style={{ color: primary, borderColor: `${primary}66` }}
+                  >
+                    Log in
+                  </button>
+                </>
               )}
-              {!logo && <span className="text-xs font-medium" style={{ color: textColor }}>{displayName || "My Page"}</span>}
             </div>
-            <div className="flex gap-3">
-              <button type="button" className="text-xs hover:underline" style={{ color: primary }}>Sign up</button>
-              <button type="button" className="text-xs hover:underline" style={{ color: primary }}>Log in</button>
             </div>
           </header>
 
@@ -576,6 +1055,7 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
                 onPointerCancel={handleBgPointerUp}
               />
             )}
+            <div className={landingMainMaxClass}>
             {fullBgItem && (
               <div
                 className={`absolute z-10 w-24 h-24 rounded-full overflow-hidden border-4 border-white shadow-lg bg-gray-100 ${
@@ -584,7 +1064,11 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
                     : ""
                 }`}
                 style={{
-                  left: fullBgItem.landingAvatarLeft ?? "1rem",
+                  left:
+                    fullBgItem.landingAvatarLeft ??
+                    (live
+                      ? "max(0.75rem, calc(50% - 360px + 0.75rem))"
+                      : "1rem"),
                   bottom: fullBgItem.landingAvatarBottom ?? "-3rem",
                   ...(framingTool === "panAvatar" && framingInteractionsEnabled
                     ? { boxShadow: `0 0 0 3px ${primary}99, 0 8px 24px rgba(0,0,0,0.2)` }
@@ -610,18 +1094,27 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
             {!fullBgItem && (
               <div
                 className={
-                  heroLayout === "split" || heroLayout === "splitRight"
-                    ? `relative flex flex-row gap-6 items-start ${heroLayout === "splitRight" ? "flex-row-reverse" : ""}`
+                  heroLayoutEffective === "split" || heroLayoutEffective === "splitRight"
+                    ? `relative flex flex-row gap-6 items-start ${heroLayoutEffective === "splitRight" ? "flex-row-reverse" : ""}`
                     : "relative flex flex-col items-center text-center max-w-[420px] mx-auto"
                 }
-                style={heroLayout === "centered" ? { maxWidth: "380px", padding: "0.5rem 0" } : undefined}
+                style={heroLayoutEffective === "centered" ? { maxWidth: "380px", padding: "0.5rem 0" } : undefined}
               >
                 {heroSlots.length > 0 && (
-                  <div
-                    className={`grid gap-2 w-full ${heroSlots.length === 1 ? "max-w-[200px] mx-auto" : ""} ${heroSlots.length === 2 ? "grid-cols-2 max-w-[280px] mx-auto" : ""} ${heroSlots.length === 3 ? "grid-cols-3 max-w-[320px] mx-auto" : ""} ${heroSlots.length === 4 ? "grid-cols-2 max-w-[280px] mx-auto" : ""} ${heroSlots.length >= 5 ? "grid-cols-3 max-w-[320px] mx-auto" : ""}`}
-                  >
+                  <div className={heroMediaGridClassName}>
                     {heroSlots.slice(0, 6).map(({ m: item, idx }, slotIndex) => {
-                      const sizeClass = item.size === "small" ? "w-20 h-28" : item.size === "large" ? "w-36 h-44" : "w-28 h-36";
+                      const sizeClass =
+                        item.size === "small"
+                          ? live
+                            ? "w-[10.08rem] h-[13.68rem]"
+                            : "w-20 h-28"
+                          : item.size === "large"
+                            ? live
+                              ? "w-[17.28rem] h-[23.04rem]"
+                              : "w-36 h-44"
+                            : live
+                              ? "w-[14.4rem] h-[19.44rem]"
+                              : "w-28 h-36";
                       const isFocusSlot = framingTool === "focusPhoto" && focusPhotoSlot === slotIndex;
                       return (
                         <div
@@ -653,7 +1146,7 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
                 )}
                 {heroSlots.length === 0 && heroImage && (
                   <div
-                    className={`rounded-xl overflow-hidden flex-shrink-0 ${heroLayout === "centered" ? "w-40 h-48 mx-auto" : heroLayout === "split" || heroLayout === "splitRight" ? "w-32 h-40" : "w-40 h-52"}`}
+                    className={`rounded-xl overflow-hidden flex-shrink-0 ${heroLayoutEffective === "centered" ? (live ? "w-[18.72rem] h-[23.76rem] mx-auto" : "w-40 h-48 mx-auto") : isHeroSplit ? (live ? "w-[17.28rem] h-[22.32rem] self-start" : "w-32 h-40 self-start") : (live ? "w-[20.16rem] h-[25.92rem]" : "w-40 h-52")}`}
                     style={{
                       border: `1px solid ${primary}30`,
                       boxShadow: isDark ? `0 18px 44px rgba(0,0,0,0.3), 0 0 0 5px ${primary}25` : `0 18px 44px ${primary}30, 0 0 0 5px rgba(255, 255, 255, 0.45)`,
@@ -662,30 +1155,110 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
                     <img src={heroImage} alt="" className="w-full h-full object-cover object-top" />
                   </div>
                 )}
-                <div className={`${heroLayout === "split" || heroLayout === "splitRight" ? "flex-1 min-w-0 text-left" : "w-full"}`}>
+                <div
+                  className={
+                    isHeroSplit
+                      ? live
+                        ? "flex-1 min-w-0 text-left pt-16"
+                        : "flex-1 min-w-0 basis-0 text-left self-center"
+                      : "w-full"
+                  }
+                >
                   {showDisplayNameOnLanding && (
-                    <h1 className="font-bold mb-1" style={getTextStyleCSS(textStyles.displayName, { fontSize: heroLayout === "centered" ? "1.125rem" : "1.25rem", color: textColor, ...heroTextBase })}>
+                    <h1
+                      className="font-bold mb-1"
+                      style={scaleHeroSplitTextStyle(
+                        getTextStyleCSS(textStyles.displayName, {
+                          fontSize:
+                            live && isHeroSplit
+                              ? "3.45rem"
+                              : !live && isHeroSplit
+                                ? "1.625rem"
+                                : heroLayoutEffective === "centered"
+                                  ? "1.125rem"
+                                  : "1.25rem",
+                          color: landingPageText,
+                          ...heroTextBase,
+                        }),
+                        Boolean(textStyles.displayName?.fontSize)
+                      )}
+                    >
                       {displayName}
                     </h1>
                   )}
                   {heroTagline && (
-                    <p className="mb-2" style={getTextStyleCSS(textStyles.heroTagline, { fontSize: "0.75rem", color: `${textColor}99`, ...heroTextBase })}>{heroTagline}</p>
+                    <p
+                      className="mb-2"
+                      style={scaleHeroSplitTextStyle(
+                        getTextStyleCSS(textStyles.heroTagline, {
+                          fontSize:
+                            live && isHeroSplit ? "1.725rem" : !live && isHeroSplit ? "1rem" : "0.75rem",
+                          color: landingPageMuted,
+                          ...heroTextBase,
+                        }),
+                        Boolean(textStyles.heroTagline?.fontSize)
+                      )}
+                    >
+                      {heroTagline}
+                    </p>
                   )}
-                  <p className="mb-2" style={getTextStyleCSS(textStyles.heroPromise, { fontSize: "0.875rem", color: primary, ...heroTextBase })}>{heroPromise}</p>
+                  <p
+                    className={`mb-2 ${isHeroSplit ? "text-balance md:whitespace-nowrap" : ""}`}
+                    style={scaleHeroSplitTextStyle(
+                      getTextStyleCSS(textStyles.heroPromise, {
+                        fontSize:
+                          live && isHeroSplit
+                            ? "2.37rem"
+                            : !live && isHeroSplit
+                              ? "1.125rem"
+                              : "0.875rem",
+                        color: primary,
+                        ...heroTextBase,
+                      }),
+                      Boolean(textStyles.heroPromise?.fontSize)
+                    )}
+                  >
+                    {heroPromise}
+                  </p>
                   {heroSubline && (
                     <p
                       className={heroSubline2 ? "mb-1" : "mb-3"}
-                      style={getTextStyleCSS(textStyles.heroSubline, { fontSize: "0.8125rem", color: `${textColor}cc`, ...heroTextBase })}
+                      style={scaleHeroSplitTextStyle(
+                        getTextStyleCSS(textStyles.heroSubline, {
+                          fontSize:
+                            live && isHeroSplit
+                              ? "1.8rem"
+                              : !live && isHeroSplit
+                                ? "1.0625rem"
+                                : "0.8125rem",
+                          color: landingPageMutedStrong,
+                          ...heroTextBase,
+                        }),
+                        Boolean(textStyles.heroSubline?.fontSize)
+                      )}
                     >
                       {heroSubline}
                     </p>
                   )}
                   {heroSubline2 && (
-                    <p className="mb-3" style={getTextStyleCSS(textStyles.heroSubline2, { fontSize: "0.75rem", color: `${textColor}99`, ...heroTextBase })}>{heroSubline2}</p>
+                    <p
+                      className="mb-3"
+                      style={scaleHeroSplitTextStyle(
+                        getTextStyleCSS(textStyles.heroSubline2, {
+                          fontSize:
+                            live && isHeroSplit ? "1.65rem" : !live && isHeroSplit ? "1rem" : "0.75rem",
+                          color: landingPageMuted,
+                          ...heroTextBase,
+                        }),
+                        Boolean(textStyles.heroSubline2?.fontSize)
+                      )}
+                    >
+                      {heroSubline2}
+                    </p>
                   )}
                   {!heroSubline && !heroSubline2 && <div className="mb-3" />}
                   {socialLinks.length > 0 && (
-                    <div className={`flex gap-2 ${heroLayout === "split" || heroLayout === "splitRight" ? "justify-start" : "justify-center"}`}>
+                    <div className={`flex gap-2 ${heroLayoutEffective === "split" || heroLayoutEffective === "splitRight" ? "justify-start" : "justify-center"}`}>
                     {socialLinks.map((link) => (
                       <a key={link.key} href={link.url} target="_blank" rel="noopener noreferrer" className="w-7 h-7 rounded-lg flex items-center justify-center transition-transform hover:scale-110" style={getSocialIconStyle(link.key, primary)}>
                         {link.icon}
@@ -697,20 +1270,20 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
               </div>
             )}
             {fullBgItem && (
-              <div className="flex gap-3 pt-14 pl-28 pr-4 pb-14">
+              <div className={`flex gap-3 pt-14 ${live ? "pl-36" : "pl-28"} pr-4 pb-14`}>
                 <div className="flex-1 min-w-0">
                   {showDisplayNameOnLanding && (
-                    <h1 className="font-bold mb-0.5" style={getTextStyleCSS(textStyles.displayName, { fontSize: "1.125rem", color: textColor, ...heroTextBase })}>{displayName}</h1>
+                    <h1 className="font-bold mb-0.5" style={getTextStyleCSS(textStyles.displayName, { fontSize: "1.125rem", color: landingPageText, ...heroTextBase })}>{displayName}</h1>
                   )}
                   {heroTagline && (
-                    <p className="text-xs mb-0.5" style={getTextStyleCSS(textStyles.heroTagline, { fontSize: "0.75rem", color: `${textColor}99`, ...heroTextBase })}>{heroTagline}</p>
+                    <p className="text-xs mb-0.5" style={getTextStyleCSS(textStyles.heroTagline, { fontSize: "0.75rem", color: landingPageMuted, ...heroTextBase })}>{heroTagline}</p>
                   )}
                   <p className="text-xs" style={getTextStyleCSS(textStyles.heroPromise, { fontSize: "0.75rem", color: primary, ...heroTextBase })}>{heroPromise}</p>
                   {heroSubline && (
-                    <p className="text-[11px] mt-0.5 mb-0.5" style={getTextStyleCSS(textStyles.heroSubline, { color: `${textColor}cc`, ...heroTextBase })}>{heroSubline}</p>
+                    <p className="text-[11px] mt-0.5 mb-0.5" style={getTextStyleCSS(textStyles.heroSubline, { color: landingPageMutedStrong, ...heroTextBase })}>{heroSubline}</p>
                   )}
                   {heroSubline2 && (
-                    <p className="text-[10px] mb-1" style={getTextStyleCSS(textStyles.heroSubline2, { color: `${textColor}99`, ...heroTextBase })}>{heroSubline2}</p>
+                    <p className="text-[10px] mb-1" style={getTextStyleCSS(textStyles.heroSubline2, { color: landingPageMuted, ...heroTextBase })}>{heroSubline2}</p>
                   )}
                   {socialLinks.length > 0 && (
                     <div className="flex gap-2 mt-1">
@@ -722,192 +1295,545 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
                 </div>
               </div>
             )}
+            </div>
           </section>
 
-          {/* Divider — extra top margin when full-bg avatar overlaps below hero */}
-          <div
-            className={`mx-4 h-px ${fullBgItem ? "mt-6" : ""}`}
-            style={{ background: `linear-gradient(90deg, transparent, ${primary}40, transparent)` }}
-          />
+          {/* Below hero: one column so cards match builder / fan-landing-feed (not full-bleed). */}
+          <div className={`${landingMainMaxClass} px-4 flex flex-col gap-4 ${fullBgItem ? "pt-2 pb-6" : "py-4"}`}>
+            <div
+              className={`h-px w-full shrink-0 ${fullBgItem ? "mt-4" : ""}`}
+              style={{ background: `linear-gradient(90deg, transparent, ${primary}40, transparent)` }}
+            />
 
-          {/* Content Sections */}
-          <div className={`px-4 space-y-4 ${fullBgItem ? "pt-6 pb-4" : "py-4"}`}>
-            {/* Why This Exists */}
-            <section 
-              className="rounded-2xl p-4 transition-all hover:translate-y-[-2px]" 
-              style={{ 
-                background: cardBg, 
-                border: isDark ? `1px solid ${primary}30` : `1px solid ${primary}18`,
-                boxShadow: isDark ? `0 14px 42px rgba(0,0,0,0.2)` : `0 14px 42px ${primary}18`
+            <div className="flex flex-col gap-4 min-w-0 w-full">
+            {/* Why This Exists — aligns with My Page “Why Subscribe” */}
+            <section
+              id="perks-section"
+              className="storefront-landing-panel perks rounded-2xl p-4 transition-all hover:translate-y-[-2px] flex flex-col min-w-0"
+              style={{
+                background: landingCardBg,
+                border: landingCardBorder,
+                boxShadow: isDark || fanDark ? `0 14px 42px rgba(0,0,0,0.2)` : `0 14px 42px ${primary}18`,
               }}
             >
-              <h2 className="font-bold mb-2" style={getTextStyleCSS(textStyles.perksTitle, { fontSize: '0.875rem', color: primary, fontFamily: globalFont })}>{landingContent.perksTitle}</h2>
-              <p className="leading-relaxed mb-2" style={getTextStyleCSS(textStyles.perksText, { fontSize: '0.75rem', color: `${textColor}cc`, fontFamily: globalFont })}>{landingContent.perksText}</p>
-              {landingContent.perksList && landingContent.perksList.length > 0 && (
-                <ul className="text-xs space-y-1" style={{ color: `${textColor}99` }}>
-                  {landingContent.perksList.slice(0, 3).map((item, i) => (
-                    <li key={i} className="flex items-center gap-2">
-                      <span style={{ color: primary }}>✓</span>
-                      {item}
+              <LandingCardTitleAccent
+                as="h2"
+                primary={primary}
+                titleStyle={getTextStyleCSS(textStyles.perksTitle, { fontSize: landingCardTitleFs, color: primary, fontFamily: globalFont })}
+              >
+                {landingContent.perksTitle}
+              </LandingCardTitleAccent>
+              <p
+                className={`leading-relaxed mb-2 ${live ? "text-base" : "text-sm"}`}
+                style={getTextStyleCSS(textStyles.perksText, { fontSize: landingCardBodyFs, color: landingPageMutedStrong, fontFamily: globalFont })}
+              >
+                {landingContent.perksText}
+              </p>
+              {live?.bio ? (
+                <p
+                  className={`leading-relaxed mb-2 ${live ? "text-base" : "text-sm"}`}
+                  style={getTextStyleCSS(textStyles.bio, { fontSize: landingCardBodyFs, color: landingPageMutedStrong, fontFamily: globalFont })}
+                >
+                  {live.bio}
+                </p>
+              ) : null}
+              {(() => {
+                const perkItems = (landingContent.perksList ?? [])
+                  .filter((item) => String(item).trim())
+                  .slice(0, live ? 999 : 3);
+                return perkItems.length > 0 ? (
+                <ul
+                  className={`list-none m-0 p-0 space-y-2.5 ${live ? "text-base" : "text-sm"}`}
+                  style={{ color: landingPageText, fontFamily: globalFont, fontSize: landingCardListFs }}
+                >
+                  {perkItems.map((item, i) =>
+                    perksListMarker === "none" ? (
+                      <li key={i} className="leading-relaxed">
+                        {item}
+                      </li>
+                    ) : (
+                      <li key={i} className="flex items-start gap-2.5">
+                        <LandingListMarkerGlyph marker={perksListMarker} color={primary} />
+                        <span className="min-w-0 leading-relaxed">{item}</span>
+                      </li>
+                    )
+                  )}
+                </ul>
+                ) : null;
+              })()}
+            </section>
+
+            {/* What You Get — Stormij-style: serif title, pink subline, hearts + body list, optional italic footer */}
+            <section
+              id="preview-section"
+              className="storefront-landing-panel preview rounded-2xl p-4 transition-all hover:translate-y-[-2px] flex flex-col min-w-0"
+              style={{
+                background: landingCardBg,
+                border: landingCardBorder,
+                boxShadow: isDark || fanDark ? `0 14px 42px rgba(0,0,0,0.2)` : `0 14px 42px ${primary}18`,
+              }}
+            >
+              <LandingCardTitleAccent
+                as="h2"
+                primary={primary}
+                titleStyle={getTextStyleCSS(textStyles.previewTitle, {
+                  fontSize: landingCardPreviewSerifTitleFs,
+                  fontWeight: 700,
+                  color: primary,
+                  fontFamily: "'Cormorant Garamond', Georgia, 'Times New Roman', serif",
+                })}
+              >
+                {landingContent.previewTitle}
+              </LandingCardTitleAccent>
+              {landingContent.previewText ? (
+                <p
+                  className={`leading-snug mb-3 font-semibold ${live ? "text-base" : "text-sm"}`}
+                  style={getTextStyleCSS(textStyles.previewText, {
+                    fontSize: landingCardPreviewSubFs,
+                    fontWeight: 600,
+                    color: primary,
+                    fontFamily: globalFont,
+                  })}
+                >
+                  {landingContent.previewText}
+                </p>
+              ) : null}
+              {(() => {
+                const previewItems = (landingContent.previewList ?? [])
+                  .filter((item) => String(item).trim())
+                  .slice(0, live ? 999 : 3);
+                return previewItems.length > 0 ? (
+                  <ul
+                    className={`list-none m-0 p-0 space-y-2.5 ${live ? "text-base" : "text-sm"}`}
+                    style={{ color: landingPageText, fontFamily: globalFont, fontSize: landingCardListFs }}
+                  >
+                    {previewItems.map((item, i) =>
+                      previewListMarker === "none" ? (
+                        <li key={i} className="leading-relaxed">
+                          {item}
+                        </li>
+                      ) : (
+                        <li key={i} className="flex items-start gap-2.5">
+                          <LandingListMarkerGlyph marker={previewListMarker} color={primary} />
+                          <span className="min-w-0 leading-relaxed">{item}</span>
+                        </li>
+                      )
+                    )}
+                  </ul>
+                ) : null;
+              })()}
+              {(() => {
+                const footerLines = (landingContent.previewFooterLines ?? [])
+                  .map((l) => String(l).trim())
+                  .filter(Boolean)
+                  .slice(0, live ? 999 : 3);
+                if (footerLines.length === 0) return null;
+                return (
+                  <div className="mt-5 space-y-1.5 pt-1">
+                    {footerLines.map((line, i) => (
+                      <p
+                        key={i}
+                        className={`italic m-0 leading-relaxed ${live ? "text-sm" : "text-xs"}`}
+                        style={{ color: landingPageMuted, fontFamily: globalFont, fontSize: landingCardPreviewFooterFs }}
+                      >
+                        {line}
+                      </p>
+                    ))}
+                  </div>
+                );
+              })()}
+            </section>
+
+            {/* The Energy — aligns with builder “The Energy Section” */}
+            <section
+              id="energy-section"
+              className="storefront-landing-panel testimonial rounded-2xl p-4 transition-all hover:translate-y-[-2px] flex flex-col min-w-0"
+              style={{
+                background: landingCardBg,
+                border: landingCardBorder,
+                boxShadow: isDark || fanDark ? `0 14px 42px rgba(0,0,0,0.2)` : `0 14px 42px ${primary}18`,
+              }}
+            >
+              <LandingCardTitleAccent
+                as="h2"
+                primary={primary}
+                titleStyle={getTextStyleCSS(textStyles.energyTitle, { fontSize: landingCardTitleFs, color: primary, fontFamily: globalFont })}
+              >
+                {landingContent.energyTitle}
+              </LandingCardTitleAccent>
+              {(() => {
+                const rawLines = landingContent.energyLines ?? [];
+                const energyLinesForDisplay = (live ? rawLines : rawLines.slice(0, 3))
+                  .map((l) => String(l))
+                  .filter((line) => line.trim());
+                const energyClosingTrim = String(landingContent.energyClosingLine ?? "").trim();
+                if (energyLinesForDisplay.length === 0 && !energyClosingTrim) return null;
+                return (
+                  <div className="mt-2 space-y-2.5 flex flex-col min-w-0">
+                    {energyLinesForDisplay.map((line, i) =>
+                      energyLinesMarker === "none" ? (
+                        <p
+                          key={i}
+                          className={`leading-relaxed m-0 ${live ? "text-base" : "text-sm"}`}
+                          style={{ color: landingPageText, fontFamily: globalFont, fontSize: landingCardListFs }}
+                        >
+                          {line}
+                        </p>
+                      ) : (
+                        <div key={i} className="flex items-start gap-2.5 min-w-0">
+                          <LandingListMarkerGlyph marker={energyLinesMarker} color={primary} />
+                          <p
+                            className={`min-w-0 flex-1 leading-relaxed m-0 ${live ? "text-base" : "text-sm"}`}
+                            style={{ color: landingPageText, fontFamily: globalFont, fontSize: landingCardListFs }}
+                          >
+                            {line}
+                          </p>
+                        </div>
+                      )
+                    )}
+                    {energyClosingTrim ? (
+                      <p
+                        className={`font-bold leading-relaxed m-0 ${live ? "text-base" : "text-sm"}`}
+                        style={{ color: primary, fontFamily: globalFont, fontSize: landingCardListFs }}
+                      >
+                        {energyClosingTrim}
+                      </p>
+                    ) : null}
+                  </div>
+                );
+              })()}
+            </section>
+
+            {/* The Boundary / Community guidelines — tier-style list optional; hidden if no intro and no lines */}
+            {(boundaryIntroMerged || boundaryLinesFiltered.length > 0) && (
+              <section
+                id="boundary-section"
+                className="storefront-landing-panel faq rounded-2xl p-4 transition-all hover:translate-y-[-2px] flex flex-col min-w-0"
+                style={{
+                  background: landingCardBg,
+                  border: landingCardBorder,
+                  boxShadow: isDark || fanDark ? `0 14px 42px rgba(0,0,0,0.2)` : `0 14px 42px ${primary}18`,
+                }}
+              >
+                <LandingCardTitleAccent
+                  as="h2"
+                  primary={primary}
+                  titleStyle={getTextStyleCSS(textStyles.boundaryTitle, { fontSize: landingCardTitleFs, color: primary, fontFamily: globalFont })}
+                >
+                  {landingContent.boundaryTitle}
+                </LandingCardTitleAccent>
+                {boundaryIntroMerged ? (
+                  <p
+                    className={`leading-relaxed m-0 ${live ? "text-base" : "text-sm"} ${boundaryLinesFiltered.length > 0 ? "mb-3" : ""}`}
+                    style={getTextStyleCSS(textStyles.boundaryText, { fontSize: landingCardBodyFs, color: landingPageMutedStrong, fontFamily: globalFont })}
+                  >
+                    {boundaryIntroMerged}
+                  </p>
+                ) : null}
+                {boundaryLinesFiltered.length > 0 ? (
+                  <ul
+                    className={`list-none m-0 p-0 space-y-2.5 text-left ${live ? "text-base" : "text-sm"}`}
+                    style={{ color: landingPageText, fontFamily: globalFont, fontSize: landingCardListFs }}
+                  >
+                    {(live ? boundaryLinesFiltered : boundaryLinesFiltered.slice(0, 6)).map((item, i) =>
+                      boundaryLinesMarker === "none" ? (
+                        <li key={i} className="leading-snug">
+                          {item}
+                        </li>
+                      ) : (
+                        <li key={i} className="flex items-start gap-2.5">
+                          <LandingListMarkerGlyph marker={boundaryLinesMarker} color={primary} />
+                          <span className="min-w-0 leading-snug font-normal">{item}</span>
+                        </li>
+                      )
+                    )}
+                  </ul>
+                ) : null}
+              </section>
+            )}
+          </div>
+
+          {/* Subscribe Card — anchor for “Join now” */}
+          <section id="pricing" className="py-4">
+            {live?.treatLinkAccountMessage ? (
+              <div
+                className="rounded-xl px-4 py-3 text-sm mb-4 text-left"
+                style={{
+                  background: fanDark ? "rgba(99,102,241,0.2)" : `${primary}12`,
+                  border: `1px solid ${primary}35`,
+                  color: landingPageText,
+                }}
+                role="status"
+              >
+                <p className="m-0 mb-2 leading-relaxed">{live.treatLinkAccountMessage}</p>
+                {!live.isLoggedIn && live.onTreatLinkSignIn ? (
+                  <div className="mt-3 space-y-2">
+                    <button
+                      type="button"
+                      className="w-full sm:w-auto px-5 py-2.5 text-sm font-semibold rounded-lg text-white"
+                      style={{ background: `linear-gradient(135deg, ${primary} 0%, ${primary}dd 100%)` }}
+                      onClick={live.onTreatLinkSignIn}
+                    >
+                      Sign in or create account
+                    </button>
+                    <p className="text-xs m-0 leading-snug" style={{ color: landingPageMuted }}>
+                      Use the <strong>same email</strong> you entered at checkout.
+                    </p>
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
+            <div className="w-full flex flex-col items-center" style={landingPricingBackdrop}>
+              <div
+                className="rounded-2xl p-8 text-center w-full max-w-[360px] mx-auto"
+                style={landingPricingCardChrome}
+              >
+                <LandingCardTitleAccent
+                  as="h3"
+                  align="center"
+                  primary={primary}
+                  titleStyle={{
+                    color: primary,
+                    fontFamily: "'Cormorant Garamond', Georgia, 'Times New Roman', serif",
+                    fontSize: "1.25rem",
+                    fontWeight: 700,
+                  }}
+                >
+                  {pricingLandingPreview.cardTitle}
+                </LandingCardTitleAccent>
+                <p
+                  className="text-3xl font-bold mb-4 tabular-nums"
+                  style={{
+                    color: fanDark || isDark ? landingPageText : "#111827",
+                    fontFamily: globalFont,
+                  }}
+                >
+                  {pricingLandingPreview.amountDisplay}
+                </p>
+                <ul className="list-none m-0 p-0 text-sm mb-5 space-y-2.5 text-center" style={{ color: landingPageText, fontFamily: globalFont }}>
+                  {pricingLandingPreview.bullets.map((line, i) => (
+                    <li key={i} className="flex items-center justify-center gap-2.5 flex-wrap">
+                      <span
+                        className="shrink-0 w-4 text-center text-base font-light leading-none"
+                        style={{ color: primary }}
+                        aria-hidden
+                      >
+                        ✓
+                      </span>
+                      <span className="leading-snug font-normal">{line}</span>
                     </li>
                   ))}
                 </ul>
-              )}
-            </section>
-
-            {/* What You Get */}
-            <section 
-              className="rounded-2xl p-4 transition-all hover:translate-y-[-2px]" 
-              style={{ 
-                background: cardBg, 
-                border: isDark ? `1px solid ${primary}30` : `1px solid ${primary}18`,
-                boxShadow: isDark ? `0 14px 42px rgba(0,0,0,0.2)` : `0 14px 42px ${primary}18`
-              }}
-            >
-              <h2 className="font-bold mb-2" style={getTextStyleCSS(textStyles.previewTitle, { fontSize: '0.875rem', color: primary, fontFamily: globalFont })}>{landingContent.previewTitle}</h2>
-              <p className="leading-relaxed mb-2" style={getTextStyleCSS(textStyles.previewText, { fontSize: '0.75rem', color: `${textColor}cc`, fontFamily: globalFont })}>{landingContent.previewText}</p>
-            </section>
-
-            {/* The Energy */}
-            <section 
-              className="rounded-2xl p-4 transition-all hover:translate-y-[-2px]" 
-              style={{ 
-                background: cardBg, 
-                border: isDark ? `1px solid ${primary}30` : `1px solid ${primary}18`,
-                boxShadow: isDark ? `0 14px 42px rgba(0,0,0,0.2)` : `0 14px 42px ${primary}18`
-              }}
-            >
-              <h2 className="font-bold mb-2" style={getTextStyleCSS(textStyles.energyTitle, { fontSize: '0.875rem', color: primary, fontFamily: globalFont })}>{landingContent.energyTitle}</h2>
-              <div className="space-y-1">
-                {(landingContent.energyLines ?? []).slice(0, 3).map((line, i) => (
-                  <p key={i} className="text-xs" style={{ color: `${textColor}cc` }}>{line}</p>
-                ))}
+                <button
+                  type="button"
+                  className="w-full py-3.5 rounded-full text-sm font-bold text-white transition-transform hover:scale-[1.01] disabled:opacity-60"
+                  style={{
+                    background: primary,
+                    boxShadow: `0 6px 20px ${primary}55`,
+                  }}
+                  disabled={live ? live.subscribing || live.joiningFree : false}
+                  onClick={
+                    live
+                      ? () => {
+                          if (live.isLoggedIn) {
+                            if (live.isFreeAccess) live.onJoinFree?.();
+                            else live.onSubscribe();
+                          } else if (live.isFreeAccess) live.onOpenSignup();
+                          else live.onOpenLogin();
+                        }
+                      : undefined
+                  }
+                >
+                  {live
+                    ? live.subscribing || live.joiningFree
+                      ? "Loading…"
+                      : live.isLoggedIn
+                        ? pricingLandingPreview.ctaLoggedIn
+                        : pricingLandingPreview.ctaGuest
+                    : pricingLandingPreview.ctaLoggedIn}
+                </button>
               </div>
-            </section>
-
-            {/* The Boundary */}
-            <section 
-              className="rounded-2xl p-4 transition-all hover:translate-y-[-2px]" 
-              style={{ 
-                background: cardBg, 
-                border: isDark ? `1px solid ${primary}30` : `1px solid ${primary}18`,
-                boxShadow: isDark ? `0 14px 42px rgba(0,0,0,0.2)` : `0 14px 42px ${primary}18`
-              }}
-            >
-              <h2 className="font-bold mb-2" style={getTextStyleCSS(textStyles.boundaryTitle, { fontSize: '0.875rem', color: primary, fontFamily: globalFont })}>{landingContent.boundaryTitle}</h2>
-              <p className="leading-relaxed" style={getTextStyleCSS(textStyles.boundaryText, { fontSize: '0.75rem', color: `${textColor}cc`, fontFamily: globalFont })}>
-                {boundariesText || landingContent.boundaryText}
-              </p>
-            </section>
-          </div>
-
-          {/* Subscribe Card */}
-          <section className="px-4 py-4">
-            <div className="rounded-xl p-4 text-center" style={{ background: `linear-gradient(135deg, ${primary}15 0%, ${primary}05 100%)`, border: `1px solid ${primary}30` }}>
-              <h3 className="text-sm font-bold mb-1" style={{ color: textColor }}>{pricingLandingPreview.cardTitle}</h3>
-              <p className="text-2xl font-bold mb-2" style={{ color: primary }}>{pricingLandingPreview.amountDisplay}</p>
-              <ul className="text-xs mb-3 space-y-1" style={{ color: `${textColor}99` }}>
-                {pricingLandingPreview.bullets.map((line, i) => (
-                  <li key={i}>✓ {line}</li>
-                ))}
-              </ul>
-              <button
-                type="button"
-                className="w-full py-2.5 rounded-lg text-sm font-semibold text-white transition-transform hover:scale-[1.02]"
-                style={{ background: `linear-gradient(135deg, ${primary} 0%, ${primary}dd 100%)` }}
+              <p
+                className="text-[11px] mt-3 leading-relaxed px-2 text-center sm:px-4 max-w-[360px] w-full mx-auto"
+                style={{
+                  color: fanDark || isDark ? landingFaint : `${textColor}99`,
+                  fontFamily: globalFont,
+                }}
               >
-                {pricingLandingPreview.ctaLoggedIn}
-              </button>
-              <p className="text-[10px] mt-2" style={{ color: `${textColor}66` }}>
                 {pricingLandingPreview.trustLine}
               </p>
             </div>
           </section>
 
-          {config.publicTreatsOnLanding === true && sections.treats !== false && (
-            <section className="px-4 py-3 storefront-preview-treats-section">
-              <div
-                className="rounded-2xl p-4 text-center"
-                style={{
-                  border: `1px solid ${primary}25`,
-                  background: isDark
-                    ? `linear-gradient(160deg, rgba(0,0,0,0.35) 0%, ${primary}12 100%)`
-                    : `linear-gradient(160deg, #fffef9 0%, ${primary}0d 100%)`,
-                  boxShadow: `0 8px 28px ${primary}12`,
-                }}
-              >
-                <p className="text-lg m-0 mb-1" aria-hidden>
-                  ✨
-                </p>
-                <h3 className="text-sm font-semibold m-0 mb-1" style={{ color: textColor }}>
-                  {storeCopy.storeLandingHeadline}
-                </h3>
-                <p className="text-xs leading-relaxed m-0 mb-3" style={{ color: `${textColor}aa` }}>
-                  {storeCopy.storeLandingDescription}
-                </p>
-                <button
-                  type="button"
-                  className="w-full py-2.5 rounded-xl text-sm font-semibold text-white cursor-default pointer-events-none"
-                  style={{
-                    background: `linear-gradient(135deg, ${primary} 0%, ${primary}dd 100%)`,
-                    boxShadow: `0 4px 14px ${primary}40`,
-                  }}
-                  disabled
-                  aria-label="Preview: store CTA"
+          {/* Same as public landing: show treat promo whenever Store is enabled (guest checkout only changes CTA). */}
+          {sections.treats !== false && (
+              <section className="py-3 storefront-preview-treats-section">
+                <div className="rounded-xl p-4 text-center" style={landingPromoCardShell()}>
+                  <p className="text-lg m-0 mb-1" aria-hidden>
+                    ✨
+                  </p>
+                  <LandingCardTitleAccent
+                    as="h3"
+                    align="center"
+                    primary={primary}
+                    titleStyle={{ color: landingPageText, fontSize: "0.875rem", fontWeight: 600, fontFamily: globalFont }}
+                  >
+                    {live?.showGuestTreatsCard ? storeCopy.publicStoreCardTitle : storeCopy.storeLandingHeadline}
+                  </LandingCardTitleAccent>
+                  <p
+                    className="text-xs leading-relaxed m-0 mb-3"
+                    style={{ color: live?.showGuestTreatsCard ? landingPageMuted : `${landingPageText}aa` }}
+                  >
+                    {live?.showGuestTreatsCard ? storeCopy.publicStoreCardDescription : storeCopy.storeLandingDescription}
+                  </p>
+                  <button
+                    type="button"
+                    className={`w-full py-2.5 rounded-xl text-sm font-semibold text-white ${
+                      live ? "" : "cursor-default pointer-events-none"
+                    }`}
+                    style={{
+                      background: `linear-gradient(135deg, ${primary} 0%, ${primary}dd 100%)`,
+                      boxShadow: `0 4px 14px ${primary}40`,
+                    }}
+                    disabled={
+                      live
+                        ? live.showGuestTreatsCard
+                          ? live.landingTreatsLoading
+                          : false
+                        : true
+                    }
+                    aria-label={
+                      live
+                        ? live.showGuestTreatsCard
+                          ? "Open treat store"
+                          : "Sign up to access the store"
+                        : "Preview: store CTA"
+                    }
+                    onClick={
+                      live
+                        ? live.showGuestTreatsCard
+                          ? live.onOpenGuestTreats
+                          : () => live.onOpenSignup()
+                        : undefined
+                    }
+                  >
+                    {live
+                      ? live.showGuestTreatsCard
+                        ? live.landingTreatsLoading
+                          ? storeCopy.memberStoreLoadingMessage
+                          : `${storeCopy.publicStoreOpenCtaLabel}${live.landingTreatProductCount ? ` (${live.landingTreatProductCount})` : ""}`
+                        : storeCopy.storeLandingCtaLabel
+                      : storeCopy.storeLandingCtaLabel}
+                  </button>
+                </div>
+              </section>
+            )}
+
+          {/* Tip Section */}
+          {(!live || live.tipsEnabled) && (
+            <section className="pb-6 pt-2">
+              <div className="pt-6 border-t text-center" style={{ borderColor: `${primary}20` }}>
+                <LandingCardTitleAccent
+                  as="h2"
+                  align="center"
+                  primary={primary}
+                  titleStyle={{ fontSize: "1rem", fontWeight: 600, color: landingPageText, fontFamily: globalFont }}
                 >
-                  {storeCopy.storeLandingCtaLabel}
-                </button>
+                  {tipLandingPreview.heading}
+                </LandingCardTitleAccent>
+                <p className="text-sm mb-4" style={{ color: landingPageMuted }}>{tipLandingPreview.subline}</p>
+                {live ? (
+                  <div className="mb-4 max-w-md mx-auto">
+                    <input
+                      type="text"
+                      className="w-full text-sm rounded-lg px-3 py-2 mb-3 border"
+                      style={{ borderColor: `${primary}30`, color: landingPageText, background: fanDark ? "rgba(255,255,255,0.06)" : undefined }}
+                      maxLength={64}
+                      placeholder="(optional) Who's showing love?"
+                      aria-label="Your name or handle (optional)"
+                      value={live.tipHandle}
+                      onChange={(e) => live.onTipHandleChange(e.target.value)}
+                      disabled={live.tipLoading}
+                    />
+                  </div>
+                ) : null}
+                <div className="flex justify-center flex-wrap gap-2 mb-4">
+                  {(live ? tipPresetsLive : [3, 5, 10, 20]).map((d) => {
+                    const label = live ? `$${d}` : `$${d}`;
+                    return (
+                      <button
+                        key={d}
+                        type="button"
+                        className="px-5 py-2 rounded-full text-sm font-semibold transition-all hover:scale-[1.03] disabled:opacity-50"
+                        style={{ background: `${primary}15`, color: primary, border: `2px solid ${primary}` }}
+                        disabled={live ? live.tipLoading : false}
+                        onClick={live ? () => live.onTipPresetDollars(d) : undefined}
+                      >
+                        {label}
+                      </button>
+                    );
+                  })}
+                </div>
+                <p className="text-xs mb-2" style={{ color: landingFaint }}>
+                  Or enter an amount (USD)
+                </p>
+                <div className="flex gap-2 max-w-[280px] mx-auto">
+                  <div className="flex-1 flex items-center rounded-full border-2 px-3" style={{ borderColor: `${primary}40` }}>
+                    <span className="text-sm font-medium" style={{ color: landingFaint }}>
+                      $
+                    </span>
+                    <input
+                      type="number"
+                      className="flex-1 py-2 px-1 text-sm bg-transparent outline-none"
+                      placeholder="e.g. 25"
+                      value={live ? live.tipCustomAmount : tipAmount}
+                      onChange={(e) =>
+                        live ? live.onTipCustomAmountChange(e.target.value) : setTipAmount(e.target.value)
+                      }
+                      onKeyDown={
+                        live
+                          ? (e) => {
+                              if (e.key === "Enter") {
+                                e.preventDefault();
+                                live.onTipCustomSubmit();
+                              }
+                            }
+                          : undefined
+                      }
+                      style={{ color: landingPageText }}
+                      disabled={live ? live.tipLoading : false}
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    className="px-5 py-2 rounded-full text-sm font-semibold text-white transition-all hover:scale-[1.03] disabled:opacity-50"
+                    style={{ backgroundColor: primary }}
+                    disabled={live ? live.tipLoading : false}
+                    onClick={live ? live.onTipCustomSubmit : undefined}
+                  >
+                    {live && live.tipLoading ? "…" : "Tip"}
+                  </button>
+                </div>
+                {live?.tipError ? (
+                  <p className="text-sm mt-2 text-red-500 dark:text-red-400" role="alert">
+                    {live.tipError}
+                  </p>
+                ) : null}
               </div>
             </section>
           )}
 
-          {/* Tip Section */}
-          <section className="px-4 pb-6 pt-2">
-            <div className="pt-6 border-t text-center" style={{ borderColor: `${primary}20` }}>
-              <p className="text-base font-semibold mb-1" style={{ color: textColor }}>{tipLandingPreview.heading}</p>
-              <p className="text-sm mb-4" style={{ color: `${textColor}99` }}>{tipLandingPreview.subline}</p>
-              <div className="flex justify-center flex-wrap gap-2 mb-4">
-                {["$3", "$5", "$10", "$20"].map((amt) => (
-                  <button
-                    key={amt}
-                    type="button"
-                    className="px-5 py-2 rounded-full text-sm font-semibold transition-all hover:scale-[1.03]"
-                    style={{ background: `${primary}15`, color: primary, border: `2px solid ${primary}` }}
-                  >
-                    {amt}
-                  </button>
-                ))}
-              </div>
-              <p className="text-xs mb-2" style={{ color: `${textColor}66` }}>Or enter an amount (USD)</p>
-              <div className="flex gap-2 max-w-[280px] mx-auto">
-                <div className="flex-1 flex items-center rounded-full border-2 px-3" style={{ borderColor: `${primary}40` }}>
-                  <span className="text-sm font-medium" style={{ color: `${textColor}66` }}>$</span>
-                  <input
-                    type="number"
-                    className="flex-1 py-2 px-1 text-sm bg-transparent outline-none"
-                    placeholder="e.g. 25"
-                    value={tipAmount}
-                    onChange={(e) => setTipAmount(e.target.value)}
-                    style={{ color: textColor }}
-                  />
-                </div>
-                <button
-                  type="button"
-                  className="px-5 py-2 rounded-full text-sm font-semibold text-white transition-all hover:scale-[1.03]"
-                  style={{ backgroundColor: primary }}
-                >
-                  Tip
-                </button>
-              </div>
-            </div>
-          </section>
-
-          {/* Footer */}
-          <footer className="px-4 py-3 text-center border-t" style={{ borderColor: `${primary}20` }}>
-            <div className="flex justify-center gap-3 text-xs" style={{ color: `${textColor}66` }}>
-              <a href="#" className="hover:underline">Terms</a>
+          {/* Footer — content width matches `.fan-landing-main` */}
+          <footer className="border-t" style={{ borderColor: `${primary}20` }}>
+            <div className={`${landingMainMaxClass} mx-auto px-4 py-3 text-center`}>
+            <div className="flex justify-center gap-3 text-xs" style={{ color: landingFaint }}>
+              <a href={live ? live.termsHref : "#"} className="hover:underline" onClick={live ? undefined : (e) => e.preventDefault()}>
+                Terms
+              </a>
               <span>·</span>
-              <a href="#" className="hover:underline">Privacy</a>
+              <a href={live ? live.privacyHref : "#"} className="hover:underline" onClick={live ? undefined : (e) => e.preventDefault()}>
+                Privacy
+              </a>
             </div>
             {socialLinks.length > 0 && (
               <div className="flex justify-center gap-2 mt-2">
@@ -925,6 +1851,7 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
                 ))}
               </div>
             )}
+            </div>
           </footer>
 
           {spicyMode && (
@@ -932,6 +1859,7 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
               🔒 18+ • Members only content
             </p>
           )}
+          </div>
         </div>
       )}
 
@@ -951,9 +1879,15 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
         >
           {/* Member Header — outside scroll so notification dropdown isn’t clipped */}
           <header className="flex items-center justify-between px-4 py-3 flex-shrink-0 gap-2" style={previewHeaderChrome}>
-            <div className="flex items-center gap-2 min-h-[48px]">
-              {logo ? (
-                <img src={logo} alt={displayName} className="h-12 w-auto max-w-[240px] object-contain object-left [mix-blend-mode:multiply]" />
+            <div className="flex items-center gap-2 min-h-[56px]">
+              {showLogoImage ? (
+                <img
+                  key={logoSrc}
+                  src={logoSrc}
+                  alt={displayName}
+                  className="h-12 w-auto max-w-[300px] object-contain object-left"
+                  onError={onLogoError}
+                />
               ) : avatar ? (
                 <img
                   src={avatar}
@@ -966,7 +1900,7 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
                   {displayName?.charAt(0) || "?"}
                 </div>
               )}
-              {!logo && <span className="text-sm font-semibold" style={{ color: primary, letterSpacing: "0.01em" }}>{displayName || "My Page"}</span>}
+              {!showLogoImage && <span className="text-sm font-semibold" style={{ color: primary, letterSpacing: "0.01em" }}>{displayName || "My Page"}</span>}
             </div>
             <nav className="flex items-center gap-1 flex-1 justify-center min-w-0 overflow-x-auto">
               {memberTabs.map((key) => (
@@ -1060,151 +1994,84 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
                     </div>
                   </div>
                 </div>
-                {/* Sample Feed Post - matches Fan Hub .feed-card (white + hairline border) */}
-                <article
-                  className={`feed-card rounded-2xl overflow-hidden${isDark ? " storefront-preview-feed-card--dark" : ""}`}
-                  style={
-                    isDark
-                      ? {
-                          background: "linear-gradient(180deg, #1f2937 0%, #1a1f2c 100%)",
-                          borderColor: `${primary}55`,
-                          boxShadow: "0 4px 20px rgba(0,0,0,0.25)",
-                        }
-                      : undefined
-                  }
-                >
-                  {/* Header - matches .feed-card-header */}
-                  <div 
-                    className="flex items-center gap-3"
-                    style={{ 
-                      padding: "0.85rem 1rem",
-                      background: isDark ? "transparent" : "linear-gradient(180deg, rgba(255,255,255,0.95) 0%, rgba(249, 250, 251, 0.6) 100%)",
-                      borderBottom: isDark ? `1px solid ${primary}25` : "1px solid rgba(156, 163, 175, 0.15)",
-                    }}
-                  >
-                    {/* Avatar - matches .feed-card-avatar */}
-                    <div 
-                      className="rounded-full flex items-center justify-center flex-shrink-0 overflow-hidden"
-                      style={{ 
-                        width: "38px", 
-                        height: "38px",
-                        border: isDark ? `2px solid ${primary}40` : "2px solid rgba(255, 255, 255, 0.9)",
-                        boxShadow: isDark ? `0 2px 8px rgba(0,0,0,0.2)` : `0 2px 8px ${primary}20`,
-                        background: avatar ? "transparent" : `linear-gradient(135deg, ${primary}88 0%, ${primary} 100%)`,
-                      }}
-                    >
+                {/* Sample Feed Post - same order as real feed: header > media > actions > body */}
+                <article className={`feed-card${isDark ? " storefront-preview-feed-card--dark" : ""}`}>
+                  <div className="feed-card-header">
+                    <div className="feed-card-avatar">
                       {avatar ? (
-                        <img src={avatar} alt="" className="w-full h-full object-cover" style={avatarCropStyle} />
+                        <img src={avatar} alt="" className="feed-card-avatar-img" style={avatarCropStyle} />
                       ) : (
-                        <span style={{ fontSize: "0.9rem", fontWeight: 600, color: "#fff" }}>
-                          {(displayName || "?")[0].toUpperCase()}
-                        </span>
+                        <span className="feed-card-avatar-initial">{(displayName || "?")[0].toUpperCase()}</span>
                       )}
                     </div>
-                    {/* Creator info - matches .feed-card-creator */}
-                    <div className="flex-1 min-w-0">
-                      <span
-                        className="feed-card-username block font-semibold"
-                        style={{
-                          fontSize: "0.95rem",
-                          letterSpacing: "0.01em",
-                          ...(isDark ? { color: textColor } : {}),
-                        }}
-                      >
-                        {displayName}
-                      </span>
+                    <div className="feed-card-creator">
+                      <span className="feed-card-username">{displayName}</span>
                     </div>
-                    {/* Time - matches .feed-card-time */}
-                    <span style={{ fontSize: "0.8rem", color: isDark ? `${textColor}99` : "#9ca3af", fontWeight: 400 }}>31 mins</span>
+                    <span className="feed-card-time">31 mins</span>
                   </div>
-                  
-                  {/* Media - matches .feed-card-media-wrap */}
-                  <div 
-                    className="aspect-square"
-                    style={{ position: "relative", overflow: "hidden" }}
-                  >
-                    <img 
-                      src="https://images.unsplash.com/photo-1517841905240-472988babdf9?w=600&h=600&fit=crop&crop=face"
+
+                  <div className="feed-card-media-wrap">
+                    <img
+                      src="https://images.unsplash.com/photo-1517841905240-472988babdf9?w=600&h=700&fit=crop&crop=face"
                       alt="Demo post"
-                      style={{ 
-                        width: "100%", 
-                        height: "100%", 
-                        objectFit: "cover",
-                      }}
+                      className="feed-card-media"
+                      style={{ objectFit: "cover" }}
                     />
                   </div>
-                  
-                  {/* Actions - matches .feed-card-actions */}
-                  <div 
-                    className="flex items-center gap-2"
-                    style={{ 
-                      padding: "0.6rem 1rem",
-                      background: isDark ? "transparent" : "linear-gradient(180deg, rgba(249, 250, 251, 0.5) 0%, rgba(255, 255, 255, 0.9) 100%)",
-                      borderBottom: isDark ? `1px solid ${primary}20` : "1px solid rgba(156, 163, 175, 0.12)",
-                    }}
-                  >
-                    <span className="inline-flex items-center gap-1">
-                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={isDark ? "currentColor" : "#6b7280"} strokeWidth="2" style={isDark ? { color: `${textColor}99` } : undefined}>
+
+                  <div className="feed-card-actions">
+                    <button type="button" className="feed-card-action-link">
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                         <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
                       </svg>
-                      <span style={{ fontSize: "0.85rem", fontWeight: 600, color: isDark ? `${textColor}99` : "#6b7280" }}>42</span>
-                    </span>
-                    <span className="inline-flex items-center gap-1">
-                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={isDark ? "currentColor" : "#6b7280"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={isDark ? { color: `${textColor}99` } : undefined}>
+                      <span className="feed-card-action-count">42</span>
+                    </button>
+                    <button type="button" className="feed-card-action-link">
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                         <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
                       </svg>
-                      <span style={{ fontSize: "0.85rem", fontWeight: 600, color: isDark ? `${textColor}99` : "#6b7280" }}>2</span>
-                    </span>
-                    <span 
-                      className="inline-flex items-center gap-1"
-                      style={{ 
-                        padding: "0.3rem 0.6rem", 
-                        borderRadius: "8px", 
-                        background: `${primary}12`,
-                        cursor: "pointer",
-                      }}
-                    >
-                      <span style={{ fontWeight: 700, color: primary, fontSize: "0.85rem" }}>$</span>
-                      <span style={{ fontSize: "0.75rem", fontWeight: 600, color: primary, letterSpacing: "0.02em" }}>SEND TIP</span>
-                    </span>
-                    <span
-                      className="inline-flex items-center"
-                      style={{ marginLeft: "auto", color: isDark ? `${textColor}99` : "#6b7280" }}
-                      title="Save post"
-                    >
+                      <span className="feed-card-action-count">2</span>
+                    </button>
+                    <button type="button" className="feed-card-send-tip">
+                      <span className="tip-currency">$</span>
+                      <span>SEND TIP</span>
+                    </button>
+                    <button type="button" className="feed-card-action-btn bookmark-btn" title="Save post">
                       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                         <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />
                       </svg>
-                    </span>
+                    </button>
                   </div>
-                  
-                  {/* Body - matches .feed-card-body */}
-                  <div style={{ padding: "0.75rem 1rem 1rem" }}>
-                    <p style={{ fontSize: "0.9rem", color: textColor, lineHeight: 1.5 }}>
+
+                  <div className="feed-card-body">
+                    <p className="m-0">
                       <span style={{ fontWeight: 600, color: primary, marginRight: "0.35rem" }}>{displayName}</span>
                       Good morning everyone 🌸
                     </p>
-                    {/* Comments preview */}
-                    <button 
+                    <button
                       type="button"
-                      style={{ 
-                        fontSize: "0.8rem", 
-                        color: isDark ? `${textColor}99` : "#9ca3af", 
-                        marginTop: "0.5rem",
-                        background: "none",
-                        border: "none",
-                        padding: 0,
-                        cursor: "pointer",
-                      }}
+                      className="mt-2 fan-feed-view-comments-link"
+                      style={{ color: isDark ? `${textColor}99` : undefined }}
                     >
                       View all 2 comments
                     </button>
-                    <div style={{ marginTop: "0.4rem" }}>
-                      <p style={{ fontSize: "0.85rem", color: textColor }}>
+                    <div className="mt-1.5">
+                      <p className="m-0">
                         <span style={{ fontWeight: 600, marginRight: "0.35rem" }}>sarah_m</span>
                         Love this! ☕
                       </p>
+                      <p className="m-0 mt-1">
+                        <span style={{ fontWeight: 600, marginRight: "0.35rem" }}>jules_k</span>
+                        This made my morning 💗
+                      </p>
                     </div>
+                    <button
+                      type="button"
+                      className="mt-2 fan-feed-view-post-link"
+                      style={{ color: isDark ? `${textColor}cc` : undefined }}
+                    >
+                      View post
+                    </button>
                   </div>
                 </article>
                 
@@ -1469,13 +2336,29 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
                     <p className="text-sm leading-relaxed" style={{ color: textColor }}>{bio}</p>
                   </div>
                 ) : null}
-                {(boundariesText || landingContent.boundaryText) ? (
+                {(boundaryIntroMerged || boundaryLinesFiltered.length > 0) ? (
                   <div className="rounded-xl p-4" style={{ background: cardBg, border: `1px solid ${isDark ? `${primary}30` : `${primary}18`}` }}>
                     <h3 className="text-xs font-semibold mb-1.5" style={{ color: primary }}>{landingContent.boundaryTitle}</h3>
-                    <p className="text-sm leading-relaxed" style={{ color: `${textColor}cc` }}>{boundariesText || landingContent.boundaryText}</p>
+                    {boundaryIntroMerged ? (
+                      <p className="text-sm leading-relaxed" style={{ color: `${textColor}cc` }}>{boundaryIntroMerged}</p>
+                    ) : null}
+                    {boundaryLinesFiltered.length > 0 ? (
+                      <ul className="list-none m-0 mt-2 p-0 space-y-1.5 text-sm">
+                        {boundaryLinesFiltered.map((line, i) =>
+                          boundaryLinesMarker === "none" ? (
+                            <li key={i} style={{ color: `${textColor}cc` }}>{line}</li>
+                          ) : (
+                            <li key={i} className="flex gap-2 items-start" style={{ color: `${textColor}cc` }}>
+                              <LandingListMarkerGlyph marker={boundaryLinesMarker} color={primary} />
+                              <span className="min-w-0">{line}</span>
+                            </li>
+                          )
+                        )}
+                      </ul>
+                    ) : null}
                   </div>
                 ) : null}
-                {!bio && !boundariesText && !landingContent.boundaryText && (
+                {!bio && !boundaryIntroMerged && boundaryLinesFiltered.length === 0 && (
                   <p className="text-sm" style={{ color: `${textColor}99` }}>No about or guidelines added yet.</p>
                 )}
               </div>

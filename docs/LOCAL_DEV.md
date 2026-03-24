@@ -18,7 +18,7 @@
    npm run dev
    ```
 
-4. Open **http://localhost:3000**. In the terminal you should see (informational only — **do not paste into PowerShell**):
+4. Open the **Local** URL from the terminal (often **http://localhost:5173/**). You should see (informational only — **do not paste into PowerShell**):
 
    ```text
    [vite] API proxy active: /api -> https://your-app.vercel.app
@@ -38,6 +38,18 @@ npm run dev
 - Most `/api` routes use Firebase `Authorization: Bearer …` from the client; those work through the proxy. Cookie-only flows that depend on the deployment domain may not match `localhost`.
 - Proxy timeout is **120s** to allow cold starts on Vercel.
 - Template line: see **`.env.example`**.
+
+### Firebase sign-in: `auth/requests-from-referer-http://localhost:5173-are-blocked`
+
+Vite uses **port 5173** by default. If your **Google Cloud** browser API key (the one in `VITE_FIREBASE_API_KEY`) has **HTTP referrer** restrictions, each origin must be listed explicitly — e.g. `http://localhost:3000/*` does **not** cover port **5173**.
+
+1. [Google Cloud Console](https://console.cloud.google.com/) → **APIs & Services** → **Credentials** → select the **Browser key** / Web client key used by Firebase.
+2. Under **Application restrictions** → **HTTP referrers**, add:
+   - `http://localhost:5173/*`
+   - `http://127.0.0.1:5173/*`
+   - (keep any existing entries such as `http://localhost:3000/*` if you still use that port.)
+3. Save and wait a minute for propagation.
+4. **Firebase Console** → **Authentication** → **Settings** → **Authorized domains**: ensure **`localhost`** is present (hostname only; no port).
 
 ---
 
@@ -167,3 +179,13 @@ If this fails, fix reported errors before worrying about dev servers.
 2. **Environment variables** in the Vercel project (Settings → Environment Variables): at minimum whatever `api/_firebaseAdmin.ts` and Stripe/OpenAI routes need (`FIREBASE_PROJECT_ID`, `FIREBASE_CLIENT_EMAIL`, `FIREBASE_PRIVATE_KEY`, etc.). Mirror values from `ENV_SETUP_GUIDE.md` if present.
 3. **Deploy:** push to GitHub (if connected) or `vercel --prod`. Static app + `api/*` serverless are defined by `vercel.json` (`framework: vite`, `outputDirectory: dist`, rewrites to `/index.html` for non-API routes).
 4. **Local serverless:** `npm run dev:vercel` is **not expected to work** here (too many API routes for the CLI’s 128-build cap). Use **`npm run dev` + `DEV_API_PROXY`** or test on a **Preview** URL instead.
+
+---
+
+## Fan storefront: preview vs live login
+
+- **My Page → Live preview** uses `StorefrontPreview` (dummy Sign up / Log in). The **public** page at `/{handle}` uses the **same** layout with **working** Sign up / Log in — they open the branded **Fan auth** modal (`FanAuthModal`).
+- **`?preview=member`** on `/{handle}?preview=member` skips the landing and shows the **member shell UI only** (no subscription check). Use that to preview tabs/layout; it does **not** log you in.
+- **`?landing=1`** on `/{handle}?landing=1` **forces the public landing** even if you’re signed in and already a member (e.g. creators checking the page). Without it, subscribers go straight to the member hub—so the landing header / hero / treats block can look “missing” when you’re logged in.
+- **My Page → Live preview** column scrolls back to the **top** when you switch Landing/Member or change handle so the header isn’t stuck off-screen.
+- To test a **real** member session: open `/{handle}`, use **Sign up** or **Log in** on the landing header or pricing card, complete Firebase auth, then subscribe or use **Join free** if the creator enabled free access. Ensure **`DEV_API_PROXY`** is set if checkout/API calls run from localhost.

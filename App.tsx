@@ -47,6 +47,7 @@ import { ErrorBoundary } from './components/ErrorBoundary';
 import { FanStorefrontView } from './components/FanStorefrontView';
 import { KNOWN_APP_ROUTES } from './constants';
 import { isCustomDomainStorefrontPath } from './src/lib/storefrontCustomDomain';
+import { useOAuthReturnHandler } from './src/hooks/useOAuthReturnHandler';
 import { ResetPassword } from './components/ResetPassword';
 import { InviteRequiredPage } from './components/InviteRequiredPage';
 import { isInviteOnlyMode } from './src/utils/inviteOnly';
@@ -260,7 +261,9 @@ const AppContent: React.FC = () => {
     const allowedEmail = getAllowedEmail();
     
     // Hooks must be called unconditionally at the top level
-    const { isAuthenticated, isAuthLoading, user, setUser, activePage, setActivePage, startTour, isTourActive, toast, showToast, isCRMOpen, setPricingView, handleLogout, selectedPlan, setSelectedPlan, openPaymentModal, isPaymentModalOpen } = useAppContext();
+    const { isAuthenticated, isAuthLoading, user, setUser, activePage, setActivePage, startTour, isTourActive, toast, showToast, isCRMOpen, setPricingView, handleLogout, selectedPlan, setSelectedPlan, openPaymentModal, isPaymentModalOpen, socialAccounts } = useAppContext();
+
+    useOAuthReturnHandler({ showToast, socialAccounts, isAuthLoading });
     
     const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
     const [loginModalInitialView, setLoginModalInitialView] = useState<'login' | 'signup'>('login');

@@ -18,7 +18,8 @@
   max-width: 420px;
   max-height: min(90vh, 720px);
   overflow-y: auto;
-  background: #fffef9;
+  /* Set inline via --fan-auth-card-bg (FanAuthModal) — default light pink, not cream */
+  background: var(--fan-auth-card-bg, var(--fan-auth-soft, #fff2f8));
   border-radius: 22px;
   box-shadow: 0 24px 60px rgba(80, 40, 60, 0.2), 0 0 0 1px rgba(212, 85, 139, 0.12);
   padding: 1.75rem 1.5rem 1.5rem;

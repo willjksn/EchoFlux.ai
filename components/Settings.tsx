@@ -10,6 +10,7 @@ import { db, storage, auth } from '../firebaseConfig';
 import { ref, uploadBytes, getDownloadURL, deleteObject, listAll, getMetadata } from 'firebase/storage';
 import { doc, setDoc, deleteDoc } from 'firebase/firestore';
 import { connectSocialAccount, disconnectSocialAccount } from '../src/services/socialMediaService';
+import { startXOAuth1Authorization } from '../src/lib/startXOAuth1Authorization';
 import { PLATFORM_CAPABILITIES, hasCapability, getCapabilityDescription, getCapability, isFullySupported } from '../src/services/platformCapabilities';
 
 interface SettingsProps {}
@@ -510,98 +511,16 @@ export const Settings: React.FC = () => {
     };
 
     const handleConnectOAuth1 = async () => {
-        // Allow admins to connect OAuth1 even in offline mode (for testing)
         if (OFFLINE_MODE && user?.role !== 'Admin') {
             showToast('X OAuth is disabled in this version. EchoFlux.ai is currently focused on offline planning and content creation.', 'info');
             return;
         }
-        // Connect OAuth 1.0a for X media uploads
         setConnectingPlatform('X');
         try {
-            const token = auth.currentUser
-                ? await auth.currentUser.getIdToken(true)
-                : null;
-
-            if (!token) {
-                throw new Error('User must be logged in');
-            }
-
-            const response = await fetch('/api/oauth/x/authorize-oauth1', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`,
-                },
-            });
-
-            if (!response.ok) {
-                let errorData: any = {};
-                try {
-                    errorData = await response.json();
-                } catch {
-                    // If response is not JSON, try to get text
-                    const text = await response.text().catch(() => 'Unknown error');
-                    errorData = { error: 'Failed to connect OAuth 1.0a', details: text };
-                }
-                
-                // Build user-friendly error message
-                let errorMessage = errorData.error || 'Failed to connect OAuth 1.0a';
-                let errorDetails = errorData.details || errorData.twitterError || '';
-                
-                // Add help text if available
-                if (errorData.help) {
-                    errorDetails = errorDetails ? `${errorDetails}. ${errorData.help}` : errorData.help;
-                }
-                
-                // Special handling for callback URL errors
-                if (errorDetails.includes('callback URL') || errorDetails.includes('Callback URI') || errorDetails.includes('callback') || errorMessage.includes('callback')) {
-                    errorMessage = 'OAuth 1.0a Callback URL Not Registered';
-                    
-                    // Build comprehensive troubleshooting message
-                    let troubleshootingMsg = `The callback URL "${errorData.callbackUrl || 'https://echoflux.ai/api/oauth/x/callback-oauth1'}" is not recognized by X.\n\n`;
-                    troubleshootingMsg += `Common causes:\n`;
-                    troubleshootingMsg += `• URL registered in OAuth 2.0 section instead of OAuth 1.0a section\n`;
-                    troubleshootingMsg += `• OAuth 1.0a not enabled in Developer Portal\n`;
-                    troubleshootingMsg += `• URL format mismatch (trailing slash, case sensitivity, etc.)\n`;
-                    troubleshootingMsg += `• Changes not propagated yet (wait 2-3 minutes after saving)\n\n`;
-                    troubleshootingMsg += `Troubleshooting Steps:\n`;
-                    troubleshootingMsg += `1. Go to X Developer Portal → Your App → Settings → User authentication settings\n`;
-                    troubleshootingMsg += `2. Make sure OAuth 1.0a is ENABLED (separate toggle from OAuth 2.0)\n`;
-                    troubleshootingMsg += `3. Find the OAuth 1.0a Callback URLs section (NOT OAuth 2.0 section)\n`;
-                    troubleshootingMsg += `4. Verify the URL is registered exactly as: ${errorData.callbackUrl || 'https://echoflux.ai/api/oauth/x/callback-oauth1'}\n`;
-                    troubleshootingMsg += `5. Check for: no trailing slash, exact case, no extra spaces\n`;
-                    troubleshootingMsg += `6. If the URL is already there, DELETE it and RE-ADD it\n`;
-                    troubleshootingMsg += `7. Wait 2-3 minutes after saving before testing again\n`;
-                    troubleshootingMsg += `8. Make sure App permissions are set to "Read and write"`;
-                    
-                    if (errorData.troubleshootingSteps && Array.isArray(errorData.troubleshootingSteps)) {
-                        troubleshootingMsg += '\n\nAdditional steps from X:\n' + errorData.troubleshootingSteps.join('\n');
-                    }
-                    
-                    errorDetails = troubleshootingMsg;
-                } else if (errorDetails.includes('OAuth 1.0a not enabled')) {
-                    errorMessage = 'OAuth 1.0a Not Enabled';
-                    errorDetails = 'OAuth 1.0a must be enabled in your X Developer Portal. Go to your X App settings → User authentication settings and enable "OAuth 1.0a" authentication.';
-                }
-                
-                const fullMessage = errorDetails ? `${errorMessage}: ${errorDetails}` : errorMessage;
-                throw new Error(fullMessage);
-            }
-
-            const { authUrl } = await response.json();
-            if (!authUrl || typeof authUrl !== 'string') {
-                throw new Error('Invalid authorization URL');
-            }
-
-            // Redirect to OAuth 1.0a authorization
-            setTimeout(() => {
-                window.location.href = authUrl;
-            }, 0);
+            await startXOAuth1Authorization();
         } catch (error: any) {
             console.error('Failed to connect OAuth 1.0a:', error);
-            
-            // Show detailed error message
-            let errorMsg = error.message || 'Failed to connect OAuth 1.0a. Please try again.';
+            let errorMsg = error?.message || 'Failed to connect OAuth 1.0a. Please try again.';
             if (errorMsg.includes('callback URL') || errorMsg.includes('callback') || errorMsg.includes('Callback')) {
                 errorMsg = 'OAuth 1.0a callback not approved. In X Developer Portal → App → Settings → App details, add BOTH callback URLs to the list: (1) https://echoflux.ai/api/oauth/x/callback (2) https://echoflux.ai/api/oauth/x/callback-oauth1 — Also try adding TWITTER_API_KEY and TWITTER_API_SECRET (from Keys and tokens tab) to Vercel.';
             }
@@ -644,102 +563,6 @@ export const Settings: React.FC = () => {
             showToast(error.message || 'Failed to load X OAuth debug info', 'error');
         }
     };
-
-    // Handle OAuth callback from URL params (X, Meta/Facebook/Instagram, legacy Meta redirect)
-    useEffect(() => {
-        const params = new URLSearchParams(window.location.search);
-        const oauthSuccess = params.get('oauth_success');
-        const connectedLegacy = params.get('connected');
-        const oauthError = params.get('error');
-        const platform = params.get('platform');
-        const messageParam = params.get('message');
-        const errorDetails = params.get('details');
-
-        // Legacy Meta callback used ?connected=meta — treat like success so users get reload + toast
-        if (!oauthSuccess && connectedLegacy === 'meta' && !oauthError) {
-            const msg = messageParam || 'Facebook and Instagram connection updated.';
-            showToast(msg, 'success');
-            window.history.replaceState({}, '', window.location.pathname);
-            window.location.reload();
-            return;
-        }
-
-        if (oauthSuccess) {
-            const oauthType = params.get('type');
-            const accountName = params.get('account');
-            const successPlatform = oauthSuccess || 'facebook';
-            const platformName = successPlatform.charAt(0).toUpperCase() + successPlatform.slice(1);
-            const hasXOAuth1 = !!(
-                safeSocialAccounts?.X &&
-                (safeSocialAccounts.X as any).oauthToken &&
-                (safeSocialAccounts.X as any).oauthTokenSecret
-            );
-
-            // For X, automatically complete OAuth 1.0a after OAuth 2.0 connects
-            if (successPlatform === 'x' && oauthType !== 'oauth1' && !hasXOAuth1) {
-                const successMessage = accountName 
-                    ? `${platformName} account (${decodeURIComponent(accountName)}) connected. Completing media permissions...`
-                    : `${platformName} account connected. Completing media permissions...`;
-                showToast(successMessage, 'success');
-
-                // Remove query params before starting OAuth 1.0a flow
-                window.history.replaceState({}, '', window.location.pathname);
-                handleConnectOAuth1();
-                return;
-            }
-
-            if (oauthType === 'oauth1') {
-                showToast('X media permissions enabled! You can now upload images and videos.', 'success');
-            } else {
-                // Meta OAuth includes ?message= from the server (URLSearchParams already decodes)
-                const metaMsg =
-                    messageParam && oauthSuccess !== 'x'
-                        ? messageParam
-                        : null;
-                const successMessage = metaMsg
-                    ? metaMsg
-                    : accountName
-                      ? `${platformName} account (${accountName}) connected successfully!`
-                      : `${platformName} account connected successfully!`;
-                showToast(successMessage, 'success');
-            }
-            // Remove query params from URL
-            window.history.replaceState({}, '', window.location.pathname);
-            // Reload page to refresh social accounts
-            window.location.reload();
-        } else if (oauthError) {
-            // Show specific error messages based on error type
-            let errorMsg = '';
-            
-            if (oauthError === 'no_instagram_account') {
-                errorMsg = 'No Instagram Business Account found. Your Instagram account must be converted to a Business or Creator account and connected to a Facebook Page. See instructions below.';
-            } else if (oauthError === 'no_pages') {
-                errorMsg =
-                    'Facebook returned no Pages you manage. Use a Facebook login that is an admin of the Page linked to your Instagram Professional account, or create a Page and connect Instagram to it in Meta Business Suite.';
-            } else if (oauthError === 'token_exchange_failed') {
-                errorMsg = `Token exchange failed. ${errorDetails ? decodeURIComponent(errorDetails).substring(0, 100) : 'Please try again.'}`;
-            } else if (oauthError === 'pages_fetch_failed') {
-                errorMsg = 'Failed to fetch Facebook Pages. Make sure you have at least one Facebook Page.';
-            } else if (oauthError === 'oauth_not_configured') {
-                const platformName = platform ? platform.charAt(0).toUpperCase() + platform.slice(1) : 'OAuth';
-                errorMsg = `${platformName} OAuth is not configured. Please contact support or check your environment variables.`;
-            } else if (oauthError === 'not_authenticated') {
-                errorMsg =
-                    'Could not link this Facebook login to your EchoFlux account. Close extra browser tabs, sign in to EchoFlux again, then connect from Settings → Connections (do not open the Meta login URL in a separate tab).';
-            } else if (oauthError === 'token_exchange_failed') {
-                const platformName = platform ? platform.charAt(0).toUpperCase() + platform.slice(1) : 'Account';
-                errorMsg = `${platformName} token exchange failed. ${errorDetails ? decodeURIComponent(errorDetails).substring(0, 150) : 'Please check your OAuth configuration and try again.'}`;
-            } else if (messageParam) {
-                errorMsg = messageParam;
-            } else {
-                errorMsg = `Failed to connect ${platform || 'account'}. Please try again.`;
-            }
-            
-            showToast(errorMsg, 'error');
-            // Remove query params from URL
-            window.history.replaceState({}, '', window.location.pathname);
-        }
-    }, [showToast, handleConnectOAuth1]);
 
     const handleDisconnectAccount = async (platform: Platform) => {
         // Allow admins to disconnect accounts even in offline mode (for testing)

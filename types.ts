@@ -234,18 +234,35 @@ export interface StorefrontSocialLinks {
     custom?: CustomSocialLink[];
 }
 
+/** How each optional list row is prefixed on the public landing (builder-controlled). */
+export type LandingSectionListMarker = 'none' | 'heart' | 'check' | 'dot';
+
 /** Landing page content sections (editable by creator) */
 export interface StorefrontLandingContent {
     perksTitle?: string;        // "Why This Exists" section title
     perksText?: string;         // Main text for perks section
     perksList?: string[];       // Bullet points list
+    /** List icon for `perksList` rows. Default: none (plain lines). */
+    perksListMarker?: LandingSectionListMarker;
     previewTitle?: string;      // "What You Get" section title
     previewText?: string;       // Main text for preview section
     previewList?: string[];     // Features list
+    /** List icon for `previewList` rows. Default when unset: heart (legacy). */
+    previewListMarker?: LandingSectionListMarker;
+    /** Italic lines below the list (e.g. disclaimers). One string per line. */
+    previewFooterLines?: string[];
     energyTitle?: string;       // "The Energy" testimonial section title
     energyLines?: string[];     // Array of energy/vibe lines
+    /** Optional bold accent line below the list (sans, primary color), e.g. "And that is different." */
+    energyClosingLine?: string;
+    /** List icon for `energyLines` rows. Default when unset: heart (legacy). */
+    energyLinesMarker?: LandingSectionListMarker;
     boundaryTitle?: string;     // "The Boundary" FAQ section title (also member About tab guidelines heading)
-    boundaryText?: string;      // Boundary/rules text
+    boundaryText?: string;      // Boundary/rules text (intro paragraph; optional if boundaryLines used)
+    /** Optional list rows under guidelines (tier-style with ✓/hearts/etc.). Empty = body text only. */
+    boundaryLines?: string[];
+    /** Marker for `boundaryLines`. Default when unset: check (matches membership card). */
+    boundaryLinesMarker?: LandingSectionListMarker;
     /** Member hub store tab + panel: main title (default "Store") */
     memberStoreTitle?: string;
     /** Subtitle under the store panel title */
@@ -321,13 +338,17 @@ export interface FanAuthBranding {
     primaryColor?: string;
     /** Headings / labels (burgundy on Stormij) */
     accentTextColor?: string;
-    /** Active tab background */
+    /** Modal card + active tab chip background tint (e.g. light pink). Overrides auto tint from theme. */
     softTint?: string;
 }
 
+/** Preset size tokens used by quick-pick controls. */
+export type PresetFontSize = 'xs' | 'sm' | 'base' | 'lg' | 'xl' | '2xl' | '3xl';
+
 /** Text styling for storefront customization */
 export interface TextStyle {
-    fontSize?: 'xs' | 'sm' | 'base' | 'lg' | 'xl' | '2xl' | '3xl';
+    /** Supports preset token (xs..3xl) or raw CSS size (e.g. 22px, 1.4rem). */
+    fontSize?: PresetFontSize | string;
     color?: string; // hex color
     fontFamily?: string; // font family name
     /** When set, overrides default upright hero/body text */
@@ -343,11 +364,15 @@ export interface CreatorStorefrontSettings {
     /** CSS object-position for avatar when shown in circular crop (e.g. full-background hero). E.g. `40% 20%`. */
     avatarObjectPosition?: string;
     logo?: string;   // image URL - shown in header (like Stormij XO logo)
+    /** Alternate field for the same asset (some docs / migrations use `logoUrl`) */
+    logoUrl?: string;
     /** When false, hide display name from landing hero (still shown in header and feed) */
     showDisplayNameOnLanding?: boolean;
 
     // Hero Section
     heroImage?: string;         // Legacy: single hero image URL (used if heroMedia is empty)
+    /** Some migrated docs use this instead of `heroImage` */
+    heroImageUrl?: string;
     /** Multiple hero images with optional size. fullBackground = one image as section background. */
     heroMedia?: {
         url: string;

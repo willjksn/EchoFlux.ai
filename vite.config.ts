@@ -12,7 +12,7 @@ function trimEnvValue(v: string | undefined): string {
  *
  * 1. Add to `.env.local` (repo root):
  *    DEV_API_PROXY=https://your-app.vercel.app
- * 2. `npm run dev` → http://localhost:3000 — `/api/*` is proxied to that URL.
+ * 2. `npm run dev` → http://localhost:3000 (or next free port) — `/api/*` is proxied to that URL.
  *
  * Or one-shot (PowerShell): `$env:DEV_API_PROXY="https://..."; npm run dev`
  *
@@ -55,6 +55,14 @@ export default defineConfig(({ mode }) => {
         configureServer(server) {
           server.httpServer?.once("listening", () => {
             const { logger } = server.config;
+            const addr = server.httpServer?.address();
+            const port =
+              addr && typeof addr === "object" && "port" in addr ? String((addr as { port: number }).port) : "";
+            if (port && port !== "3000") {
+              logger.warn(
+                `\n  [vite] Dev server is on port ${port} (3000 was busy). Open http://localhost:${port}/ — check the terminal “Local:” line.\n`
+              );
+            }
             if (apiTarget === defaultTarget) {
               logger.warn(
                 "\n  [vite] DEV_API_PROXY not set: /api -> http://localhost:3001 (often nothing listening).\n  Add DEV_API_PROXY=https://your-deployment.vercel.app to .env.local\n  See docs/LOCAL_DEV.md\n"
@@ -69,10 +77,13 @@ export default defineConfig(({ mode }) => {
       },
     ],
     server: {
+      /** Prefer 3000 for OAuth / Firebase referrer presets; if busy Vite picks the next port. */
       port: 3000,
-      /** Avoid hard fail when 3000–3002 are taken (e.g. other Vite / vercel processes). */
       strictPort: false,
-      host: "localhost",
+      /** Open the app in the default browser to the correct port (fixes “server runs but I see nothing” on :3000). */
+      open: true,
+      /** Listen on all interfaces so http://127.0.0.1:<port>/ works if localhost misbehaves. */
+      host: true,
       hmr: {
         host: "localhost",
       },

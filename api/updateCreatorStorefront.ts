@@ -50,6 +50,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       avatarObjectPosition:
         body.avatarObjectPosition !== undefined ? body.avatarObjectPosition : existingData?.avatarObjectPosition,
       logo: body.logo !== undefined ? body.logo : existingData?.logo,
+      logoUrl: body.logoUrl !== undefined ? body.logoUrl : existingData?.logoUrl,
       showDisplayNameOnLanding: body.showDisplayNameOnLanding !== undefined ? body.showDisplayNameOnLanding : existingData?.showDisplayNameOnLanding,
       
       // Hero Section
@@ -97,6 +98,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         }
         if (handle) {
           tx.set(db.collection("creatorHandles").doc(handle), { creatorId });
+        }
+        tx.set(creatorRef, payload, { merge: true });
+      });
+    } else if (handle && HANDLE_REGEX.test(handle)) {
+      // Keep creatorHandles mapping in sync even when handle text didn't change.
+      // This repairs legacy mismatches (e.g. storefront resolves to a placeholder creatorId).
+      await db.runTransaction(async (tx) => {
+        const handleRef = db.collection("creatorHandles").doc(handle);
+        const handleSnap = await tx.get(handleRef);
+        const mappedCreatorId = (handleSnap.data() as { creatorId?: string } | undefined)?.creatorId;
+        const sameHandleOnCreatorDoc = oldHandle === handle;
+        const canRepairMapping =
+          !handleSnap.exists || mappedCreatorId === creatorId || sameHandleOnCreatorDoc;
+
+        if (canRepairMapping) {
+          tx.set(handleRef, { creatorId });
         }
         tx.set(creatorRef, payload, { merge: true });
       });

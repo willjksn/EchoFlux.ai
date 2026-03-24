@@ -19,7 +19,10 @@ import "../styles/fan-auth-modal.css";
 
 const DEFAULT_FAN_AUTH_PRIMARY = "#d9468c";
 const DEFAULT_FAN_AUTH_ACCENT = "#4a2c2c";
+/** Tab / chip tint when creator has not set `fanAuthBranding.softTint` */
 const DEFAULT_FAN_AUTH_SOFT = "#fdf2f7";
+/** Card surface when theme is still default indigo — light pink (Stormij-style), not cream */
+const DEFAULT_FAN_AUTH_CARD_BG = "#fff2f8";
 const BUILTIN_DEFAULT_PRIMARY = "#6366f1";
 
 function lightenHex(hex: string, amount = 0.35): string {
@@ -97,7 +100,20 @@ export const FanAuthModal: React.FC<FanAuthModalProps> = ({
   const useIndigoDefault = !branding?.primaryColor && (!themePrimary || themePrimary === BUILTIN_DEFAULT_PRIMARY);
   const primary = branding?.primaryColor ?? (useIndigoDefault ? DEFAULT_FAN_AUTH_PRIMARY : themePrimary ?? DEFAULT_FAN_AUTH_PRIMARY);
   const accentText = branding?.accentTextColor ?? themeText ?? DEFAULT_FAN_AUTH_ACCENT;
-  const softTint = branding?.softTint ?? DEFAULT_FAN_AUTH_SOFT;
+  /** Tabs / active chip — custom `softTint`, else pink default for indigo, else subtle tint from theme primary */
+  const softTint =
+    branding?.softTint ??
+    (useIndigoDefault ? DEFAULT_FAN_AUTH_SOFT : lightenHex(themePrimary ?? BUILTIN_DEFAULT_PRIMARY, 0.88));
+  /**
+   * Modal card background: custom `softTint` if set (same key as My Page “modal tint”).
+   * Otherwise light pink when storefront still uses default indigo; subtle primary tint when they picked a theme;
+   * never the old cream #fffef9.
+   */
+  const cardBackground =
+    branding?.softTint ??
+    (useIndigoDefault
+      ? DEFAULT_FAN_AUTH_CARD_BG
+      : lightenHex(themePrimary ?? BUILTIN_DEFAULT_PRIMARY, 0.93));
   const gradTop = lightenHex(primary, 0.38);
 
   const loginTitle = branding?.loginTitle?.trim() || "Welcome back";
@@ -286,9 +302,11 @@ export const FanAuthModal: React.FC<FanAuthModalProps> = ({
         className="fan-auth-card"
         style={{
           fontFamily,
+          backgroundColor: cardBackground,
           ["--fan-auth-primary" as string]: primary,
           ["--fan-auth-accent" as string]: accentText,
           ["--fan-auth-soft" as string]: softTint,
+          ["--fan-auth-card-bg" as string]: cardBackground,
         }}
       >
         <button type="button" className="fan-auth-close" onClick={onClose} aria-label="Close">
