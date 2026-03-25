@@ -572,6 +572,7 @@ export const MyPageBuilder: React.FC = () => {
   const [handleCheckMessage, setHandleCheckMessage] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [handleSaving, setHandleSaving] = useState(false);
   const [avatarUploading, setAvatarUploading] = useState(false);
   const [logoUploading, setLogoUploading] = useState(false);
   const [previewMode, setPreviewMode] = useState<"landing" | "member">("landing");
@@ -797,9 +798,19 @@ export const MyPageBuilder: React.FC = () => {
   const checkHandle = useCallback(
     async (value: string) => {
       const clean = value.replace("@", "").toLowerCase().trim();
+      const currentSavedHandle = String(saved.handle ?? "")
+        .replace("@", "")
+        .toLowerCase()
+        .trim();
       if (!clean || clean.length < 3 || clean.length > 20 || !/^[a-z0-9_]+$/.test(clean)) {
         setHandleCheckStatus("idle");
         setHandleCheckMessage("");
+        return;
+      }
+      // If creator is still using their own saved handle, never show "taken".
+      if (creatorId && clean === currentSavedHandle) {
+        setHandleCheckStatus("available");
+        setHandleCheckMessage("Your current handle");
         return;
       }
       setHandleCheckStatus("checking");
@@ -859,7 +870,7 @@ export const MyPageBuilder: React.FC = () => {
         setHandleCheckMessage("Could not check availability");
       }
     },
-    [creatorId]
+    [creatorId, saved.handle]
   );
 
   useEffect(() => {
@@ -894,6 +905,69 @@ export const MyPageBuilder: React.FC = () => {
       },
     }));
   }, []);
+
+  const handleSaveHandle = useCallback(async () => {
+    if (!creatorId) {
+      showToast?.("Not authenticated", "error");
+      return;
+    }
+    const clean = handleInput.replace("@", "").toLowerCase().trim();
+    const currentSaved = String(saved.handle ?? "").replace("@", "").toLowerCase().trim();
+    if (!clean || clean.length < 3 || clean.length > 20 || !/^[a-z0-9_]+$/.test(clean)) {
+      showToast?.("Enter a valid handle (3-20 letters, numbers, underscores).", "error");
+      return;
+    }
+    if (clean === currentSaved) {
+      showToast?.("Handle already saved.", "info");
+      return;
+    }
+    if (handleCheckStatus === "taken") {
+      showToast?.("That handle is unavailable.", "error");
+      return;
+    }
+
+    setHandleSaving(true);
+    try {
+      const token = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
+      if (!token) {
+        showToast?.("Authentication token missing. Please sign in again.", "error");
+        return;
+      }
+
+      const res = await fetch("/api/updateCreatorStorefront", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ handle: clean }),
+      });
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        // Local fallback when /api isn't available.
+        if (res.status === 404 && db && creatorId) {
+          await setDoc(
+            doc(db, "creators", creatorId),
+            { handle: clean, updatedAt: new Date().toISOString() },
+            { merge: true }
+          );
+          await setDoc(doc(db, "creatorHandles", clean), { creatorId }, { merge: true });
+        } else {
+          throw new Error((data as { message?: string }).message || `Save failed (${res.status})`);
+        }
+      }
+
+      setSaved((prev) => ({ ...prev, handle: clean, updatedAt: new Date().toISOString() }));
+      setDraft((prev) => ({ ...prev, handle: clean }));
+      setHandleInput(clean);
+      setHandleCheckStatus("available");
+      setHandleCheckMessage("Your current handle");
+      showToast?.("Handle saved", "success");
+    } catch (e) {
+      console.error("[MyPageBuilder] Handle save error:", e);
+      showToast?.(e instanceof Error ? e.message : "Failed to save handle", "error");
+    } finally {
+      setHandleSaving(false);
+    }
+  }, [creatorId, handleInput, handleCheckStatus, saved.handle, showToast]);
 
   const handleSave = useCallback(async () => {
     if (!creatorId) {
@@ -1222,6 +1296,8 @@ export const MyPageBuilder: React.FC = () => {
       : "";
 
   const handleCleanForCheck = handleInput.replace("@", "").toLowerCase().trim();
+  const savedHandleForCheck = String(saved.handle ?? "").replace("@", "").toLowerCase().trim();
+  const handleIsCurrentSaved = !!handleCleanForCheck && handleCleanForCheck === savedHandleForCheck;
   const handleFormatOk =
     handleCleanForCheck.length >= 3 &&
     handleCleanForCheck.length <= 20 &&
@@ -1266,9 +1342,32 @@ export const MyPageBuilder: React.FC = () => {
                 className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                 maxLength={20}
               />
+              <button
+                type="button"
+                onClick={handleSaveHandle}
+                disabled={
+                  handleSaving ||
+                  saving ||
+                  !handleFormatOk ||
+                  handleCheckStatus === "checking" ||
+                  handleCheckStatus === "taken" ||
+                  handleIsCurrentSaved
+                }
+                className="px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm font-medium text-gray-700 dark:text-gray-200 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors"
+              >
+                {handleSaving ? "Saving…" : "Save handle"}
+              </button>
               {handleCheckStatus === "checking" && <span className="text-sm text-gray-500 dark:text-gray-400">Checking…</span>}
               {handleCheckStatus === "available" && (
-                <span className="text-sm font-medium text-green-600 dark:text-green-400">Available</span>
+                <span
+                  className={`text-sm font-medium ${
+                    handleIsCurrentSaved
+                      ? "text-gray-500 dark:text-gray-400"
+                      : "text-green-600 dark:text-green-400"
+                  }`}
+                >
+                  Available
+                </span>
               )}
               {handleCheckStatus === "taken" && (
                 <span className="text-sm text-red-600 dark:text-red-400">
@@ -1893,7 +1992,7 @@ export const MyPageBuilder: React.FC = () => {
                     Extra lines (one per line, optional)
                   </label>
                   <textarea
-                    rows={4}
+                    rows={6}
                     placeholder="Each line appears under your description. Leave empty for description only (e.g. “Why This Exists” with no list)."
                     value={(draft.landingContent?.perksList ?? []).join("\n")}
                     onChange={(e) => {
@@ -1966,7 +2065,7 @@ export const MyPageBuilder: React.FC = () => {
                     Feature lines (one per line, optional)
                   </label>
                   <textarea
-                    rows={4}
+                    rows={6}
                     placeholder="Each line is a row under your description (e.g. “What You Get” perks)."
                     value={(draft.landingContent?.previewList ?? []).join("\n")}
                     onChange={(e) => {
@@ -2035,7 +2134,7 @@ export const MyPageBuilder: React.FC = () => {
                     value={(draft.landingContent?.energyLines ?? DEFAULT_LANDING_CONTENT.energyLines)?.join("\n")}
                     onChange={(e) => updateLandingContent("energyLines", e.target.value.split("\n"))}
                     placeholder="One line per vibe (e.g., Playful and honest.)"
-                    rows={3}
+                    rows={6}
                     className="w-full px-3 py-1.5 pr-12 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                   />
                   <div className="absolute right-2 top-1.5">
@@ -2127,7 +2226,7 @@ export const MyPageBuilder: React.FC = () => {
                     Guideline lines (one per line, optional — tier-style list under the intro)
                   </label>
                   <textarea
-                    rows={4}
+                    rows={6}
                     placeholder={"e.g.\nDo not screenshot.\nStay chill."}
                     value={(draft.landingContent?.boundaryLines ?? []).join("\n")}
                     onChange={(e) => {
