@@ -470,15 +470,15 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
       ? "linear-gradient(135deg, #0f0f0f 0%, #1a1a1a 50%, #0f0f0f 100%)"
       : isDark
         ? background
-        : /* Soft pink wash so white cards read like the reference (pale pink field behind white UI). */
-          `linear-gradient(165deg, ${primary}12 0%, ${background} 38%, #fffefb 62%, ${primary}08 100%)`;
+        : /* Subtle primary wash on page background (creator theme, not fixed rose). */
+          `linear-gradient(165deg, ${primary}12 0%, ${background} 38%, #ffffff 62%, ${primary}08 100%)`;
   const tipPresetsLive = live?.tipPresetDollars ?? [5, 10, 25, 50, 100, 250];
-  /** Landing + member preview top bars — same lite pink treat-card chrome */
+  /** Landing + member preview top bars — soft primary-tinted chrome */
   const previewHeaderChrome: React.CSSProperties = {
     borderBottom: `1px solid ${primary}25`,
     background: isDark
       ? `linear-gradient(160deg, rgba(0, 0, 0, 0.35) 0%, ${primary}12 100%)`
-      : `linear-gradient(160deg, #fffef9 0%, ${primary}0d 100%)`,
+      : `linear-gradient(160deg, #ffffff 0%, color-mix(in srgb, ${primary} 4%, #ffffff) 100%)`,
     boxShadow: `0 8px 28px ${primary}12`,
   };
   const cardBg = isDark ? background : `linear-gradient(140deg, rgba(255, 255, 255, 0.94) 0%, ${primary}06 52%, ${primary}08 100%)`;
@@ -517,7 +517,7 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
     ...extra,
   });
 
-  /** Stormij-style: pale pink “stage” behind the white membership card (light mode). Full width of column. */
+  /** Light wash behind the pricing card (tinted from creator primary, not fixed rose). */
   const landingPricingBackdrop: React.CSSProperties =
     fanDark || isDark
       ? {}
@@ -527,7 +527,7 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
           padding: "1.25rem 0",
         };
 
-  /** White card + light pink border + soft pink glow (reference: monthly membership). */
+  /** White card + primary border/glow; inner fill uses primary mix (no hardcoded pink). */
   const landingPricingCardChrome: React.CSSProperties =
     fanDark || isDark
       ? {
@@ -536,8 +536,7 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
           }),
         }
       : {
-          /* Matches `fan-landing-feed.css` `.fan-landing-tier-card` */
-          background: `linear-gradient(160deg, #ffffff 0%, rgba(255, 244, 249, 0.95) 100%)`,
+          background: `linear-gradient(160deg, #ffffff 0%, color-mix(in srgb, ${primary} 5%, #ffffff) 100%)`,
           border: `1px solid ${primary}`,
           boxShadow: `0 12px 34px ${primary}3d, 0 0 0 1px ${primary}14`,
         };
@@ -1345,6 +1344,18 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
                 </p>
               ) : null}
               {(() => {
+                const perksMode = landingContent.perksExtraMode ?? "bullets";
+                const perksParaTrim = String(landingContent.perksParagraph ?? "").trim();
+                if (perksMode === "paragraph" && perksParaTrim) {
+                  return (
+                    <p
+                      className={`whitespace-pre-wrap leading-relaxed mb-2 ${live ? "text-base" : "text-sm"}`}
+                      style={{ color: landingPageText, fontFamily: globalFont, fontSize: landingCardListFs }}
+                    >
+                      {landingContent.perksParagraph}
+                    </p>
+                  );
+                }
                 const perkItems = (landingContent.perksList ?? [])
                   .filter((item) => String(item).trim())
                   .slice(0, live ? 999 : 3);
@@ -1406,6 +1417,18 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
                 </p>
               ) : null}
               {(() => {
+                const previewMode = landingContent.previewExtraMode ?? "bullets";
+                const previewParaTrim = String(landingContent.previewParagraph ?? "").trim();
+                if (previewMode === "paragraph" && previewParaTrim) {
+                  return (
+                    <p
+                      className={`whitespace-pre-wrap leading-relaxed mb-2 ${live ? "text-base" : "text-sm"}`}
+                      style={{ color: landingPageText, fontFamily: globalFont, fontSize: landingCardListFs }}
+                    >
+                      {landingContent.previewParagraph}
+                    </p>
+                  );
+                }
                 const previewItems = (landingContent.previewList ?? [])
                   .filter((item) => String(item).trim())
                   .slice(0, live ? 999 : 3);
@@ -1469,11 +1492,36 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
                 {landingContent.energyTitle}
               </LandingCardTitleAccent>
               {(() => {
+                const energyMode = landingContent.energyBodyMode ?? "bullets";
+                const energyParaTrim = String(landingContent.energyParagraph ?? "").trim();
+                const energyClosingTrim = String(landingContent.energyClosingLine ?? "").trim();
+                if (energyMode === "paragraph") {
+                  if (!energyParaTrim && !energyClosingTrim) return null;
+                  return (
+                    <div className="mt-2 space-y-2.5 flex flex-col min-w-0">
+                      {energyParaTrim ? (
+                        <p
+                          className={`whitespace-pre-wrap leading-relaxed m-0 ${live ? "text-base" : "text-sm"}`}
+                          style={{ color: landingPageText, fontFamily: globalFont, fontSize: landingCardListFs }}
+                        >
+                          {landingContent.energyParagraph}
+                        </p>
+                      ) : null}
+                      {energyClosingTrim ? (
+                        <p
+                          className={`font-bold leading-relaxed m-0 ${live ? "text-base" : "text-sm"}`}
+                          style={{ color: primary, fontFamily: globalFont, fontSize: landingCardListFs }}
+                        >
+                          {energyClosingTrim}
+                        </p>
+                      ) : null}
+                    </div>
+                  );
+                }
                 const rawLines = landingContent.energyLines ?? [];
                 const energyLinesForDisplay = (live ? rawLines : rawLines.slice(0, 3))
                   .map((l) => String(l))
                   .filter((line) => line.trim());
-                const energyClosingTrim = String(landingContent.energyClosingLine ?? "").trim();
                 if (energyLinesForDisplay.length === 0 && !energyClosingTrim) return null;
                 return (
                   <div className="mt-2 space-y-2.5 flex flex-col min-w-0">
@@ -1878,6 +1926,7 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
             minHeight: 0,
             "--fan-primary": primary,
             "--fan-accent": primary,
+            "--fan-accent-soft": `color-mix(in srgb, ${primary} 14%, transparent)`,
             "--fan-accent-hover": accentHover,
             "--fan-text": textColor,
             "--fan-text-muted": isDark ? `${textColor}99` : "#7c5b68",

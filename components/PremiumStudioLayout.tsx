@@ -105,6 +105,7 @@ export const PremiumStudioLayout: React.FC<PremiumStudioLayoutProps> = ({ childr
       const edge = '#334155';
       return {
         '--fan-primary': primary,
+        '--fan-accent-soft': `color-mix(in srgb, ${primary} 14%, transparent)`,
         '--fan-bg': bg2,
         '--fan-text': ink,
         '--fan-text-muted': muted,
@@ -117,6 +118,7 @@ export const PremiumStudioLayout: React.FC<PremiumStudioLayoutProps> = ({ childr
     }
     return {
       '--fan-primary': primary,
+      '--fan-accent-soft': `color-mix(in srgb, ${primary} 14%, transparent)`,
       '--fan-bg': background,
       '--fan-text': text,
       '--fan-text-muted': textMuted,

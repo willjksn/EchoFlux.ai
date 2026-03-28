@@ -12,6 +12,7 @@ import type {
   TextStyle,
   PresetFontSize,
   LandingSectionListMarker,
+  LandingSectionBodyMode,
 } from "../types";
 import { STOREFRONT_CONTENT_POLICY, DEFAULT_PRIVACY_POLICY, DEFAULT_TERMS_OF_SERVICE, FAN_HUB_THEME_PRESETS, HERO_LAYOUT_OPTIONS, HERO_MEDIA_SIZE_OPTIONS } from "../constants";
 import { getAvatarCropStyle } from "../src/lib/avatarCrop";
@@ -137,6 +138,37 @@ function parseAvatarPercentPair(s: string | undefined | null): [number, number] 
 
 function formatAvatarPercentPair(x: number, y: number) {
   return `${clampPercent(Math.round(x * 10) / 10, 0, 100)}% ${clampPercent(Math.round(y * 10) / 10, 0, 100)}%`;
+}
+
+function LandingBodyModeToggle({
+  value,
+  onChange,
+  ariaLabel,
+}: {
+  value: LandingSectionBodyMode;
+  onChange: (mode: LandingSectionBodyMode) => void;
+  ariaLabel: string;
+}) {
+  const pill = (active: boolean) =>
+    `px-2.5 py-1 text-xs font-semibold rounded-md transition-colors ${
+      active
+        ? "bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm"
+        : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
+    }`;
+  return (
+    <div
+      className="inline-flex rounded-lg border border-gray-200 dark:border-gray-600 p-0.5 bg-gray-100 dark:bg-gray-800/80 gap-0.5"
+      role="group"
+      aria-label={ariaLabel}
+    >
+      <button type="button" className={pill(value === "bullets")} onClick={() => onChange("bullets")}>
+        Bullets
+      </button>
+      <button type="button" className={pill(value === "paragraph")} onClick={() => onChange("paragraph")}>
+        Paragraph
+      </button>
+    </div>
+  );
 }
 
 /** Firestore rejects nested `undefined`. `JSON.stringify` omits them, but client `setDoc` does not. */
@@ -1274,6 +1306,81 @@ export const MyPageBuilder: React.FC = () => {
     });
   };
 
+  const setPerksExtraMode = useCallback((mode: LandingSectionBodyMode) => {
+    setDraft((prev) => {
+      const lc = { ...(prev.landingContent ?? DEFAULT_LANDING_CONTENT) };
+      if (mode === "paragraph") {
+        const para =
+          String(lc.perksParagraph ?? "").trim() !== ""
+            ? lc.perksParagraph
+            : (lc.perksList ?? []).map((l) => String(l).trim()).filter(Boolean).join("\n");
+        return {
+          ...prev,
+          landingContent: { ...lc, perksExtraMode: "paragraph", perksParagraph: para ?? "" },
+        };
+      }
+      const lines = String(lc.perksParagraph ?? "")
+        .split("\n")
+        .map((s) => s.trim())
+        .filter(Boolean);
+      const nextList = lines.length > 0 ? lines : lc.perksList ?? [];
+      return {
+        ...prev,
+        landingContent: { ...lc, perksExtraMode: "bullets", perksList: nextList },
+      };
+    });
+  }, []);
+
+  const setPreviewExtraMode = useCallback((mode: LandingSectionBodyMode) => {
+    setDraft((prev) => {
+      const lc = { ...(prev.landingContent ?? DEFAULT_LANDING_CONTENT) };
+      if (mode === "paragraph") {
+        const para =
+          String(lc.previewParagraph ?? "").trim() !== ""
+            ? lc.previewParagraph
+            : (lc.previewList ?? []).map((l) => String(l).trim()).filter(Boolean).join("\n");
+        return {
+          ...prev,
+          landingContent: { ...lc, previewExtraMode: "paragraph", previewParagraph: para ?? "" },
+        };
+      }
+      const lines = String(lc.previewParagraph ?? "")
+        .split("\n")
+        .map((s) => s.trim())
+        .filter(Boolean);
+      const nextList = lines.length > 0 ? lines : lc.previewList ?? [];
+      return {
+        ...prev,
+        landingContent: { ...lc, previewExtraMode: "bullets", previewList: nextList },
+      };
+    });
+  }, []);
+
+  const setEnergyBodyMode = useCallback((mode: LandingSectionBodyMode) => {
+    setDraft((prev) => {
+      const lc = { ...(prev.landingContent ?? DEFAULT_LANDING_CONTENT) };
+      if (mode === "paragraph") {
+        const para =
+          String(lc.energyParagraph ?? "").trim() !== ""
+            ? lc.energyParagraph
+            : (lc.energyLines ?? []).map((l) => String(l).trim()).filter(Boolean).join("\n");
+        return {
+          ...prev,
+          landingContent: { ...lc, energyBodyMode: "paragraph", energyParagraph: para ?? "" },
+        };
+      }
+      const lines = String(lc.energyParagraph ?? "")
+        .split("\n")
+        .map((s) => s.trim())
+        .filter(Boolean);
+      const nextLines = lines.length > 0 ? lines : lc.energyLines ?? [];
+      return {
+        ...prev,
+        landingContent: { ...lc, energyBodyMode: "bullets", energyLines: nextLines },
+      };
+    });
+  }, []);
+
   // Helper to update legal
   const updateLegal = (field: keyof StorefrontLegal, value: string) => {
     updateDraft({
@@ -1986,35 +2093,74 @@ export const MyPageBuilder: React.FC = () => {
                   </div>
                 </div>
                 <div className="mt-3 space-y-2">
-                  <label className="block text-xs font-medium text-gray-500 dark:text-gray-400">
-                    Extra lines (one per line, optional)
-                  </label>
-                  <textarea
-                    rows={6}
-                    placeholder="Each line appears under your description. Leave empty for description only (e.g. “Why This Exists” with no list)."
-                    value={(draft.landingContent?.perksList ?? []).join("\n")}
-                    onChange={(e) => {
-                      const raw = e.target.value;
-                      const lines = raw.length === 0 ? [] : raw.split("\n");
-                      updateLandingContent("perksList", lines);
-                    }}
-                    className="w-full px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                  />
-                  <div>
-                    <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Bullet style for those lines</label>
-                    <select
-                      className="w-full px-2 py-1.5 text-xs border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                      value={draft.landingContent?.perksListMarker ?? "none"}
-                      onChange={(e) =>
-                        updateLandingContent("perksListMarker", e.target.value as LandingSectionListMarker)
-                      }
-                    >
-                      <option value="none">None — plain lines</option>
-                      <option value="heart">Heart</option>
-                      <option value="check">Check (✓)</option>
-                      <option value="dot">Dot</option>
-                    </select>
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <label className="block text-xs font-medium text-gray-500 dark:text-gray-400">
+                      Under your description (optional)
+                    </label>
+                    <LandingBodyModeToggle
+                      value={draft.landingContent?.perksExtraMode ?? "bullets"}
+                      onChange={setPerksExtraMode}
+                      ariaLabel="Why subscribe: bullets or paragraph"
+                    />
                   </div>
+                  {(draft.landingContent?.perksExtraMode ?? "bullets") === "bullets" ? (
+                    <>
+                      <textarea
+                        rows={6}
+                        placeholder="One bullet per line. Leave empty for description only."
+                        value={(draft.landingContent?.perksList ?? []).join("\n")}
+                        onChange={(e) => {
+                          const raw = e.target.value;
+                          const lines = raw.length === 0 ? [] : raw.split("\n");
+                          updateLandingContent("perksList", lines);
+                        }}
+                        className="w-full px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                      />
+                      <div>
+                        <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+                          Bullet style
+                        </label>
+                        <select
+                          className="w-full px-2 py-1.5 text-xs border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                          value={draft.landingContent?.perksListMarker ?? "none"}
+                          onChange={(e) =>
+                            updateLandingContent("perksListMarker", e.target.value as LandingSectionListMarker)
+                          }
+                        >
+                          <option value="none">None — plain lines</option>
+                          <option value="heart">Heart</option>
+                          <option value="check">Check (✓)</option>
+                          <option value="dot">Dot</option>
+                        </select>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="relative">
+                      <textarea
+                        rows={6}
+                        placeholder="Full paragraph under your description. Line breaks are kept on the live page."
+                        value={draft.landingContent?.perksParagraph ?? ""}
+                        onChange={(e) => updateLandingContent("perksParagraph", e.target.value)}
+                        className="w-full px-3 py-1.5 pr-12 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                      />
+                      <div className="absolute right-2 top-1.5">
+                        <EmojiButton
+                          onSelect={(emoji) => {
+                            setDraft((prev) => {
+                              const lc = prev.landingContent ?? DEFAULT_LANDING_CONTENT;
+                              return {
+                                ...prev,
+                                landingContent: {
+                                  ...lc,
+                                  perksParagraph: (lc.perksParagraph ?? "") + emoji,
+                                },
+                              };
+                            });
+                          }}
+                        />
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -2059,35 +2205,74 @@ export const MyPageBuilder: React.FC = () => {
                   </div>
                 </div>
                 <div className="mt-3 space-y-2">
-                  <label className="block text-xs font-medium text-gray-500 dark:text-gray-400">
-                    Feature lines (one per line, optional)
-                  </label>
-                  <textarea
-                    rows={6}
-                    placeholder="Each line is a row under your description (e.g. “What You Get” perks)."
-                    value={(draft.landingContent?.previewList ?? []).join("\n")}
-                    onChange={(e) => {
-                      const raw = e.target.value;
-                      const lines = raw.length === 0 ? [] : raw.split("\n");
-                      updateLandingContent("previewList", lines);
-                    }}
-                    className="w-full px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                  />
-                  <div>
-                    <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Bullet style for those lines</label>
-                    <select
-                      className="w-full px-2 py-1.5 text-xs border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                      value={draft.landingContent?.previewListMarker ?? "heart"}
-                      onChange={(e) =>
-                        updateLandingContent("previewListMarker", e.target.value as LandingSectionListMarker)
-                      }
-                    >
-                      <option value="none">None — plain lines</option>
-                      <option value="heart">Heart</option>
-                      <option value="check">Check (✓)</option>
-                      <option value="dot">Dot</option>
-                    </select>
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <label className="block text-xs font-medium text-gray-500 dark:text-gray-400">
+                      Under subline (optional)
+                    </label>
+                    <LandingBodyModeToggle
+                      value={draft.landingContent?.previewExtraMode ?? "bullets"}
+                      onChange={setPreviewExtraMode}
+                      ariaLabel="What you get: bullets or paragraph"
+                    />
                   </div>
+                  {(draft.landingContent?.previewExtraMode ?? "bullets") === "bullets" ? (
+                    <>
+                      <textarea
+                        rows={6}
+                        placeholder="One bullet per line under your subline."
+                        value={(draft.landingContent?.previewList ?? []).join("\n")}
+                        onChange={(e) => {
+                          const raw = e.target.value;
+                          const lines = raw.length === 0 ? [] : raw.split("\n");
+                          updateLandingContent("previewList", lines);
+                        }}
+                        className="w-full px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                      />
+                      <div>
+                        <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+                          Bullet style
+                        </label>
+                        <select
+                          className="w-full px-2 py-1.5 text-xs border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                          value={draft.landingContent?.previewListMarker ?? "heart"}
+                          onChange={(e) =>
+                            updateLandingContent("previewListMarker", e.target.value as LandingSectionListMarker)
+                          }
+                        >
+                          <option value="none">None — plain lines</option>
+                          <option value="heart">Heart</option>
+                          <option value="check">Check (✓)</option>
+                          <option value="dot">Dot</option>
+                        </select>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="relative">
+                      <textarea
+                        rows={6}
+                        placeholder="Full paragraph under your subline. Line breaks are kept on the live page."
+                        value={draft.landingContent?.previewParagraph ?? ""}
+                        onChange={(e) => updateLandingContent("previewParagraph", e.target.value)}
+                        className="w-full px-3 py-1.5 pr-12 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                      />
+                      <div className="absolute right-2 top-1.5">
+                        <EmojiButton
+                          onSelect={(emoji) => {
+                            setDraft((prev) => {
+                              const lc = prev.landingContent ?? DEFAULT_LANDING_CONTENT;
+                              return {
+                                ...prev,
+                                landingContent: {
+                                  ...lc,
+                                  previewParagraph: (lc.previewParagraph ?? "") + emoji,
+                                },
+                              };
+                            });
+                          }}
+                        />
+                      </div>
+                    </div>
+                  )}
                 </div>
                 <div className="mt-3 space-y-2">
                   <label className="block text-xs font-medium text-gray-500 dark:text-gray-400">
@@ -2127,41 +2312,89 @@ export const MyPageBuilder: React.FC = () => {
                   />
                   <EmojiButton onSelect={(emoji) => updateLandingContent("energyTitle", (draft.landingContent?.energyTitle ?? "") + emoji)} />
                 </div>
-                <div className="relative">
-                  <textarea
-                    value={(draft.landingContent?.energyLines ?? DEFAULT_LANDING_CONTENT.energyLines)?.join("\n")}
-                    onChange={(e) => updateLandingContent("energyLines", e.target.value.split("\n"))}
-                    placeholder="One line per vibe (e.g., Playful and honest.)"
-                    rows={6}
-                    className="w-full px-3 py-1.5 pr-12 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+                  <span className="text-xs font-medium text-gray-500 dark:text-gray-400">Body under title</span>
+                  <LandingBodyModeToggle
+                    value={draft.landingContent?.energyBodyMode ?? "bullets"}
+                    onChange={setEnergyBodyMode}
+                    ariaLabel="The energy section: bullets or paragraph"
                   />
-                  <div className="absolute right-2 top-1.5">
-                    <EmojiButton onSelect={(emoji) => {
-                      const lines = draft.landingContent?.energyLines ?? DEFAULT_LANDING_CONTENT.energyLines ?? [];
-                      if (lines.length > 0) {
-                        lines[lines.length - 1] = lines[lines.length - 1] + emoji;
-                        updateLandingContent("energyLines", [...lines]);
-                      } else {
-                        updateLandingContent("energyLines", [emoji]);
-                      }
-                    }} />
+                </div>
+                {(draft.landingContent?.energyBodyMode ?? "bullets") === "bullets" ? (
+                  <>
+                    <div className="relative">
+                      <textarea
+                        value={(draft.landingContent?.energyLines ?? DEFAULT_LANDING_CONTENT.energyLines)?.join("\n")}
+                        onChange={(e) => updateLandingContent("energyLines", e.target.value.split("\n"))}
+                        placeholder="One bullet per line (e.g. Playful and honest.)"
+                        rows={6}
+                        className="w-full px-3 py-1.5 pr-12 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                      />
+                      <div className="absolute right-2 top-1.5">
+                        <EmojiButton
+                          onSelect={(emoji) => {
+                            setDraft((prev) => {
+                              const lc = prev.landingContent ?? DEFAULT_LANDING_CONTENT;
+                              const lines = [...(lc.energyLines ?? DEFAULT_LANDING_CONTENT.energyLines ?? [])];
+                              if (lines.length > 0) {
+                                lines[lines.length - 1] = lines[lines.length - 1] + emoji;
+                              } else {
+                                lines.push(emoji);
+                              }
+                              return {
+                                ...prev,
+                                landingContent: { ...lc, energyLines: lines },
+                              };
+                            });
+                          }}
+                        />
+                      </div>
+                    </div>
+                    <div className="mt-2">
+                      <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+                        Bullet style
+                      </label>
+                      <select
+                        className="w-full px-2 py-1.5 text-xs border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                        value={draft.landingContent?.energyLinesMarker ?? "heart"}
+                        onChange={(e) =>
+                          updateLandingContent("energyLinesMarker", e.target.value as LandingSectionListMarker)
+                        }
+                      >
+                        <option value="none">None — plain lines</option>
+                        <option value="heart">Heart</option>
+                        <option value="check">Check (✓)</option>
+                        <option value="dot">Dot</option>
+                      </select>
+                    </div>
+                  </>
+                ) : (
+                  <div className="relative">
+                    <textarea
+                      value={draft.landingContent?.energyParagraph ?? ""}
+                      onChange={(e) => updateLandingContent("energyParagraph", e.target.value)}
+                      placeholder="Full paragraph for this section. Line breaks are kept on the live page."
+                      rows={6}
+                      className="w-full px-3 py-1.5 pr-12 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                    />
+                    <div className="absolute right-2 top-1.5">
+                      <EmojiButton
+                        onSelect={(emoji) => {
+                          setDraft((prev) => {
+                            const lc = prev.landingContent ?? DEFAULT_LANDING_CONTENT;
+                            return {
+                              ...prev,
+                              landingContent: {
+                                ...lc,
+                                energyParagraph: (lc.energyParagraph ?? "") + emoji,
+                              },
+                            };
+                          });
+                        }}
+                      />
+                    </div>
                   </div>
-                </div>
-                <div className="mt-2">
-                  <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Bullet style for each line</label>
-                  <select
-                    className="w-full px-2 py-1.5 text-xs border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                    value={draft.landingContent?.energyLinesMarker ?? "heart"}
-                    onChange={(e) =>
-                      updateLandingContent("energyLinesMarker", e.target.value as LandingSectionListMarker)
-                    }
-                  >
-                    <option value="none">None — plain lines</option>
-                    <option value="heart">Heart</option>
-                    <option value="check">Check (✓)</option>
-                    <option value="dot">Dot</option>
-                  </select>
-                </div>
+                )}
                 <div className="mt-2">
                   <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
                     Closing line (bold, accent color — optional)
@@ -2174,7 +2407,9 @@ export const MyPageBuilder: React.FC = () => {
                     className="w-full px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                   />
                 </div>
-                <p className="text-xs text-gray-400 mt-1">One line per row in the box above.</p>
+                {(draft.landingContent?.energyBodyMode ?? "bullets") === "bullets" ? (
+                  <p className="text-xs text-gray-400 mt-1">Bullets: one row per line in the box above.</p>
+                ) : null}
               </div>
 
               {/* Boundary Section */}

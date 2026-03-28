@@ -135,7 +135,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const legal = creatorData?.legal || undefined;
     const monetization = creatorData?.monetization || undefined;
     const textStyles = creatorData?.textStyles || undefined;
-    const feedSettings = (creatorData?.feedSettings as { hideLikeCounts?: boolean; hideComments?: boolean; hideLikes?: boolean } | undefined) || undefined;
+    const feedSettings = (
+      creatorData?.feedSettings as
+        | { hideLikeCounts?: boolean; hideComments?: boolean; hideLikes?: boolean; hideTipButton?: boolean }
+        | undefined
+    ) || undefined;
     const publicTreatsOnLanding = creatorData?.publicTreatsOnLanding === true;
     const fanAuthBranding = creatorData?.fanAuthBranding || undefined;
 
@@ -199,6 +203,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         hideLikeCounts: !!feedSettings.hideLikeCounts,
         hideComments: !!feedSettings.hideComments,
         hideLikes: !!feedSettings.hideLikes,
+        hideTipButton: !!feedSettings.hideTipButton,
       } : undefined,
       publicTreatsOnLanding,
       fanAuthBranding,

@@ -101,7 +101,7 @@ export type StorefrontCreator = {
   rules?: { boundariesText?: string };
   spicyMode?: boolean;
   monetization?: CreatorMonetization;
-  feedSettings?: { hideLikeCounts?: boolean; hideComments?: boolean; hideLikes?: boolean };
+  feedSettings?: { hideLikeCounts?: boolean; hideComments?: boolean; hideLikes?: boolean; hideTipButton?: boolean };
   heroMedia?: {
     url: string;
     size?: "small" | "medium" | "large" | "fullBackground";
@@ -2270,10 +2270,11 @@ export const FanStorefrontView: React.FC = () => {
         backgroundColor: bg,
         "--fan-primary": primary,
         "--fan-accent": primary,
+        "--fan-accent-soft": `color-mix(in srgb, ${primary} 14%, transparent)`,
         "--fan-accent-hover": theme?.accentHover ?? primary,
         "--fan-bg": bg,
         "--fan-text": theme?.text || "#1f2937",
-        "--fan-border": theme?.border || "rgba(201, 112, 130, 0.2)",
+        "--fan-border": theme?.border || "#e5e7eb",
       } as React.CSSProperties}
     >
       <ReportProblemModal
@@ -2481,7 +2482,9 @@ export const FanStorefrontView: React.FC = () => {
         <div
           className={`fan-member-content ${
             activeTab === "profile" ? "fan-member-content--settings" : ""
-          } ${activeTab === "feed" ? "fan-member-content--feed" : ""}`}
+          } ${activeTab === "feed" ? "fan-member-content--feed" : ""}${
+            activeTab === "saved" ? " fan-member-content--feed-column" : ""
+          }`}
         >
             {activeTab === "feed" && !needsPaidUpgrade && (
               <FanMemberFeed
@@ -2504,6 +2507,7 @@ export const FanStorefrontView: React.FC = () => {
                 primary={primary}
                 feedSettings={creator.feedSettings}
                 fanId={auth.currentUser?.uid}
+                onBackToFeed={() => setActiveTab("feed")}
               />
             )}
             {activeTab === "treats" && (

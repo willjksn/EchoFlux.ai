@@ -953,13 +953,13 @@ export const OnlyFansSextingSession: React.FC = () => {
                     </div>
 
         {/* Content Spiciness Slider */}
-        <div className="chat-session-spiciness-wrap" style={{ marginTop: '1rem', padding: '0.75rem', background: 'rgba(236, 72, 153, 0.1)', borderRadius: '0.5rem', border: '1px solid rgba(236, 72, 153, 0.3)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
-            <span style={{ fontSize: '0.875rem', fontWeight: 500, color: 'rgb(190, 24, 93)', display: 'flex', alignItems: 'center', gap: '0.375rem' }}>
+        <div className="chat-session-spiciness-wrap">
+          <div className="flex items-center justify-between mb-2">
+            <span className="chat-session-spiciness-title">
               <span>🌶️</span>
               Content Spiciness: {SPICINESS_LABELS[contentSpiciness - 1]}
             </span>
-            <span style={{ fontSize: '0.75rem', color: 'rgb(219, 39, 119)' }}>{contentSpiciness}/10</span>
+            <span className="chat-session-spiciness-value">{contentSpiciness}/10</span>
           </div>
           <input
             type="range"
@@ -967,12 +967,9 @@ export const OnlyFansSextingSession: React.FC = () => {
             max={10}
             value={contentSpiciness}
             onChange={(e) => setContentSpiciness(Number(e.target.value))}
-            style={{ width: '100%', height: '0.5rem', borderRadius: '0.25rem', cursor: 'pointer', accentColor: 'rgb(236, 72, 153)' }}
           />
-          <p style={{ fontSize: '0.75rem', color: 'rgb(219, 39, 119)', marginTop: '0.25rem' }}>
-            Adjust how bold the AI chat responses are
-          </p>
-                </div>
+          <p className="chat-session-spiciness-hint">Adjust how bold the AI chat responses are</p>
+        </div>
 
         {/* Start Button */}
                 <button

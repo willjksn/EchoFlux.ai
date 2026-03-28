@@ -237,22 +237,37 @@ export interface StorefrontSocialLinks {
 /** How each optional list row is prefixed on the public landing (builder-controlled). */
 export type LandingSectionListMarker = 'none' | 'heart' | 'check' | 'dot';
 
+/** Extra body under a section: one bullet per line, or a single paragraph (line breaks preserved). */
+export type LandingSectionBodyMode = 'bullets' | 'paragraph';
+
 /** Landing page content sections (editable by creator) */
 export interface StorefrontLandingContent {
     perksTitle?: string;        // "Why This Exists" section title
     perksText?: string;         // Main text for perks section
     perksList?: string[];       // Bullet points list
+    /** When `paragraph`, `perksParagraph` is shown instead of `perksList`. Default: bullets. */
+    perksExtraMode?: LandingSectionBodyMode;
+    /** Multi-line body when `perksExtraMode` is `paragraph`. */
+    perksParagraph?: string;
     /** List icon for `perksList` rows. Default: none (plain lines). */
     perksListMarker?: LandingSectionListMarker;
     previewTitle?: string;      // "What You Get" section title
     previewText?: string;       // Main text for preview section
     previewList?: string[];     // Features list
+    /** When `paragraph`, `previewParagraph` is shown instead of `previewList`. Default: bullets. */
+    previewExtraMode?: LandingSectionBodyMode;
+    /** Multi-line body when `previewExtraMode` is `paragraph`. */
+    previewParagraph?: string;
     /** List icon for `previewList` rows. Default when unset: heart (legacy). */
     previewListMarker?: LandingSectionListMarker;
     /** Italic lines below the list (e.g. disclaimers). One string per line. */
     previewFooterLines?: string[];
     energyTitle?: string;       // "The Energy" testimonial section title
     energyLines?: string[];     // Array of energy/vibe lines
+    /** When `paragraph`, `energyParagraph` is shown instead of `energyLines`. Default: bullets. */
+    energyBodyMode?: LandingSectionBodyMode;
+    /** Multi-line body when `energyBodyMode` is `paragraph`. */
+    energyParagraph?: string;
     /** Optional bold accent line below the list (sans, primary color), e.g. "And that is different." */
     energyClosingLine?: string;
     /** List icon for `energyLines` rows. Default when unset: heart (legacy). */

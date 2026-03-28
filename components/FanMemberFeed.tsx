@@ -28,6 +28,55 @@ import { feedCommentAuthorLabel, feedCommentAuthorInitial } from "../src/lib/fee
 const SAVED_BY_CREATOR_KEY = "savedPostIdsByCreator";
 const INLINE_COMMENT_PREVIEW_MAX = 120;
 
+const FeedHeaderGridIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+    <rect x="3" y="3" width="7" height="7" rx="1" />
+    <rect x="14" y="3" width="7" height="7" rx="1" />
+    <rect x="3" y="14" width="7" height="7" rx="1" />
+    <rect x="14" y="14" width="7" height="7" rx="1" />
+  </svg>
+);
+
+/** Same chrome on main feed and Saved tab: left = feed↔saved, right = saved count */
+function FanFeedHeaderChrome({
+  savedCount,
+  onLeftClick,
+  leftTitle,
+  leftAriaLabel,
+  savedLinkVariant,
+  onOpenSaved,
+}: {
+  savedCount: number;
+  onLeftClick: () => void;
+  leftTitle: string;
+  leftAriaLabel: string;
+  savedLinkVariant: "go-to-saved" | "current-saved";
+  onOpenSaved?: () => void;
+}) {
+  return (
+    <div className="fan-hub-feed-chrome -mx-1 mb-1">
+      <div className="feed-header-wrap">
+        <div className="feed-header">
+          <button type="button" className="feed-view-toggle" title={leftTitle} aria-label={leftAriaLabel} onClick={onLeftClick}>
+            <FeedHeaderGridIcon />
+          </button>
+          <div className="feed-header-right">
+            {savedLinkVariant === "go-to-saved" ? (
+              <button type="button" className="feed-saved-link" onClick={() => onOpenSaved?.()}>
+                Saved Posts ({savedCount})
+              </button>
+            ) : (
+              <span className="feed-saved-link feed-saved-link--current" aria-current="page">
+                Saved Posts ({savedCount})
+              </span>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function getInlineCommentPreview(text: string): { preview: string; truncated: boolean } {
   const raw = String(text || "");
   if (raw.length <= INLINE_COMMENT_PREVIEW_MAX) {
@@ -109,6 +158,7 @@ export interface FanFeedVisibilitySettings {
   hideLikeCounts?: boolean;
   hideComments?: boolean;
   hideLikes?: boolean;
+  hideTipButton?: boolean;
 }
 
 interface FanMemberFeedProps {
@@ -488,6 +538,26 @@ function FanMemberPostMedia({
   );
 }
 
+/** Same storage paths as FanHubFeed: creators fanPosts, creators posts, users/{creatorId}/posts (+ demo IDs). */
+async function fetchMemberPostById(creatorId: string, postId: string): Promise<Post | null> {
+  if (!db) return null;
+  const demo = DEMO_POSTS.find((p) => p.id === postId);
+  if (demo) return demo;
+  const refs = [
+    doc(db, "creators", creatorId, "fanPosts", postId),
+    doc(db, "creators", creatorId, "posts", postId),
+    doc(db, "users", creatorId, "posts", postId),
+  ];
+  for (const ref of refs) {
+    const snap = await getDoc(ref);
+    if (snap.exists()) {
+      const p = postFromFirestore(snap.id, snap.data());
+      if (p) return p;
+    }
+  }
+  return null;
+}
+
 function useMemberPostDetail(creatorId: string | undefined, viewPostId: string | null) {
   const [detailPost, setDetailPost] = useState<Post | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
@@ -501,17 +571,7 @@ function useMemberPostDetail(creatorId: string | undefined, viewPostId: string |
     setDetailLoading(true);
     setDetailPost(null);
     try {
-      let found: Post | null = null;
-      for (const col of ["fanPosts", "posts"] as const) {
-        const snap = await getDoc(doc(db, "creators", creatorId, col, viewPostId));
-        if (snap.exists()) {
-          const p = postFromFirestore(snap.id, snap.data());
-          if (p) {
-            found = p;
-            break;
-          }
-        }
-      }
+      const found = await fetchMemberPostById(creatorId, viewPostId);
       setDetailPost(found);
     } finally {
       setDetailLoading(false);
@@ -800,30 +860,35 @@ export const FanMemberFeed: React.FC<FanMemberFeedProps> = ({
   const fetchPosts = useCallback(async () => {
     setLoading(true);
     try {
-      const tryCollections = [
-        collection(db, "creators", creatorId, "fanPosts"),
-        collection(db, "creators", creatorId, "posts"),
-      ];
-      let realPosts: Post[] = [];
-      for (const postsRef of tryCollections) {
-        const q = query(postsRef, orderBy("createdAt", "desc"), limit(20));
-        const snapshot = await getDocs(q);
-        const batch: Post[] = [];
-        snapshot.docs.forEach((docSnap) => {
-          const p = postFromFirestore(docSnap.id, docSnap.data());
-          if (p) batch.push(p);
-        });
-        batch.sort((a, b) => (a.pinned && !b.pinned ? -1 : !a.pinned && b.pinned ? 1 : 0));
-        if (batch.length > 0) {
-          realPosts = batch;
-          break;
+      const byId = new Map<string, Post>();
+      const tryMerge = async (path: [string, string, string]) => {
+        try {
+          const postsRef = collection(db, path[0], path[1], path[2]);
+          const q = query(postsRef, orderBy("createdAt", "desc"), limit(30));
+          const snapshot = await getDocs(q);
+          snapshot.docs.forEach((docSnap) => {
+            const p = postFromFirestore(docSnap.id, docSnap.data());
+            if (p) byId.set(p.id, p);
+          });
+        } catch {
+          /* missing index or permission */
         }
-      }
+      };
+      await tryMerge(["creators", creatorId, "fanPosts"]);
+      await tryMerge(["creators", creatorId, "posts"]);
+      await tryMerge(["users", creatorId, "posts"]);
 
-      if (realPosts.length === 0) {
+      const list = Array.from(byId.values());
+      list.sort((a, b) => {
+        if (a.pinned && !b.pinned) return -1;
+        if (!a.pinned && b.pinned) return 1;
+        return b.createdAt.getTime() - a.createdAt.getTime();
+      });
+
+      if (list.length === 0) {
         setPosts(DEMO_POSTS);
       } else {
-        setPosts(realPosts);
+        setPosts(list);
       }
     } catch (err) {
       console.error("Error fetching posts:", err);
@@ -988,32 +1053,14 @@ export const FanMemberFeed: React.FC<FanMemberFeedProps> = ({
 
   return (
     <div className="fan-member-feed">
-      <div className="fan-hub-feed-chrome -mx-1 mb-1">
-        <div className="feed-header-wrap">
-          <div className="feed-header">
-            <button
-              type="button"
-              className="feed-view-toggle"
-              title="Saved posts grid"
-              aria-label="Saved posts grid"
-              aria-pressed={false}
-              onClick={onOpenSaved}
-            >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <rect x="3" y="3" width="7" height="7" rx="1" />
-                <rect x="14" y="3" width="7" height="7" rx="1" />
-                <rect x="3" y="14" width="7" height="7" rx="1" />
-                <rect x="14" y="14" width="7" height="7" rx="1" />
-              </svg>
-            </button>
-            <div className="feed-header-right">
-              <button type="button" className="feed-saved-link" onClick={onOpenSaved}>
-                Saved Posts ({bookmarkedPosts.size})
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
+      <FanFeedHeaderChrome
+        savedCount={bookmarkedPosts.size}
+        onLeftClick={() => onOpenSaved?.()}
+        leftTitle="Open saved posts"
+        leftAriaLabel="Open saved posts"
+        savedLinkVariant="go-to-saved"
+        onOpenSaved={onOpenSaved}
+      />
 
       <div className="fan-feed-posts">
         {posts.length === 0 ? (
@@ -1075,10 +1122,12 @@ export const FanMemberFeed: React.FC<FanMemberFeedProps> = ({
                   </button>
                 )}
 
-                <button type="button" className="feed-card-send-tip">
-                  <span className="tip-currency">$</span>
-                  <span>SEND TIP</span>
-                </button>
+                {!feedSettings?.hideTipButton && (
+                  <button type="button" className="feed-card-send-tip">
+                    <span className="tip-currency">$</span>
+                    <span>SEND TIP</span>
+                  </button>
+                )}
 
                 <button
                   type="button"
@@ -1217,6 +1266,8 @@ interface FanMemberSavedProps {
   primary?: string;
   feedSettings?: FanFeedVisibilitySettings;
   fanId: string | undefined;
+  /** Return to main feed (same control as grid on feed opens Saved) */
+  onBackToFeed: () => void;
 }
 
 export const FanMemberSaved: React.FC<FanMemberSavedProps> = ({
@@ -1227,6 +1278,7 @@ export const FanMemberSaved: React.FC<FanMemberSavedProps> = ({
   primary = "#6366f1",
   feedSettings,
   fanId,
+  onBackToFeed,
 }) => {
   const avatarCropStyle: React.CSSProperties = getAvatarCropStyle(avatarObjectPosition);
   const creatorAvatarSrc = typeof avatar === "string" && avatar.trim() ? avatar.trim() : undefined;
@@ -1238,6 +1290,7 @@ export const FanMemberSaved: React.FC<FanMemberSavedProps> = ({
   const { detailPost, detailLoading, reload: reloadDetailPost } = useMemberPostDetail(creatorId, viewPostId);
   const [fanPublicProfile, setFanPublicProfile] = useState<{ photoURL?: string; displayName?: string }>({});
   const [expandedInlineCommentKeys, setExpandedInlineCommentKeys] = useState<Set<string>>(new Set());
+  const [savedBookmarkCount, setSavedBookmarkCount] = useState(0);
 
   useEffect(() => {
     if (!fanId || !db) {
@@ -1285,6 +1338,7 @@ export const FanMemberSaved: React.FC<FanMemberSavedProps> = ({
         byCreator[creatorId] = current.filter((id) => id !== postId);
         await setDoc(userRef, { [SAVED_BY_CREATOR_KEY]: byCreator }, { merge: true });
         setPosts((prev) => prev.filter((p) => p.id !== postId));
+        setSavedBookmarkCount((c) => Math.max(0, c - 1));
       } catch (err) {
         console.error("Failed to unsave", err);
       } finally {
@@ -1297,6 +1351,7 @@ export const FanMemberSaved: React.FC<FanMemberSavedProps> = ({
   useEffect(() => {
     if (!fanId || !creatorId || !db) {
       setPosts([]);
+      setSavedBookmarkCount(0);
       setLoading(false);
       return;
     }
@@ -1308,26 +1363,16 @@ export const FanMemberSaved: React.FC<FanMemberSavedProps> = ({
         const data = (snap.exists() ? snap.data() : {}) as Record<string, unknown>;
         const byCreator = (data[SAVED_BY_CREATOR_KEY] as Record<string, string[]>) || {};
         const ids = byCreator[creatorId];
+        const n = Array.isArray(ids) ? ids.length : 0;
+        setSavedBookmarkCount(n);
         if (!Array.isArray(ids) || ids.length === 0) {
           setPosts([]);
           setLoading(false);
           return;
         }
-        return Promise.all(
-          ids.map(async (postId) => {
-            const fanPostSnap = await getDoc(doc(db!, "creators", creatorId, "fanPosts", postId));
-            if (fanPostSnap.exists()) return { postId, snap: fanPostSnap };
-            const legacySnap = await getDoc(doc(db!, "creators", creatorId, "posts", postId));
-            return { postId, snap: legacySnap };
-          })
-        ).then((results) => {
+        return Promise.all(ids.map((postId) => fetchMemberPostById(creatorId, postId))).then((resolved) => {
           if (cancelled) return;
-          const list: Post[] = [];
-          results.forEach(({ postId, snap }) => {
-            if (!snap.exists()) return;
-            const p = postFromFirestore(postId, snap.data());
-            if (p) list.push(p);
-          });
+          const list = resolved.filter((p): p is Post => p != null);
           list.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
           setPosts(list);
         });
@@ -1357,18 +1402,33 @@ export const FanMemberSaved: React.FC<FanMemberSavedProps> = ({
 
   if (loading) {
     return (
-      <div className="fan-feed-loading">
-        <div className="fan-feed-spinner" />
-        <p>Loading saved posts...</p>
+      <div className="fan-member-feed">
+        <FanFeedHeaderChrome
+          savedCount={savedBookmarkCount}
+          onLeftClick={onBackToFeed}
+          leftTitle="Back to feed"
+          leftAriaLabel="Back to feed"
+          savedLinkVariant="current-saved"
+        />
+        <div className="fan-feed-loading">
+          <div className="fan-feed-spinner" />
+          <p>Loading saved posts...</p>
+        </div>
       </div>
     );
   }
 
   return (
     <div className="fan-member-feed">
-      <div className="fan-feed-header">
-        <h2 className="fan-feed-title">Saved</h2>
-        <p className="fan-feed-subtitle">Posts you saved from {displayName}</p>
+      <FanFeedHeaderChrome
+        savedCount={savedBookmarkCount}
+        onLeftClick={onBackToFeed}
+        leftTitle="Back to feed"
+        leftAriaLabel="Back to feed"
+        savedLinkVariant="current-saved"
+      />
+      <div className="fan-feed-header pt-1">
+        <p className="fan-feed-subtitle m-0 text-center">Posts you saved from {displayName}</p>
       </div>
       <div className="fan-feed-posts">
         {posts.length === 0 ? (

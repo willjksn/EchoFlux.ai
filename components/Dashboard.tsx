@@ -2,7 +2,7 @@ import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { MessageCard } from './MessageCard';
 import { Platform, Message, DashboardFilters, MessageType, CalendarEvent, MessageCategory, SocialStats, Plan } from '../types';
 import { InstagramIcon, TikTokIcon, XIcon, ThreadsIcon, YouTubeIcon, LinkedInIcon, FacebookIcon, PinterestIcon } from './icons/PlatformIcons';
-import { DashboardIcon, FlagIcon, SearchIcon, StarIcon, CalendarIcon, SparklesIcon, TrendingIcon, CheckCircleIcon, UserIcon, ArrowUpCircleIcon, KanbanIcon, BriefcaseIcon, LinkIcon, RocketIcon, ArrowUpIcon, ChatIcon, DollarSignIcon, HeartIcon, TargetIcon } from './icons/UIIcons';
+import { DashboardIcon, FlagIcon, SearchIcon, StarIcon, CalendarIcon, SparklesIcon, TrendingIcon, CheckCircleIcon, UserIcon, ArrowUpCircleIcon, KanbanIcon, BriefcaseIcon, LinkIcon, ArrowUpIcon, ChatIcon, DollarSignIcon, HeartIcon, TargetIcon } from './icons/UIIcons';
 import { useAppContext } from './AppContext';
 import { updateUserSocialStats } from '../src/services/socialStatsService';
 import { auth, db } from '../firebaseConfig';
@@ -253,10 +253,6 @@ export const Dashboard: React.FC = () => {
   const [selectedCategory, setSelectedCategory] = useState<'trending' | 'engagement' | 'niche' | null>(null);
   const [showIdeasModal, setShowIdeasModal] = useState(false);
 
-  // Dashboard mode: Social (default) / Monetized (Premium Studio only; Pro sees upgrade when selecting Monetized)
-  const [dashboardMode, setDashboardMode] = useState<'social' | 'monetized'>('social');
-  const hasMonetizedAccess = user?.plan === 'Elite' || user?.plan === 'Agency' || user?.plan === 'OnlyFansStudio';
-  const isPro = user?.plan === 'Pro';
   const hasFanHubAccess = ['Pro', 'Elite', 'Agency'].includes(user?.plan ?? '');
 
   // Admin-only daily dashboard flag & lightweight metrics
@@ -3290,122 +3286,9 @@ export const Dashboard: React.FC = () => {
     return renderAdminDashboardView();
   }
 
-  const handleMonetizedClick = () => {
-    setDashboardMode('monetized');
-  };
-
-  const navigateToStudioTab = (tab: string) => {
-    setActivePage('onlyfansStudio');
-    if (typeof window !== 'undefined') {
-      window.history.pushState({}, '', `/studio?tab=${encodeURIComponent(tab)}`);
-    }
-  };
-
-  // Monetized mode: Pro sees Fan Hub cards; Elite/Agency/OnlyFansStudio see all cards including Premium Studio features
-  const showMonetizedCards = dashboardMode === 'monetized' && (hasMonetizedAccess || hasFanHubAccess);
-  const hasPremiumStudioFeatures = hasMonetizedAccess; // Drops & PPV, Funnel Teasers are Elite+ only
-
-  const ELITE_ONLY_BULLETS = [
-    'Drops & PPV',
-    'Funnel Teasers',
-    'Persona',
-    'Prompts',
-    'Money Calendar',
-  ];
-
   return (
     <div id="tour-step-1-dashboard" className="space-y-6 max-w-7xl mx-auto w-full">
-      {/* Dashboard Mode Toggle: Social / Monetized (Pro sees upgrade when selecting Monetized) */}
-      {!isAdmin && (hasMonetizedAccess || isPro) && (
-        <div className="flex items-center gap-2 p-2 rounded-lg bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 w-fit">
-          <button
-            type="button"
-            onClick={() => setDashboardMode('social')}
-            className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${dashboardMode === 'social' ? 'bg-primary-600 text-white' : 'text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700'}`}
-          >
-            Social
-          </button>
-          <button
-            type="button"
-            onClick={handleMonetizedClick}
-            className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${dashboardMode === 'monetized' ? 'bg-primary-600 text-white' : 'text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700'}`}
-          >
-            Monetized
-          </button>
-        </div>
-      )}
-
-      {/* Monetized mode: Show cards based on plan access */}
-      {showMonetizedCards && (
-        <div className="space-y-4">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {/* Elite+ only: Drops & PPV */}
-            {hasPremiumStudioFeatures && (
-              <button type="button" onClick={() => navigateToStudioTab('drops')} className="flex flex-col items-start p-5 rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 hover:shadow-md transition-all text-left">
-                <SparklesIcon className="w-8 h-8 text-primary-600 dark:text-primary-400 mb-2" />
-                <span className="font-semibold text-gray-900 dark:text-white">Drops & PPV</span>
-                <span className="text-sm text-gray-500 dark:text-gray-400 mt-1">Plan and price drops</span>
-              </button>
-            )}
-            {/* Pro+ : DM Session */}
-            <button type="button" onClick={() => setActivePage('fanHub')} className="flex flex-col items-start p-5 rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 hover:shadow-md transition-all text-left">
-              <ChatIcon className="w-8 h-8 text-primary-600 dark:text-primary-400 mb-2" />
-              <span className="font-semibold text-gray-900 dark:text-white">DM Session</span>
-              <span className="text-sm text-gray-500 dark:text-gray-400 mt-1">Fan messages & engagement</span>
-            </button>
-            {/* Elite+ only: Funnel Teasers */}
-            {hasPremiumStudioFeatures && (
-              <button type="button" onClick={() => navigateToStudioTab('teasers')} className="flex flex-col items-start p-5 rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 hover:shadow-md transition-all text-left">
-                <RocketIcon className="w-8 h-8 text-primary-600 dark:text-primary-400 mb-2" />
-                <span className="font-semibold text-gray-900 dark:text-white">Funnel Teasers</span>
-                <span className="text-sm text-gray-500 dark:text-gray-400 mt-1">IG/X/TikTok teasers + CTAs</span>
-              </button>
-            )}
-            {/* Pro+ : Fans */}
-            <button type="button" onClick={() => setActivePage('fanHub')} className="flex flex-col items-start p-5 rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 hover:shadow-md transition-all text-left">
-              <UserIcon className="w-8 h-8 text-primary-600 dark:text-primary-400 mb-2" />
-              <span className="font-semibold text-gray-900 dark:text-white">Fans</span>
-              <span className="text-sm text-gray-500 dark:text-gray-400 mt-1">Top fans & notes</span>
-            </button>
-            {/* Pro+ : Analytics */}
-            <button type="button" onClick={() => setActivePage('fanHub')} className="flex flex-col items-start p-5 rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 hover:shadow-md transition-all text-left">
-              <TrendingIcon className="w-8 h-8 text-primary-600 dark:text-primary-400 mb-2" />
-              <span className="font-semibold text-gray-900 dark:text-white">Analytics</span>
-              <span className="text-sm text-gray-500 dark:text-gray-400 mt-1">What&apos;s working</span>
-            </button>
-            {/* Pro+ : Payouts */}
-            <button type="button" onClick={() => setActivePage('fanHub')} className="flex flex-col items-start p-5 rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 hover:shadow-md transition-all text-left">
-              <DollarSignIcon className="w-8 h-8 text-primary-600 dark:text-primary-400 mb-2" />
-              <span className="font-semibold text-gray-900 dark:text-white">Payouts</span>
-              <span className="text-sm text-gray-500 dark:text-gray-400 mt-1">Connect & manage payouts</span>
-            </button>
-          </div>
-          
-          {/* Pro users: Show upgrade prompt for Elite features */}
-          {!hasPremiumStudioFeatures && (
-            <div className="bg-gradient-to-r from-primary-50 to-indigo-50 dark:from-primary-900/20 dark:to-indigo-900/20 rounded-xl border border-primary-200 dark:border-primary-700 p-4">
-              <div className="flex items-start gap-3">
-                <SparklesIcon className="w-6 h-6 text-primary-600 dark:text-primary-400 flex-shrink-0 mt-0.5" />
-                <div className="flex-1">
-                  <h3 className="font-semibold text-gray-900 dark:text-white text-sm">Unlock Premium Studio</h3>
-                  <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
-                    Upgrade to Elite for {ELITE_ONLY_BULLETS.join(', ')}, and more.
-                  </p>
-                  <button
-                    type="button"
-                    onClick={() => openPaymentModal?.({ name: 'Elite', price: 79, cycle: 'monthly' })}
-                    className="mt-2 px-3 py-1.5 bg-primary-600 text-white text-xs font-semibold rounded-lg hover:bg-primary-700 transition-colors"
-                  >
-                    Upgrade to Elite
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-
-      {dashboardMode === 'social' && renderCommandCenter()}
+      {renderCommandCenter()}
     </div>
   );
 };

@@ -81,7 +81,7 @@ const formatTime = (isoString: string) => {
 const statusColors: Record<string, string> = {
   pending: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400",
   accepted: "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400",
-  active: "bg-indigo-100 text-indigo-800 dark:bg-indigo-900/30 dark:text-indigo-400 animate-pulse",
+  active: "fh-live-session-active animate-pulse",
   completed: "bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300",
   declined: "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400",
   expired: "bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-500",
@@ -484,7 +484,7 @@ export const LiveVideoChatManager: React.FC<LiveVideoChatManagerProps> = ({
   if (loading) {
     return (
       <div className="p-6 text-center text-gray-500 dark:text-gray-400">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-500 mx-auto mb-2"></div>
+        <div className="animate-spin rounded-full h-8 w-8 border-2 fh-live-spinner mx-auto mb-2" />
         Loading video chat requests...
       </div>
     );
@@ -499,7 +499,7 @@ export const LiveVideoChatManager: React.FC<LiveVideoChatManagerProps> = ({
     }
 
     return (
-      <div className="bg-gradient-to-br from-indigo-500 to-violet-600 rounded-xl p-4 text-white">
+      <div className="fh-live-compact-widget">
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
             <VideoIcon />
@@ -553,7 +553,7 @@ export const LiveVideoChatManager: React.FC<LiveVideoChatManagerProps> = ({
       <div className="p-4 border-b border-gray-200 dark:border-gray-700">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center text-white">
+            <div className="w-10 h-10 fh-live-avatar-icon">
               <VideoIcon />
             </div>
             <div>
@@ -600,13 +600,13 @@ export const LiveVideoChatManager: React.FC<LiveVideoChatManagerProps> = ({
                 onClick={() => setFilter(f)}
                 className={`px-3 py-1.5 rounded-lg text-sm font-medium transition ${
                   filter === f
-                    ? "bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400"
+                    ? "fh-live-filter-active"
                     : "bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600"
                 }`}
               >
                 {f.charAt(0).toUpperCase() + f.slice(1)}
                 {f === "pending" && pendingCount > 0 && (
-                  <span className="ml-1.5 bg-indigo-500 text-white px-1.5 py-0.5 rounded-full text-xs">
+                  <span className="ml-1.5 fh-live-badge-count px-1.5 py-0.5 rounded-full text-xs">
                     {pendingCount}
                   </span>
                 )}
@@ -617,7 +617,7 @@ export const LiveVideoChatManager: React.FC<LiveVideoChatManagerProps> = ({
           {/* Start Instant Call Button */}
           <button
             onClick={() => setShowInstantCallModal(true)}
-            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-gradient-to-r from-indigo-500 to-violet-500 text-white text-sm font-medium hover:from-indigo-600 hover:to-violet-600 transition shadow-md"
+            className="fh-live-gradient-btn flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition shadow-md"
           >
             <PhoneIcon />
             <span>Start Instant Call</span>
@@ -682,7 +682,7 @@ export const LiveVideoChatManager: React.FC<LiveVideoChatManagerProps> = ({
                       <button
                         onClick={() => handleAccept(session)}
                         disabled={actionLoading === session.id}
-                        className="px-3 py-2 text-sm font-medium text-white bg-gradient-to-r from-indigo-500 to-violet-600 hover:from-indigo-600 hover:to-violet-700 rounded-lg transition disabled:opacity-50"
+                        className="fh-live-gradient-btn px-3 py-2 text-sm font-medium rounded-lg transition disabled:opacity-50"
                       >
                         {actionLoading === session.id ? "..." : "Accept"}
                       </button>
@@ -716,7 +716,7 @@ export const LiveVideoChatManager: React.FC<LiveVideoChatManagerProps> = ({
             <div className="p-6 border-b border-gray-200 dark:border-gray-700">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-full bg-gradient-to-br from-indigo-500 to-violet-500 flex items-center justify-center text-white">
+                  <div className="w-10 h-10 fh-live-avatar-icon">
                     <VideoIcon />
                   </div>
                   <h3 className="text-lg font-bold text-gray-900 dark:text-white">
@@ -759,7 +759,7 @@ export const LiveVideoChatManager: React.FC<LiveVideoChatManagerProps> = ({
                       onFocus={() => setFanDropdownOpen(true)}
                       placeholder={fansLoading ? "Loading fans..." : "Start typing fan name or email..."}
                       disabled={fansLoading}
-                      className="w-full pl-10 pr-10 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition"
+                      className="w-full pl-10 pr-10 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white fh-live-input transition"
                       autoComplete="off"
                     />
                     {fanSearchQuery && (
@@ -795,9 +795,9 @@ export const LiveVideoChatManager: React.FC<LiveVideoChatManagerProps> = ({
                                   handleSelectFan(fan);
                                   setFanSearchQuery(fan.listLabel || fan.email || fan.id);
                                 }}
-                                className="w-full text-left px-4 py-3 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition flex items-center gap-3"
+                                className="w-full text-left px-4 py-3 fh-live-dropdown-item transition flex items-center gap-3"
                               >
-                                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-indigo-100 to-violet-100 dark:from-indigo-900/30 dark:to-violet-900/30 flex items-center justify-center text-indigo-600 dark:text-indigo-400 flex-shrink-0 font-semibold">
+                                <div className="w-10 h-10 fh-live-fan-chip-avatar text-sm flex-shrink-0">
                                   {(fan.listLabel || fan.email || "?")[0].toUpperCase()}
                                 </div>
                                 <div className="min-w-0 flex-1">
@@ -822,9 +822,9 @@ export const LiveVideoChatManager: React.FC<LiveVideoChatManagerProps> = ({
 
               {/* Selected Fan Card */}
               {selectedFan && (
-                <div className="p-4 rounded-xl bg-gradient-to-br from-indigo-50 to-violet-50 dark:from-indigo-900/20 dark:to-violet-900/20 border border-indigo-200 dark:border-indigo-800">
+                <div className="fh-live-selected-card">
                   <div className="flex items-center gap-4">
-                    <div className="w-14 h-14 rounded-full bg-gradient-to-br from-indigo-400 to-violet-500 flex items-center justify-center text-white text-xl font-bold shadow-lg">
+                    <div className="w-14 h-14 fh-live-avatar-icon text-xl font-bold shadow-lg">
                       {(selectedFan.listLabel || selectedFan.email || "?")[0].toUpperCase()}
                     </div>
                     <div className="flex-1 min-w-0">
@@ -836,7 +836,7 @@ export const LiveVideoChatManager: React.FC<LiveVideoChatManagerProps> = ({
                           {selectedFan.email}
                         </p>
                       )}
-                      <p className="text-xs text-indigo-600 dark:text-indigo-400 mt-1 flex items-center gap-1">
+                      <p className="text-xs fh-live-accent-text mt-1 flex items-center gap-1">
                         <CheckIcon />
                         Ready for video call
                       </p>
@@ -865,7 +865,7 @@ export const LiveVideoChatManager: React.FC<LiveVideoChatManagerProps> = ({
                 <select
                   value={instantCallDuration}
                   onChange={(e) => setInstantCallDuration(Number(e.target.value))}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white fh-live-input"
                 >
                   <option value={5}>5 minutes</option>
                   <option value={10}>10 minutes</option>
@@ -894,7 +894,7 @@ export const LiveVideoChatManager: React.FC<LiveVideoChatManagerProps> = ({
               <button
                 onClick={handleStartInstantCall}
                 disabled={startingInstantCall || !instantCallFanId.trim()}
-                className="flex-1 px-4 py-2 bg-gradient-to-r from-indigo-500 to-violet-500 text-white rounded-lg hover:from-indigo-600 hover:to-violet-600 transition font-medium disabled:opacity-50 flex items-center justify-center gap-2"
+                className="fh-live-gradient-btn flex-1 px-4 py-2 rounded-lg transition font-medium disabled:opacity-50 flex items-center justify-center gap-2"
               >
                 {startingInstantCall ? (
                   <>

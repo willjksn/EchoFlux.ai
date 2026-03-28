@@ -70,6 +70,7 @@ export type FeedVisibilitySettings = {
   hideLikeCounts: boolean;
   hideComments: boolean;
   hideLikes: boolean;
+  hideTipButton: boolean;
   /** Elite: AI auto-reply to comments (max 2 replies per fan per post; random chance for non-supporters) */
   autoReplyAI?: boolean;
   /** Elite: 0–100, chance to reply to a comment when not from a tipper/buyer (e.g. 25 = 25%) */
@@ -431,6 +432,7 @@ function FeedCard({
   onToggleVisibility,
   onTogglePin,
   creatorThemePrimary,
+  hideTipButtons,
 }: {
   post: FeedPost;
   creatorName: string;
@@ -449,6 +451,8 @@ function FeedCard({
   onTogglePin?: (postId: string, currentlyPinned: boolean) => void;
   /** From `creators/{id}.theme.primary` — tints the multi-media count badge */
   creatorThemePrimary?: string;
+  /** Global creator visibility setting applied to all posts for fans. */
+  hideTipButtons?: boolean;
 }) {
   const countBadgeStyle = useMemo(
     () => feedCardCountThemedStyle(creatorThemePrimary),
@@ -951,7 +955,7 @@ function FeedCard({
               <span className="feed-card-action-count">{visibleComments.length}</span>
             </button>
           )}
-          {post.showTipButton !== false && !hasTipGoal && (
+          {post.showTipButton !== false && !hasTipGoal && !hideTipButtons && (
             <button
               type="button"
               className="feed-card-action-group feed-card-action-link feed-card-send-tip"
@@ -1068,7 +1072,7 @@ function FeedCard({
                 <span className="feed-card-action-count">{visibleComments.length}</span>
               </button>
             )}
-            {post.showTipButton !== false && !hasTipGoal && (
+            {post.showTipButton !== false && !hasTipGoal && !hideTipButtons && (
               <button
                 type="button"
                 className="feed-card-action-group feed-card-action-link feed-card-send-tip"
@@ -1276,6 +1280,7 @@ export const FanHubFeed: React.FC<{ isAdminMode?: boolean }> = ({ isAdminMode = 
     hideLikeCounts: false,
     hideComments: false,
     hideLikes: false,
+    hideTipButton: false,
     autoReplyAI: false,
     autoReplyChance: 25,
   });
@@ -1390,6 +1395,7 @@ export const FanHubFeed: React.FC<{ isAdminMode?: boolean }> = ({ isAdminMode = 
           hideLikeCounts: !!fs.hideLikeCounts,
           hideComments: !!fs.hideComments,
           hideLikes: !!fs.hideLikes,
+          hideTipButton: !!fs.hideTipButton,
           autoReplyAI: !!fs.autoReplyAI,
           autoReplyChance: typeof fs.autoReplyChance === "number" ? Math.max(0, Math.min(100, fs.autoReplyChance)) : 25,
         });
@@ -1615,43 +1621,119 @@ export const FanHubFeed: React.FC<{ isAdminMode?: boolean }> = ({ isAdminMode = 
                 {visibilityOpen && (
                   <div className="feed-header-visibility-popover" aria-label="Visibility for fans">
                     <span className="feed-header-visibility-label">Visibility for fans</span>
-                    <label className="feed-header-checkbox">
-                      <input
-                        type="checkbox"
-                        checked={feedSettings.hideLikeCounts}
-                        onChange={(e) => saveFeedSettings({ ...feedSettings, hideLikeCounts: e.target.checked })}
-                      />
-                      <span>Hide like counts</span>
-                    </label>
-                    <label className="feed-header-checkbox">
-                      <input
-                        type="checkbox"
-                        checked={feedSettings.hideComments}
-                        onChange={(e) => saveFeedSettings({ ...feedSettings, hideComments: e.target.checked })}
-                      />
-                      <span>Hide comments</span>
-                    </label>
-                    <label className="feed-header-checkbox">
-                      <input
-                        type="checkbox"
-                        checked={feedSettings.hideLikes}
-                        onChange={(e) => saveFeedSettings({ ...feedSettings, hideLikes: e.target.checked })}
-                      />
-                      <span>Hide likes</span>
-                    </label>
+                    <div className="feed-header-toggle-row">
+                      <span className="feed-header-toggle-label">Like counts</span>
+                      <div className="feed-header-toggle-segment" role="group" aria-label="Like counts visibility">
+                        <button
+                          type="button"
+                          className={`feed-header-toggle-option${!feedSettings.hideLikeCounts ? " active" : ""}`}
+                          onClick={() => saveFeedSettings({ ...feedSettings, hideLikeCounts: false })}
+                          aria-pressed={!feedSettings.hideLikeCounts}
+                        >
+                          Show
+                        </button>
+                        <button
+                          type="button"
+                          className={`feed-header-toggle-option${feedSettings.hideLikeCounts ? " active" : ""}`}
+                          onClick={() => saveFeedSettings({ ...feedSettings, hideLikeCounts: true })}
+                          aria-pressed={feedSettings.hideLikeCounts}
+                        >
+                          Hide
+                        </button>
+                      </div>
+                    </div>
+                    <div className="feed-header-toggle-row">
+                      <span className="feed-header-toggle-label">Comments</span>
+                      <div className="feed-header-toggle-segment" role="group" aria-label="Comments visibility">
+                        <button
+                          type="button"
+                          className={`feed-header-toggle-option${!feedSettings.hideComments ? " active" : ""}`}
+                          onClick={() => saveFeedSettings({ ...feedSettings, hideComments: false })}
+                          aria-pressed={!feedSettings.hideComments}
+                        >
+                          Show
+                        </button>
+                        <button
+                          type="button"
+                          className={`feed-header-toggle-option${feedSettings.hideComments ? " active" : ""}`}
+                          onClick={() => saveFeedSettings({ ...feedSettings, hideComments: true })}
+                          aria-pressed={feedSettings.hideComments}
+                        >
+                          Hide
+                        </button>
+                      </div>
+                    </div>
+                    <div className="feed-header-toggle-row">
+                      <span className="feed-header-toggle-label">Likes</span>
+                      <div className="feed-header-toggle-segment" role="group" aria-label="Likes visibility">
+                        <button
+                          type="button"
+                          className={`feed-header-toggle-option${!feedSettings.hideLikes ? " active" : ""}`}
+                          onClick={() => saveFeedSettings({ ...feedSettings, hideLikes: false })}
+                          aria-pressed={!feedSettings.hideLikes}
+                        >
+                          Show
+                        </button>
+                        <button
+                          type="button"
+                          className={`feed-header-toggle-option${feedSettings.hideLikes ? " active" : ""}`}
+                          onClick={() => saveFeedSettings({ ...feedSettings, hideLikes: true })}
+                          aria-pressed={feedSettings.hideLikes}
+                        >
+                          Hide
+                        </button>
+                      </div>
+                    </div>
+                    <div className="feed-header-toggle-row">
+                      <span className="feed-header-toggle-label">Tip button</span>
+                      <div className="feed-header-toggle-segment" role="group" aria-label="Tip button visibility">
+                        <button
+                          type="button"
+                          className={`feed-header-toggle-option${!feedSettings.hideTipButton ? " active" : ""}`}
+                          onClick={() => saveFeedSettings({ ...feedSettings, hideTipButton: false })}
+                          aria-pressed={!feedSettings.hideTipButton}
+                        >
+                          Show
+                        </button>
+                        <button
+                          type="button"
+                          className={`feed-header-toggle-option${feedSettings.hideTipButton ? " active" : ""}`}
+                          onClick={() => saveFeedSettings({ ...feedSettings, hideTipButton: true })}
+                          aria-pressed={feedSettings.hideTipButton}
+                        >
+                          Hide
+                        </button>
+                      </div>
+                    </div>
                     {/* Elite: AI comment replies */}
                     <div className="feed-header-ai-replies mt-3 pt-3 border-t border-gray-200 dark:border-gray-600">
                       <span className="feed-header-visibility-label block mb-2">AI comment replies</span>
                       {canUseAIReplies ? (
                         <>
-                          <label className="feed-header-checkbox">
-                            <input
-                              type="checkbox"
-                              checked={!!feedSettings.autoReplyAI}
-                              onChange={(e) => saveFeedSettings({ ...feedSettings, autoReplyAI: e.target.checked })}
-                            />
-                            <span>Reply to comments with AI (your tone, max 2 per fan per post)</span>
-                          </label>
+                          <div className="feed-header-toggle-row">
+                            <span className="feed-header-toggle-label">AI replies</span>
+                            <div className="feed-header-toggle-segment" role="group" aria-label="AI comment replies">
+                              <button
+                                type="button"
+                                className={`feed-header-toggle-option${!!feedSettings.autoReplyAI ? " active" : ""}`}
+                                onClick={() => saveFeedSettings({ ...feedSettings, autoReplyAI: true })}
+                                aria-pressed={!!feedSettings.autoReplyAI}
+                              >
+                                On
+                              </button>
+                              <button
+                                type="button"
+                                className={`feed-header-toggle-option${!feedSettings.autoReplyAI ? " active" : ""}`}
+                                onClick={() => saveFeedSettings({ ...feedSettings, autoReplyAI: false })}
+                                aria-pressed={!feedSettings.autoReplyAI}
+                              >
+                                Off
+                              </button>
+                            </div>
+                          </div>
+                          <p className="feed-header-toggle-help">
+                            Uses your tone, max 2 replies per fan per post.
+                          </p>
                           {feedSettings.autoReplyAI && (
                             <div className="mt-2">
                               <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">
@@ -1719,6 +1801,7 @@ export const FanHubFeed: React.FC<{ isAdminMode?: boolean }> = ({ isAdminMode = 
                 onToggleVisibility={handleToggleVisibility}
                 onTogglePin={handleTogglePin}
                 creatorThemePrimary={creatorStorefront.themePrimary}
+                hideTipButtons={feedSettings.hideTipButton}
               />
             ))}
           </div>

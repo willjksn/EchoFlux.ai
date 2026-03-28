@@ -26,7 +26,7 @@ if (!getApps().length) {
 const useTestMode = process.env.STRIPE_USE_TEST_MODE === 'true' || process.env.STRIPE_USE_TEST_MODE === '1';
 
 const stripeSecretKey = useTestMode
-  ? (process.env.STRIPE_SECRET_KEY_Test || process.env.STRIPE_SECRET_KEY)
+  ? (process.env.STRIPE_SECRET_KEY_Test || process.env.STRIPE_SECRET_KEY_TEST || process.env.STRIPE_SECRET_KEY)
   : (process.env.STRIPE_SECRET_KEY_LIVE || process.env.STRIPE_SECRET_KEY);
 
 if (!stripeSecretKey) {

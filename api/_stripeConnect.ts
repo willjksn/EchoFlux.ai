@@ -10,7 +10,10 @@ const useTestMode =
   (process.env.STRIPE_USE_TEST_MODE || "").toString().toLowerCase().trim() === "1";
 
 const stripeSecretKey = useTestMode
-  ? (process.env.STRIPE_SECRET_KEY_Test || process.env.STRIPE_SECRET_KEY || null)
+  ? (process.env.STRIPE_SECRET_KEY_Test ||
+      process.env.STRIPE_SECRET_KEY_TEST ||
+      process.env.STRIPE_SECRET_KEY ||
+      null)
   : (process.env.STRIPE_SECRET_KEY_LIVE || process.env.STRIPE_SECRET_KEY || null);
 
 if (stripeSecretKey && useTestMode && !stripeSecretKey.startsWith("sk_test_")) {
