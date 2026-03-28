@@ -18,13 +18,15 @@ export type CreatorFanHubTheme = typeof DEFAULT_FAN_HUB_THEME;
 
 function mergeTheme(raw: Partial<CreatorStorefrontSettings["theme"]> | undefined): CreatorFanHubTheme {
   if (!raw) return { ...DEFAULT_FAN_HUB_THEME };
+  const primary = raw.primary || DEFAULT_FAN_HUB_THEME.primary;
   return {
-    primary: raw.primary || DEFAULT_FAN_HUB_THEME.primary,
+    primary,
     background: raw.background || DEFAULT_FAN_HUB_THEME.background,
     text: raw.text || DEFAULT_FAN_HUB_THEME.text,
     textMuted: raw.textMuted || DEFAULT_FAN_HUB_THEME.textMuted,
     border: raw.border || DEFAULT_FAN_HUB_THEME.border,
-    accentHover: raw.accentHover || DEFAULT_FAN_HUB_THEME.accentHover,
+    /** If unset in Firestore, follow primary — avoids default indigo while primary is brand pink/blue/etc. */
+    accentHover: raw.accentHover || primary,
     fontFamily: raw.fontFamily || undefined,
   };
 }

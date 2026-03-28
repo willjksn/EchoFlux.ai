@@ -5998,7 +5998,11 @@ button.treat-card:hover:not(:disabled) .treat-card-cta {
 }
 
 .purchases-filter-btn.active {
-  background: linear-gradient(135deg, var(--fan-primary, #6366f1), #8b5cf6);
+  background: linear-gradient(
+    135deg,
+    var(--fan-primary, #6366f1),
+    color-mix(in srgb, var(--fan-primary, #6366f1) 68%, #1e1b4b)
+  );
   color: #fff;
   border-color: transparent;
 }
@@ -7356,12 +7360,21 @@ button.treat-card:hover:not(:disabled) .treat-card-cta {
   border-radius: 0.5rem;
   border: none;
   background: color-mix(in srgb, var(--fan-primary, #6366f1) 12%, transparent);
-  color: var(--fan-accent-hover, var(--fan-primary, #6366f1));
+  color: color-mix(in srgb, var(--fan-primary, #6366f1) 72%, var(--fan-text, #1f2937));
   cursor: pointer;
   transition: background 0.15s ease, transform 0.1s ease;
 }
 .stormij-theme .fh-dm-sidebar-icon-btn:hover {
   background: color-mix(in srgb, var(--fan-primary, #6366f1) 22%, transparent);
+  color: var(--fan-primary, #6366f1);
+}
+.dark .stormij-theme .fh-dm-sidebar-icon-btn {
+  background: color-mix(in srgb, var(--fan-primary, #6366f1) 18%, #1f2937);
+  color: color-mix(in srgb, var(--fan-primary, #6366f1) 78%, #e2e8f0);
+}
+.dark .stormij-theme .fh-dm-sidebar-icon-btn:hover {
+  background: color-mix(in srgb, var(--fan-primary, #6366f1) 28%, #1f2937);
+  color: color-mix(in srgb, var(--fan-primary, #6366f1) 88%, #f8fafc);
 }
 .stormij-theme .fh-dm-sidebar-search {
   margin: 0.5rem 1rem 0.25rem;
@@ -7396,8 +7409,15 @@ button.treat-card:hover:not(:disabled) .treat-card-cta {
   cursor: pointer;
 }
 .stormij-theme .fh-dm-tab--active {
-  background: color-mix(in srgb, var(--fan-primary, #6366f1) 14%, transparent);
-  color: var(--fan-accent-hover, var(--fan-primary, #6366f1));
+  background: color-mix(in srgb, var(--fan-primary, #6366f1) 14%, #ffffff);
+  color: color-mix(in srgb, var(--fan-primary, #6366f1) 68%, var(--fan-text, #1f2937));
+}
+.dark .stormij-theme .fh-dm-tab {
+  color: #9ca3af;
+}
+.dark .stormij-theme .fh-dm-tab--active {
+  background: color-mix(in srgb, var(--fan-primary, #6366f1) 22%, #1f2937);
+  color: color-mix(in srgb, var(--fan-primary, #6366f1) 82%, #f1f5f9);
 }
 .stormij-theme .fh-dm-thread-row {
   display: flex;
