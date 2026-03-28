@@ -62,6 +62,13 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     // Merge defaults safely
                     const mergedUser: User = {
                         ...loaded,
+                        // Always trust Firebase Auth UID for path ownership checks.
+                        // If stored `id` is missing/stale, downstream listeners may hit
+                        // users/{wrong-id}/... and trigger permission-denied.
+                        id: fbUser.uid,
+                        email: loaded.email || fbUser.email || "",
+                        name: loaded.name || fbUser.displayName || "User",
+                        avatar: loaded.avatar || fbUser.photoURL || `https://picsum.photos/seed/${fbUser.uid}/100/100`,
                         settings: {
                             ...defaultSettings,
                             ...(loaded.settings || {}),

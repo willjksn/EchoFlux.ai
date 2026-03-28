@@ -72,6 +72,7 @@ interface FanLandingPageProps {
   onSubscribe: () => void;
   onJoinFree?: () => void;
   onOpenFanAuth?: (view: "login" | "signup") => void;
+  onLogout?: () => void;
   subscribing: boolean;
   joiningFree?: boolean;
   isLoggedIn: boolean;
@@ -151,6 +152,7 @@ export const FanLandingPage: React.FC<FanLandingPageProps> = ({
   onSubscribe,
   onJoinFree,
   onOpenFanAuth,
+  onLogout,
   subscribing,
   joiningFree = false,
   isLoggedIn,
@@ -308,6 +310,7 @@ export const FanLandingPage: React.FC<FanLandingPageProps> = ({
           isFreeAccess,
           onOpenSignup: openFanAuthSignup,
           onOpenLogin: openFanAuthLogin,
+          onLogout,
           onSubscribe,
           onJoinFree,
           subscribing,

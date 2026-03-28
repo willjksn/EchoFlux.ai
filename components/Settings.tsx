@@ -213,6 +213,7 @@ export const Settings: React.FC = () => {
     const [connectingPlatform, setConnectingPlatform] = useState<Platform | null>(null);
     const [showInstagramSetupModal, setShowInstagramSetupModal] = useState(false);
     const [showFacebookSetupModal, setShowFacebookSetupModal] = useState(false);
+    const [showConnectionGuideModal, setShowConnectionGuideModal] = useState(false);
     const [showCancelModal, setShowCancelModal] = useState(false);
     const [isCancelling, setIsCancelling] = useState(false);
     
@@ -901,10 +902,17 @@ export const Settings: React.FC = () => {
                                         );
                                     })}
                                 </div>
-                                <div className="mt-4 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
-                                    <p className="text-sm text-blue-800 dark:text-blue-200">
-                                        <strong>Note:</strong> You'll be redirected to authorize each platform.
+                                <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-700/30 px-4 py-3">
+                                    <p className="text-sm text-gray-600 dark:text-gray-300">
+                                        Need help connecting social accounts?
                                     </p>
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowConnectionGuideModal(true)}
+                                        className="px-3 py-1.5 text-sm font-semibold rounded-md bg-primary-600 text-white hover:bg-primary-700 transition-colors"
+                                    >
+                                        Connection requirements
+                                    </button>
                                 </div>
                                 {user?.role === 'Admin' && (
                                     <div className="mt-3 flex items-center justify-end">
@@ -1499,6 +1507,15 @@ Return only the rewritten personality description.
                                     <li>Then come back here and click "Proceed" below</li>
                                 </ol>
                             </div>
+
+                            <div className="p-4 bg-slate-50 dark:bg-slate-900/40 rounded-lg border border-slate-200 dark:border-slate-600">
+                                <p className="text-sm font-semibold text-gray-900 dark:text-white mb-1">
+                                    Why do I see extra Instagram accounts or Pages?
+                                </p>
+                                <p className="text-sm text-gray-600 dark:text-gray-400">
+                                    Meta lists everything your <strong>Facebook login</strong> can manage — not only this EchoFlux account. If you admin another Page, use another IG, or test apps for someone else, those can appear. Choose only the Page linked to <strong>your</strong> creator Instagram. Use Meta’s <strong>Log into another account</strong> if the wrong Facebook profile is active.
+                                </p>
+                            </div>
                             
                             <div className="flex gap-3 pt-4">
                                 <button
@@ -1555,6 +1572,15 @@ Return only the rewritten personality description.
                                     <li>Then come back here and click "Proceed" below</li>
                                 </ol>
                             </div>
+
+                            <div className="p-4 bg-slate-50 dark:bg-slate-900/40 rounded-lg border border-slate-200 dark:border-slate-600">
+                                <p className="text-sm font-semibold text-gray-900 dark:text-white mb-1">
+                                    Why do I see Pages that aren’t “mine” for this account?
+                                </p>
+                                <p className="text-sm text-gray-600 dark:text-gray-400">
+                                    Facebook shows every Page where <strong>you</strong> have a role (Admin, Editor, etc.). That can include a company app Page, a client Page, or a test Page — EchoFlux doesn’t choose the list. Pick only the Page you want for <strong>this</strong> creator. If you see the wrong Facebook identity at the top of Meta’s screen, use <strong>Log into another account</strong>.
+                                </p>
+                            </div>
                             
                             <div className="flex gap-3 pt-4">
                                 <button
@@ -1568,6 +1594,86 @@ Return only the rewritten personality description.
                                     className="flex-1 px-4 py-2 text-sm font-medium text-white bg-primary-600 rounded-lg hover:bg-primary-700 transition-colors"
                                 >
                                     Proceed to Connect
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+            {showConnectionGuideModal && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+                    <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-3xl w-full max-h-[90vh] overflow-y-auto">
+                        <div className="sticky top-0 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-6 py-4 flex items-center justify-between">
+                            <h3 className="text-xl font-bold text-gray-900 dark:text-white">Social connection requirements</h3>
+                            <button
+                                onClick={() => setShowConnectionGuideModal(false)}
+                                className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                            >
+                                <XMarkIcon className="w-6 h-6" />
+                            </button>
+                        </div>
+                        <div className="p-6 space-y-4">
+                            <div className="rounded-lg border border-gray-200 dark:border-gray-700 p-4">
+                                <p className="text-sm font-semibold text-gray-900 dark:text-white mb-2">Facebook + Instagram (Meta)</p>
+                                <div className="space-y-3 text-sm text-gray-700 dark:text-gray-300">
+                                    <p className="font-medium text-gray-900 dark:text-white">Step 1: Create a Facebook Page (if you do not have one)</p>
+                                    <ol className="list-decimal list-inside space-y-1 ml-2">
+                                        <li>Go to <span className="font-semibold">facebook.com/pages/create</span>.</li>
+                                        <li>Choose a Page name, category, and profile details.</li>
+                                        <li>Make sure your Facebook profile is listed as <strong>Admin</strong> in Page Access.</li>
+                                    </ol>
+
+                                    <p className="font-medium text-gray-900 dark:text-white">Step 2: Switch Instagram to a Professional account</p>
+                                    <ol className="list-decimal list-inside space-y-1 ml-2">
+                                        <li>Open Instagram app, then go to <strong>Settings and privacy</strong>, then <strong>Account type and tools</strong>.</li>
+                                        <li>Select <strong>Switch to professional account</strong>.</li>
+                                        <li>Choose <strong>Creator</strong> or <strong>Business</strong> (both work with EchoFlux).</li>
+                                    </ol>
+
+                                    <p className="font-medium text-gray-900 dark:text-white">Step 3: Link Instagram to your Facebook Page</p>
+                                    <ol className="list-decimal list-inside space-y-1 ml-2">
+                                        <li>In Instagram, go to <strong>Account Center</strong> and add your Facebook profile if needed.</li>
+                                        <li>Open your Facebook Page settings, then <strong>Linked accounts</strong> / <strong>Instagram</strong>.</li>
+                                        <li>Connect the same Instagram Professional account you want EchoFlux to use.</li>
+                                    </ol>
+
+                                    <p className="font-medium text-gray-900 dark:text-white">Step 4: Connect inside EchoFlux</p>
+                                    <ol className="list-decimal list-inside space-y-1 ml-2">
+                                        <li>In EchoFlux Settings, open <strong>Connections</strong>, then click <strong>Connect</strong> for Facebook or Instagram.</li>
+                                        <li>On Meta's permission screen, verify the correct Facebook profile at the top.</li>
+                                        <li>Use <strong>Edit previous settings</strong> and select only the Page/Instagram for this creator account.</li>
+                                    </ol>
+                                </div>
+                            </div>
+                            <div className="rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 p-4">
+                                <p className="text-sm font-semibold text-amber-900 dark:text-amber-200 mb-1">Common issues and fixes</p>
+                                <ul className="text-sm text-amber-900/90 dark:text-amber-200/90 list-disc list-inside space-y-2">
+                                    <li><strong>Wrong pages/accounts shown:</strong> You are logged into the wrong Facebook profile. Use <strong>Log into another account</strong> in Meta OAuth.</li>
+                                    <li><strong>Instagram does not appear:</strong> Confirm it is Professional and linked to the selected Facebook Page.</li>
+                                    <li><strong>Connection succeeds but posting fails:</strong> Reconnect and grant full requested permissions for Page + Instagram.</li>
+                                </ul>
+                            </div>
+                            <div className="rounded-lg border border-gray-200 dark:border-gray-700 p-4">
+                                <p className="text-sm font-semibold text-gray-900 dark:text-white mb-2">X (Twitter)</p>
+                                <ul className="text-sm text-gray-700 dark:text-gray-300 list-disc list-inside space-y-2">
+                                    <li>EchoFlux connects the X account currently signed in within your browser session.</li>
+                                    <li>If you manage multiple X accounts, use a dedicated browser profile or incognito window per creator.</li>
+                                    <li>Reconnect if you change X credentials or permissions.</li>
+                                </ul>
+                            </div>
+                            <div className="rounded-lg border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/20 p-4">
+                                <p className="text-sm font-semibold text-blue-900 dark:text-blue-200 mb-1">How EchoFlux decides what appears</p>
+                                <p className="text-sm text-blue-900/90 dark:text-blue-200/90">
+                                    EchoFlux cannot edit Meta/X account lists shown during OAuth. Those options are returned directly by Meta/X based on who is logged in and what they can access.
+                                </p>
+                            </div>
+                            <div className="flex justify-end pt-2">
+                                <button
+                                    type="button"
+                                    onClick={() => setShowConnectionGuideModal(false)}
+                                    className="px-4 py-2 text-sm font-semibold rounded-md bg-primary-600 text-white hover:bg-primary-700 transition-colors"
+                                >
+                                    Got it
                                 </button>
                             </div>
                         </div>

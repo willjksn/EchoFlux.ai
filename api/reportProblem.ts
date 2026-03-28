@@ -41,6 +41,46 @@ async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
     status: "new",
   });
 
+  // Mirror into unified IT support tickets so Admin Tools can triage
+  const [userDoc, creatorDoc] = await Promise.all([
+    db.collection("users").doc(user.uid).get().catch(() => null),
+    db.collection("creators").doc(user.uid).get().catch(() => null),
+  ]);
+  const userData = (userDoc?.data?.() || {}) as Record<string, unknown>;
+  const isCreatorReporter = !!creatorDoc?.exists;
+  const creatorData = (creatorDoc?.data?.() || {}) as Record<string, unknown>;
+  const creatorHandle = isCreatorReporter && typeof creatorData.handle === "string" ? creatorData.handle : null;
+  const creatorDisplayName =
+    isCreatorReporter && typeof creatorData.displayName === "string" && creatorData.displayName.trim()
+      ? creatorData.displayName.trim()
+      : creatorHandle || null;
+  const preview = String(message).trim().slice(0, 180);
+
+  await db.collection("support_tickets").add({
+    creatorId: isCreatorReporter ? user.uid : null,
+    creatorHandle,
+    creatorDisplayName,
+    reporterUid: user.uid,
+    reporterEmail: user.email || null,
+    reporterName:
+      (typeof userData.name === "string" && userData.name) ||
+      (typeof userData.displayName === "string" && userData.displayName) ||
+      user.email ||
+      "Unknown",
+    reporterRole: (typeof userData.role === "string" && userData.role) || "User",
+    reporterKind: isCreatorReporter ? "creator" : "fan",
+    status: "open",
+    page: page || null,
+    url: url || null,
+    userAgent: userAgent || null,
+    preview,
+    createdAt: now,
+    updatedAt: now,
+    lastMessageAt: now,
+    lastMessagePreview: preview,
+    messageCount: 1,
+  });
+
   res.status(200).json({ success: true });
 }
 

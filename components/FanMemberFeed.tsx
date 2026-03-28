@@ -26,6 +26,15 @@ import { ViewPostModalVideo } from "./ViewPostModalVideo";
 import { feedCommentAuthorLabel, feedCommentAuthorInitial } from "../src/lib/feedCommentLabel";
 
 const SAVED_BY_CREATOR_KEY = "savedPostIdsByCreator";
+const INLINE_COMMENT_PREVIEW_MAX = 120;
+
+function getInlineCommentPreview(text: string): { preview: string; truncated: boolean } {
+  const raw = String(text || "");
+  if (raw.length <= INLINE_COMMENT_PREVIEW_MAX) {
+    return { preview: raw, truncated: false };
+  }
+  return { preview: `${raw.slice(0, INLINE_COMMENT_PREVIEW_MAX).trimEnd()}...`, truncated: true };
+}
 
 /** Same icons as FanHubFeed / stormij-fanhub — multi-media count badge */
 const MediaImageIcon = () => (
@@ -394,7 +403,6 @@ function FanMemberPostMedia({
           src={currentUrl}
           alt=""
           className={splitModal ? "feed-comments-modal-media" : "feed-card-media"}
-          style={!splitModal && variant === "feed" ? { objectFit: "cover", objectPosition: "center top" } : undefined}
           loading={idx === 0 ? "lazy" : "eager"}
         />
       )}
@@ -774,6 +782,7 @@ export const FanMemberFeed: React.FC<FanMemberFeedProps> = ({
   const [likedPosts, setLikedPosts] = useState<Set<string>>(new Set());
   const [bookmarkedPosts, setBookmarkedPosts] = useState<Set<string>>(new Set());
   const [expandedComments, setExpandedComments] = useState<Set<string>>(new Set());
+  const [expandedInlineCommentKeys, setExpandedInlineCommentKeys] = useState<Set<string>>(new Set());
   const [bookmarkSaving, setBookmarkSaving] = useState(false);
   const [commentDraft, setCommentDraft] = useState<Record<string, string>>({});
   const [commentSending, setCommentSending] = useState<string | null>(null);
@@ -1094,24 +1103,45 @@ export const FanMemberFeed: React.FC<FanMemberFeedProps> = ({
 
               {!(feedSettings?.hideComments || post.hideComments) && (
                 <div className="fan-feed-post-footer">
-                  {post.commentsCount > 0 && (
+                  {Math.max(post.commentsCount || 0, (post.commentsList ?? []).length) > 0 && (
                     <button
                       type="button"
                       className="fan-feed-view-comments-link"
                       onClick={() => setViewPostId(post.id)}
                     >
-                      View all {post.commentsCount} comments
+                      View all {Math.max(post.commentsCount || 0, (post.commentsList ?? []).length)} comments
                     </button>
                   )}
                   {post.commentsCount === 0 && (post.commentsList ?? []).length === 0 && (
                     <p className="fan-feed-post-comments-teaser">No comments yet.</p>
                   )}
-                  {(post.commentsList ?? []).slice(0, 2).map((c, idx) => (
-                    <p key={`${post.id}-inline-c-${idx}`} className="m-0 text-sm" style={{ color: "var(--fan-text, #1f2937)" }}>
+                  {(post.commentsList ?? []).slice(0, 2).map((c, idx) => {
+                    const inlineKey = `${post.id}-inline-c-${idx}`;
+                    const expanded = expandedInlineCommentKeys.has(inlineKey);
+                    const { preview, truncated } = getInlineCommentPreview(c.text);
+                    return (
+                    <p key={inlineKey} className="m-0 text-sm" style={{ color: "var(--fan-text, #1f2937)" }}>
                       <span style={{ fontWeight: 600, marginRight: "0.35rem" }}>{c.author}</span>
-                      {c.text}
+                      {expanded || !truncated ? c.text : preview}
+                      {truncated ? (
+                        <button
+                          type="button"
+                          className="fan-feed-view-post-link"
+                          style={{ marginLeft: "0.35rem" }}
+                          onClick={() =>
+                            setExpandedInlineCommentKeys((prev) => {
+                              const next = new Set(prev);
+                              if (next.has(inlineKey)) next.delete(inlineKey);
+                              else next.add(inlineKey);
+                              return next;
+                            })
+                          }
+                        >
+                          {expanded ? "less" : "more"}
+                        </button>
+                      ) : null}
                     </p>
-                  ))}
+                  );})}
                   <button
                     type="button"
                     className="fan-feed-view-post-link"
@@ -1207,6 +1237,7 @@ export const FanMemberSaved: React.FC<FanMemberSavedProps> = ({
   const [commentDraft, setCommentDraft] = useState<Record<string, string>>({});
   const { detailPost, detailLoading, reload: reloadDetailPost } = useMemberPostDetail(creatorId, viewPostId);
   const [fanPublicProfile, setFanPublicProfile] = useState<{ photoURL?: string; displayName?: string }>({});
+  const [expandedInlineCommentKeys, setExpandedInlineCommentKeys] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     if (!fanId || !db) {
@@ -1384,24 +1415,45 @@ export const FanMemberSaved: React.FC<FanMemberSavedProps> = ({
               </div>
               {!(feedSettings?.hideComments || post.hideComments) && (
                 <div className="fan-feed-post-footer">
-                  {post.commentsCount > 0 && (
+                  {Math.max(post.commentsCount || 0, (post.commentsList ?? []).length) > 0 && (
                     <button
                       type="button"
                       className="fan-feed-view-comments-link"
                       onClick={() => setViewPostId(post.id)}
                     >
-                      View all {post.commentsCount} comments
+                      View all {Math.max(post.commentsCount || 0, (post.commentsList ?? []).length)} comments
                     </button>
                   )}
                   {post.commentsCount === 0 && (post.commentsList ?? []).length === 0 && (
                     <p className="fan-feed-post-comments-teaser">No comments yet.</p>
                   )}
-                  {(post.commentsList ?? []).slice(0, 2).map((c, idx) => (
-                    <p key={`${post.id}-saved-inline-c-${idx}`} className="m-0 text-sm" style={{ color: "var(--fan-text, #1f2937)" }}>
+                  {(post.commentsList ?? []).slice(0, 2).map((c, idx) => {
+                    const inlineKey = `${post.id}-saved-inline-c-${idx}`;
+                    const expanded = expandedInlineCommentKeys.has(inlineKey);
+                    const { preview, truncated } = getInlineCommentPreview(c.text);
+                    return (
+                    <p key={inlineKey} className="m-0 text-sm" style={{ color: "var(--fan-text, #1f2937)" }}>
                       <span style={{ fontWeight: 600, marginRight: "0.35rem" }}>{c.author}</span>
-                      {c.text}
+                      {expanded || !truncated ? c.text : preview}
+                      {truncated ? (
+                        <button
+                          type="button"
+                          className="fan-feed-view-post-link"
+                          style={{ marginLeft: "0.35rem" }}
+                          onClick={() =>
+                            setExpandedInlineCommentKeys((prev) => {
+                              const next = new Set(prev);
+                              if (next.has(inlineKey)) next.delete(inlineKey);
+                              else next.add(inlineKey);
+                              return next;
+                            })
+                          }
+                        >
+                          {expanded ? "less" : "more"}
+                        </button>
+                      ) : null}
                     </p>
-                  ))}
+                  );})}
                   <button
                     type="button"
                     className="fan-feed-view-post-link"

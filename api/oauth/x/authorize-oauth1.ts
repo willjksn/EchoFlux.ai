@@ -253,9 +253,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       timestamp: new Date().toISOString(),
     }, { merge: true });
 
-    // Build authorization URL
-    // Use oauth/authenticate to reduce re-login prompts when possible
-    const authUrl = `https://api.twitter.com/oauth/authenticate?oauth_token=${encodeURIComponent(oauthToken)}`;
+    // Same as OAuth 2.0: avoid silently using another X session in the browser (shared X_OAUTH_FORCE_LOGIN).
+    const forceLogin = process.env.X_OAUTH_FORCE_LOGIN !== 'false';
+    const authUrl = forceLogin
+      ? `https://api.twitter.com/oauth/authenticate?oauth_token=${encodeURIComponent(oauthToken)}&force_login=true`
+      : `https://api.twitter.com/oauth/authenticate?oauth_token=${encodeURIComponent(oauthToken)}`;
 
     return res.status(200).json({
       authUrl,

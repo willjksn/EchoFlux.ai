@@ -141,8 +141,6 @@ async function parseApiBody(res: Response): Promise<{ json: Record<string, unkno
   }
 }
 
-const DEV_PROXY_BANNER_KEY = "fanhub-messages-dev-proxy-dismiss";
-
 export const FanHubMessages: React.FC = () => {
   const { user, showToast } = useAppContext();
   const premiumTab = usePremiumStudioTab();
@@ -209,8 +207,18 @@ export const FanHubMessages: React.FC = () => {
     };
   }, [creatorId]);
 
+  const activeThreads = useMemo(() => {
+    // Only show conversations with message activity:
+    // - fan started chat, OR
+    // - thread has a non-empty last message preview (creator/fan message exists)
+    return threads.filter((t) => {
+      const hasPreview = (t.lastMessagePreview || "").trim().length > 0;
+      return t.fanHasSentMessage === true || hasPreview;
+    });
+  }, [threads]);
+
   const filteredThreads = useMemo(() => {
-    let t = threads;
+    let t = activeThreads;
     if (listTab === "requests") t = t.filter((x) => x.fanHasSentMessage === true);
     const q = threadSearchQuery.trim().toLowerCase();
     if (q) {
@@ -222,7 +230,7 @@ export const FanHubMessages: React.FC = () => {
       );
     }
     return t;
-  }, [threads, listTab, threadSearchQuery]);
+  }, [activeThreads, listTab, threadSearchQuery]);
 
   const sortedFilteredThreads = useMemo(
     () => sortCreatorDmThreads(filteredThreads),
@@ -232,15 +240,6 @@ export const FanHubMessages: React.FC = () => {
   // Instant video call state
   const [startingVideo, setStartingVideo] = useState(false);
   const [activeVideoSession, setActiveVideoSession] = useState<{ sessionId: string; creatorId: string } | null>(null);
-  const [showDevProxyBanner, setShowDevProxyBanner] = useState(() => {
-    if (!import.meta.env.DEV) return false;
-    try {
-      return sessionStorage.getItem(DEV_PROXY_BANNER_KEY) !== "1";
-    } catch {
-      return true;
-    }
-  });
-
   const fetchThreads = useCallback(async (): Promise<FanDmThread[] | null> => {
     if (!creatorId) return null;
     setLoading(true);
@@ -285,14 +284,14 @@ export const FanHubMessages: React.FC = () => {
   /** Keep selection in sync when threads load/refresh; merge row so pin/mute/unread stay current. */
   useEffect(() => {
     setSelectedThread((prev) => {
-      if (threads.length === 0) return null;
+      if (activeThreads.length === 0) return null;
       if (prev) {
-        const fresh = threads.find((t) => t.id === prev.id);
+        const fresh = activeThreads.find((t) => t.id === prev.id);
         if (fresh) return fresh;
       }
-      return threads[0];
+      return activeThreads[0];
     });
-  }, [threads]);
+  }, [activeThreads]);
 
   const fetchMessagesForThread = useCallback(
     async (
@@ -799,41 +798,6 @@ export const FanHubMessages: React.FC = () => {
   return (
     <div className="max-w-7xl mx-auto p-4 sm:p-6 stormij-theme fh-messages-hub">
       <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-6">Messages</h1>
-      {import.meta.env.DEV && showDevProxyBanner ? (
-        <div className="mb-4 rounded-lg border border-sky-200 dark:border-sky-800 bg-sky-50 dark:bg-sky-950/40 px-4 py-3 text-sm text-sky-950 dark:text-sky-100">
-          <div className="flex justify-between gap-2 items-start">
-            <div>
-              <p className="font-semibold">Localhost: Messages need a real `/api` backend</p>
-              <p className="mt-1 text-xs opacity-90 leading-relaxed">
-                Plain <code className="px-1 rounded bg-black/10 dark:bg-white/10">npm run dev</code> does not run Vercel functions. Create{" "}
-                <code className="px-1 rounded bg-black/10 dark:bg-white/10">.env.local</code> in the project root with:
-              </p>
-              <pre className="mt-2 text-[11px] bg-black/5 dark:bg-white/10 p-2 rounded overflow-x-auto">
-                DEV_API_PROXY=https://YOUR-APP.vercel.app
-              </pre>
-              <p className="mt-2 text-xs opacity-90">
-                No trailing slash. Restart the dev server. In the terminal you should see{" "}
-                <code className="px-1 rounded bg-black/10 dark:bg-white/10">[vite] API proxy active</code>. See{" "}
-                <code className="px-1 rounded bg-black/10 dark:bg-white/10">docs/LOCAL_DEV.md</code>.
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={() => {
-                try {
-                  sessionStorage.setItem(DEV_PROXY_BANNER_KEY, "1");
-                } catch {
-                  /* ignore */
-                }
-                setShowDevProxyBanner(false);
-              }}
-              className="text-xs shrink-0 text-sky-700 dark:text-sky-300 hover:underline"
-            >
-              Dismiss
-            </button>
-          </div>
-        </div>
-      ) : null}
       <div className="flex gap-4 sm:gap-6 flex-col lg:flex-row">
         <div className="w-full lg:w-80 flex-shrink-0 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 overflow-hidden lg:max-h-[min(85vh,720px)] lg:flex lg:flex-col">
           <div className="fh-dm-sidebar-header">
@@ -910,7 +874,7 @@ export const FanHubMessages: React.FC = () => {
                 Retry
               </button>
             </div>
-          ) : threads.length === 0 ? (
+          ) : activeThreads.length === 0 ? (
             <div className="p-4 text-gray-500 dark:text-gray-400 text-sm">
               <p>No conversations yet.</p>
             </div>

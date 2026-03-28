@@ -12,15 +12,21 @@ import { getStorage } from "firebase/storage";
 import { getAnalytics, isSupported } from "firebase/analytics";
 import { getFunctions } from "firebase/functions";
 
+function cleanEnv(value: unknown): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const trimmed = value.trim().replace(/^["']|["']$/g, "");
+  return trimmed || undefined;
+}
+
 const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
-  databaseURL: import.meta.env.VITE_FIREBASE_DATABASE_URL,
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
-  appId: import.meta.env.VITE_FIREBASE_APP_ID,
-  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID,
+  apiKey: cleanEnv(import.meta.env.VITE_FIREBASE_API_KEY),
+  authDomain: cleanEnv(import.meta.env.VITE_FIREBASE_AUTH_DOMAIN),
+  databaseURL: cleanEnv(import.meta.env.VITE_FIREBASE_DATABASE_URL),
+  projectId: cleanEnv(import.meta.env.VITE_FIREBASE_PROJECT_ID),
+  storageBucket: cleanEnv(import.meta.env.VITE_FIREBASE_STORAGE_BUCKET),
+  messagingSenderId: cleanEnv(import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID),
+  appId: cleanEnv(import.meta.env.VITE_FIREBASE_APP_ID),
+  measurementId: cleanEnv(import.meta.env.VITE_FIREBASE_MEASUREMENT_ID),
 };
 
 // ------------------------------------------------------------
@@ -55,13 +61,20 @@ onAuthStateChanged(auth, async (user) => {
 // ------------------------------------------------------------
 // Firestore & Storage
 // ------------------------------------------------------------
-// Firestore: long-polling can avoid `Listen/channel` 400 errors
-// in certain networks/browsers (proxies, strict privacy settings, etc.).
-const FORCE_FIRESTORE_LONG_POLLING =
-  import.meta.env.VITE_FIRESTORE_FORCE_LONG_POLLING === "true";
+// Firestore transport:
+// - WebChannel `Listen/channel` can 400 in localhost/Electron/proxied environments.
+// - In dev we force long-polling and also enable auto-detect fallback.
+// - Override with VITE_FIRESTORE_FORCE_LONG_POLLING=false only when debugging transport.
+const envLongPoll = String(import.meta.env.VITE_FIRESTORE_FORCE_LONG_POLLING || "").toLowerCase();
+const forceLongPolling =
+  envLongPoll === "true" ||
+  (import.meta.env.DEV && envLongPoll !== "false");
 export const db = initializeFirestore(app, {
-  ...(FORCE_FIRESTORE_LONG_POLLING ? { experimentalForceLongPolling: true } : {}),
-  useFetchStreams: false,
+  ...(forceLongPolling
+    ? {
+        experimentalForceLongPolling: true,
+      }
+    : {}),
 });
 export const storage = getStorage(app);
 
@@ -73,7 +86,7 @@ export const functions = getFunctions(app, "us-central1");
 // ------------------------------------------------------------
 // Analytics (Browser Only)
 // ------------------------------------------------------------
-const analyticsMeasurementId = import.meta.env.VITE_FIREBASE_MEASUREMENT_ID;
+const analyticsMeasurementId = cleanEnv(import.meta.env.VITE_FIREBASE_MEASUREMENT_ID);
 const analyticsDisabled = String(import.meta.env.VITE_DISABLE_ANALYTICS || '').toLowerCase() === 'true';
 
 if (analyticsMeasurementId && !analyticsDisabled) {

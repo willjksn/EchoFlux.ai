@@ -86,10 +86,9 @@
     <!-- Facebook SDK for JavaScript -->
     <!-- Note: App ID will be injected from environment variable -->
     <script>
-      function isSecureFacebookContext() {
-        const host = window.location.hostname;
-        const isLocalhost = host === 'localhost' || host === '127.0.0.1';
-        return window.location.protocol === 'https:' || isLocalhost;
+      /** FB.getLoginStatus is blocked on all http:// origins, including localhost (Meta policy). */
+      function isFacebookLoginStatusAllowed() {
+        return window.location.protocol === 'https:';
       }
 
       window.fbAsyncInit = function() {
@@ -106,14 +105,12 @@
           
           FB.AppEvents.logPageView();
           
-          // Check login status only in secure contexts.
-          // Facebook blocks getLoginStatus on non-HTTPS public pages.
-          if (isSecureFacebookContext()) {
+          if (isFacebookLoginStatusAllowed()) {
             FB.getLoginStatus(function(response) {
               statusChangeCallback(response);
             });
           } else {
-            console.log('Facebook SDK: skipping getLoginStatus on non-HTTPS page');
+            console.log('Facebook SDK: skipping getLoginStatus (requires https://)');
           }
         }
       };
@@ -145,8 +142,8 @@
 
       // Login button callback - called when user clicks Facebook Login button
       function checkLoginState() {
-        if (!isSecureFacebookContext()) {
-          console.log('Facebook SDK: checkLoginState skipped on non-HTTPS page');
+        if (!isFacebookLoginStatusAllowed()) {
+          console.log('Facebook SDK: checkLoginState skipped (requires https://)');
           return;
         }
         FB.getLoginStatus(function(response) {

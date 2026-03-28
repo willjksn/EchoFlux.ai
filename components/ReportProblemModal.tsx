@@ -6,9 +6,27 @@ import { auth } from "../firebaseConfig";
 interface ReportProblemModalProps {
   isOpen: boolean;
   onClose: () => void;
+  /** Destination address for mailto; defaults to EchoFlux support. */
+  contactEmail?: string;
+  /** Brand/support name used in email subject/body copy. */
+  supportName?: string;
+  /** Submission channel. `inApp` sends to internal support threads; `email` opens mail app. */
+  mode?: "email" | "inApp";
+  /** Optional callback for in-app support submission. */
+  onSubmitInApp?: (payload: { message: string; diagnostics: string }) => Promise<void>;
+  /** Optional callback after successful submit. */
+  onSubmitted?: () => void;
 }
 
-export const ReportProblemModal: React.FC<ReportProblemModalProps> = ({ isOpen, onClose }) => {
+export const ReportProblemModal: React.FC<ReportProblemModalProps> = ({
+  isOpen,
+  onClose,
+  contactEmail = "contact@echoflux.ai",
+  supportName = "EchoFlux",
+  mode = "email",
+  onSubmitInApp,
+  onSubmitted,
+}) => {
   const { user, activePage, showToast } = useAppContext();
   const [message, setMessage] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -25,9 +43,9 @@ export const ReportProblemModal: React.FC<ReportProblemModalProps> = ({ isOpen, 
   }, [user?.email, user?.id, user?.plan, user?.role, activePage]);
 
   const mailtoHref = useMemo(() => {
-    const subject = `EchoFlux Bug Report (${user?.email || "unknown"})`;
+    const subject = `${supportName} Bug Report (${user?.email || "unknown"})`;
     const body =
-      `Hi EchoFlux Support,\n\n` +
+      `Hi ${supportName} Support,\n\n` +
       `Problem:\n${message || "[describe what happened]"}\n\n` +
       `Steps to reproduce:\n1.\n2.\n3.\n\n` +
       `Expected:\n\nActual:\n\n` +
@@ -37,8 +55,8 @@ export const ReportProblemModal: React.FC<ReportProblemModalProps> = ({ isOpen, 
       subject,
       body,
     });
-    return `mailto:contact@echoflux.ai?${qs.toString()}`;
-  }, [message, diagnostics, user?.email]);
+    return `mailto:${contactEmail}?${qs.toString()}`;
+  }, [message, diagnostics, user?.email, contactEmail, supportName]);
 
   const handleSubmit = async () => {
     if (!message.trim()) {
@@ -47,7 +65,7 @@ export const ReportProblemModal: React.FC<ReportProblemModalProps> = ({ isOpen, 
     }
     setIsSubmitting(true);
     try {
-      // Log the report server-side (for tracking)
+      // Always log the report server-side (for tracking/admin review).
       const token = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
       if (token) {
         await fetch("/api/reportProblem", {
@@ -65,11 +83,21 @@ export const ReportProblemModal: React.FC<ReportProblemModalProps> = ({ isOpen, 
         }).catch(() => {});
       }
 
-      // Open email client for direct support response
-      window.location.href = mailtoHref;
-      showToast("Opening your email client to send the report…", "success");
+      if (mode === "inApp") {
+        if (!onSubmitInApp) {
+          throw new Error("In-app support is not configured.");
+        }
+        await onSubmitInApp({ message: message.trim(), diagnostics });
+        showToast("Report sent to IT support.", "success");
+      } else {
+        // Open email client for direct support response
+        window.location.href = mailtoHref;
+        showToast("Opening your email client to send the report…", "success");
+      }
+
       onClose();
       setMessage("");
+      onSubmitted?.();
     } catch (e: any) {
       showToast(e?.message || "Failed to submit report", "error");
     } finally {
@@ -91,12 +119,14 @@ export const ReportProblemModal: React.FC<ReportProblemModalProps> = ({ isOpen, 
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4">
+    <div className="fixed inset-0 z-[12000] flex items-center justify-center bg-black/60 backdrop-blur-sm px-4">
       <div className="w-full max-w-lg bg-white dark:bg-gray-900 rounded-2xl shadow-2xl border border-gray-200 dark:border-gray-800">
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200 dark:border-gray-800">
           <div>
             <h3 className="text-lg font-bold text-gray-900 dark:text-white">Report a Problem</h3>
-            <p className="text-xs text-gray-500 dark:text-gray-400">We’ll respond via `contact@echoflux.ai`.</p>
+            <p className="text-xs text-gray-500 dark:text-gray-400">
+              {mode === "inApp" ? "Send this directly to support in-app." : `We’ll respond via \`${contactEmail}\`.`}
+            </p>
           </div>
           <button
             type="button"
@@ -151,7 +181,7 @@ export const ReportProblemModal: React.FC<ReportProblemModalProps> = ({ isOpen, 
             onClick={handleSubmit}
             className="px-4 py-2 rounded-md text-sm bg-primary-600 text-white hover:bg-primary-700 disabled:opacity-50"
           >
-            {isSubmitting ? "Preparing…" : "Email Support"}
+            {isSubmitting ? "Sending…" : mode === "inApp" ? "Send Report" : "Email Support"}
           </button>
         </div>
       </div>

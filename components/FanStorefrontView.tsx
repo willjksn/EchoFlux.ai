@@ -1,6 +1,15 @@
 import React, { useState, useEffect, useCallback, useRef, Fragment } from "react";
 import { auth } from "../firebaseConfig";
-import { collection, doc, getDoc, getDocs, query, where } from "firebase/firestore";
+import { collection, doc, getDoc, getDocs, limit, onSnapshot, orderBy, query, setDoc, where } from "firebase/firestore";
+import { storage } from "../firebaseConfig";
+import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
+import {
+  EmailAuthProvider,
+  reauthenticateWithCredential,
+  sendPasswordResetEmail,
+  updatePassword,
+  updateProfile,
+} from "firebase/auth";
 import type {
   TreatProduct,
   FanDmThread,
@@ -48,10 +57,12 @@ import { FanHubNotificationBell } from "./FanHubNotificationBell";
 import { getAvatarCropStyle } from "../src/lib/avatarCrop";
 import { resolveStoreCopy } from "../src/lib/storefrontStoreCopy";
 import { resolveTipSectionCopy } from "../src/lib/tipSectionCopy";
+import { normalizeMemberUsername, validateMemberUsernameFormat } from "../src/lib/memberUsername";
 import { useAppContext } from "./AppContext";
 import { isConfiguredCustomStorefrontHost } from "../src/lib/storefrontCustomDomain";
 import { usePathname } from "../src/hooks/usePathname";
 import { db } from "../firebaseConfig";
+import { ReportProblemModal } from "./ReportProblemModal";
 
 export type StorefrontCreator = {
   creatorId: string;
@@ -113,6 +124,31 @@ export type StorefrontCreator = {
     boundaryText?: TextStyle;
   };
   fanAuthBranding?: FanAuthBranding;
+};
+
+type HeaderSessionAlert = {
+  id: string;
+  kind: "chat" | "video";
+  title: string;
+  ctaLabel: string;
+  startsAt?: string;
+  status: string;
+};
+
+type SupportThread = {
+  id: string;
+  title: string;
+  status: "open" | "closed";
+  createdAt?: string;
+  updatedAt?: string;
+  lastMessage?: string;
+};
+
+type SupportMessage = {
+  id: string;
+  senderType: "fan" | "support";
+  content: string;
+  createdAt?: string;
 };
 
 /**
@@ -348,7 +384,7 @@ function TipSection({
 }
 
 export const FanStorefrontView: React.FC = () => {
-  const { showToast } = useAppContext();
+  const { showToast, activePage } = useAppContext();
   const pathname = usePathname();
   const [handle, setHandle] = useState<string | null>(() => parseHandleFromPath().handle);
   const [legalSubpage, setLegalSubpage] = useState<"terms" | "privacy" | null>(() => parseHandleFromPath().subpage);
@@ -363,13 +399,14 @@ export const FanStorefrontView: React.FC = () => {
   const [memberUsernameRequired, setMemberUsernameRequired] = useState(false);
   const [cancelMembershipLoading, setCancelMembershipLoading] = useState(false);
   const [cancelMembershipMessage, setCancelMembershipMessage] = useState<string | null>(null);
+  const [membershipType, setMembershipType] = useState<"free" | "paid" | null>(null);
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const [entitlementLoading, setEntitlementLoading] = useState(false);
   /** Bumps when entitlement effect re-runs so stale async completions don't leave loading stuck. */
   const entitlementFetchGen = useRef(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<"feed" | "treats" | "messages" | "tip" | "saved" | "about">("feed");
+  const [activeTab, setActiveTab] = useState<"feed" | "treats" | "messages" | "tip" | "saved" | "about" | "profile">("feed");
   const [tipSelectedPreset, setTipSelectedPreset] = useState<number | null>(null);
   const [tipCustomAmount, setTipCustomAmount] = useState("");
   const [tipLoading, setTipLoading] = useState(false);
@@ -404,6 +441,37 @@ export const FanStorefrontView: React.FC = () => {
   const [dmVoiceMeterKey, setDmVoiceMeterKey] = useState(0);
   const [fanBanned, setFanBanned] = useState(false);
   const profileMenuRef = useRef<HTMLDivElement | null>(null);
+  const [profileDraft, setProfileDraft] = useState<{
+    firstName: string;
+    lastName: string;
+    bio: string;
+    photoURL: string;
+  }>({ firstName: "", lastName: "", bio: "", photoURL: "" });
+  const [profileInitial, setProfileInitial] = useState<{
+    firstName: string;
+    lastName: string;
+    bio: string;
+    photoURL: string;
+  }>({ firstName: "", lastName: "", bio: "", photoURL: "" });
+  const [profileSaving, setProfileSaving] = useState(false);
+  const [usernameDraft, setUsernameDraft] = useState("");
+  const [usernameInitial, setUsernameInitial] = useState("");
+  const [usernameState, setUsernameState] = useState<"idle" | "checking" | "available" | "taken" | "current" | "invalid">("idle");
+  const [usernameMsg, setUsernameMsg] = useState("");
+  const [avatarUploading, setAvatarUploading] = useState(false);
+  const [passwordCurrent, setPasswordCurrent] = useState("");
+  const [passwordNext, setPasswordNext] = useState("");
+  const [passwordConfirm, setPasswordConfirm] = useState("");
+  const [passwordSaving, setPasswordSaving] = useState(false);
+  const autoSubscribeRedirectingRef = useRef(false);
+  const [sessionAlerts, setSessionAlerts] = useState<HeaderSessionAlert[]>([]);
+  const sessionAlertIdsRef = useRef<Set<string> | null>(null);
+  const [reportProblemOpen, setReportProblemOpen] = useState(false);
+  const [supportThreads, setSupportThreads] = useState<SupportThread[]>([]);
+  const [supportThreadId, setSupportThreadId] = useState<string | null>(null);
+  const [supportMessages, setSupportMessages] = useState<SupportMessage[]>([]);
+  const [supportReplyDraft, setSupportReplyDraft] = useState("");
+  const [supportSending, setSupportSending] = useState(false);
 
   const urlParams = typeof window !== "undefined" ? new URLSearchParams(window.location.search) : null;
   const previewMember = urlParams?.get("preview") === "member";
@@ -468,6 +536,7 @@ export const FanStorefrontView: React.FC = () => {
         (key) =>
           key !== "saved" &&
           key !== "messages" &&
+          key !== "about" &&
           (sec as Record<string, boolean>)[key] !== false
       ) ?? "feed";
     setActiveTab(next as "feed" | "treats" | "messages" | "tip" | "saved" | "about");
@@ -796,6 +865,218 @@ export const FanStorefrontView: React.FC = () => {
     return () => unsub();
   }, []);
 
+  const handleSessionAlertAction = useCallback(
+    async (alert: HeaderSessionAlert) => {
+      if (!creator?.creatorId || !auth.currentUser) return;
+      if (alert.kind === "chat") {
+        setActiveTab("messages");
+        return;
+      }
+      try {
+        const token = await auth.currentUser.getIdToken(true);
+        const res = await fetch("/api/liveVideoChat?action=token", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ sessionId: alert.id, creatorId: creator.creatorId }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error((data as { error?: string }).error || "Could not open video session");
+        const roomUrl = (data as { roomUrl?: string }).roomUrl;
+        const tokenParam = (data as { token?: string }).token;
+        if (!roomUrl || !tokenParam) throw new Error("Video room is not ready yet.");
+        const joinUrl = `${roomUrl}${roomUrl.includes("?") ? "&" : "?"}t=${encodeURIComponent(tokenParam)}`;
+        window.open(joinUrl, "_blank", "noopener,noreferrer");
+      } catch (e) {
+        showToast?.(e instanceof Error ? e.message : "Could not open video session.", "error");
+      }
+    },
+    [creator?.creatorId, showToast]
+  );
+
+  useEffect(() => {
+    if (!isLoggedIn || !creator?.creatorId || !auth.currentUser) {
+      setSessionAlerts([]);
+      sessionAlertIdsRef.current = null;
+      return;
+    }
+    let cancelled = false;
+
+    const fetchAlerts = async () => {
+      try {
+        const token = await auth.currentUser!.getIdToken();
+        const res = await fetch(`/api/getFanSessionAlerts?creatorId=${encodeURIComponent(creator.creatorId)}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || cancelled) return;
+        const alerts = Array.isArray((data as { alerts?: HeaderSessionAlert[] }).alerts)
+          ? ((data as { alerts: HeaderSessionAlert[] }).alerts || [])
+          : [];
+        if (!cancelled) {
+          setSessionAlerts(alerts);
+          const nextIds = new Set(alerts.map((a) => `${a.kind}:${a.id}`));
+          const prevIds = sessionAlertIdsRef.current;
+          if (prevIds) {
+            const newOnes = alerts.filter((a) => !prevIds.has(`${a.kind}:${a.id}`));
+            if (newOnes.length > 0) {
+              const first = newOnes[0];
+              showToast?.(first.title, "info");
+            }
+          }
+          sessionAlertIdsRef.current = nextIds;
+        }
+      } catch {
+        if (!cancelled) setSessionAlerts([]);
+      }
+    };
+
+    void fetchAlerts();
+    const timer = window.setInterval(fetchAlerts, 30000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [isLoggedIn, creator?.creatorId, showToast]);
+
+  useEffect(() => {
+    if (!isLoggedIn || !auth.currentUser?.uid || !db) {
+      setSupportThreads([]);
+      setSupportThreadId(null);
+      return;
+    }
+    const uid = auth.currentUser.uid;
+    const q = query(
+      collection(db, "users", uid, "support_threads"),
+      orderBy("updatedAt", "desc"),
+      limit(25)
+    );
+    return onSnapshot(
+      q,
+      (snap) => {
+        const next: SupportThread[] = snap.docs.map((d) => {
+          const data = d.data() as Record<string, unknown>;
+          return {
+            id: d.id,
+            title: typeof data.title === "string" && data.title.trim() ? data.title.trim() : "Problem report",
+            status: data.status === "closed" ? "closed" : "open",
+            createdAt: typeof data.createdAt === "string" ? data.createdAt : undefined,
+            updatedAt: typeof data.updatedAt === "string" ? data.updatedAt : undefined,
+            lastMessage: typeof data.lastMessage === "string" ? data.lastMessage : undefined,
+          };
+        });
+        setSupportThreads(next);
+        setSupportThreadId((prev) => prev ?? next[0]?.id ?? null);
+      },
+      () => {
+        setSupportThreads([]);
+      }
+    );
+  }, [isLoggedIn]);
+
+  useEffect(() => {
+    if (!isLoggedIn || !auth.currentUser?.uid || !supportThreadId || !db) {
+      setSupportMessages([]);
+      return;
+    }
+    const uid = auth.currentUser.uid;
+    const q = query(
+      collection(db, "users", uid, "support_threads", supportThreadId, "messages"),
+      orderBy("createdAt", "asc"),
+      limit(200)
+    );
+    return onSnapshot(
+      q,
+      (snap) => {
+        const msgs: SupportMessage[] = snap.docs.map((d) => {
+          const data = d.data() as Record<string, unknown>;
+          const createdAt =
+            typeof data.createdAt === "string"
+              ? data.createdAt
+              : data.createdAt && typeof (data.createdAt as { toDate?: () => Date }).toDate === "function"
+                ? (data.createdAt as { toDate: () => Date }).toDate().toISOString()
+                : undefined;
+          return {
+            id: d.id,
+            senderType: data.senderType === "support" ? "support" : "fan",
+            content: typeof data.content === "string" ? data.content : "",
+            createdAt,
+          };
+        });
+        setSupportMessages(msgs);
+      },
+      () => {
+        setSupportMessages([]);
+      }
+    );
+  }, [isLoggedIn, supportThreadId]);
+
+  const submitSupportProblem = useCallback(
+    async ({ message, diagnostics }: { message: string; diagnostics: string }) => {
+      if (!auth.currentUser?.uid || !creator?.creatorId) throw new Error("Please sign in again and try.");
+      const token = await auth.currentUser.getIdToken(true);
+      const res = await fetch("/api/createSupportTicket", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          creatorId: creator.creatorId,
+          reporterKind: "fan",
+          message,
+          diagnostics,
+          page: activePage,
+          url: typeof window !== "undefined" ? window.location.href : "",
+          userAgent: typeof navigator !== "undefined" ? navigator.userAgent : "",
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !(data as { success?: boolean }).success) {
+        throw new Error((data as { error?: string }).error || "Failed to create support ticket");
+      }
+      setSupportThreadId((data as { ticketId?: string }).ticketId ?? null);
+      setActiveTab("profile");
+    },
+    [activePage, creator?.creatorId, setActiveTab]
+  );
+
+  const sendSupportReply = useCallback(async () => {
+    const content = supportReplyDraft.trim();
+    if (!content || !auth.currentUser?.uid || !supportThreadId) return;
+    setSupportSending(true);
+    try {
+      const token = await auth.currentUser.getIdToken(true);
+      const res = await fetch("/api/supportTicketReply", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ ticketId: supportThreadId, content }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error((data as { error?: string }).error || "Failed to send support reply");
+      setSupportReplyDraft("");
+      showToast("Reply sent to support.", "success");
+    } catch (error: any) {
+      showToast(error?.message || "Failed to send support reply", "error");
+    } finally {
+      setSupportSending(false);
+    }
+  }, [showToast, supportReplyDraft, supportThreadId]);
+
+  const getSupportMessageMainText = useCallback((content: string): string => {
+    const [main] = content.split("\n\n---\n");
+    return (main || content).trim();
+  }, []);
+
+  const getSupportMessageDiagnostics = useCallback((content: string): string | null => {
+    const parts = content.split("\n\n---\n");
+    if (parts.length < 2) return null;
+    const diagnostics = parts.slice(1).join("\n\n---\n").trim();
+    return diagnostics || null;
+  }, []);
+
   useEffect(() => {
     if (!profileMenuOpen) return;
     const onPointerDown = (event: MouseEvent) => {
@@ -818,6 +1099,7 @@ export const FanStorefrontView: React.FC = () => {
   useEffect(() => {
     if (!creator?.creatorId || !isLoggedIn) {
       setSubscribed(false);
+      setMembershipType(null);
       setMemberUsernameRequired(false);
       setEntitlementLoading(false);
       return;
@@ -836,11 +1118,13 @@ export const FanStorefrontView: React.FC = () => {
         const data = await res.json().catch(() => ({}));
         if (gen !== entitlementFetchGen.current) return;
         setSubscribed(!!(data as { subscribed?: boolean }).subscribed);
+        setMembershipType(((data as { membershipType?: "free" | "paid" | null }).membershipType ?? null) as "free" | "paid" | null);
         setMemberUsernameRequired(!!(data as { memberUsernameRequired?: boolean }).memberUsernameRequired);
         setUnlockedProductIds(Array.isArray((data as { unlockedProductIds?: string[] }).unlockedProductIds) ? (data as { unlockedProductIds: string[] }).unlockedProductIds : []);
       } catch {
         if (gen === entitlementFetchGen.current) {
           setSubscribed(false);
+          setMembershipType(null);
           setMemberUsernameRequired(false);
         }
       } finally {
@@ -873,7 +1157,8 @@ export const FanStorefrontView: React.FC = () => {
   }, [activeTab, creator?.creatorId, fetchTreats]);
 
   const onPublicLanding =
-    !previewMember && (!isLoggedIn || !subscribed);
+    !previewMember &&
+    (!isLoggedIn || !(subscribed && (creator?.monetization?.freeAccessEnabled === true || membershipType === "paid")));
 
   useEffect(() => {
     if (
@@ -1011,34 +1296,57 @@ export const FanStorefrontView: React.FC = () => {
     }
   };
 
-  const handleSubscribe = async () => {
+  const startSubscriptionCheckout = async (opts?: { auto?: boolean }) => {
+    const isAuto = opts?.auto === true;
     if (!creator?.creatorId || !auth.currentUser) {
+      if (isAuto) return;
       setFanAuthView("login");
       setFanAuthOpen(true);
       return;
     }
+    if (isAuto) {
+      autoSubscribeRedirectingRef.current = true;
+    }
     setSubscribing(true);
     try {
       const token = await auth.currentUser.getIdToken(true);
+      const currentUrl = typeof window !== "undefined" ? new URL(window.location.href) : null;
+      const successUrl = currentUrl ? `${currentUrl.origin}${currentUrl.pathname}${currentUrl.search}${currentUrl.hash}` : window.location.href;
+      const cancelUrl = currentUrl
+        ? (() => {
+            const u = new URL(currentUrl.toString());
+            u.searchParams.set("paywall", "1");
+            return u.toString();
+          })()
+        : window.location.href;
       const res = await fetch("/api/createFanCheckoutSession", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({
           creatorId: creator.creatorId,
           type: "subscription",
-          successUrl: window.location.href,
-          cancelUrl: window.location.href,
+          successUrl,
+          cancelUrl,
         }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error((data as { error?: string }).error || "Checkout failed");
       const url = (data as { url?: string }).url;
       if (url) window.location.href = url;
-    } catch {
-      // could toast
+    } catch (e) {
+      if (!isAuto) {
+        showToast(e instanceof Error ? e.message : "Could not open checkout.", "error");
+      }
     } finally {
       setSubscribing(false);
+      if (isAuto) {
+        autoSubscribeRedirectingRef.current = false;
+      }
     }
+  };
+
+  const handleSubscribe = async () => {
+    await startSubscriptionCheckout();
   };
 
   const handleJoinFree = async () => {
@@ -1059,6 +1367,7 @@ export const FanStorefrontView: React.FC = () => {
       if (!res.ok) throw new Error((data as { error?: string }).error || "Failed to join");
       // Successfully joined — sync entitlement (username may still be required)
       setSubscribed(true);
+      setMembershipType("free");
       try {
         const token2 = await auth.currentUser.getIdToken(true);
         const entRes = await fetch(
@@ -1134,16 +1443,12 @@ export const FanStorefrontView: React.FC = () => {
 
   const handleOpenProfile = () => {
     setProfileMenuOpen(false);
-    setActiveTab("about");
+    setActiveTab("profile");
   };
 
   const handleSendProblem = () => {
     setProfileMenuOpen(false);
-    const subject = encodeURIComponent(`Problem report for @${creator?.handle ?? ""}`);
-    const body = encodeURIComponent(
-      `Creator: @${creator?.handle ?? ""}\nPage: ${typeof window !== "undefined" ? window.location.href : ""}\n\nDescribe the issue:`
-    );
-    window.location.href = `mailto:support@engagesuite.ai?subject=${subject}&body=${body}`;
+    setReportProblemOpen(true);
   };
 
   const handleLogout = async () => {
@@ -1151,11 +1456,284 @@ export const FanStorefrontView: React.FC = () => {
     try {
       await auth.signOut();
       setIsLoggedIn(false);
+      setMembershipType(null);
       if (creator?.handle) window.location.href = `/${creator.handle}`;
     } catch {
       showToast("Could not log out. Try again.", "error");
     }
   };
+
+  useEffect(() => {
+    if (activeTab !== "profile" || !auth.currentUser?.uid) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const snap = await getDoc(doc(db, "users", auth.currentUser!.uid));
+        const d = (snap.data() || {}) as Record<string, unknown>;
+        const displayNameRaw =
+          (typeof d.displayName === "string" && d.displayName.trim()) ||
+          auth.currentUser?.displayName ||
+          "";
+        const firstName =
+          (typeof d.firstName === "string" && d.firstName.trim()) ||
+          (displayNameRaw ? displayNameRaw.split(/\s+/)[0] : "");
+        const lastName =
+          (typeof d.lastName === "string" && d.lastName.trim()) ||
+          (displayNameRaw.includes(" ") ? displayNameRaw.split(/\s+/).slice(1).join(" ") : "");
+        const bio =
+          (typeof d.bio === "string" && d.bio.trim()) ||
+          (typeof d.memberBio === "string" && d.memberBio.trim()) ||
+          "";
+        const photoURL =
+          (typeof d.photoURL === "string" && d.photoURL.trim()) ||
+          (typeof d.avatar === "string" && d.avatar.trim()) ||
+          auth.currentUser?.photoURL ||
+          "";
+        const username =
+          (typeof d.username === "string" && d.username.trim())
+            ? normalizeMemberUsername(d.username)
+            : "";
+        if (!cancelled) {
+          setProfileDraft({ firstName, lastName, bio, photoURL });
+          setProfileInitial({ firstName, lastName, bio, photoURL });
+          setUsernameDraft(username);
+          setUsernameInitial(username);
+          if (username) {
+            setUsernameState("current");
+            setUsernameMsg("Your current username.");
+          } else {
+            setUsernameState("idle");
+            setUsernameMsg("");
+          }
+        }
+      } catch {
+        if (!cancelled) {
+          const dn = auth.currentUser?.displayName || "";
+          setProfileDraft({
+            firstName: dn ? dn.split(/\s+/)[0] : "",
+            lastName: dn.includes(" ") ? dn.split(/\s+/).slice(1).join(" ") : "",
+            bio: "",
+            photoURL: auth.currentUser?.photoURL || "",
+          });
+          setProfileInitial({
+            firstName: dn ? dn.split(/\s+/)[0] : "",
+            lastName: dn.includes(" ") ? dn.split(/\s+/).slice(1).join(" ") : "",
+            bio: "",
+            photoURL: auth.currentUser?.photoURL || "",
+          });
+          setUsernameDraft("");
+          setUsernameInitial("");
+          setUsernameState("idle");
+          setUsernameMsg("");
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [activeTab, isLoggedIn]);
+
+  useEffect(() => {
+    if (activeTab !== "profile" || !auth.currentUser) return;
+    const raw = usernameDraft.trim();
+    if (!raw) {
+      setUsernameState("idle");
+      setUsernameMsg("");
+      return;
+    }
+    const fmtErr = validateMemberUsernameFormat(raw);
+    if (fmtErr) {
+      setUsernameState("invalid");
+      setUsernameMsg(fmtErr);
+      return;
+    }
+    const normalized = normalizeMemberUsername(raw);
+    if (usernameInitial && normalized === normalizeMemberUsername(usernameInitial)) {
+      setUsernameState("current");
+      setUsernameMsg("Your current username.");
+      return;
+    }
+
+    let cancelled = false;
+    setUsernameState("checking");
+    const t = window.setTimeout(async () => {
+      try {
+        const token = await auth.currentUser!.getIdToken(true);
+        const res = await fetch(
+          `/api/checkMemberUsernameAvailability?username=${encodeURIComponent(normalized)}`,
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+        const data = await res.json().catch(() => ({}));
+        if (cancelled) return;
+        const reason = (data as { reason?: string }).reason || "";
+        if (reason === "current") {
+          setUsernameState("current");
+          setUsernameMsg("Your current username.");
+        } else if ((data as { available?: boolean }).available) {
+          setUsernameState("available");
+          setUsernameMsg("Available.");
+        } else {
+          setUsernameState("taken");
+          setUsernameMsg((data as { message?: string }).message || "Unavailable — already taken.");
+        }
+      } catch {
+        if (!cancelled) {
+          setUsernameState("idle");
+          setUsernameMsg("");
+        }
+      }
+    }, 260);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(t);
+    };
+  }, [activeTab, usernameDraft, usernameInitial]);
+
+  const isProfileDirty =
+    profileDraft.firstName.trim() !== profileInitial.firstName.trim() ||
+    profileDraft.lastName.trim() !== profileInitial.lastName.trim() ||
+    profileDraft.bio.trim() !== profileInitial.bio.trim() ||
+    (profileDraft.photoURL || "") !== (profileInitial.photoURL || "") ||
+    normalizeMemberUsername(usernameDraft || "") !== normalizeMemberUsername(usernameInitial || "");
+
+  const handleProfileSave = useCallback(async () => {
+    if (!auth.currentUser?.uid) return;
+    if (!isProfileDirty) return;
+    const firstName = profileDraft.firstName.trim();
+    const lastName = profileDraft.lastName.trim();
+    const displayName = [firstName, lastName].filter(Boolean).join(" ").trim() || "Member";
+    const nextUsername = normalizeMemberUsername(usernameDraft || "");
+    const usernameFmtErr = nextUsername ? validateMemberUsernameFormat(nextUsername) : null;
+    if (usernameFmtErr) {
+      showToast(usernameFmtErr, "error");
+      return;
+    }
+    setProfileSaving(true);
+    try {
+      if (nextUsername && creator?.creatorId) {
+        const token = await auth.currentUser.getIdToken(true);
+        const claimRes = await fetch("/api/claimMemberUsername", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ username: nextUsername, creatorId: creator.creatorId }),
+        });
+        const claimData = await claimRes.json().catch(() => ({}));
+        if (!claimRes.ok) {
+          throw new Error((claimData as { error?: string }).error || "Could not save username.");
+        }
+      }
+      await setDoc(
+        doc(db, "users", auth.currentUser.uid),
+        {
+          firstName,
+          lastName,
+          displayName,
+          bio: profileDraft.bio.trim(),
+          memberBio: profileDraft.bio.trim(),
+          photoURL: profileDraft.photoURL || null,
+          avatar: profileDraft.photoURL || null,
+          updatedAt: new Date().toISOString(),
+        },
+        { merge: true }
+      );
+      await updateProfile(auth.currentUser, {
+        displayName,
+        photoURL: profileDraft.photoURL || null,
+      });
+      if (nextUsername) {
+        setUsernameInitial(nextUsername);
+        setUsernameState("current");
+        setUsernameMsg("Your current username.");
+      } else {
+        setUsernameInitial("");
+        setUsernameState("idle");
+        setUsernameMsg("");
+      }
+      setProfileInitial({
+        firstName,
+        lastName,
+        bio: profileDraft.bio.trim(),
+        photoURL: profileDraft.photoURL || "",
+      });
+      showToast("Profile updated.", "success");
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : "Could not save profile.", "error");
+    } finally {
+      setProfileSaving(false);
+    }
+  }, [creator?.creatorId, isProfileDirty, profileDraft, showToast, usernameDraft]);
+
+  const handleProfileAvatarUpload = useCallback(
+    async (file: File) => {
+      if (!auth.currentUser?.uid) return;
+      setAvatarUploading(true);
+      try {
+        const ext = (file.name.split(".").pop() || "jpg").toLowerCase();
+        const path = `users/${auth.currentUser.uid}/profile_avatar/${Date.now()}.${ext}`;
+        const storageRef = ref(storage, path);
+        await uploadBytes(storageRef, file, { contentType: file.type || "image/jpeg" });
+        const url = await getDownloadURL(storageRef);
+        setProfileDraft((prev) => ({ ...prev, photoURL: url }));
+        await setDoc(
+          doc(db, "users", auth.currentUser.uid),
+          { photoURL: url, avatar: url, updatedAt: new Date().toISOString() },
+          { merge: true }
+        );
+        await updateProfile(auth.currentUser, { photoURL: url });
+        showToast("Avatar updated.", "success");
+      } catch (e) {
+        showToast(e instanceof Error ? e.message : "Could not upload avatar.", "error");
+      } finally {
+        setAvatarUploading(false);
+      }
+    },
+    [showToast]
+  );
+
+  const handleChangePassword = useCallback(async () => {
+    if (!auth.currentUser) return;
+    const email = auth.currentUser.email || "";
+    if (!email) {
+      showToast("No email found on this account.", "error");
+      return;
+    }
+    const next = passwordNext.trim();
+    if (!next || next.length < 8) {
+      showToast("Use at least 8 characters for a new password.", "error");
+      return;
+    }
+    if (next !== passwordConfirm.trim()) {
+      showToast("New passwords do not match.", "error");
+      return;
+    }
+    setPasswordSaving(true);
+    try {
+      if (passwordCurrent.trim()) {
+        const cred = EmailAuthProvider.credential(email, passwordCurrent.trim());
+        await reauthenticateWithCredential(auth.currentUser, cred);
+        await updatePassword(auth.currentUser, next);
+        showToast("Password updated.", "success");
+      } else {
+        await sendPasswordResetEmail(auth, email);
+        showToast("Password reset email sent. Open your email to finish changing password.", "success");
+      }
+      setPasswordCurrent("");
+      setPasswordNext("");
+      setPasswordConfirm("");
+    } catch (e) {
+      const code = (e as { code?: string })?.code || "";
+      if (code === "auth/requires-recent-login") {
+        showToast("Please log in again, then change password.", "error");
+      } else if (code === "auth/wrong-password" || code === "auth/invalid-credential") {
+        showToast("Current password is incorrect.", "error");
+      } else {
+        showToast(e instanceof Error ? e.message : "Could not change password.", "error");
+      }
+    } finally {
+      setPasswordSaving(false);
+    }
+  }, [passwordCurrent, passwordNext, passwordConfirm, showToast]);
 
   const fetchDmThreadAndMessages = useCallback(async () => {
     if (!creator?.creatorId || !auth.currentUser || activeTab !== "messages") return;
@@ -1374,11 +1952,49 @@ export const FanStorefrontView: React.FC = () => {
     setHeaderLogoFailed(true);
   }, [headerLogoIndex, headerLogoCandidates.length]);
 
+  // Membership gating values must be computed before any early return to keep hook order stable.
+  const creatorRequiresPaidMembership = creator?.monetization?.freeAccessEnabled !== true;
+  const hasPaidMembership = subscribed && membershipType === "paid";
+  const hasAccessByCurrentMembership =
+    subscribed && (creator?.monetization?.freeAccessEnabled === true || hasPaidMembership);
+  const hasUnlockedPurchases = unlockedProductIds.length > 0;
+  const needsPaidUpgrade = isLoggedIn && subscribed && creatorRequiresPaidMembership && !hasPaidMembership;
+  const purchaseOnlyAccess = needsPaidUpgrade && hasUnlockedPurchases;
+  const isViewingOwnStorefront =
+    !!creator?.creatorId && !!auth.currentUser?.uid && auth.currentUser.uid === creator.creatorId;
+  const forceCreatorPreviewLanding = forcePublicLanding && isViewingOwnStorefront;
+  const hasMemberAreaAccess = hasAccessByCurrentMembership || purchaseOnlyAccess;
+  const showLanding = previewMember
+    ? false
+    : forceCreatorPreviewLanding || isViewingOwnStorefront || !isLoggedIn || !hasMemberAreaAccess;
+
+  useEffect(() => {
+    if (!needsPaidUpgrade || previewMember || isViewingOwnStorefront) return;
+    if (purchaseOnlyAccess && !["treats", "tip", "profile"].includes(activeTab)) {
+      setActiveTab("treats");
+    }
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get("paywall") === "1") return;
+    }
+    if (autoSubscribeRedirectingRef.current) return;
+    void startSubscriptionCheckout({ auto: true });
+  }, [
+    needsPaidUpgrade,
+    previewMember,
+    isViewingOwnStorefront,
+    purchaseOnlyAccess,
+    activeTab,
+  ]);
+
   if (loading) {
     return (
       <div className="stormij-theme storefront-landing-wrap min-h-screen flex items-center justify-center">
         <div className="text-center" style={{ color: "var(--text-muted)" }}>
-          <div className="animate-spin rounded-full h-10 w-10 border-2 border-[var(--accent)] border-t-transparent mx-auto mb-3" />
+          <div
+            className="animate-spin rounded-full h-10 w-10 border-2 border-t-transparent mx-auto mb-3"
+            style={{ borderColor: defaultPrimary, borderTopColor: "transparent" }}
+          />
           <p>Loading...</p>
         </div>
       </div>
@@ -1428,11 +2044,29 @@ export const FanStorefrontView: React.FC = () => {
   // Member view background - uses creator theme or neutral default
   const bg = theme?.background || defaultBg;
   const primary = theme?.primary || defaultPrimary;
-
+  const memberSinceLabel = (() => {
+    const raw = auth.currentUser?.metadata?.creationTime;
+    if (!raw) return "Unknown";
+    const date = new Date(raw);
+    if (Number.isNaN(date.getTime())) return "Unknown";
+    return date.toLocaleDateString(undefined, { month: "long", year: "numeric" });
+  })();
+  const membershipSummary = subscribed
+    ? membershipType === "paid"
+      ? `Paid${typeof creator.monetization?.monthlyPrice === "number" ? ` • $${(creator.monetization.monthlyPrice / 100).toFixed(2)}/mo` : ""}`
+      : "Free"
+    : "Not active";
+  const profileDisplayName = auth.currentUser?.displayName || "Member";
+  const profileHandle = `@${(dmLabels?.fan || auth.currentUser?.displayName || auth.currentUser?.email || "member")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, "_")}`;
   // Nav tabs: order from sectionsOrder, filtered by sections; hide Messages when chat disabled; always include Saved at the end
   const memberTabKeys = (sectionsOrder || ["feed", "treats", "tip", "messages", "about"])
+    .filter((key) => key !== "about")
     .filter((key) => key !== "saved" && (sections as Record<string, boolean>)?.[key] !== false)
-    .filter((key) => key !== "messages" || chatEnabled);
+    .filter((key) => key !== "messages" || chatEnabled)
+    .filter((key) => !purchaseOnlyAccess || key === "treats" || key === "tip");
   const navLabels: Record<string, string> = {
     feed: "Home",
     treats: storeCopy.memberStoreTitle,
@@ -1441,6 +2075,20 @@ export const FanStorefrontView: React.FC = () => {
     saved: "Saved",
     about: "About",
   };
+  const nextSessionAlert = sessionAlerts[0] ?? null;
+  const nextSessionTimeLabel =
+    nextSessionAlert?.startsAt &&
+    Number.isFinite(new Date(nextSessionAlert.startsAt).getTime())
+      ? new Date(nextSessionAlert.startsAt).toLocaleTimeString([], {
+          hour: "numeric",
+          minute: "2-digit",
+        })
+      : null;
+
+  // Creator-facing live preview should present guest auth CTAs (Sign up / Log in),
+  // not the creator's existing session state.
+  // Do not force guest CTAs for normal fan sessions just because `?landing=1` is present.
+  const showGuestAuthCtasOnLanding = isViewingOwnStorefront;
 
   // Render legal pages (Terms/Privacy) if subpage is set
   if (legalSubpage) {
@@ -1543,12 +2191,6 @@ export const FanStorefrontView: React.FC = () => {
     );
   }
 
-  const isViewingOwnStorefront =
-    !!creator?.creatorId && !!auth.currentUser?.uid && auth.currentUser.uid === creator.creatorId;
-  const showLanding = previewMember
-    ? false
-    : forcePublicLanding || isViewingOwnStorefront || !isLoggedIn || !subscribed;
-
   const storefrontTermsPath =
     typeof window !== "undefined" && isConfiguredCustomStorefrontHost(window.location.hostname)
       ? "/terms"
@@ -1571,7 +2213,8 @@ export const FanStorefrontView: React.FC = () => {
           }}
           subscribing={subscribing}
           joiningFree={joiningFree}
-          isLoggedIn={isLoggedIn}
+          isLoggedIn={showGuestAuthCtasOnLanding ? false : isLoggedIn}
+          onLogout={showGuestAuthCtasOnLanding ? undefined : handleLogout}
           publicTreatsOnLanding={creator.publicTreatsOnLanding === true}
           sectionsTreatsEnabled={creator.sections?.treats !== false}
           landingTreatProducts={landingTreatsProducts}
@@ -1587,6 +2230,18 @@ export const FanStorefrontView: React.FC = () => {
           <FanAuthModal
             isOpen={fanAuthOpen}
             onClose={() => setFanAuthOpen(false)}
+            onSuccess={() => {
+              setIsLoggedIn(true);
+              if (typeof window !== "undefined" && !isViewingOwnStorefront) {
+                const params = new URLSearchParams(window.location.search);
+                if (params.get("landing") === "1") {
+                  params.delete("landing");
+                  const nextQs = params.toString();
+                  const nextUrl = `${window.location.pathname}${nextQs ? `?${nextQs}` : ""}${window.location.hash}`;
+                  window.history.replaceState(null, "", nextUrl);
+                }
+              }
+            }}
             initialView={fanAuthView}
             creatorId={creator.creatorId}
             displayName={displayName}
@@ -1621,7 +2276,16 @@ export const FanStorefrontView: React.FC = () => {
         "--fan-border": theme?.border || "rgba(201, 112, 130, 0.2)",
       } as React.CSSProperties}
     >
-      {memberUsernameRequired && creator && !previewMember && (
+      <ReportProblemModal
+        isOpen={reportProblemOpen}
+        onClose={() => setReportProblemOpen(false)}
+        contactEmail="contact@insightmediagroupllc.com"
+        supportName="Insight Media Group LLC"
+        mode="inApp"
+        onSubmitInApp={submitSupportProblem}
+        onSubmitted={() => setActiveTab("profile")}
+      />
+      {memberUsernameRequired && creator && !previewMember && hasAccessByCurrentMembership && (
         <MemberUsernameGateModal
           creatorId={creator.creatorId}
           creatorDisplayName={displayName}
@@ -1651,7 +2315,7 @@ export const FanStorefrontView: React.FC = () => {
                   {creator.handle?.toLowerCase() === "stormijxo" ? "STORMI J XO" : (displayName || "Creator").toUpperCase()}
                 </span>
                 <span className="storefront-header-wordmark-sub">
-                  {(creator.fanAuthBranding?.communityName || "Inner Circle").trim() || "Inner Circle"}
+                  {(creator.fanAuthBranding?.communityName || "Member Access").trim() || "Member Access"}
                 </span>
               </div>
             )}
@@ -1718,45 +2382,92 @@ export const FanStorefrontView: React.FC = () => {
                 </button>
               );
             })}
-            <div className="storefront-header-actions">
-              {isLoggedIn && (
-                <FanHubNotificationBell
-                  accentColor={primary}
-                  iconColor={theme?.text || "#6f4858"}
-                  className="storefront-header-notify-bell"
-                />
-              )}
-              <div className="storefront-profile-menu-wrap" ref={profileMenuRef}>
-                <button
-                  type="button"
-                  className="storefront-profile-menu-trigger"
-                  onClick={() => setProfileMenuOpen((v) => !v)}
-                  aria-haspopup="menu"
-                  aria-expanded={profileMenuOpen}
-                  title="Profile menu"
-                >
-                  {memberAvatar ? (
-                    <img src={memberAvatar} alt="" className="storefront-profile-menu-avatar" style={avatarCropStyle} />
-                  ) : (
-                    <span className="storefront-profile-menu-avatar storefront-profile-menu-avatar-fallback">{memberAvatarInitial}</span>
-                  )}
-                </button>
-                {profileMenuOpen && (
-                  <div className="storefront-profile-menu-dropdown" role="menu">
-                    <button type="button" role="menuitem" className="storefront-profile-menu-item" onClick={handleOpenProfile}>
-                      Your profile
-                    </button>
-                    <button type="button" role="menuitem" className="storefront-profile-menu-item" onClick={handleSendProblem}>
-                      Send a problem
-                    </button>
-                    <button type="button" role="menuitem" className="storefront-profile-menu-item" onClick={handleLogout}>
-                      Log out
-                    </button>
-                  </div>
-                )}
-              </div>
-            </div>
           </nav>
+          <div className="storefront-header-actions">
+            {isLoggedIn && (
+              <FanHubNotificationBell
+                accentColor={primary}
+                iconColor={theme?.text || "#6f4858"}
+                className="storefront-header-notify-bell"
+              />
+            )}
+            {isLoggedIn && nextSessionAlert ? (
+              <button
+                type="button"
+                onClick={() => {
+                  void handleSessionAlertAction(nextSessionAlert);
+                }}
+                className="storefront-nav-btn active"
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "0.35rem",
+                  padding: "0.45rem 0.75rem",
+                  borderRadius: "999px",
+                  borderColor: `${primary}55`,
+                  backgroundColor: `${primary}12`,
+                  color: "var(--fan-text, #1f2937)",
+                }}
+                title={nextSessionAlert.title}
+              >
+                <span
+                  style={{
+                    width: 8,
+                    height: 8,
+                    borderRadius: "999px",
+                    backgroundColor: primary,
+                    display: "inline-block",
+                  }}
+                />
+                <span style={{ fontWeight: 600, fontSize: "0.78rem" }}>
+                  {nextSessionAlert.kind === "video" ? "Video session" : "Chat session"}
+                </span>
+                {nextSessionTimeLabel ? (
+                  <span style={{ fontSize: "0.72rem", opacity: 0.85 }}>
+                    {nextSessionTimeLabel}
+                  </span>
+                ) : null}
+                {sessionAlerts.length > 1 ? (
+                  <span
+                    className="min-w-[16px] h-[16px] px-1 rounded-full text-[10px] font-bold leading-none inline-flex items-center justify-center text-white"
+                    style={{ backgroundColor: primary }}
+                    aria-label={`${sessionAlerts.length} upcoming sessions`}
+                  >
+                    {sessionAlerts.length}
+                  </span>
+                ) : null}
+              </button>
+            ) : null}
+            <div className="storefront-profile-menu-wrap" ref={profileMenuRef}>
+              <button
+                type="button"
+                className="storefront-profile-menu-trigger"
+                onClick={() => setProfileMenuOpen((v) => !v)}
+                aria-haspopup="menu"
+                aria-expanded={profileMenuOpen}
+                title="Profile menu"
+              >
+                {memberAvatar ? (
+                  <img src={memberAvatar} alt="" className="storefront-profile-menu-avatar" style={avatarCropStyle} />
+                ) : (
+                  <span className="storefront-profile-menu-avatar storefront-profile-menu-avatar-fallback">{memberAvatarInitial}</span>
+                )}
+              </button>
+              {profileMenuOpen && (
+                <div className="storefront-profile-menu-dropdown" role="menu">
+                  <button type="button" role="menuitem" className="storefront-profile-menu-item" onClick={handleOpenProfile}>
+                    Your profile
+                  </button>
+                  <button type="button" role="menuitem" className="storefront-profile-menu-item" onClick={handleSendProblem}>
+                    Report a problem
+                  </button>
+                  <button type="button" role="menuitem" className="storefront-profile-menu-item" onClick={handleLogout}>
+                    Log out
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       </header>
 
@@ -1767,8 +2478,12 @@ export const FanStorefrontView: React.FC = () => {
       )}
 
       {!entitlementLoading && (
-        <div className="fan-member-content">
-            {activeTab === "feed" && (
+        <div
+          className={`fan-member-content ${
+            activeTab === "profile" ? "fan-member-content--settings" : ""
+          } ${activeTab === "feed" ? "fan-member-content--feed" : ""}`}
+        >
+            {activeTab === "feed" && !needsPaidUpgrade && (
               <FanMemberFeed
                 creatorId={creator.creatorId}
                 displayName={displayName}
@@ -1793,6 +2508,11 @@ export const FanStorefrontView: React.FC = () => {
             )}
             {activeTab === "treats" && (
               <div className="fan-member-treats">
+                {needsPaidUpgrade ? (
+                  <p className="fan-member-empty" style={{ marginBottom: "0.75rem" }}>
+                    This creator is now on paid membership. Feed and messages are locked until you subscribe, but your purchased treats stay available.
+                  </p>
+                ) : null}
                 {treatsLoading ? (
                   <p className="fan-member-loading">{storeCopy.memberStoreLoadingMessage}</p>
                 ) : treatsProducts.length === 0 ? (
@@ -1801,6 +2521,10 @@ export const FanStorefrontView: React.FC = () => {
                   <div className="fan-member-treats-grid">
                     {treatsProducts.map((p) => {
                       const owned = unlockedProductIds.includes(p.id);
+                      const hasLimit = typeof p.quantityLimit === "number" && p.quantityLimit > 0;
+                      const soldCount = Math.max(0, Number(p.soldCount || 0));
+                      const remaining = hasLimit ? Math.max(0, p.quantityLimit! - soldCount) : null;
+                      const soldOut = hasLimit && remaining === 0;
                       return (
                         <div key={p.id} className="fan-member-treat-card">
                           <p className="fan-member-treat-type">{p.type.replace(/_/g, " ")}</p>
@@ -1809,13 +2533,20 @@ export const FanStorefrontView: React.FC = () => {
                             <p className="fan-member-treat-desc">{p.description}</p>
                           )}
                           <p className="fan-member-treat-price">{formatPrice(p.priceCents)}</p>
+                          {hasLimit ? (
+                            <p className="fan-member-treat-desc" style={{ marginTop: "-0.2rem" }}>
+                              {remaining} left
+                            </p>
+                          ) : null}
                           <div className="fan-member-treat-action">
                             {owned ? (
                               <span className="fan-member-treat-owned">Purchased</span>
+                            ) : soldOut ? (
+                              <span className="fan-member-treat-owned">Sold out</span>
                             ) : (
                               <button
                                 type="button"
-                                disabled={!!purchasingId}
+                                disabled={!!purchasingId || soldOut}
                                 onClick={() => handlePurchase(p.id)}
                                 className="fan-member-treat-buy"
                                 style={{ backgroundColor: primary }}
@@ -1831,7 +2562,7 @@ export const FanStorefrontView: React.FC = () => {
                 )}
               </div>
             )}
-            {activeTab === "messages" && (
+            {activeTab === "messages" && !needsPaidUpgrade && (
               <div className="fan-member-messages">
                 {!isLoggedIn ? (
                   <p className="fan-member-empty">Log in to message {displayName}.</p>
@@ -2026,6 +2757,488 @@ export const FanStorefrontView: React.FC = () => {
                 tipLoading={tipLoading}
                 setTipLoading={setTipLoading}
               />
+            )}
+            {activeTab === "profile" && (
+              <div className="fan-member-about fan-member-about--settings">
+                <div className="fan-profile-header">
+                  <h2 className="fan-member-about-title m-0">{profileDisplayName}'s Profile</h2>
+                  <p className="fan-member-about-text mt-1">View and manage profile information.</p>
+                </div>
+                <div className="fan-profile-stats-grid">
+                  <div className="fan-profile-stat-card">
+                    <p className="fan-profile-stat-label">Current Plan</p>
+                    <p className="fan-profile-stat-value">{membershipSummary}</p>
+                  </div>
+                  <div className="fan-profile-stat-card">
+                    <p className="fan-profile-stat-label">Member Since</p>
+                    <p className="fan-profile-stat-value">{memberSinceLabel}</p>
+                  </div>
+                  <div className="fan-profile-stat-card">
+                    <p className="fan-profile-stat-label">Support Threads</p>
+                    <p className="fan-profile-stat-value">{supportThreads.length}</p>
+                  </div>
+                </div>
+                <div className="fan-member-about-section">
+                  <div
+                    className="fan-profile-panel fan-profile-hero-card"
+                    style={{
+                      borderColor: "color-mix(in srgb, var(--fan-primary, #6366f1) 24%, transparent)",
+                    }}
+                  >
+                    <h3 className="fan-profile-section-title">Profile Information</h3>
+                    <div className="flex items-center gap-3">
+                      {profileDraft.photoURL ? (
+                        <img
+                          src={profileDraft.photoURL}
+                          alt=""
+                          className="w-20 h-20 rounded-full object-cover border-2 border-white shadow-sm"
+                          style={avatarCropStyle}
+                        />
+                      ) : (
+                        <span className="storefront-profile-menu-avatar storefront-profile-menu-avatar-fallback w-20 h-20 text-xl">
+                          {memberAvatarInitial}
+                        </span>
+                      )}
+                      <div>
+                        <p className="fan-profile-name m-0">{profileDisplayName}</p>
+                        <p className="fan-member-about-text m-0 text-sm">
+                          {auth.currentUser?.email || "No email on account"}
+                        </p>
+                        <p className="fan-member-about-text m-0 opacity-80 text-sm">{profileHandle}</p>
+                      </div>
+                    </div>
+                    <div className="mt-3">
+                      <label className="block text-xs mb-1" style={{ color: "var(--fan-text-muted, #6b7280)" }}>
+                        Username
+                      </label>
+                      <div className="fan-profile-username-row">
+                        <span className="fan-profile-username-prefix">@</span>
+                        <input
+                          value={usernameDraft}
+                          onChange={(e) =>
+                            setUsernameDraft(normalizeMemberUsername(e.target.value).replace(/[^a-z0-9_]/g, ""))
+                          }
+                          className="fan-profile-username-input"
+                          placeholder="your_username"
+                          maxLength={32}
+                        />
+                      </div>
+                      {usernameMsg ? (
+                        <p
+                          className={`fan-profile-username-status fan-profile-username-status--${usernameState}`}
+                        >
+                          {usernameState === "available"
+                            ? "Available."
+                            : usernameState === "taken"
+                              ? "Unavailable - already taken."
+                              : usernameState === "current"
+                                ? "Your current username."
+                                : usernameMsg}
+                        </p>
+                      ) : null}
+                    </div>
+                    <div className="fan-profile-bio-preview mt-4">
+                      {profileDraft.bio?.trim()
+                        ? profileDraft.bio
+                        : "Add a short bio so creators understand your vibe and preferences."}
+                    </div>
+                    <div className="flex flex-wrap gap-2 mt-3 items-center">
+                      <label
+                        className="storefront-cancel-membership-btn cursor-pointer"
+                        style={{
+                          color: primary,
+                          borderColor: `${primary}66`,
+                          backgroundColor: `${primary}0f`,
+                        }}
+                      >
+                        {avatarUploading ? "Uploading image..." : "Upload image"}
+                        <input
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          onChange={(e) => {
+                            const f = e.target.files?.[0];
+                            if (f) {
+                              void handleProfileAvatarUpload(f);
+                            }
+                          }}
+                        />
+                      </label>
+                      <button
+                        type="button"
+                        className="storefront-cancel-membership-btn"
+                        style={{
+                          color: primary,
+                          borderColor: `${primary}66`,
+                          backgroundColor: `${primary}0f`,
+                        }}
+                        onClick={() => setActiveTab("messages")}
+                      >
+                        Messages
+                      </button>
+                      <button
+                        type="button"
+                        className="storefront-cancel-membership-btn"
+                        style={{
+                          color: primary,
+                          borderColor: `${primary}66`,
+                          backgroundColor: `${primary}0f`,
+                        }}
+                        disabled={profileSaving || !isProfileDirty}
+                        onClick={() => {
+                          void handleProfileSave();
+                        }}
+                      >
+                        {profileSaving ? "Saving..." : isProfileDirty ? "Save" : "Edit"}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+                <div className="fan-member-about-section">
+                  <h3 className="fan-member-about-heading">Profile details</h3>
+                  <div className="fan-profile-panel" style={{ borderColor: "color-mix(in srgb, var(--fan-primary, #6366f1) 24%, transparent)" }}>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-xs mb-1" style={{ color: "var(--fan-text-muted, #6b7280)" }}>First name</label>
+                        <input
+                          value={profileDraft.firstName}
+                          onChange={(e) => setProfileDraft((p) => ({ ...p, firstName: e.target.value }))}
+                          className="w-full px-3 py-2 rounded-lg border text-sm"
+                          style={{ borderColor: "color-mix(in srgb, var(--fan-primary, #6366f1) 18%, transparent)", backgroundColor: "white", color: "var(--fan-text, #1f2937)" }}
+                          placeholder="First name"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs mb-1" style={{ color: "var(--fan-text-muted, #6b7280)" }}>Last name</label>
+                        <input
+                          value={profileDraft.lastName}
+                          onChange={(e) => setProfileDraft((p) => ({ ...p, lastName: e.target.value }))}
+                          className="w-full px-3 py-2 rounded-lg border text-sm"
+                          style={{ borderColor: "color-mix(in srgb, var(--fan-primary, #6366f1) 18%, transparent)", backgroundColor: "white", color: "var(--fan-text, #1f2937)" }}
+                          placeholder="Last name"
+                        />
+                      </div>
+                    </div>
+                    <div className="mt-3">
+                      <label className="block text-xs mb-1" style={{ color: "var(--fan-text-muted, #6b7280)" }}>Bio</label>
+                      <textarea
+                        rows={4}
+                        value={profileDraft.bio}
+                        onChange={(e) => setProfileDraft((p) => ({ ...p, bio: e.target.value }))}
+                        className="w-full px-3 py-2 rounded-lg border text-sm"
+                        style={{ borderColor: "color-mix(in srgb, var(--fan-primary, #6366f1) 18%, transparent)", backgroundColor: "white", color: "var(--fan-text, #1f2937)" }}
+                        placeholder="Tell creators a little about you..."
+                      />
+                    </div>
+                    <div className="mt-3">
+                      <button
+                        type="button"
+                        className="storefront-cancel-membership-btn"
+                        style={{
+                          color: primary,
+                          borderColor: `${primary}66`,
+                          backgroundColor: `${primary}0f`,
+                        }}
+                        disabled={profileSaving || !isProfileDirty}
+                        onClick={() => {
+                          void handleProfileSave();
+                        }}
+                      >
+                        {profileSaving ? "Saving..." : isProfileDirty ? "Save details" : "Edit details"}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+                <div className="fan-member-about-section">
+                  <h3 className="fan-member-about-heading">Membership</h3>
+                  <div
+                    className="fan-profile-panel"
+                    style={{
+                      borderColor: "color-mix(in srgb, var(--fan-primary, #6366f1) 24%, transparent)",
+                    }}
+                  >
+                    <p className="fan-member-about-text">
+                      {subscribed
+                        ? membershipType === "paid"
+                          ? `Paid membership is active${typeof creator.monetization?.monthlyPrice === "number"
+                              ? ` ($${(creator.monetization.monthlyPrice / 100).toFixed(2)}/mo)`
+                              : "."}`
+                          : creator.monetization?.freeAccessEnabled
+                            ? "Free membership is active."
+                            : "You joined when this page was free. This page is now paid — subscribe to keep access."
+                        : "No active membership."}
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap gap-2 mt-3">
+                    {!subscribed ? (
+                      <button
+                        type="button"
+                        onClick={creator.monetization?.freeAccessEnabled ? handleJoinFree : handleSubscribe}
+                        disabled={joiningFree || subscribing}
+                        className="storefront-cancel-membership-btn"
+                        style={{
+                          color: primary,
+                          borderColor: `${primary}66`,
+                          backgroundColor: `${primary}0f`,
+                        }}
+                      >
+                        {creator.monetization?.freeAccessEnabled
+                          ? joiningFree
+                            ? "Joining..."
+                            : "Join free membership"
+                          : subscribing
+                            ? "Opening checkout..."
+                            : "Subscribe"}
+                      </button>
+                    ) : null}
+                    {subscribed && membershipType !== "paid" && creator.monetization?.freeAccessEnabled !== true ? (
+                      <button
+                        type="button"
+                        onClick={handleSubscribe}
+                        disabled={subscribing}
+                        className="storefront-cancel-membership-btn"
+                        style={{
+                          color: primary,
+                          borderColor: `${primary}66`,
+                          backgroundColor: `${primary}0f`,
+                        }}
+                      >
+                        {subscribing ? "Opening checkout..." : "Subscribe"}
+                      </button>
+                    ) : null}
+                    {subscribed && membershipType === "paid" ? (
+                      <button
+                        type="button"
+                        onClick={handleCancelMembership}
+                        disabled={cancelMembershipLoading}
+                        className="storefront-cancel-membership-btn"
+                        style={{
+                          color: primary,
+                          borderColor: `${primary}66`,
+                          backgroundColor: `${primary}0f`,
+                        }}
+                      >
+                        {cancelMembershipLoading ? "Updating..." : "Manage subscription"}
+                      </button>
+                    ) : null}
+                  </div>
+                  {cancelMembershipMessage ? (
+                    <p className="fan-member-about-text mt-2">{cancelMembershipMessage}</p>
+                  ) : null}
+                </div>
+                <div className="fan-member-about-section">
+                  <h3 className="fan-member-about-heading">Password</h3>
+                  <div className="fan-profile-panel" style={{ borderColor: "color-mix(in srgb, var(--fan-primary, #6366f1) 24%, transparent)" }}>
+                    <p className="fan-member-about-text mb-2">
+                      Enter your current password and a new password to change it now, or leave current password blank and we will email you a reset link.
+                    </p>
+                    <div className="grid grid-cols-1 gap-2">
+                      <input
+                        type="password"
+                        value={passwordCurrent}
+                        onChange={(e) => setPasswordCurrent(e.target.value)}
+                        className="w-full px-3 py-2 rounded-lg border text-sm"
+                        style={{ borderColor: "color-mix(in srgb, var(--fan-primary, #6366f1) 18%, transparent)", backgroundColor: "white", color: "var(--fan-text, #1f2937)" }}
+                        placeholder="Current password (optional if using email reset)"
+                      />
+                      <input
+                        type="password"
+                        value={passwordNext}
+                        onChange={(e) => setPasswordNext(e.target.value)}
+                        className="w-full px-3 py-2 rounded-lg border text-sm"
+                        style={{ borderColor: "color-mix(in srgb, var(--fan-primary, #6366f1) 18%, transparent)", backgroundColor: "white", color: "var(--fan-text, #1f2937)" }}
+                        placeholder="New password"
+                      />
+                      <input
+                        type="password"
+                        value={passwordConfirm}
+                        onChange={(e) => setPasswordConfirm(e.target.value)}
+                        className="w-full px-3 py-2 rounded-lg border text-sm"
+                        style={{ borderColor: "color-mix(in srgb, var(--fan-primary, #6366f1) 18%, transparent)", backgroundColor: "white", color: "var(--fan-text, #1f2937)" }}
+                        placeholder="Confirm new password"
+                      />
+                    </div>
+                    <div className="mt-3">
+                      <button
+                        type="button"
+                        className="storefront-cancel-membership-btn"
+                        style={{
+                          color: primary,
+                          borderColor: `${primary}66`,
+                          backgroundColor: `${primary}0f`,
+                        }}
+                        disabled={passwordSaving}
+                        onClick={() => {
+                          void handleChangePassword();
+                        }}
+                      >
+                        {passwordSaving ? "Updating..." : "Change password"}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+                <div className="fan-member-about-section">
+                  <div className="flex items-center justify-between gap-3">
+                    <h3 className="fan-member-about-heading m-0">IT support threads</h3>
+                    <button
+                      type="button"
+                      className="storefront-cancel-membership-btn"
+                      style={{
+                        color: primary,
+                        borderColor: `${primary}66`,
+                        backgroundColor: `${primary}0f`,
+                      }}
+                      onClick={() => setReportProblemOpen(true)}
+                    >
+                      Report a problem
+                    </button>
+                  </div>
+                  <p className="fan-member-about-text mt-2">
+                    Submit and track technical issues here. Your support history is organized by thread.
+                  </p>
+                  {supportThreads.length === 0 ? (
+                    <div
+                      className="fan-profile-panel mt-2 text-sm"
+                      style={{
+                        borderColor: "color-mix(in srgb, var(--fan-primary, #6366f1) 24%, transparent)",
+                      }}
+                    >
+                      No support threads yet. Use <strong>Report a problem</strong> to start one.
+                    </div>
+                  ) : (
+                    <div className="mt-2 grid grid-cols-1 lg:grid-cols-[300px_minmax(0,1fr)] gap-4">
+                      <div
+                        className="fan-profile-panel p-2"
+                        style={{
+                          borderColor: "color-mix(in srgb, var(--fan-primary, #6366f1) 24%, transparent)",
+                        }}
+                      >
+                        <div className="space-y-2 max-h-[280px] overflow-auto">
+                          {supportThreads.map((thread) => {
+                            const active = supportThreadId === thread.id;
+                            const preview = getSupportMessageMainText(thread.lastMessage || "");
+                            return (
+                              <button
+                                key={thread.id}
+                                type="button"
+                                onClick={() => setSupportThreadId(thread.id)}
+                                className="w-full text-left rounded-lg border px-3 py-2 transition-colors"
+                                style={{
+                                  borderColor: active
+                                    ? "color-mix(in srgb, var(--fan-primary, #6366f1) 58%, transparent)"
+                                    : "color-mix(in srgb, var(--fan-primary, #6366f1) 20%, transparent)",
+                                  backgroundColor: active
+                                    ? "color-mix(in srgb, var(--fan-primary, #6366f1) 10%, white)"
+                                    : "white",
+                                }}
+                              >
+                                <div className="flex items-center justify-between gap-2">
+                                  <p className="text-sm font-semibold m-0 truncate">{thread.title}</p>
+                                  <span
+                                    className="text-[10px] px-2 py-0.5 rounded-full border shrink-0"
+                                    style={{
+                                      borderColor:
+                                        thread.status === "closed"
+                                          ? "color-mix(in srgb, #64748b 45%, transparent)"
+                                          : "color-mix(in srgb, #059669 45%, transparent)",
+                                      color: thread.status === "closed" ? "#64748b" : "#059669",
+                                      backgroundColor:
+                                        thread.status === "closed"
+                                          ? "color-mix(in srgb, #64748b 10%, transparent)"
+                                          : "color-mix(in srgb, #059669 10%, transparent)",
+                                    }}
+                                  >
+                                    {thread.status === "closed" ? "Closed" : "Open"}
+                                  </span>
+                                </div>
+                                {preview ? <p className="text-xs m-0 mt-1 opacity-85 line-clamp-2">{preview}</p> : null}
+                                <p className="text-[11px] m-0 mt-1 opacity-75">
+                                  {thread.updatedAt ? new Date(thread.updatedAt).toLocaleString() : "No date"}
+                                </p>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                      <div
+                        className="fan-profile-panel"
+                        style={{
+                          borderColor: "color-mix(in srgb, var(--fan-primary, #6366f1) 24%, transparent)",
+                        }}
+                      >
+                        <div className="space-y-2 max-h-[280px] overflow-auto pr-1">
+                          {supportMessages.map((msg) => (
+                            <div
+                              key={msg.id}
+                              className="rounded-lg border px-3 py-2"
+                              style={{
+                                borderColor:
+                                  msg.senderType === "support"
+                                    ? "color-mix(in srgb, #475569 32%, transparent)"
+                                    : "color-mix(in srgb, var(--fan-primary, #6366f1) 30%, transparent)",
+                                backgroundColor:
+                                  msg.senderType === "support"
+                                    ? "color-mix(in srgb, #475569 8%, white)"
+                                    : "color-mix(in srgb, var(--fan-primary, #6366f1) 7%, white)",
+                              }}
+                            >
+                              <p className="text-xs font-semibold m-0">
+                                {msg.senderType === "support" ? "IT Team" : "You"}
+                              </p>
+                              <p className="text-sm whitespace-pre-wrap m-0 mt-1">{getSupportMessageMainText(msg.content)}</p>
+                              {getSupportMessageDiagnostics(msg.content) ? (
+                                <details className="mt-1">
+                                  <summary className="text-[11px] cursor-pointer opacity-80">Diagnostics</summary>
+                                  <pre className="text-[11px] whitespace-pre-wrap mt-1 opacity-80">
+                                    {getSupportMessageDiagnostics(msg.content)}
+                                  </pre>
+                                </details>
+                              ) : null}
+                              <p className="text-[11px] opacity-75 m-0 mt-1">
+                                {msg.createdAt ? new Date(msg.createdAt).toLocaleString() : ""}
+                              </p>
+                            </div>
+                          ))}
+                          {supportThreadId && supportMessages.length === 0 ? (
+                            <p className="text-sm opacity-75">No messages in this thread yet.</p>
+                          ) : null}
+                        </div>
+                        {supportThreadId ? (
+                          <div className="mt-3 flex gap-2">
+                            <textarea
+                              rows={2}
+                              value={supportReplyDraft}
+                              onChange={(e) => setSupportReplyDraft(e.target.value)}
+                              className="w-full px-3 py-2 rounded-lg border text-sm"
+                              style={{
+                                borderColor: "color-mix(in srgb, var(--fan-primary, #6366f1) 18%, transparent)",
+                                backgroundColor: "white",
+                                color: "var(--fan-text, #1f2937)",
+                              }}
+                              placeholder="Reply to IT support..."
+                            />
+                            <button
+                              type="button"
+                              className="storefront-cancel-membership-btn self-end"
+                              style={{
+                                color: primary,
+                                borderColor: `${primary}66`,
+                                backgroundColor: `${primary}0f`,
+                              }}
+                              disabled={supportSending || !supportReplyDraft.trim()}
+                              onClick={() => {
+                                void sendSupportReply();
+                              }}
+                            >
+                              {supportSending ? "Sending..." : "Send"}
+                            </button>
+                          </div>
+                        ) : null}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
             )}
             {activeTab === "about" && (
               <div className="fan-member-about">

@@ -14,6 +14,7 @@ export interface StorefrontPreviewLiveLanding {
   isFreeAccess: boolean;
   onOpenSignup: () => void;
   onOpenLogin: () => void;
+  onLogout?: () => void;
   onSubscribe: () => void;
   onJoinFree?: () => void;
   subscribing: boolean;
@@ -258,31 +259,31 @@ const SECTION_LABELS: Record<string, string> = {
 
 // Neutral default landing content - creators should customize
 const DEFAULT_LANDING_CONTENT: StorefrontLandingContent = {
-  perksTitle: "Why Join",
-  perksText: "A space for exclusive content and real connection with my community.",
+  perksTitle: "Demo Section Title",
+  perksText: "This is demo landing copy. Update this text in My Page Builder.",
   perksList: [
-    "Exclusive behind-the-scenes content",
-    "Direct messages and personal connection",
-    "Early access to new releases",
-    "Special treats and surprises",
+    "Demo bullet one",
+    "Demo bullet two",
+    "Demo bullet three",
+    "Demo bullet four",
   ],
-  previewTitle: "What You Get",
-  previewText: "Inside the Inner Circle:",
+  previewTitle: "Demo Preview",
+  previewText: "This is demo preview text.",
   previewList: [
-    "Daily posts and updates",
-    "Exclusive photos and videos",
-    "Personal messages",
-    "Live sessions and Q&As",
+    "Demo feature one",
+    "Demo feature two",
+    "Demo feature three",
+    "Demo feature four",
   ],
-  previewFooterLines: ["Nothing explicit.", "Nothing fake.", "Nothing forced."],
-  energyTitle: "The Vibe",
+  previewFooterLines: ["Demo footer line one.", "Demo footer line two."],
+  energyTitle: "Demo Vibe",
   energyLines: [
-    "Authentic and real.",
-    "Genuine connection.",
-    "A supportive community.",
+    "Demo vibe line one.",
+    "Demo vibe line two.",
+    "Demo vibe line three.",
   ],
   boundaryTitle: "Community Guidelines",
-  boundaryText: "This is a supportive space. Respect is everything. No negativity, no demands — just genuine connection.",
+  boundaryText: "This is demo guideline text. Replace with your own policy and expectations.",
 };
 
 // Social icons
@@ -546,6 +547,7 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
   const sectionsOrder = config.sectionsOrder ?? DEFAULT_SECTION_ORDER;
   const chatEnabledPreview = config.monetization?.chatEnabled !== false;
   const memberTabs = sectionsOrder
+    .filter((key) => key !== "about")
     .filter((key) => key !== "saved" && (sections as Record<string, boolean>)?.[key] !== false)
     .filter((key) => key !== "messages" || chatEnabledPreview);
   const effectiveTab =
@@ -566,6 +568,11 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
   }, [previewMode, effectiveTab]);
 
   const displayName = config.displayName || config.handle || "Your name";
+  const creatorHandleLabel = `@${String(config.handle || displayName || "creator")
+    .replace(/^@/, "")
+    .replace(/\s+/g, "")
+    .toLowerCase()}`;
+  const fanUsernameLabel = "@your_username";
   const bio = config.bio ?? "";
   const avatar = config.avatar;
   /** Same crop for every circular avatar in the preview. */
@@ -627,7 +634,7 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
   const heroPromise =
     typeof config.heroPromise === "string" && config.heroPromise.trim() !== ""
       ? config.heroPromise.trim()
-      : "Your access to the real me";
+      : "Demo hero promise text";
   const heroSubline = config.heroSubline ?? "";
   const heroSubline2 = config.heroSubline2 ?? "";
   const heroLayout = config.heroLayout ?? "default";
@@ -2301,14 +2308,28 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
                 <p className="fan-member-messages-title">Conversation with {displayName}</p>
                 <div className="fan-member-messages-list">
                   <div className="fan-member-message fan-member-message-received">
-                    <span className="fan-member-message-content">
-                      Hey! Thanks for being here — this is how DMs look for fans.
-                    </span>
-                    <span className="fan-member-message-time">2:31 PM</span>
+                    <div className="fh-dm-chat-row fh-dm-chat-row--in">
+                      <div className="fh-dm-bubble-wrap fh-dm-bubble-wrap--in">
+                        <div className="fh-dm-bubble fh-dm-bubble--them">
+                          <div className="fh-dm-bubble__head">{creatorHandleLabel}</div>
+                          <div className="fh-dm-bubble__body">
+                            Hey! Thanks for being here — this is how DMs look for fans.
+                          </div>
+                        </div>
+                        <div className="fh-dm-meta-below">2:31 PM</div>
+                      </div>
+                    </div>
                   </div>
                   <div className="fan-member-message fan-member-message-sent">
-                    <span className="fan-member-message-content">Love the new drop! 🔥</span>
-                    <span className="fan-member-message-time">2:32 PM</span>
+                    <div className="fh-dm-chat-row fh-dm-chat-row--out">
+                      <div className="fh-dm-bubble-wrap fh-dm-bubble-wrap--out">
+                        <div className="fh-dm-bubble fh-dm-bubble--me">
+                          <div className="fh-dm-bubble__head">{fanUsernameLabel}</div>
+                          <div className="fh-dm-bubble__body">Love the new drop! 🔥</div>
+                        </div>
+                        <div className="fh-dm-meta-below">2:32 PM</div>
+                      </div>
+                    </div>
                   </div>
                 </div>
                 <div className="fan-member-messages-compose">

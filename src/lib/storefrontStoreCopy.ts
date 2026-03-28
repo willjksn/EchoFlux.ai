@@ -18,16 +18,14 @@ export type ResolvedStoreCopy = {
 
 const DEFAULTS: ResolvedStoreCopy = {
   memberStoreTitle: "Store",
-  memberStoreSubtitle: "Personal messages, voice notes, and more — just for you.",
+  memberStoreSubtitle: "Demo member store subtitle text.",
   memberStoreEmptyMessage: "Nothing listed here yet.",
   memberStoreLoadingMessage: "Loading…",
-  storeLandingHeadline: "Want something sweet?",
-  storeLandingDescription:
-    "Come by the treat shop — little extras, surprises, and picks just for you.",
+  storeLandingHeadline: "Demo store headline",
+  storeLandingDescription: "Demo store description text.",
   storeLandingCtaLabel: "Shop treats",
   publicStoreCardTitle: "Treat store",
-  publicStoreCardDescription:
-    "Browse treats without a membership — checkout with your email. If you subscribe later with the same email, your purchases link to your account.",
+  publicStoreCardDescription: "Demo public store description text.",
   publicStoreOpenCtaLabel: "Open treat store",
   publicStoreModalTitle: "Treat store",
   publicStoreModalEmptyMessage:

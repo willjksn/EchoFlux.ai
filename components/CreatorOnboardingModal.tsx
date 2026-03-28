@@ -59,6 +59,30 @@ export const CreatorOnboardingModal: React.FC<CreatorOnboardingModalProps> = ({ 
         }
     }, [user?.id]);
 
+    const persistFanHubThemeSelection = useCallback(async (opts?: { handle?: string }) => {
+        if (!user?.id) return;
+        try {
+            const preset = FAN_HUB_THEME_PRESETS.find((p) => p.id === fanHubPresetId) || FAN_HUB_THEME_PRESETS[0];
+            const token = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
+            if (!token) return;
+            const body: Record<string, unknown> = {
+                displayName: user.name || user.email?.split('@')[0] || user.id,
+                theme: { ...preset.theme, presetId: preset.id, primary: fanHubPrimaryColor },
+            };
+            const cleanHandle = (opts?.handle || "").replace(/@/g, '').toLowerCase().trim();
+            if (cleanHandle) {
+                body.handle = cleanHandle;
+            }
+            await fetch('/api/updateCreatorStorefront', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                body: JSON.stringify(body),
+            });
+        } catch (e) {
+            console.warn('Failed to persist onboarding Fan Hub theme selection:', e);
+        }
+    }, [user?.id, user?.name, user?.email, fanHubPresetId, fanHubPrimaryColor]);
+
     useEffect(() => {
         const clean = fanHubHandle.replace(/@/g, '').toLowerCase().trim();
         if (clean.length < 3 || !/^[a-z0-9_]+$/.test(clean)) {
@@ -78,7 +102,6 @@ export const CreatorOnboardingModal: React.FC<CreatorOnboardingModalProps> = ({ 
         }
         setFanHubSaving(true);
         try {
-            const preset = FAN_HUB_THEME_PRESETS.find((p) => p.id === fanHubPresetId) || FAN_HUB_THEME_PRESETS[0];
             const token = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
             if (!token) throw new Error('Not authenticated');
             const res = await fetch('/api/updateCreatorStorefront', {
@@ -87,7 +110,11 @@ export const CreatorOnboardingModal: React.FC<CreatorOnboardingModalProps> = ({ 
                 body: JSON.stringify({
                     handle: cleanHandle,
                     displayName: user.name || user.email?.split('@')[0] || cleanHandle,
-                    theme: { ...preset.theme, presetId: preset.id, primary: fanHubPrimaryColor },
+                    theme: {
+                        ...(FAN_HUB_THEME_PRESETS.find((p) => p.id === fanHubPresetId) || FAN_HUB_THEME_PRESETS[0]).theme,
+                        presetId: fanHubPresetId,
+                        primary: fanHubPrimaryColor,
+                    },
                 }),
             });
             const data = await res.json().catch(() => ({}));
@@ -103,6 +130,7 @@ export const CreatorOnboardingModal: React.FC<CreatorOnboardingModalProps> = ({ 
     };
 
     const handleSaveAndComplete = async () => {
+        await persistFanHubThemeSelection({ handle: fanHubHandle });
         await persistCreatorProfile();
         if (user) {
             await setUser({ ...user, niche, audience, hasCompletedOnboarding: true });
@@ -133,6 +161,7 @@ export const CreatorOnboardingModal: React.FC<CreatorOnboardingModalProps> = ({ 
     }, [user?.id, niche, audience, creatorGender]);
 
     const handleSkipFanHubSetup = async () => {
+        await persistFanHubThemeSelection({ handle: fanHubHandle });
         await persistCreatorProfile();
         if (user) setUser({ ...user, niche, audience, hasCompletedOnboarding: true });
         onComplete();

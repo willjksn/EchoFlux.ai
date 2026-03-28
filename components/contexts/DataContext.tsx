@@ -395,9 +395,12 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     FIRESTORE LISTENERS
   --------------------------------------------------------------------*/
   useEffect(() => {
+    const authUid = auth.currentUser?.uid || null;
+    const effectiveUserId = authUid || user?.id || null;
+
     // Only clear data if user ID actually changed (user logged out or switched)
     // Don't clear if user is just temporarily null during auth state check
-    if (!user || !user.id) {
+    if (!effectiveUserId || !authUid) {
       // Only clear if we had a user before (actual logout), not if it's initial load
       if (lastUserId) {
         setMessages([]);
@@ -422,13 +425,20 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       return;
     }
 
+    if (user?.id && user.id !== authUid) {
+      console.warn("DataContext detected user.id/auth UID mismatch; using auth UID for Firestore paths.", {
+        userId: user.id,
+        authUid,
+      });
+    }
+
     // If user ID hasn't changed, don't re-establish listeners (they're already active)
-    if (lastUserId === user.id) {
+    if (lastUserId === effectiveUserId) {
       return;
     }
 
     // User ID changed - update and set up new listeners
-    setLastUserId(user.id);
+    setLastUserId(effectiveUserId);
 
     const subcollections = [
       { name: "messages", setter: setMessages }, // No seed - users start with empty inbox
@@ -485,7 +495,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     ];
 
     const unsubscribers = subcollections.map(({ name, setter, seed, seedIdField }) => {
-      const collRef = collection(db, "users", user.id, name);
+      const collRef = collection(db, "users", effectiveUserId, name);
       
       // Different collections have different timestamp/date fields
       let q;
@@ -570,7 +580,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       );
     });
 
-    if (user.bioPage) setBioPageState(user.bioPage);
+    if (user?.bioPage) setBioPageState(user.bioPage);
 
     return () => {
       // Clean up all listeners
@@ -582,7 +592,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         }
       });
     };
-  }, [user?.id]); // Only re-run when user.id changes, not when user object reference changes
+  }, [user?.id, auth.currentUser?.uid]); // Re-run when auth identity changes
 
   /*--------------------------------------------------------------------
     SETTINGS

@@ -2,9 +2,9 @@ import type { StorefrontLandingContent } from "../../types";
 
 export type TipSectionContext = "landing" | "member";
 
-const DEFAULT_HEADING = "Want to show love?";
-const DEFAULT_SUBLINE_GUEST = "One-time tip — no subscription";
-const DEFAULT_SUBLINE_MEMBER = "No minimum — send what you like.";
+const DEFAULT_HEADING = "Support this creator";
+const DEFAULT_SUBLINE_GUEST = "One-time tip — no subscription needed.";
+const DEFAULT_SUBLINE_MEMBER = "Choose any amount to send support.";
 
 /**
  * Tip section copy: same customizable heading on landing and member Tip tab.

@@ -92,6 +92,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // X API requires spaces in scope to be URL-encoded as %20, not +
     // Note: media.write scope may be needed for media uploads, but OAuth 2.0 may not support v1.1 media upload endpoint
     const scope = 'tweet.read tweet.write users.read offline.access media.write';
+    // force_login: ask for credentials instead of silently using the browser's current X session.
+    // Set X_OAUTH_FORCE_LOGIN=false only if you need seamless re-auth and accept wrong-account risk on shared PCs.
+    const forceLogin = process.env.X_OAUTH_FORCE_LOGIN !== 'false';
+
     const params = new URLSearchParams({
       response_type: 'code',
       client_id: clientId,
@@ -101,7 +105,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       code_challenge_method: 'S256', // SHA256 method for PKCE
       prompt: 'consent',
     });
-    
+
+    if (forceLogin) {
+      params.append('force_login', 'true');
+    }
+
     // Add scope separately to ensure proper encoding (spaces as %20)
     params.append('scope', scope);
 

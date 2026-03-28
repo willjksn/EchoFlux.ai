@@ -15,7 +15,7 @@ export const Header: React.FC<HeaderProps> = ({ pageTitle }) => {
   const {
     isDarkMode, toggleTheme, setIsSidebarOpen, handleLogout, setActivePage,
     user, clients, selectedClient, setSelectedClient, notifications,
-    setNotifications, navigateToDashboardWithFilter
+    setNotifications, navigateToDashboardWithFilter, activePage
   } = useAppContext();
 
   if (!user) {
@@ -40,6 +40,7 @@ export const Header: React.FC<HeaderProps> = ({ pageTitle }) => {
   }, [notifications]);
 
   const hasUnreadNotifications = useMemo(() => visibleNotifications.some(n => !n.read), [visibleNotifications]);
+  const showShareReviewInMenu = activePage !== 'fanHub';
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -180,7 +181,9 @@ export const Header: React.FC<HeaderProps> = ({ pageTitle }) => {
   return (
     <header className="flex-shrink-0 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
       <ReportProblemModal isOpen={isReportOpen} onClose={() => setIsReportOpen(false)} />
-      <ShareReviewModal isOpen={isReviewOpen} onClose={() => setIsReviewOpen(false)} />
+      {showShareReviewInMenu ? (
+        <ShareReviewModal isOpen={isReviewOpen} onClose={() => setIsReviewOpen(false)} />
+      ) : null}
       <div className="flex items-center justify-between p-4 h-20">
         <div className="flex items-center space-x-4">
             <button
@@ -272,12 +275,14 @@ export const Header: React.FC<HeaderProps> = ({ pageTitle }) => {
                     >
                         Report a Problem
                     </button>
-                    <button
-                        onClick={() => { setIsReviewOpen(true); setIsProfileOpen(false); }}
-                        className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
-                    >
-                        Share a Review
-                    </button>
+                    {showShareReviewInMenu ? (
+                      <button
+                          onClick={() => { setIsReviewOpen(true); setIsProfileOpen(false); }}
+                          className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
+                      >
+                          Share a Review
+                      </button>
+                    ) : null}
                     <button 
                         onClick={handleLogout}
                         className="w-full text-left flex items-center px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"

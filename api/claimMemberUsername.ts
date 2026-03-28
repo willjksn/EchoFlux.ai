@@ -69,13 +69,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const existingUsername =
     typeof existingUser?.username === "string" ? normalize(existingUser.username) : "";
 
-  if (existingUsername && existingUsername !== norm) {
-    return res.status(400).json({
-      error: "You already have a username. Changing it is not supported here yet.",
-    });
-  }
-
   const unameRef = db.collection("usernames").doc(norm);
+  const oldUnameRef = existingUsername && existingUsername !== norm ? db.collection("usernames").doc(existingUsername) : null;
 
   try {
     await db.runTransaction(async (tx) => {
@@ -87,6 +82,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         }
       }
       tx.set(unameRef, { uid, updatedAt: now });
+      if (oldUnameRef) {
+        const oldSnap = await tx.get(oldUnameRef);
+        const oldOwner = (oldSnap.data() as { uid?: string } | undefined)?.uid;
+        if (!oldOwner || oldOwner === uid) {
+          tx.delete(oldUnameRef);
+        }
+      }
       tx.set(
         userRef,
         {

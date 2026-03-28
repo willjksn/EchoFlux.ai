@@ -6250,8 +6250,8 @@ button.treat-card:hover:not(:disabled) .treat-card-cta {
   width: 42px;
   height: 42px;
   border-radius: 9999px;
-  border: 1px solid rgba(212, 85, 139, 0.24);
-  background: #fff;
+  border: 1px solid color-mix(in srgb, var(--fan-primary, #6366f1) 28%, transparent);
+  background: color-mix(in srgb, var(--fan-primary, #6366f1) 6%, #fff);
   padding: 0;
   display: inline-flex;
   align-items: center;
@@ -6262,8 +6262,8 @@ button.treat-card:hover:not(:disabled) .treat-card-cta {
 }
 
 .storefront-profile-menu-trigger:hover {
-  border-color: rgba(212, 85, 139, 0.45);
-  box-shadow: 0 6px 16px rgba(212, 85, 139, 0.2);
+  border-color: color-mix(in srgb, var(--fan-primary, #6366f1) 48%, transparent);
+  box-shadow: 0 6px 16px color-mix(in srgb, var(--fan-primary, #6366f1) 25%, transparent);
 }
 
 .storefront-profile-menu-avatar {
@@ -6282,7 +6282,12 @@ button.treat-card:hover:not(:disabled) .treat-card-cta {
   font-size: 0.9rem;
   font-weight: 700;
   color: #fff;
-  background: linear-gradient(135deg, #c97082, #d4558b);
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--fan-primary, #6366f1) 76%, #ffffff) 0%,
+    var(--fan-primary, #6366f1) 60%,
+    color-mix(in srgb, var(--fan-primary, #6366f1) 78%, #000000) 100%
+  );
 }
 
 .storefront-profile-menu-dropdown {
@@ -6291,7 +6296,7 @@ button.treat-card:hover:not(:disabled) .treat-card-cta {
   top: calc(100% + 8px);
   width: 220px;
   background: #fff;
-  border: 1px solid rgba(212, 85, 139, 0.14);
+  border: 1px solid color-mix(in srgb, var(--fan-primary, #6366f1) 22%, transparent);
   border-radius: 14px;
   box-shadow: 0 16px 36px rgba(0, 0, 0, 0.18);
   padding: 0.5rem;
@@ -6305,14 +6310,14 @@ button.treat-card:hover:not(:disabled) .treat-card-cta {
   text-align: left;
   padding: 0.7rem 0.75rem;
   border-radius: 10px;
-  color: #5f3e4b;
+  color: color-mix(in srgb, var(--fan-primary, #6366f1) 44%, #111827);
   font-size: 1.05rem;
   cursor: pointer;
 }
 
 .storefront-profile-menu-item:hover {
-  background: rgba(212, 85, 139, 0.08);
-  color: #8b3a4a;
+  background: color-mix(in srgb, var(--fan-primary, #6366f1) 12%, transparent);
+  color: color-mix(in srgb, var(--fan-primary, #6366f1) 62%, #111827);
 }
 
 .storefront-header-notify-bell {
@@ -6357,7 +6362,7 @@ button.treat-card:hover:not(:disabled) .treat-card-cta {
   border-radius: 10px;
   font-size: 0.86rem;
   font-weight: 500;
-  color: #6f4858;
+  color: color-mix(in srgb, var(--fan-primary, #6366f1) 42%, #1f2937);
   background: transparent;
   border: 1px solid transparent;
   cursor: pointer;
@@ -6367,28 +6372,33 @@ button.treat-card:hover:not(:disabled) .treat-card-cta {
 }
 
 .storefront-nav-btn:hover {
-  color: #c97082;
-  background: rgba(212, 85, 139, 0.08);
+  color: var(--fan-primary, #6366f1);
+  background: color-mix(in srgb, var(--fan-primary, #6366f1) 11%, transparent);
 }
 
 .storefront-nav-btn.active {
-  color: #8b3a4a;
-  background: rgba(212, 85, 139, 0.12);
-  border-color: rgba(212, 85, 139, 0.25);
+  color: var(--fan-primary, #6366f1);
+  background: color-mix(in srgb, var(--fan-primary, #6366f1) 16%, transparent);
+  border-color: color-mix(in srgb, var(--fan-primary, #6366f1) 34%, transparent);
 }
 
 .storefront-nav-btn.storefront-nav-tip {
-  color: #c97082;
+  color: var(--fan-primary, #6366f1);
 }
 
 .storefront-nav-btn.storefront-nav-tip:hover {
-  color: #d4558b;
-  background: rgba(212, 85, 139, 0.08);
+  color: var(--fan-primary, #6366f1);
+  background: color-mix(in srgb, var(--fan-primary, #6366f1) 11%, transparent);
 }
 
 .storefront-nav-btn.storefront-nav-tip.active {
   color: #fff;
-  background: linear-gradient(135deg, #c97082, #d4558b);
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--fan-primary, #6366f1) 84%, #ffffff),
+    var(--fan-primary, #6366f1)
+  );
+  border-color: color-mix(in srgb, var(--fan-primary, #6366f1) 35%, transparent);
 }
 
 .storefront-nav-icon {
@@ -6424,16 +6434,25 @@ button.treat-card:hover:not(:disabled) .treat-card-cta {
 .tip-section-wrap {
   max-width: 100%;
   text-align: left;
-  background: linear-gradient(160deg, rgba(255, 255, 255, 1) 0%, rgba(255, 244, 249, 0.95) 100%);
-  border: 1px solid rgba(212, 85, 139, 0.12);
+  background: linear-gradient(
+    160deg,
+    rgba(255, 255, 255, 1) 0%,
+    color-mix(in srgb, var(--fan-primary, #6366f1) 8%, #fff) 100%
+  );
+  border: 1px solid color-mix(in srgb, var(--fan-primary, #6366f1) 20%, transparent);
   border-radius: 16px;
   padding: 1.5rem;
-  box-shadow: 0 4px 16px rgba(212, 85, 139, 0.08);
+  box-shadow: 0 4px 16px color-mix(in srgb, var(--fan-primary, #6366f1) 14%, transparent);
 }
 
 /* Tip Hero */
 .tip-hero-section {
-  background: linear-gradient(135deg, rgba(201, 112, 130, 0.1) 0%, rgba(212, 85, 139, 0.08) 50%, rgba(255, 200, 220, 0.15) 100%);
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--fan-primary, #6366f1) 14%, transparent) 0%,
+    color-mix(in srgb, var(--fan-primary, #6366f1) 10%, transparent) 50%,
+    color-mix(in srgb, var(--fan-primary, #6366f1) 18%, transparent) 100%
+  );
   border-radius: 16px;
   padding: 2rem 1.5rem;
   text-align: center;
@@ -6445,13 +6464,13 @@ button.treat-card:hover:not(:disabled) .treat-card-cta {
   font-size: clamp(1.5rem, 4vw, 2rem);
   font-weight: 600;
   font-style: italic;
-  color: #c97082;
+  color: var(--fan-primary, #6366f1);
   margin: 0 0 0.5rem;
 }
 
 .tip-hero-subtitle {
   font-size: 1rem;
-  color: #6f4858;
+  color: color-mix(in srgb, var(--fan-primary, #6366f1) 45%, #1f2937);
   margin: 0;
 }
 
@@ -6463,7 +6482,7 @@ button.treat-card:hover:not(:disabled) .treat-card-cta {
 .tip-amounts-heading {
   font-size: 1rem;
   font-weight: 600;
-  color: #3d2a30;
+  color: color-mix(in srgb, var(--fan-primary, #6366f1) 55%, #111827);
   margin: 0 0 1rem;
 }
 
@@ -6478,9 +6497,9 @@ button.treat-card:hover:not(:disabled) .treat-card-cta {
   padding: 0.6rem 1.25rem;
   font-size: 1rem;
   font-weight: 500;
-  color: #6f4858;
+  color: color-mix(in srgb, var(--fan-primary, #6366f1) 45%, #1f2937);
   background: #fff;
-  border: 1px solid rgba(212, 85, 139, 0.25);
+  border: 1px solid color-mix(in srgb, var(--fan-primary, #6366f1) 30%, transparent);
   border-radius: 12px;
   cursor: pointer;
   font-family: inherit;
@@ -6488,14 +6507,18 @@ button.treat-card:hover:not(:disabled) .treat-card-cta {
 }
 
 .tip-preset-btn:hover {
-  border-color: #c97082;
-  color: #c97082;
-  background: rgba(201, 112, 130, 0.08);
+  border-color: var(--fan-primary, #6366f1);
+  color: var(--fan-primary, #6366f1);
+  background: color-mix(in srgb, var(--fan-primary, #6366f1) 10%, transparent);
 }
 
 .tip-preset-btn.active {
-  background: linear-gradient(135deg, #c97082, #d4558b);
-  border-color: #c97082;
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--fan-primary, #6366f1) 84%, #ffffff),
+    var(--fan-primary, #6366f1)
+  );
+  border-color: var(--fan-primary, #6366f1);
   color: #fff;
 }
 
@@ -6508,7 +6531,7 @@ button.treat-card:hover:not(:disabled) .treat-card-cta {
   display: block;
   font-size: 0.9rem;
   font-weight: 500;
-  color: #3d2a30;
+  color: color-mix(in srgb, var(--fan-primary, #6366f1) 55%, #111827);
   margin-bottom: 0.5rem;
 }
 
@@ -6516,11 +6539,11 @@ button.treat-card:hover:not(:disabled) .treat-card-cta {
   width: 100%;
   max-width: 160px;
   padding: 0.6rem 0.75rem;
-  border: 1px solid rgba(212, 85, 139, 0.25);
+  border: 1px solid color-mix(in srgb, var(--fan-primary, #6366f1) 30%, transparent);
   border-radius: 10px;
   font-size: 1rem;
   background: #fff;
-  color: #3d2a30;
+  color: color-mix(in srgb, var(--fan-primary, #6366f1) 55%, #111827);
 }
 
 .tip-custom-input::placeholder {
@@ -6530,7 +6553,7 @@ button.treat-card:hover:not(:disabled) .treat-card-cta {
 .tip-custom-input:focus {
   outline: none;
   border-color: var(--fan-primary, #6366f1);
-  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--fan-primary, #6366f1) 24%, transparent);
 }
 
 /* CTA Button */
@@ -6540,18 +6563,22 @@ button.treat-card:hover:not(:disabled) .treat-card-cta {
   font-size: 1.05rem;
   font-weight: 600;
   color: #fff;
-  background: linear-gradient(135deg, #c97082, #d4558b);
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--fan-primary, #6366f1) 84%, #ffffff),
+    var(--fan-primary, #6366f1)
+  );
   border: none;
   border-radius: 12px;
   cursor: pointer;
   font-family: inherit;
   transition: all 0.2s ease;
-  box-shadow: 0 4px 14px rgba(201, 112, 130, 0.3);
+  box-shadow: 0 4px 14px color-mix(in srgb, var(--fan-primary, #6366f1) 34%, transparent);
 }
 
 .tip-cta-btn:hover:not(:disabled) {
   transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(201, 112, 130, 0.4);
+  box-shadow: 0 6px 20px color-mix(in srgb, var(--fan-primary, #6366f1) 45%, transparent);
 }
 
 .tip-cta-btn:disabled {
@@ -6573,7 +6600,7 @@ button.treat-card:hover:not(:disabled) .treat-card-cta {
 .tip-thanks-text {
   font-size: 1rem;
   font-weight: 600;
-  color: #3d2a30;
+  color: color-mix(in srgb, var(--fan-primary, #6366f1) 55%, #111827);
   margin: 0;
 }
 
@@ -6917,6 +6944,27 @@ button.treat-card:hover:not(:disabled) .treat-card-cta {
 }
 .dark .stormij-theme .fh-dm-bubble--them .fh-dm-bubble__foot {
   color: #9ca3af;
+}
+
+/* Fan storefront member messages:
+   right/outgoing bubble = creator primary color, left/incoming bubble = neutral gray. */
+.stormij-theme .fan-member-messages-list .fh-dm-chat-row--out .fh-dm-bubble {
+  background: linear-gradient(135deg, var(--fan-primary, #6366f1), var(--fan-accent-hover, #4f46e5)) !important;
+  color: #fff !important;
+  border: 1px solid color-mix(in srgb, var(--fan-primary, #6366f1) 68%, transparent) !important;
+}
+.stormij-theme .fan-member-messages-list .fh-dm-chat-row--out .fh-dm-bubble .fh-dm-bubble__head,
+.stormij-theme .fan-member-messages-list .fh-dm-chat-row--out .fh-dm-bubble .fh-dm-bubble__foot {
+  color: rgba(255, 255, 255, 0.9) !important;
+}
+.stormij-theme .fan-member-messages-list .fh-dm-chat-row--in .fh-dm-bubble {
+  background: #f3f4f6 !important;
+  color: #111827 !important;
+  border: 1px solid #e5e7eb !important;
+}
+.stormij-theme .fan-member-messages-list .fh-dm-chat-row--in .fh-dm-bubble .fh-dm-bubble__head,
+.stormij-theme .fan-member-messages-list .fh-dm-chat-row--in .fh-dm-bubble .fh-dm-bubble__foot {
+  color: #6b7280 !important;
 }
 
 /* Fan/incoming: clock below bubble (Stormij reference) */

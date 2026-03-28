@@ -27,10 +27,10 @@ type SessionStatus = 'setup' | 'active' | 'paused' | 'ended';
 type DurationPreset = '15' | '30' | '45' | '60' | 'custom';
 
 interface Message {
-  id: string;
+    id: string;
   senderId: string;
   text: string;
-  timestamp: Date;
+    timestamp: Date;
   imageUrls?: string[];
   videoUrls?: string[];
 }
@@ -542,11 +542,11 @@ export const OnlyFansSextingSession: React.FC = () => {
     const text = myMessageInput.trim();
     if (!text || !sessionStarted) return;
 
-    const newMessage: Message = {
-      id: `msg-${Date.now()}`,
+        const newMessage: Message = {
+            id: `msg-${Date.now()}`,
       senderId: adminUid,
       text,
-      timestamp: new Date(),
+            timestamp: new Date(),
     };
 
     setMessages((prev) => [...prev, newMessage]);
@@ -557,12 +557,12 @@ export const OnlyFansSextingSession: React.FC = () => {
   const handleAddFanMessage = useCallback((content: string) => {
     if (!content.trim() || !sessionStarted) return;
 
-    const fanMessage: Message = {
-      id: `fan-msg-${Date.now()}`,
+        const fanMessage: Message = {
+            id: `fan-msg-${Date.now()}`,
       senderId: selectedUid || 'fan',
       text: content.trim(),
-      timestamp: new Date(),
-    };
+            timestamp: new Date(),
+        };
 
     setMessages((prev) => [...prev, fanMessage]);
 
@@ -663,7 +663,7 @@ export const OnlyFansSextingSession: React.FC = () => {
 
   // Active Session View
   if (sessionStarted) {
-    return (
+        return (
       <>
         <div className="chat-session-active-wrap stormij-theme">
           {/* Header */}
@@ -673,12 +673,12 @@ export const OnlyFansSextingSession: React.FC = () => {
               <p className="chat-session-active-subtitle">
                 {roleplayType === 'GFE' ? 'GFE (Girlfriend Experience)' : roleplayType === 'Custom' && customChatTypeValue.trim() ? customChatTypeValue.trim() : roleplayType} — {tone} — {sessionPaused ? 'paused' : 'active'}
               </p>
-            </div>
+                        </div>
             <div className="chat-session-active-header-actions">
               <span className="chat-session-timer-display" aria-live="polite">
                 {formatTime(timeRemainingSeconds)}
               </span>
-              <button
+                            <button
                 type="button"
                 className={`chat-session-ai-chatbot-btn ${chatBotEnabled ? 'active' : ''} ${!canUseChatBot ? 'chat-session-ai-chatbot-btn--locked' : ''}`}
                 onClick={() => {
@@ -694,22 +694,22 @@ export const OnlyFansSextingSession: React.FC = () => {
                 disabled={!canUseChatBot && undefined}
               >
                 {chatBotReplying ? '…' : '🤖'} AI Chat Bot {!canUseChatBot ? '(Elite)' : chatBotEnabled ? 'On' : 'Off'}
-              </button>
-              <button
+                            </button>
+                            <button
                 type="button"
                 className="chat-session-pause-btn"
                 onClick={() => setSessionPaused((p) => !p)}
-              >
+                            >
                 {sessionPaused ? '▶ Resume' : 'II Pause'}
-              </button>
-              <button
+                            </button>
+                            <button
                 type="button"
                 className="chat-session-end-btn"
                 onClick={() => setSessionEndModalOpen(true)}
-              >
+                            >
                 ■ End Session
-              </button>
-            </div>
+                            </button>
+                        </div>
           </header>
 
           {/* Main Layout */}
@@ -723,11 +723,11 @@ export const OnlyFansSextingSession: React.FC = () => {
                 ) : (
                   messages.map((m) => {
                     const isYou = m.senderId === adminUid;
-                    return (
+        return (
                       <div key={m.id} className={isYou ? 'chat-session-msg-you' : 'chat-session-msg-fan'}>
                         <span className="chat-session-msg-label">{isYou ? 'You' : 'Fan'}</span>
                         {normalizeChatText(m.text) && <p className="chat-session-msg-text">{normalizeChatText(m.text)}</p>}
-                      </div>
+                        </div>
                     );
                   })
                 )}
@@ -749,12 +749,12 @@ export const OnlyFansSextingSession: React.FC = () => {
                   />
                   <button type="button" className="chat-session-emoji-trigger" aria-label="Add emoji">
                     😀
-                  </button>
-                </div>
+                            </button>
+                        </div>
                 <button type="button" className="chat-session-send-btn" onClick={handleSendMyMessage}>
                   Send
                 </button>
-              </div>
+                </div>
 
               {/* Media Row */}
               <div className="chat-session-media-row">
@@ -769,44 +769,44 @@ export const OnlyFansSextingSession: React.FC = () => {
                 <button type="button" className="chat-session-media-btn">
                   Media from library
                 </button>
-              </div>
+                        </div>
 
               {/* Add Fan Message (testing) */}
               <div className="chat-session-add-fan-row">
                 <div className="chat-session-add-fan-inner">
-                  <input
-                    type="text"
+                                <input
+                                    type="text"
                     className="chat-session-input"
                     placeholder="Simulate fan message..."
                     onKeyDown={(e) => {
-                      if (e.key === 'Enter' && e.currentTarget.value.trim()) {
+                                        if (e.key === 'Enter' && e.currentTarget.value.trim()) {
                         handleAddFanMessage(e.currentTarget.value);
-                        e.currentTarget.value = '';
-                      }
-                    }}
-                  />
-                  <button
+                                            e.currentTarget.value = '';
+                                        }
+                                    }}
+                                />
+                                <button
                     type="button"
                     className="chat-session-add-btn"
-                    onClick={(e) => {
-                      const input = e.currentTarget.previousElementSibling as HTMLInputElement;
+                                    onClick={(e) => {
+                                        const input = e.currentTarget.previousElementSibling as HTMLInputElement;
                       if (input?.value.trim()) {
                         handleAddFanMessage(input.value);
-                        input.value = '';
-                      }
-                    }}
-                  >
-                    Add
-                  </button>
-                </div>
-              </div>
+                                            input.value = '';
+                                        }
+                                    }}
+                                >
+                                    Add
+                                </button>
+                            </div>
+                        </div>
 
               <button type="button" className="chat-session-back-btn" onClick={() => setSessionStarted(false)}>
                 ← Back to setup
-              </button>
-            </div>
+                            </button>
+                    </div>
 
-            {/* AI Suggestions Panel */}
+                    {/* AI Suggestions Panel */}
             <div className="chat-session-suggestions-panel">
               <h3 className="chat-session-panel-title">AI Suggestions</h3>
               <AISuggestionsPanel
@@ -816,8 +816,8 @@ export const OnlyFansSextingSession: React.FC = () => {
                 loading={suggestionsLoading}
                 disabled={chatBotEnabled}
               />
-            </div>
-          </div>
+                        </div>
+                            </div>
         </div>
         <SessionEndModal
           open={sessionEndModalOpen}
@@ -858,7 +858,7 @@ export const OnlyFansSextingSession: React.FC = () => {
               <label className="chat-session-label">Session duration</label>
               <div className="chat-session-duration-row">
                 {(['15', '30', '45', '60'] as const).map((m) => (
-                  <button
+                                                <button
                     key={m}
                     type="button"
                     className={`chat-session-duration-btn ${durationPreset === m ? 'active' : ''}`}
@@ -868,16 +868,16 @@ export const OnlyFansSextingSession: React.FC = () => {
                     }}
                   >
                     {m === '60' ? '1 hr' : `${m} min`}
-                  </button>
+                                                </button>
                 ))}
-                <button
+                                                <button
                   type="button"
                   className={`chat-session-duration-btn ${durationPreset === 'custom' ? 'active' : ''}`}
                   onClick={() => setDurationPreset('custom')}
                 >
                   Custom
-                </button>
-              </div>
+                                                </button>
+                                            </div>
               {durationPreset === 'custom' && (
                 <div className="chat-session-custom-duration">
                   <input
@@ -889,68 +889,68 @@ export const OnlyFansSextingSession: React.FC = () => {
                     className="chat-session-input chat-session-duration-input"
                   />
                   <span className="chat-session-duration-unit">min</span>
+                            </div>
+                        )}
+                    </div>
                 </div>
-              )}
-            </div>
-          </div>
           {useCreatorPersonality && creatorPersonality && (
             <div className="chat-session-personality-content">
               <label className="chat-session-label">Creator personality (from AI Training)</label>
               <div className="chat-session-personality-preview">
                 {creatorPersonality || 'No personality set. Add one in AI Training for consistent voice across chat, captions, and prompts.'}
-              </div>
-            </div>
-          )}
-        </div>
+                            </div>
+                        </div>
+                    )}
+                </div>
 
         {/* Chat Type */}
         <label className="chat-session-label">Chat Type</label>
         <div className="chat-session-role-grid">
           {ROLEPLAY_TYPES.map((r) => (
-            <button
+                    <button
               key={r}
               type="button"
               className={`chat-session-role-btn ${roleplayType === r ? 'active' : ''}`}
               onClick={() => setRoleplayType(r)}
             >
               {r}
-            </button>
-          ))}
-          <button
+                            </button>
+                        ))}
+                    <button
             type="button"
             className={`chat-session-role-btn chat-session-role-btn-custom ${roleplayType === 'Custom' ? 'active' : ''}`}
-            onClick={() => setRoleplayType('Custom')}
-          >
-            Custom
-          </button>
+                        onClick={() => setRoleplayType('Custom')}
+                    >
+                        Custom
+                    </button>
         </div>
-        {roleplayType === 'Custom' && (
+                    {roleplayType === 'Custom' && (
           <div className="chat-session-custom-chat-type">
-            <input
-              type="text"
+                        <input
+                            type="text"
               className="chat-session-input"
               placeholder="Enter custom chat type..."
               value={customChatTypeValue}
               onChange={(e) => setCustomChatTypeValue(e.target.value)}
               aria-label="Custom chat type"
             />
-          </div>
+                </div>
         )}
 
-        {/* Tone */}
+                {/* Tone */}
         <label className="chat-session-label">Tone</label>
         <div className="chat-session-tone-row">
           {TONES.map((t) => (
-            <button
-              key={t}
+                            <button
+                                key={t}
               type="button"
               className={`chat-session-role-btn ${tone === t ? 'active' : ''}`}
-              onClick={() => setTone(t)}
-            >
-              {t}
-            </button>
-          ))}
-        </div>
+                                onClick={() => setTone(t)}
+                            >
+                                {t}
+                            </button>
+                        ))}
+                    </div>
 
         {/* Content Spiciness Slider */}
         <div className="chat-session-spiciness-wrap" style={{ marginTop: '1rem', padding: '0.75rem', background: 'rgba(236, 72, 153, 0.1)', borderRadius: '0.5rem', border: '1px solid rgba(236, 72, 153, 0.3)' }}>
@@ -972,10 +972,10 @@ export const OnlyFansSextingSession: React.FC = () => {
           <p style={{ fontSize: '0.75rem', color: 'rgb(219, 39, 119)', marginTop: '0.25rem' }}>
             Adjust how bold the AI chat responses are
           </p>
-        </div>
+                </div>
 
         {/* Start Button */}
-        <button
+                <button
           type="button"
           className="chat-session-start-btn"
           onClick={handleStartSession}
@@ -983,9 +983,9 @@ export const OnlyFansSextingSession: React.FC = () => {
           title={!selectedUid ? 'Select a fan to start' : 'Start chat session'}
         >
           <span className="chat-session-start-icon"><PlayIcon /></span>
-          Start Session
-        </button>
-      </div>
-    </div>
-  );
+                    Start Session
+                </button>
+            </div>
+        </div>
+    );
 };

@@ -17,12 +17,7 @@ import { isMaintenanceMode, canBypassMaintenance } from "../src/utils/maintenanc
 import { validateMemberUsernameFormat, normalizeMemberUsername } from "../src/lib/memberUsername";
 import "../styles/fan-auth-modal.css";
 
-const DEFAULT_FAN_AUTH_PRIMARY = "#d9468c";
 const DEFAULT_FAN_AUTH_ACCENT = "#4a2c2c";
-/** Tab / chip tint when creator has not set `fanAuthBranding.softTint` */
-const DEFAULT_FAN_AUTH_SOFT = "#fdf2f7";
-/** Card surface when theme is still default indigo — light pink (Stormij-style), not cream */
-const DEFAULT_FAN_AUTH_CARD_BG = "#fff2f8";
 const BUILTIN_DEFAULT_PRIMARY = "#6366f1";
 
 function lightenHex(hex: string, amount = 0.35): string {
@@ -41,6 +36,7 @@ function lightenHex(hex: string, amount = 0.35): string {
 export type FanAuthModalProps = {
   isOpen: boolean;
   onClose: () => void;
+  onSuccess?: () => void;
   initialView: "login" | "signup";
   creatorId: string;
   displayName: string;
@@ -58,6 +54,7 @@ export type FanAuthModalProps = {
 export const FanAuthModal: React.FC<FanAuthModalProps> = ({
   isOpen,
   onClose,
+  onSuccess,
   initialView,
   creatorId,
   displayName,
@@ -83,6 +80,7 @@ export const FanAuthModal: React.FC<FanAuthModalProps> = ({
   const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [loading, setLoading] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const [formError, setFormError] = useState<string>("");
   const [forgotOpen, setForgotOpen] = useState(false);
   const [forgotEmail, setForgotEmail] = useState("");
 
@@ -90,6 +88,7 @@ export const FanAuthModal: React.FC<FanAuthModalProps> = ({
     if (!isOpen) return;
     setMode(initialView);
     setFieldErrors({});
+    setFormError("");
     setForgotOpen(false);
   }, [initialView, isOpen]);
 
@@ -97,23 +96,18 @@ export const FanAuthModal: React.FC<FanAuthModalProps> = ({
     branding?.communityName?.trim() ||
     `${displayName || "This creator"}'s member area`;
 
-  const useIndigoDefault = !branding?.primaryColor && (!themePrimary || themePrimary === BUILTIN_DEFAULT_PRIMARY);
-  const primary = branding?.primaryColor ?? (useIndigoDefault ? DEFAULT_FAN_AUTH_PRIMARY : themePrimary ?? DEFAULT_FAN_AUTH_PRIMARY);
+  const primary = branding?.primaryColor ?? themePrimary ?? BUILTIN_DEFAULT_PRIMARY;
   const accentText = branding?.accentTextColor ?? themeText ?? DEFAULT_FAN_AUTH_ACCENT;
-  /** Tabs / active chip — custom `softTint`, else pink default for indigo, else subtle tint from theme primary */
+  /** Tabs / active chip — custom `softTint`, else subtle tint from active primary */
   const softTint =
     branding?.softTint ??
-    (useIndigoDefault ? DEFAULT_FAN_AUTH_SOFT : lightenHex(themePrimary ?? BUILTIN_DEFAULT_PRIMARY, 0.88));
+    lightenHex(primary, 0.88);
   /**
    * Modal card background: custom `softTint` if set (same key as My Page “modal tint”).
    * Otherwise light pink when storefront still uses default indigo; subtle primary tint when they picked a theme;
    * never the old cream #fffef9.
    */
-  const cardBackground =
-    branding?.softTint ??
-    (useIndigoDefault
-      ? DEFAULT_FAN_AUTH_CARD_BG
-      : lightenHex(themePrimary ?? BUILTIN_DEFAULT_PRIMARY, 0.93));
+  const cardBackground = branding?.softTint ?? lightenHex(primary, 0.93);
   const gradTop = lightenHex(primary, 0.38);
 
   const loginTitle = branding?.loginTitle?.trim() || "Welcome back";
@@ -146,38 +140,45 @@ export const FanAuthModal: React.FC<FanAuthModalProps> = ({
 
   const tryJoinFreeAndUsername = async (uname: string) => {
     if (!freeAccessEnabled || !auth.currentUser) return;
-    const token = await auth.currentUser.getIdToken(true);
-    const join = await fetch("/api/joinFreeMembership", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ creatorId }),
-    });
-    const joinData = await join.json().catch(() => ({}));
-    if (!join.ok) {
-      showToast?.((joinData as { error?: string }).error || "Could not join free membership.", "error");
-      return;
-    }
-    const trimmed = uname.trim();
-    if (!trimmed) return;
-    const fmt = validateMemberUsernameFormat(trimmed);
-    if (fmt) {
-      showToast?.(fmt, "error");
-      return;
-    }
-    const claim = await fetch("/api/claimMemberUsername", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ username: normalizeMemberUsername(trimmed), creatorId }),
-    });
-    const claimData = await claim.json().catch(() => ({}));
-    if (!claim.ok) {
-      showToast?.((claimData as { error?: string }).error || "Account created — set your username next.", "info");
+    try {
+      const token = await auth.currentUser.getIdToken(true);
+      const join = await fetch("/api/joinFreeMembership", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ creatorId }),
+      });
+      const joinData = await join.json().catch(() => ({}));
+      if (!join.ok) {
+        // Non-fatal: auth already succeeded, but membership bootstrap endpoint failed.
+        showToast?.((joinData as { error?: string }).error || "Signed in, but couldn't auto-join free membership yet.", "info");
+        return;
+      }
+      const trimmed = uname.trim();
+      if (!trimmed) return;
+      const fmt = validateMemberUsernameFormat(trimmed);
+      if (fmt) {
+        showToast?.(fmt, "error");
+        return;
+      }
+      const claim = await fetch("/api/claimMemberUsername", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ username: normalizeMemberUsername(trimmed), creatorId }),
+      });
+      const claimData = await claim.json().catch(() => ({}));
+      if (!claim.ok) {
+        showToast?.((claimData as { error?: string }).error || "Account created — set your username next.", "info");
+      }
+    } catch {
+      // Non-fatal in local dev when /api proxy is not configured.
+      showToast?.("Signed in, but membership sync is temporarily unavailable.", "info");
     }
   };
 
   const handleEmailAuth = async (e: React.FormEvent) => {
     e.preventDefault();
     setFieldErrors({});
+    setFormError("");
     setLoading(true);
     try {
       if (isMaintenanceMode() && !canBypassMaintenance(email)) {
@@ -198,6 +199,7 @@ export const FanAuthModal: React.FC<FanAuthModalProps> = ({
           await tryJoinFreeAndUsername("");
         }
         showToast?.("You're in!", "success");
+        onSuccess?.();
         onClose();
         return;
       }
@@ -222,9 +224,23 @@ export const FanAuthModal: React.FC<FanAuthModalProps> = ({
       try {
         const methods = await fetchSignInMethodsForEmail(auth, email.trim());
         if (methods.length > 0) {
-          showToast?.("This email is already registered. Log in instead.", "error");
-          setMode("login");
-          return;
+          // Same fan can subscribe to multiple creators with one Firebase account.
+          // If account exists, try logging in immediately with the provided password.
+          try {
+            await signInWithEmailAndPassword(auth, email.trim(), password);
+            if (freeAccessEnabled) {
+              await tryJoinFreeAndUsername(username);
+            }
+            showToast?.("Welcome back! We signed you in to continue.", "success");
+            onSuccess?.();
+            onClose();
+            return;
+          } catch {
+            showToast?.("This email is already registered. Log in with your existing password.", "info");
+            setFormError("This email already has an account. Please log in.");
+            setMode("login");
+            return;
+          }
         }
       } catch {
         /* continue */
@@ -234,16 +250,49 @@ export const FanAuthModal: React.FC<FanAuthModalProps> = ({
       await updateProfile(cred.user, { displayName: fullName.trim() });
       await tryJoinFreeAndUsername(username);
       showToast?.("Account created!", "success");
+      onSuccess?.();
       onClose();
     } catch (ex: unknown) {
       const code = (ex as { code?: string })?.code || "";
+      console.error("Fan auth email flow failed:", { mode, code, ex });
       if (code === "auth/email-already-in-use") {
-        showToast?.("Email already in use. Try logging in.", "error");
-        setMode("login");
+        // Retry as login so one email can be reused across creators seamlessly.
+        try {
+          await signInWithEmailAndPassword(auth, email.trim(), password);
+          if (freeAccessEnabled) {
+            await tryJoinFreeAndUsername(username);
+          }
+          showToast?.("Welcome back! We signed you in to continue.", "success");
+          onSuccess?.();
+          onClose();
+          return;
+        } catch {
+          setFormError("This email is already registered. Try logging in.");
+          showToast?.("Email already in use. Try logging in.", "error");
+          setMode("login");
+        }
       } else if (code === "auth/invalid-credential" || code === "auth/wrong-password") {
         setFieldErrors({ password: "Incorrect email or password." });
+        showToast?.("Incorrect email or password.", "error");
+      } else if (code === "auth/invalid-login-credentials") {
+        setFieldErrors({ password: "Incorrect email or password." });
+        showToast?.("Incorrect email or password.", "error");
+      } else if (code === "auth/user-not-found") {
+        setFieldErrors({ email: "No account found for this email." });
+        showToast?.("No account found for this email.", "error");
+      } else if (code === "auth/invalid-email") {
+        setFieldErrors({ email: "Please enter a valid email address." });
+        showToast?.("Please enter a valid email address.", "error");
+      } else if (code === "auth/too-many-requests") {
+        setFormError("Too many attempts. Please wait a bit and try again.");
+        showToast?.("Too many attempts. Please wait and try again.", "error");
+      } else if (code === "auth/operation-not-allowed") {
+        setFormError("Email/password sign-in is disabled in Firebase Auth for this project.");
+        showToast?.("Email/password sign-in is disabled in Firebase Auth.", "error");
       } else {
-        showToast?.((ex as Error)?.message || "Something went wrong.", "error");
+        const fallback = (ex as Error)?.message || "Something went wrong.";
+        setFormError(code ? `${fallback} (${code})` : fallback);
+        showToast?.(fallback, "error");
       }
     } finally {
       setLoading(false);
@@ -268,11 +317,15 @@ export const FanAuthModal: React.FC<FanAuthModalProps> = ({
         await tryJoinFreeAndUsername("");
       }
       showToast?.("You're in!", "success");
+      onSuccess?.();
       onClose();
     } catch (ex: unknown) {
       const code = (ex as { code?: string })?.code;
+      console.error("Fan auth Google flow failed:", { code, ex });
       if (code !== "auth/popup-closed-by-user") {
-        showToast?.((ex as Error)?.message || "Google sign-in failed.", "error");
+        const msg = (ex as Error)?.message || "Google sign-in failed.";
+        setFormError(code ? `${msg} (${code})` : msg);
+        showToast?.(msg, "error");
       }
     } finally {
       setLoading(false);
@@ -289,7 +342,11 @@ export const FanAuthModal: React.FC<FanAuthModalProps> = ({
       await sendPasswordResetEmail(auth, em);
       showToast?.("Check your email for a reset link.", "success");
       setForgotOpen(false);
-    } catch {
+    } catch (ex: unknown) {
+      const code = (ex as { code?: string })?.code || "";
+      console.error("Fan auth password reset failed:", { code, ex });
+      const msg = (ex as Error)?.message || "Could not send reset email.";
+      setFormError(code ? `${msg} (${code})` : msg);
       showToast?.("Could not send reset email.", "error");
     }
   };
@@ -328,7 +385,11 @@ export const FanAuthModal: React.FC<FanAuthModalProps> = ({
           <button
             type="button"
             className={`fan-auth-tab ${mode === "login" ? "fan-auth-tab--active" : ""}`}
-            onClick={() => setMode("login")}
+            onClick={() => {
+              setMode("login");
+              setFormError("");
+              setFieldErrors({});
+            }}
             style={
               mode === "login"
                 ? { backgroundColor: softTint, color: primary, borderColor: primary }
@@ -340,7 +401,11 @@ export const FanAuthModal: React.FC<FanAuthModalProps> = ({
           <button
             type="button"
             className={`fan-auth-tab ${mode === "signup" ? "fan-auth-tab--active" : ""}`}
-            onClick={() => setMode("signup")}
+            onClick={() => {
+              setMode("signup");
+              setFormError("");
+              setFieldErrors({});
+            }}
             style={
               mode === "signup"
                 ? { backgroundColor: softTint, color: primary, borderColor: primary }
@@ -378,6 +443,7 @@ export const FanAuthModal: React.FC<FanAuthModalProps> = ({
           </div>
         ) : (
           <form className="fan-auth-form" onSubmit={handleEmailAuth}>
+            {formError ? <p className="fan-auth-err">{formError}</p> : null}
             {mode === "signup" && (
               <>
                 <label className="fan-auth-label" style={{ color: accentText }}>

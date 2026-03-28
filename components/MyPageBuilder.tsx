@@ -63,42 +63,41 @@ const DEFAULT_SOCIAL_LINKS: StorefrontSocialLinks = {
 };
 
 const DEFAULT_LANDING_CONTENT: StorefrontLandingContent = {
-  perksTitle: "Why Join",
-  perksText: "A space for exclusive content and real connection with my community.",
+  perksTitle: "Demo Section Title",
+  perksText: "This is demo landing copy. Update this text in My Page Builder.",
   perksList: [
-    "Exclusive behind-the-scenes content",
-    "Direct messages and personal connection",
-    "Early access to new releases",
-    "Special treats and surprises",
+    "Demo bullet one",
+    "Demo bullet two",
+    "Demo bullet three",
+    "Demo bullet four",
   ],
-  previewTitle: "What You Get",
-  previewText: "Inside the Inner Circle:",
+  previewTitle: "Demo Preview",
+  previewText: "This is demo preview text.",
   previewList: [
-    "Daily posts and updates",
-    "Exclusive photos and videos",
-    "Personal messages",
-    "Live sessions and Q&As",
+    "Demo feature one",
+    "Demo feature two",
+    "Demo feature three",
+    "Demo feature four",
   ],
-  previewFooterLines: ["Nothing explicit.", "Nothing fake.", "Nothing forced."],
-  energyTitle: "The Vibe",
+  previewFooterLines: ["Demo footer line one.", "Demo footer line two."],
+  energyTitle: "Demo Vibe",
   energyLines: [
-    "Authentic and real.",
-    "Genuine connection.",
-    "A supportive community.",
+    "Demo vibe line one.",
+    "Demo vibe line two.",
+    "Demo vibe line three.",
   ],
   boundaryTitle: "Community Guidelines",
-  boundaryText: "This is a supportive space. Respect is everything. No negativity, no demands — just genuine connection.",
+  boundaryText: "This is demo guideline text. Replace with your own policy and expectations.",
   memberStoreTitle: "Store",
-  memberStoreSubtitle: "Personal messages, voice notes, and more — just for you.",
+  memberStoreSubtitle: "Demo member store subtitle text.",
   memberStoreEmptyMessage: "Nothing listed here yet.",
   memberStoreLoadingMessage: "Loading…",
-  storeLandingHeadline: "Want something sweet?",
-  storeLandingDescription:
-    "Come by the treat shop — little extras, surprises, and picks just for you.",
+  storeLandingHeadline: "Demo store headline",
+  storeLandingDescription: "Demo store description text.",
   storeLandingCtaLabel: "Shop treats",
   publicStoreCardTitle: "Treat store",
   publicStoreCardDescription:
-    "Browse treats without a membership — checkout with your email. If you subscribe later with the same email, your purchases link to your account.",
+    "Demo public store description text.",
   publicStoreOpenCtaLabel: "Open treat store",
   publicStoreModalTitle: "Treat store",
   publicStoreModalEmptyMessage: "Nothing available right now.",
@@ -913,15 +912,14 @@ export const MyPageBuilder: React.FC = () => {
     }
     const clean = handleInput.replace("@", "").toLowerCase().trim();
     const currentSaved = String(saved.handle ?? "").replace("@", "").toLowerCase().trim();
+    const isResyncOnly = clean === currentSaved;
     if (!clean || clean.length < 3 || clean.length > 20 || !/^[a-z0-9_]+$/.test(clean)) {
       showToast?.("Enter a valid handle (3-20 letters, numbers, underscores).", "error");
       return;
     }
-    if (clean === currentSaved) {
-      showToast?.("Handle already saved.", "info");
-      return;
-    }
-    if (handleCheckStatus === "taken") {
+    // Allow "save" even when the handle text didn't change so we can repair
+    // stale creatorHandles mapping in backend/local dev.
+    if (!isResyncOnly && handleCheckStatus === "taken") {
       showToast?.("That handle is unavailable.", "error");
       return;
     }
@@ -960,7 +958,7 @@ export const MyPageBuilder: React.FC = () => {
       setHandleInput(clean);
       setHandleCheckStatus("available");
       setHandleCheckMessage("Your current handle");
-      showToast?.("Handle saved", "success");
+      showToast?.(isResyncOnly ? "Handle mapping synced" : "Handle saved", "success");
     } catch (e) {
       console.error("[MyPageBuilder] Handle save error:", e);
       showToast?.(e instanceof Error ? e.message : "Failed to save handle", "error");
