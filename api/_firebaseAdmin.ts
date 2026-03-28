@@ -33,36 +33,53 @@ export function getAdminApp(): admin.app.App {
     // Continue to initialize new app
   }
 
-  // Load base64 key (support multiple env names)
   const base64 =
     process.env.FIREBASE_SERVICE_ACCOUNT_KEY_BASE64 ||
-    process.env.FIREBASE_ADMIN_KEY || // common fallback name
+    process.env.FIREBASE_ADMIN_KEY ||
     null;
-  if (!base64) {
-    throw new Error("Missing FIREBASE_SERVICE_ACCOUNT_KEY_BASE64 (or FIREBASE_ADMIN_KEY) env var for Firebase Admin.");
-  }
 
-  let serviceAccountJson: string;
-  try {
-    serviceAccountJson = Buffer.from(base64, "base64").toString("utf8");
-  } catch (e) {
-    console.error("Base64 decode error:", e);
-    throw new Error("Invalid FIREBASE_SERVICE_ACCOUNT_KEY_BASE64 value.");
-  }
+  const projectId = process.env.FIREBASE_PROJECT_ID?.trim();
+  const clientEmail = process.env.FIREBASE_CLIENT_EMAIL?.trim();
+  const privateKeyRaw = process.env.FIREBASE_PRIVATE_KEY;
+  const privateKey =
+    typeof privateKeyRaw === "string" && privateKeyRaw.length > 0
+      ? privateKeyRaw.replace(/\\n/g, "\n")
+      : null;
 
-  let serviceAccount: admin.ServiceAccount;
+  // Initialize Admin SDK (base64 JSON **or** PEM-style vars — match stripeWebhook / purchaseVideoMinutes)
   try {
-    serviceAccount = JSON.parse(serviceAccountJson);
-  } catch (e) {
-    console.error("JSON parse error:", e);
-    throw new Error("Decoded service account JSON is invalid.");
-  }
-
-  // Initialize Admin SDK
-  try {
-    app = admin.initializeApp({
-      credential: admin.credential.cert(serviceAccount),
-    });
+    if (base64) {
+      let serviceAccountJson: string;
+      try {
+        serviceAccountJson = Buffer.from(base64, "base64").toString("utf8");
+      } catch (e) {
+        console.error("Base64 decode error:", e);
+        throw new Error("Invalid FIREBASE_SERVICE_ACCOUNT_KEY_BASE64 value.");
+      }
+      let serviceAccount: admin.ServiceAccount;
+      try {
+        serviceAccount = JSON.parse(serviceAccountJson) as admin.ServiceAccount;
+      } catch (e) {
+        console.error("JSON parse error:", e);
+        throw new Error("Decoded service account JSON is invalid.");
+      }
+      app = admin.initializeApp({
+        credential: admin.credential.cert(serviceAccount),
+      });
+    } else if (projectId && clientEmail && privateKey) {
+      app = admin.initializeApp({
+        credential: admin.credential.cert({
+          projectId,
+          clientEmail,
+          privateKey,
+        }),
+      });
+    } else {
+      throw new Error(
+        "Firebase Admin is not configured. Set either (1) FIREBASE_SERVICE_ACCOUNT_KEY_BASE64 or FIREBASE_ADMIN_KEY, " +
+          "or (2) FIREBASE_PROJECT_ID + FIREBASE_CLIENT_EMAIL + FIREBASE_PRIVATE_KEY (same as other API routes)."
+      );
+    }
     
     if (!app) {
       throw new Error("Failed to initialize Firebase Admin app");

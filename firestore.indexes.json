@@ -21,6 +21,14 @@
       "queryScope": "COLLECTION",
       "fields": [
         { "fieldPath": "fanId", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "onlyfans_sexting_sessions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "fanId", "order": "ASCENDING" },
         { "fieldPath": "createdAt", "order": "DESCENDING" },
         { "fieldPath": "__name__", "order": "ASCENDING" }
       ]
@@ -39,13 +47,6 @@
       "fields": [
         { "fieldPath": "fanId", "order": "ASCENDING" },
         { "fieldPath": "lastMessageAt", "order": "DESCENDING" }
-      ]
-    },
-    {
-      "collectionGroup": "orders",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "stripePaymentIntentId", "order": "ASCENDING" }
       ]
     },
     {
@@ -110,6 +111,14 @@
       ]
     },
     {
+      "collectionGroup": "calendar_events",
+      "fieldPath": "timestamp",
+      "indexes": [
+        { "order": "ASCENDING", "queryScope": "COLLECTION" },
+        { "order": "DESCENDING", "queryScope": "COLLECTION" }
+      ]
+    },
+    {
       "collectionGroup": "onlyfans_calendar_events",
       "fieldPath": "date",
       "indexes": [
@@ -155,6 +164,11 @@
         { "order": "ASCENDING", "queryScope": "COLLECTION" },
         { "order": "DESCENDING", "queryScope": "COLLECTION" }
       ]
+    },
+    {
+      "collectionGroup": "orders",
+      "fieldPath": "stripePaymentIntentId",
+      "indexes": [{ "order": "ASCENDING", "queryScope": "COLLECTION" }]
     }
   ]
 }

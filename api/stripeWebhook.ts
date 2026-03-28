@@ -127,6 +127,7 @@ async function processFanHubCheckoutSessionCompleted(
       status: 'paid',
       fanEmail: session.customer_details?.email || session.metadata?.fanEmail || null,
       fanName: session.customer_details?.name || session.metadata?.fanName || null,
+      scheduleStatus: 'pending',
       createdAt: now,
     });
 
@@ -204,11 +205,14 @@ async function processFanHubCheckoutSessionCompleted(
     const fanName = session.customer_details?.name || session.metadata?.fanName || null;
     const isGuestFan = fanId.startsWith('guest_');
 
+    const productTitle =
+      (typeof session.metadata?.productTitle === 'string' && session.metadata.productTitle.trim()) || null;
     const orderRef = db.collection('orders').doc();
     await orderRef.set({
       creatorId,
       fanId,
       productId,
+      productTitle: productTitle || undefined,
       type: 'product',
       stripeSessionId: session.id,
       stripePaymentIntentId: paymentIntentId || null,
@@ -216,6 +220,7 @@ async function processFanHubCheckoutSessionCompleted(
       status: 'paid',
       fanEmail,
       fanName,
+      scheduleStatus: 'pending',
       ...(isGuestProductCheckout ? { guestCheckout: true } : {}),
       createdAt: now,
     });
@@ -294,6 +299,7 @@ async function processFanHubCheckoutSessionCompleted(
       amountCents: amountTotal,
       tipHandle,
       status: 'paid',
+      scheduleStatus: 'pending',
       createdAt: now,
     });
 

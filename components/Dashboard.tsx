@@ -6,7 +6,7 @@ import { DashboardIcon, FlagIcon, SearchIcon, StarIcon, CalendarIcon, SparklesIc
 import { useAppContext } from './AppContext';
 import { updateUserSocialStats } from '../src/services/socialStatsService';
 import { auth, db } from '../firebaseConfig';
-import { collection, query, orderBy, limit as firestoreLimit, getDocs, where, Timestamp } from 'firebase/firestore';
+import { collection, query, orderBy, limit as firestoreLimit, getDocs, getCountFromServer, where } from 'firebase/firestore';
 import { ContentGapAnalysis } from './ContentGapAnalysis';
 import { LiveVideoChatManager } from './LiveVideoChatManager';
 import { FeedbackSurveyModal, type FeedbackMilestone } from './FeedbackSurveyModal';
@@ -105,67 +105,94 @@ export const Dashboard: React.FC = () => {
         const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
         const monthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
 
-        // Fetch recent subscribers/members
-        const subscribersRef = collection(db, 'creators', user.id, 'subscribers');
-        const recentSubsQuery = query(
-          subscribersRef,
-          orderBy('createdAt', 'desc'),
-          firestoreLimit(10)
-        );
-        const subscribersSnap = await getDocs(recentSubsQuery);
-        const subscribers = subscribersSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        
-        const newMembersThisWeek = subscribers.filter((sub: any) => {
-          const createdAt = sub.createdAt?.toDate?.() || new Date(sub.createdAt);
-          return createdAt >= weekAgo;
-        }).length;
+        // Fan Hub members + revenue use the same paths as Stripe webhooks: creators/{id}/fans and top-level orders (via API).
+        const fansRef = collection(db, 'creators', user.id, 'fans');
+        const totalMembersSnap = await getCountFromServer(fansRef);
+        const totalMembers = totalMembersSnap.data().count;
 
-        // Fetch orders for revenue and activity
-        const ordersRef = collection(db, 'creators', user.id, 'orders');
-        const recentOrdersQuery = query(
-          ordersRef,
-          orderBy('createdAt', 'desc'),
-          firestoreLimit(50)
-        );
-        const ordersSnap = await getDocs(recentOrdersQuery);
-        const orders = ordersSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        const parseFanDate = (raw: unknown): Date | null => {
+          if (raw == null) return null;
+          if (typeof (raw as { toDate?: () => Date }).toDate === 'function') {
+            const d = (raw as { toDate: () => Date }).toDate();
+            return Number.isNaN(d.getTime()) ? null : d;
+          }
+          const d = new Date(raw as string);
+          return Number.isNaN(d.getTime()) ? null : d;
+        };
 
-        // Calculate revenue
-        let weeklyRev = 0;
-        let monthlyRev = 0;
+        let newMembersThisWeek = 0;
+        try {
+          const newMembersWindowQuery = query(fansRef, orderBy('createdAt', 'desc'), firestoreLimit(500));
+          const windowSnap = await getDocs(newMembersWindowQuery);
+          windowSnap.forEach((d) => {
+            const created = parseFanDate(d.data().createdAt);
+            if (created && created >= weekAgo) newMembersThisWeek += 1;
+          });
+        } catch {
+          newMembersThisWeek = 0;
+        }
+
+        const recentFansQuery = query(fansRef, orderBy('createdAt', 'desc'), firestoreLimit(10));
+        const recentFansSnap = await getDocs(recentFansQuery);
+        const recentFans = recentFansSnap.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }));
+
+        const token = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
+        let orders: Array<{
+          id: string;
+          type?: string;
+          amountCents?: number;
+          createdAt: string;
+          fanEmail?: string | null;
+          fanName?: string | null;
+        }> = [];
+        if (token) {
+          const ordersRes = await fetch('/api/creatorOrders?limit=100', {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          if (ordersRes.ok) {
+            const body = await ordersRes.json();
+            orders = Array.isArray(body.orders) ? body.orders : [];
+          }
+        }
+
+        let weeklyRevCents = 0;
+        let monthlyRevCents = 0;
         const recentActivity: typeof fanHubStats.recentActivity = [];
 
-        orders.forEach((order: any) => {
-          const orderDate = order.createdAt?.toDate?.() || new Date(order.createdAt);
-          const amount = order.amount || 0;
-          
-          if (orderDate >= weekAgo) weeklyRev += amount;
-          if (orderDate >= monthAgo) monthlyRev += amount;
-          
-          // Build activity feed
+        orders.forEach((order) => {
+          const orderDate = new Date(order.createdAt);
+          if (Number.isNaN(orderDate.getTime())) return;
+          const cents = typeof order.amountCents === 'number' ? order.amountCents : 0;
+
+          if (orderDate >= weekAgo) weeklyRevCents += cents;
+          if (orderDate >= monthAgo) monthlyRevCents += cents;
+
           if (recentActivity.length < 5) {
             let activityType: 'tip' | 'unlock' | 'purchase' = 'purchase';
             if (order.type === 'tip') activityType = 'tip';
             else if (order.type === 'unlock') activityType = 'unlock';
-            
+
+            const label =
+              (typeof order.fanName === 'string' && order.fanName.trim()) ||
+              (typeof order.fanEmail === 'string' && order.fanEmail.trim()) ||
+              'Anonymous';
             recentActivity.push({
               id: order.id,
               type: activityType,
-              userName: order.fanEmail || order.customerEmail || 'Anonymous',
-              amount: amount / 100,
+              userName: label,
+              amount: cents / 100,
               timestamp: orderDate,
             });
           }
         });
 
-        // Add recent signups to activity
-        subscribers.slice(0, 3).forEach((sub: any) => {
-          const createdAt = sub.createdAt?.toDate?.() || new Date(sub.createdAt);
-          if (recentActivity.length < 5) {
+        recentFans.slice(0, 3).forEach((fan: any) => {
+          const createdAt = fan.createdAt?.toDate?.() || new Date(fan.createdAt);
+          if (recentActivity.length < 5 && !Number.isNaN(createdAt.getTime())) {
             recentActivity.push({
-              id: sub.id,
+              id: fan.id,
               type: 'signup',
-              userName: sub.email || 'New Member',
+              userName: fan.email || fan.displayName || 'New Member',
               timestamp: createdAt,
             });
           }
@@ -195,11 +222,11 @@ export const Dashboard: React.FC = () => {
 
         setFanHubStats({
           newMembers: newMembersThisWeek,
-          totalMembers: subscribersSnap.size,
+          totalMembers,
           recentActivity: recentActivity.slice(0, 5),
           topPosts,
-          weeklyRevenue: weeklyRev / 100,
-          monthlyRevenue: monthlyRev / 100,
+          weeklyRevenue: weeklyRevCents / 100,
+          monthlyRevenue: monthlyRevCents / 100,
         });
       } catch (err) {
         console.error('Error fetching fan hub data:', err);

@@ -247,111 +247,85 @@ export const AdminDashboard: React.FC = () => {
         fetchVideoStats();
     }, [currentUser?.role]);
 
-    // Fetch Fan Hub Revenue data from all creators
+    // Fan Hub revenue: top-level `orders` (Stripe webhook) via admin API — not creators/{id}/orders mirror
     useEffect(() => {
         const fetchFanHubRevenue = async () => {
             if (currentUser?.role !== 'Admin') return;
             setIsLoadingFanHubRevenue(true);
-            
-            try {
-                const commissionRate = 0.10; // 10% Echoflux commission
-                let totalRevenue = 0;
-                let tips = 0;
-                let unlocks = 0;
-                let treats = 0;
-                let subscriptions = 0;
-                const creatorRevenues: Record<string, { name: string; email: string; revenue: number }> = {};
-                const allTransactions: Array<{ id: string; creatorId: string; creatorName: string; type: string; amount: number; timestamp: Date }> = [];
 
-                // Get all creators (users who have set up fan pages)
-                const creatorsRef = collection(db, 'creators');
-                const creatorsSnap = await getDocs(creatorsRef);
-                
-                for (const creatorDoc of creatorsSnap.docs) {
-                    const creatorId = creatorDoc.id;
-                    const creatorData = creatorDoc.data();
-                    
-                    // Find the user to get their name/email
-                    const matchingUser = users.find(u => u.id === creatorId);
-                    const creatorName = matchingUser?.name || creatorData.displayName || 'Unknown Creator';
-                    const creatorEmail = matchingUser?.email || '';
-                    
-                    // Initialize creator revenue tracking
-                    if (!creatorRevenues[creatorId]) {
-                        creatorRevenues[creatorId] = { name: creatorName, email: creatorEmail, revenue: 0 };
-                    }
-                    
-                    // Fetch orders for this creator
-                    try {
-                        const ordersRef = collection(db, 'creators', creatorId, 'orders');
-                        const ordersQuery = query(ordersRef, orderBy('createdAt', 'desc'));
-                        const ordersSnap = await getDocs(ordersQuery);
-                        
-                        ordersSnap.docs.forEach(orderDoc => {
-                            const order = orderDoc.data();
-                            const amount = (order.amount || 0) / 100; // Convert cents to dollars
-                            const orderType = order.type || 'purchase';
-                            const orderDate = order.createdAt?.toDate?.() || new Date(order.createdAt);
-                            
-                            totalRevenue += amount;
-                            creatorRevenues[creatorId].revenue += amount;
-                            
-                            // Categorize by type
-                            if (orderType === 'tip') {
-                                tips += amount;
-                            } else if (orderType === 'unlock') {
-                                unlocks += amount;
-                            } else if (orderType === 'subscription') {
-                                subscriptions += amount;
-                            } else {
-                                treats += amount; // Store/treats purchases
-                            }
-                            
-                            // Add to transactions list
-                            allTransactions.push({
-                                id: orderDoc.id,
-                                creatorId,
-                                creatorName,
-                                type: orderType,
-                                amount,
-                                timestamp: orderDate,
-                            });
-                        });
-                    } catch (err) {
-                        // Creator might not have orders collection
-                    }
+            try {
+                const commissionRate = 0.10;
+                const token = await auth.currentUser?.getIdToken(true);
+                if (!token) return;
+
+                const res = await fetch('/api/adminFanHubRevenue?limit=5000', {
+                    headers: { Authorization: `Bearer ${token}` },
+                });
+                if (!res.ok) {
+                    console.error('adminFanHubRevenue:', res.status, await res.text());
+                    return;
                 }
-                
-                // Calculate commission
+
+                const data = (await res.json()) as {
+                    totalRevenue: number;
+                    tips: number;
+                    unlocks: number;
+                    treats: number;
+                    subscriptions: number;
+                    byCreatorId: Record<string, number>;
+                    recentTransactions: Array<{
+                        id: string;
+                        creatorId: string;
+                        type: string;
+                        amount: number;
+                        timestamp: string;
+                    }>;
+                };
+
+                const creatorsSnap = await getDocs(collection(db, 'creators'));
+                const displayByCreatorId: Record<string, string> = {};
+                creatorsSnap.forEach((d) => {
+                    const cd = d.data() as { displayName?: string };
+                    displayByCreatorId[d.id] = cd.displayName || 'Unknown Creator';
+                });
+
+                const resolveCreatorName = (creatorId: string) => {
+                    const u = users.find((x) => x.id === creatorId);
+                    return u?.name || displayByCreatorId[creatorId] || 'Unknown Creator';
+                };
+
+                const totalRevenue = data.totalRevenue ?? 0;
                 const echofluxCommission = totalRevenue * commissionRate;
-                
-                // Get top creators by revenue
-                const topCreators = Object.entries(creatorRevenues)
-                    .map(([id, data]) => ({
-                        id,
-                        name: data.name,
-                        email: data.email,
-                        revenue: data.revenue,
-                        commission: data.revenue * commissionRate,
-                    }))
+
+                const topCreators = Object.entries(data.byCreatorId || {})
+                    .map(([id, revenue]) => {
+                        const u = users.find((x) => x.id === id);
+                        return {
+                            id,
+                            name: u?.name || displayByCreatorId[id] || 'Unknown Creator',
+                            email: u?.email || '',
+                            revenue,
+                            commission: revenue * commissionRate,
+                        };
+                    })
                     .sort((a, b) => b.revenue - a.revenue)
                     .slice(0, 5);
-                
-                // Get recent transactions
-                const recentTransactions = allTransactions
-                    .sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime())
-                    .slice(0, 10)
-                    .map(t => ({
-                        ...t,
-                        commission: t.amount * commissionRate,
-                    }));
-                
+
+                const recentTransactions = (data.recentTransactions || []).slice(0, 10).map((t) => ({
+                    id: t.id,
+                    creatorName: resolveCreatorName(t.creatorId),
+                    type: t.type,
+                    amount: t.amount,
+                    commission: t.amount * commissionRate,
+                    timestamp: new Date(t.timestamp),
+                }));
+
                 setFanHubRevenue({
                     totalRevenue,
-                    tips,
-                    unlocks,
-                    treats,
-                    subscriptions,
+                    tips: data.tips ?? 0,
+                    unlocks: data.unlocks ?? 0,
+                    treats: data.treats ?? 0,
+                    subscriptions: data.subscriptions ?? 0,
                     echofluxCommission,
                     commissionRate,
                     topCreators,
@@ -364,9 +338,7 @@ export const AdminDashboard: React.FC = () => {
             }
         };
 
-        if (users.length > 0) {
-            fetchFanHubRevenue();
-        }
+        fetchFanHubRevenue();
     }, [currentUser?.role, users]);
 
     // Check if we should open feedback tab (from notification click)

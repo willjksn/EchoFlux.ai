@@ -64,6 +64,12 @@ import { usePathname } from "../src/hooks/usePathname";
 import { db } from "../firebaseConfig";
 import { ReportProblemModal } from "./ReportProblemModal";
 
+/** Default bio set at fan signup; hide on creator hubs so fans see a creator-specific welcome instead of EchoFlux branding. */
+function isEchoFluxDefaultFanBio(bio: string): boolean {
+  const s = bio.trim().toLowerCase();
+  return s === "welcome to echoflux.ai!" || s === "welcome to echoflux.ai";
+}
+
 export type StorefrontCreator = {
   creatorId: string;
   handle: string;
@@ -2061,6 +2067,17 @@ export const FanStorefrontView: React.FC = () => {
     .trim()
     .toLowerCase()
     .replace(/\s+/g, "_")}`;
+  const memberHubWelcomeLine = (() => {
+    const community = (creator.fanAuthBranding?.communityName || "").trim();
+    if (community) return `Welcome to ${community}`;
+    const name = typeof displayName === "string" && displayName.trim() ? displayName.trim() : "";
+    if (name) return `Welcome to ${name}'s member hub`;
+    const h = (creator.handle || "").trim();
+    if (h) return `Welcome to @${h}'s member hub`;
+    return "Welcome to this member hub";
+  })();
+  const fanBioPreviewText =
+    profileDraft.bio?.trim() && !isEchoFluxDefaultFanBio(profileDraft.bio) ? profileDraft.bio.trim() : "";
   // Nav tabs: order from sectionsOrder, filtered by sections; hide Messages when chat disabled; always include Saved at the end
   const memberTabKeys = (sectionsOrder || ["feed", "treats", "tip", "messages", "about"])
     .filter((key) => key !== "about")
@@ -2841,10 +2858,21 @@ export const FanStorefrontView: React.FC = () => {
                         </p>
                       ) : null}
                     </div>
-                    <div className="fan-profile-bio-preview mt-4">
-                      {profileDraft.bio?.trim()
-                        ? profileDraft.bio
-                        : "Add a short bio so creators understand your vibe and preferences."}
+                    <p
+                      className="fan-profile-member-hub-welcome mt-4 text-sm font-semibold m-0"
+                      style={{ color: "var(--fan-text, #111827)" }}
+                    >
+                      {memberHubWelcomeLine}
+                    </p>
+                    <p
+                      className="text-xs mt-2 mb-1 m-0"
+                      style={{ color: "var(--fan-text-muted, #6b7280)" }}
+                    >
+                      Your bio (visible to creators)
+                    </p>
+                    <div className="fan-profile-bio-preview mt-0">
+                      {fanBioPreviewText ||
+                        "Add a short bio so creators understand your vibe and preferences."}
                     </div>
                     <div className="flex flex-wrap gap-2 mt-3 items-center">
                       <label

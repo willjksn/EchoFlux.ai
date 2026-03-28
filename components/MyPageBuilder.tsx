@@ -2781,13 +2781,15 @@ export const MyPageBuilder: React.FC = () => {
             </div>
           </CollapsibleSection>
 
-          <CollapsibleSection title="Fan sign-in branding">
+          <CollapsibleSection title="Member hub name & sign-in branding">
             <p className="text-xs text-gray-500 dark:text-gray-400 mb-3 pt-2">
-              Log in / Sign up on your storefront uses your theme. If your theme is still the default indigo, fans see a soft pink/burgundy auth modal until you customize colors. Override specific auth colors here (optional).
+              Name your space for fans (e.g. Inner Circle). That name appears on the log in / sign up modal and in members’ profile settings as their welcome line. If you leave it blank, we use your display name instead. Log in / Sign up also uses your theme; if the theme is still the default indigo, fans see a soft pink/burgundy auth modal until you customize colors. Override auth colors below (optional).
             </p>
             <div className="space-y-3">
               <div>
-                <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Community name</label>
+                <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+                  Member hub / community name
+                </label>
                 <input
                   type="text"
                   value={draft.fanAuthBranding?.communityName ?? ""}
@@ -2799,7 +2801,7 @@ export const MyPageBuilder: React.FC = () => {
                       },
                     })
                   }
-                  placeholder='e.g. Inner Circle'
+                  placeholder='e.g. Inner Circle, The Lounge, or your brand name'
                   className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
                 />
               </div>

@@ -343,7 +343,7 @@ export interface StorefrontLegal {
  * If unset, the modal uses your theme colors — or soft pink/burgundy defaults when the theme is still the built-in indigo.
  */
 export interface FanAuthBranding {
-    /** e.g. "Inner Circle" — used in subtitles like "Log in to …" */
+    /** e.g. "Inner Circle" — member hub / community name: log in modal copy, member profile welcome, and similar fan-facing labels */
     communityName?: string;
     loginTitle?: string;
     loginSubtitle?: string;

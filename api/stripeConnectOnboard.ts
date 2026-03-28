@@ -21,7 +21,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const stripe = getPlatformStripe();
   if (!stripe) {
-    return res.status(503).json({ error: "Stripe is not configured" });
+    const useTest =
+      (process.env.STRIPE_USE_TEST_MODE || "").toString().toLowerCase().trim() === "true" ||
+      (process.env.STRIPE_USE_TEST_MODE || "").toString().toLowerCase().trim() === "1";
+    return res.status(503).json({
+      error: "Stripe is not configured",
+      code: "STRIPE_NOT_CONFIGURED",
+      hint: useTest
+        ? "This deployment has no usable sk_test_ key. Set STRIPE_SECRET_KEY_Test or STRIPE_SECRET_KEY_TEST (or STRIPE_SECRET_KEY) for Preview. In Vercel, enable these variables for the Preview environment."
+        : "This deployment has no usable secret key. Set STRIPE_SECRET_KEY_LIVE or STRIPE_SECRET_KEY for Preview/Production. In Vercel → Settings → Environment Variables, tick Preview (not only Production).",
+    });
   }
 
   const origin = (req.headers.origin || req.headers.referer || "").replace(/\/$/, "") || process.env.NEXT_PUBLIC_APP_URL || "https://echoflux.ai";

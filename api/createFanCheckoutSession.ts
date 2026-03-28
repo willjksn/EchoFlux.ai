@@ -211,6 +211,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           fanId: allowGuestProduct ? "guest_pending" : fanId,
           type: "product",
           productId: productId!,
+          productTitle: title,
           isPlatformOwner: isPlatformOwner ? "true" : "false",
           ...(allowGuestProduct ? { guestCheckout: "true", entry: "landing_treats" } : {}),
         },

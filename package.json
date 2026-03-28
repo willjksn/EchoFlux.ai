@@ -15,6 +15,7 @@
     "typecheck:app": "tsc -p tsconfig.app.json",
     "typecheck:api": "tsc -p tsconfig.api.json",
     "test:e2e": "playwright test",
+    "stripe:health": "node scripts/stripeHealthCheck.mjs",
     "deploy": "firebase deploy --only hosting",
     "migrate:stormij:dry": "npx ts-node --esm scripts/migrate-stormij.ts --dry-run",
     "migrate:stormij": "npx ts-node --esm scripts/migrate-stormij.ts",

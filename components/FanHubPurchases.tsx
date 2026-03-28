@@ -73,29 +73,33 @@ export const FanHubPurchases: React.FC = () => {
       });
       if (res.ok) {
         const data = await res.json();
-        if (Array.isArray(data.orders) && data.orders.length > 0) {
-          const realPurchases: Purchase[] = data.orders.map((o: any) => ({
-            id: o.id,
-            email: o.fanEmail || o.fanId || "Unknown",
-            fanName: o.fanName || null,
-            productName: o.productTitle || o.type || "Purchase",
-            treatType: o.productId || o.type,
-            amountCents: o.amountCents || 0,
-            createdAt: new Date(o.createdAt),
-            scheduleStatus: o.scheduleStatus || "pending",
-            scheduledDate: o.scheduledDate || null,
-            scheduledTime: o.scheduledTime || null,
-            isDemo: false,
-          }));
-          setPurchases(realPurchases);
-        }
+        const list = Array.isArray(data.orders) ? data.orders : [];
+        const realPurchases: Purchase[] = list.map((o: any) => ({
+          id: o.id,
+          email: o.fanEmail || o.fanId || "Unknown",
+          fanName: o.fanName || null,
+          productName: o.productTitle || o.type || "Purchase",
+          treatType: o.productId || o.type,
+          amountCents: o.amountCents || 0,
+          createdAt: new Date(o.createdAt),
+          scheduleStatus: (o.scheduleStatus as ScheduleStatus) || "pending",
+          scheduledDate: o.scheduledDate || null,
+          scheduledTime: o.scheduledTime || null,
+          isDemo: false,
+        }));
+        setPurchases(realPurchases);
+      } else {
+        const errBody = await res.text().catch(() => "");
+        showToast?.(`Could not load purchases (${res.status}). Try Refresh.`, "error");
+        if (import.meta.env.DEV) console.warn("creatorOrders failed", res.status, errBody);
       }
-    } catch {
-      // Keep demo data on error
+    } catch (e) {
+      showToast?.("Could not load purchases.", "error");
+      if (import.meta.env.DEV) console.warn("creatorOrders error", e);
     } finally {
       setLoading(false);
     }
-  }, [user?.id]);
+  }, [user?.id, showToast]);
 
   useEffect(() => {
     fetchPurchases();
@@ -122,10 +126,39 @@ export const FanHubPurchases: React.FC = () => {
 
     // Parse time
     const [h, min] = scheduleTime.split(":").map(Number);
+    const timeHHmm = `${String(h ?? 0).padStart(2, "0")}:${String(min ?? 0).padStart(2, "0")}`;
     const scheduledAt = new Date(scheduleDate);
     scheduledAt.setHours(h ?? 0, min ?? 0, 0, 0);
 
-    // Update local state (demo mode)
+    if (!p.isDemo) {
+      try {
+        const token = auth.currentUser ? await auth.currentUser.getIdToken() : null;
+        const scheduleRes = await fetch("/api/updateCreatorOrderSchedule", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+          body: JSON.stringify({
+            orderId: p.id,
+            scheduleStatus: "scheduled",
+            scheduledDate: scheduleDate.trim(),
+            scheduledTime: timeHHmm,
+          }),
+        });
+        if (!scheduleRes.ok) {
+          const j = (await scheduleRes.json().catch(() => ({}))) as { error?: string };
+          showToast?.(j.error || "Could not save schedule", "error");
+          setSavingId(null);
+          return;
+        }
+      } catch {
+        showToast?.("Could not save schedule.", "error");
+        setSavingId(null);
+        return;
+      }
+    }
+
     setPurchases((prev) =>
       prev.map((purchase) =>
         purchase.id === p.id
@@ -133,7 +166,7 @@ export const FanHubPurchases: React.FC = () => {
               ...purchase,
               scheduleStatus: "scheduled" as ScheduleStatus,
               scheduledDate: scheduleDate.trim(),
-              scheduledTime: `${String(h ?? 0).padStart(2, "0")}:${String(min ?? 0).padStart(2, "0")}`,
+              scheduledTime: timeHHmm,
             }
           : purchase
       )
@@ -168,7 +201,7 @@ export const FanHubPurchases: React.FC = () => {
         const durationMinutes = durationMatch ? parseInt(durationMatch[1], 10) : undefined;
         
         const calendarTreatType = treatTypeMap[p.treatType] || 'other';
-        const timeStr = `${String(h ?? 0).padStart(2, "0")}:${String(min ?? 0).padStart(2, "0")}`;
+        const timeStr = timeHHmm;
         
         await addDoc(collection(db, "users", user.id, "onlyfans_calendar_events"), {
           // Core event fields
@@ -202,7 +235,30 @@ export const FanHubPurchases: React.FC = () => {
     showToast?.("Scheduled! It will appear on your calendar.", "success");
   };
 
-  const markCompleted = (p: Purchase) => {
+  const markCompleted = async (p: Purchase) => {
+    if (!p.isDemo) {
+      try {
+        const token = auth.currentUser ? await auth.currentUser.getIdToken() : null;
+        const scheduleRes = await fetch("/api/updateCreatorOrderSchedule", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+          body: JSON.stringify({
+            orderId: p.id,
+            scheduleStatus: "completed",
+          }),
+        });
+        if (!scheduleRes.ok) {
+          showToast?.("Could not update order.", "error");
+          return;
+        }
+      } catch {
+        showToast?.("Could not update order.", "error");
+        return;
+      }
+    }
     setPurchases((prev) =>
       prev.map((purchase) =>
         purchase.id === p.id
@@ -214,10 +270,7 @@ export const FanHubPurchases: React.FC = () => {
   };
 
   const filteredPurchases = purchases.filter((p) => {
-    if (filterStatus === "all") {
-      // By default, hide scheduled items - they appear on calendar now
-      return p.scheduleStatus === "pending";
-    }
+    if (filterStatus === "all") return true;
     return p.scheduleStatus === filterStatus;
   });
 
