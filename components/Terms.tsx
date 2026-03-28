@@ -5,7 +5,7 @@ export const Terms: React.FC = () => {
         <div className="max-w-4xl mx-auto space-y-8">
             <div className="bg-white dark:bg-gray-800 p-8 rounded-xl shadow-md">
                 <h2 className="text-3xl font-bold text-gray-900 dark:text-white">Terms of Service & Fair Use Policy</h2>
-                <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">Last updated: March 2026</p>
+                <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">Last updated: March 28, 2026</p>
 
                 <div className="mt-6 prose prose-lg dark:prose-invert max-w-none text-gray-700 dark:text-gray-300">
                     <p>
@@ -92,7 +92,12 @@ export const Terms: React.FC = () => {
                         </li>
                         <li>
                             <strong>Terms & Privacy:</strong> Creators can customize their own Terms of Service and Privacy Policy 
-                            for their Fan Hub page. If not customized, default terms apply.
+                            for their Fan Hub page. If not customized, default terms apply that describe the relationship between the creator, fans, and EchoFlux as platform provider.
+                        </li>
+                        <li>
+                            <strong>Stripe Connect:</strong> To receive Fan Hub payouts, creators must complete Stripe Connect onboarding, 
+                            keep account information accurate, and comply with Stripe's terms, identity requirements, and applicable tax and 
+                            financial regulations. EchoFlux does not hold fan funds; payments are processed by Stripe to the creator's connected account, subject to Stripe's rules and holds.
                         </li>
                     </ul>
 
@@ -120,8 +125,16 @@ export const Terms: React.FC = () => {
                             behavior may result in being blocked by the creator or banned from the platform.
                         </li>
                         <li>
-                            <strong>Removal:</strong> Creators may remove or block fans at their discretion. If removed, 
-                            you retain access until the end of your paid period but will not be charged again.
+                            <strong>Removal and blocking:</strong> Creators may remove or block fans at their discretion. When you are blocked, 
+                            you may be unable to send direct messages or complete new purchases with that creator, even if you still hold an active subscription elsewhere on the platform. Access to paid periods and refunds follow the creator's stated policy and applicable law.
+                        </li>
+                        <li>
+                            <strong>Reporting:</strong> You may report concerning messages or behavior through in-product tools where available. 
+                            Reports may be reviewed by EchoFlux or the creator as needed for safety and legal compliance.
+                        </li>
+                        <li>
+                            <strong>Your agreement with the creator:</strong> Your purchase of memberships, tips, digital goods, or sessions is a 
+                            transaction with the creator. EchoFlux provides software, checkout, and infrastructure. The creator's Fan Hub terms and privacy notices (including defaults if they have not customized them) govern how that creator offers the Service to you, in addition to these Terms where EchoFlux is the contracting party for the creator account.
                         </li>
                     </ul>
 
@@ -261,7 +274,14 @@ export const Terms: React.FC = () => {
                         incidental, special, consequential, or punitive damages arising from your use of the service.
                     </p>
                     <p className="mt-2">
-                        We are not responsible for content posted by creators or the actions of any users on the platform.
+                        We are not responsible for content posted by creators or the actions of any users on the platform. To the maximum 
+                        extent permitted by law, we are not liable for disputes between creators and fans regarding products, services, 
+                        refunds, or content quality; those matters are primarily between the creator and the fan, subject to Stripe's role 
+                        in payment processing and mandatory consumer laws.
+                    </p>
+                    <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
+                        Some jurisdictions do not allow certain limitations; in those cases, our liability is limited to the fullest extent 
+                        the law allows.
                     </p>
 
                     <h3 className="text-xl font-bold text-gray-900 dark:text-white mt-8 mb-2">
@@ -273,6 +293,85 @@ export const Terms: React.FC = () => {
                     </p>
                     <p className="mt-2">
                         Continued use of the service after changes constitutes acceptance of the updated terms.
+                    </p>
+
+                    <h3 className="text-xl font-bold text-gray-900 dark:text-white mt-8 mb-2">
+                        13. Legal Relationship: EchoFlux, Creators, and Fans
+                    </h3>
+                    <p>
+                        EchoFlux provides the creator platform (including Fan Hub technology, authentication, payments integration, messaging, 
+                        and related features). Creators are independent businesses or individuals responsible for their own content, pricing, 
+                        refunds, tax filings, and legal relationship with their fans. Fans' purchases on a creator's Fan Hub are primarily 
+                        between the fan and that creator; EchoFlux is not a party to that sale except as a technology and payments facilitator 
+                        where Stripe Connect and our software are used.
+                    </p>
+                    <p className="mt-2">
+                        Nothing in these Terms creates a partnership, agency, joint venture, or employment relationship between EchoFlux and 
+                        creators, or between EchoFlux and fans.
+                    </p>
+
+                    <h3 className="text-xl font-bold text-gray-900 dark:text-white mt-8 mb-2">
+                        14. Creator Obligations (Account Holders)
+                    </h3>
+                    <p>If you operate a creator account on EchoFlux, you agree that you will:</p>
+                    <ul className="list-disc pl-6 space-y-2 mt-2">
+                        <li>Comply with applicable laws (including consumer protection, intellectual property, export controls, and tax obligations).</li>
+                        <li>Not use Fan Hub to offer illegal goods or services, non-consensual content, or content that violates Section 7.</li>
+                        <li>Maintain accurate Stripe Connect and payout information and honor your stated refund and cancellation policies where required by law.</li>
+                        <li>Provide clear terms and privacy information to your fans (custom copy or the EchoFlux default templates).</li>
+                        <li>Use blocking, messaging, and moderation tools responsibly and not for unlawful discrimination or harassment.</li>
+                    </ul>
+
+                    <h3 className="text-xl font-bold text-gray-900 dark:text-white mt-8 mb-2">
+                        15. Indemnification by Creators
+                    </h3>
+                    <p>
+                        To the fullest extent permitted by law, you (as a creator) agree to indemnify, defend, and hold harmless EchoFlux, 
+                        its affiliates, and their respective directors, officers, employees, and contractors from any claims, damages, losses, 
+                        liabilities, and expenses (including reasonable attorneys' fees) arising out of or related to: your Fan Hub content 
+                        or offerings; your interactions with fans; your breach of these Terms; or your violation of third-party rights or 
+                        applicable law. EchoFlux may assume exclusive defense of any matter subject to indemnification at its option.
+                    </p>
+
+                    <h3 className="text-xl font-bold text-gray-900 dark:text-white mt-8 mb-2">
+                        16. DMCA and Copyright Complaints
+                    </h3>
+                    <p>
+                        We respect intellectual property rights. If you believe material on EchoFlux infringes your copyright, you may send 
+                        a notice with the information required by the Digital Millennium Copyright Act (DMCA) to <strong>contact@echoflux.ai</strong>. 
+                        We may remove or disable access to material in appropriate cases and may terminate repeat infringers where permitted by law.
+                    </p>
+
+                    <h3 className="text-xl font-bold text-gray-900 dark:text-white mt-8 mb-2">
+                        17. Dispute Resolution and Governing Law
+                    </h3>
+                    <p>
+                        These Terms are governed by the laws of the United States and the State of Delaware, without regard to conflict-of-law 
+                        principles, except that mandatory consumer protection laws in your place of residence may still apply where they cannot 
+                        be waived. You agree that exclusive jurisdiction for disputes arising out of these Terms or your use of EchoFlux as 
+                        a creator or visitor to echoflux.ai (excluding disputes that must be brought in another forum under mandatory law) lies 
+                        in the state or federal courts located in Delaware, and you consent to personal jurisdiction there.
+                    </p>
+                    <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
+                        Fans who only interact with a creator's Fan Hub may also have rights under the governing law described in that creator's 
+                        Fan Hub terms where those terms apply to the fan–creator relationship.
+                    </p>
+
+                    <h3 className="text-xl font-bold text-gray-900 dark:text-white mt-8 mb-2">
+                        18. Electronic Communications and Assignment
+                    </h3>
+                    <p>
+                        You consent to receive communications from us electronically (including email and in-app notices). We may assign these 
+                        Terms or delegate our obligations in connection with a merger, acquisition, or sale of assets, provided your rights are 
+                        not materially reduced. You may not assign your rights without our prior written consent.
+                    </p>
+
+                    <h3 className="text-xl font-bold text-gray-900 dark:text-white mt-8 mb-2">
+                        19. No Professional Advice; Template Notice
+                    </h3>
+                    <p className="text-sm text-gray-600 dark:text-gray-400">
+                        EchoFlux does not provide legal, tax, or financial advice. Default Fan Hub terms and privacy templates are starting 
+                        points for creators and are not a substitute for advice from qualified counsel in your jurisdiction.
                     </p>
 
                     <div className="mt-8 p-6 border-l-4 border-primary-400 bg-primary-50 dark:bg-primary-900/30 rounded-r-lg">

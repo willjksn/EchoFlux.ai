@@ -1381,16 +1381,20 @@ export const MyPageBuilder: React.FC = () => {
     });
   }, []);
 
-  // Helper to update legal
-  const updateLegal = (field: keyof StorefrontLegal, value: string) => {
-    updateDraft({
+  // Helper to update legal — must use functional setDraft so back-to-back updates (e.g. termsText + termsLastUpdated)
+  // do not clobber each other with a stale draft.legal from the render closure.
+  const updateLegal = useCallback((field: keyof StorefrontLegal, value: string) => {
+    setDraft((prev) => ({
+      ...prev,
+      // DEFAULT_LEGAL must come first so prev.legal is not wiped by empty default strings
+      // when updating a single field (e.g. termsLastUpdated after termsText).
       legal: {
-        ...draft.legal,
         ...DEFAULT_LEGAL,
+        ...prev.legal,
         [field]: value,
       },
-    });
-  };
+    }));
+  }, []);
 
   // State for legal modals
   const [legalModalOpen, setLegalModalOpen] = useState<"terms" | "privacy" | null>(null);

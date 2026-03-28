@@ -5,7 +5,7 @@ export const Privacy: React.FC = () => {
         <div className="max-w-4xl mx-auto space-y-8">
             <div className="bg-white dark:bg-gray-800 p-8 rounded-xl shadow-md">
                 <h2 className="text-3xl font-bold text-gray-900 dark:text-white">Privacy Policy</h2>
-                <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">Last updated: March 2026</p>
+                <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">Last updated: March 28, 2026</p>
 
                 <div className="mt-6 prose prose-lg dark:prose-invert max-w-none text-gray-700 dark:text-gray-300">
                     <p>
@@ -195,6 +195,64 @@ export const Privacy: React.FC = () => {
                     </p>
                     <p className="mt-2">
                         Continued use of the service after changes constitutes acceptance of the updated policy.
+                    </p>
+
+                    <h3 className="text-xl font-bold text-gray-900 dark:text-white mt-8 mb-2">
+                        15. EchoFlux, Creators, and Fans — Who Handles What
+                    </h3>
+                    <p>
+                        EchoFlux processes account, usage, payment metadata, security, and platform operations data as described in this 
+                        policy. When you use a creator's Fan Hub, that creator receives certain information about you (for example, display 
+                        name, email, and purchase history with them) to deliver memberships, messages, and store items. The creator is 
+                        responsible for their own use of that information and for the notices on their Fan Hub page (including default 
+                        templates if they have not replaced them). EchoFlux may act as a service provider to creators for hosting and 
+                        delivery features, and as an independent controller for platform-wide security, fraud prevention, and compliance.
+                    </p>
+
+                    <h3 className="text-xl font-bold text-gray-900 dark:text-white mt-8 mb-2">
+                        16. Fan Hub Features and Data Categories
+                    </h3>
+                    <p>
+                        Fan Hub may include public landing pages, member feeds, saved posts, direct messaging between you and the creator, 
+                        tips, subscriptions, digital products, scheduled or live video sessions (which may use third-party video providers), 
+                        notifications, and custom domains. Data associated with each feature is used to operate that feature, bill usage 
+                        where applicable, and enforce our Terms and safety policies.
+                    </p>
+
+                    <h3 className="text-xl font-bold text-gray-900 dark:text-white mt-8 mb-2">
+                        17. Guest Checkout and Limited Accounts
+                    </h3>
+                    <p>
+                        If you complete a purchase without a full member profile, we may still collect email, payment status from Stripe, 
+                        and identifiers needed to link your purchase to an account when you sign in later. That information is processed 
+                        under this policy and the creator's Fan Hub privacy notice for fan-facing disclosures.
+                    </p>
+
+                    <h3 className="text-xl font-bold text-gray-900 dark:text-white mt-8 mb-2">
+                        18. Safety Reports, Blocking, and Law Enforcement
+                    </h3>
+                    <p>
+                        When you report a message or user, we collect report details (such as reason, identifiers, and timestamps) to 
+                        investigate abuse, comply with law, and protect users. Block lists prevent certain fans from messaging or 
+                        checking out with a creator as implemented in our systems. We may retain report and security records as long as 
+                        needed for safety, litigation, or compliance.
+                    </p>
+
+                    <h3 className="text-xl font-bold text-gray-900 dark:text-white mt-8 mb-2">
+                        19. U.S. State Privacy Rights (including California)
+                    </h3>
+                    <p>
+                        Depending on where you live, you may have the right to know categories and specific pieces of personal information 
+                        we collect, the purposes of collection, categories of recipients, and in some cases to request deletion, correction, 
+                        or opt-out of certain processing. California residents: we do not "sell" personal information for money as 
+                        traditionally understood; we use service providers as described above. You may designate an authorized agent 
+                        where state law allows. To exercise rights, contact <strong>contact@echoflux.ai</strong>. We will not discriminate 
+                        against you for exercising privacy rights. Appeals and additional disclosures may be required under specific 
+                        state laws; we will respond within the timeframes those laws require.
+                    </p>
+                    <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
+                        For requests that relate primarily to a specific creator's use of your data on their Fan Hub, we may direct you 
+                        to that creator where appropriate, while still handling platform-level data we control.
                     </p>
 
                     <div className="mt-8 p-6 border-l-4 border-primary-400 bg-primary-50 dark:bg-primary-900/30 rounded-r-lg">
