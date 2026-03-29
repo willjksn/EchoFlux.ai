@@ -54,21 +54,30 @@ async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
     isCreatorReporter && typeof creatorData.displayName === "string" && creatorData.displayName.trim()
       ? creatorData.displayName.trim()
       : creatorHandle || null;
-  const preview = String(message).trim().slice(0, 180);
+  const trimmedMessage = String(message).trim();
+  const preview = trimmedMessage.slice(0, 180);
 
-  await db.collection("support_tickets").add({
+  const ticketRef = db.collection("support_tickets").doc();
+  const ticketId = ticketRef.id;
+  const reporterKind = isCreatorReporter ? "creator" : "fan";
+  const reporterName =
+    (typeof userData.name === "string" && userData.name) ||
+    (typeof userData.displayName === "string" && userData.displayName) ||
+    user.email ||
+    "Unknown";
+
+  const batch = db.batch();
+
+  batch.set(ticketRef, {
+    id: ticketId,
     creatorId: isCreatorReporter ? user.uid : null,
     creatorHandle,
     creatorDisplayName,
     reporterUid: user.uid,
     reporterEmail: user.email || null,
-    reporterName:
-      (typeof userData.name === "string" && userData.name) ||
-      (typeof userData.displayName === "string" && userData.displayName) ||
-      user.email ||
-      "Unknown",
+    reporterName,
     reporterRole: (typeof userData.role === "string" && userData.role) || "User",
-    reporterKind: isCreatorReporter ? "creator" : "fan",
+    reporterKind,
     status: "open",
     page: page || null,
     url: url || null,
@@ -80,6 +89,69 @@ async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
     lastMessagePreview: preview,
     messageCount: 1,
   });
+
+  batch.set(ticketRef.collection("messages").doc(), {
+    senderKind: reporterKind,
+    senderUid: user.uid,
+    senderName: reporterName,
+    content: trimmedMessage,
+    createdAt: now,
+  });
+
+  // Mirror every report into the reporter's support thread collection for in-app tracking.
+  batch.set(db.collection("users").doc(user.uid).collection("support_threads").doc(ticketId), {
+    title: preview || "Problem report",
+    status: "open",
+    createdAt: now,
+    updatedAt: now,
+    lastMessage: trimmedMessage,
+    creatorId: isCreatorReporter ? user.uid : null,
+    creatorDisplayName,
+  });
+  batch.set(
+    db.collection("users").doc(user.uid).collection("support_threads").doc(ticketId).collection("messages").doc(),
+    {
+      senderType: "fan",
+      content: trimmedMessage,
+      createdAt: now,
+    }
+  );
+
+  // Keep creator-scoped support view in sync for creator-context reports.
+  if (isCreatorReporter) {
+    batch.set(db.collection("creators").doc(user.uid).collection("support_tickets").doc(ticketId), {
+      ticketId,
+      creatorId: user.uid,
+      creatorHandle,
+      creatorDisplayName,
+      reporterUid: user.uid,
+      reporterEmail: user.email || null,
+      reporterName,
+      reporterKind,
+      status: "open",
+      preview,
+      createdAt: now,
+      updatedAt: now,
+      lastMessageAt: now,
+    });
+  }
+
+  // Raise an admin alert so support reports are visible in Admin alerts feed.
+  batch.set(db.collection("admin_alerts").doc(), {
+    type: "support_ticket_created",
+    severity: "warning",
+    title: "New support ticket",
+    message: `${reporterKind === "creator" ? "Creator" : "Fan"} report from ${reporterName}`,
+    ticketId,
+    reporterUid: user.uid,
+    reporterEmail: user.email || null,
+    reporterKind,
+    creatorId: isCreatorReporter ? user.uid : null,
+    read: false,
+    createdAt: new Date(),
+  });
+
+  await batch.commit();
 
   res.status(200).json({ success: true });
 }

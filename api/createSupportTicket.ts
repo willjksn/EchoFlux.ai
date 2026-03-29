@@ -126,6 +126,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       updatedAt: now,
       lastMessageAt: now,
     });
+    batch.set(db.collection("admin_alerts").doc(), {
+      type: "support_ticket_created",
+      severity: "warning",
+      title: "New support ticket",
+      message: `${baseTicket.reporterKind === "creator" ? "Creator" : "Fan"} report from ${baseTicket.reporterName}`,
+      ticketId,
+      reporterUid: authUser.uid,
+      reporterEmail: authUser.email || null,
+      reporterKind: baseTicket.reporterKind,
+      creatorId,
+      read: false,
+      createdAt: new Date(),
+    });
 
     await batch.commit();
 

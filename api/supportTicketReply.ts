@@ -70,6 +70,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         { merge: true }
       );
     }
+    batch.set(db.collection("admin_alerts").doc(), {
+      type: "support_ticket_reply",
+      severity: "info",
+      title: "Support ticket updated",
+      message: `New reply from ${reporterName}`,
+      ticketId,
+      reporterUid,
+      reporterEmail: authUser.email || null,
+      reporterKind: "fan",
+      creatorId,
+      read: false,
+      createdAt: new Date(),
+    });
 
     await batch.commit();
     return res.status(200).json({ success: true });
