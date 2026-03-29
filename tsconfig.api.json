@@ -10,12 +10,7 @@
     "allowSyntheticDefaultImports": true,
     "skipLibCheck": true
   },
-  "include": [
-    "api/**/*.ts",
-    "src/lib/storefrontHeroNormalize.ts",
-    "src/lib/mergeFanHubStorefrontTheme.ts",
-    "src/lib/fanHubThemePresets.ts"
-  ],
+  "include": ["api/**/*.ts"],
   "exclude": [
     "node_modules",
     "dist",

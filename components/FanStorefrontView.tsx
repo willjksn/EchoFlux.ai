@@ -813,7 +813,14 @@ export const FanStorefrontView: React.FC = () => {
         if (cancelled) return;
         if (!res.ok) {
           const body = await res.json().catch(() => ({}));
-          setError((body as { error?: string }).error || "Creator not found");
+          const msg = (body as { error?: string }).error;
+          setError(
+            res.status === 404
+              ? msg || "Creator not found"
+              : res.status >= 500
+                ? msg || "Unable to load this creator. Please try again in a moment."
+                : msg || "Creator not found"
+          );
           setCreator(null);
           setLoading(false);
           return;

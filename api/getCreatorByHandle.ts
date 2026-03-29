@@ -1,8 +1,9 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { getAdminDb } from "./_firebaseAdmin.js";
 import { enforceRateLimit } from "./_rateLimit.js";
-import { mergeFanHubStorefrontTheme } from "../src/lib/mergeFanHubStorefrontTheme.js";
-import { normalizeHeroMediaForStorefront } from "../src/lib/storefrontHeroNormalize.js";
+import { mergeFanHubStorefrontTheme } from "./_mergeFanHubStorefrontTheme.js";
+import { normalizeHeroMediaForStorefront } from "./_storefrontHeroNormalize.js";
+import { jsonSafeForApiResponse } from "./_jsonSafeForApiResponse.js";
 
 /**
  * Resolve creator by handle for fan storefront (echoflux.ai/{handle}).
@@ -220,12 +221,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       fanAuthBranding,
     };
 
-    return res.status(200).json(payload);
+    return res.status(200).json(jsonSafeForApiResponse(payload));
   } catch (error: unknown) {
+    const msg = error instanceof Error ? error.message : String(error);
     console.error("getCreatorByHandle error:", error);
     return res.status(500).json({
       error: "Failed to resolve creator",
-      details: process.env.NODE_ENV === "development" ? (error as Error)?.message : undefined,
+      details:
+        process.env.NODE_ENV === "development" || process.env.VERCEL_ENV === "preview"
+          ? msg
+          : undefined,
     });
   }
 }
