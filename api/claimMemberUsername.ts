@@ -70,10 +70,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     typeof existingUser?.username === "string" ? normalize(existingUser.username) : "";
 
   const unameRef = db.collection("usernames").doc(norm);
+  const creatorHandleRef = db.collection("creatorHandles").doc(norm);
   const oldUnameRef = existingUsername && existingUsername !== norm ? db.collection("usernames").doc(existingUsername) : null;
 
   try {
     await db.runTransaction(async (tx) => {
+      const creatorHandleSnap = await tx.get(creatorHandleRef);
+      if (creatorHandleSnap.exists) {
+        throw new Error("RESERVED_CREATOR_HANDLE");
+      }
       const uSnap = await tx.get(unameRef);
       if (uSnap.exists) {
         const owner = (uSnap.data() as { uid?: string } | undefined)?.uid;
@@ -100,6 +105,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     });
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : String(e);
+    if (msg === "RESERVED_CREATOR_HANDLE") {
+      return res.status(409).json({ error: "That username is reserved as a creator handle." });
+    }
     if (msg === "TAKEN") {
       return res.status(409).json({ error: "That username is already taken." });
     }

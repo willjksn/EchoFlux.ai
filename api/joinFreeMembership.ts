@@ -43,14 +43,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(404).json({ error: "Creator not found" });
     }
 
-    const creatorData = creatorSnap.data() as { 
+    const creatorData = creatorSnap.data() as {
       monetization?: { freeAccessEnabled?: boolean };
+      /** Legacy shape on older creator docs */
+      freeAccessEnabled?: boolean;
       displayName?: string;
       handle?: string;
     } | undefined;
 
     // Check if free access is enabled for this creator
-    if (!creatorData?.monetization?.freeAccessEnabled) {
+    const freeAccessEnabled =
+      creatorData?.monetization?.freeAccessEnabled === true ||
+      creatorData?.freeAccessEnabled === true;
+    if (!freeAccessEnabled) {
       return res.status(400).json({ error: "This creator requires a paid subscription" });
     }
 

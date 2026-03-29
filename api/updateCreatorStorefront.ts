@@ -97,6 +97,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           }
         }
         if (handle) {
+          const reservedUsernameRef = db.collection("usernames").doc(handle);
+          const reservedUsernameSnap = await tx.get(reservedUsernameRef);
+          if (reservedUsernameSnap.exists) {
+            throw new Error("HANDLE_RESERVED_BY_USERNAME");
+          }
           tx.set(db.collection("creatorHandles").doc(handle), { creatorId });
         }
         tx.set(creatorRef, payload, { merge: true });
@@ -105,6 +110,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       // Keep creatorHandles mapping in sync even when handle text didn't change.
       // This repairs legacy mismatches (e.g. storefront resolves to a placeholder creatorId).
       await db.runTransaction(async (tx) => {
+        const reservedUsernameRef = db.collection("usernames").doc(handle);
+        const reservedUsernameSnap = await tx.get(reservedUsernameRef);
+        if (reservedUsernameSnap.exists) {
+          throw new Error("HANDLE_RESERVED_BY_USERNAME");
+        }
         const handleRef = db.collection("creatorHandles").doc(handle);
         const handleSnap = await tx.get(handleRef);
         const mappedCreatorId = (handleSnap.data() as { creatorId?: string } | undefined)?.creatorId;
@@ -125,6 +135,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   } catch (e: unknown) {
     console.error("updateCreatorStorefront error:", e);
     const msg = e instanceof Error ? e.message : "Update failed";
+    if (msg === "HANDLE_RESERVED_BY_USERNAME") {
+      return res.status(409).json({ error: "This handle is reserved by a fan username." });
+    }
     return res.status(500).json({ error: "Update failed", message: msg });
   }
 }

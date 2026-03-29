@@ -48,6 +48,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
     }
 
+    // 1b) Global namespace lock: member usernames reserve creator handles too.
+    const usernameDoc = await db.collection("usernames").doc(cleanHandle).get();
+    if (usernameDoc.exists) {
+      return res.status(200).json({
+        available: false,
+        message: "This handle is already taken",
+      });
+    }
+
     // 2) Fallback: creators where handle == cleanHandle
     const creatorsRef = db.collection("creators");
     let snapshot;

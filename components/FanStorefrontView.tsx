@@ -58,6 +58,8 @@ import { getAvatarCropStyle } from "../src/lib/avatarCrop";
 import { resolveStoreCopy } from "../src/lib/storefrontStoreCopy";
 import { resolveTipSectionCopy } from "../src/lib/tipSectionCopy";
 import { normalizeMemberUsername, validateMemberUsernameFormat } from "../src/lib/memberUsername";
+import { mergeFanHubStorefrontTheme } from "../src/lib/mergeFanHubStorefrontTheme";
+import { normalizeHeroMediaForStorefront } from "../src/lib/storefrontHeroNormalize";
 import { useAppContext } from "./AppContext";
 import { isConfiguredCustomStorefrontHost } from "../src/lib/storefrontCustomDomain";
 import { usePathname } from "../src/hooks/usePathname";
@@ -811,22 +813,116 @@ export const FanStorefrontView: React.FC = () => {
       try {
         const res = await fetch(`/api/getCreatorByHandle?handle=${encodeURIComponent(handle)}`);
         if (cancelled) return;
+        let resolved: StorefrontCreator | null = null;
         if (!res.ok) {
           const body = await res.json().catch(() => ({}));
           const msg = (body as { error?: string }).error;
-          setError(
-            res.status === 404
-              ? msg || "Creator not found"
-              : res.status >= 500
-                ? msg || "Unable to load this creator. Please try again in a moment."
-                : msg || "Creator not found"
-          );
-          setCreator(null);
-          setLoading(false);
-          return;
+          // Local-dev resilience: if proxied API is down, allow the signed-in creator
+          // to load their own storefront directly from Firestore by matching handle.
+          if (db && import.meta.env.DEV && auth.currentUser?.uid) {
+            try {
+              const ownDoc = await getDoc(doc(db, "creators", auth.currentUser.uid));
+              if (ownDoc.exists()) {
+                const own = ownDoc.data() as Record<string, unknown>;
+                const ownHandle = normalizeHandleKey(typeof own.handle === "string" ? own.handle : "");
+                const routeHandle = normalizeHandleKey(handle);
+                if (ownHandle && routeHandle && ownHandle === routeHandle) {
+                  const ownTheme = mergeFanHubStorefrontTheme(own.theme as Record<string, unknown> | undefined);
+                  const ownSections = (own.sections as Record<string, boolean> | undefined) || {};
+                  const ownRules = (own.rules as Record<string, string> | undefined) || {};
+                  const ownMonetization =
+                    (own.monetization as StorefrontCreator["monetization"] | undefined) ||
+                    (typeof own.freeAccessEnabled === "boolean" ||
+                    typeof own.tipsEnabled === "boolean" ||
+                    typeof own.monthlyPrice === "number"
+                      ? {
+                          freeAccessEnabled: own.freeAccessEnabled === true,
+                          tipsEnabled: own.tipsEnabled !== false,
+                          ...(typeof own.monthlyPrice === "number" ? { monthlyPrice: own.monthlyPrice } : {}),
+                        }
+                      : undefined);
+                  const ownHeroMedia = normalizeHeroMediaForStorefront(
+                    own.heroMedia,
+                    own.heroImage,
+                    own.heroImageUrl
+                  );
+                  const ownHeroImage =
+                    (typeof own.heroImage === "string" && own.heroImage.trim()) ||
+                    (typeof own.heroImageUrl === "string" && own.heroImageUrl.trim()) ||
+                    ownHeroMedia[0]?.url ||
+                    undefined;
+
+                  resolved = {
+                    creatorId: auth.currentUser.uid,
+                    handle: routeHandle || handle,
+                    displayName: (own.displayName as string) || routeHandle || handle,
+                    bio: (own.bio as string) || undefined,
+                    avatar: (own.avatar as string) || (own.avatarUrl as string) || undefined,
+                    avatarObjectPosition: (own.avatarObjectPosition as string) || undefined,
+                    logo: (own.logo as string) || (own.logoUrl as string) || undefined,
+                    logoUrl: (own.logoUrl as string) || undefined,
+                    showDisplayNameOnLanding: (own.showDisplayNameOnLanding as boolean) !== false,
+                    heroImage: ownHeroImage,
+                    heroImageUrl: (own.heroImageUrl as string) || undefined,
+                    heroMedia: ownHeroMedia.length > 0 ? ownHeroMedia : undefined,
+                    heroTagline: (own.heroTagline as string) || undefined,
+                    heroPromise: (own.heroPromise as string) || undefined,
+                    heroSubline: (own.heroSubline as string) || undefined,
+                    heroSubline2: (own.heroSubline2 as string) || undefined,
+                    socialLinks: own.socialLinks as StorefrontCreator["socialLinks"] | undefined,
+                    landingContent: own.landingContent as StorefrontCreator["landingContent"] | undefined,
+                    legal: own.legal as StorefrontCreator["legal"] | undefined,
+                    textStyles: own.textStyles as StorefrontCreator["textStyles"] | undefined,
+                    theme: {
+                      primary: ownTheme.primary || "#6366f1",
+                      background: ownTheme.background || "#fafafa",
+                      text: ownTheme.text || "#1f2937",
+                      textMuted: ownTheme.textMuted,
+                      presetId: ownTheme.presetId,
+                      buttonStyle: ownTheme.buttonStyle || "solid",
+                      fontFamily: ownTheme.fontFamily,
+                      accentHover: ownTheme.accentHover,
+                      border: ownTheme.border,
+                    },
+                    heroLayout: (own.heroLayout as StorefrontCreator["heroLayout"]) || "default",
+                    sections: {
+                      feed: ownSections.feed !== false,
+                      treats: ownSections.treats !== false,
+                      tip: ownSections.tip !== false,
+                      messages: ownSections.messages !== false,
+                      about: ownSections.about !== false,
+                    },
+                    sectionsOrder: (own.sectionsOrder as string[] | undefined) || ["feed", "treats", "tip", "messages", "about"],
+                    publicTreatsOnLanding: own.publicTreatsOnLanding === true,
+                    rules: ownRules.boundariesText != null ? { boundariesText: ownRules.boundariesText } : undefined,
+                    spicyMode: own.spicyMode === true,
+                    monetization: ownMonetization,
+                    feedSettings: own.feedSettings as StorefrontCreator["feedSettings"] | undefined,
+                    fanAuthBranding: own.fanAuthBranding as StorefrontCreator["fanAuthBranding"] | undefined,
+                  };
+                }
+              }
+            } catch {
+              // fall through to standard API error below
+            }
+          }
+          if (!resolved) {
+            setError(
+              res.status === 404
+                ? msg || "Creator not found"
+                : res.status >= 500
+                  ? msg || "Unable to load this creator. Please try again in a moment."
+                  : msg || "Creator not found"
+            );
+            setCreator(null);
+            setLoading(false);
+            return;
+          }
+        } else {
+          const data = await res.json();
+          resolved = data as StorefrontCreator;
         }
-        const data = await res.json();
-        let resolved = data as StorefrontCreator;
+
         const missingVisuals =
           !String(resolved.logo ?? "").trim() &&
           !String(resolved.logoUrl ?? "").trim() &&

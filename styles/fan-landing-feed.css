@@ -1148,8 +1148,8 @@
   width: 100%;
   height: auto;
   max-height: 600px;
-  /* cover: portrait + max-height yields a wide box; contain pillarboxes — cover fills the frame */
-  object-fit: cover;
+  /* Keep the full image visible (less zoom/crop in member feed cards). */
+  object-fit: contain;
   object-position: center top;
   display: block;
 }

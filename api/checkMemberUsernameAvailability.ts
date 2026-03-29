@@ -30,9 +30,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (!db) return res.status(500).json({ error: "Database unavailable" });
 
   try {
-    const [userSnap, unameSnap] = await Promise.all([
+    const [userSnap, unameSnap, creatorHandleSnap] = await Promise.all([
       db.collection("users").doc(decoded.uid).get(),
       db.collection("usernames").doc(username).get(),
+      db.collection("creatorHandles").doc(username).get(),
     ]);
     const existing = userSnap.data() as { username?: string } | undefined;
     const current = typeof existing?.username === "string" ? normalize(existing.username) : "";
@@ -40,6 +41,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(200).json({ available: true, reason: "current", message: "Your current username." });
     }
     if (!unameSnap.exists) {
+      if (creatorHandleSnap.exists) {
+        return res
+          .status(200)
+          .json({ available: false, reason: "reserved_creator_handle", message: "Unavailable — reserved as a creator handle." });
+      }
       return res.status(200).json({ available: true, reason: "available", message: "Available." });
     }
     const owner = (unameSnap.data() as { uid?: string } | undefined)?.uid;

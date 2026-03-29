@@ -903,7 +903,14 @@
 }
 .stormij-theme .fan-member-content--feed .feed-card-media-wrap .feed-card-media,
 .stormij-theme .fan-member-content--feed-column .feed-card-media-wrap .feed-card-media,
-.stormij-theme .fan-hub-feed-chrome .feed-card-media-wrap .feed-card-media,
+.stormij-theme .fan-hub-feed-chrome .feed-card-media-wrap .feed-card-media {
+  width: 100%;
+  height: auto;
+  max-height: 600px;
+  object-fit: contain;
+  object-position: center top;
+  display: block;
+}
 .stormij-theme .fan-member-content--feed .feed-card-media-wrap .feed-card-media-video,
 .stormij-theme .fan-member-content--feed-column .feed-card-media-wrap .feed-card-media-video,
 .stormij-theme .fan-hub-feed-chrome .feed-card-media-wrap .feed-card-media-video {

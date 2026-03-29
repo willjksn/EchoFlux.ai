@@ -8,13 +8,18 @@ export async function readFanCheckoutFetchResult(res: Response): Promise<{
 }> {
   const text = await res.text();
   try {
-    const data = text ? (JSON.parse(text) as { url?: string; error?: string }) : {};
+    const data = text ? (JSON.parse(text) as { url?: string; error?: string; message?: string; details?: string }) : {};
+    const serverMessage =
+      (typeof data.error === "string" && data.error.trim()) ||
+      (typeof data.message === "string" && data.message.trim()) ||
+      (typeof data.details === "string" && data.details.trim()) ||
+      "";
     return {
       ok: res.ok,
       url: typeof data.url === "string" ? data.url : undefined,
       error:
-        typeof data.error === "string" && data.error.trim()
-          ? data.error.trim()
+        serverMessage
+          ? serverMessage
           : !res.ok
             ? `Request failed (${res.status})`
             : undefined,

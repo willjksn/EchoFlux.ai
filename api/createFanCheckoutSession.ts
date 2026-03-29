@@ -70,7 +70,10 @@ function isCreatorPlatformOwner(
   if (PLATFORM_OWNER_IDS.includes(creatorId)) return true;
   if (creatorData?.isPlatformOwner === true) return true;
   if (creatorData?.platformOwner === true) return true;
-  if (typeof creatorData?.role === "string" && creatorData.role.toLowerCase().trim() === "owner") return true;
+  if (typeof creatorData?.role === "string") {
+    const role = creatorData.role.toLowerCase().trim();
+    if (role === "owner" || role === "admin" || role === "platform_owner") return true;
+  }
   return false;
 }
 
@@ -143,7 +146,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const safeCancelUrl = toSafeCheckoutUrl(cancelUrl, defaultCancel, STRIPE_USE_TEST_MODE);
 
   try {
-    const db = getAdminDb();
+    let db: ReturnType<typeof getAdminDb>;
+    try {
+      db = getAdminDb();
+    } catch (dbErr: unknown) {
+      const dbMsg = dbErr instanceof Error ? dbErr.message : "Database unavailable";
+      return res.status(503).json({ error: "Database unavailable", message: dbMsg });
+    }
 
     if (decoded?.uid && (await isFanBlocked(db, creatorId, decoded.uid))) {
       return res.status(403).json({ error: "You cannot purchase from this creator" });
@@ -162,15 +171,31 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       platformOwner?: boolean;
       role?: string;
     } | undefined;
+    const creatorUserSnap = await db.collection("users").doc(creatorId).get();
+    const creatorUserData = creatorUserSnap.data() as {
+      displayName?: string;
+      handle?: string;
+      isPlatformOwner?: boolean;
+      platformOwner?: boolean;
+      role?: string;
+      publicTreatsOnLanding?: boolean;
+    } | undefined;
+    const ownerDetectionData = {
+      isPlatformOwner:
+        creatorData?.isPlatformOwner === true || creatorUserData?.isPlatformOwner === true,
+      platformOwner:
+        creatorData?.platformOwner === true || creatorUserData?.platformOwner === true,
+      role: creatorData?.role || creatorUserData?.role,
+    };
 
     if (allowGuestProduct) {
-      if (!creatorData?.publicTreatsOnLanding) {
+      if (!(creatorData?.publicTreatsOnLanding === true || creatorUserData?.publicTreatsOnLanding === true)) {
         return res.status(403).json({ error: "Store purchases are not available for guest checkout on this page" });
       }
     }
     
     // Check if this is a platform owner (e.g., Stormij) - payments go directly to EchoFlux
-    const isPlatformOwner = isCreatorPlatformOwner(creatorId, creatorData);
+    const isPlatformOwner = isCreatorPlatformOwner(creatorId, ownerDetectionData);
     
     // For regular creators, require Stripe Connect; for platform owners, skip it
     const connectAccountId =
@@ -213,7 +238,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // For platform owners: no stripeAccount option (direct to platform), no fees
     // For regular creators: use Connect account with 10% platform fee
     const opts = isPlatformOwner ? {} : getStripeOptions(connectAccountId);
-    const displayName = creatorData?.displayName || creatorData?.handle || "Creator";
+    const displayName =
+      creatorData?.displayName ||
+      creatorData?.handle ||
+      creatorUserData?.displayName ||
+      creatorUserData?.handle ||
+      "Creator";
 
     // ==================== SUBSCRIPTION ====================
     if (type === "subscription") {

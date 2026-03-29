@@ -311,6 +311,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   // Fetch admin alerts if user is admin
   useEffect(() => {
     if (!user || user.role !== 'Admin') return;
+    // Avoid false-positive admin listeners when user doc and auth uid are briefly out of sync.
+    if (auth.currentUser?.uid && user.id && auth.currentUser.uid !== user.id) return;
 
     let cancelled = false;
     let unsubscribe: (() => void) | undefined;
