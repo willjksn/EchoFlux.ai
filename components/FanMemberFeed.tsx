@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback, useMemo } from "react";
+import React, { useState, useEffect, useLayoutEffect, useCallback, useMemo, useRef } from "react";
 import {
   collection,
   getDocs,
@@ -24,9 +24,120 @@ import { inferIsVideoFromUrl, normalizePostMediaTypes } from "../src/lib/mediaUr
 import { DmAudioPlayer } from "./DmAudioPlayer";
 import { ViewPostModalVideo } from "./ViewPostModalVideo";
 import { feedCommentAuthorLabel, feedCommentAuthorInitial } from "../src/lib/feedCommentLabel";
+import { useAppContext } from "./AppContext";
 
 const SAVED_BY_CREATOR_KEY = "savedPostIdsByCreator";
 const INLINE_COMMENT_PREVIEW_MAX = 120;
+const EMPTY_FAN_POST_UNLOCK_SET = new Set<string>();
+
+/** Snapshots vertical scroll for the carousel’s scroll chain so slide changes don’t jump the viewport. */
+type FanFeedScrollSnap = { el: HTMLElement | Document; top: number; left: number };
+
+function captureFanFeedCarouselScrollSnaps(root: HTMLElement | null): FanFeedScrollSnap[] {
+  if (typeof document === "undefined" || typeof window === "undefined") return [];
+  const out: FanFeedScrollSnap[] = [];
+  let el: HTMLElement | null = root;
+  while (el) {
+    const st = getComputedStyle(el);
+    const oy = st.overflowY;
+    const ox = st.overflowX;
+    const yScroll =
+      (oy === "auto" || oy === "scroll" || oy === "overlay") && el.scrollHeight > el.clientHeight + 1;
+    const xScroll =
+      (ox === "auto" || ox === "scroll" || ox === "overlay") && el.scrollWidth > el.clientWidth + 1;
+    if (yScroll || xScroll) {
+      out.push({ el, top: el.scrollTop, left: el.scrollLeft });
+    }
+    el = el.parentElement;
+  }
+  out.push({ el: document.documentElement, top: window.scrollY, left: window.scrollX });
+  return out;
+}
+
+function restoreFanFeedCarouselScrollSnaps(snaps: FanFeedScrollSnap[]) {
+  for (let i = snaps.length - 1; i >= 0; i--) {
+    const { el, top, left } = snaps[i];
+    if (el === document.documentElement) {
+      window.scrollTo(left, top);
+    } else {
+      (el as HTMLElement).scrollTop = top;
+      (el as HTMLElement).scrollLeft = left;
+    }
+  }
+}
+
+const FEED_TIP_PRESET_USD = [5, 10, 25, 50, 100, 250] as const;
+
+function isLocalCheckoutHost(hostname: string): boolean {
+  const h = hostname.toLowerCase();
+  return h === "localhost" || h === "127.0.0.1" || h === "::1" || h.endsWith(".local");
+}
+
+function buildTipCheckoutReturnUrl(pathname: string, search: string, hash = ""): string | undefined {
+  if (typeof window === "undefined") return undefined;
+  if (isLocalCheckoutHost(window.location.hostname)) {
+    return `https://echoflux.ai${pathname}${search}${hash}`;
+  }
+  return `${window.location.origin}${pathname}${search}${hash}`;
+}
+
+function buildPostUnlockCheckoutReturnUrls(): { successUrl?: string; cancelUrl?: string } {
+  if (typeof window === "undefined") return {};
+  const u = new URL(window.location.href);
+  u.searchParams.set("post_unlock", "1");
+  const successUrl = buildTipCheckoutReturnUrl(u.pathname, u.search, u.hash || "");
+  const c = new URL(window.location.href);
+  const cancelUrl = buildTipCheckoutReturnUrl(c.pathname, c.search, c.hash || "");
+  return { successUrl, cancelUrl };
+}
+
+async function startFanPostUnlockCheckoutSession(creatorId: string, postId: string): Promise<string> {
+  const token = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
+  if (!token) throw new Error("Sign in to unlock this post.");
+  const { successUrl, cancelUrl } = buildPostUnlockCheckoutReturnUrls();
+  const res = await fetch("/api/createFanCheckoutSession", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({
+      creatorId,
+      type: "post_unlock",
+      postId,
+      ...(successUrl ? { successUrl } : {}),
+      ...(cancelUrl ? { cancelUrl } : {}),
+    }),
+  });
+  const data = (await res.json()) as { url?: string; error?: string };
+  if (!res.ok) throw new Error(data.error || "Checkout failed. Please try again.");
+  if (!data.url) throw new Error("Checkout link was not returned. Please try again.");
+  return data.url;
+}
+
+async function startFanTipCheckoutSession(creatorId: string, amountCents: number): Promise<string> {
+  const token = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
+  const successUrl = buildTipCheckoutReturnUrl(window.location.pathname, "?tip=success");
+  const cancelUrl = buildTipCheckoutReturnUrl(window.location.pathname, "?tip=cancel");
+  const res = await fetch("/api/createFanCheckoutSession", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify({
+      creatorId,
+      type: "tip",
+      amountCents,
+      ...(successUrl ? { successUrl } : {}),
+      ...(cancelUrl ? { cancelUrl } : {}),
+    }),
+  });
+  const data = (await res.json()) as { url?: string; error?: string };
+  if (!res.ok) throw new Error(data.error || "Checkout failed. Please try again.");
+  if (!data.url) throw new Error("Checkout link was not returned. Please try again.");
+  return data.url;
+}
 
 const FeedHeaderGridIcon = () => (
   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
@@ -171,8 +282,15 @@ interface FanMemberFeedProps {
   feedSettings?: FanFeedVisibilitySettings;
   /** Logged-in fan's uid; when set, bookmarks are persisted and loaded from Firestore */
   fanId?: string;
+  /** Post IDs this fan has paid to unlock (from getFanEntitlement). */
+  unlockedFanPostIds?: string[];
   /** Optional member-header shortcut to open Saved tab. */
   onOpenSaved?: () => void;
+  /** When false, hide the feed “Send tip” control (creator disabled Tips section). */
+  tipsEnabled?: boolean;
+  /** Same heading/subline as the full Tip tab (from My Page / resolveTipSectionCopy). */
+  tipHeading?: string;
+  tipSubline?: string;
 }
 
 const DEMO_POSTS: Post[] = [
@@ -300,6 +418,11 @@ function FanMemberPostMedia({
   primary,
   variant = "feed",
   splitModal = false,
+  creatorId,
+  fanId,
+  unlockedFanPostIds,
+  unlockingPostId = null,
+  onUnlockPost,
 }: {
   post: Post;
   primary: string;
@@ -307,13 +430,23 @@ function FanMemberPostMedia({
   variant?: "feed" | "detail";
   /** Same media chrome as creator View post (split modal): modal classes + loop video */
   splitModal?: boolean;
+  creatorId?: string;
+  fanId?: string;
+  unlockedFanPostIds?: Set<string>;
+  unlockingPostId?: string | null;
+  onUnlockPost?: (postId: string) => void | Promise<void>;
 }) {
   const urls = post.mediaUrls;
   const types = post.mediaTypes;
   const n = urls.length;
-  const lockedCfg = post.lockedContent?.enabled ? post.lockedContent : undefined;
+  const isDemoPost = post.id.startsWith("demo-");
+  const idSet = unlockedFanPostIds ?? EMPTY_FAN_POST_UNLOCK_SET;
+  const postUnlocked = idSet.has(post.id);
+  const lockedCfg = !postUnlocked && post.lockedContent?.enabled ? post.lockedContent : undefined;
 
   const [mediaIndex, setMediaIndex] = useState(0);
+  const carouselRootRef = useRef<HTMLDivElement>(null);
+  const scrollRestoreSnapsRef = useRef<FanFeedScrollSnap[] | null>(null);
 
   useEffect(() => {
     setMediaIndex(0);
@@ -322,6 +455,13 @@ function FanMemberPostMedia({
   useEffect(() => {
     setMediaIndex((i) => Math.min(i, Math.max(0, n - 1)));
   }, [n]);
+
+  useLayoutEffect(() => {
+    const snaps = scrollRestoreSnapsRef.current;
+    if (!snaps?.length) return;
+    scrollRestoreSnapsRef.current = null;
+    restoreFanFeedCarouselScrollSnaps(snaps);
+  }, [mediaIndex]);
 
   const mediaTotals = useMemo(() => {
     return urls.reduce(
@@ -342,6 +482,7 @@ function FanMemberPostMedia({
       e.stopPropagation();
       e.preventDefault();
       if (n <= 1) return;
+      scrollRestoreSnapsRef.current = captureFanFeedCarouselScrollSnaps(carouselRootRef.current);
       setMediaIndex((i) => Math.max(0, i - 1));
     },
     [n]
@@ -352,23 +493,45 @@ function FanMemberPostMedia({
       e.stopPropagation();
       e.preventDefault();
       if (n <= 1) return;
+      scrollRestoreSnapsRef.current = captureFanFeedCarouselScrollSnaps(carouselRootRef.current);
       setMediaIndex((i) => Math.min(n - 1, i + 1));
     },
     [n]
   );
+
+  /** Stops focus-on-click from scrolling the focused control into view (esp. inside nested scrollers). */
+  const onCarouselControlMouseDown = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+  }, []);
+
+  const onCarouselControlPointerDownCapture = useCallback((e: React.PointerEvent) => {
+    if (e.pointerType === "mouse") e.preventDefault();
+  }, []);
 
   const onCarouselKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
       if (n <= 1) return;
       if (e.key === "ArrowLeft") {
         e.preventDefault();
+        scrollRestoreSnapsRef.current = captureFanFeedCarouselScrollSnaps(carouselRootRef.current);
         setMediaIndex((i) => Math.max(0, i - 1));
       } else if (e.key === "ArrowRight") {
         e.preventDefault();
+        scrollRestoreSnapsRef.current = captureFanFeedCarouselScrollSnaps(carouselRootRef.current);
         setMediaIndex((i) => Math.min(n - 1, i + 1));
       }
     },
     [n]
+  );
+
+  const goToSlide = useCallback(
+    (i: number, e: React.MouseEvent) => {
+      e.stopPropagation();
+      e.preventDefault();
+      scrollRestoreSnapsRef.current = captureFanFeedCarouselScrollSnaps(carouselRootRef.current);
+      setMediaIndex(i);
+    },
+    []
   );
 
   if (n === 0) return null;
@@ -395,6 +558,19 @@ function FanMemberPostMedia({
 
   const slideLabel = `Slide ${idx + 1} of ${n}`;
 
+  const canClickUnlock =
+    post.lockedContent?.priceCents != null &&
+    post.lockedContent.priceCents >= 50 &&
+    !!creatorId &&
+    !!fanId &&
+    !!onUnlockPost &&
+    !isDemoPost;
+
+  const lockPriceCents = post.lockedContent?.priceCents;
+  const hasLockPriceLabel =
+    typeof lockPriceCents === "number" && Number.isFinite(lockPriceCents) && lockPriceCents > 0;
+  const lockPriceText = hasLockPriceLabel ? `Unlock $${(lockPriceCents / 100).toFixed(2)}` : null;
+
   const rootClass = splitModal
     ? `feed-comments-modal-media-wrap fan-feed-media-carousel${
         showCarousel ? " feed-comments-modal-media-wrap--carousel" : ""
@@ -409,6 +585,7 @@ function FanMemberPostMedia({
 
   return (
     <div
+      ref={carouselRootRef}
       role={showCarousel ? "group" : undefined}
       aria-roledescription={showCarousel ? "carousel" : undefined}
       aria-label={showCarousel ? `Post media, ${slideLabel}` : undefined}
@@ -454,18 +631,46 @@ function FanMemberPostMedia({
           alt=""
           className={splitModal ? "feed-comments-modal-media" : "feed-card-media"}
           loading={idx === 0 ? "lazy" : "eager"}
+          draggable={lockedCurrent ? false : undefined}
+          onDragStart={lockedCurrent ? (e) => e.preventDefault() : undefined}
         />
       )}
       {lockedCurrent && (
-        <div className="fan-feed-media-lock-overlay">
+        <div
+          className="fan-feed-media-lock-overlay"
+          role="region"
+          aria-label="Locked media"
+          onContextMenu={(e) => e.preventDefault()}
+        >
           <span className="fan-feed-media-lock-icon" aria-hidden>
             🔒
           </span>
-          <span className="fan-feed-media-lock-text" style={{ color: primary }}>
-            {post.lockedContent?.priceCents != null && post.lockedContent.priceCents > 0
-              ? `Unlock $${(post.lockedContent.priceCents / 100).toFixed(2)}`
-              : "Locked"}
-          </span>
+          {canClickUnlock ? (
+            <button
+              type="button"
+              className="fan-feed-media-lock-unlock-btn"
+              style={{
+                borderColor: primary,
+                color: "#fff",
+                background: `linear-gradient(135deg, ${primary} 0%, color-mix(in srgb, ${primary} 70%, #000) 100%)`,
+              }}
+              disabled={unlockingPostId === post.id}
+              aria-label={`Unlock for ${(post.lockedContent!.priceCents / 100).toFixed(2)} dollars`}
+              onClick={(e) => {
+                e.stopPropagation();
+                e.preventDefault();
+                void onUnlockPost!(post.id);
+              }}
+            >
+              {unlockingPostId === post.id
+                ? "Unlock…"
+                : `Unlock $${(post.lockedContent!.priceCents / 100).toFixed(2)}`}
+            </button>
+          ) : (
+            <span className="fan-feed-media-lock-text" style={{ color: primary }}>
+              {lockPriceText ?? (isDemoPost ? "Preview (demo)" : "Locked")}
+            </span>
+          )}
         </div>
       )}
       {showCarousel && (
@@ -475,6 +680,8 @@ function FanMemberPostMedia({
               type="button"
               className="fan-feed-media-carousel-btn fan-feed-media-carousel-btn--prev"
               aria-label="Previous image or video"
+              onPointerDownCapture={onCarouselControlPointerDownCapture}
+              onMouseDown={onCarouselControlMouseDown}
               onClick={goPrev}
             >
               <CarouselChevronLeft />
@@ -485,6 +692,8 @@ function FanMemberPostMedia({
               type="button"
               className="fan-feed-media-carousel-btn fan-feed-media-carousel-btn--next"
               aria-label="Next image or video"
+              onPointerDownCapture={onCarouselControlPointerDownCapture}
+              onMouseDown={onCarouselControlMouseDown}
               onClick={goNext}
             >
               <CarouselChevronRight />
@@ -508,11 +717,9 @@ function FanMemberPostMedia({
                 }
                 style={i === idx ? { backgroundColor: primary } : undefined}
                 aria-label={`Go to slide ${i + 1}`}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  e.preventDefault();
-                  setMediaIndex(i);
-                }}
+                onPointerDownCapture={onCarouselControlPointerDownCapture}
+                onMouseDown={onCarouselControlMouseDown}
+                onClick={(e) => goToSlide(i, e)}
               />
             ))}
           </div>
@@ -598,7 +805,7 @@ function FanMemberPostDetailModal({
   creatorAvatar,
   creatorAvatarCropStyle,
   primary,
-  creatorId: _creatorId,
+  creatorId,
   fanId,
   fanPhotoURL,
   fanDisplayName,
@@ -609,6 +816,9 @@ function FanMemberPostDetailModal({
   onSubmitComment,
   onReloadAfterComment,
   backLabel = "Back to Home",
+  unlockedFanPostIds,
+  unlockingPostId,
+  onUnlockPost,
 }: {
   open: boolean;
   onClose: () => void;
@@ -633,6 +843,9 @@ function FanMemberPostDetailModal({
   onReloadAfterComment: () => void | Promise<void>;
   /** e.g. "Back to Saved" on the Saved tab */
   backLabel?: string;
+  unlockedFanPostIds?: Set<string>;
+  unlockingPostId?: string | null;
+  onUnlockPost?: (postId: string) => void | Promise<void>;
 }) {
   useEffect(() => {
     if (!open) return;
@@ -710,7 +923,18 @@ function FanMemberPostDetailModal({
           ) : (
             <div className={`feed-comments-modal-content feed-comments-modal-content--stack${hasMedia ? "" : " no-media"}`}>
               <span className="sr-only">Post by {displayName}</span>
-              {hasMedia ? <FanMemberPostMedia post={post} primary={primary} splitModal /> : null}
+              {hasMedia ? (
+                <FanMemberPostMedia
+                  post={post}
+                  primary={primary}
+                  splitModal
+                  creatorId={creatorId}
+                  fanId={fanId}
+                  unlockedFanPostIds={unlockedFanPostIds}
+                  unlockingPostId={unlockingPostId}
+                  onUnlockPost={onUnlockPost}
+                />
+              ) : null}
               <div className="feed-comments-modal-panel">
                 {post.content?.trim() ? (
                   <div className="feed-comments-modal-post-body">
@@ -833,8 +1057,14 @@ export const FanMemberFeed: React.FC<FanMemberFeedProps> = ({
   primary = "#6366f1",
   feedSettings,
   fanId,
+  unlockedFanPostIds: unlockedFanPostIdsProp = [],
   onOpenSaved,
+  tipsEnabled = true,
+  tipHeading = "Support this creator",
+  tipSubline = "Choose an amount to send support.",
 }) => {
+  const { showToast } = useAppContext();
+  const unlockedFanPostIdSet = useMemo(() => new Set(unlockedFanPostIdsProp), [unlockedFanPostIdsProp]);
   const avatarCropStyle: React.CSSProperties = getAvatarCropStyle(avatarObjectPosition);
   const creatorAvatarSrc = typeof avatar === "string" && avatar.trim() ? avatar.trim() : undefined;
   const [posts, setPosts] = useState<Post[]>([]);
@@ -847,6 +1077,11 @@ export const FanMemberFeed: React.FC<FanMemberFeedProps> = ({
   const [commentDraft, setCommentDraft] = useState<Record<string, string>>({});
   const [commentSending, setCommentSending] = useState<string | null>(null);
   const [viewPostId, setViewPostId] = useState<string | null>(null);
+  const [tipSheetOpen, setTipSheetOpen] = useState(false);
+  const [tipSelectedPreset, setTipSelectedPreset] = useState<number | null>(null);
+  const [tipCustomAmount, setTipCustomAmount] = useState("");
+  const [tipLoading, setTipLoading] = useState(false);
+  const [unlockingPostId, setUnlockingPostId] = useState<string | null>(null);
   const { detailPost, detailLoading, reload: reloadDetailPost } = useMemberPostDetail(creatorId, viewPostId);
   const [fanPublicProfile, setFanPublicProfile] = useState<{ photoURL?: string; displayName?: string }>({});
 
@@ -942,6 +1177,60 @@ export const FanMemberFeed: React.FC<FanMemberFeedProps> = ({
       cancelled = true;
     };
   }, [fanId, creatorId]);
+
+  useEffect(() => {
+    if (!tipSheetOpen) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setTipSheetOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => {
+      document.body.style.overflow = prev;
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [tipSheetOpen]);
+
+  const openTipSheet = useCallback(() => {
+    setTipSelectedPreset(null);
+    setTipCustomAmount("");
+    setTipSheetOpen(true);
+  }, []);
+
+  const tipAmountCents = useMemo(() => {
+    const parsed = tipCustomAmount.trim() ? Number.parseFloat(tipCustomAmount) : NaN;
+    const custom = Number.isFinite(parsed) ? Math.round(parsed * 100) : 0;
+    return tipSelectedPreset != null ? tipSelectedPreset * 100 : custom;
+  }, [tipSelectedPreset, tipCustomAmount]);
+
+  const submitTipFromSheet = useCallback(async () => {
+    if (tipAmountCents < 100 || tipAmountCents > 100_000) return;
+    setTipLoading(true);
+    try {
+      const url = await startFanTipCheckoutSession(creatorId, tipAmountCents);
+      window.location.href = url;
+    } catch (e) {
+      showToast?.(e instanceof Error ? e.message : "Could not start checkout.", "error");
+    } finally {
+      setTipLoading(false);
+    }
+  }, [creatorId, tipAmountCents, showToast]);
+
+  const handleUnlockPost = useCallback(
+    async (postId: string) => {
+      if (!creatorId || unlockingPostId) return;
+      setUnlockingPostId(postId);
+      try {
+        const url = await startFanPostUnlockCheckoutSession(creatorId, postId);
+        window.location.href = url;
+      } catch (e) {
+        showToast?.(e instanceof Error ? e.message : "Could not start checkout.", "error");
+        setUnlockingPostId(null);
+      }
+    },
+    [creatorId, unlockingPostId, showToast]
+  );
 
   const submitComment = useCallback(
     async (postId: string, afterSuccess?: () => void | Promise<void>) => {
@@ -1084,7 +1373,15 @@ export const FanMemberFeed: React.FC<FanMemberFeedProps> = ({
                 <span className="feed-card-time">{formatTimeAgo(post.createdAt)}</span>
               </div>
 
-              <FanMemberPostMedia post={post} primary={primary} />
+              <FanMemberPostMedia
+                post={post}
+                primary={primary}
+                creatorId={creatorId}
+                fanId={fanId}
+                unlockedFanPostIds={unlockedFanPostIdSet}
+                unlockingPostId={unlockingPostId}
+                onUnlockPost={handleUnlockPost}
+              />
 
               {post.audioUrls && post.audioUrls.length > 0 ? (
                 <div className="fan-feed-post-audio mt-2 space-y-2 px-1">
@@ -1122,8 +1419,15 @@ export const FanMemberFeed: React.FC<FanMemberFeedProps> = ({
                   </button>
                 )}
 
-                {!feedSettings?.hideTipButton && (
-                  <button type="button" className="feed-card-send-tip">
+                {!feedSettings?.hideTipButton && tipsEnabled && (
+                  <button
+                    type="button"
+                    className="feed-card-send-tip"
+                    aria-label="Send a tip"
+                    aria-haspopup="dialog"
+                    aria-expanded={tipSheetOpen}
+                    onClick={openTipSheet}
+                  >
                     <span className="tip-currency">$</span>
                     <span>SEND TIP</span>
                   </button>
@@ -1233,6 +1537,93 @@ export const FanMemberFeed: React.FC<FanMemberFeedProps> = ({
         )}
       </div>
 
+      {tipSheetOpen ? (
+        <div
+          className="fan-member-post-modal-backdrop fan-feed-tip-sheet-backdrop"
+          role="presentation"
+          onClick={() => !tipLoading && setTipSheetOpen(false)}
+        >
+          <div
+            className="fan-feed-tip-sheet"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="fan-feed-tip-sheet-title"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="fan-feed-tip-sheet__head">
+              <div>
+                <h2 id="fan-feed-tip-sheet-title" className="fan-feed-tip-sheet__title">
+                  {tipHeading}
+                </h2>
+                <p className="fan-feed-tip-sheet__sub">{tipSubline}</p>
+              </div>
+              <button
+                type="button"
+                className="feed-comments-modal-close"
+                disabled={tipLoading}
+                onClick={() => setTipSheetOpen(false)}
+                aria-label="Close"
+              >
+                ×
+              </button>
+            </div>
+            <p className="tip-amounts-heading" style={{ marginTop: 0 }}>
+              Choose an amount
+            </p>
+            <div className="tip-presets-grid">
+              {FEED_TIP_PRESET_USD.map((dollars) => (
+                <button
+                  key={dollars}
+                  type="button"
+                  className={`tip-preset-btn ${tipSelectedPreset === dollars ? "active" : ""}`}
+                  disabled={tipLoading}
+                  onClick={() => {
+                    setTipSelectedPreset(dollars);
+                    setTipCustomAmount("");
+                  }}
+                  style={
+                    tipSelectedPreset === dollars
+                      ? { backgroundColor: primary, borderColor: primary, color: "#fff" }
+                      : {}
+                  }
+                >
+                  ${dollars}
+                </button>
+              ))}
+            </div>
+            <div className="tip-custom-section">
+              <label className="tip-custom-label" htmlFor="fan-feed-tip-custom">
+                Or enter custom amount ($)
+              </label>
+              <input
+                id="fan-feed-tip-custom"
+                type="number"
+                min={1}
+                max={1000}
+                step="0.01"
+                value={tipCustomAmount}
+                disabled={tipLoading}
+                onChange={(e) => {
+                  setTipCustomAmount(e.target.value);
+                  setTipSelectedPreset(null);
+                }}
+                placeholder="e.g. 15"
+                className="tip-custom-input"
+              />
+            </div>
+            <button
+              type="button"
+              className="tip-cta-btn"
+              onClick={() => void submitTipFromSheet()}
+              disabled={tipAmountCents < 100 || tipAmountCents > 100_000 || tipLoading}
+              style={{ backgroundColor: primary }}
+            >
+              {tipLoading ? "Taking you to checkout…" : `Tip $${(tipAmountCents / 100).toFixed(2)}`}
+            </button>
+          </div>
+        </div>
+      ) : null}
+
       <FanMemberPostDetailModal
         open={viewPostId !== null}
         onClose={() => setViewPostId(null)}
@@ -1252,6 +1643,9 @@ export const FanMemberFeed: React.FC<FanMemberFeedProps> = ({
         commentSending={commentSending}
         onSubmitComment={submitComment}
         onReloadAfterComment={reloadDetailPost}
+        unlockedFanPostIds={unlockedFanPostIdSet}
+        unlockingPostId={unlockingPostId}
+        onUnlockPost={handleUnlockPost}
       />
     </div>
   );
@@ -1266,6 +1660,7 @@ interface FanMemberSavedProps {
   primary?: string;
   feedSettings?: FanFeedVisibilitySettings;
   fanId: string | undefined;
+  unlockedFanPostIds?: string[];
   /** Return to main feed (same control as grid on feed opens Saved) */
   onBackToFeed: () => void;
 }
@@ -1278,8 +1673,26 @@ export const FanMemberSaved: React.FC<FanMemberSavedProps> = ({
   primary = "#6366f1",
   feedSettings,
   fanId,
+  unlockedFanPostIds: unlockedFanPostIdsSaved = [],
   onBackToFeed,
 }) => {
+  const { showToast: showToastSaved } = useAppContext();
+  const unlockedFanPostIdSetSaved = useMemo(() => new Set(unlockedFanPostIdsSaved), [unlockedFanPostIdsSaved]);
+  const [unlockingPostIdSaved, setUnlockingPostIdSaved] = useState<string | null>(null);
+  const handleUnlockPostSaved = useCallback(
+    async (postId: string) => {
+      if (!creatorId || unlockingPostIdSaved) return;
+      setUnlockingPostIdSaved(postId);
+      try {
+        const url = await startFanPostUnlockCheckoutSession(creatorId, postId);
+        window.location.href = url;
+      } catch (e) {
+        showToastSaved?.(e instanceof Error ? e.message : "Could not start checkout.", "error");
+        setUnlockingPostIdSaved(null);
+      }
+    },
+    [creatorId, unlockingPostIdSaved, showToastSaved]
+  );
   const avatarCropStyle: React.CSSProperties = getAvatarCropStyle(avatarObjectPosition);
   const creatorAvatarSrc = typeof avatar === "string" && avatar.trim() ? avatar.trim() : undefined;
   const [posts, setPosts] = useState<Post[]>([]);
@@ -1451,7 +1864,15 @@ export const FanMemberSaved: React.FC<FanMemberSavedProps> = ({
                   <span className="fan-feed-post-time">{formatTimeAgo(post.createdAt)}</span>
                 </div>
               </div>
-              <FanMemberPostMedia post={post} primary={primary} />
+              <FanMemberPostMedia
+                post={post}
+                primary={primary}
+                creatorId={creatorId}
+                fanId={fanId}
+                unlockedFanPostIds={unlockedFanPostIdSetSaved}
+                unlockingPostId={unlockingPostIdSaved}
+                onUnlockPost={handleUnlockPostSaved}
+              />
               <div className="fan-feed-post-actions">
                 <button
                   type="button"
@@ -1547,6 +1968,9 @@ export const FanMemberSaved: React.FC<FanMemberSavedProps> = ({
         commentSending={null}
         onReloadAfterComment={reloadDetailPost}
         backLabel="Back to Saved"
+        unlockedFanPostIds={unlockedFanPostIdSetSaved}
+        unlockingPostId={unlockingPostIdSaved}
+        onUnlockPost={handleUnlockPostSaved}
       />
     </div>
   );

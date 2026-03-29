@@ -909,7 +909,7 @@
 .stormij-theme .fan-hub-feed-chrome .feed-card-media-wrap .feed-card-media-video {
   width: 100%;
   height: auto;
-  max-height: 520px;
+  max-height: 600px;
   object-fit: contain;
   object-position: center top;
   display: block;
@@ -1238,6 +1238,26 @@
 /* Multi-media pill uses inline --feed-card-count-divider from creator theme.primary */
 .feed-card-count.feed-card-count--themed .feed-card-count-item + .feed-card-count-item::before {
   background: var(--feed-card-count-divider, rgba(109, 40, 217, 0.3));
+}
+
+/* Member storefront / Fan Hub: default pill was purple; use creator --fan-primary when not JS-themed */
+.stormij-theme .feed-card-count:not(.feed-card-count--themed) {
+  border-color: color-mix(in srgb, var(--fan-primary, #6366f1) 38%, var(--fan-border, #e5e7eb));
+  background: color-mix(in srgb, var(--fan-primary, #6366f1) 9%, #ffffff);
+  color: color-mix(in srgb, var(--fan-primary, #6366f1) 58%, #0f172a);
+  box-shadow: 0 6px 18px color-mix(in srgb, var(--fan-primary, #6366f1) 16%, transparent);
+}
+.dark .stormij-theme .feed-card-count:not(.feed-card-count--themed) {
+  border-color: color-mix(in srgb, var(--fan-primary, #6366f1) 42%, #475569);
+  background: color-mix(in srgb, var(--fan-primary, #6366f1) 16%, #1f2937);
+  color: color-mix(in srgb, var(--fan-primary, #6366f1) 88%, #f8fafc);
+  box-shadow: 0 6px 18px color-mix(in srgb, var(--fan-primary, #6366f1) 24%, transparent);
+}
+.stormij-theme .feed-card-count:not(.feed-card-count--themed) .feed-card-count-item + .feed-card-count-item::before {
+  background: color-mix(in srgb, var(--fan-primary, #6366f1) 36%, transparent);
+}
+.dark .stormij-theme .feed-card-count:not(.feed-card-count--themed) .feed-card-count-item + .feed-card-count-item::before {
+  background: color-mix(in srgb, var(--fan-primary, #6366f1) 48%, transparent);
 }
 
 /* Actions Bar */
@@ -1635,6 +1655,7 @@
 .feed-comments-modal-media-wrap--carousel {
   position: relative;
   overflow: hidden;
+  overflow-anchor: none;
 }
 .feed-comments-modal-carousel-dots {
   position: absolute;
@@ -4755,9 +4776,14 @@ button.treat-card:hover:not(:disabled) .treat-card-cta {
   border-color: rgba(255, 255, 255, 0.1);
 }
 
-.chat-session-fan-trigger:hover {
-  border-color: #c97082;
-  background: rgba(201, 112, 130, 0.05);
+.chat-session-fan-trigger:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--fan-primary, #6366f1) 52%, #64748b);
+  background: color-mix(in srgb, var(--fan-primary, #6366f1) 7%, var(--surface, #ffffff));
+}
+
+.dark .chat-session-fan-trigger:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--fan-primary, #6366f1) 42%, rgba(255, 255, 255, 0.22));
+  background: color-mix(in srgb, var(--fan-primary, #6366f1) 12%, rgba(255, 255, 255, 0.06));
 }
 
 .chat-session-fan-trigger:disabled {
@@ -4966,8 +4992,8 @@ button.treat-card:hover:not(:disabled) .treat-card-cta {
 }
 
 .dark .chat-session-personality-preview {
-  background: rgba(139, 92, 246, 0.1);
-  border-color: rgba(139, 92, 246, 0.2);
+  background: color-mix(in srgb, var(--fan-primary, #6366f1) 12%, transparent);
+  border-color: color-mix(in srgb, var(--fan-primary, #6366f1) 24%, transparent);
   color: #9ca3af;
 }
 
@@ -5065,7 +5091,7 @@ button.treat-card:hover:not(:disabled) .treat-card-cta {
 }
 
 .chat-session-role-grid .chat-session-role-btn.active {
-  background: linear-gradient(135deg, var(--fan-primary, #6366f1), #8b5cf6);
+  background: linear-gradient(135deg, var(--fan-primary, #6366f1), var(--fan-accent-hover, #4f46e5));
   border-color: transparent;
   color: #fff;
 }
@@ -5107,7 +5133,7 @@ button.treat-card:hover:not(:disabled) .treat-card-cta {
 }
 
 .chat-session-tone-row .chat-session-role-btn.active {
-  background: linear-gradient(135deg, var(--fan-primary, #6366f1), #8b5cf6);
+  background: linear-gradient(135deg, var(--fan-primary, #6366f1), var(--fan-accent-hover, #4f46e5));
   border-color: transparent;
   color: #fff;
 }
@@ -5120,7 +5146,7 @@ button.treat-card:hover:not(:disabled) .treat-card-cta {
   gap: 0.5rem;
   width: 100%;
   padding: 1rem;
-  background: linear-gradient(135deg, var(--fan-primary, #6366f1) 0%, #8b5cf6 100%);
+  background: linear-gradient(135deg, var(--fan-primary, #6366f1) 0%, var(--fan-accent-hover, #4f46e5) 100%);
   border: none;
   border-radius: 12px;
   font-size: 1rem;
@@ -5178,12 +5204,12 @@ button.treat-card:hover:not(:disabled) .treat-card-cta {
 .chat-session-input:focus {
   outline: none;
   border-color: var(--fan-primary, #6366f1);
-  box-shadow: 0 0 0 2px rgba(201, 112, 130, 0.15);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--fan-primary, #6366f1) 22%, transparent);
 }
 
 .dark .chat-session-input:focus {
-  border-color: #a78bfa;
-  box-shadow: 0 0 0 2px rgba(139, 92, 246, 0.2);
+  border-color: var(--fan-primary, #6366f1);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--fan-primary, #6366f1) 30%, transparent);
 }
 
 .chat-session-input::placeholder {
@@ -5206,16 +5232,24 @@ button.treat-card:hover:not(:disabled) .treat-card-cta {
   justify-content: space-between;
   gap: 1rem;
   padding: 1rem 1.25rem;
-  background: linear-gradient(140deg, rgba(255, 255, 255, 0.94) 0%, rgba(255, 245, 250, 0.86) 100%);
-  border: 1px solid rgba(201, 112, 130, 0.2);
+  background: linear-gradient(
+    140deg,
+    var(--surface, #ffffff) 0%,
+    color-mix(in srgb, var(--fan-primary, #6366f1) 9%, var(--surface, #ffffff)) 100%
+  );
+  border: 1px solid color-mix(in srgb, var(--fan-primary, #6366f1) 24%, var(--fan-border, #e5e7eb));
   border-radius: 12px;
   margin-bottom: 1rem;
   flex-wrap: wrap;
 }
 
 .dark .chat-session-active-header {
-  background: linear-gradient(140deg, rgba(31, 41, 55, 0.94) 0%, rgba(45, 30, 50, 0.86) 100%);
-  border-color: rgba(139, 92, 246, 0.3);
+  background: linear-gradient(
+    140deg,
+    rgba(31, 41, 55, 0.98) 0%,
+    color-mix(in srgb, var(--fan-primary, #6366f1) 14%, #1f2937) 100%
+  );
+  border-color: color-mix(in srgb, var(--fan-primary, #6366f1) 32%, #334155);
 }
 
 .chat-session-active-header-left {
@@ -5256,15 +5290,17 @@ button.treat-card:hover:not(:disabled) .treat-card-cta {
   font-variant-numeric: tabular-nums;
   font-size: 1.25rem;
   font-weight: 700;
-  color: #c97082;
+  color: var(--fan-primary, #6366f1);
   padding: 0.5rem 0.75rem;
   background: #fff;
   border-radius: 8px;
+  border: 1px solid color-mix(in srgb, var(--fan-primary, #6366f1) 18%, var(--fan-border, #e5e7eb));
 }
 
 .dark .chat-session-timer-display {
   background: rgba(255, 255, 255, 0.05);
-  color: #a78bfa;
+  color: color-mix(in srgb, var(--fan-primary, #6366f1) 88%, #ffffff);
+  border-color: color-mix(in srgb, var(--fan-primary, #6366f1) 28%, #475569);
 }
 
 /* AI Chat Bot Button */
@@ -5295,15 +5331,15 @@ button.treat-card:hover:not(:disabled) .treat-card-cta {
 }
 
 .chat-session-ai-chatbot-btn.active {
-  background: rgba(201, 112, 130, 0.1);
-  color: #c97082;
-  border-color: #c97082;
+  background: color-mix(in srgb, var(--fan-primary, #6366f1) 12%, transparent);
+  color: var(--fan-primary, #6366f1);
+  border-color: color-mix(in srgb, var(--fan-primary, #6366f1) 42%, var(--fan-border, #e5e7eb));
 }
 
 .dark .chat-session-ai-chatbot-btn.active {
-  background: rgba(139, 92, 246, 0.1);
-  color: #a78bfa;
-  border-color: #a78bfa;
+  background: color-mix(in srgb, var(--fan-primary, #6366f1) 16%, transparent);
+  color: color-mix(in srgb, var(--fan-primary, #6366f1) 90%, #ffffff);
+  border-color: color-mix(in srgb, var(--fan-primary, #6366f1) 38%, #64748b);
 }
 
 .chat-session-ai-chatbot-btn:disabled {
@@ -5320,7 +5356,7 @@ button.treat-card:hover:not(:disabled) .treat-card-cta {
 
 /* Pause Button */
 .chat-session-pause-btn {
-  background: linear-gradient(135deg, #c97082, #a855f7);
+  background: linear-gradient(135deg, var(--fan-primary, #6366f1), var(--fan-accent-hover, #4f46e5));
   color: #fff;
   border: none;
   border-radius: 8px;
@@ -5425,7 +5461,7 @@ button.treat-card:hover:not(:disabled) .treat-card-cta {
   text-align: right;
   margin-bottom: 0.5rem;
   padding: 0.5rem 0.75rem;
-  background: linear-gradient(135deg, #c97082, #a855f7);
+  background: linear-gradient(135deg, var(--fan-primary, #6366f1), var(--fan-accent-hover, #4f46e5));
   border-radius: 12px 12px 4px 12px;
   color: #fff;
   max-width: 85%;
@@ -5505,8 +5541,8 @@ button.treat-card:hover:not(:disabled) .treat-card-cta {
 }
 
 .chat-session-add-btn:hover {
-  border-color: #c97082;
-  color: #c97082;
+  border-color: var(--fan-primary, #6366f1);
+  color: var(--fan-primary, #6366f1);
 }
 
 /* Send Row */
@@ -5535,7 +5571,7 @@ button.treat-card:hover:not(:disabled) .treat-card-cta {
 
 .chat-session-send-input-wrap:focus-within {
   border-color: var(--fan-primary, #6366f1);
-  box-shadow: 0 0 0 2px rgba(201, 112, 130, 0.15);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--fan-primary, #6366f1) 22%, transparent);
 }
 
 .chat-session-send-row .chat-session-send-input {
@@ -5567,12 +5603,12 @@ button.treat-card:hover:not(:disabled) .treat-card-cta {
 }
 
 .chat-session-emoji-trigger:hover {
-  background: rgba(201, 112, 130, 0.1);
-  color: #c97082;
+  background: color-mix(in srgb, var(--fan-primary, #6366f1) 12%, transparent);
+  color: var(--fan-primary, #6366f1);
 }
 
 .chat-session-send-btn {
-  background: linear-gradient(135deg, #c97082, #a855f7);
+  background: linear-gradient(135deg, var(--fan-primary, #6366f1), var(--fan-accent-hover, #4f46e5));
   color: #fff;
   border: none;
   border-radius: 8px;
@@ -5620,8 +5656,8 @@ button.treat-card:hover:not(:disabled) .treat-card-cta {
 }
 
 .chat-session-media-btn:hover {
-  border-color: #c97082;
-  color: #c97082;
+  border-color: var(--fan-primary, #6366f1);
+  color: var(--fan-primary, #6366f1);
 }
 
 /* Back Button */
@@ -5644,8 +5680,8 @@ button.treat-card:hover:not(:disabled) .treat-card-cta {
 }
 
 .chat-session-back-btn:hover {
-  border-color: #c97082;
-  color: #c97082;
+  border-color: var(--fan-primary, #6366f1);
+  color: var(--fan-primary, #6366f1);
 }
 
 /* AI Suggestions Panel */
@@ -5656,7 +5692,7 @@ button.treat-card:hover:not(:disabled) .treat-card-cta {
 }
 
 .chat-session-suggest-reply-btn {
-  background: linear-gradient(135deg, #c97082, #a855f7);
+  background: linear-gradient(135deg, var(--fan-primary, #6366f1), var(--fan-accent-hover, #4f46e5));
   color: #fff;
   border: none;
   border-radius: 10px;
@@ -5727,7 +5763,7 @@ button.treat-card:hover:not(:disabled) .treat-card-cta {
 .chat-session-card-link {
   background: none;
   border: none;
-  color: #c97082;
+  color: var(--fan-primary, #6366f1);
   font-size: 0.85rem;
   font-weight: 500;
   cursor: pointer;
@@ -5737,8 +5773,8 @@ button.treat-card:hover:not(:disabled) .treat-card-cta {
 }
 
 .chat-session-card-link:hover {
-  color: #a855f7;
-  background: rgba(201, 112, 130, 0.1);
+  color: var(--fan-accent-hover, #4f46e5);
+  background: color-mix(in srgb, var(--fan-primary, #6366f1) 10%, transparent);
 }
 
 /* Modal */
@@ -5818,7 +5854,7 @@ button.treat-card:hover:not(:disabled) .treat-card-cta {
 }
 
 .chat-session-modal-btn.primary {
-  background: linear-gradient(135deg, #c97082, #a855f7);
+  background: linear-gradient(135deg, var(--fan-primary, #6366f1), var(--fan-accent-hover, #4f46e5));
   border: none;
   color: #fff;
 }
@@ -7461,6 +7497,23 @@ button.treat-card:hover:not(:disabled) .treat-card-cta {
   min-width: 0;
   text-align: left;
   padding: 0.65rem 0.75rem 0.65rem 1rem;
+}
+.stormij-theme .fh-dm-thread-row__main:hover {
+  background: color-mix(in srgb, var(--fan-primary, #6366f1) 9%, var(--surface, #ffffff));
+}
+.dark .stormij-theme .fh-dm-thread-row__main:hover {
+  background: color-mix(in srgb, var(--fan-primary, #6366f1) 14%, #1f2937);
+}
+.stormij-theme .fh-dm-modal-member-btn {
+  border: none;
+  background: transparent;
+  cursor: pointer;
+}
+.stormij-theme .fh-dm-modal-member-btn:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--fan-primary, #6366f1) 10%, var(--surface, #ffffff));
+}
+.dark .stormij-theme .fh-dm-modal-member-btn:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--fan-primary, #6366f1) 14%, #1f2937);
 }
 .stormij-theme .fh-dm-thread-row__top {
   display: flex;

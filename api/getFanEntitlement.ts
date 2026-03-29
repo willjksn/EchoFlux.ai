@@ -21,7 +21,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const decoded = await verifyAuth(req);
   if (!decoded?.uid) {
-    return res.status(200).json({ subscribed: false, unlockedProductIds: [] });
+    return res.status(200).json({ subscribed: false, unlockedProductIds: [], unlockedFanPostIds: [] });
   }
 
   const fanId = decoded.uid;
@@ -75,9 +75,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       .doc(fanId);
     const grantSnap = await grantRef.get();
     let unlockedProductIds: string[] = [];
+    let unlockedFanPostIds: string[] = [];
     if (grantSnap.exists) {
-      const grantData = grantSnap.data() as { unlockedProductIds?: string[]; subscription?: boolean; membershipType?: string } | undefined;
+      const grantData = grantSnap.data() as {
+        unlockedProductIds?: string[];
+        unlockedFanPostIds?: string[];
+        subscription?: boolean;
+        membershipType?: string;
+      } | undefined;
       unlockedProductIds = Array.isArray(grantData?.unlockedProductIds) ? grantData.unlockedProductIds : [];
+      unlockedFanPostIds = Array.isArray(grantData?.unlockedFanPostIds) ? grantData.unlockedFanPostIds : [];
       // Also check entitlements grant for subscription status
       if (!subscribed && grantData?.subscription) {
         subscribed = true;
@@ -102,6 +109,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       subscribed,
       membershipType,
       unlockedProductIds,
+      unlockedFanPostIds,
       memberUsername,
       memberUsernameRequired,
     });

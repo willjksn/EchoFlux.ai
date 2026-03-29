@@ -22,6 +22,12 @@ export const STOREFRONT_CONTENT_POLICY = {
   ] as const,
 } as const;
 
+/**
+ * sessionStorage key: set immediately before fan storefront email/Google signup so AuthContext
+ * creates `users/{uid}` with plan Free + hasCompletedOnboarding (skips EchoFlux PlanSelectorModal).
+ */
+export const FAN_STOREFRONT_SIGNUP_SESSION_KEY = 'echofluxFanStorefrontSignup';
+
 // Analytics UI is currently disabled in the app.
 export const ANALYTICS_ENABLED = false;
 

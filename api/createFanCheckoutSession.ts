@@ -1,4 +1,5 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
+import type { DocumentSnapshot } from "firebase-admin/firestore";
 import Stripe from "stripe";
 import { getPlatformStripe, getStripeOptions } from "./_stripeConnect.js";
 import { getAdminDb } from "./_firebaseAdmin.js";
@@ -20,10 +21,11 @@ function isReconnectableConnectError(err: unknown): boolean {
   const msg = (e?.message || "").toLowerCase();
   return (
     e?.code === "resource_missing" ||
-    e?.type === "StripeInvalidRequestError" ||
+    e?.type === "StripePermissionError" ||
     msg.includes("no such account") ||
     msg.includes("does not have access to account") ||
-    msg.includes("this key cannot access account")
+    msg.includes("this key cannot access account") ||
+    msg.includes("cannot access the connected account")
   );
 }
 
@@ -78,7 +80,7 @@ function isCreatorPlatformOwner(
  * For regular creators: Funds go to creator's Connect account with 10% platform fee.
  * For platform owners (e.g., Stormij): Funds go directly to EchoFlux, no Connect account needed.
  * 
- * Body: { creatorId, type: 'subscription' | 'product' | 'tip', productId?, subscriptionPriceCents?, amountCents?, tipHandle?, successUrl?, cancelUrl?, guestProduct?: boolean }
+ * Body: { creatorId, type: 'subscription' | 'product' | 'tip' | 'post_unlock', productId?, postId?, subscriptionPriceCents?, amountCents?, tipHandle?, successUrl?, cancelUrl?, guestProduct?: boolean }
  * guestProduct: true → guest store checkout without Firebase auth; Stripe collects email; webhook uses guest_${stripeCustomerId}.
  * 
  * Tips can be made without authentication (anonymous tippers).
@@ -95,8 +97,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const body = (req.body || {}) as {
     creatorId?: string;
-    type?: "subscription" | "product" | "tip";
+    type?: "subscription" | "product" | "tip" | "post_unlock";
     productId?: string;
+    postId?: string;
     subscriptionPriceCents?: number;
     amountCents?: number;
     tipHandle?: string;
@@ -105,15 +108,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     guestProduct?: boolean;
   };
 
-  const { creatorId, type, productId, subscriptionPriceCents, amountCents, tipHandle, successUrl, cancelUrl, guestProduct } = body;
+  const { creatorId, type, productId, postId, subscriptionPriceCents, amountCents, tipHandle, successUrl, cancelUrl, guestProduct } = body;
   if (!creatorId || !type) {
     return res.status(400).json({ error: "creatorId and type are required" });
   }
-  if (type !== "subscription" && type !== "product" && type !== "tip") {
-    return res.status(400).json({ error: "type must be 'subscription', 'product', or 'tip'" });
+  if (type !== "subscription" && type !== "product" && type !== "tip" && type !== "post_unlock") {
+    return res.status(400).json({ error: "type must be 'subscription', 'product', 'tip', or 'post_unlock'" });
   }
   if (type === "product" && !productId) {
     return res.status(400).json({ error: "productId is required for product checkout" });
+  }
+  if (type === "post_unlock" && !postId) {
+    return res.status(400).json({ error: "postId is required for post unlock checkout" });
   }
   if (type === "tip" && (!amountCents || amountCents < 100)) {
     return res.status(400).json({ error: "amountCents must be at least 100 ($1) for tips" });
@@ -326,6 +332,97 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(200).json({ url: session.url, sessionId: session.id });
     }
 
+    // ==================== FEED POST UNLOCK (PPV) ====================
+    if (type === "post_unlock") {
+      const postIdStr = String(postId!).trim();
+      if (!postIdStr) {
+        return res.status(400).json({ error: "postId is required for post unlock checkout" });
+      }
+
+      const postRefs = [
+        db.collection("creators").doc(creatorId).collection("fanPosts").doc(postIdStr),
+        db.collection("creators").doc(creatorId).collection("posts").doc(postIdStr),
+        db.collection("users").doc(creatorId).collection("posts").doc(postIdStr),
+      ];
+      let postSnap: DocumentSnapshot | null = null;
+      for (const ref of postRefs) {
+        const snap = await ref.get();
+        if (snap.exists) {
+          postSnap = snap;
+          break;
+        }
+      }
+      if (!postSnap?.exists) {
+        return res.status(404).json({ error: "Post not found" });
+      }
+      const pdata = postSnap.data() as Record<string, unknown>;
+      const status = (pdata.status as string) || "published";
+      if (status === "draft") {
+        return res.status(404).json({ error: "Post not found" });
+      }
+      const lcRaw = pdata.lockedContent;
+      if (!lcRaw || typeof lcRaw !== "object") {
+        return res.status(400).json({ error: "This post is not available for purchase" });
+      }
+      const lc = lcRaw as Record<string, unknown>;
+      if (!lc.enabled) {
+        return res.status(400).json({ error: "This post is not available for purchase" });
+      }
+      const priceCents = typeof lc.priceCents === "number" && Number.isFinite(lc.priceCents) ? lc.priceCents : 0;
+      if (priceCents < 50) {
+        return res.status(400).json({ error: "Unlock price is not configured for this post" });
+      }
+      const unlockAmount = Math.min(100_000, priceCents);
+
+      const grantRef = db.collection("creatorEntitlements").doc(creatorId).collection("grants").doc(fanId);
+      const grantSnap = await grantRef.get();
+      const existingUnlocks = (grantSnap.data() as { unlockedFanPostIds?: string[] } | undefined)?.unlockedFanPostIds;
+      if (Array.isArray(existingUnlocks) && existingUnlocks.includes(postIdStr)) {
+        return res.status(400).json({ error: "You already unlocked this post" });
+      }
+
+      const unlockLineTitle = `Unlock post — ${displayName}`;
+
+      const unlockSessionParams: Stripe.Checkout.SessionCreateParams = {
+        mode: "payment",
+        payment_method_types: ["card"],
+        line_items: [
+          {
+            price_data: {
+              currency: "usd",
+              product_data: {
+                name: unlockLineTitle,
+                description: "One-time unlock for member feed content",
+                metadata: { creatorId, postId: postIdStr },
+              },
+              unit_amount: unlockAmount,
+            },
+            quantity: 1,
+          },
+        ],
+        success_url: safeSuccessUrl,
+        cancel_url: safeCancelUrl,
+        client_reference_id: fanId,
+        metadata: {
+          creatorId,
+          fanId,
+          type: "post_unlock",
+          postId: postIdStr,
+          amountCents: String(unlockAmount),
+          isPlatformOwner: isPlatformOwner ? "true" : "false",
+        },
+        ...(isPlatformOwner
+          ? {}
+          : {
+              payment_intent_data: {
+                application_fee_amount: Math.round(unlockAmount * PLATFORM_FEE_PERCENT),
+              },
+            }),
+      };
+      const session = await stripe.checkout.sessions.create(unlockSessionParams, opts);
+      return res.status(200).json({ url: session.url, sessionId: session.id });
+    }
+
     // ==================== TIP ====================
     if (type === "tip") {
       const tipAmountCents = Math.min(100000, Math.max(100, Number(amountCents) || 100)); // $1 min, $1000 max
@@ -372,27 +469,54 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   } catch (e: unknown) {
     console.error("createFanCheckoutSession error:", e);
     if (isReconnectableConnectError(e)) {
+      const stripeMsg = e instanceof Stripe.errors.StripeError ? e.message : "";
       return res.status(400).json({
         error: "Creator Stripe connection needs to be refreshed",
         code: "CREATOR_STRIPE_RECONNECT_REQUIRED",
         reconnectRequired: true,
         message:
           "This creator's Stripe account is unavailable for the current Stripe mode. Ask the creator to reconnect Stripe in Fan Hub > Payouts.",
+        ...(stripeMsg ? { stripeMessage: stripeMsg } : {}),
       });
     }
-    const stripeErr = e as {
-      type?: string;
-      code?: string;
-      message?: string;
-      rawType?: string;
-    };
-    const isStripeInvalidRequest =
-      stripeErr?.type === "StripeInvalidRequestError" ||
-      stripeErr?.rawType === "invalid_request_error";
-    if (isStripeInvalidRequest) {
+    if (e instanceof Stripe.errors.StripeInvalidRequestError) {
       return res.status(400).json({
-        error: stripeErr?.message || "Invalid checkout configuration",
-        code: stripeErr?.code || "STRIPE_INVALID_REQUEST",
+        error: e.message || "Invalid checkout configuration",
+        code: e.code || "STRIPE_INVALID_REQUEST",
+      });
+    }
+    if (e instanceof Stripe.errors.StripeCardError) {
+      return res.status(400).json({
+        error: e.message || "Card was declined",
+        code: e.code || "card_error",
+        declineCode: e.decline_code,
+      });
+    }
+    if (e instanceof Stripe.errors.StripeIdempotencyError) {
+      return res.status(400).json({
+        error: e.message || "Duplicate request",
+        code: e.code || "idempotency_error",
+      });
+    }
+    if (e instanceof Stripe.errors.StripeAuthenticationError) {
+      return res.status(503).json({
+        error: "Stripe authentication failed — check STRIPE_SECRET_KEY_* and mode (test vs live) in deployment env.",
+        code: "STRIPE_AUTH",
+      });
+    }
+    if (e instanceof Stripe.errors.StripeRateLimitError) {
+      return res.status(429).json({ error: "Too many checkout attempts; try again in a moment." });
+    }
+    if (e instanceof Stripe.errors.StripeAPIError || e instanceof Stripe.errors.StripeConnectionError) {
+      return res.status(502).json({
+        error: "Stripe is temporarily unavailable; try again shortly.",
+        message: e.message,
+      });
+    }
+    if (e instanceof Stripe.errors.StripeError) {
+      return res.status(400).json({
+        error: e.message || "Stripe could not start checkout",
+        code: e.code || e.type || "STRIPE_ERROR",
       });
     }
     const msg = e instanceof Error ? e.message : "Checkout failed";

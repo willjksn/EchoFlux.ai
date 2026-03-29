@@ -95,6 +95,11 @@ const MoreHorizontalIcon = () => (
   </svg>
 );
 
+/** Same rule as server `getThreadId` (deterministic doc id for fanDmThreads). */
+function threadIdForCreatorFan(creatorId: string, fanId: string): string {
+  return [creatorId, fanId].sort().join("_");
+}
+
 function sortCreatorDmThreads(list: FanDmThread[]): FanDmThread[] {
   return [...list].sort((a, b) => {
     const pA = a.creatorInboxPinned ? 1 : 0;
@@ -207,18 +212,9 @@ export const FanHubMessages: React.FC = () => {
     };
   }, [creatorId]);
 
-  const activeThreads = useMemo(() => {
-    // Only show conversations with message activity:
-    // - fan started chat, OR
-    // - thread has a non-empty last message preview (creator/fan message exists)
-    return threads.filter((t) => {
-      const hasPreview = (t.lastMessagePreview || "").trim().length > 0;
-      return t.fanHasSentMessage === true || hasPreview;
-    });
-  }, [threads]);
-
+  /** List all inbox threads — include empty threads so "New message" opens stay visible until first send. */
   const filteredThreads = useMemo(() => {
-    let t = activeThreads;
+    let t = threads;
     if (listTab === "requests") t = t.filter((x) => x.fanHasSentMessage === true);
     const q = threadSearchQuery.trim().toLowerCase();
     if (q) {
@@ -230,7 +226,7 @@ export const FanHubMessages: React.FC = () => {
       );
     }
     return t;
-  }, [activeThreads, listTab, threadSearchQuery]);
+  }, [threads, listTab, threadSearchQuery]);
 
   const sortedFilteredThreads = useMemo(
     () => sortCreatorDmThreads(filteredThreads),
@@ -284,14 +280,14 @@ export const FanHubMessages: React.FC = () => {
   /** Keep selection in sync when threads load/refresh; merge row so pin/mute/unread stay current. */
   useEffect(() => {
     setSelectedThread((prev) => {
-      if (activeThreads.length === 0) return null;
+      if (threads.length === 0) return null;
       if (prev) {
-        const fresh = activeThreads.find((t) => t.id === prev.id);
+        const fresh = threads.find((t) => t.id === prev.id);
         if (fresh) return fresh;
       }
-      return activeThreads[0];
+      return threads[0];
     });
-  }, [activeThreads]);
+  }, [threads]);
 
   const fetchMessagesForThread = useCallback(
     async (
@@ -602,11 +598,30 @@ export const FanHubMessages: React.FC = () => {
       });
       const { json: data } = await parseApiBody(res);
       if (!res.ok) throw new Error((data.error as string) || "Failed to open conversation");
+      const ensuredId =
+        typeof data.threadId === "string" ? data.threadId : threadIdForCreatorFan(creatorId, fanId);
       setShowNewDmModal(false);
       const list = await fetchThreads();
-      const t = list?.find((x) => x.fanId === fanId);
-      if (t) setSelectedThread(t);
-      showToast?.("Conversation opened", "success");
+      const t =
+        list?.find((x) => x.id === ensuredId && x.fanId === fanId) ?? list?.find((x) => x.fanId === fanId);
+      if (t) {
+        setSelectedThread(t);
+      } else {
+        const label = newDmMembers.find((m) => m.fanId === fanId)?.label;
+        const now = new Date().toISOString();
+        setSelectedThread({
+          id: ensuredId,
+          creatorId,
+          fanId,
+          lastMessageAt: now,
+          lastMessagePreview: "",
+          createdAt: now,
+          updatedAt: now,
+          fanHasSentMessage: false,
+          otherPartyDisplayName: label,
+        });
+      }
+      showToast?.("Conversation ready — you can send a message", "success");
     } catch (e) {
       showToast?.(e instanceof Error ? e.message : "Failed", "error");
     } finally {
@@ -874,7 +889,7 @@ export const FanHubMessages: React.FC = () => {
                 Retry
               </button>
             </div>
-          ) : activeThreads.length === 0 ? (
+          ) : threads.length === 0 ? (
             <div className="p-4 text-gray-500 dark:text-gray-400 text-sm">
               <p>No conversations yet.</p>
             </div>
@@ -897,7 +912,7 @@ export const FanHubMessages: React.FC = () => {
                       setThreadRowMenuOpenId(null);
                       setSelectedThread(t);
                     }}
-                    className={`fh-dm-thread-row__main hover:bg-gray-50 dark:hover:bg-gray-700/50 transition ${
+                    className={`fh-dm-thread-row__main transition ${
                       selectedThread?.id === t.id ? "fh-selected-soft" : ""
                     }`}
                   >
@@ -1284,7 +1299,7 @@ export const FanHubMessages: React.FC = () => {
                     <li key={m.fanId}>
                       <button
                         type="button"
-                        className="w-full text-left py-2.5 px-1 hover:bg-gray-50 dark:hover:bg-gray-700/50 rounded text-gray-900 dark:text-white text-sm"
+                        className="fh-dm-modal-member-btn w-full text-left py-2.5 px-1 rounded text-gray-900 dark:text-white text-sm"
                         disabled={!!ensuringThreadFanId}
                         onClick={() => void startConversationWithMember(m.fanId)}
                       >

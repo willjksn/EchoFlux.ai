@@ -15,6 +15,7 @@ import type { FanAuthBranding } from "../types";
 import { useAppContext } from "./AppContext";
 import { isMaintenanceMode, canBypassMaintenance } from "../src/utils/maintenance";
 import { validateMemberUsernameFormat, normalizeMemberUsername } from "../src/lib/memberUsername";
+import { FAN_STOREFRONT_SIGNUP_SESSION_KEY } from "../constants";
 import "../styles/fan-auth-modal.css";
 
 const DEFAULT_FAN_AUTH_ACCENT = "#4a2c2c";
@@ -258,7 +259,22 @@ export const FanAuthModal: React.FC<FanAuthModalProps> = ({
         /* continue */
       }
 
-      const cred = await createUserWithEmailAndPassword(auth, email.trim(), password);
+      try {
+        sessionStorage.setItem(FAN_STOREFRONT_SIGNUP_SESSION_KEY, "1");
+      } catch {
+        /* ignore */
+      }
+      let cred;
+      try {
+        cred = await createUserWithEmailAndPassword(auth, email.trim(), password);
+      } catch (createErr) {
+        try {
+          sessionStorage.removeItem(FAN_STOREFRONT_SIGNUP_SESSION_KEY);
+        } catch {
+          /* ignore */
+        }
+        throw createErr;
+      }
       await updateProfile(cred.user, { displayName: fullName.trim() });
       await tryJoinFreeAndUsername(username);
       showToast?.("Account created!", "success");
@@ -323,6 +339,13 @@ export const FanAuthModal: React.FC<FanAuthModalProps> = ({
     }
     setLoading(true);
     try {
+      if (mode === "signup") {
+        try {
+          sessionStorage.setItem(FAN_STOREFRONT_SIGNUP_SESSION_KEY, "1");
+        } catch {
+          /* ignore */
+        }
+      }
       const provider = new GoogleAuthProvider();
       await signInWithPopup(auth, provider);
       if (freeAccessEnabled) {
@@ -332,6 +355,13 @@ export const FanAuthModal: React.FC<FanAuthModalProps> = ({
       onSuccess?.();
       onClose();
     } catch (ex: unknown) {
+      if (mode === "signup") {
+        try {
+          sessionStorage.removeItem(FAN_STOREFRONT_SIGNUP_SESSION_KEY);
+        } catch {
+          /* ignore */
+        }
+      }
       const code = (ex as { code?: string })?.code;
       console.error("Fan auth Google flow failed:", { code, ex });
       if (code !== "auth/popup-closed-by-user") {

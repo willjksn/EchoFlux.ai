@@ -619,6 +619,10 @@ function FeedCard({
     [mediaCount]
   );
 
+  const suppressCarouselControlMouseDown = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+  }, []);
+
   const modalIdx = mediaCount > 0 ? Math.min(modalMediaIndex, mediaCount - 1) : 0;
   const modalUrl = urls[modalIdx];
   const modalIsVideo =
@@ -672,6 +676,7 @@ function FeedCard({
             type="button"
             className="fan-feed-media-carousel-btn fan-feed-media-carousel-btn--prev"
             aria-label="Previous image or video"
+            onMouseDown={suppressCarouselControlMouseDown}
             onClick={carouselPrev}
           >
             <FeedCarouselChevronLeft />
@@ -682,6 +687,7 @@ function FeedCard({
             type="button"
             className="fan-feed-media-carousel-btn fan-feed-media-carousel-btn--next"
             aria-label="Next image or video"
+            onMouseDown={suppressCarouselControlMouseDown}
             onClick={carouselNext}
           >
             <FeedCarouselChevronRight />
@@ -1160,6 +1166,7 @@ function FeedCard({
                             type="button"
                             className="fan-feed-media-carousel-btn fan-feed-media-carousel-btn--prev"
                             aria-label="Previous image or video"
+                            onMouseDown={suppressCarouselControlMouseDown}
                             onClick={modalCarouselPrev}
                           >
                             <FeedCarouselChevronLeft />
@@ -1170,6 +1177,7 @@ function FeedCard({
                             type="button"
                             className="fan-feed-media-carousel-btn fan-feed-media-carousel-btn--next"
                             aria-label="Next image or video"
+                            onMouseDown={suppressCarouselControlMouseDown}
                             onClick={modalCarouselNext}
                           >
                             <FeedCarouselChevronRight />
@@ -1189,6 +1197,7 @@ function FeedCard({
                                   : undefined
                               }
                               aria-label={`Go to slide ${i + 1}`}
+                              onMouseDown={suppressCarouselControlMouseDown}
                               onClick={(e) => {
                                 e.preventDefault();
                                 e.stopPropagation();

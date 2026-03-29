@@ -25,18 +25,36 @@ export function isConfiguredCustomStorefrontHost(hostname: string): boolean {
   return getConfiguredCustomStorefrontHosts().includes(normalizeHostname(hostname));
 }
 
+/** Member hub path segments on custom domains — align with FanStorefrontView / App.tsx */
+const CUSTOM_SF_MEMBER_SEGS =
+  /^(?:feed|home|store|treats|purchases|tip|messages|profile|saved|about)$/i;
+
 /**
  * True when this path on this host should render the fan storefront (custom domain only).
  * - `/`, `/terms`, `/privacy`
+ * - `/{memberTab}` at root hub (e.g. `/messages`, `/store`)
  * - `/{handle}` where handle matches My Page slug `[a-z0-9_]+`
+ * - `/{handle}/{memberTab}` or `/{handle}/terms|privacy`
  */
 export function isCustomDomainStorefrontPath(pathname: string, hostname: string): boolean {
   if (!isConfiguredCustomStorefrontHost(hostname)) return false;
   const np = pathname.replace(/\/+$/, "") || "/";
   if (np === "/" || np === "/terms" || np === "/privacy") return true;
-  const m = pathname.match(/^\/([^/]+)\/?$/);
-  if (!m) return false;
-  const seg = m[1];
-  if (seg === "api" || seg.includes(".")) return false;
-  return /^[a-z0-9_]+$/i.test(seg);
+  const parts = np.slice(1).split("/").filter(Boolean);
+  if (parts.length === 1) {
+    const seg = parts[0];
+    if (seg === "api" || seg.includes(".")) return false;
+    if (seg === "terms" || seg === "privacy") return true;
+    if (CUSTOM_SF_MEMBER_SEGS.test(seg)) return true;
+    return /^[a-z0-9_]+$/i.test(seg);
+  }
+  if (parts.length === 2) {
+    const a = parts[0];
+    const b = parts[1];
+    if (a === "api" || a.includes(".")) return false;
+    if (!/^[a-z0-9_]+$/i.test(a)) return false;
+    if (b === "terms" || b === "privacy") return true;
+    return CUSTOM_SF_MEMBER_SEGS.test(b);
+  }
+  return false;
 }

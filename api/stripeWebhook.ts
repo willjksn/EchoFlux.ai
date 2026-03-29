@@ -69,7 +69,7 @@ function verifyWebhookSignature(rawBody: Buffer, sig: string): Stripe.Event {
   throw new Error('Webhook signature verification failed (no valid secret)');
 }
 
-const FAN_HUB_CHECKOUT_TYPES = new Set(['subscription', 'product', 'tip']);
+const FAN_HUB_CHECKOUT_TYPES = new Set(['subscription', 'product', 'tip', 'post_unlock']);
 
 /**
  * Fan Hub checkout (creator storefront): same Firestore updates for Connect checkouts and
@@ -284,6 +284,84 @@ async function processFanHubCheckoutSessionCompleted(
     return true;
   }
 
+  if (type === 'post_unlock' && session.metadata?.postId) {
+    const unlockPostId = session.metadata.postId as string;
+    if (fanId.startsWith('guest_') || fanId.startsWith('anon_')) {
+      console.warn('Fan hub post_unlock checkout invalid fan id', session.id);
+      return false;
+    }
+    const paymentIntentId = typeof session.payment_intent === 'string' ? session.payment_intent : (session.payment_intent as Stripe.PaymentIntent)?.id;
+    const amountTotal = session.amount_total ?? 0;
+
+    const orderRef = db.collection('orders').doc();
+    await orderRef.set({
+      creatorId,
+      fanId,
+      postId: unlockPostId,
+      productId: null,
+      type: 'post_unlock',
+      stripeSessionId: session.id,
+      stripePaymentIntentId: paymentIntentId || null,
+      amountCents: amountTotal,
+      status: 'paid',
+      fanEmail: session.customer_details?.email || session.metadata?.fanEmail || null,
+      fanName: session.customer_details?.name || session.metadata?.fanName || null,
+      scheduleStatus: 'pending',
+      createdAt: now,
+    });
+
+    const grantRef = db.collection('creatorEntitlements').doc(creatorId).collection('grants').doc(fanId);
+    const grantSnap = await grantRef.get();
+    const existing = grantSnap.data() as { unlockedFanPostIds?: string[]; unlockedProductIds?: string[] } | undefined;
+    const unlockedPosts = Array.isArray(existing?.unlockedFanPostIds) ? existing.unlockedFanPostIds : [];
+    if (!unlockedPosts.includes(unlockPostId)) {
+      await grantRef.set({ unlockedFanPostIds: [...unlockedPosts, unlockPostId], updatedAt: now }, { merge: true });
+    }
+
+    const fanEmail = session.customer_details?.email || session.metadata?.fanEmail || null;
+    const fanName = session.customer_details?.name || session.metadata?.fanName || null;
+    const fanRef = db.collection('creators').doc(creatorId).collection('fans').doc(fanId);
+    const fanSnap = await fanRef.get();
+    if (!fanSnap.exists) {
+      await fanRef.set({
+        id: fanId,
+        creatorId,
+        email: fanEmail,
+        displayName: fanName,
+        stripeCustomerId: typeof session.customer === 'string' ? session.customer : (session.customer as any)?.id || null,
+        subscriptionStatus: null,
+        lastPurchaseAt: now,
+        totalSpentCents: amountTotal,
+        purchaseCount: 1,
+        createdAt: now,
+        updatedAt: now,
+      });
+    } else {
+      const fanData = fanSnap.data() as { totalSpentCents?: number; purchaseCount?: number };
+      await fanRef.update({
+        lastPurchaseAt: now,
+        totalSpentCents: (fanData.totalSpentCents || 0) + amountTotal,
+        purchaseCount: (fanData.purchaseCount || 0) + 1,
+        updatedAt: now,
+      });
+    }
+
+    try {
+      await upsertFanHubFanPreferenceFromMember(db, creatorId, fanId, now, 'stripe_post_unlock');
+    } catch (e) {
+      console.error('syncFanHubFanPreference (post_unlock):', e);
+    }
+
+    const statsRef = db.collection('creatorStats').doc(creatorId);
+    const statsSnap = await statsRef.get();
+    const stats = statsSnap.data() as { totalRevenueCents?: number; totalOrders?: number } | undefined;
+    const totalRevenue = (stats?.totalRevenueCents ?? 0) + amountTotal;
+    const totalOrders = (stats?.totalOrders ?? 0) + 1;
+    await statsRef.set({ totalRevenueCents: totalRevenue, totalOrders, updatedAt: now }, { merge: true });
+    console.log(`Fan hub: post_unlock checkout creator=${creatorId} fan=${fanId} post=${unlockPostId}`);
+    return true;
+  }
+
   if (type === 'tip') {
     const paymentIntentId = typeof session.payment_intent === 'string' ? session.payment_intent : (session.payment_intent as Stripe.PaymentIntent)?.id;
     const amountTotal = session.amount_total ?? 0;
@@ -491,19 +569,40 @@ async function handleConnectEvent(db: Firestore, _stripe: Stripe, event: Stripe.
     const ordersSnap = await db.collection('orders').where('stripePaymentIntentId', '==', paymentIntentId).limit(1).get();
     if (ordersSnap.empty) return;
     const orderDoc = ordersSnap.docs[0];
-    const order = orderDoc.data() as { creatorId?: string; fanId?: string; productId?: string; amountCents?: number; status?: string };
+    const order = orderDoc.data() as {
+      creatorId?: string;
+      fanId?: string;
+      productId?: string;
+      postId?: string;
+      type?: string;
+      amountCents?: number;
+      status?: string;
+    };
     if (order.status === 'refunded') return;
-    const { creatorId, fanId, productId, amountCents = 0 } = order;
+    const { creatorId, fanId, productId, postId: orderPostId, type: orderType, amountCents = 0 } = order;
     if (!creatorId || !fanId) return;
 
     await orderDoc.ref.update({ status: 'refunded', updatedAt: new Date().toISOString() });
 
-    if (productId) {
+    if (productId || (orderType === 'post_unlock' && orderPostId)) {
       const grantRef = db.collection('creatorEntitlements').doc(creatorId).collection('grants').doc(fanId);
       const grantSnap = await grantRef.get();
-      const data = grantSnap.data() as { unlockedProductIds?: string[] } | undefined;
-      const unlocked = Array.isArray(data?.unlockedProductIds) ? data.unlockedProductIds.filter((id) => id !== productId) : [];
-      await grantRef.set({ unlockedProductIds: unlocked, updatedAt: new Date().toISOString() }, { merge: true });
+      const grantData = grantSnap.data() as {
+        unlockedProductIds?: string[];
+        unlockedFanPostIds?: string[];
+      } | undefined;
+      const patch: Record<string, unknown> = { updatedAt: new Date().toISOString() };
+      if (productId) {
+        patch.unlockedProductIds = Array.isArray(grantData?.unlockedProductIds)
+          ? grantData.unlockedProductIds.filter((id) => id !== productId)
+          : [];
+      }
+      if (orderType === 'post_unlock' && orderPostId) {
+        patch.unlockedFanPostIds = Array.isArray(grantData?.unlockedFanPostIds)
+          ? grantData.unlockedFanPostIds.filter((id) => id !== orderPostId)
+          : [];
+      }
+      await grantRef.set(patch, { merge: true });
     }
 
     const statsRef = db.collection('creatorStats').doc(creatorId);

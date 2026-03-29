@@ -385,7 +385,10 @@ export const FanHubAnalytics: React.FC = () => {
     return (
       <div className="p-8 flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-indigo-500 mx-auto mb-4"></div>
+          <div
+            className="animate-spin rounded-full h-10 w-10 border-2 border-transparent mx-auto mb-4"
+            style={{ borderBottomColor: "var(--fan-primary, #6366f1)" }}
+          />
           <p className="text-gray-500 dark:text-gray-400">Loading analytics...</p>
         </div>
       </div>
@@ -624,9 +627,18 @@ export const FanHubAnalytics: React.FC = () => {
         </div>
       </div>
 
-      {/* Insights Section */}
-      <div className="bg-gradient-to-r from-indigo-50 to-violet-50 dark:from-indigo-900/20 dark:to-violet-900/20 rounded-xl p-6 border border-indigo-100 dark:border-indigo-800/50">
-        <h3 className="font-semibold text-gray-900 dark:text-white mb-3">Quick Insights</h3>
+      {/* Insights — tint from creator Fan Hub theme (--fan-* set on PremiumStudioLayout) */}
+      <div
+        className="rounded-xl p-6 border"
+        style={{
+          background:
+            "linear-gradient(90deg, color-mix(in srgb, var(--fan-primary, #6366f1) 12%, var(--fan-bg, #ffffff)) 0%, color-mix(in srgb, var(--fan-primary, #6366f1) 7%, var(--fan-bg, #ffffff)) 100%)",
+          borderColor: "color-mix(in srgb, var(--fan-primary, #6366f1) 28%, var(--fan-border, #e5e7eb))",
+        }}
+      >
+        <h3 className="font-semibold mb-3" style={{ color: "var(--fan-text, #111827)" }}>
+          Quick Insights
+        </h3>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
           <div className="bg-white/80 dark:bg-gray-800/80 rounded-lg p-4">
             <p className="font-medium text-gray-900 dark:text-white mb-1">Top Revenue Source</p>

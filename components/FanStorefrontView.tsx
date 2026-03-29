@@ -64,6 +64,27 @@ import { usePathname } from "../src/hooks/usePathname";
 import { db } from "../firebaseConfig";
 import { ReportProblemModal } from "./ReportProblemModal";
 
+/** Ensure member-store products have usable Firestore ids (avoids every row showing “Processing…” when id is missing or duplicated). */
+function normalizeMemberTreatProducts(raw: unknown): TreatProduct[] {
+  if (!Array.isArray(raw)) return [];
+  const out: TreatProduct[] = [];
+  const seen = new Set<string>();
+  for (const item of raw) {
+    if (!item || typeof item !== "object") continue;
+    const p = item as Partial<TreatProduct> & { id?: unknown };
+    const sid =
+      typeof p.id === "string"
+        ? p.id.trim()
+        : p.id != null && String(p.id).trim() !== ""
+          ? String(p.id).trim()
+          : "";
+    if (!sid || seen.has(sid)) continue;
+    seen.add(sid);
+    out.push({ ...p, id: sid } as TreatProduct);
+  }
+  return out;
+}
+
 /** Default bio set at fan signup; hide platform-branded defaults on creator hubs. */
 function isEchoFluxDefaultFanBio(bio: string): boolean {
   const s = bio.trim().toLowerCase();
@@ -164,54 +185,188 @@ type SupportMessage = {
   createdAt?: string;
 };
 
+/** Member hub URL segments (path-based tabs). Keep in sync with App.tsx storefront path checks. */
+const MEMBER_PATH_SLUGS = new Set([
+  "home",
+  "feed",
+  "store",
+  "treats",
+  "purchases",
+  "tip",
+  "messages",
+  "profile",
+  "saved",
+  "about",
+]);
+
+type FanStorefrontMemberTab =
+  | "feed"
+  | "treats"
+  | "messages"
+  | "tip"
+  | "saved"
+  | "about"
+  | "profile"
+  | "purchases";
+
+function isMemberPathSlug(seg: string): boolean {
+  return MEMBER_PATH_SLUGS.has(seg.toLowerCase());
+}
+
+function memberPathSlugToTab(slug: string): FanStorefrontMemberTab | null {
+  const s = slug.trim().toLowerCase();
+  if (s === "home" || s === "feed") return "feed";
+  if (s === "store" || s === "treats") return "treats";
+  if (s === "purchases") return "purchases";
+  if (s === "tip") return "tip";
+  if (s === "messages") return "messages";
+  if (s === "profile") return "profile";
+  if (s === "saved") return "saved";
+  if (s === "about") return "about";
+  return null;
+}
+
+function memberTabToPathSlug(tab: FanStorefrontMemberTab): string | null {
+  switch (tab) {
+    case "feed":
+      return null;
+    case "treats":
+      return "store";
+    case "purchases":
+      return "purchases";
+    case "tip":
+      return "tip";
+    case "messages":
+      return "messages";
+    case "profile":
+      return "profile";
+    case "saved":
+      return "saved";
+    case "about":
+      return "about";
+    default:
+      return null;
+  }
+}
+
+function decodeHandleSegment(raw: string): string {
+  try {
+    return decodeURIComponent(raw).replace("@", "").toLowerCase().trim();
+  } catch {
+    return raw.replace("@", "").toLowerCase().trim();
+  }
+}
+
+function buildFanStorefrontMemberPath(tab: FanStorefrontMemberTab, creatorHandle: string): string {
+  if (typeof window === "undefined") return `/${creatorHandle}`;
+  const pathname = window.location.pathname.replace(/\/+$/, "") || "/";
+  const slug = memberTabToPathSlug(tab);
+  const legacy = pathname.match(/^\/(?:u|link)\/([^/]+)/);
+  if (legacy) {
+    const seg = legacy[1];
+    if (!slug) return `/u/${seg}`;
+    return `/u/${seg}/${slug}`;
+  }
+  if (isConfiguredCustomStorefrontHost(window.location.hostname)) {
+    const parts = pathname.slice(1).split("/").filter(Boolean);
+    const atRootHub = parts.length === 0 || (parts.length === 1 && isMemberPathSlug(parts[0]));
+    if (atRootHub) {
+      if (!slug) return `/`;
+      return `/${slug}`;
+    }
+  }
+  if (!slug) return `/${creatorHandle}`;
+  return `/${creatorHandle}/${slug}`;
+}
+
+/** Update pathname for member hub tab; drops legacy `?tab=` while preserving other query params. */
+function applyFanStorefrontMemberUrl(
+  tab: FanStorefrontMemberTab,
+  ctx: {
+    showLanding: boolean;
+    creatorHandle: string | null | undefined;
+    stripSearchKeys?: string[];
+  }
+): void {
+  if (typeof window === "undefined" || ctx.showLanding || !ctx.creatorHandle?.trim()) return;
+  const path = buildFanStorefrontMemberPath(tab, ctx.creatorHandle.trim());
+  const p = new URLSearchParams(window.location.search);
+  p.delete("tab");
+  for (const k of ctx.stripSearchKeys || []) {
+    if (k) p.delete(k);
+  }
+  const qs = p.toString();
+  const hash = window.location.hash || "";
+  window.history.replaceState(null, "", path + (qs ? `?${qs}` : "") + hash);
+}
+
 /**
- * Path → handle + legal subpage.
- * - Default domain: /{handle}, /{handle}/terms|privacy, legacy /u/ /link/
- * - Custom domain (VITE_CUSTOM_STOREFRONT_HOSTS): / → handle from API; /terms|/privacy; /{handle}
+ * Path → handle + legal subpage + optional member nav segment (path-based tabs).
+ * - Default domain: /{handle}, /{handle}/terms|privacy|{nav}, legacy /u|link/{handle}/...
+ * - Custom domain: /, /terms|privacy, /{nav} at root hub, /{handle}, /{handle}/{nav}
  */
-function parseHandleFromPath(): { handle: string | null; subpage: "terms" | "privacy" | null } {
-  if (typeof window === "undefined") return { handle: null, subpage: null };
+function parseHandleFromPath(): {
+  handle: string | null;
+  subpage: "terms" | "privacy" | null;
+  memberNavSlug: string | null;
+} {
+  if (typeof window === "undefined") {
+    return { handle: null, subpage: null, memberNavSlug: null };
+  }
   const path = window.location.pathname.replace(/\/+$/, "") || "/";
   const parts = path.slice(1).split("/").filter(Boolean);
+  const host = window.location.hostname;
+  const custom = isConfiguredCustomStorefrontHost(host);
 
-  if (isConfiguredCustomStorefrontHost(window.location.hostname)) {
+  if (custom) {
     if (parts.length === 0) {
-      return { handle: null, subpage: null };
+      return { handle: null, subpage: null, memberNavSlug: null };
     }
     if (parts.length === 1 && (parts[0] === "terms" || parts[0] === "privacy")) {
-      return { handle: null, subpage: parts[0] as "terms" | "privacy" };
+      return { handle: null, subpage: parts[0] as "terms" | "privacy", memberNavSlug: null };
+    }
+    if (parts.length === 1 && isMemberPathSlug(parts[0])) {
+      return { handle: null, subpage: null, memberNavSlug: parts[0].toLowerCase() };
     }
     if (parts.length === 1 && /^[a-z0-9_]+$/i.test(parts[0])) {
-      try {
-        return {
-          handle: decodeURIComponent(parts[0]).replace("@", "").toLowerCase().trim(),
-          subpage: null,
-        };
-      } catch {
-        return { handle: parts[0].replace("@", "").toLowerCase().trim(), subpage: null };
+      return { handle: decodeHandleSegment(parts[0]), subpage: null, memberNavSlug: null };
+    }
+    if (parts.length === 2) {
+      const a = parts[0];
+      const b = parts[1].toLowerCase();
+      if (b === "terms" || b === "privacy") {
+        return { handle: decodeHandleSegment(a), subpage: b as "terms" | "privacy", memberNavSlug: null };
+      }
+      if (/^[a-z0-9_]+$/i.test(a) && isMemberPathSlug(b)) {
+        return { handle: decodeHandleSegment(a), subpage: null, memberNavSlug: b };
       }
     }
-    return { handle: null, subpage: null };
+    return { handle: null, subpage: null, memberNavSlug: null };
   }
 
-  const legacyMatch = path.match(/^\/(?:u|link)\/([^/]+)/);
-  const handleSegment = legacyMatch ? legacyMatch[1] : parts[0];
-  if (!handleSegment) return { handle: null, subpage: null };
-
-  const subpageSegment = parts[1]?.toLowerCase();
-  const subpage = subpageSegment === "terms" || subpageSegment === "privacy" ? subpageSegment : null;
-
-  try {
-    return {
-      handle: decodeURIComponent(handleSegment).replace("@", "").toLowerCase().trim(),
-      subpage,
-    };
-  } catch {
-    return {
-      handle: handleSegment.replace("@", "").toLowerCase().trim(),
-      subpage,
-    };
+  const legacyFull = path.match(/^\/(?:u|link)\/([^/]+)(?:\/([^/]+))?$/);
+  if (legacyFull) {
+    const h = decodeHandleSegment(legacyFull[1]);
+    const rest = (legacyFull[2] || "").toLowerCase();
+    if (rest === "terms" || rest === "privacy") {
+      return { handle: h, subpage: rest as "terms" | "privacy", memberNavSlug: null };
+    }
+    if (rest && isMemberPathSlug(rest)) {
+      return { handle: h, subpage: null, memberNavSlug: rest };
+    }
+    return { handle: h, subpage: null, memberNavSlug: null };
   }
+
+  const handleSeg = parts[0];
+  if (!handleSeg) return { handle: null, subpage: null, memberNavSlug: null };
+  const seg1 = (parts[1] || "").toLowerCase();
+  if (seg1 === "terms" || seg1 === "privacy") {
+    return { handle: decodeHandleSegment(handleSeg), subpage: seg1 as "terms" | "privacy", memberNavSlug: null };
+  }
+  if (seg1 && isMemberPathSlug(seg1)) {
+    return { handle: decodeHandleSegment(handleSeg), subpage: null, memberNavSlug: seg1 };
+  }
+  return { handle: decodeHandleSegment(handleSeg), subpage: null, memberNavSlug: null };
 }
 
 function normalizeHandleKey(input: string | null | undefined): string {
@@ -446,6 +601,7 @@ export const FanStorefrontView: React.FC = () => {
   const [tipLoading, setTipLoading] = useState(false);
   const [isLoggedIn, setIsLoggedIn] = useState(!!auth.currentUser);
   const [unlockedProductIds, setUnlockedProductIds] = useState<string[]>([]);
+  const [unlockedFanPostIds, setUnlockedFanPostIds] = useState<string[]>([]);
   const [treatsProducts, setTreatsProducts] = useState<TreatProduct[]>([]);
   const [treatsLoading, setTreatsLoading] = useState(false);
   /** Visible treats on public landing when creator enables guest checkout */
@@ -573,9 +729,14 @@ export const FanStorefrontView: React.FC = () => {
           key !== "about" &&
           (sec as Record<string, boolean>)[key] !== false
       ) ?? "feed";
-    setActiveTab(next as "feed" | "treats" | "messages" | "tip" | "saved" | "about");
+    const nextTab = next as FanStorefrontMemberTab;
+    setActiveTab(nextTab);
+    if (creator?.handle?.trim()) {
+      applyFanStorefrontMemberUrl(nextTab, { showLanding: false, creatorHandle: creator.handle });
+    }
   }, [
     creator?.creatorId,
+    creator?.handle,
     creator?.monetization?.chatEnabled,
     creator?.sectionsOrder,
     creator?.sections,
@@ -927,6 +1088,9 @@ export const FanStorefrontView: React.FC = () => {
       if (!creator?.creatorId || !auth.currentUser) return;
       if (alert.kind === "chat") {
         setActiveTab("messages");
+        if (creator?.handle?.trim()) {
+          applyFanStorefrontMemberUrl("messages", { showLanding: false, creatorHandle: creator.handle });
+        }
         return;
       }
       try {
@@ -1093,8 +1257,11 @@ export const FanStorefrontView: React.FC = () => {
       }
       setSupportThreadId((data as { ticketId?: string }).ticketId ?? null);
       setActiveTab("profile");
+      if (creator?.handle?.trim()) {
+        applyFanStorefrontMemberUrl("profile", { showLanding: false, creatorHandle: creator.handle });
+      }
     },
-    [activePage, creator?.creatorId, setActiveTab]
+    [activePage, creator?.creatorId, creator?.handle, setActiveTab]
   );
 
   const sendSupportReply = useCallback(async () => {
@@ -1158,6 +1325,7 @@ export const FanStorefrontView: React.FC = () => {
       setSubscribed(false);
       setMembershipType(null);
       setMemberUsernameRequired(false);
+      setUnlockedFanPostIds([]);
       setEntitlementLoading(false);
       return;
     }
@@ -1178,11 +1346,17 @@ export const FanStorefrontView: React.FC = () => {
         setMembershipType(((data as { membershipType?: "free" | "paid" | null }).membershipType ?? null) as "free" | "paid" | null);
         setMemberUsernameRequired(!!(data as { memberUsernameRequired?: boolean }).memberUsernameRequired);
         setUnlockedProductIds(Array.isArray((data as { unlockedProductIds?: string[] }).unlockedProductIds) ? (data as { unlockedProductIds: string[] }).unlockedProductIds : []);
+        setUnlockedFanPostIds(
+          Array.isArray((data as { unlockedFanPostIds?: string[] }).unlockedFanPostIds)
+            ? (data as { unlockedFanPostIds: string[] }).unlockedFanPostIds
+            : []
+        );
       } catch {
         if (gen === entitlementFetchGen.current) {
           setSubscribed(false);
           setMembershipType(null);
           setMemberUsernameRequired(false);
+          setUnlockedFanPostIds([]);
         }
       } finally {
         if (gen === entitlementFetchGen.current) {
@@ -1191,6 +1365,45 @@ export const FanStorefrontView: React.FC = () => {
       }
     })();
   }, [creator?.creatorId, isLoggedIn]);
+
+  const refetchMemberEntitlement = useCallback(async () => {
+    if (!creator?.creatorId || !auth.currentUser) return;
+    const token = await auth.currentUser.getIdToken(true);
+    const res = await fetch(
+      `/api/getFanEntitlement?creatorId=${encodeURIComponent(creator.creatorId)}`,
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+    const data = await res.json().catch(() => ({}));
+    setSubscribed(!!(data as { subscribed?: boolean }).subscribed);
+    setMembershipType(
+      ((data as { membershipType?: "free" | "paid" | null }).membershipType ?? null) as "free" | "paid" | null
+    );
+    setMemberUsernameRequired(!!(data as { memberUsernameRequired?: boolean }).memberUsernameRequired);
+    setUnlockedProductIds(
+      Array.isArray((data as { unlockedProductIds?: string[] }).unlockedProductIds)
+        ? (data as { unlockedProductIds: string[] }).unlockedProductIds
+        : []
+    );
+    setUnlockedFanPostIds(
+      Array.isArray((data as { unlockedFanPostIds?: string[] }).unlockedFanPostIds)
+        ? (data as { unlockedFanPostIds: string[] }).unlockedFanPostIds
+        : []
+    );
+  }, [creator?.creatorId]);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !creator?.creatorId || !isLoggedIn) return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("post_unlock") !== "1") return;
+    void refetchMemberEntitlement();
+    params.delete("post_unlock");
+    const qs = params.toString();
+    window.history.replaceState(
+      {},
+      "",
+      window.location.pathname + (qs ? `?${qs}` : "") + (window.location.hash || "")
+    );
+  }, [creator?.creatorId, isLoggedIn, refetchMemberEntitlement]);
 
   const fetchTreats = useCallback(async () => {
     if (!creator?.creatorId) return;
@@ -1201,7 +1414,7 @@ export const FanStorefrontView: React.FC = () => {
       );
       if (!res.ok) return;
       const data = await res.json();
-      setTreatsProducts(Array.isArray(data.products) ? data.products : []);
+      setTreatsProducts(normalizeMemberTreatProducts(data.products));
     } catch {
       setTreatsProducts([]);
     } finally {
@@ -1301,6 +1514,11 @@ export const FanStorefrontView: React.FC = () => {
               setUnlockedProductIds(
                 Array.isArray((ent as { unlockedProductIds?: string[] }).unlockedProductIds)
                   ? (ent as { unlockedProductIds: string[] }).unlockedProductIds
+                  : []
+              );
+              setUnlockedFanPostIds(
+                Array.isArray((ent as { unlockedFanPostIds?: string[] }).unlockedFanPostIds)
+                  ? (ent as { unlockedFanPostIds: string[] }).unlockedFanPostIds
                   : []
               );
             }
@@ -1441,6 +1659,16 @@ export const FanStorefrontView: React.FC = () => {
         );
         const ent = await entRes.json().catch(() => ({}));
         setMemberUsernameRequired(!!(ent as { memberUsernameRequired?: boolean }).memberUsernameRequired);
+        setUnlockedProductIds(
+          Array.isArray((ent as { unlockedProductIds?: string[] }).unlockedProductIds)
+            ? (ent as { unlockedProductIds: string[] }).unlockedProductIds
+            : []
+        );
+        setUnlockedFanPostIds(
+          Array.isArray((ent as { unlockedFanPostIds?: string[] }).unlockedFanPostIds)
+            ? (ent as { unlockedFanPostIds: string[] }).unlockedFanPostIds
+            : []
+        );
       } catch {
         /* keep prior state */
       }
@@ -1453,7 +1681,10 @@ export const FanStorefrontView: React.FC = () => {
 
   const handlePurchase = async (productId: string) => {
     if (!creator?.creatorId || !auth.currentUser) return;
-    setPurchasingId(productId);
+    const pid =
+      typeof productId === "string" ? productId.trim() : String(productId ?? "").trim();
+    if (!pid) return;
+    setPurchasingId(pid);
     try {
       const token = await auth.currentUser.getIdToken(true);
       const successUrl = buildPublicCheckoutUrl(window.location.pathname, window.location.search, window.location.hash);
@@ -1464,7 +1695,7 @@ export const FanStorefrontView: React.FC = () => {
         body: JSON.stringify({
           creatorId: creator.creatorId,
           type: "product",
-          productId,
+          productId: pid,
           ...(successUrl ? { successUrl } : {}),
           ...(cancelUrl ? { cancelUrl } : {}),
         }),
@@ -1512,12 +1743,8 @@ export const FanStorefrontView: React.FC = () => {
   const handleOpenProfile = () => {
     setProfileMenuOpen(false);
     setActiveTab("profile");
-    if (typeof window !== "undefined") {
-      const params = new URLSearchParams(window.location.search);
-      params.set("tab", "profile");
-      const qs = params.toString();
-      const nextUrl = `${window.location.pathname}${qs ? `?${qs}` : ""}${window.location.hash}`;
-      window.history.replaceState(null, "", nextUrl);
+    if (creator?.handle?.trim()) {
+      applyFanStorefrontMemberUrl("profile", { showLanding: false, creatorHandle: creator.handle });
     }
   };
 
@@ -2050,6 +2277,9 @@ export const FanStorefrontView: React.FC = () => {
     if (!needsPaidUpgrade || previewMember || isViewingOwnStorefront) return;
     if ((purchaseOnlyAccess || paidPageUnsubscribed) && !["tip", "purchases", "profile"].includes(activeTab)) {
       setActiveTab("purchases");
+      if (creator?.handle?.trim()) {
+        applyFanStorefrontMemberUrl("purchases", { showLanding: false, creatorHandle: creator.handle });
+      }
     }
     if (typeof window !== "undefined") {
       const params = new URLSearchParams(window.location.search);
@@ -2064,28 +2294,33 @@ export const FanStorefrontView: React.FC = () => {
     purchaseOnlyAccess,
     paidPageUnsubscribed,
     activeTab,
+    creator?.handle,
   ]);
   useEffect(() => {
     if (typeof window === "undefined" || showLanding) return;
+    const parsed = parseHandleFromPath();
+    const fromPath = parsed.memberNavSlug ? memberPathSlugToTab(parsed.memberNavSlug) : null;
     const params = new URLSearchParams(window.location.search);
-    const slug = (params.get("tab") || "").trim().toLowerCase();
-    if (!slug) return;
-    const mapped =
-      slug === "home" || slug === "feed"
-        ? "feed"
-        : slug === "store" || slug === "treats"
-          ? "treats"
-          : slug === "purchases"
-            ? "purchases"
-          : slug === "tip"
-            ? "tip"
-            : slug === "messages"
-              ? "messages"
-              : slug === "profile"
-                ? "profile"
-                : null;
+    const qTab = (params.get("tab") || "").trim().toLowerCase();
+    const fromQuery = qTab ? memberPathSlugToTab(qTab) : null;
+    const mapped = fromPath || fromQuery;
     if (mapped) setActiveTab(mapped);
-  }, [showLanding]);
+
+    if (parsed.memberNavSlug && params.has("tab")) {
+      params.delete("tab");
+      const qs = params.toString();
+      window.history.replaceState(
+        null,
+        "",
+        window.location.pathname + (qs ? `?${qs}` : "") + window.location.hash
+      );
+    } else if (creator?.handle?.trim() && qTab && memberPathSlugToTab(qTab) && !parsed.memberNavSlug) {
+      applyFanStorefrontMemberUrl(memberPathSlugToTab(qTab)!, {
+        showLanding: false,
+        creatorHandle: creator.handle.trim(),
+      });
+    }
+  }, [showLanding, pathname, creator?.handle]);
 
   if (loading) {
     const loadingPrimary = creator?.theme?.primary || defaultPrimary;
@@ -2210,27 +2445,11 @@ export const FanStorefrontView: React.FC = () => {
   };
   const setActiveTabWithUrl = (nextTab: typeof activeTab) => {
     setActiveTab(nextTab);
-    if (typeof window === "undefined" || showLanding) return;
-    const params = new URLSearchParams(window.location.search);
-    const slug =
-      nextTab === "feed"
-        ? "home"
-        : nextTab === "treats"
-          ? "store"
-          : nextTab === "purchases"
-            ? "purchases"
-          : nextTab === "tip"
-            ? "tip"
-            : nextTab === "messages"
-              ? "messages"
-              : nextTab === "profile"
-                ? "profile"
-                : "";
-    if (!slug || slug === "home") params.delete("tab");
-    else params.set("tab", slug);
-    const qs = params.toString();
-    const nextUrl = `${window.location.pathname}${qs ? `?${qs}` : ""}${window.location.hash}`;
-    window.history.replaceState(null, "", nextUrl);
+    if (typeof window === "undefined" || showLanding || !creator.handle?.trim()) return;
+    applyFanStorefrontMemberUrl(nextTab as FanStorefrontMemberTab, {
+      showLanding,
+      creatorHandle: creator.handle,
+    });
   };
   const nextSessionAlert = sessionAlerts[0] ?? null;
   const nextSessionTimeLabel =
@@ -2394,23 +2613,20 @@ export const FanStorefrontView: React.FC = () => {
             onSuccess={() => {
               setIsLoggedIn(true);
               setFanAuthOpen(false);
-              setActiveTab(creator.monetization?.freeAccessEnabled === true ? "feed" : "profile");
+              const nextTab: FanStorefrontMemberTab =
+                creator.monetization?.freeAccessEnabled === true ? "feed" : "profile";
+              setActiveTab(nextTab);
               // Immediate visual feedback for free pages; entitlement fetch will reconcile exact status.
               if (creator.monetization?.freeAccessEnabled === true) {
                 setSubscribed(true);
                 setMembershipType("free");
               }
-              if (typeof window !== "undefined") {
-                const params = new URLSearchParams(window.location.search);
-                if (params.get("landing") === "1") {
-                  params.delete("landing");
-                }
-                if (params.get("tab") === "home") {
-                  params.delete("tab");
-                }
-                const nextQs = params.toString();
-                const nextUrl = `${window.location.pathname}${nextQs ? `?${nextQs}` : ""}${window.location.hash}`;
-                window.history.replaceState(null, "", nextUrl);
+              if (typeof window !== "undefined" && creator.handle?.trim()) {
+                applyFanStorefrontMemberUrl(nextTab, {
+                  showLanding: false,
+                  creatorHandle: creator.handle,
+                  stripSearchKeys: ["landing", "login", "signup"],
+                });
               }
             }}
             initialView={fanAuthView}
@@ -2455,7 +2671,12 @@ export const FanStorefrontView: React.FC = () => {
         supportName="Insight Media Group LLC"
         mode="inApp"
         onSubmitInApp={submitSupportProblem}
-        onSubmitted={() => setActiveTab("profile")}
+        onSubmitted={() => {
+          setActiveTab("profile");
+          if (creator.handle?.trim()) {
+            applyFanStorefrontMemberUrl("profile", { showLanding: false, creatorHandle: creator.handle });
+          }
+        }}
       />
       {memberUsernameRequired && creator && !previewMember && hasAccessByCurrentMembership && (
         <MemberUsernameGateModal
@@ -2679,7 +2900,11 @@ export const FanStorefrontView: React.FC = () => {
                 primary={primary}
                 feedSettings={creator.feedSettings}
                 fanId={auth.currentUser?.uid}
-                onOpenSaved={() => setActiveTab("saved")}
+                unlockedFanPostIds={unlockedFanPostIds}
+                onOpenSaved={() => setActiveTabWithUrl("saved")}
+                tipsEnabled={creator.sections?.tip !== false}
+                tipHeading={tipMemberCopy.heading}
+                tipSubline={tipMemberCopy.subline}
               />
             )}
             {activeTab === "saved" && (
@@ -2691,7 +2916,8 @@ export const FanStorefrontView: React.FC = () => {
                 primary={primary}
                 feedSettings={creator.feedSettings}
                 fanId={auth.currentUser?.uid}
-                onBackToFeed={() => setActiveTab("feed")}
+                unlockedFanPostIds={unlockedFanPostIds}
+                onBackToFeed={() => setActiveTabWithUrl("feed")}
               />
             )}
             {activeTab === "treats" && !paidPageUnsubscribed && !purchaseOnlyAccess && (
@@ -2712,14 +2938,21 @@ export const FanStorefrontView: React.FC = () => {
                   <p className="fan-member-empty">{storeCopy.memberStoreEmptyMessage}</p>
                 ) : (
                   <div className="fan-member-treats-grid">
-                    {treatsProducts.map((p) => {
-                      const owned = unlockedProductIds.includes(p.id);
+                    {treatsProducts.map((p, index) => {
+                      const productRowId = p.id;
+                      const owned = unlockedProductIds.includes(productRowId);
                       const hasLimit = typeof p.quantityLimit === "number" && p.quantityLimit > 0;
                       const soldCount = Math.max(0, Number(p.soldCount || 0));
                       const remaining = hasLimit ? Math.max(0, p.quantityLimit! - soldCount) : null;
                       const soldOut = hasLimit && remaining === 0;
+                      const checkoutBusy = purchasingId != null && purchasingId !== "";
+                      const isPurchasingThis =
+                        checkoutBusy && purchasingId === productRowId;
                       return (
-                        <div key={p.id} className="fan-member-treat-card">
+                        <div
+                          key={`member-treat-${productRowId}-${index}`}
+                          className="fan-member-treat-card"
+                        >
                           <p className="fan-member-treat-type">{p.type.replace(/_/g, " ")}</p>
                           <h3 className="fan-member-treat-title">{p.title}</h3>
                           {p.description && (
@@ -2739,12 +2972,12 @@ export const FanStorefrontView: React.FC = () => {
                             ) : (
                               <button
                                 type="button"
-                                disabled={!!purchasingId || soldOut}
-                                onClick={() => handlePurchase(p.id)}
+                                disabled={checkoutBusy || soldOut}
+                                onClick={() => handlePurchase(productRowId)}
                                 className="fan-member-treat-buy"
                                 style={{ backgroundColor: primary }}
                               >
-                                {purchasingId === p.id ? "Processing…" : "Purchase"}
+                                {isPurchasingThis ? "Processing…" : "Purchase"}
                               </button>
                             )}
                           </div>
@@ -3146,7 +3379,7 @@ export const FanStorefrontView: React.FC = () => {
                           borderColor: `${primary}66`,
                           backgroundColor: `${primary}0f`,
                         }}
-                        onClick={() => setActiveTab("messages")}
+                        onClick={() => setActiveTabWithUrl("messages")}
                       >
                         Messages
                       </button>

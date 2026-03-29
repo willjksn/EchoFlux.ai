@@ -3,7 +3,7 @@ import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { doc, getDoc, setDoc, deleteField } from 'firebase/firestore';
 import { auth, db } from '../../firebaseConfig';
 import { User, SocialStats, Platform, Plan } from '../../types';
-import { defaultSettings } from '../../constants';
+import { defaultSettings, FAN_STOREFRONT_SIGNUP_SESSION_KEY } from '../../constants';
 
 interface AuthContextType {
     user: User | null;
@@ -51,6 +51,11 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     const snap = await getDoc(ref);
 
                     if (snap.exists()) {
+                        try {
+                            sessionStorage.removeItem(FAN_STOREFRONT_SIGNUP_SESSION_KEY);
+                        } catch {
+                            /* ignore */
+                        }
                         const loaded = snap.data() as User;
 
                     // Default everyone to Creator
@@ -151,10 +156,18 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                             return;
                         }
                     
-                        // No pending signup - this might be a Google sign-in for an existing user
-                        // or a direct sign-in. Create the user document in unprovisioned state.
-                        // Plan selection / checkout flow will assign Pro or Elite.
-                        const defaultPlan: Plan | null = null;
+                        // No pending signup - main landing / OAuth may use unprovisioned state until plan checkout.
+                        // Fan creator storefront signup sets FAN_STOREFRONT_SIGNUP_SESSION_KEY so we skip SaaS plan modal.
+                        let fromFanStorefrontSignup = false;
+                        try {
+                            if (sessionStorage.getItem(FAN_STOREFRONT_SIGNUP_SESSION_KEY) === '1') {
+                                sessionStorage.removeItem(FAN_STOREFRONT_SIGNUP_SESSION_KEY);
+                                fromFanStorefrontSignup = true;
+                            }
+                        } catch {
+                            /* ignore */
+                        }
+                        const defaultPlan: Plan | null = fromFanStorefrontSignup ? 'Free' : null;
                     
                         const newUser: User = {
                             id: fbUser.uid,
@@ -166,7 +179,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                             role: "User",
                             userType: 'Creator', // All users are Creators now
                             signupDate: new Date().toISOString(),
-                            hasCompletedOnboarding: false,
+                            hasCompletedOnboarding: fromFanStorefrontSignup,
                             notifications: {
                                 newMessages: true,
                                 weeklySummary: false,

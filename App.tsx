@@ -244,13 +244,22 @@ const AppContent: React.FC = () => {
     /** stormijxo.com → /, /terms, /privacy, /{handle} (see storefrontCustomDomain + creatorDomains map) */
     const isCustomDomainSf =
         typeof window !== 'undefined' && isCustomDomainStorefrontPath(pathname, hostname);
+    const np = pathname.replace(/\/+$/, '') || '/';
+    // Member hub second segment (path-based tabs); keep list in sync with FanStorefrontView member URLs
+    const isStorefrontMemberSubpathPlain =
+        /^\/[^/]+\/(?:terms|privacy|feed|home|store|treats|purchases|tip|messages|profile|saved|about)$/i.test(np);
+    const isStorefrontLegacyMemberSubpath =
+        /^\/(?:u|link)\/[^/]+\/(?:terms|privacy|feed|home|store|treats|purchases|tip|messages|profile|saved|about)$/i.test(
+            np
+        );
     const isStorefrontPath =
         !pathname.startsWith('/api') &&
         !pathname.includes('.') &&
         (isCustomDomainSf ||
-            ((!isKnownAppRoute && /^\/[^/]+$/.test(pathname)) ||
-                /^\/(?:u|link)\/[^/]+$/.test(pathname) ||
-                /^\/[^/]+\/(terms|privacy)$/.test(pathname))); // /{handle}/terms or /{handle}/privacy
+            ((!isKnownAppRoute && /^\/[^/]+$/.test(np)) ||
+                /^\/(?:u|link)\/[^/]+$/.test(np) ||
+                isStorefrontMemberSubpathPlain ||
+                isStorefrontLegacyMemberSubpath));
 
     if (isStorefrontPath) {
         return <FanStorefrontView />;
