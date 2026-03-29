@@ -17,6 +17,7 @@ import type {
 } from "../types";
 import { StorefrontPreview } from "./StorefrontPreview";
 import { resolveStoreCopy } from "../src/lib/storefrontStoreCopy";
+import { readFanCheckoutFetchResult } from "../src/lib/fanCheckoutResponse";
 
 interface FanLandingPageProps {
   creator: {
@@ -272,12 +273,12 @@ export const FanLandingPage: React.FC<FanLandingPageProps> = ({
           cancelUrl: `${base}${window.location.pathname}`,
         }),
       });
-      const data = (await res.json().catch(() => ({}))) as { url?: string; error?: string };
-      if (res.ok && data.url) {
-        window.location.href = data.url;
+      const { ok, url, error } = await readFanCheckoutFetchResult(res);
+      if (ok && url) {
+        window.location.href = url;
         return;
       }
-      setTipError(data.error || "Could not start checkout.");
+      setTipError(error || "Could not start checkout.");
     } catch {
       setTipError("Could not start checkout. Try again.");
     } finally {

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef, Fragment } from "react";
+import React, { useState, useEffect, useCallback, useRef, Fragment, useMemo } from "react";
 import { auth } from "../firebaseConfig";
 import { collection, doc, getDoc, getDocs, limit, onSnapshot, orderBy, query, setDoc, where } from "firebase/firestore";
 import { storage } from "../firebaseConfig";
@@ -63,6 +63,8 @@ import { isConfiguredCustomStorefrontHost } from "../src/lib/storefrontCustomDom
 import { usePathname } from "../src/hooks/usePathname";
 import { db } from "../firebaseConfig";
 import { ReportProblemModal } from "./ReportProblemModal";
+import { Toast } from "./Toast";
+import { readFanCheckoutFetchResult } from "../src/lib/fanCheckoutResponse";
 
 /** Ensure member-store products have usable Firestore ids (avoids every row showing “Processing…” when id is missing or duplicated). */
 function normalizeMemberTreatProducts(raw: unknown): TreatProduct[] {
@@ -441,6 +443,7 @@ interface TipSectionProps {
   setTipCustomAmount: (v: string) => void;
   tipLoading: boolean;
   setTipLoading: (v: boolean) => void;
+  showToast: (message: string, type: "success" | "error" | "info") => void;
 }
 
 function TipSection({
@@ -455,6 +458,7 @@ function TipSection({
   setTipCustomAmount,
   tipLoading,
   setTipLoading,
+  showToast,
 }: TipSectionProps) {
   const parsedCustomAmount = tipCustomAmount.trim()
     ? Number.parseFloat(tipCustomAmount)
@@ -468,7 +472,10 @@ function TipSection({
       : customAmountCents;
 
   const startTipCheckout = async (cents: number) => {
-    if (cents < 100 || cents > 100000) return;
+    if (cents < 100 || cents > 100000) {
+      showToast("Choose an amount between $1 and $1,000.", "error");
+      return;
+    }
     setTipLoading(true);
     try {
       const token = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
@@ -488,12 +495,11 @@ function TipSection({
           ...(cancelUrl ? { cancelUrl } : {}),
         }),
       });
-      const data = (await res.json()) as { url?: string; error?: string };
-      if (!res.ok) throw new Error(data.error || "Checkout failed. Please try again.");
-      if (!data.url) throw new Error("Checkout link was not returned. Please try again.");
-      window.location.href = data.url;
+      const { ok, url, error } = await readFanCheckoutFetchResult(res);
+      if (!ok || !url) throw new Error(error || "Checkout failed. Please try again.");
+      window.location.href = url;
     } catch (e) {
-      alert(e instanceof Error ? e.message : "Something went wrong. Please try again.");
+      showToast(e instanceof Error ? e.message : "Something went wrong. Please try again.", "error");
     } finally {
       setTipLoading(false);
     }
@@ -573,7 +579,7 @@ function TipSection({
 }
 
 export const FanStorefrontView: React.FC = () => {
-  const { showToast, activePage } = useAppContext();
+  const { showToast, activePage, toast } = useAppContext();
   const pathname = usePathname();
   const [handle, setHandle] = useState<string | null>(() => parseHandleFromPath().handle);
   const [legalSubpage, setLegalSubpage] = useState<"terms" | "privacy" | null>(() => parseHandleFromPath().subpage);
@@ -1563,10 +1569,8 @@ export const FanStorefrontView: React.FC = () => {
           ...(cancelUrl ? { cancelUrl } : {}),
         }),
       });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error((data as { error?: string }).error || "Checkout failed");
-      const url = (data as { url?: string }).url;
-      if (!url) throw new Error("Checkout link was not returned. Please try again.");
+      const { ok, url, error } = await readFanCheckoutFetchResult(res);
+      if (!ok || !url) throw new Error(error || "Checkout failed");
       window.location.href = url;
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Checkout could not start. Please try again.";
@@ -1611,10 +1615,8 @@ export const FanStorefrontView: React.FC = () => {
           ...(cancelUrl ? { cancelUrl } : {}),
         }),
       });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error((data as { error?: string }).error || "Checkout failed");
-      const url = (data as { url?: string }).url;
-      if (!url) throw new Error("Checkout link was not returned. Please try again.");
+      const { ok, url, error } = await readFanCheckoutFetchResult(res);
+      if (!ok || !url) throw new Error(error || "Checkout failed");
       window.location.href = url;
     } catch (e) {
       if (!isAuto) {
@@ -1700,10 +1702,8 @@ export const FanStorefrontView: React.FC = () => {
           ...(cancelUrl ? { cancelUrl } : {}),
         }),
       });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error((data as { error?: string }).error || "Checkout failed");
-      const url = (data as { url?: string }).url;
-      if (!url) throw new Error("Checkout link was not returned. Please try again.");
+      const { ok, url, error } = await readFanCheckoutFetchResult(res);
+      if (!ok || !url) throw new Error(error || "Checkout failed");
       window.location.href = url;
     } catch (e) {
       showToast(e instanceof Error ? e.message : "Could not open checkout.", "error");
@@ -1868,7 +1868,17 @@ export const FanStorefrontView: React.FC = () => {
         );
         const data = await res.json().catch(() => ({}));
         if (cancelled) return;
+        if (!res.ok) {
+          setUsernameState("idle");
+          setUsernameMsg((data as { error?: string }).error || "Could not check availability.");
+          return;
+        }
         const reason = (data as { reason?: string }).reason || "";
+        if (reason === "invalid") {
+          setUsernameState("invalid");
+          setUsernameMsg((data as { message?: string }).message || "Invalid username.");
+          return;
+        }
         if (reason === "current") {
           setUsernameState("current");
           setUsernameMsg("Your current username.");
@@ -2322,29 +2332,47 @@ export const FanStorefrontView: React.FC = () => {
     }
   }, [showLanding, pathname, creator?.handle]);
 
+  /** Must run before any early return (loading / error) so hook order is stable. */
+  const profileDisplayName = useMemo(() => {
+    const fromForm = [profileDraft.firstName, profileDraft.lastName].filter(Boolean).join(" ").trim();
+    if (fromForm) return fromForm;
+    return auth.currentUser?.displayName?.trim() || "Member";
+  }, [profileDraft.firstName, profileDraft.lastName, auth.currentUser?.displayName]);
+
+  const profileMemberAtHandle = useMemo(() => {
+    const u = normalizeMemberUsername(usernameInitial || usernameDraft || "");
+    return u ? `@${u}` : "";
+  }, [usernameInitial, usernameDraft]);
+
   if (loading) {
     const loadingPrimary = creator?.theme?.primary || defaultPrimary;
     return (
-      <div className="stormij-theme storefront-landing-wrap min-h-screen flex items-center justify-center">
-        <div className="text-center" style={{ color: "var(--text-muted)" }}>
-          <div
-            className="animate-spin rounded-full h-10 w-10 border-2 border-t-transparent mx-auto mb-3"
-            style={{ borderColor: loadingPrimary, borderTopColor: "transparent" }}
-          />
-          <p>Loading...</p>
+      <>
+        <div className="stormij-theme storefront-landing-wrap min-h-screen flex items-center justify-center">
+          <div className="text-center" style={{ color: "var(--text-muted)" }}>
+            <div
+              className="animate-spin rounded-full h-10 w-10 border-2 border-t-transparent mx-auto mb-3"
+              style={{ borderColor: loadingPrimary, borderTopColor: "transparent" }}
+            />
+            <p>Loading...</p>
+          </div>
         </div>
-      </div>
+        {toast && <Toast message={toast.message} type={toast.type} />}
+      </>
     );
   }
 
   if (error || !creator) {
     return (
-      <div className="stormij-theme storefront-landing-wrap min-h-screen flex items-center justify-center">
-        <div className="text-center max-w-md px-4" style={{ color: "var(--text)" }}>
-          <h1 className="text-xl font-semibold mb-2">Not found</h1>
-          <p style={{ color: "var(--text-muted)" }}>{error || "This creator page doesn't exist."}</p>
+      <>
+        <div className="stormij-theme storefront-landing-wrap min-h-screen flex items-center justify-center">
+          <div className="text-center max-w-md px-4" style={{ color: "var(--text)" }}>
+            <h1 className="text-xl font-semibold mb-2">Not found</h1>
+            <p style={{ color: "var(--text-muted)" }}>{error || "This creator page doesn't exist."}</p>
+          </div>
         </div>
-      </div>
+        {toast && <Toast message={toast.message} type={toast.type} />}
+      </>
     );
   }
 
@@ -2402,11 +2430,6 @@ export const FanStorefrontView: React.FC = () => {
       ? `Paid${typeof creator.monetization?.monthlyPrice === "number" ? ` • $${(creator.monetization.monthlyPrice / 100).toFixed(2)}/mo` : ""}`
       : "Free"
     : "Not active";
-  const profileDisplayName = auth.currentUser?.displayName || "Member";
-  const profileHandle = `@${(dmLabels?.fan || auth.currentUser?.displayName || auth.currentUser?.email || "member")
-    .trim()
-    .toLowerCase()
-    .replace(/\s+/g, "_")}`;
   const memberHubWelcomeLine = (() => {
     const community = (creator.fanAuthBranding?.communityName || "").trim();
     if (community) return `Welcome to ${community}`;
@@ -2477,6 +2500,7 @@ export const FanStorefrontView: React.FC = () => {
       : creator.legal?.privacyLastUpdated;
 
     return (
+      <>
       <div 
         className="min-h-screen py-8 px-4"
         style={{ backgroundColor: bg }}
@@ -2564,6 +2588,8 @@ export const FanStorefrontView: React.FC = () => {
           </div>
         </div>
       </div>
+      {toast && <Toast message={toast.message} type={toast.type} />}
+      </>
     );
   }
 
@@ -2643,6 +2669,7 @@ export const FanStorefrontView: React.FC = () => {
             freeAccessEnabled={creator.monetization?.freeAccessEnabled === true}
           />
         )}
+        {toast && <Toast message={toast.message} type={toast.type} />}
       </>
     );
   }
@@ -3227,6 +3254,7 @@ export const FanStorefrontView: React.FC = () => {
                 setTipCustomAmount={setTipCustomAmount}
                 tipLoading={tipLoading}
                 setTipLoading={setTipLoading}
+                showToast={showToast}
               />
             )}
             {activeTab === "profile" && (
@@ -3275,7 +3303,9 @@ export const FanStorefrontView: React.FC = () => {
                         <p className="fan-member-about-text m-0 text-sm">
                           {auth.currentUser?.email || "No email on account"}
                         </p>
-                        <p className="fan-member-about-text m-0 opacity-80 text-sm">{profileHandle}</p>
+                        {profileMemberAtHandle ? (
+                          <p className="fan-member-about-text m-0 opacity-80 text-sm">{profileMemberAtHandle}</p>
+                        ) : null}
                       </div>
                     </div>
                     <div className="mt-3">
@@ -3737,6 +3767,7 @@ export const FanStorefrontView: React.FC = () => {
             )}
         </div>
       )}
+      {toast && <Toast message={toast.message} type={toast.type} />}
     </div>
   );
 };

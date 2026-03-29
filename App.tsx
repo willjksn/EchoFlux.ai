@@ -232,6 +232,7 @@ const MainContent: React.FC = () => {
 }
 
 const AppContent: React.FC = () => {
+    const appContext = useAppContext();
     // Check if this is a public bio page route (e.g., /username, /u/username, or /link/username for backward compatibility)
     // This should be checked BEFORE authentication to allow public access
     const pathname = window.location.pathname;
@@ -265,12 +266,11 @@ const AppContent: React.FC = () => {
         return <FanStorefrontView />;
     }
     
-    // Check maintenance mode FIRST - before any hooks or other logic
+    // Check maintenance mode FIRST - before any other logic
     const maintenanceEnabled = isMaintenanceMode();
     const allowedEmail = getAllowedEmail();
-    
-    // Hooks must be called unconditionally at the top level
-    const { isAuthenticated, isAuthLoading, user, setUser, activePage, setActivePage, startTour, isTourActive, toast, showToast, isCRMOpen, setPricingView, handleLogout, selectedPlan, setSelectedPlan, openPaymentModal, isPaymentModalOpen, socialAccounts } = useAppContext();
+
+    const { isAuthenticated, isAuthLoading, user, setUser, activePage, setActivePage, startTour, isTourActive, toast, showToast, isCRMOpen, setPricingView, handleLogout, selectedPlan, setSelectedPlan, openPaymentModal, isPaymentModalOpen, socialAccounts } = appContext;
 
     useOAuthReturnHandler({ showToast, socialAccounts, isAuthLoading });
     

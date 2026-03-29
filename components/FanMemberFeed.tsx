@@ -24,6 +24,7 @@ import { inferIsVideoFromUrl, normalizePostMediaTypes } from "../src/lib/mediaUr
 import { DmAudioPlayer } from "./DmAudioPlayer";
 import { ViewPostModalVideo } from "./ViewPostModalVideo";
 import { feedCommentAuthorLabel, feedCommentAuthorInitial } from "../src/lib/feedCommentLabel";
+import { readFanCheckoutFetchResult } from "../src/lib/fanCheckoutResponse";
 import { useAppContext } from "./AppContext";
 
 const SAVED_BY_CREATOR_KEY = "savedPostIdsByCreator";
@@ -109,10 +110,9 @@ async function startFanPostUnlockCheckoutSession(creatorId: string, postId: stri
       ...(cancelUrl ? { cancelUrl } : {}),
     }),
   });
-  const data = (await res.json()) as { url?: string; error?: string };
-  if (!res.ok) throw new Error(data.error || "Checkout failed. Please try again.");
-  if (!data.url) throw new Error("Checkout link was not returned. Please try again.");
-  return data.url;
+  const { ok, url, error } = await readFanCheckoutFetchResult(res);
+  if (!ok || !url) throw new Error(error || "Checkout failed. Please try again.");
+  return url;
 }
 
 async function startFanTipCheckoutSession(creatorId: string, amountCents: number): Promise<string> {
@@ -133,10 +133,9 @@ async function startFanTipCheckoutSession(creatorId: string, amountCents: number
       ...(cancelUrl ? { cancelUrl } : {}),
     }),
   });
-  const data = (await res.json()) as { url?: string; error?: string };
-  if (!res.ok) throw new Error(data.error || "Checkout failed. Please try again.");
-  if (!data.url) throw new Error("Checkout link was not returned. Please try again.");
-  return data.url;
+  const { ok, url, error } = await readFanCheckoutFetchResult(res);
+  if (!ok || !url) throw new Error(error || "Checkout failed. Please try again.");
+  return url;
 }
 
 const FeedHeaderGridIcon = () => (

@@ -1148,7 +1148,8 @@
   width: 100%;
   height: auto;
   max-height: 600px;
-  object-fit: contain;
+  /* cover: portrait + max-height yields a wide box; contain pillarboxes — cover fills the frame */
+  object-fit: cover;
   object-position: center top;
   display: block;
 }
@@ -1159,7 +1160,7 @@
   width: 100%;
   height: auto;
   max-height: 600px;
-  object-fit: contain;
+  object-fit: cover;
   object-position: center top;
   display: block;
 }
