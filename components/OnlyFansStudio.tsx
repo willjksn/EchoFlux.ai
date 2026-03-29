@@ -780,8 +780,16 @@ export const OnlyFansStudio: React.FC<{ mode?: 'studio' | 'fanHub' }> = ({ mode 
 
     // Fan Hub: only these tabs when mode === 'fanHub' (Stormij theme wrapper for feed/treats styling)
     if (mode === 'fanHub' && premiumTab) {
+        const bridge = premiumTab.fanHubCssVarBridge;
         const wrap = (content: React.ReactNode) => (
-            <div style={{ minHeight: "100%", color: "var(--text)", fontFamily: "var(--sans, system-ui, sans-serif)" }}>
+            <div
+                style={{
+                    minHeight: '100%',
+                    ...(bridge ?? {}),
+                    color: 'var(--fan-text, inherit)',
+                    fontFamily: 'var(--fan-sans, system-ui, sans-serif)',
+                }}
+            >
                 {content}
             </div>
         );

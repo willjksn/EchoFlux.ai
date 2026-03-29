@@ -27,6 +27,11 @@ export type PremiumStudioTabContextValue = {
   pendingFansTabSelection: PendingFansTabSelection | null;
   clearPendingFansTabSelection: () => void;
   openFanInFansTab: (fanId: string, displayLabel?: string) => void;
+  /**
+   * Fan Hub only: same --fan-* tokens as the outer shell (includes preview theme).
+   * Apply on tab content wrappers so nested UI (e.g. Chat Session) isn’t stuck on CSS fallbacks.
+   */
+  fanHubCssVarBridge: React.CSSProperties | null;
 };
 
 const PremiumStudioTabContext = createContext<PremiumStudioTabContextValue | null>(null);
@@ -123,42 +128,59 @@ export const PremiumStudioLayout: React.FC<PremiumStudioLayoutProps> = ({ childr
     [fanTheme, previewTheme]
   );
 
-  const fanHubShellStyle = useMemo((): React.CSSProperties => {
-    if (!isFanHub) return {};
+  const fanHubCssVarBridge = useMemo((): React.CSSProperties | null => {
+    if (!isFanHub) return null;
     const { primary, background, text, textMuted, border, accentHover, fontFamily } = effectiveFanTheme;
-    // App dark mode: don’t paint the Fan Hub with the public storefront’s light paper (#fafafa).
+    const sans = fontFamily ? ({ '--fan-sans': fontFamily } as React.CSSProperties) : {};
+    const baseTokens = {
+      '--fan-primary': primary,
+      '--fan-accent-soft': `color-mix(in srgb, ${primary} 14%, transparent)`,
+      '--fan-accent-hover': accentHover,
+      ...sans,
+    } as React.CSSProperties;
     if (isDarkMode) {
-      const bg = '#0f172a';
       const bg2 = '#111827';
       const ink = '#f1f5f9';
       const muted = '#94a3b8';
       const edge = '#334155';
       return {
-        '--fan-primary': primary,
-        '--fan-accent-soft': `color-mix(in srgb, ${primary} 14%, transparent)`,
+        ...baseTokens,
         '--fan-bg': bg2,
         '--fan-text': ink,
         '--fan-text-muted': muted,
         '--fan-border': edge,
-        '--fan-accent-hover': accentHover,
-        background: `linear-gradient(180deg, ${bg} 0%, ${bg2} 40%, ${bg2} 100%)`,
-        color: ink,
-        ...(fontFamily ? ({ fontFamily, '--fan-sans': fontFamily } as React.CSSProperties) : {}),
       };
     }
     return {
-      '--fan-primary': primary,
-      '--fan-accent-soft': `color-mix(in srgb, ${primary} 14%, transparent)`,
+      ...baseTokens,
       '--fan-bg': background,
       '--fan-text': text,
       '--fan-text-muted': textMuted,
       '--fan-border': border,
-      '--fan-accent-hover': accentHover,
-      background,
-      color: text,
-      ...(fontFamily ? ({ fontFamily, '--fan-sans': fontFamily } as React.CSSProperties) : {}),
     };
   }, [isFanHub, effectiveFanTheme, isDarkMode]);
+
+  const fanHubShellStyle = useMemo((): React.CSSProperties => {
+    if (!isFanHub || !fanHubCssVarBridge) return {};
+    const { background, text, fontFamily } = effectiveFanTheme;
+    if (isDarkMode) {
+      const bg = '#0f172a';
+      const bg2 = '#111827';
+      const ink = '#f1f5f9';
+      return {
+        ...fanHubCssVarBridge,
+        background: `linear-gradient(180deg, ${bg} 0%, ${bg2} 40%, ${bg2} 100%)`,
+        color: ink,
+        ...(fontFamily ? { fontFamily } : {}),
+      };
+    }
+    return {
+      ...fanHubCssVarBridge,
+      background,
+      color: text,
+      ...(fontFamily ? { fontFamily } : {}),
+    };
+  }, [isFanHub, isDarkMode, effectiveFanTheme, fanHubCssVarBridge]);
 
   const inner = (
     <>
@@ -236,6 +258,7 @@ export const PremiumStudioLayout: React.FC<PremiumStudioLayoutProps> = ({ childr
           pendingFansTabSelection: isFanHub ? pendingFansTabSelection : null,
           clearPendingFansTabSelection: isFanHub ? clearPendingFansTabSelection : () => {},
           openFanInFansTab,
+          fanHubCssVarBridge: isFanHub ? fanHubCssVarBridge : null,
         }}
       >
         {children}

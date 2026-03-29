@@ -5456,12 +5456,13 @@ button.treat-card:hover:not(:disabled) .treat-card-cta {
   min-height: 200px;
 }
 
-/* Message Bubbles */
+/* Message Bubbles — creator “you” = Fan Hub primary; fan = neutral grey (matches fh-messages-hub) */
 .chat-session-msg-you {
   text-align: right;
   margin-bottom: 0.5rem;
   padding: 0.5rem 0.75rem;
   background: linear-gradient(135deg, var(--fan-primary, #6366f1), var(--fan-accent-hover, #4f46e5));
+  border: 1px solid color-mix(in srgb, var(--fan-primary, #6366f1) 68%, transparent);
   border-radius: 12px 12px 4px 12px;
   color: #fff;
   max-width: 85%;
@@ -5472,19 +5473,21 @@ button.treat-card:hover:not(:disabled) .treat-card-cta {
   text-align: left;
   margin-bottom: 0.5rem;
   padding: 0.5rem 0.75rem;
-  background: #e5e7eb;
+  background: #f3f4f6;
+  border: 1px solid #e5e7eb;
   border-radius: 12px 12px 12px 4px;
-  color: #1f2937;
+  color: #111827;
   max-width: 85%;
 }
 
 .dark .chat-session-msg-fan {
-  background: rgba(255, 255, 255, 0.1);
+  background: #374151;
+  border-color: #4b5563;
   color: #f3f4f6;
 }
 
 .chat-session-msg-you .chat-session-msg-label {
-  color: rgba(255, 255, 255, 0.8);
+  color: rgba(255, 255, 255, 0.88);
   font-size: 0.8rem;
   font-weight: 600;
   display: block;
@@ -5492,11 +5495,15 @@ button.treat-card:hover:not(:disabled) .treat-card-cta {
 }
 
 .chat-session-msg-fan .chat-session-msg-label {
-  color: #0d9488;
+  color: #6b7280;
   font-size: 0.8rem;
   font-weight: 600;
   display: block;
   margin-bottom: 0.2rem;
+}
+
+.dark .chat-session-msg-fan .chat-session-msg-label {
+  color: #9ca3af;
 }
 
 .chat-session-msg-text {
@@ -5504,45 +5511,6 @@ button.treat-card:hover:not(:disabled) .treat-card-cta {
   font-size: 0.9rem;
   color: inherit;
   line-height: 1.4;
-}
-
-/* Add Fan Message Row */
-.chat-session-add-fan-row {
-  margin-top: 1rem;
-}
-
-.chat-session-add-fan-inner {
-  display: flex;
-  gap: 0.5rem;
-  margin-top: 0.35rem;
-}
-
-.chat-session-add-fan-inner .chat-session-input {
-  flex: 1;
-  min-width: 0;
-}
-
-.chat-session-add-btn {
-  background: #fff;
-  color: #374151;
-  border: 1px solid rgba(0, 0, 0, 0.1);
-  border-radius: 8px;
-  padding: 0.5rem 0.875rem;
-  font-size: 0.85rem;
-  font-weight: 500;
-  cursor: pointer;
-  transition: border-color 0.15s ease, color 0.15s ease;
-}
-
-.dark .chat-session-add-btn {
-  background: rgba(255, 255, 255, 0.05);
-  border-color: rgba(255, 255, 255, 0.1);
-  color: #e5e7eb;
-}
-
-.chat-session-add-btn:hover {
-  border-color: var(--fan-primary, #6366f1);
-  color: var(--fan-primary, #6366f1);
 }
 
 /* Send Row */
@@ -7367,25 +7335,34 @@ button.treat-card:hover:not(:disabled) .treat-card-cta {
   color: #9ca3af;
 }
 
-/* Fan storefront member messages:
-   right/outgoing bubble = creator primary color, left/incoming bubble = neutral gray. */
+/* Fan storefront member messages (fan’s view): --out = fan’s own (grey); --in = creator (brand primary).
+   (Creator hub .fh-messages-hub uses the opposite mapping: out = creator, in = fan.) */
 .stormij-theme .fan-member-messages-list .fh-dm-chat-row--out .fh-dm-bubble {
-  background: linear-gradient(135deg, var(--fan-primary, #6366f1), var(--fan-accent-hover, #4f46e5)) !important;
-  color: #fff !important;
-  border: 1px solid color-mix(in srgb, var(--fan-primary, #6366f1) 68%, transparent) !important;
-}
-.stormij-theme .fan-member-messages-list .fh-dm-chat-row--out .fh-dm-bubble .fh-dm-bubble__head,
-.stormij-theme .fan-member-messages-list .fh-dm-chat-row--out .fh-dm-bubble .fh-dm-bubble__foot {
-  color: rgba(255, 255, 255, 0.9) !important;
-}
-.stormij-theme .fan-member-messages-list .fh-dm-chat-row--in .fh-dm-bubble {
   background: #f3f4f6 !important;
   color: #111827 !important;
   border: 1px solid #e5e7eb !important;
 }
+.stormij-theme .fan-member-messages-list .fh-dm-chat-row--out .fh-dm-bubble .fh-dm-bubble__head,
+.stormij-theme .fan-member-messages-list .fh-dm-chat-row--out .fh-dm-bubble .fh-dm-bubble__foot {
+  color: #6b7280 !important;
+}
+.dark .stormij-theme .fan-member-messages-list .fh-dm-chat-row--out .fh-dm-bubble {
+  background: #374151 !important;
+  color: #f3f4f6 !important;
+  border-color: #4b5563 !important;
+}
+.dark .stormij-theme .fan-member-messages-list .fh-dm-chat-row--out .fh-dm-bubble .fh-dm-bubble__head,
+.dark .stormij-theme .fan-member-messages-list .fh-dm-chat-row--out .fh-dm-bubble .fh-dm-bubble__foot {
+  color: #9ca3af !important;
+}
+.stormij-theme .fan-member-messages-list .fh-dm-chat-row--in .fh-dm-bubble {
+  background: linear-gradient(135deg, var(--fan-primary, #6366f1), var(--fan-accent-hover, #4f46e5)) !important;
+  color: #fff !important;
+  border: 1px solid color-mix(in srgb, var(--fan-primary, #6366f1) 68%, transparent) !important;
+}
 .stormij-theme .fan-member-messages-list .fh-dm-chat-row--in .fh-dm-bubble .fh-dm-bubble__head,
 .stormij-theme .fan-member-messages-list .fh-dm-chat-row--in .fh-dm-bubble .fh-dm-bubble__foot {
-  color: #6b7280 !important;
+  color: rgba(255, 255, 255, 0.9) !important;
 }
 
 /* Fan/incoming: clock below bubble (Stormij reference) */
@@ -7616,7 +7593,7 @@ button.treat-card:hover:not(:disabled) .treat-card-cta {
   margin-right: 2px;
 }
 
-/* Creator hub chat: force distinct incoming vs outgoing */
+/* Creator hub (creator’s view): out = creator primary, in = fan grey (mirror of .fan-member-messages-list) */
 .fh-messages-hub.stormij-theme .fh-dm-chat-row {
   display: flex;
   width: 100%;
@@ -7642,23 +7619,32 @@ button.treat-card:hover:not(:disabled) .treat-card-cta {
   align-items: flex-start;
   margin-right: auto;
 }
-.fh-messages-hub.stormij-theme .fh-dm-bubble--me {
-  background: linear-gradient(135deg, var(--accent, #6366f1), var(--accent-hover, #4f46e5)) !important;
+.fh-messages-hub.stormij-theme .fh-dm-chat-row--out .fh-dm-bubble {
+  background: linear-gradient(135deg, var(--fan-primary, #6366f1), var(--fan-accent-hover, #4f46e5)) !important;
   color: #fff !important;
+  border: 1px solid color-mix(in srgb, var(--fan-primary, #6366f1) 68%, transparent) !important;
 }
-.fh-messages-hub.stormij-theme .fh-dm-bubble--them {
-  background: #e4dff2 !important;
+.fh-messages-hub.stormij-theme .fh-dm-chat-row--out .fh-dm-bubble .fh-dm-bubble__head,
+.fh-messages-hub.stormij-theme .fh-dm-chat-row--out .fh-dm-bubble .fh-dm-bubble__foot {
+  color: rgba(255, 255, 255, 0.9) !important;
+}
+.fh-messages-hub.stormij-theme .fh-dm-chat-row--in .fh-dm-bubble {
+  background: #f3f4f6 !important;
   color: #111827 !important;
+  border: 1px solid #e5e7eb !important;
 }
-.dark .fh-messages-hub.stormij-theme .fh-dm-bubble--them {
-  background: #3d3848 !important;
+.dark .fh-messages-hub.stormij-theme .fh-dm-chat-row--in .fh-dm-bubble {
+  background: #374151 !important;
   color: #f3f4f6 !important;
+  border: 1px solid #4b5563 !important;
 }
-.fh-messages-hub.stormij-theme .fh-dm-bubble--them .fh-dm-bubble__head--primary {
-  color: #4b5563 !important;
+.fh-messages-hub.stormij-theme .fh-dm-chat-row--in .fh-dm-bubble .fh-dm-bubble__head,
+.fh-messages-hub.stormij-theme .fh-dm-chat-row--in .fh-dm-bubble .fh-dm-bubble__foot {
+  color: #6b7280 !important;
 }
-.dark .fh-messages-hub.stormij-theme .fh-dm-bubble--them .fh-dm-bubble__head--primary {
-  color: #d1d5db !important;
+.dark .fh-messages-hub.stormij-theme .fh-dm-chat-row--in .fh-dm-bubble .fh-dm-bubble__head,
+.dark .fh-messages-hub.stormij-theme .fh-dm-chat-row--in .fh-dm-bubble .fh-dm-bubble__foot {
+  color: #9ca3af !important;
 }
 
 .stormij-theme .fh-dm-modal-overlay {

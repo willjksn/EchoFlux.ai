@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useAppContext } from './AppContext';
 import { hasEliteAccess } from '../src/utils/planAccess';
 import { auth, db } from '../firebaseConfig';
@@ -380,6 +380,35 @@ export const OnlyFansSextingSession: React.FC = () => {
   const selectedFan = fans.find((f) => f.uid === selectedUid);
   const recentMessages = messagesToContext(messages, adminUid);
 
+  const creatorChatLabel = useMemo(() => {
+    const n = user?.name?.trim();
+    if (n) return n;
+    const local = user?.email?.split('@')[0]?.trim();
+    if (local) return local;
+    return 'You';
+  }, [user?.name, user?.email]);
+
+  const fanChatLabel = useMemo(() => {
+    if (!selectedFan) return 'Member';
+    const fromList = selectedFan.listLabel?.trim();
+    if (fromList) return fromList;
+    return (
+      formatFanDisplayLabel(
+        {
+          username: selectedFan.username ?? null,
+          displayName: selectedFan.displayName ?? null,
+          email: selectedFan.email || null,
+        },
+        { fallback: 'Member' }
+      ) || 'Member'
+    );
+  }, [selectedFan]);
+
+  const messageSenderLabel = useCallback(
+    (senderId: string) => (senderId === adminUid ? creatorChatLabel : fanChatLabel),
+    [adminUid, creatorChatLabel, fanChatLabel]
+  );
+
   // Load fans — same enrichment as Fans tab (users + creators/.../fans + fanHubListLabel; no UID truncation)
   useEffect(() => {
     if (!adminUid) return;
@@ -554,22 +583,6 @@ export const OnlyFansSextingSession: React.FC = () => {
     setAutoSuggestions([]);
   }, [myMessageInput, sessionStarted, adminUid]);
 
-  const handleAddFanMessage = useCallback((content: string) => {
-    if (!content.trim() || !sessionStarted) return;
-
-        const fanMessage: Message = {
-            id: `fan-msg-${Date.now()}`,
-      senderId: selectedUid || 'fan',
-      text: content.trim(),
-            timestamp: new Date(),
-        };
-
-    setMessages((prev) => [...prev, fanMessage]);
-
-    // Trigger suggestions after fan message
-    handleRequestSuggestions();
-  }, [sessionStarted, selectedUid]);
-
   const handleUseSuggestion = useCallback((text: string) => {
     setMyMessageInput(text);
     sendInputRef.current?.focus();
@@ -725,7 +738,7 @@ export const OnlyFansSextingSession: React.FC = () => {
                     const isYou = m.senderId === adminUid;
         return (
                       <div key={m.id} className={isYou ? 'chat-session-msg-you' : 'chat-session-msg-fan'}>
-                        <span className="chat-session-msg-label">{isYou ? 'You' : 'Fan'}</span>
+                        <span className="chat-session-msg-label">{messageSenderLabel(m.senderId)}</span>
                         {normalizeChatText(m.text) && <p className="chat-session-msg-text">{normalizeChatText(m.text)}</p>}
                         </div>
                     );
@@ -769,36 +782,6 @@ export const OnlyFansSextingSession: React.FC = () => {
                 <button type="button" className="chat-session-media-btn">
                   Media from library
                 </button>
-                        </div>
-
-              {/* Add Fan Message (testing) */}
-              <div className="chat-session-add-fan-row">
-                <div className="chat-session-add-fan-inner">
-                                <input
-                                    type="text"
-                    className="chat-session-input"
-                    placeholder="Simulate fan message..."
-                    onKeyDown={(e) => {
-                                        if (e.key === 'Enter' && e.currentTarget.value.trim()) {
-                        handleAddFanMessage(e.currentTarget.value);
-                                            e.currentTarget.value = '';
-                                        }
-                                    }}
-                                />
-                                <button
-                    type="button"
-                    className="chat-session-add-btn"
-                                    onClick={(e) => {
-                                        const input = e.currentTarget.previousElementSibling as HTMLInputElement;
-                      if (input?.value.trim()) {
-                        handleAddFanMessage(input.value);
-                                            input.value = '';
-                                        }
-                                    }}
-                                >
-                                    Add
-                                </button>
-                            </div>
                         </div>
 
               <button type="button" className="chat-session-back-btn" onClick={() => setSessionStarted(false)}>

@@ -242,7 +242,10 @@ export const VideoCallRoom: React.FC<VideoCallRoomProps> = ({
       {/* Header */}
       <div className="flex items-center justify-between p-4 bg-gray-800/80 backdrop-blur">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-full bg-pink-500 flex items-center justify-center">
+          <div
+            className="w-10 h-10 rounded-full flex items-center justify-center text-white"
+            style={{ backgroundColor: "var(--fan-primary, #6366f1)" }}
+          >
             <VideoIcon />
           </div>
           <div>

@@ -212,9 +212,23 @@ export const FanHubMessages: React.FC = () => {
     };
   }, [creatorId]);
 
-  /** List all inbox threads — include empty threads so "New message" opens stay visible until first send. */
+  /** Threads with at least one message (non-empty preview). Placeholder rows from join/checkout stay out until someone chats. */
+  const threadsWithActivity = useMemo(
+    () => threads.filter((t) => (t.lastMessagePreview || "").trim().length > 0),
+    [threads]
+  );
+
+  /** Sidebar list: active conversations, plus the open thread if it has no preview yet (New message / first compose). */
+  const threadsForSidebar = useMemo(() => {
+    const list = [...threadsWithActivity];
+    if (selectedThread && !list.some((t) => t.id === selectedThread.id)) {
+      return [selectedThread, ...list];
+    }
+    return list;
+  }, [threadsWithActivity, selectedThread]);
+
   const filteredThreads = useMemo(() => {
-    let t = threads;
+    let t = threadsForSidebar;
     if (listTab === "requests") t = t.filter((x) => x.fanHasSentMessage === true);
     const q = threadSearchQuery.trim().toLowerCase();
     if (q) {
@@ -226,7 +240,7 @@ export const FanHubMessages: React.FC = () => {
       );
     }
     return t;
-  }, [threads, listTab, threadSearchQuery]);
+  }, [threadsForSidebar, listTab, threadSearchQuery]);
 
   const sortedFilteredThreads = useMemo(
     () => sortCreatorDmThreads(filteredThreads),
@@ -285,7 +299,9 @@ export const FanHubMessages: React.FC = () => {
         const fresh = threads.find((t) => t.id === prev.id);
         if (fresh) return fresh;
       }
-      return threads[0];
+      const active = threads.filter((t) => (t.lastMessagePreview || "").trim().length > 0);
+      if (active.length === 0) return null;
+      return active[0];
     });
   }, [threads]);
 
@@ -889,9 +905,10 @@ export const FanHubMessages: React.FC = () => {
                 Retry
               </button>
             </div>
-          ) : threads.length === 0 ? (
+          ) : threadsWithActivity.length === 0 && !selectedThread ? (
             <div className="p-4 text-gray-500 dark:text-gray-400 text-sm">
               <p>No conversations yet.</p>
+              <p className="mt-2 text-xs opacity-90">Start one with New message, or wait until a member messages you.</p>
             </div>
           ) : filteredThreads.length === 0 ? (
             <p className="p-4 text-sm text-gray-500 dark:text-gray-400">
@@ -1051,7 +1068,10 @@ export const FanHubMessages: React.FC = () => {
                       handleStartInstantVideo(selectedThread.fanId, selectedThread.otherPartyDisplayName || "Member")
                     }
                     disabled={startingVideo}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gradient-to-r from-primary-600 to-primary-700 text-white text-sm font-medium hover:from-primary-700 hover:to-primary-800 disabled:opacity-50 transition"
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-white text-sm font-medium hover:opacity-95 disabled:opacity-50 transition"
+                    style={{
+                      background: `linear-gradient(to right, var(--fan-primary, #6366f1), var(--fan-accent-hover, #4f46e5))`,
+                    }}
                     title="Start instant video call"
                   >
                     <VideoIcon />
