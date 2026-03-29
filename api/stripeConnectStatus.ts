@@ -6,6 +6,21 @@ import { verifyAuth } from "./verifyAuth.js";
 // Platform owner creator IDs - no Stripe Connect needed, payments go directly to EchoFlux
 const PLATFORM_OWNER_IDS = (process.env.PLATFORM_OWNER_CREATOR_IDS || "").split(",").map(s => s.trim()).filter(Boolean);
 
+function isCreatorPlatformOwner(
+  creatorId: string,
+  creatorData: {
+    isPlatformOwner?: boolean;
+    platformOwner?: boolean;
+    role?: string;
+  } | undefined
+): boolean {
+  if (PLATFORM_OWNER_IDS.includes(creatorId)) return true;
+  if (creatorData?.isPlatformOwner === true) return true;
+  if (creatorData?.platformOwner === true) return true;
+  if (typeof creatorData?.role === "string" && creatorData.role.toLowerCase().trim() === "owner") return true;
+  return false;
+}
+
 function isReconnectableConnectError(err: unknown): boolean {
   const e = err as { code?: string; type?: string; message?: string };
   const msg = (e?.message || "").toLowerCase();
@@ -41,8 +56,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const db = getAdminDb();
     const creatorId = decoded.uid;
     
-    // Check if this is a platform owner (e.g., Stormij)
-    const isPlatformOwner = PLATFORM_OWNER_IDS.includes(creatorId);
+    const creatorRef = db.collection("creators").doc(creatorId);
+    const creatorSnap = await creatorRef.get();
+    const data = creatorSnap.data() as {
+      stripeConnectAccountId?: string;
+      stripeAccountId?: string;
+      connectedStripeAccountId?: string;
+      stripe?: { connectAccountId?: string };
+      isPlatformOwner?: boolean;
+      platformOwner?: boolean;
+      role?: string;
+    } | undefined;
+    const isPlatformOwner = isCreatorPlatformOwner(creatorId, data);
     
     // Platform owners don't need Stripe Connect - payments go directly to EchoFlux
     if (isPlatformOwner) {
@@ -54,15 +79,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         isPlatformOwner: true,
       });
     }
-    
-    const creatorRef = db.collection("creators").doc(creatorId);
-    const creatorSnap = await creatorRef.get();
-    const data = creatorSnap.data() as {
-      stripeConnectAccountId?: string;
-      stripeAccountId?: string;
-      connectedStripeAccountId?: string;
-      stripe?: { connectAccountId?: string };
-    } | undefined;
     const accountId =
       data?.stripeConnectAccountId ||
       data?.stripeAccountId ||

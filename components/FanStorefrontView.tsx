@@ -214,6 +214,14 @@ function parseHandleFromPath(): { handle: string | null; subpage: "terms" | "pri
   }
 }
 
+function normalizeHandleKey(input: string | null | undefined): string {
+  return String(input || "")
+    .replace("@", "")
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]/g, "");
+}
+
 function normalizeFirebaseStorageObjectPath(url: string): string {
   try {
     const u = new URL(url);
@@ -230,6 +238,20 @@ function normalizeFirebaseStorageObjectPath(url: string): string {
   } catch {
     return url;
   }
+}
+
+function isLocalCheckoutHost(hostname: string): boolean {
+  const host = hostname.toLowerCase();
+  return host === "localhost" || host === "127.0.0.1" || host === "::1" || host.endsWith(".local");
+}
+
+function buildPublicCheckoutUrl(pathname: string, search = "", hash = ""): string | undefined {
+  if (typeof window === "undefined") return undefined;
+  if (isLocalCheckoutHost(window.location.hostname)) {
+    // Local dev proxies /api to Vercel; Stripe rejects localhost return URLs on live checkout.
+    return `https://echoflux.ai${pathname}${search}${hash}`;
+  }
+  return `${window.location.origin}${pathname}${search}${hash}`;
 }
 
 const TIP_PRESET_AMOUNTS = [5, 10, 25, 50, 100, 250];
@@ -295,7 +317,8 @@ function TipSection({
     setTipLoading(true);
     try {
       const token = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
-      const base = typeof window !== "undefined" ? window.location.origin : "";
+      const successUrl = buildPublicCheckoutUrl(window.location.pathname, "?tip=success");
+      const cancelUrl = buildPublicCheckoutUrl(window.location.pathname, "?tip=cancel");
       const res = await fetch("/api/createFanCheckoutSession", {
         method: "POST",
         headers: {
@@ -306,18 +329,16 @@ function TipSection({
           creatorId,
           type: "tip",
           amountCents: cents,
-          successUrl: `${base}${window.location.pathname}?tip=success`,
-          cancelUrl: `${base}${window.location.pathname}?tip=cancel`,
+          ...(successUrl ? { successUrl } : {}),
+          ...(cancelUrl ? { cancelUrl } : {}),
         }),
       });
       const data = (await res.json()) as { url?: string; error?: string };
-      if (data.url) {
-        window.location.href = data.url;
-        return;
-      }
-      alert(data.error || "Checkout failed. Please try again.");
-    } catch {
-      alert("Something went wrong. Please try again.");
+      if (!res.ok) throw new Error(data.error || "Checkout failed. Please try again.");
+      if (!data.url) throw new Error("Checkout link was not returned. Please try again.");
+      window.location.href = data.url;
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "Something went wrong. Please try again.");
     } finally {
       setTipLoading(false);
     }
@@ -419,7 +440,7 @@ export const FanStorefrontView: React.FC = () => {
   const entitlementFetchGen = useRef(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<"feed" | "treats" | "messages" | "tip" | "saved" | "about" | "profile">("feed");
+  const [activeTab, setActiveTab] = useState<"feed" | "treats" | "messages" | "tip" | "saved" | "about" | "profile" | "purchases">("feed");
   const [tipSelectedPreset, setTipSelectedPreset] = useState<number | null>(null);
   const [tipCustomAmount, setTipCustomAmount] = useState("");
   const [tipLoading, setTipLoading] = useState(false);
@@ -734,12 +755,9 @@ export const FanStorefrontView: React.FC = () => {
             const ownDoc = await getDoc(doc(db, "creators", auth.currentUser.uid));
             if (ownDoc.exists()) {
               const own = ownDoc.data() as Record<string, unknown>;
-              const ownHandle =
-                (typeof own.handle === "string" ? own.handle : "")
-                  .replace("@", "")
-                  .toLowerCase()
-                  .trim();
-              if (ownHandle === handle) {
+              const ownHandle = normalizeHandleKey(typeof own.handle === "string" ? own.handle : "");
+              const routeHandle = normalizeHandleKey(handle);
+              if (ownHandle && routeHandle && ownHandle === routeHandle) {
                 const ownMonetization = (
                   (own.monetization as StorefrontCreator["monetization"] | undefined) ||
                   (typeof own.freeAccessEnabled === "boolean" ||
@@ -857,15 +875,12 @@ export const FanStorefrontView: React.FC = () => {
               const ownDoc = await getDoc(doc(db, "creators", auth.currentUser.uid));
               if (ownDoc.exists()) {
                 const own = ownDoc.data() as Record<string, unknown>;
-                const ownHandle =
-                  (typeof own.handle === "string" ? own.handle : "")
-                    .replace("@", "")
-                    .toLowerCase()
-                    .trim();
+                const ownHandle = normalizeHandleKey(typeof own.handle === "string" ? own.handle : "");
+                const routeHandle = normalizeHandleKey(handle);
                 const ownLogo =
                   (typeof own.logo === "string" ? own.logo.trim() : "") ||
                   (typeof own.logoUrl === "string" ? own.logoUrl.trim() : "");
-                if (ownHandle === handle && ownLogo) {
+                if (ownHandle && routeHandle && ownHandle === routeHandle && ownLogo) {
                   resolved = {
                     ...resolved,
                     logo: ownLogo,
@@ -1195,7 +1210,7 @@ export const FanStorefrontView: React.FC = () => {
   }, [creator?.creatorId]);
 
   useEffect(() => {
-    if (activeTab === "treats" && creator?.creatorId) fetchTreats();
+    if ((activeTab === "treats" || activeTab === "purchases") && creator?.creatorId) fetchTreats();
   }, [activeTab, creator?.creatorId, fetchTreats]);
 
   const onPublicLanding =
@@ -1313,7 +1328,11 @@ export const FanStorefrontView: React.FC = () => {
     if (!creator?.creatorId) return;
     setGuestTreatPurchasingId(productId);
     try {
-      const base = `${window.location.origin}${window.location.pathname}`;
+      const successUrl = buildPublicCheckoutUrl(
+        window.location.pathname,
+        "?treat_success=1&session_id={CHECKOUT_SESSION_ID}"
+      );
+      const cancelUrl = buildPublicCheckoutUrl(window.location.pathname);
       const res = await fetch("/api/createFanCheckoutSession", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -1322,14 +1341,15 @@ export const FanStorefrontView: React.FC = () => {
           type: "product",
           productId,
           guestProduct: true,
-          successUrl: `${base}?treat_success=1&session_id={CHECKOUT_SESSION_ID}`,
-          cancelUrl: base,
+          ...(successUrl ? { successUrl } : {}),
+          ...(cancelUrl ? { cancelUrl } : {}),
         }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error((data as { error?: string }).error || "Checkout failed");
       const url = (data as { url?: string }).url;
-      if (url) window.location.href = url;
+      if (!url) throw new Error("Checkout link was not returned. Please try again.");
+      window.location.href = url;
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Checkout could not start. Please try again.";
       showToast?.(msg, "error");
@@ -1353,28 +1373,31 @@ export const FanStorefrontView: React.FC = () => {
     try {
       const token = await auth.currentUser.getIdToken(true);
       const currentUrl = typeof window !== "undefined" ? new URL(window.location.href) : null;
-      const successUrl = currentUrl ? `${currentUrl.origin}${currentUrl.pathname}${currentUrl.search}${currentUrl.hash}` : window.location.href;
+      const successUrl = currentUrl
+        ? buildPublicCheckoutUrl(currentUrl.pathname, currentUrl.search, currentUrl.hash)
+        : undefined;
       const cancelUrl = currentUrl
         ? (() => {
             const u = new URL(currentUrl.toString());
             u.searchParams.set("paywall", "1");
-            return u.toString();
+            return buildPublicCheckoutUrl(u.pathname, u.search, u.hash);
           })()
-        : window.location.href;
+        : undefined;
       const res = await fetch("/api/createFanCheckoutSession", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({
           creatorId: creator.creatorId,
           type: "subscription",
-          successUrl,
-          cancelUrl,
+          ...(successUrl ? { successUrl } : {}),
+          ...(cancelUrl ? { cancelUrl } : {}),
         }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error((data as { error?: string }).error || "Checkout failed");
       const url = (data as { url?: string }).url;
-      if (url) window.location.href = url;
+      if (!url) throw new Error("Checkout link was not returned. Please try again.");
+      window.location.href = url;
     } catch (e) {
       if (!isAuto) {
         showToast(e instanceof Error ? e.message : "Could not open checkout.", "error");
@@ -1433,6 +1456,8 @@ export const FanStorefrontView: React.FC = () => {
     setPurchasingId(productId);
     try {
       const token = await auth.currentUser.getIdToken(true);
+      const successUrl = buildPublicCheckoutUrl(window.location.pathname, window.location.search, window.location.hash);
+      const cancelUrl = buildPublicCheckoutUrl(window.location.pathname, window.location.search, window.location.hash);
       const res = await fetch("/api/createFanCheckoutSession", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
@@ -1440,16 +1465,17 @@ export const FanStorefrontView: React.FC = () => {
           creatorId: creator.creatorId,
           type: "product",
           productId,
-          successUrl: window.location.href,
-          cancelUrl: window.location.href,
+          ...(successUrl ? { successUrl } : {}),
+          ...(cancelUrl ? { cancelUrl } : {}),
         }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error((data as { error?: string }).error || "Checkout failed");
       const url = (data as { url?: string }).url;
-      if (url) window.location.href = url;
-    } catch {
-      // could toast
+      if (!url) throw new Error("Checkout link was not returned. Please try again.");
+      window.location.href = url;
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : "Could not open checkout.", "error");
     } finally {
       setPurchasingId(null);
     }
@@ -1486,6 +1512,13 @@ export const FanStorefrontView: React.FC = () => {
   const handleOpenProfile = () => {
     setProfileMenuOpen(false);
     setActiveTab("profile");
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      params.set("tab", "profile");
+      const qs = params.toString();
+      const nextUrl = `${window.location.pathname}${qs ? `?${qs}` : ""}${window.location.hash}`;
+      window.history.replaceState(null, "", nextUrl);
+    }
   };
 
   const handleSendProblem = () => {
@@ -1998,6 +2031,7 @@ export const FanStorefrontView: React.FC = () => {
   // Membership gating values must be computed before any early return to keep hook order stable.
   const creatorRequiresPaidMembership = creator?.monetization?.freeAccessEnabled !== true;
   const hasPaidMembership = subscribed && membershipType === "paid";
+  const paidPageUnsubscribed = creatorRequiresPaidMembership && membershipType !== "paid";
   const hasAccessByCurrentMembership =
     subscribed && (creator?.monetization?.freeAccessEnabled === true || hasPaidMembership);
   const hasUnlockedPurchases = unlockedProductIds.length > 0;
@@ -2007,14 +2041,15 @@ export const FanStorefrontView: React.FC = () => {
     !!creator?.creatorId && !!auth.currentUser?.uid && auth.currentUser.uid === creator.creatorId;
   const forceCreatorPreviewLanding = forcePublicLanding && isViewingOwnStorefront;
   const hasMemberAreaAccess = hasAccessByCurrentMembership || purchaseOnlyAccess;
+  const requiresPaidToAccess = creator?.monetization?.freeAccessEnabled !== true;
   const showLanding = previewMember
     ? false
-    : forceCreatorPreviewLanding || isViewingOwnStorefront || !isLoggedIn || !hasMemberAreaAccess;
+    : forceCreatorPreviewLanding || !isLoggedIn || (!requiresPaidToAccess && !hasMemberAreaAccess);
 
   useEffect(() => {
     if (!needsPaidUpgrade || previewMember || isViewingOwnStorefront) return;
-    if (purchaseOnlyAccess && !["treats", "tip", "profile"].includes(activeTab)) {
-      setActiveTab("treats");
+    if ((purchaseOnlyAccess || paidPageUnsubscribed) && !["tip", "purchases", "profile"].includes(activeTab)) {
+      setActiveTab("purchases");
     }
     if (typeof window !== "undefined") {
       const params = new URLSearchParams(window.location.search);
@@ -2027,16 +2062,39 @@ export const FanStorefrontView: React.FC = () => {
     previewMember,
     isViewingOwnStorefront,
     purchaseOnlyAccess,
+    paidPageUnsubscribed,
     activeTab,
   ]);
+  useEffect(() => {
+    if (typeof window === "undefined" || showLanding) return;
+    const params = new URLSearchParams(window.location.search);
+    const slug = (params.get("tab") || "").trim().toLowerCase();
+    if (!slug) return;
+    const mapped =
+      slug === "home" || slug === "feed"
+        ? "feed"
+        : slug === "store" || slug === "treats"
+          ? "treats"
+          : slug === "purchases"
+            ? "purchases"
+          : slug === "tip"
+            ? "tip"
+            : slug === "messages"
+              ? "messages"
+              : slug === "profile"
+                ? "profile"
+                : null;
+    if (mapped) setActiveTab(mapped);
+  }, [showLanding]);
 
   if (loading) {
+    const loadingPrimary = creator?.theme?.primary || defaultPrimary;
     return (
       <div className="stormij-theme storefront-landing-wrap min-h-screen flex items-center justify-center">
         <div className="text-center" style={{ color: "var(--text-muted)" }}>
           <div
             className="animate-spin rounded-full h-10 w-10 border-2 border-t-transparent mx-auto mb-3"
-            style={{ borderColor: defaultPrimary, borderTopColor: "transparent" }}
+            style={{ borderColor: loadingPrimary, borderTopColor: "transparent" }}
           />
           <p>Loading...</p>
         </div>
@@ -2125,19 +2183,54 @@ export const FanStorefrontView: React.FC = () => {
   })();
   const fanBioPreviewText =
     profileDraft.bio?.trim() && !isEchoFluxDefaultFanBio(profileDraft.bio) ? profileDraft.bio.trim() : "";
-  // Nav tabs: order from sectionsOrder, filtered by sections; hide Messages when chat disabled; always include Saved at the end
-  const memberTabKeys = (sectionsOrder || ["feed", "treats", "tip", "messages", "about"])
+  // Nav tabs: order from sectionsOrder, filtered by sections; hide Messages when chat disabled.
+  const baseMemberTabKeys = (sectionsOrder || ["feed", "treats", "tip", "messages", "about"])
     .filter((key) => key !== "about")
     .filter((key) => key !== "saved" && (sections as Record<string, boolean>)?.[key] !== false)
     .filter((key) => key !== "messages" || chatEnabled)
     .filter((key) => !purchaseOnlyAccess || key === "treats" || key === "tip");
+  const memberTabKeys = (() => {
+    const keys = [...baseMemberTabKeys];
+    if (!keys.includes("purchases")) {
+      const treatsIdx = keys.indexOf("treats");
+      const insertAt = treatsIdx >= 0 ? treatsIdx + 1 : keys.length;
+      keys.splice(insertAt, 0, "purchases");
+    }
+    if (purchaseOnlyAccess || paidPageUnsubscribed) {
+      return keys.filter((key) => key === "purchases" || key === "tip");
+    }
+    return keys;
+  })();
   const navLabels: Record<string, string> = {
     feed: "Home",
-    treats: storeCopy.memberStoreTitle,
+    treats: "Store",
+    purchases: "Purchases",
     tip: "Tip",
     messages: "Messages",
-    saved: "Saved",
-    about: "About",
+  };
+  const setActiveTabWithUrl = (nextTab: typeof activeTab) => {
+    setActiveTab(nextTab);
+    if (typeof window === "undefined" || showLanding) return;
+    const params = new URLSearchParams(window.location.search);
+    const slug =
+      nextTab === "feed"
+        ? "home"
+        : nextTab === "treats"
+          ? "store"
+          : nextTab === "purchases"
+            ? "purchases"
+          : nextTab === "tip"
+            ? "tip"
+            : nextTab === "messages"
+              ? "messages"
+              : nextTab === "profile"
+                ? "profile"
+                : "";
+    if (!slug || slug === "home") params.delete("tab");
+    else params.set("tab", slug);
+    const qs = params.toString();
+    const nextUrl = `${window.location.pathname}${qs ? `?${qs}` : ""}${window.location.hash}`;
+    window.history.replaceState(null, "", nextUrl);
   };
   const nextSessionAlert = sessionAlerts[0] ?? null;
   const nextSessionTimeLabel =
@@ -2152,7 +2245,7 @@ export const FanStorefrontView: React.FC = () => {
   // Creator-facing live preview should present guest auth CTAs (Sign up / Log in),
   // not the creator's existing session state.
   // Do not force guest CTAs for normal fan sessions just because `?landing=1` is present.
-  const showGuestAuthCtasOnLanding = isViewingOwnStorefront;
+  const showGuestAuthCtasOnLanding = isViewingOwnStorefront && forcePublicLanding;
 
   // Render legal pages (Terms/Privacy) if subpage is set
   if (legalSubpage) {
@@ -2300,14 +2393,24 @@ export const FanStorefrontView: React.FC = () => {
             onClose={() => setFanAuthOpen(false)}
             onSuccess={() => {
               setIsLoggedIn(true);
-              if (typeof window !== "undefined" && !isViewingOwnStorefront) {
+              setFanAuthOpen(false);
+              setActiveTab(creator.monetization?.freeAccessEnabled === true ? "feed" : "profile");
+              // Immediate visual feedback for free pages; entitlement fetch will reconcile exact status.
+              if (creator.monetization?.freeAccessEnabled === true) {
+                setSubscribed(true);
+                setMembershipType("free");
+              }
+              if (typeof window !== "undefined") {
                 const params = new URLSearchParams(window.location.search);
                 if (params.get("landing") === "1") {
                   params.delete("landing");
-                  const nextQs = params.toString();
-                  const nextUrl = `${window.location.pathname}${nextQs ? `?${nextQs}` : ""}${window.location.hash}`;
-                  window.history.replaceState(null, "", nextUrl);
                 }
+                if (params.get("tab") === "home") {
+                  params.delete("tab");
+                }
+                const nextQs = params.toString();
+                const nextUrl = `${window.location.pathname}${nextQs ? `?${nextQs}` : ""}${window.location.hash}`;
+                window.history.replaceState(null, "", nextUrl);
               }
             }}
             initialView={fanAuthView}
@@ -2396,7 +2499,7 @@ export const FanStorefrontView: React.FC = () => {
                 <button
                   key={key}
                   type="button"
-                  onClick={() => setActiveTab(key)}
+                  onClick={() => setActiveTabWithUrl(key as typeof activeTab)}
                   className={`storefront-nav-btn ${isTip ? "storefront-nav-tip" : ""} ${activeTab === key ? "active" : ""}`}
                   title={key === "saved" ? "Saved posts" : undefined}
                 >
@@ -2415,6 +2518,13 @@ export const FanStorefrontView: React.FC = () => {
                       <path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z" />
                     </svg>
                   )}
+                  {key === "purchases" && (
+                    <svg className="storefront-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <rect x="3" y="4" width="18" height="16" rx="2" />
+                      <line x1="7" y1="9" x2="17" y2="9" />
+                      <line x1="7" y1="13" x2="14" y2="13" />
+                    </svg>
+                  )}
                   {key === "tip" && (
                     <svg className="storefront-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                       <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
@@ -2423,6 +2533,12 @@ export const FanStorefrontView: React.FC = () => {
                   {key === "messages" && (
                     <svg className="storefront-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                       <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+                    </svg>
+                  )}
+                  {key === "profile" && (
+                    <svg className="storefront-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                      <circle cx="12" cy="7" r="4" />
                     </svg>
                   )}
                   {key === "saved" && (
@@ -2578,7 +2694,7 @@ export const FanStorefrontView: React.FC = () => {
                 onBackToFeed={() => setActiveTab("feed")}
               />
             )}
-            {activeTab === "treats" && (
+            {activeTab === "treats" && !paidPageUnsubscribed && !purchaseOnlyAccess && (
               <div className="fan-member-treats">
                 <div className="fan-member-store-header">
                   <h2 className="fan-member-store-title">
@@ -2590,11 +2706,6 @@ export const FanStorefrontView: React.FC = () => {
                     </p>
                   ) : null}
                 </div>
-                {needsPaidUpgrade ? (
-                  <p className="fan-member-empty" style={{ marginBottom: "0.75rem" }}>
-                    This creator is now on paid membership. Feed and messages are locked until you subscribe, but your purchased treats stay available.
-                  </p>
-                ) : null}
                 {treatsLoading ? (
                   <p className="fan-member-loading">{storeCopy.memberStoreLoadingMessage}</p>
                 ) : treatsProducts.length === 0 ? (
@@ -2640,6 +2751,51 @@ export const FanStorefrontView: React.FC = () => {
                         </div>
                       );
                     })}
+                  </div>
+                )}
+              </div>
+            )}
+            {activeTab === "purchases" && (
+              <div className="fan-member-treats">
+                <div className="fan-member-store-header">
+                  <h2 className="fan-member-store-title">Your purchases</h2>
+                  <p className="fan-member-store-subtitle">
+                    Everything you bought lives here.
+                  </p>
+                </div>
+                {treatsLoading ? (
+                  <p className="fan-member-loading">Loading your purchases...</p>
+                ) : unlockedProductIds.length === 0 ? (
+                  <div className="fan-profile-panel">
+                    <p className="fan-member-about-text">
+                      No purchases yet.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="fan-member-treats-grid">
+                    {treatsProducts
+                      .filter((p) => unlockedProductIds.includes(p.id))
+                      .map((p) => (
+                        <div key={p.id} className="fan-member-treat-card">
+                          <p className="fan-member-treat-type">{p.type.replace(/_/g, " ")}</p>
+                          <h3 className="fan-member-treat-title">{p.title}</h3>
+                          {p.description ? (
+                            <p className="fan-member-treat-desc">{p.description}</p>
+                          ) : null}
+                          <p className="fan-member-treat-price">{formatPrice(p.priceCents)}</p>
+                          <div className="fan-member-treat-action">
+                            <span className="fan-member-treat-owned">Purchased</span>
+                            <button
+                              type="button"
+                              className="fan-member-treat-buy"
+                              style={{ backgroundColor: primary }}
+                              onClick={() => setActiveTabWithUrl("treats")}
+                            >
+                              Open in Store
+                            </button>
+                          </div>
+                        </div>
+                      ))}
                   </div>
                 )}
               </div>

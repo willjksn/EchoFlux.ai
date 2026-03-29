@@ -11,6 +11,9 @@ const PLATFORM_FEE_PERCENT = 0.10; // 10% platform fee on all fan payments
 // Platform owner creator IDs - payments go directly to EchoFlux, no Connect needed, no fee
 // Set via PLATFORM_OWNER_CREATOR_IDS env var (comma-separated)
 const PLATFORM_OWNER_IDS = (process.env.PLATFORM_OWNER_CREATOR_IDS || "").split(",").map(s => s.trim()).filter(Boolean);
+const STRIPE_USE_TEST_MODE =
+  (process.env.STRIPE_USE_TEST_MODE || "").toString().toLowerCase().trim() === "true" ||
+  (process.env.STRIPE_USE_TEST_MODE || "").toString().toLowerCase().trim() === "1";
 
 function isReconnectableConnectError(err: unknown): boolean {
   const e = err as { code?: string; type?: string; message?: string };
@@ -22,6 +25,51 @@ function isReconnectableConnectError(err: unknown): boolean {
     msg.includes("does not have access to account") ||
     msg.includes("this key cannot access account")
   );
+}
+
+function toSafeCheckoutUrl(
+  input: string | undefined,
+  fallback: string,
+  allowLocalHttp: boolean
+): string {
+  const sanitize = (candidate: string | undefined): string | null => {
+    if (!candidate || typeof candidate !== "string") return null;
+    try {
+      const parsed = new URL(candidate);
+      if (parsed.protocol !== "https:" && parsed.protocol !== "http:") return null;
+      const host = parsed.hostname.toLowerCase();
+      const isLocalHost =
+        host === "localhost" ||
+        host === "127.0.0.1" ||
+        host === "::1" ||
+        host.endsWith(".local");
+      if (isLocalHost && !allowLocalHttp) return null;
+      if (parsed.protocol === "http:" && !isLocalHost) return null;
+      return parsed.toString();
+    } catch {
+      return null;
+    }
+  };
+  const direct = sanitize(input);
+  if (direct) return direct;
+  const safeFallback = sanitize(fallback);
+  if (safeFallback) return safeFallback;
+  return "https://echoflux.ai/";
+}
+
+function isCreatorPlatformOwner(
+  creatorId: string,
+  creatorData: {
+    isPlatformOwner?: boolean;
+    platformOwner?: boolean;
+    role?: string;
+  } | undefined
+): boolean {
+  if (PLATFORM_OWNER_IDS.includes(creatorId)) return true;
+  if (creatorData?.isPlatformOwner === true) return true;
+  if (creatorData?.platformOwner === true) return true;
+  if (typeof creatorData?.role === "string" && creatorData.role.toLowerCase().trim() === "owner") return true;
+  return false;
 }
 
 /**
@@ -80,9 +128,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (type !== "tip" && !decoded?.uid && !allowGuestProduct) {
     return res.status(401).json({ error: "Unauthorized - please sign in" });
   }
-  const origin = (req.headers.origin || req.headers.referer || "").replace(/\/$/, "") || process.env.NEXT_PUBLIC_APP_URL || "https://echoflux.ai";
+  const configuredAppUrl = process.env.NEXT_PUBLIC_APP_URL || "https://echoflux.ai";
+  const requestOrigin = String(req.headers.origin || req.headers.referer || "").replace(/\/$/, "");
+  const origin = toSafeCheckoutUrl(requestOrigin, configuredAppUrl, STRIPE_USE_TEST_MODE).replace(/\/$/, "");
   const defaultSuccess = `${origin}/?payment=success`;
   const defaultCancel = `${origin}/`;
+  const safeSuccessUrl = toSafeCheckoutUrl(successUrl, defaultSuccess, STRIPE_USE_TEST_MODE);
+  const safeCancelUrl = toSafeCheckoutUrl(cancelUrl, defaultCancel, STRIPE_USE_TEST_MODE);
 
   try {
     const db = getAdminDb();
@@ -100,6 +152,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       displayName?: string;
       handle?: string;
       publicTreatsOnLanding?: boolean;
+      isPlatformOwner?: boolean;
+      platformOwner?: boolean;
+      role?: string;
     } | undefined;
 
     if (allowGuestProduct) {
@@ -109,7 +164,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
     
     // Check if this is a platform owner (e.g., Stormij) - payments go directly to EchoFlux
-    const isPlatformOwner = PLATFORM_OWNER_IDS.includes(creatorId);
+    const isPlatformOwner = isCreatorPlatformOwner(creatorId, creatorData);
     
     // For regular creators, require Stripe Connect; for platform owners, skip it
     const connectAccountId =
@@ -175,8 +230,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             quantity: 1,
           },
         ],
-        success_url: successUrl || defaultSuccess,
-        cancel_url: cancelUrl || defaultCancel,
+        success_url: safeSuccessUrl,
+        cancel_url: safeCancelUrl,
         client_reference_id: fanId,
         metadata: {
           creatorId,
@@ -243,8 +298,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             quantity: 1,
           },
         ],
-        success_url: successUrl || defaultSuccess,
-        cancel_url: cancelUrl || defaultCancel,
+        success_url: safeSuccessUrl,
+        cancel_url: safeCancelUrl,
         client_reference_id: allowGuestProduct ? `landing_${Date.now()}_${Math.random().toString(36).slice(2, 9)}` : fanId,
         metadata: {
           creatorId,
@@ -292,8 +347,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             quantity: 1,
           },
         ],
-        success_url: successUrl || defaultSuccess,
-        cancel_url: cancelUrl || defaultCancel,
+        success_url: safeSuccessUrl,
+        cancel_url: safeCancelUrl,
         client_reference_id: fanId,
         metadata: {
           creatorId,
@@ -323,6 +378,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         reconnectRequired: true,
         message:
           "This creator's Stripe account is unavailable for the current Stripe mode. Ask the creator to reconnect Stripe in Fan Hub > Payouts.",
+      });
+    }
+    const stripeErr = e as {
+      type?: string;
+      code?: string;
+      message?: string;
+      rawType?: string;
+    };
+    const isStripeInvalidRequest =
+      stripeErr?.type === "StripeInvalidRequestError" ||
+      stripeErr?.rawType === "invalid_request_error";
+    if (isStripeInvalidRequest) {
+      return res.status(400).json({
+        error: stripeErr?.message || "Invalid checkout configuration",
+        code: stripeErr?.code || "STRIPE_INVALID_REQUEST",
       });
     }
     const msg = e instanceof Error ? e.message : "Checkout failed";

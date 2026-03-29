@@ -1,10 +1,6 @@
 import React, { useState } from "react";
-import { auth, db } from "../firebaseConfig";
-import {
-  validateMemberUsernameFormat,
-  normalizeMemberUsername,
-  isMemberUsernameAvailable,
-} from "../src/lib/memberUsername";
+import { auth } from "../firebaseConfig";
+import { validateMemberUsernameFormat, normalizeMemberUsername } from "../src/lib/memberUsername";
 
 type Props = {
   creatorId: string;
@@ -26,20 +22,45 @@ export const MemberUsernameGateModal: React.FC<Props> = ({
 }) => {
   const [value, setValue] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [availabilityHint, setAvailabilityHint] = useState<string | null>(null);
   const [checking, setChecking] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
   const checkAvailability = async () => {
     setError(null);
+    setAvailabilityHint(null);
     const fmt = validateMemberUsernameFormat(value);
     if (fmt) {
       setError(fmt);
       return;
     }
+    const token = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
+    if (!token) {
+      setError("Please sign in again.");
+      return;
+    }
     setChecking(true);
     try {
-      const ok = await isMemberUsernameAvailable(db, value);
-      if (!ok) setError("That username is already taken.");
+      const normalized = normalizeMemberUsername(value);
+      const res = await fetch(
+        `/api/checkMemberUsernameAvailability?username=${encodeURIComponent(normalized)}`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setError((data as { error?: string }).error || "Could not check availability. Try again.");
+        return;
+      }
+      const available = (data as { available?: boolean }).available;
+      const message = (data as { message?: string }).message || "";
+      const reason = (data as { reason?: string }).reason || "";
+      if (available) {
+        setAvailabilityHint(message || "That username is available.");
+      } else if (reason === "invalid") {
+        setError(message || "Invalid username.");
+      } else {
+        setError(message || "That username is already taken.");
+      }
     } catch {
       setError("Could not check availability. Try again.");
     } finally {
@@ -116,7 +137,10 @@ export const MemberUsernameGateModal: React.FC<Props> = ({
             className="flex-1 rounded-lg border px-3 py-2 text-base outline-none focus:ring-2"
             style={{ borderColor: `${primaryColor}55`, color: textColor }}
             value={value}
-            onChange={(e) => setValue(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ""))}
+            onChange={(e) => {
+              setAvailabilityHint(null);
+              setValue(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ""));
+            }}
             placeholder="your_handle"
           />
         </div>
@@ -124,6 +148,11 @@ export const MemberUsernameGateModal: React.FC<Props> = ({
         {error && (
           <p className="text-sm text-red-600 mb-3" role="alert">
             {error}
+          </p>
+        )}
+        {availabilityHint && !error && (
+          <p className="text-sm text-emerald-700 mb-3" role="status">
+            {availabilityHint}
           </p>
         )}
         <div className="flex flex-wrap gap-2">

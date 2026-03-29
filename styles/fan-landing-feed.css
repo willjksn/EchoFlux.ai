@@ -1110,7 +1110,7 @@
 
 .fan-member-content--feed .fan-feed-media-image,
 .fan-member-content--feed .fan-feed-media-video {
-  max-height: 420px;
+  max-height: 520px;
 }
 
 /* Match storefront `.stormij-theme .fan-feed-post` (this file loads after stormij; keep tokens, not rose hex). */
@@ -1141,7 +1141,7 @@
 .fan-hub-feed-chrome .feed-card-media-wrap .feed-card-media {
   width: 100%;
   height: auto;
-  max-height: 420px;
+  max-height: 520px;
   object-fit: contain;
   object-position: center top;
   display: block;
@@ -1152,7 +1152,7 @@
 .fan-hub-feed-chrome .feed-card-media-wrap .feed-card-media-video {
   width: 100%;
   height: auto;
-  max-height: 420px;
+  max-height: 520px;
   object-fit: contain;
   object-position: center top;
   display: block;
@@ -1516,8 +1516,13 @@
   align-items: center;
   padding: 0.6rem 1rem;
   gap: 0.5rem;
-  background: linear-gradient(180deg, rgba(253, 244, 246, 0.5) 0%, rgba(254, 248, 249, 0.9) 100%);
-  border-bottom: 1px solid rgba(201, 112, 130, 0.12);
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--fan-primary, #6366f1) 5%, #ffffff) 0%,
+    color-mix(in srgb, var(--fan-primary, #6366f1) 6%, #ffffff) 100%
+  );
+  border-top: 1px solid color-mix(in srgb, var(--fan-primary, #6366f1) 14%, var(--fan-border, #e5e7eb));
+  border-bottom: 1px solid color-mix(in srgb, var(--fan-primary, #6366f1) 12%, var(--fan-border, #e5e7eb));
 }
 
 .fan-feed-action-btn {

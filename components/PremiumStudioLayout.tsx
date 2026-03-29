@@ -10,6 +10,9 @@ import {
   clearNewMessageNotificationBadge,
 } from './useUnreadNewMessageNotifications';
 
+const FAN_HUB_PREVIEW_THEME_STORAGE_KEY = 'echoflux:fanhub-preview-theme';
+const FAN_HUB_PREVIEW_THEME_EVENT = 'echoflux:fanhub-preview-theme-changed';
+
 /** Pending selection when jumping from Messages (or elsewhere) to Fans tab. */
 export type PendingFansTabSelection = {
   fanId: string;
@@ -91,11 +94,38 @@ export const PremiumStudioLayout: React.FC<PremiumStudioLayoutProps> = ({ childr
 
   const creatorId = isFanHub ? auth.currentUser?.uid : undefined;
   const fanTheme = useCreatorFanHubTheme(creatorId);
+  const [previewTheme, setPreviewTheme] = useState<Partial<typeof fanTheme> | null>(null);
   const { isDarkMode } = useUI();
+  useEffect(() => {
+    if (!isFanHub || typeof window === 'undefined') {
+      setPreviewTheme(null);
+      return;
+    }
+    const hydrate = () => {
+      try {
+        const raw = window.sessionStorage.getItem(FAN_HUB_PREVIEW_THEME_STORAGE_KEY);
+        if (!raw) {
+          setPreviewTheme(null);
+          return;
+        }
+        const parsed = JSON.parse(raw) as Partial<typeof fanTheme>;
+        setPreviewTheme(parsed && typeof parsed === 'object' ? parsed : null);
+      } catch {
+        setPreviewTheme(null);
+      }
+    };
+    hydrate();
+    window.addEventListener(FAN_HUB_PREVIEW_THEME_EVENT, hydrate);
+    return () => window.removeEventListener(FAN_HUB_PREVIEW_THEME_EVENT, hydrate);
+  }, [isFanHub]);
+  const effectiveFanTheme = useMemo(
+    () => ({ ...fanTheme, ...(previewTheme ?? {}) }),
+    [fanTheme, previewTheme]
+  );
 
   const fanHubShellStyle = useMemo((): React.CSSProperties => {
     if (!isFanHub) return {};
-    const { primary, background, text, textMuted, border, accentHover, fontFamily } = fanTheme;
+    const { primary, background, text, textMuted, border, accentHover, fontFamily } = effectiveFanTheme;
     // App dark mode: don’t paint the Fan Hub with the public storefront’s light paper (#fafafa).
     if (isDarkMode) {
       const bg = '#0f172a';
@@ -128,7 +158,7 @@ export const PremiumStudioLayout: React.FC<PremiumStudioLayoutProps> = ({ childr
       color: text,
       ...(fontFamily ? ({ fontFamily, '--fan-sans': fontFamily } as React.CSSProperties) : {}),
     };
-  }, [isFanHub, fanTheme, isDarkMode]);
+  }, [isFanHub, effectiveFanTheme, isDarkMode]);
 
   const inner = (
     <>
@@ -138,7 +168,7 @@ export const PremiumStudioLayout: React.FC<PremiumStudioLayoutProps> = ({ childr
         }`}
         style={
           isFanHub
-            ? { borderColor: isDarkMode ? `${fanTheme.primary}40` : `${fanTheme.primary}33` }
+            ? { borderColor: isDarkMode ? `${effectiveFanTheme.primary}40` : `${effectiveFanTheme.primary}33` }
             : undefined
         }
       >
@@ -161,17 +191,17 @@ export const PremiumStudioLayout: React.FC<PremiumStudioLayoutProps> = ({ childr
               style={
                 isFanHub
                   ? tab === id
-                    ? { backgroundColor: fanTheme.primary, color: '#fff' }
+                    ? { backgroundColor: effectiveFanTheme.primary, color: '#fff' }
                     : isDarkMode
                       ? {
-                          backgroundColor: `color-mix(in srgb, ${fanTheme.primary} 12%, #1e293b)`,
+                          backgroundColor: `color-mix(in srgb, ${effectiveFanTheme.primary} 12%, #1e293b)`,
                           color: '#e2e8f0',
-                          border: `1px solid color-mix(in srgb, ${fanTheme.primary} 28%, #334155)`,
+                          border: `1px solid color-mix(in srgb, ${effectiveFanTheme.primary} 28%, #334155)`,
                         }
                       : {
-                          backgroundColor: `color-mix(in srgb, ${fanTheme.primary} 10%, ${fanTheme.background})`,
-                          color: fanTheme.text,
-                          border: `1px solid color-mix(in srgb, ${fanTheme.primary} 22%, ${fanTheme.border})`,
+                          backgroundColor: `color-mix(in srgb, ${effectiveFanTheme.primary} 10%, ${effectiveFanTheme.background})`,
+                          color: effectiveFanTheme.text,
+                          border: `1px solid color-mix(in srgb, ${effectiveFanTheme.primary} 22%, ${effectiveFanTheme.border})`,
                         }
                   : undefined
               }
@@ -181,7 +211,7 @@ export const PremiumStudioLayout: React.FC<PremiumStudioLayoutProps> = ({ childr
                 {isFanHub && id === 'messages' && unreadMessagesTabCount > 0 ? (
                   <span
                     className="min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-bold leading-none inline-flex items-center justify-center text-white"
-                    style={{ backgroundColor: fanTheme.primary }}
+                    style={{ backgroundColor: effectiveFanTheme.primary }}
                     aria-label={`${unreadMessagesTabCount} unread messages`}
                   >
                     {unreadMessagesTabCount > 9 ? '9+' : unreadMessagesTabCount}
@@ -193,8 +223,8 @@ export const PremiumStudioLayout: React.FC<PremiumStudioLayoutProps> = ({ childr
         </div>
         {isFanHub ? (
           <FanHubNotificationBell
-            accentColor={fanTheme.primary}
-            iconColor={isDarkMode ? '#e2e8f0' : fanTheme.text}
+            accentColor={effectiveFanTheme.primary}
+            iconColor={isDarkMode ? '#e2e8f0' : effectiveFanTheme.text}
             className="shrink-0"
           />
         ) : null}
@@ -220,8 +250,8 @@ export const PremiumStudioLayout: React.FC<PremiumStudioLayoutProps> = ({ childr
         style={{
           ...fanHubShellStyle,
           borderColor: isDarkMode
-            ? `color-mix(in srgb, ${fanTheme.primary} 32%, #334155)`
-            : `${fanTheme.primary}22`,
+            ? `color-mix(in srgb, ${effectiveFanTheme.primary} 32%, #334155)`
+            : `${effectiveFanTheme.primary}22`,
         }}
       >
         <div className="max-w-7xl mx-auto">{inner}</div>

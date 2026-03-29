@@ -110,6 +110,8 @@ const DEFAULT_LEGAL: StorefrontLegal = {
   privacyText: "",
   privacyLastUpdated: "",
 };
+const FAN_HUB_PREVIEW_THEME_STORAGE_KEY = "echoflux:fanhub-preview-theme";
+const FAN_HUB_PREVIEW_THEME_EVENT = "echoflux:fanhub-preview-theme-changed";
 
 function clampPercent(n: number, min: number, max: number) {
   return Math.max(min, Math.min(max, n));
@@ -607,11 +609,35 @@ export const MyPageBuilder: React.FC = () => {
   const [avatarUploading, setAvatarUploading] = useState(false);
   const [logoUploading, setLogoUploading] = useState(false);
   const [previewMode, setPreviewMode] = useState<"landing" | "member">("landing");
+  const [saveBtnHover, setSaveBtnHover] = useState(false);
   const [previewFramingTool, setPreviewFramingTool] = useState<
     "off" | "panBg" | "panAvatar" | "focusPhoto"
   >("off");
   const [previewFocusPhotoSlot, setPreviewFocusPhotoSlot] = useState(0);
   const previewScrollRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const liveTheme = { ...DEFAULT_THEME, ...(draft.theme || {}) };
+    try {
+      window.sessionStorage.setItem(FAN_HUB_PREVIEW_THEME_STORAGE_KEY, JSON.stringify(liveTheme));
+      window.dispatchEvent(new Event(FAN_HUB_PREVIEW_THEME_EVENT));
+    } catch {
+      // Ignore storage errors (private mode/quota) and keep builder functional.
+    }
+  }, [draft.theme]);
+
+  useEffect(() => {
+    return () => {
+      if (typeof window === "undefined") return;
+      try {
+        window.sessionStorage.removeItem(FAN_HUB_PREVIEW_THEME_STORAGE_KEY);
+        window.dispatchEvent(new Event(FAN_HUB_PREVIEW_THEME_EVENT));
+      } catch {
+        // Ignore cleanup storage errors.
+      }
+    };
+  }, []);
 
   const heroGridSlotCount = useMemo(
     () => (draft.heroMedia ?? []).filter((m) => m.size !== "fullBackground").length,
@@ -1407,6 +1433,12 @@ export const MyPageBuilder: React.FC = () => {
   const handleCleanForCheck = handleInput.replace("@", "").toLowerCase().trim();
   const savedHandleForCheck = String(saved.handle ?? "").replace("@", "").toLowerCase().trim();
   const handleIsCurrentSaved = !!handleCleanForCheck && handleCleanForCheck === savedHandleForCheck;
+  const savePrimary = draft.theme?.primary || DEFAULT_THEME.primary;
+  const explicitHover = draft.theme?.accentHover;
+  const saveHoverColor =
+    explicitHover && explicitHover !== DEFAULT_THEME.accentHover
+      ? explicitHover
+      : savePrimary;
   const handleFormatOk =
     handleCleanForCheck.length >= 3 &&
     handleCleanForCheck.length <= 20 &&
@@ -3442,7 +3474,10 @@ export const MyPageBuilder: React.FC = () => {
               type="button"
               onClick={handleSave}
               disabled={!isDirty || saving}
-              className="px-4 py-2 rounded-lg bg-primary-600 text-white hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              onMouseEnter={() => setSaveBtnHover(true)}
+              onMouseLeave={() => setSaveBtnHover(false)}
+              className="px-4 py-2 rounded-lg text-white disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              style={{ backgroundColor: saveBtnHover ? saveHoverColor : savePrimary }}
             >
               {saving ? "Saving…" : "Save Changes"}
             </button>
