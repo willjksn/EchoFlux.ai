@@ -2373,7 +2373,7 @@
 
 .fan-member-messages-empty {
   text-align: center;
-  color: var(--fan-text-muted);
+  color: color-mix(in srgb, var(--fan-primary, #6366f1) 72%, var(--fan-text, #1f2937) 28%);
   font-size: 0.9rem;
   padding: 1rem 0;
   margin: 0;
@@ -2540,7 +2540,7 @@
 .fan-profile-stat-label {
   margin: 0;
   font-size: 0.74rem;
-  color: var(--fan-text-muted, #6b7280);
+  color: color-mix(in srgb, var(--fan-primary, #6366f1) 72%, var(--fan-text, #1f2937) 28%);
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
@@ -2681,6 +2681,37 @@
   line-height: 1.6;
   margin: 0;
   color: var(--fan-text, #1f2937);
+}
+
+.fan-member-store-subtitle {
+  margin: 0;
+  font-size: 1.02rem;
+  line-height: 1.55;
+  font-weight: 600;
+  color: color-mix(in srgb, var(--fan-primary, #6366f1) 68%, var(--fan-text, #1f2937) 32%);
+}
+
+.fan-member-store-header {
+  text-align: center;
+  margin: 0 auto 0.95rem;
+  max-width: 760px;
+}
+
+.fan-member-store-title {
+  margin: 0 0 0.35rem;
+  font-family: var(--fan-serif, "Cormorant Garamond", Georgia, serif);
+  font-size: clamp(2rem, 3.2vw, 2.45rem);
+  font-style: italic;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  color: color-mix(in srgb, var(--fan-primary, #6366f1) 64%, var(--fan-text, #1f2937) 36%);
+}
+
+.fan-member-store-header .fan-member-store-subtitle {
+  margin: 0 auto;
+  max-width: 640px;
+  font-size: 1.08rem;
+  font-weight: 500;
 }
 
 /* Responsive */

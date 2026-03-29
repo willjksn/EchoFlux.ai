@@ -64,10 +64,17 @@ import { usePathname } from "../src/hooks/usePathname";
 import { db } from "../firebaseConfig";
 import { ReportProblemModal } from "./ReportProblemModal";
 
-/** Default bio set at fan signup; hide on creator hubs so fans see a creator-specific welcome instead of EchoFlux branding. */
+/** Default bio set at fan signup; hide platform-branded defaults on creator hubs. */
 function isEchoFluxDefaultFanBio(bio: string): boolean {
   const s = bio.trim().toLowerCase();
-  return s === "welcome to echoflux.ai!" || s === "welcome to echoflux.ai";
+  return (
+    s === "welcome to echoflux.ai!" ||
+    s === "welcome to echoflux.ai" ||
+    s === "welcome to engagesuite.ai!" ||
+    s === "welcome to engagesuite.ai" ||
+    s === "welcome to engagesuite!" ||
+    s === "welcome to engagesuite"
+  );
 }
 
 export type StorefrontCreator = {
@@ -733,6 +740,18 @@ export const FanStorefrontView: React.FC = () => {
                   .toLowerCase()
                   .trim();
               if (ownHandle === handle) {
+                const ownMonetization = (
+                  (own.monetization as StorefrontCreator["monetization"] | undefined) ||
+                  (typeof own.freeAccessEnabled === "boolean" ||
+                  typeof own.tipsEnabled === "boolean" ||
+                  typeof own.monthlyPrice === "number"
+                    ? {
+                        freeAccessEnabled: own.freeAccessEnabled === true,
+                        tipsEnabled: own.tipsEnabled !== false,
+                        ...(typeof own.monthlyPrice === "number" ? { monthlyPrice: own.monthlyPrice } : {}),
+                      }
+                    : undefined)
+                );
                 resolved = {
                   ...resolved,
                   creatorId: auth.currentUser.uid,
@@ -793,9 +812,26 @@ export const FanStorefrontView: React.FC = () => {
                   rules:
                     resolved.rules ||
                     (own.rules as StorefrontCreator["rules"] | undefined),
+                  // Owner preview should reflect owner's latest theme and monetization exactly.
                   theme:
-                    resolved.theme ||
-                    (own.theme as StorefrontCreator["theme"] | undefined),
+                    (own.theme as StorefrontCreator["theme"] | undefined) ||
+                    resolved.theme,
+                  monetization:
+                    ownMonetization ||
+                    resolved.monetization,
+                  sections:
+                    (own.sections as StorefrontCreator["sections"] | undefined) ||
+                    resolved.sections,
+                  sectionsOrder:
+                    (own.sectionsOrder as StorefrontCreator["sectionsOrder"] | undefined) ||
+                    resolved.sectionsOrder,
+                  fanAuthBranding:
+                    (own.fanAuthBranding as StorefrontCreator["fanAuthBranding"] | undefined) ||
+                    resolved.fanAuthBranding,
+                  publicTreatsOnLanding:
+                    typeof own.publicTreatsOnLanding === "boolean"
+                      ? (own.publicTreatsOnLanding as boolean)
+                      : resolved.publicTreatsOnLanding,
                   heroLayout:
                     resolved.heroLayout ||
                     (own.heroLayout as StorefrontCreator["heroLayout"] | undefined),
@@ -1486,10 +1522,11 @@ export const FanStorefrontView: React.FC = () => {
         const lastName =
           (typeof d.lastName === "string" && d.lastName.trim()) ||
           (displayNameRaw.includes(" ") ? displayNameRaw.split(/\s+/).slice(1).join(" ") : "");
-        const bio =
+        const bioRaw =
           (typeof d.bio === "string" && d.bio.trim()) ||
           (typeof d.memberBio === "string" && d.memberBio.trim()) ||
           "";
+        const bio = isEchoFluxDefaultFanBio(bioRaw) ? "" : bioRaw;
         const photoURL =
           (typeof d.photoURL === "string" && d.photoURL.trim()) ||
           (typeof d.avatar === "string" && d.avatar.trim()) ||
@@ -2030,6 +2067,14 @@ export const FanStorefrontView: React.FC = () => {
   const chatEnabled = monetization?.chatEnabled !== false;
   const videoEnabled = monetization?.videoEnabled !== false;
   const storeCopy = resolveStoreCopy(landingContent);
+  const memberStoreSubtitleText = (() => {
+    const raw = (storeCopy.memberStoreSubtitle || "").trim();
+    if (!raw) return "";
+    if (/^demo member store subtitle text\.?$/i.test(raw)) {
+      return "Personal messages, voice notes, and more - just for you.";
+    }
+    return raw;
+  })();
   const guidelinesSectionTitle =
     (landingContent?.boundaryTitle && landingContent.boundaryTitle.trim()) || "Community Guidelines";
   const rulesBoundariesRaw = rules?.boundariesText;
@@ -2050,6 +2095,8 @@ export const FanStorefrontView: React.FC = () => {
   // Member view background - uses creator theme or neutral default
   const bg = theme?.background || defaultBg;
   const primary = theme?.primary || defaultPrimary;
+  const profileFieldLabelColor =
+    "color-mix(in srgb, var(--fan-primary, #6366f1) 72%, var(--fan-text, #1f2937) 28%)";
   const memberSinceLabel = (() => {
     const raw = auth.currentUser?.metadata?.creationTime;
     if (!raw) return "Unknown";
@@ -2216,6 +2263,10 @@ export const FanStorefrontView: React.FC = () => {
     typeof window !== "undefined" && isConfiguredCustomStorefrontHost(window.location.hostname)
       ? "/privacy"
       : `/${creator.handle}/privacy`;
+  const storefrontHomePath =
+    typeof window !== "undefined" && isConfiguredCustomStorefrontHost(window.location.hostname)
+      ? "/"
+      : `/${creator.handle}?landing=1`;
 
   if (showLanding) {
     return (
@@ -2241,7 +2292,7 @@ export const FanStorefrontView: React.FC = () => {
           treatLinkAccountMessage={treatLinkMessage}
           termsHref={storefrontTermsPath}
           privacyHref={storefrontPrivacyPath}
-          homeHref="/"
+          homeHref={storefrontHomePath}
         />
         {fanAuthOpen && (
           <FanAuthModal
@@ -2529,6 +2580,16 @@ export const FanStorefrontView: React.FC = () => {
             )}
             {activeTab === "treats" && (
               <div className="fan-member-treats">
+                <div className="fan-member-store-header">
+                  <h2 className="fan-member-store-title">
+                    {storeCopy.memberStoreTitle || "Treats"}
+                  </h2>
+                  {memberStoreSubtitleText ? (
+                    <p className="fan-member-store-subtitle">
+                      {memberStoreSubtitleText}
+                    </p>
+                  ) : null}
+                </div>
                 {needsPaidUpgrade ? (
                   <p className="fan-member-empty" style={{ marginBottom: "0.75rem" }}>
                     This creator is now on paid membership. Feed and messages are locked until you subscribe, but your purchased treats stay available.
@@ -2829,11 +2890,11 @@ export const FanStorefrontView: React.FC = () => {
                       </div>
                     </div>
                     <div className="mt-3">
-                      <label className="block text-xs mb-1" style={{ color: "var(--fan-text-muted, #6b7280)" }}>
+                      <label className="block text-xs mb-1" style={{ color: profileFieldLabelColor }}>
                         Username
                       </label>
                       <div className="fan-profile-username-row">
-                        <span className="fan-profile-username-prefix">@</span>
+                        <span className="fan-profile-username-prefix" style={{ color: profileFieldLabelColor }}>@</span>
                         <input
                           value={usernameDraft}
                           onChange={(e) =>
@@ -2864,15 +2925,40 @@ export const FanStorefrontView: React.FC = () => {
                     >
                       {memberHubWelcomeLine}
                     </p>
-                    <p
-                      className="text-xs mt-2 mb-1 m-0"
-                      style={{ color: "var(--fan-text-muted, #6b7280)" }}
-                    >
-                      Your bio (visible to creators)
-                    </p>
-                    <div className="fan-profile-bio-preview mt-0">
-                      {fanBioPreviewText ||
-                        "Add a short bio so creators understand your vibe and preferences."}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
+                      <div>
+                        <label className="block text-xs mb-1" style={{ color: profileFieldLabelColor }}>First name</label>
+                        <input
+                          value={profileDraft.firstName}
+                          onChange={(e) => setProfileDraft((p) => ({ ...p, firstName: e.target.value }))}
+                          className="w-full px-3 py-2 rounded-lg border text-sm"
+                          style={{ borderColor: "color-mix(in srgb, var(--fan-primary, #6366f1) 18%, transparent)", backgroundColor: "white", color: "var(--fan-text, #1f2937)" }}
+                          placeholder="First name"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs mb-1" style={{ color: profileFieldLabelColor }}>Last name</label>
+                        <input
+                          value={profileDraft.lastName}
+                          onChange={(e) => setProfileDraft((p) => ({ ...p, lastName: e.target.value }))}
+                          className="w-full px-3 py-2 rounded-lg border text-sm"
+                          style={{ borderColor: "color-mix(in srgb, var(--fan-primary, #6366f1) 18%, transparent)", backgroundColor: "white", color: "var(--fan-text, #1f2937)" }}
+                          placeholder="Last name"
+                        />
+                      </div>
+                    </div>
+                    <div className="mt-3">
+                      <label className="block text-xs mb-1" style={{ color: profileFieldLabelColor }}>
+                        Bio (visible to creators)
+                      </label>
+                      <textarea
+                        rows={4}
+                        value={profileDraft.bio}
+                        onChange={(e) => setProfileDraft((p) => ({ ...p, bio: e.target.value }))}
+                        className="w-full px-3 py-2 rounded-lg border text-sm"
+                        style={{ borderColor: "color-mix(in srgb, var(--fan-primary, #6366f1) 18%, transparent)", backgroundColor: "white", color: "var(--fan-text, #1f2937)" }}
+                        placeholder="Tell creators a little about you..."
+                      />
                     </div>
                     <div className="flex flex-wrap gap-2 mt-3 items-center">
                       <label
@@ -2921,62 +3007,7 @@ export const FanStorefrontView: React.FC = () => {
                           void handleProfileSave();
                         }}
                       >
-                        {profileSaving ? "Saving..." : isProfileDirty ? "Save" : "Edit"}
-                      </button>
-                    </div>
-                  </div>
-                </div>
-                <div className="fan-member-about-section">
-                  <h3 className="fan-member-about-heading">Profile details</h3>
-                  <div className="fan-profile-panel" style={{ borderColor: "color-mix(in srgb, var(--fan-primary, #6366f1) 24%, transparent)" }}>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <div>
-                        <label className="block text-xs mb-1" style={{ color: "var(--fan-text-muted, #6b7280)" }}>First name</label>
-                        <input
-                          value={profileDraft.firstName}
-                          onChange={(e) => setProfileDraft((p) => ({ ...p, firstName: e.target.value }))}
-                          className="w-full px-3 py-2 rounded-lg border text-sm"
-                          style={{ borderColor: "color-mix(in srgb, var(--fan-primary, #6366f1) 18%, transparent)", backgroundColor: "white", color: "var(--fan-text, #1f2937)" }}
-                          placeholder="First name"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-xs mb-1" style={{ color: "var(--fan-text-muted, #6b7280)" }}>Last name</label>
-                        <input
-                          value={profileDraft.lastName}
-                          onChange={(e) => setProfileDraft((p) => ({ ...p, lastName: e.target.value }))}
-                          className="w-full px-3 py-2 rounded-lg border text-sm"
-                          style={{ borderColor: "color-mix(in srgb, var(--fan-primary, #6366f1) 18%, transparent)", backgroundColor: "white", color: "var(--fan-text, #1f2937)" }}
-                          placeholder="Last name"
-                        />
-                      </div>
-                    </div>
-                    <div className="mt-3">
-                      <label className="block text-xs mb-1" style={{ color: "var(--fan-text-muted, #6b7280)" }}>Bio</label>
-                      <textarea
-                        rows={4}
-                        value={profileDraft.bio}
-                        onChange={(e) => setProfileDraft((p) => ({ ...p, bio: e.target.value }))}
-                        className="w-full px-3 py-2 rounded-lg border text-sm"
-                        style={{ borderColor: "color-mix(in srgb, var(--fan-primary, #6366f1) 18%, transparent)", backgroundColor: "white", color: "var(--fan-text, #1f2937)" }}
-                        placeholder="Tell creators a little about you..."
-                      />
-                    </div>
-                    <div className="mt-3">
-                      <button
-                        type="button"
-                        className="storefront-cancel-membership-btn"
-                        style={{
-                          color: primary,
-                          borderColor: `${primary}66`,
-                          backgroundColor: `${primary}0f`,
-                        }}
-                        disabled={profileSaving || !isProfileDirty}
-                        onClick={() => {
-                          void handleProfileSave();
-                        }}
-                      >
-                        {profileSaving ? "Saving..." : isProfileDirty ? "Save details" : "Edit details"}
+                        {profileSaving ? "Saving..." : isProfileDirty ? "Save changes" : "All changes saved"}
                       </button>
                     </div>
                   </div>

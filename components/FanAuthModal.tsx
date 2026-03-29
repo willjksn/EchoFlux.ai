@@ -150,7 +150,9 @@ export const FanAuthModal: React.FC<FanAuthModalProps> = ({
       const joinData = await join.json().catch(() => ({}));
       if (!join.ok) {
         // Non-fatal: auth already succeeded, but membership bootstrap endpoint failed.
-        showToast?.((joinData as { error?: string }).error || "Signed in, but couldn't auto-join free membership yet.", "info");
+        const joinErr = (joinData as { error?: string }).error || "Signed in, but couldn't auto-join free membership yet.";
+        setFormError(joinErr);
+        showToast?.(joinErr, "info");
         return;
       }
       const trimmed = uname.trim();
@@ -218,6 +220,16 @@ export const FanAuthModal: React.FC<FanAuthModalProps> = ({
       if (!acceptedTerms) err.terms = "Accept the Terms and Privacy Policy to continue.";
       if (Object.keys(err).length) {
         setFieldErrors(err);
+        const first =
+          err.fullName ||
+          err.username ||
+          err.email ||
+          err.password ||
+          err.confirmPassword ||
+          err.terms ||
+          "Please fix the highlighted fields.";
+        setFormError(first);
+        showToast?.(first, "error");
         return;
       }
 

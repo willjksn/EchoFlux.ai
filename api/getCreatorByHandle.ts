@@ -93,7 +93,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
     }
 
-    // If mapping is missing/stale, or another doc clearly has richer storefront data, use that.
+    // If mapping is missing/stale, choose best candidate by storefront richness.
+    // IMPORTANT: when creatorHandles mapping resolves to a valid creator doc, keep it authoritative
+    // so live landing/theme/monetization match the creator's own page.
     if (!creatorsSnap.empty) {
       let bestDoc = creatorsSnap.docs[0];
       let bestData = bestDoc.data() as Record<string, unknown>;
@@ -111,13 +113,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
       const mappedHandle =
         typeof creatorData?.handle === "string" ? String(creatorData.handle).replace("@", "").toLowerCase().trim() : "";
-      const mappedScore = storefrontScore(creatorData);
-      const mappedLooksStale =
-        !creatorData ||
-        mappedHandle !== cleanHandle ||
-        (bestDoc.id !== creatorId && bestScore > mappedScore);
+      const mappedDocIsValid = !!creatorId && !!creatorData && mappedHandle === cleanHandle;
 
-      if (!creatorId || mappedLooksStale) {
+      // Only fallback when mapping was missing or clearly invalid.
+      if (!mappedDocIsValid) {
         creatorId = bestDoc.id;
         creatorData = bestData;
       }
@@ -127,13 +126,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(404).json({ error: "Creator not found" });
     }
 
+    const cd = creatorData as Record<string, unknown>;
     const theme = (creatorData?.theme as Record<string, string> | undefined) || {};
     const sections = (creatorData?.sections as Record<string, boolean> | undefined) || {};
     const rules = (creatorData?.rules as Record<string, string> | undefined) || {};
     const socialLinks = creatorData?.socialLinks || undefined;
     const landingContent = creatorData?.landingContent || undefined;
     const legal = creatorData?.legal || undefined;
-    const monetization = creatorData?.monetization || undefined;
+    const monetization =
+      (creatorData?.monetization as Record<string, unknown> | undefined) ||
+      (typeof cd?.freeAccessEnabled === "boolean" || typeof cd?.tipsEnabled === "boolean" || typeof cd?.monthlyPrice === "number"
+        ? {
+            freeAccessEnabled: cd?.freeAccessEnabled === true,
+            tipsEnabled: cd?.tipsEnabled !== false,
+            ...(typeof cd?.monthlyPrice === "number" ? { monthlyPrice: cd.monthlyPrice } : {}),
+          }
+        : undefined);
     const textStyles = creatorData?.textStyles || undefined;
     const feedSettings = (
       creatorData?.feedSettings as
@@ -143,7 +151,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const publicTreatsOnLanding = creatorData?.publicTreatsOnLanding === true;
     const fanAuthBranding = creatorData?.fanAuthBranding || undefined;
 
-    const cd = creatorData as Record<string, unknown>;
     const heroMediaNorm = normalizeHeroMediaForStorefront(
       cd?.heroMedia,
       cd?.heroImage,

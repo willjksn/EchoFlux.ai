@@ -18,7 +18,7 @@ export type ResolvedStoreCopy = {
 
 const DEFAULTS: ResolvedStoreCopy = {
   memberStoreTitle: "Store",
-  memberStoreSubtitle: "Demo member store subtitle text.",
+  memberStoreSubtitle: "Personal messages, voice notes, and more - just for you.",
   memberStoreEmptyMessage: "Nothing listed here yet.",
   memberStoreLoadingMessage: "Loading…",
   storeLandingHeadline: "Demo store headline",

@@ -12,6 +12,18 @@ const PLATFORM_FEE_PERCENT = 0.10; // 10% platform fee on all fan payments
 // Set via PLATFORM_OWNER_CREATOR_IDS env var (comma-separated)
 const PLATFORM_OWNER_IDS = (process.env.PLATFORM_OWNER_CREATOR_IDS || "").split(",").map(s => s.trim()).filter(Boolean);
 
+function isReconnectableConnectError(err: unknown): boolean {
+  const e = err as { code?: string; type?: string; message?: string };
+  const msg = (e?.message || "").toLowerCase();
+  return (
+    e?.code === "resource_missing" ||
+    e?.type === "StripeInvalidRequestError" ||
+    msg.includes("no such account") ||
+    msg.includes("does not have access to account") ||
+    msg.includes("this key cannot access account")
+  );
+}
+
 /**
  * POST: Create Stripe Checkout Session for fan→creator payment (subscription, product, or tip).
  * 
@@ -82,6 +94,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const creatorSnap = await db.collection("creators").doc(creatorId).get();
     const creatorData = creatorSnap.data() as {
       stripeConnectAccountId?: string;
+      stripeAccountId?: string;
+      connectedStripeAccountId?: string;
+      stripe?: { connectAccountId?: string };
       displayName?: string;
       handle?: string;
       publicTreatsOnLanding?: boolean;
@@ -97,15 +112,40 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const isPlatformOwner = PLATFORM_OWNER_IDS.includes(creatorId);
     
     // For regular creators, require Stripe Connect; for platform owners, skip it
-    const connectAccountId = creatorData?.stripeConnectAccountId;
+    const connectAccountId =
+      creatorData?.stripeConnectAccountId ||
+      creatorData?.stripeAccountId ||
+      creatorData?.connectedStripeAccountId ||
+      creatorData?.stripe?.connectAccountId ||
+      null;
     if (!isPlatformOwner && !connectAccountId) {
       return res.status(400).json({ error: "Creator has not connected Stripe" });
     }
+    // Backfill canonical field if we discovered a legacy key.
+    if (!isPlatformOwner && connectAccountId && creatorData?.stripeConnectAccountId !== connectAccountId) {
+      await db.collection("creators").doc(creatorId).set(
+        { stripeConnectAccountId: connectAccountId, updatedAt: new Date().toISOString() },
+        { merge: true },
+      );
+    }
 
     if (!isPlatformOwner && connectAccountId) {
-      const account = await stripe.accounts.retrieve(connectAccountId);
-      if (!account.charges_enabled) {
-        return res.status(400).json({ error: "Creator cannot accept payments yet" });
+      try {
+        const account = await stripe.accounts.retrieve(connectAccountId);
+        if (!account.charges_enabled) {
+          return res.status(400).json({ error: "Creator cannot accept payments yet" });
+        }
+      } catch (e) {
+        if (isReconnectableConnectError(e)) {
+          return res.status(400).json({
+            error: "Creator Stripe connection needs to be refreshed",
+            code: "CREATOR_STRIPE_RECONNECT_REQUIRED",
+            reconnectRequired: true,
+            message:
+              "This creator's Stripe account is unavailable for the current Stripe mode. Ask the creator to reconnect Stripe in Fan Hub > Payouts.",
+          });
+        }
+        throw e;
       }
     }
 
@@ -276,6 +316,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(400).json({ error: "Invalid request type" });
   } catch (e: unknown) {
     console.error("createFanCheckoutSession error:", e);
+    if (isReconnectableConnectError(e)) {
+      return res.status(400).json({
+        error: "Creator Stripe connection needs to be refreshed",
+        code: "CREATOR_STRIPE_RECONNECT_REQUIRED",
+        reconnectRequired: true,
+        message:
+          "This creator's Stripe account is unavailable for the current Stripe mode. Ask the creator to reconnect Stripe in Fan Hub > Payouts.",
+      });
+    }
     const msg = e instanceof Error ? e.message : "Checkout failed";
     return res.status(500).json({ error: "Checkout failed", message: msg });
   }

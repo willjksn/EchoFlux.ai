@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAppContext } from './AppContext';
-import { XMarkIcon, CheckCircleIcon } from './icons/UIIcons';
+import { XMarkIcon, CheckCircleIcon, LogoIcon } from './icons/UIIcons';
 import { auth, db } from '../firebaseConfig';
 import {
   createUserWithEmailAndPassword,
@@ -778,9 +778,12 @@ export const LoginModal: React.FC<LoginModalProps> = ({
         {/* Header + Login/Signup toggle */}
         <div className="px-6 pt-6 pb-4 border-b border-gray-200 dark:border-gray-800 flex-none">
           <div className="flex items-center justify-center mb-2">
-            <span className="inline-flex items-center justify-center h-10 w-10 rounded-full bg-primary-100 dark:bg-primary-900 text-primary-600 dark:text-primary-300 font-bold text-xl">
-              EF
-            </span>
+            <div className="flex items-center">
+              <LogoIcon />
+              <span className="ml-2 text-xl font-bold" style={{ color: '#2563eb' }}>
+                EchoFlux.ai
+              </span>
+            </div>
           </div>
           <h2 className="text-xl font-bold text-center text-gray-900 dark:text-white">
             {isLogin ? 'Welcome back' : 'Create your account'}

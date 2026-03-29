@@ -7030,9 +7030,9 @@ button.treat-card:hover:not(:disabled) .treat-card-cta {
   padding: 0.6rem 1.25rem;
   font-size: 1rem;
   font-weight: 500;
-  color: var(--text-muted, #6b7280);
+  color: color-mix(in srgb, var(--fan-primary, #6366f1) 55%, var(--text, #1f2937) 45%);
   background: var(--bg, #fff);
-  border: 1px solid rgba(201, 112, 130, 0.2);
+  border: 1px solid color-mix(in srgb, var(--fan-primary, #6366f1) 32%, transparent);
   border-radius: 12px;
   cursor: pointer;
   font-family: inherit;
@@ -7040,20 +7040,24 @@ button.treat-card:hover:not(:disabled) .treat-card-cta {
 }
 
 .dark .stormij-theme .tip-preset-btn {
-  background: rgba(255, 255, 255, 0.05);
-  color: #9ca3af;
-  border-color: rgba(201, 112, 130, 0.3);
+  background: color-mix(in srgb, var(--fan-primary, #6366f1) 10%, rgba(255, 255, 255, 0.04));
+  color: color-mix(in srgb, var(--fan-primary, #6366f1) 68%, #e5e7eb);
+  border-color: color-mix(in srgb, var(--fan-primary, #6366f1) 42%, transparent);
 }
 
 .stormij-theme .tip-preset-btn:hover {
-  border-color: #c97082;
-  color: #c97082;
-  background: rgba(201, 112, 130, 0.08);
+  border-color: var(--fan-primary, #6366f1);
+  color: var(--fan-primary, #6366f1);
+  background: color-mix(in srgb, var(--fan-primary, #6366f1) 10%, transparent);
 }
 
 .stormij-theme .tip-preset-btn.active {
-  background: linear-gradient(135deg, #c97082, #a855f7);
-  border-color: transparent;
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--fan-primary, #6366f1) 84%, #ffffff),
+    var(--fan-primary, #6366f1)
+  );
+  border-color: var(--fan-primary, #6366f1);
   color: #fff;
 }
 
@@ -7077,7 +7081,7 @@ button.treat-card:hover:not(:disabled) .treat-card-cta {
   width: 100%;
   max-width: 140px;
   padding: 0.6rem 0.75rem;
-  border: 1px solid rgba(201, 112, 130, 0.25);
+  border: 1px solid color-mix(in srgb, var(--fan-primary, #6366f1) 32%, transparent);
   border-radius: 10px;
   font-size: 1rem;
   background: var(--bg-card, #fff);
@@ -7085,15 +7089,15 @@ button.treat-card:hover:not(:disabled) .treat-card-cta {
 }
 
 .dark .stormij-theme .tip-custom-input {
-  background: rgba(255, 255, 255, 0.05);
-  color: #f3f4f6;
-  border-color: rgba(201, 112, 130, 0.35);
+  background: color-mix(in srgb, var(--fan-primary, #6366f1) 10%, rgba(255, 255, 255, 0.04));
+  color: color-mix(in srgb, var(--fan-primary, #6366f1) 28%, #ffffff);
+  border-color: color-mix(in srgb, var(--fan-primary, #6366f1) 45%, transparent);
 }
 
 .stormij-theme .tip-custom-input:focus {
   outline: none;
   border-color: var(--fan-primary, #6366f1);
-  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--fan-primary, #6366f1) 22%, transparent);
 }
 
 .stormij-theme .tip-cta {
@@ -7102,7 +7106,11 @@ button.treat-card:hover:not(:disabled) .treat-card-cta {
   font-size: 1.05rem;
   font-weight: 600;
   color: #fff;
-  background: linear-gradient(135deg, #c97082, #a855f7);
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--fan-primary, #6366f1) 84%, #ffffff),
+    var(--fan-accent-hover, var(--fan-primary, #6366f1))
+  );
   border: none;
   border-radius: 12px;
   cursor: pointer;
@@ -7639,14 +7647,14 @@ button.treat-card:hover:not(:disabled) .treat-card-cta {
   width: 2.25rem;
   height: 2.25rem;
   border-radius: 0.5rem;
-  border: 1px solid color-mix(in srgb, var(--text-muted, #6b7280) 35%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent, #ec4899) 40%, transparent);
   background: var(--surface, #fff);
-  color: var(--text-muted, #6b7280);
+  color: color-mix(in srgb, var(--accent, #ec4899) 78%, var(--text, #1f2937) 22%);
   cursor: pointer;
 }
 .stormij-theme .fh-dm-compose-icon:hover:not(:disabled) {
   border-color: var(--accent, #ec4899);
-  color: var(--accent, #db2777);
+  color: var(--accent, #ec4899);
 }
 .stormij-theme .fh-dm-compose-icon:disabled {
   opacity: 0.45;
