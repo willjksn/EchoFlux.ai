@@ -1,4 +1,4 @@
-import { FAN_HUB_THEME_PRESETS } from "../../constants";
+import { FAN_HUB_THEME_PRESETS } from "./fanHubThemePresets";
 
 /**
  * Merge Fan Hub theme preset defaults (Ocean, etc.) with stored Firestore `theme`.

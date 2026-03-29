@@ -12,7 +12,9 @@
   },
   "include": [
     "api/**/*.ts",
-    "src/lib/storefrontHeroNormalize.ts"
+    "src/lib/storefrontHeroNormalize.ts",
+    "src/lib/mergeFanHubStorefrontTheme.ts",
+    "src/lib/fanHubThemePresets.ts"
   ],
   "exclude": [
     "node_modules",

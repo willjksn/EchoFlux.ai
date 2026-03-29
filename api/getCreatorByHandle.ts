@@ -123,19 +123,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
     }
 
-    if (!creatorId) {
+    if (!creatorId || !creatorData) {
       return res.status(404).json({ error: "Creator not found" });
     }
 
     const cd = creatorData as Record<string, unknown>;
-    const theme = mergeFanHubStorefrontTheme(creatorData?.theme as Record<string, unknown> | undefined);
-    const sections = (creatorData?.sections as Record<string, boolean> | undefined) || {};
-    const rules = (creatorData?.rules as Record<string, string> | undefined) || {};
-    const socialLinks = creatorData?.socialLinks || undefined;
-    const landingContent = creatorData?.landingContent || undefined;
-    const legal = creatorData?.legal || undefined;
+    const theme = mergeFanHubStorefrontTheme(creatorData.theme as Record<string, unknown> | undefined);
+    const sections = (creatorData.sections as Record<string, boolean> | undefined) || {};
+    const rules = (creatorData.rules as Record<string, string> | undefined) || {};
+    const socialLinks = creatorData.socialLinks || undefined;
+    const landingContent = creatorData.landingContent || undefined;
+    const legal = creatorData.legal || undefined;
     const monetization =
-      (creatorData?.monetization as Record<string, unknown> | undefined) ||
+      (creatorData.monetization as Record<string, unknown> | undefined) ||
       (typeof cd?.freeAccessEnabled === "boolean" || typeof cd?.tipsEnabled === "boolean" || typeof cd?.monthlyPrice === "number"
         ? {
             freeAccessEnabled: cd?.freeAccessEnabled === true,
@@ -143,14 +143,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             ...(typeof cd?.monthlyPrice === "number" ? { monthlyPrice: cd.monthlyPrice } : {}),
           }
         : undefined);
-    const textStyles = creatorData?.textStyles || undefined;
+    const textStyles = creatorData.textStyles || undefined;
     const feedSettings = (
-      creatorData?.feedSettings as
+      creatorData.feedSettings as
         | { hideLikeCounts?: boolean; hideComments?: boolean; hideLikes?: boolean; hideTipButton?: boolean }
         | undefined
     ) || undefined;
-    const publicTreatsOnLanding = creatorData?.publicTreatsOnLanding === true;
-    const fanAuthBranding = creatorData?.fanAuthBranding || undefined;
+    const publicTreatsOnLanding = creatorData.publicTreatsOnLanding === true;
+    const fanAuthBranding = creatorData.fanAuthBranding || undefined;
 
     const heroMediaNorm = normalizeHeroMediaForStorefront(
       cd?.heroMedia,
@@ -166,23 +166,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const payload = {
       creatorId,
       handle: cleanHandle,
-      displayName: (creatorData?.displayName as string) || cleanHandle,
-      bio: (creatorData?.bio as string) || undefined,
-      avatar: (creatorData?.avatar as string) || (creatorData?.avatarUrl as string) || undefined,
-      avatarObjectPosition: (creatorData?.avatarObjectPosition as string) || undefined,
-      logo: (creatorData?.logo as string) || (creatorData?.logoUrl as string) || undefined,
-      showDisplayNameOnLanding: (creatorData?.showDisplayNameOnLanding as boolean) !== false,
+      displayName: (creatorData.displayName as string) || cleanHandle,
+      bio: (creatorData.bio as string) || undefined,
+      avatar: (creatorData.avatar as string) || (creatorData.avatarUrl as string) || undefined,
+      avatarObjectPosition: (creatorData.avatarObjectPosition as string) || undefined,
+      logo: (creatorData.logo as string) || (creatorData.logoUrl as string) || undefined,
+      showDisplayNameOnLanding: (creatorData.showDisplayNameOnLanding as boolean) !== false,
       heroImage: heroImageResolved,
       /** Raw legacy field (optional); prefer `heroImage` + `heroMedia` which are normalized above. */
       heroImageUrl:
-        typeof cd.heroImageUrl === "string" && (cd.heroImageUrl as string).trim()
+        typeof cd?.heroImageUrl === "string" && (cd.heroImageUrl as string).trim()
           ? (cd.heroImageUrl as string).trim()
           : undefined,
       heroMedia: heroMediaNorm.length > 0 ? heroMediaNorm : undefined,
-      heroTagline: (creatorData?.heroTagline as string) || undefined,
-      heroPromise: (creatorData?.heroPromise as string) || undefined,
-      heroSubline: (creatorData?.heroSubline as string) || undefined,
-      heroSubline2: (creatorData?.heroSubline2 as string) || undefined,
+      heroTagline: (creatorData.heroTagline as string) || undefined,
+      heroPromise: (creatorData.heroPromise as string) || undefined,
+      heroSubline: (creatorData.heroSubline as string) || undefined,
+      heroSubline2: (creatorData.heroSubline2 as string) || undefined,
       socialLinks,
       landingContent,
       legal,
@@ -198,7 +198,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         fontFamily: theme.fontFamily,
         presetId: theme.presetId,
       },
-      heroLayout: (creatorData?.heroLayout as "default" | "centered" | "split" | "splitRight") || "default",
+      heroLayout: (creatorData.heroLayout as "default" | "centered" | "split" | "splitRight") || "default",
       sections: {
         feed: sections.feed !== false,
         treats: sections.treats !== false,
@@ -206,8 +206,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         messages: sections.messages !== false,
         about: sections.about !== false,
       },
-      sectionsOrder: (creatorData?.sectionsOrder as string[] | undefined) || ["feed", "treats", "tip", "messages", "about"],
-      spicyMode: !!creatorData?.spicyMode,
+      sectionsOrder: (creatorData.sectionsOrder as string[] | undefined) || ["feed", "treats", "tip", "messages", "about"],
+      spicyMode: !!creatorData.spicyMode,
       rules: rules.boundariesText != null ? { boundariesText: rules.boundariesText } : undefined,
       monetization,
       feedSettings: feedSettings ? {
