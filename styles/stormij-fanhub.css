@@ -7280,13 +7280,20 @@ button.treat-card:hover:not(:disabled) .treat-card-cta {
   color: #9ca3af;
 }
 .stormij-theme .fh-dm-bubble--me {
-  background: linear-gradient(135deg, var(--accent, #6366f1), var(--accent-hover, #4f46e5));
+  /* Single-hue depth from storefront --fan-primary (Ocean, etc.); avoid indigo→violet mismatch */
+  background: linear-gradient(
+    155deg,
+    var(--fan-primary, var(--accent, #6366f1)) 0%,
+    color-mix(in srgb, var(--fan-primary, var(--accent, #6366f1)) 72%, #000 28%) 100%
+  );
   color: #fff;
   border-radius: 14px 14px 4px 14px;
 }
 .stormij-theme .fh-dm-bubble--them {
-  background: #e4dff2;
+  /* Neutral incoming bubble (fan); not lavender */
+  background: #f3f4f6;
   color: #111827;
+  border: 1px solid #e5e7eb;
   border-radius: 14px 14px 14px 4px;
 }
 .dark .stormij-theme .fh-dm-bubble--them {
@@ -7620,7 +7627,11 @@ button.treat-card:hover:not(:disabled) .treat-card-cta {
   margin-right: auto;
 }
 .fh-messages-hub.stormij-theme .fh-dm-chat-row--out .fh-dm-bubble {
-  background: linear-gradient(135deg, var(--fan-primary, #6366f1), var(--fan-accent-hover, #4f46e5)) !important;
+  background: linear-gradient(
+    155deg,
+    var(--fan-primary, #6366f1) 0%,
+    color-mix(in srgb, var(--fan-primary, #6366f1) 72%, #000 28%) 100%
+  ) !important;
   color: #fff !important;
   border: 1px solid color-mix(in srgb, var(--fan-primary, #6366f1) 68%, transparent) !important;
 }
@@ -7777,6 +7788,211 @@ button.treat-card:hover:not(:disabled) .treat-card-cta {
 .stormij-theme .fh-dm-attachment audio {
   width: 100%;
   max-width: 280px;
+}
+
+/* Voice note bubble (member DMs + shared player) — compact; tints from --fan-primary (storefront theme) */
+.stormij-theme .fh-dm-voice-note {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.2rem;
+  max-width: 10.75rem;
+  width: 100%;
+  margin: 0.1rem 0 0.15rem;
+}
+.stormij-theme .fh-dm-voice-note__mic {
+  color: var(--fan-primary, #6366f1);
+  line-height: 0;
+  opacity: 0.95;
+}
+.stormij-theme .fh-dm-voice-note__mic svg {
+  width: 1.125rem;
+  height: 1.125rem;
+  display: block;
+}
+.stormij-theme .fh-dm-voice-note__pill {
+  display: flex;
+  align-items: center;
+  gap: 0.28rem;
+  width: 100%;
+  min-width: 0;
+  padding: 0.22rem 0.4rem 0.22rem 0.32rem;
+  background: #fff;
+  border-radius: 999px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+  border: 1px solid rgba(0, 0, 0, 0.06);
+}
+.dark .stormij-theme .fh-dm-voice-note__pill {
+  background: #1e293b;
+  border-color: rgba(255, 255, 255, 0.08);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+}
+.stormij-theme .fh-dm-voice-note__play {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.35rem;
+  height: 1.35rem;
+  padding: 0;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: #111;
+  cursor: pointer;
+}
+.dark .stormij-theme .fh-dm-voice-note__play {
+  color: #f1f5f9;
+}
+.stormij-theme .fh-dm-voice-note__play:hover {
+  opacity: 0.85;
+}
+.stormij-theme .fh-dm-voice-note__progress-wrap {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+}
+.stormij-theme .fh-dm-voice-note__range {
+  width: 100%;
+  height: 0.3rem;
+  margin: 0;
+  accent-color: var(--fan-primary, #6366f1);
+  cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+}
+.stormij-theme .fh-dm-voice-note__range::-webkit-slider-runnable-track {
+  height: 2px;
+  border-radius: 2px;
+  background: linear-gradient(
+    to right,
+    var(--fan-primary, #6366f1) 0%,
+    var(--fan-primary, #6366f1) var(--fh-voice-pct, 0%),
+    #e5e7eb var(--fh-voice-pct, 0%),
+    #e5e7eb 100%
+  );
+}
+.dark .stormij-theme .fh-dm-voice-note__range::-webkit-slider-runnable-track {
+  background: linear-gradient(
+    to right,
+    var(--fan-primary, #6366f1) 0%,
+    var(--fan-primary, #6366f1) var(--fh-voice-pct, 0%),
+    #334155 var(--fh-voice-pct, 0%),
+    #334155 100%
+  );
+}
+.stormij-theme .fh-dm-voice-note__range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--fan-primary, #6366f1);
+  margin-top: -3px;
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--fan-primary, #6366f1) 35%, #000);
+}
+.stormij-theme .fh-dm-voice-note__range::-moz-range-track {
+  height: 2px;
+  border-radius: 2px;
+  background: #e5e7eb;
+}
+.dark .stormij-theme .fh-dm-voice-note__range::-moz-range-track {
+  background: #334155;
+}
+.stormij-theme .fh-dm-voice-note__range::-moz-range-progress {
+  height: 2px;
+  border-radius: 2px;
+  background: var(--fan-primary, #6366f1);
+}
+.stormij-theme .fh-dm-voice-note__icon {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.25rem;
+  height: 1.25rem;
+  padding: 0;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: #111;
+  cursor: pointer;
+}
+.dark .stormij-theme .fh-dm-voice-note__icon {
+  color: #e2e8f0;
+}
+.stormij-theme .fh-dm-voice-note__icon:hover {
+  opacity: 0.8;
+}
+.stormij-theme .fh-dm-voice-note__audio {
+  position: absolute;
+  width: 0;
+  height: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* Staged DM attachment (before Send) */
+.stormij-theme .fh-dm-pending-attach {
+  width: 100%;
+  margin-bottom: 0.35rem;
+}
+.stormij-theme .fh-dm-pending-attach__inner {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  position: relative;
+}
+.stormij-theme .fh-dm-pending-attach__thumb {
+  max-height: 5rem;
+  max-width: 8rem;
+  border-radius: 0.5rem;
+  object-fit: cover;
+  display: block;
+  border: 1px solid color-mix(in srgb, var(--fan-primary, #6366f1) 22%, transparent);
+}
+.stormij-theme .fh-dm-pending-attach__voice-label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.75rem;
+  background: color-mix(in srgb, var(--fan-primary, #6366f1) 10%, transparent);
+  font-size: 0.8125rem;
+  color: var(--fan-text, #374151);
+}
+.stormij-theme .fh-dm-pending-attach__voice-icon {
+  color: var(--fan-primary, #6366f1);
+  display: flex;
+}
+.stormij-theme .fh-dm-pending-attach__remove {
+  flex-shrink: 0;
+  width: 1.75rem;
+  height: 1.75rem;
+  border: none;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.06);
+  color: #374151;
+  font-size: 1.25rem;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.stormij-theme .fh-dm-pending-attach__remove:hover {
+  background: rgba(0, 0, 0, 0.1);
+}
+.stormij-theme .fh-dm-pending-attach__hint,
+.stormij-theme .fh-dm-pending-attach__uploading {
+  margin: 0.25rem 0 0;
+  font-size: 0.7rem;
+  color: var(--fan-text-muted, #6b7280);
+}
+.stormij-theme .fh-dm-pending-attach__uploading {
+  font-style: italic;
 }
 
 /* ----- OnlyFans / chat assistant: spiciness ----- */

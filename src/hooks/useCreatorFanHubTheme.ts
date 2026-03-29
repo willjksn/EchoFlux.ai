@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { doc, getDoc } from "firebase/firestore";
 import { db } from "../../firebaseConfig";
+import { mergeFanHubStorefrontTheme } from "../lib/mergeFanHubStorefrontTheme";
 import type { CreatorStorefrontSettings } from "../../types";
 
 /** Defaults match My Page / storefront when no Firestore theme yet */
@@ -18,16 +19,16 @@ export type CreatorFanHubTheme = typeof DEFAULT_FAN_HUB_THEME;
 
 function mergeTheme(raw: Partial<CreatorStorefrontSettings["theme"]> | undefined): CreatorFanHubTheme {
   if (!raw) return { ...DEFAULT_FAN_HUB_THEME };
-  const primary = raw.primary || DEFAULT_FAN_HUB_THEME.primary;
+  const m = mergeFanHubStorefrontTheme(raw as Record<string, unknown>);
+  const primary = m.primary || DEFAULT_FAN_HUB_THEME.primary;
   return {
     primary,
-    background: raw.background || DEFAULT_FAN_HUB_THEME.background,
-    text: raw.text || DEFAULT_FAN_HUB_THEME.text,
-    textMuted: raw.textMuted || DEFAULT_FAN_HUB_THEME.textMuted,
-    border: raw.border || DEFAULT_FAN_HUB_THEME.border,
-    /** If unset in Firestore, follow primary — avoids default indigo while primary is brand pink/blue/etc. */
-    accentHover: raw.accentHover || primary,
-    fontFamily: raw.fontFamily || undefined,
+    background: m.background || DEFAULT_FAN_HUB_THEME.background,
+    text: m.text || DEFAULT_FAN_HUB_THEME.text,
+    textMuted: m.textMuted || DEFAULT_FAN_HUB_THEME.textMuted,
+    border: m.border || DEFAULT_FAN_HUB_THEME.border,
+    accentHover: m.accentHover || primary,
+    fontFamily: m.fontFamily || undefined,
   };
 }
 

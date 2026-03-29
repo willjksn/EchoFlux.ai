@@ -50,8 +50,9 @@ import {
   parseObjectPositionPercentPair,
   formatObjectPositionPercentPair,
 } from "../src/lib/objectPositionPan";
-import { FanHubNotificationBell } from "./FanHubNotificationBell";
+import { FanHubNotificationBell, type FanHubNotificationNavigatePayload } from "./FanHubNotificationBell";
 import { auth } from "../firebaseConfig";
+import { useAppContext } from "./AppContext";
 import {
   useUnreadNewMessageNotificationCount,
   clearNewMessageNotificationBadge,
@@ -549,6 +550,75 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
     .filter((key) => key !== "about")
     .filter((key) => key !== "saved" && (sections as Record<string, boolean>)?.[key] !== false)
     .filter((key) => key !== "messages" || chatEnabledPreview);
+  const { user, showToast } = useAppContext();
+
+  const joinFanVideoSessionPreview = useCallback(
+    async (sessionId: string, creatorIdForSession: string) => {
+      if (!auth.currentUser || !creatorIdForSession.trim()) return;
+      try {
+        const token = await auth.currentUser.getIdToken(true);
+        const res = await fetch("/api/liveVideoChat?action=token", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ sessionId, creatorId: creatorIdForSession }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error((data as { error?: string }).error || "Could not open video session");
+        const roomUrl = (data as { roomUrl?: string }).roomUrl;
+        const tokenParam = (data as { token?: string }).token;
+        if (!roomUrl || !tokenParam) throw new Error("Video room is not ready yet.");
+        const joinUrl = `${roomUrl}${roomUrl.includes("?") ? "&" : "?"}t=${encodeURIComponent(tokenParam)}`;
+        window.open(joinUrl, "_blank", "noopener,noreferrer");
+      } catch (e) {
+        showToast?.(e instanceof Error ? e.message : "Could not open video session.", "error");
+      }
+    },
+    [showToast]
+  );
+
+  const handlePreviewNotificationNavigate = useCallback(
+    (p: FanHubNotificationNavigatePayload) => {
+      if (previewMode !== "member") return;
+      const d = p.data;
+      const selfId = user?.id;
+      if (d.creatorId && selfId && d.creatorId !== selfId) return;
+
+      const goMessages = () => {
+        if (memberTabs.includes("messages")) setActiveTab("messages");
+      };
+      const goTreats = () => {
+        if (memberTabs.includes("treats")) setActiveTab("treats");
+        else if (memberTabs.includes("feed")) setActiveTab("feed");
+      };
+
+      if (p.type === "new_message") {
+        goMessages();
+        return;
+      }
+      if (
+        p.type === "video_chat_accepted" ||
+        p.type === "video_chat_starting" ||
+        p.type === "video_chat_reminder"
+      ) {
+        const sid = d.sessionId?.trim();
+        const cid = (d.creatorId?.trim() || selfId || "").trim();
+        if (sid && cid) void joinFanVideoSessionPreview(sid, cid);
+        else goMessages();
+        return;
+      }
+      if (p.type === "purchase_confirmed" || p.type === "content_unlocked") {
+        goTreats();
+        return;
+      }
+      if (p.type === "session_starting" || p.type === "session_reminder") {
+        goMessages();
+        return;
+      }
+      if (d.threadId?.trim()) goMessages();
+    },
+    [joinFanVideoSessionPreview, memberTabs, previewMode, user?.id]
+  );
+
   const effectiveTab =
     activeTab === "saved" && !memberTabs.includes("saved")
       ? "feed"
@@ -1992,6 +2062,7 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
                 iconColor={`${textColor}99`}
                 compact
                 className="storefront-preview-notify-bell"
+                onNavigate={handlePreviewNotificationNavigate}
               />
               {/* Profile avatar button */}
               <button

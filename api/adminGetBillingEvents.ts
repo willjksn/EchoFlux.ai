@@ -20,22 +20,26 @@ async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
     return;
   }
 
-  let user;
+  let authUser;
   try {
     const verifyAuth = await getVerifyAuth();
-    user = await verifyAuth(req);
+    authUser = await verifyAuth(req);
   } catch (authError: any) {
     res.status(401).json({ success: false, error: "Authentication error", failed: [], renewals: [] });
     return;
   }
 
-  // Only admins
-  if (!user || user.role !== "Admin") {
-    res.status(403).json({ error: "Forbidden" });
+  if (!authUser?.uid) {
+    res.status(401).json({ success: false, error: "Unauthorized", failed: [], renewals: [] });
     return;
   }
 
   const db = getAdminDb();
+  const adminSnap = await db.collection("users").doc(authUser.uid).get();
+  if (!adminSnap.exists || (adminSnap.data() as { role?: string } | undefined)?.role !== "Admin") {
+    res.status(403).json({ error: "Forbidden" });
+    return;
+  }
   const now = Date.now();
   const dayAgo = now - 24 * 60 * 60 * 1000;
   const weekAhead = now + 7 * 24 * 60 * 60 * 1000;

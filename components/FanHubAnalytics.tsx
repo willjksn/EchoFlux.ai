@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useCallback, useMemo } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { useAppContext } from "./AppContext";
 import { auth, db } from "../firebaseConfig";
-import { collection, query, where, getDocs, orderBy, Timestamp } from "firebase/firestore";
+import { collection, getDocs } from "firebase/firestore";
 import { formatFanDisplayLabel } from "../src/lib/fanHubDisplay";
 
 type DateRange = "7d" | "30d" | "90d" | "all";
@@ -15,10 +15,14 @@ interface RevenueMetrics {
 }
 
 interface FanMetrics {
+  /** Members on your page (prefs) plus anyone who only appears on orders — aligns with Fans tab + order-only guests */
   totalFans: number;
+  /** Distinct fans with ≥1 order (tips, treats, subs, unlocks); free-only members are excluded here */
+  purchasingFans: number;
   newFans: number;
   activeFans: number;
   churnedFans: number;
+  /** Share of purchasing fans inactive 60+ days */
   churnRate: number;
 }
 
@@ -122,6 +126,23 @@ function getDateRangeStart(range: DateRange): Date | null {
   return new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
 }
 
+function parsePreferenceDate(v: unknown): Date | null {
+  if (v == null) return null;
+  if (typeof v === "object" && v !== null && "toDate" in v && typeof (v as { toDate?: () => Date }).toDate === "function") {
+    try {
+      const d = (v as { toDate: () => Date }).toDate();
+      return d instanceof Date && !Number.isNaN(d.getTime()) ? d : null;
+    } catch {
+      return null;
+    }
+  }
+  if (typeof v === "string" && v.trim()) {
+    const d = new Date(v);
+    return Number.isNaN(d.getTime()) ? null : d;
+  }
+  return null;
+}
+
 function csvEscapeCell(value: string | number): string {
   const s = String(value ?? "");
   if (/[",\n\r]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
@@ -150,6 +171,7 @@ export const FanHubAnalytics: React.FC = () => {
   const [previousRevenue, setPreviousRevenue] = useState<RevenueMetrics | null>(null);
   const [fanMetrics, setFanMetrics] = useState<FanMetrics>({
     totalFans: 0,
+    purchasingFans: 0,
     newFans: 0,
     activeFans: 0,
     churnedFans: 0,
@@ -260,7 +282,7 @@ export const FanHubAnalytics: React.FC = () => {
         }));
       setRecentTransactions(transactions);
 
-      // Calculate fan metrics from orders
+      // Calculate fan metrics from orders (purchasing cohort)
       const fanSpending = new Map<
         string,
         { total: number; lastActive: Date; firstOrder: Date; fanName?: string | null; fanEmail?: string | null }
@@ -288,26 +310,77 @@ export const FanHubAnalytics: React.FC = () => {
         }
       });
 
-      // Calculate fan metrics
+      const purchasingFans = fanSpending.size;
+
+      // Same member list as Fan Hub → Fans (`onlyfans_fan_preferences`), plus order-only fanIds
+      const prefMeta = new Map<string, { createdAt: Date | null; updatedAt: Date | null }>();
+      try {
+        const prefSnap = await getDocs(collection(db, "users", user.id, "onlyfans_fan_preferences"));
+        prefSnap.forEach((d) => {
+          const data = d.data() as Record<string, unknown>;
+          prefMeta.set(d.id, {
+            createdAt: parsePreferenceDate(data.createdAt),
+            updatedAt: parsePreferenceDate(data.updatedAt),
+          });
+        });
+      } catch (e) {
+        console.warn("FanHubAnalytics: could not load fan preferences", e);
+      }
+
+      const allMemberFanIds = new Set<string>(prefMeta.keys());
+      orders.forEach((o: any) => {
+        const fid = typeof o.fanId === "string" ? o.fanId.trim() : "";
+        if (fid) allMemberFanIds.add(fid);
+      });
+
       const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
       const sixtyDaysAgo = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000);
-      let totalFans = fanSpending.size;
-      let newFans = 0;
-      let activeFans = 0;
-      let churnedFans = 0;
 
+      const newFanIds = new Set<string>();
+      allMemberFanIds.forEach((id) => {
+        const meta = prefMeta.get(id);
+        const created = meta?.createdAt ?? null;
+        if (created && created >= thirtyDaysAgo) {
+          newFanIds.add(id);
+          return;
+        }
+        const spend = fanSpending.get(id);
+        if (spend && spend.firstOrder >= thirtyDaysAgo) {
+          newFanIds.add(id);
+        }
+      });
+
+      const activeFanIds = new Set<string>();
+      allMemberFanIds.forEach((id) => {
+        const spend = fanSpending.get(id);
+        const meta = prefMeta.get(id);
+        if (spend && spend.lastActive >= thirtyDaysAgo) {
+          activeFanIds.add(id);
+          return;
+        }
+        const upd = meta?.updatedAt;
+        if (upd && upd >= thirtyDaysAgo) {
+          activeFanIds.add(id);
+          return;
+        }
+        const cr = meta?.createdAt;
+        if (!spend && cr && cr >= thirtyDaysAgo) {
+          activeFanIds.add(id);
+        }
+      });
+
+      let churnedFans = 0;
       fanSpending.forEach((data) => {
-        if (data.firstOrder >= thirtyDaysAgo) newFans++;
-        if (data.lastActive >= thirtyDaysAgo) activeFans++;
         if (data.lastActive < sixtyDaysAgo && data.firstOrder < sixtyDaysAgo) churnedFans++;
       });
 
-      const churnRate = totalFans > 0 ? (churnedFans / totalFans) * 100 : 0;
+      const churnRate = purchasingFans > 0 ? (churnedFans / purchasingFans) * 100 : 0;
 
       setFanMetrics({
-        totalFans,
-        newFans,
-        activeFans,
+        totalFans: allMemberFanIds.size,
+        purchasingFans,
+        newFans: newFanIds.size,
+        activeFans: activeFanIds.size,
         churnedFans,
         churnRate,
       });
@@ -485,36 +558,48 @@ export const FanHubAnalytics: React.FC = () => {
           <UsersIcon />
           Fan Metrics
         </h2>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
           <StatCard
-            title="Total Fans"
+            title="Total fans"
             value={fanMetrics.totalFans.toLocaleString()}
             icon={<UsersIcon />}
-            subtitle="Unique paying fans"
+            subtitle="Free + paid members"
           />
           <StatCard
-            title="New Fans"
+            title="Purchasing fans"
+            value={fanMetrics.purchasingFans.toLocaleString()}
+            icon={<DollarIcon />}
+            subtitle="At least one tip, sub, treat, or unlock"
+          />
+          <StatCard
+            title="New fans"
             value={fanMetrics.newFans.toLocaleString()}
             icon={<UsersIcon />}
-            subtitle="Last 30 days"
+            subtitle="Joined or first purchase, last 30 days"
           />
           <StatCard
-            title="Active Fans"
+            title="Active fans"
             value={fanMetrics.activeFans.toLocaleString()}
             icon={<UsersIcon />}
-            subtitle="Active in last 30 days"
+            subtitle="Order or profile activity, last 30 days"
           />
           <StatCard
-            title="Churned Fans"
+            title="Churned (paying)"
             value={fanMetrics.churnedFans.toLocaleString()}
             icon={<UsersIcon />}
-            subtitle="Inactive 60+ days"
+            subtitle="No purchase activity 60+ days"
           />
           <StatCard
-            title="Churn Rate"
+            title="Churn rate"
             value={formatPercentage(fanMetrics.churnRate)}
             icon={<TrendDownIcon />}
-            subtitle={fanMetrics.churnRate > 10 ? "Consider re-engagement" : "Healthy retention"}
+            subtitle={
+              fanMetrics.purchasingFans === 0
+                ? "No purchase history yet"
+                : fanMetrics.churnRate > 10
+                  ? "Of purchasing fans — consider re-engagement"
+                  : "Of purchasing fans"
+            }
             accentColor={fanMetrics.churnRate > 10 ? "red" : "green"}
           />
         </div>

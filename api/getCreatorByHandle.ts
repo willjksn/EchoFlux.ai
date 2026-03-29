@@ -1,6 +1,7 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { getAdminDb } from "./_firebaseAdmin.js";
 import { enforceRateLimit } from "./_rateLimit.js";
+import { mergeFanHubStorefrontTheme } from "../src/lib/mergeFanHubStorefrontTheme.js";
 import { normalizeHeroMediaForStorefront } from "../src/lib/storefrontHeroNormalize.js";
 
 /**
@@ -127,7 +128,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     const cd = creatorData as Record<string, unknown>;
-    const theme = (creatorData?.theme as Record<string, string> | undefined) || {};
+    const theme = mergeFanHubStorefrontTheme(creatorData?.theme as Record<string, unknown> | undefined);
     const sections = (creatorData?.sections as Record<string, boolean> | undefined) || {};
     const rules = (creatorData?.rules as Record<string, string> | undefined) || {};
     const socialLinks = creatorData?.socialLinks || undefined;
@@ -190,9 +191,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         primary: theme.primary || "#6366f1",
         background: theme.background || "#fafafa",
         text: theme.text || "#1f2937",
+        textMuted: theme.textMuted,
+        border: theme.border,
+        accentHover: theme.accentHover,
         buttonStyle: theme.buttonStyle || "solid",
-        fontFamily: (theme as { fontFamily?: string }).fontFamily,
-        presetId: (theme as { presetId?: string }).presetId,
+        fontFamily: theme.fontFamily,
+        presetId: theme.presetId,
       },
       heroLayout: (creatorData?.heroLayout as "default" | "centered" | "split" | "splitRight") || "default",
       sections: {

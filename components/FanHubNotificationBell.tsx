@@ -35,6 +35,15 @@ function useDmMutedThreadIds(uid: string | null): Set<string> {
   return mutedIds;
 }
 
+/** Normalized payload when the user opens a notification (Firestore `data` map + metadata). */
+export type FanHubNotificationNavigatePayload = {
+  id: string;
+  type: string;
+  title: string;
+  body: string;
+  data: Record<string, string>;
+};
+
 export type FanHubNotificationBellProps = {
   /** Member storefront accent (e.g. creator primary). Creator hub can omit for CSS vars. */
   accentColor?: string;
@@ -45,7 +54,19 @@ export type FanHubNotificationBellProps = {
    * Smaller icon + padding + stroke to align with compact nav chrome (e.g. My Page preview tabs).
    */
   compact?: boolean;
+  /** Deep-link: messages thread, purchases, video session, etc. */
+  onNavigate?: (payload: FanHubNotificationNavigatePayload) => void;
 };
+
+function notificationDataAsStrings(raw: unknown): Record<string, string> {
+  if (!raw || typeof raw !== "object") return {};
+  const out: Record<string, string> = {};
+  for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
+    if (typeof v === "string") out[k] = v;
+    else if (v != null && (typeof v === "number" || typeof v === "boolean")) out[k] = String(v);
+  }
+  return out;
+}
 
 function createdAtMs(data: Record<string, unknown>): number {
   const c = data.createdAt;
@@ -67,6 +88,7 @@ type Row = {
   createdAtMs: number;
   type: string;
   threadId?: string;
+  data: Record<string, string>;
 };
 
 /**
@@ -78,6 +100,7 @@ export const FanHubNotificationBell: React.FC<FanHubNotificationBellProps> = ({
   iconColor,
   className = "",
   compact = false,
+  onNavigate,
 }) => {
   const [uid, setUid] = useState<string | null>(() => auth.currentUser?.uid ?? null);
   const [open, setOpen] = useState(false);
@@ -104,16 +127,17 @@ export const FanHubNotificationBell: React.FC<FanHubNotificationBellProps> = ({
       (snap) => {
         setListenError(null);
         const next: Row[] = snap.docs.map((d) => {
-          const data = d.data() as Record<string, unknown>;
-          const payload = data.data as { threadId?: string } | undefined;
+          const docData = d.data() as Record<string, unknown>;
+          const payload = notificationDataAsStrings(docData.data);
           return {
             id: d.id,
-            title: String(data.title ?? "Notification"),
-            body: String(data.body ?? ""),
-            read: data.read === true,
-            createdAtMs: createdAtMs(data),
-            type: String(data.type ?? ""),
-            threadId: typeof payload?.threadId === "string" ? payload.threadId : undefined,
+            title: String(docData.title ?? "Notification"),
+            body: String(docData.body ?? ""),
+            read: docData.read === true,
+            createdAtMs: createdAtMs(docData),
+            type: String(docData.type ?? ""),
+            threadId: payload.threadId?.trim() || undefined,
+            data: payload,
           };
         });
         next.sort((a, b) => b.createdAtMs - a.createdAtMs);
@@ -238,6 +262,14 @@ export const FanHubNotificationBell: React.FC<FanHubNotificationBellProps> = ({
                         type="button"
                         onClick={() => {
                           if (!r.read) void markRead(r.id);
+                          setOpen(false);
+                          onNavigate?.({
+                            id: r.id,
+                            type: r.type,
+                            title: r.title,
+                            body: r.body,
+                            data: r.data,
+                          });
                         }}
                         className={`w-full text-left px-3 py-2.5 hover:bg-black/[0.03] dark:hover:bg-white/5 ${
                           r.read

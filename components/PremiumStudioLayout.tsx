@@ -27,6 +27,10 @@ export type PremiumStudioTabContextValue = {
   pendingFansTabSelection: PendingFansTabSelection | null;
   clearPendingFansTabSelection: () => void;
   openFanInFansTab: (fanId: string, displayLabel?: string) => void;
+  /** Fan Hub Messages: after switching to Messages, select this thread id (from notification `data.threadId`). */
+  pendingMessagesThreadId: string | null;
+  clearPendingMessagesThreadId: () => void;
+  openMessagesForThread: (threadId: string) => void;
   /**
    * Fan Hub only: same --fan-* tokens as the outer shell (includes preview theme).
    * Apply on tab content wrappers so nested UI (e.g. Chat Session) isn’t stuck on CSS fallbacks.
@@ -56,6 +60,18 @@ export const PremiumStudioLayout: React.FC<PremiumStudioLayoutProps> = ({ childr
 
   const [tab, setTab] = useTabFromUrl(pathPrefix, tabIds, defaultTab);
   const [pendingFansTabSelection, setPendingFansTabSelection] = useState<PendingFansTabSelection | null>(null);
+  const [pendingMessagesThreadId, setPendingMessagesThreadId] = useState<string | null>(null);
+  const clearPendingMessagesThreadId = useCallback(() => setPendingMessagesThreadId(null), []);
+  const openMessagesForThread = useCallback(
+    (threadId: string) => {
+      if (!isFanHub) return;
+      const id = threadId.trim();
+      if (!id) return;
+      setPendingMessagesThreadId(id);
+      setTab('messages');
+    },
+    [isFanHub, setTab]
+  );
   const clearPendingFansTabSelection = useCallback(() => setPendingFansTabSelection(null), []);
   const openFanInFansTab = useCallback(
     (fanId: string, displayLabel?: string) => {
@@ -72,6 +88,36 @@ export const PremiumStudioLayout: React.FC<PremiumStudioLayoutProps> = ({ childr
   );
 
   const unreadMessagesTabCount = useUnreadNewMessageNotificationCount(isFanHub ? null : false);
+
+  const handleFanHubNotificationNavigate = useCallback(
+    (p: { type: string; data: Record<string, string> }) => {
+      if (!isFanHub) return;
+      const t = (p.type || '').trim();
+      const d = p.data;
+      if (t === 'new_message' && d.threadId?.trim()) {
+        openMessagesForThread(d.threadId);
+        return;
+      }
+      if (t === 'video_chat_accepted' || t === 'video_chat_starting' || t === 'video_chat_reminder') {
+        setTab('videoChats');
+        return;
+      }
+      if (t === 'session_starting' || t === 'session_reminder') {
+        setTab('sessions');
+        return;
+      }
+      if (t === 'purchase_confirmed' || t === 'content_unlocked') {
+        setTab('purchases');
+        return;
+      }
+      if (d.threadId?.trim()) {
+        openMessagesForThread(d.threadId);
+      } else {
+        setTab('messages');
+      }
+    },
+    [isFanHub, openMessagesForThread, setTab]
+  );
 
   /** Sync dm_muted_threads mirror so message badges respect conversations muted before this feature. */
   useEffect(() => {
@@ -248,6 +294,7 @@ export const PremiumStudioLayout: React.FC<PremiumStudioLayoutProps> = ({ childr
             accentColor={effectiveFanTheme.primary}
             iconColor={isDarkMode ? '#e2e8f0' : effectiveFanTheme.text}
             className="shrink-0"
+            onNavigate={handleFanHubNotificationNavigate}
           />
         ) : null}
       </div>
@@ -258,6 +305,9 @@ export const PremiumStudioLayout: React.FC<PremiumStudioLayoutProps> = ({ childr
           pendingFansTabSelection: isFanHub ? pendingFansTabSelection : null,
           clearPendingFansTabSelection: isFanHub ? clearPendingFansTabSelection : () => {},
           openFanInFansTab,
+          pendingMessagesThreadId: isFanHub ? pendingMessagesThreadId : null,
+          clearPendingMessagesThreadId: isFanHub ? clearPendingMessagesThreadId : () => {},
+          openMessagesForThread: isFanHub ? openMessagesForThread : () => {},
           fanHubCssVarBridge: isFanHub ? fanHubCssVarBridge : null,
         }}
       >

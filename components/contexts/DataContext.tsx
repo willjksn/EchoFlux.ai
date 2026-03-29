@@ -313,53 +313,53 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (!user || user.role !== 'Admin') return;
 
     let cancelled = false;
+    let unsubscribe: (() => void) | undefined;
 
-    const fetchAdminAlerts = async () => {
+    void (async () => {
       try {
         const token = auth.currentUser ? await auth.currentUser.getIdToken() : null;
         if (!token || cancelled) return;
 
-        // Fetch unread admin alerts from Firestore
         const adminAlertsRef = collection(db, 'admin_alerts');
         const alertsQuery = query(adminAlertsRef, orderBy('createdAt', 'desc'));
-        
-        const unsubscribe = onSnapshot(alertsQuery, (snapshot) => {
-          if (cancelled) return;
 
-          const alerts = snapshot.docs
-            .map(doc => ({ id: doc.id, ...doc.data() }))
-            .filter((alert: any) => !alert.read)
-            .slice(0, 10); // Limit to 10 most recent unread alerts
+        unsubscribe = onSnapshot(
+          alertsQuery,
+          (snapshot) => {
+            if (cancelled) return;
 
-          // Convert admin alerts to notifications
-          const adminNotifications: Notification[] = alerts.map((alert: any) => ({
-            id: `admin-${alert.id}`,
-            text: alert.message || 'Admin alert',
-            timestamp: alert.createdAt?.toDate?.()?.toLocaleString() || 'Just now',
-            read: false,
-            messageId: `admin-${alert.type || 'alert'}`,
-          }));
+            const alerts = snapshot.docs
+              .map((doc) => ({ id: doc.id, ...doc.data() }))
+              .filter((alert: any) => !alert.read)
+              .slice(0, 10);
 
-          // Add admin notifications to existing notifications
-          setNotifications((prev) => {
-            const existingIds = new Set(prev.map(n => n.id));
-            const toAdd = adminNotifications.filter(n => !existingIds.has(n.id));
-            return [...toAdd, ...prev];
-          });
-        }, (error) => {
-          console.warn('Failed to fetch admin alerts:', error);
-        });
+            const adminNotifications: Notification[] = alerts.map((alert: any) => ({
+              id: `admin-${alert.id}`,
+              text: alert.message || 'Admin alert',
+              timestamp: alert.createdAt?.toDate?.()?.toLocaleString() || 'Just now',
+              read: false,
+              messageId: `admin-${alert.type || 'alert'}`,
+            }));
 
-        return () => {
-          cancelled = true;
-          unsubscribe();
-        };
+            setNotifications((prev) => {
+              const existingIds = new Set(prev.map((n) => n.id));
+              const toAdd = adminNotifications.filter((n) => !existingIds.has(n.id));
+              return [...toAdd, ...prev];
+            });
+          },
+          (error) => {
+            console.warn('Failed to fetch admin alerts:', error);
+          }
+        );
       } catch (err) {
         console.warn('Failed to setup admin alerts listener:', err);
       }
-    };
+    })();
 
-    fetchAdminAlerts();
+    return () => {
+      cancelled = true;
+      unsubscribe?.();
+    };
   }, [user?.id, user?.role]);
 
   // Check usage limits and trial end dates when user data changes

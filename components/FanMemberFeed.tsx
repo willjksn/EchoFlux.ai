@@ -422,6 +422,7 @@ function FanMemberPostMedia({
   unlockedFanPostIds,
   unlockingPostId = null,
   onUnlockPost,
+  onUnlockNeedSignIn,
 }: {
   post: Post;
   primary: string;
@@ -434,6 +435,8 @@ function FanMemberPostMedia({
   unlockedFanPostIds?: Set<string>;
   unlockingPostId?: string | null;
   onUnlockPost?: (postId: string) => void | Promise<void>;
+  /** Shown when user taps Unlock but fanId is missing (e.g. auth still restoring). */
+  onUnlockNeedSignIn?: (message: string) => void;
 }) {
   const urls = post.mediaUrls;
   const types = post.mediaTypes;
@@ -460,6 +463,12 @@ function FanMemberPostMedia({
     if (!snaps?.length) return;
     scrollRestoreSnapsRef.current = null;
     restoreFanFeedCarouselScrollSnaps(snaps);
+    // Scroll anchoring / focus can adjust scroll after layout; restore again on the next frame(s).
+    const id = window.requestAnimationFrame(() => {
+      restoreFanFeedCarouselScrollSnaps(snaps);
+      window.requestAnimationFrame(() => restoreFanFeedCarouselScrollSnaps(snaps));
+    });
+    return () => window.cancelAnimationFrame(id);
   }, [mediaIndex]);
 
   const mediaTotals = useMemo(() => {
@@ -483,6 +492,7 @@ function FanMemberPostMedia({
       if (n <= 1) return;
       scrollRestoreSnapsRef.current = captureFanFeedCarouselScrollSnaps(carouselRootRef.current);
       setMediaIndex((i) => Math.max(0, i - 1));
+      (e.currentTarget as HTMLButtonElement).blur();
     },
     [n]
   );
@@ -494,6 +504,7 @@ function FanMemberPostMedia({
       if (n <= 1) return;
       scrollRestoreSnapsRef.current = captureFanFeedCarouselScrollSnaps(carouselRootRef.current);
       setMediaIndex((i) => Math.min(n - 1, i + 1));
+      (e.currentTarget as HTMLButtonElement).blur();
     },
     [n]
   );
@@ -523,15 +534,13 @@ function FanMemberPostMedia({
     [n]
   );
 
-  const goToSlide = useCallback(
-    (i: number, e: React.MouseEvent) => {
-      e.stopPropagation();
-      e.preventDefault();
-      scrollRestoreSnapsRef.current = captureFanFeedCarouselScrollSnaps(carouselRootRef.current);
-      setMediaIndex(i);
-    },
-    []
-  );
+  const goToSlide = useCallback((i: number, e: React.MouseEvent) => {
+    e.stopPropagation();
+    e.preventDefault();
+    scrollRestoreSnapsRef.current = captureFanFeedCarouselScrollSnaps(carouselRootRef.current);
+    setMediaIndex(i);
+    (e.currentTarget as HTMLButtonElement).blur();
+  }, []);
 
   if (n === 0) return null;
 
@@ -557,11 +566,10 @@ function FanMemberPostMedia({
 
   const slideLabel = `Slide ${idx + 1} of ${n}`;
 
-  const canClickUnlock =
-    post.lockedContent?.priceCents != null &&
+  const unlockOfferEligible =
+    typeof post.lockedContent?.priceCents === "number" &&
     post.lockedContent.priceCents >= 50 &&
     !!creatorId &&
-    !!fanId &&
     !!onUnlockPost &&
     !isDemoPost;
 
@@ -644,30 +652,13 @@ function FanMemberPostMedia({
           <span className="fan-feed-media-lock-icon" aria-hidden>
             🔒
           </span>
-          {canClickUnlock ? (
-            <button
-              type="button"
-              className="fan-feed-media-lock-unlock-btn"
-              style={{
-                borderColor: primary,
-                color: "#fff",
-                background: `linear-gradient(135deg, ${primary} 0%, color-mix(in srgb, ${primary} 70%, #000) 100%)`,
-              }}
-              disabled={unlockingPostId === post.id}
-              aria-label={`Unlock for ${(post.lockedContent!.priceCents / 100).toFixed(2)} dollars`}
-              onClick={(e) => {
-                e.stopPropagation();
-                e.preventDefault();
-                void onUnlockPost!(post.id);
-              }}
-            >
-              {unlockingPostId === post.id
-                ? "Unlock…"
-                : `Unlock $${(post.lockedContent!.priceCents / 100).toFixed(2)}`}
-            </button>
-          ) : (
+          {!unlockOfferEligible ? (
             <span className="fan-feed-media-lock-text" style={{ color: primary }}>
               {lockPriceText ?? (isDemoPost ? "Preview (demo)" : "Locked")}
+            </span>
+          ) : (
+            <span className="fan-feed-media-lock-hint">
+              {showCarousel ? "Extra photos & videos are locked" : "This content is locked"}
             </span>
           )}
         </div>
@@ -724,6 +715,48 @@ function FanMemberPostMedia({
           </div>
         </>
       )}
+      {lockedCurrent && unlockOfferEligible ? (
+        <div
+          className={`fan-feed-media-lock-unlock-hit${splitModal ? " fan-feed-media-lock-unlock-hit--modal" : ""}${
+            !showCarousel ? " fan-feed-media-lock-unlock-hit--solo" : ""
+          }`}
+        >
+          <div className="fan-feed-media-lock-unlock-stack">
+            <span className="fan-feed-media-lock-unlock-label">Pay to unlock</span>
+            <button
+              type="button"
+              className="fan-feed-media-lock-unlock-btn fan-feed-media-lock-unlock-btn--prominent"
+              style={{
+                borderColor: "#ffffff",
+                color: "#fff",
+                background: `linear-gradient(135deg, ${primary} 0%, color-mix(in srgb, ${primary} 72%, #000) 100%)`,
+              }}
+              disabled={unlockingPostId === post.id}
+              aria-label={`Unlock for ${(post.lockedContent!.priceCents / 100).toFixed(2)} dollars`}
+              onPointerDownCapture={(e) => e.stopPropagation()}
+              onMouseDown={(e) => {
+                e.stopPropagation();
+                e.preventDefault();
+              }}
+              onClick={(e) => {
+                e.stopPropagation();
+                e.preventDefault();
+                if (!fanId) {
+                  onUnlockNeedSignIn?.("Sign in to unlock this post.");
+                  return;
+                }
+                void onUnlockPost!(post.id);
+              }}
+            >
+              {unlockingPostId === post.id
+                ? "Unlock…"
+                : !fanId
+                  ? "Sign in to unlock"
+                  : `Unlock $${(post.lockedContent!.priceCents / 100).toFixed(2)}`}
+            </button>
+          </div>
+        </div>
+      ) : null}
       {showMultiBadge && (
         <span className="feed-card-count" aria-label={badgeAria}>
           {mediaTotals.images > 0 && (
@@ -818,6 +851,7 @@ function FanMemberPostDetailModal({
   unlockedFanPostIds,
   unlockingPostId,
   onUnlockPost,
+  onUnlockNeedSignIn,
 }: {
   open: boolean;
   onClose: () => void;
@@ -845,6 +879,7 @@ function FanMemberPostDetailModal({
   unlockedFanPostIds?: Set<string>;
   unlockingPostId?: string | null;
   onUnlockPost?: (postId: string) => void | Promise<void>;
+  onUnlockNeedSignIn?: (message: string) => void;
 }) {
   useEffect(() => {
     if (!open) return;
@@ -932,6 +967,7 @@ function FanMemberPostDetailModal({
                   unlockedFanPostIds={unlockedFanPostIds}
                   unlockingPostId={unlockingPostId}
                   onUnlockPost={onUnlockPost}
+                  onUnlockNeedSignIn={onUnlockNeedSignIn}
                 />
               ) : null}
               <div className="feed-comments-modal-panel">
@@ -1380,6 +1416,7 @@ export const FanMemberFeed: React.FC<FanMemberFeedProps> = ({
                 unlockedFanPostIds={unlockedFanPostIdSet}
                 unlockingPostId={unlockingPostId}
                 onUnlockPost={handleUnlockPost}
+                onUnlockNeedSignIn={(m) => showToast?.(m, "error")}
               />
 
               {post.audioUrls && post.audioUrls.length > 0 ? (
@@ -1645,6 +1682,7 @@ export const FanMemberFeed: React.FC<FanMemberFeedProps> = ({
         unlockedFanPostIds={unlockedFanPostIdSet}
         unlockingPostId={unlockingPostId}
         onUnlockPost={handleUnlockPost}
+        onUnlockNeedSignIn={(m) => showToast?.(m, "error")}
       />
     </div>
   );
@@ -1871,6 +1909,7 @@ export const FanMemberSaved: React.FC<FanMemberSavedProps> = ({
                 unlockedFanPostIds={unlockedFanPostIdSetSaved}
                 unlockingPostId={unlockingPostIdSaved}
                 onUnlockPost={handleUnlockPostSaved}
+                onUnlockNeedSignIn={(m) => showToastSaved?.(m, "error")}
               />
               <div className="fan-feed-post-actions">
                 <button
@@ -1970,6 +2009,7 @@ export const FanMemberSaved: React.FC<FanMemberSavedProps> = ({
         unlockedFanPostIds={unlockedFanPostIdSetSaved}
         unlockingPostId={unlockingPostIdSaved}
         onUnlockPost={handleUnlockPostSaved}
+        onUnlockNeedSignIn={(m) => showToastSaved?.(m, "error")}
       />
     </div>
   );

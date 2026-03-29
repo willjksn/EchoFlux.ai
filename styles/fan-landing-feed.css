@@ -1476,6 +1476,8 @@
   padding: 0.2rem 0.4rem;
   border-radius: 999px;
   background: rgba(0, 0, 0, 0.32);
+  /* Bar doesn’t steal taps; individual dots still clickable (unlock CTA can sit above visually). */
+  pointer-events: none;
 }
 .fan-feed-media-carousel-dot {
   width: 7px;
@@ -1486,6 +1488,7 @@
   cursor: pointer;
   background: rgba(255, 255, 255, 0.5);
   transition: transform 0.15s ease, background 0.15s ease;
+  pointer-events: auto;
 }
 .fan-feed-media-carousel-dot:hover {
   background: rgba(255, 255, 255, 0.75);
@@ -1505,6 +1508,90 @@
   .fan-feed-media-carousel-btn--next {
     right: 0.35rem;
   }
+}
+
+/* PPV unlock: fixed band above dots so it’s obvious; above badge (9) and carousel chrome. */
+.fan-feed-media-lock-unlock-hit {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 2.85rem;
+  top: auto;
+  height: auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 0.75rem;
+  z-index: 11;
+  pointer-events: none;
+}
+.fan-feed-media-lock-unlock-hit--modal {
+  bottom: 2.7rem;
+}
+/* Single media: center the CTA vertically */
+.fan-feed-media-lock-unlock-hit--solo {
+  bottom: auto;
+  top: 50%;
+  transform: translateY(-50%);
+}
+.fan-feed-media-lock-unlock-hit--modal.fan-feed-media-lock-unlock-hit--solo {
+  bottom: auto;
+  top: 50%;
+}
+.fan-feed-media-lock-unlock-stack {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.4rem;
+  max-width: 100%;
+  pointer-events: none;
+}
+.fan-feed-media-lock-unlock-stack .fan-feed-media-lock-unlock-btn {
+  pointer-events: auto;
+}
+.fan-feed-media-lock-unlock-label {
+  margin: 0;
+  padding: 0.2rem 0.65rem;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+}
+.fan-feed-media-lock-hint {
+  display: block;
+  max-width: 16rem;
+  margin-top: 0.15rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  line-height: 1.35;
+  color: rgba(255, 255, 255, 0.92);
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.65);
+  text-align: center;
+}
+.fan-feed-media-lock-unlock-btn--prominent {
+  min-height: 44px;
+  padding: 0.55rem 1.35rem;
+  font-size: 0.95rem;
+  border-width: 2px;
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.35),
+    0 4px 18px rgba(0, 0, 0, 0.45);
+}
+
+/* Count badge above lock overlay (overlay 3); default .feed-card-count is z-index 2 in stormij. */
+.fan-member-content--feed .fan-feed-media-carousel .feed-card-count,
+.fan-member-content--feed-column .fan-feed-media-carousel .feed-card-count {
+  z-index: 9;
+}
+
+/* Reduce scroll-anchoring jumps when slide height changes inside the feed */
+.fan-member-content--feed .fan-feed-post,
+.fan-member-content--feed-column .fan-feed-post {
+  overflow-anchor: none;
 }
 
 .fan-feed-media-lock-overlay {

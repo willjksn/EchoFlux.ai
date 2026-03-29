@@ -212,6 +212,12 @@ service cloud.firestore {
       allow read, write: if isAdmin();
     }
 
+    /** System alerts for admins (e.g. Stripe/webhooks). Written only via Admin SDK. */
+    match /admin_alerts/{alertId} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+
     /** -------------------------------------------------------
      *  MEMBER USERNAMES (global handles for fans)
      *  - Public read for availability checks in Fan Hub

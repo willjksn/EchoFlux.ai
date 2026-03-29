@@ -163,6 +163,9 @@ export const FanHubMessages: React.FC = () => {
   /** Set when /api/fanDmMessages fails (otherwise empty array looked like “no messages”). */
   const [messagesError, setMessagesError] = useState<string | null>(null);
   const [reply, setReply] = useState("");
+  const [pendingAttachmentUrl, setPendingAttachmentUrl] = useState<string | null>(null);
+  const [pendingAttachmentType, setPendingAttachmentType] = useState<DmAttachmentKind | null>(null);
+  const [pendingAttachmentUploading, setPendingAttachmentUploading] = useState(false);
   const [sending, setSending] = useState(false);
   const [deletingThreadId, setDeletingThreadId] = useState<string | null>(null);
   const [deletingMessageId, setDeletingMessageId] = useState<string | null>(null);
@@ -305,6 +308,19 @@ export const FanHubMessages: React.FC = () => {
     });
   }, [threads]);
 
+  const pendingMessagesThreadId = premiumTab?.pendingMessagesThreadId ?? null;
+  const clearPendingMessagesThreadId = premiumTab?.clearPendingMessagesThreadId;
+
+  /** Notification deep-link: select thread after list loads (runs after generic thread sync). */
+  useEffect(() => {
+    if (!creatorId || loading) return;
+    const pending = pendingMessagesThreadId?.trim();
+    if (!pending || !clearPendingMessagesThreadId) return;
+    const t = threads.find((x) => x.id === pending);
+    if (t) setSelectedThread(t);
+    clearPendingMessagesThreadId();
+  }, [creatorId, loading, threads, pendingMessagesThreadId, clearPendingMessagesThreadId]);
+
   const fetchMessagesForThread = useCallback(
     async (
       thread: FanDmThread
@@ -374,6 +390,12 @@ export const FanHubMessages: React.FC = () => {
       cancelled = true;
     };
   }, [selectedThread?.id, creatorId, fetchMessagesForThread]);
+
+  useEffect(() => {
+    setPendingAttachmentUrl(null);
+    setPendingAttachmentType(null);
+    setPendingAttachmentUploading(false);
+  }, [selectedThread?.id]);
 
   const fetchMemberDirectory = useCallback(
     async (q: string) => {
@@ -478,6 +500,8 @@ export const FanHubMessages: React.FC = () => {
       setMessagesError(loadErr);
       setMessageLabels(nextLabels);
       void fetchThreads();
+      setPendingAttachmentUrl(null);
+      setPendingAttachmentType(null);
       requestAnimationFrame(() => messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }));
       showToast?.("Sent", "success");
     } catch (e) {
@@ -489,20 +513,33 @@ export const FanHubMessages: React.FC = () => {
   };
 
   const sendReply = async () => {
-    if (!selectedThread || !reply.trim() || !creatorId) return;
-    await sendDmWithPayload(reply.trim());
+    if (!selectedThread || !creatorId) return;
+    if (!reply.trim() && !pendingAttachmentUrl) return;
+    await sendDmWithPayload(
+      reply.trim(),
+      pendingAttachmentUrl || undefined,
+      pendingAttachmentType || undefined
+    );
+  };
+
+  const clearPendingAttachment = () => {
+    setPendingAttachmentUrl(null);
+    setPendingAttachmentType(null);
   };
 
   const onFileSelected: React.ChangeEventHandler<HTMLInputElement> = async (e) => {
     const file = e.target.files?.[0];
     e.target.value = "";
     if (!file || !creatorId || !selectedThread) return;
-    const caption = reply.trim();
+    setPendingAttachmentUploading(true);
     try {
       const { url, attachmentType } = await uploadFanDmAttachment(creatorId, file);
-      await sendDmWithPayload(caption, url, attachmentType);
+      setPendingAttachmentUrl(url);
+      setPendingAttachmentType(attachmentType);
     } catch (err) {
       showToast?.(err instanceof Error ? err.message : "Upload failed", "error");
+    } finally {
+      setPendingAttachmentUploading(false);
     }
   };
 
@@ -541,7 +578,7 @@ export const FanHubMessages: React.FC = () => {
       };
       rec.onstop = async () => {
         setVoiceMeterStream(null);
-        stream.getTracks().forEach((t) => t.stop());
+        stream?.getTracks().forEach((t) => t.stop());
         setIsRecordingVoice(false);
         mediaRecorderRef.current = null;
         const chunks = mediaChunksRef.current;
@@ -558,9 +595,10 @@ export const FanHubMessages: React.FC = () => {
         const file = new File([blob], `voice-${Date.now()}.${ext}`, { type: fileType });
         try {
           const { url } = await uploadFanDmAttachment(creatorId, file);
-          await sendDmWithPayload("", url, "audio");
+          setPendingAttachmentUrl(url);
+          setPendingAttachmentType("audio");
         } catch (err) {
-          showToast?.(err instanceof Error ? err.message : "Voice send failed", "error");
+          showToast?.(err instanceof Error ? err.message : "Voice upload failed", "error");
         }
       };
       mediaRecorderRef.current = rec;
@@ -1171,7 +1209,7 @@ export const FanHubMessages: React.FC = () => {
                                     m.attachmentType !== "image" &&
                                     m.attachmentType !== "video")) ? (
                                   <div className="fh-dm-attachment">
-                                    <DmAudioPlayer src={m.attachmentUrl} className="w-full max-w-sm" />
+                                    <DmAudioPlayer src={m.attachmentUrl} variant="voiceNote" />
                                   </div>
                                 ) : null}
                                 {m.content?.trim() ? m.content : null}
@@ -1217,6 +1255,39 @@ export const FanHubMessages: React.FC = () => {
                     <AudioLevelMeter key={`dm-creator-voice-${voiceMeterKey}`} stream={voiceMeterStream} className="w-full max-w-md" />
                   </div>
                 ) : null}
+                {pendingAttachmentUploading && !pendingAttachmentUrl ? (
+                  <p className="text-xs text-gray-500 dark:text-gray-400">Uploading attachment…</p>
+                ) : null}
+                {pendingAttachmentUrl && pendingAttachmentType ? (
+                  <div className="fh-dm-pending-attach">
+                    <div className="fh-dm-pending-attach__inner">
+                      {pendingAttachmentType === "image" ? (
+                        <img src={pendingAttachmentUrl} alt="" className="fh-dm-pending-attach__thumb" />
+                      ) : pendingAttachmentType === "video" ? (
+                        <video src={pendingAttachmentUrl} className="fh-dm-pending-attach__thumb" muted playsInline />
+                      ) : (
+                        <div className="fh-dm-pending-attach__voice-label">
+                          <span className="fh-dm-pending-attach__voice-icon" aria-hidden>
+                            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2">
+                              <path d="M12 14a3 3 0 0 0 3-3V5a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3z" />
+                              <path d="M19 10v1a7 7 0 0 1-14 0v-1" />
+                            </svg>
+                          </span>
+                          Voice note ready — click Send
+                        </div>
+                      )}
+                      <button
+                        type="button"
+                        className="fh-dm-pending-attach__remove"
+                        aria-label="Remove attachment"
+                        onClick={clearPendingAttachment}
+                      >
+                        ×
+                      </button>
+                    </div>
+                    <p className="fh-dm-pending-attach__hint">Add a caption if you like, then Send.</p>
+                  </div>
+                ) : null}
                 <div className="flex gap-2 items-end">
                 <input
                   ref={fileInputRef}
@@ -1231,7 +1302,7 @@ export const FanHubMessages: React.FC = () => {
                     className="fh-dm-compose-icon"
                     title="Photo or video"
                     aria-label="Upload photo or video"
-                    disabled={sending || !selectedThread}
+                    disabled={sending || !selectedThread || pendingAttachmentUploading}
                     onClick={() => fileInputRef.current?.click()}
                   >
                     <PhotoIcon />
@@ -1239,9 +1310,9 @@ export const FanHubMessages: React.FC = () => {
                   <button
                     type="button"
                     className={`fh-dm-compose-icon ${isRecordingVoice ? "fh-dm-compose-icon--recording" : ""}`}
-                    title={isRecordingVoice ? "Stop and send voice" : "Record voice message"}
+                    title={isRecordingVoice ? "Stop recording" : "Record voice message"}
                     aria-label={isRecordingVoice ? "Stop recording" : "Record voice message"}
-                    disabled={sending || !selectedThread}
+                    disabled={sending || !selectedThread || pendingAttachmentUploading}
                     onClick={() => toggleVoiceRecording()}
                   >
                     <MicIcon />
@@ -1255,7 +1326,7 @@ export const FanHubMessages: React.FC = () => {
                   onKeyDown={(e) => {
                     if (e.key === "Enter" && !e.shiftKey) {
                       e.preventDefault();
-                      void sendReply();
+                      if (reply.trim() || pendingAttachmentUrl) void sendReply();
                     }
                   }}
                   placeholder="Message"
@@ -1264,7 +1335,11 @@ export const FanHubMessages: React.FC = () => {
                 <button
                   type="button"
                   onClick={sendReply}
-                  disabled={sending || !reply.trim()}
+                  disabled={
+                    sending ||
+                    pendingAttachmentUploading ||
+                    (!reply.trim() && !pendingAttachmentUrl)
+                  }
                   className="px-4 py-2 fh-btn text-sm font-medium disabled:opacity-50 shrink-0"
                 >
                   {sending ? "Sending…" : "Send"}
