@@ -156,6 +156,7 @@ export const AdminDashboard: React.FC = () => {
     const [editingUser, setEditingUser] = useState<User | null>(null);
     const [grantingRewardToUser, setGrantingRewardToUser] = useState<User | null>(null);
     const [searchTerm, setSearchTerm] = useState('');
+    const [userOriginFilter, setUserOriginFilter] = useState<'all' | 'fan_hub' | 'echoflux'>('all');
     const [isLoading, setIsLoading] = useState(true);
     const [accessError, setAccessError] = useState<string | null>(null);
     const [modelUsageStats, setModelUsageStats] = useState<ModelUsageStats | null>(null);
@@ -217,7 +218,7 @@ export const AdminDashboard: React.FC = () => {
     // Reset to page 1 when search term changes
     useEffect(() => {
         setCurrentPage(1);
-    }, [searchTerm]);
+    }, [searchTerm, userOriginFilter]);
 
     // Fetch Video Chat Usage Stats
     useEffect(() => {
@@ -561,10 +562,16 @@ export const AdminDashboard: React.FC = () => {
     }, [users, currentUser]);
     
     const filteredUsers = useMemo(() => {
-        const filtered = users.filter(user => 
-            user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            user.email.toLowerCase().includes(searchTerm.toLowerCase())
-        );
+        const filtered = users.filter(user => {
+            const matchesSearch =
+                user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                user.email.toLowerCase().includes(searchTerm.toLowerCase());
+            if (!matchesSearch) return false;
+            if (userOriginFilter === 'all') return true;
+            if (userOriginFilter === 'fan_hub') return user.accountOrigin === 'fan_hub';
+            // Treat undefined as legacy EchoFlux account for filtering.
+            return user.accountOrigin !== 'fan_hub';
+        });
         
         // Separate admins from regular users
         const adminUsers = filtered.filter(user => user.role === 'Admin');
@@ -577,7 +584,7 @@ export const AdminDashboard: React.FC = () => {
         
         // Return admins first, then regular users
         return [...adminUsers, ...regularUsers];
-    }, [users, searchTerm]);
+    }, [users, searchTerm, userOriginFilter]);
     
     // Calculate totals for ALL users (not just filtered/visible)
     const monthlyTotals = useMemo(() => {
@@ -730,6 +737,17 @@ export const AdminDashboard: React.FC = () => {
     const activityIcons: Record<Activity['type'], React.ReactNode> = {
         'New User': <UserPlusIcon />,
         'Plan Upgrade': <ArrowUpCircleIcon />,
+    };
+
+    const getUserOriginBadge = (user: User) => {
+        if (user.accountOrigin === 'fan_hub') {
+            return (
+                <span className="text-[10px] bg-cyan-600 text-white dark:bg-cyan-500 dark:text-white px-2 py-0.5 rounded-full font-semibold tracking-wide">
+                    FAN HUB
+                </span>
+            );
+        }
+        return null;
     };
 
     return (
@@ -1468,6 +1486,41 @@ export const AdminDashboard: React.FC = () => {
                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4">
                     <h3 className="text-xl font-bold text-gray-900 dark:text-white">User Management</h3>
                     <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+                        <div className="inline-flex rounded-md border border-gray-300 dark:border-gray-600 overflow-hidden">
+                            <button
+                                type="button"
+                                onClick={() => setUserOriginFilter('all')}
+                                className={`px-3 py-2 text-xs font-semibold ${
+                                    userOriginFilter === 'all'
+                                        ? 'bg-gray-900 text-white dark:bg-gray-100 dark:text-gray-900'
+                                        : 'bg-white text-gray-700 dark:bg-gray-800 dark:text-gray-300'
+                                }`}
+                            >
+                                All
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setUserOriginFilter('fan_hub')}
+                                className={`px-3 py-2 text-xs font-semibold ${
+                                    userOriginFilter === 'fan_hub'
+                                        ? 'bg-cyan-600 text-white dark:bg-cyan-500 dark:text-white'
+                                        : 'bg-white text-gray-700 dark:bg-gray-800 dark:text-gray-300'
+                                }`}
+                            >
+                                Fan Hub
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setUserOriginFilter('echoflux')}
+                                className={`px-3 py-2 text-xs font-semibold ${
+                                    userOriginFilter === 'echoflux'
+                                        ? 'bg-indigo-600 text-white dark:bg-indigo-500 dark:text-white'
+                                        : 'bg-white text-gray-700 dark:bg-gray-800 dark:text-gray-300'
+                                }`}
+                            >
+                                EchoFlux
+                            </button>
+                        </div>
                         <button
                             onClick={() => setShowAddUserModal(true)}
                             className="inline-flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 transition-colors font-medium"
@@ -1577,6 +1630,7 @@ export const AdminDashboard: React.FC = () => {
                                                                             <p className="font-bold text-gray-900 dark:text-white flex items-center gap-2">
                                                                                 {user.name}
                                                                                 <span className="text-xs bg-blue-600 text-white px-2 py-0.5 rounded">ADMIN</span>
+                                                                                {getUserOriginBadge(user)}
                                                                             </p>
                                                                             <p className="text-sm text-gray-500 dark:text-gray-400">{user.email}</p>
                                                                         </div>
@@ -1657,7 +1711,10 @@ export const AdminDashboard: React.FC = () => {
                                                             <div className="flex items-center space-x-3">
                                                                 <img src={user.avatar} alt={user.name} className="w-10 h-10 rounded-full"/>
                                                                 <div>
-                                                                    <p className="font-bold text-gray-900 dark:text-white">{user.name}</p>
+                                                                    <p className="font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                                                                        {user.name}
+                                                                        {getUserOriginBadge(user)}
+                                                                    </p>
                                                                     <p className="text-sm text-gray-500 dark:text-gray-400">{user.email}</p>
                                                                 </div>
                                                             </div>

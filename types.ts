@@ -821,6 +821,8 @@ export interface User {
   }>;
   /** Global fan / member handle (lowercase); set only via `api/claimMemberUsername` */
   username?: string;
+  /** How this auth profile was first provisioned. */
+  accountOrigin?: 'fan_hub' | 'echoflux';
 }
 
 export interface Notification {

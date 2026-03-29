@@ -180,6 +180,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                             userType: 'Creator', // All users are Creators now
                             signupDate: new Date().toISOString(),
                             hasCompletedOnboarding: fromFanStorefrontSignup,
+                            accountOrigin: fromFanStorefrontSignup ? 'fan_hub' : 'echoflux',
                             notifications: {
                                 newMessages: true,
                                 weeklySummary: false,
