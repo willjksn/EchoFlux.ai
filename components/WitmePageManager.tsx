@@ -66,7 +66,7 @@ const DEFAULT_CONFIG: WitmeLandingConfig = {
   heroTrustText: 'Verified fan-safe pages powered by EchoFlux.ai',
   featureCards: [
     { title: 'Start memberships', description: 'Join ongoing access when a creator opens member tiers.', icon: '👥' },
-    { title: 'Unlock private drops', description: 'Get access to paid posts, drops, and off-feed content.', icon: '🔓' },
+    { title: 'Unlock store drops', description: 'Get access to paid posts, drops, and off-feed content from Store.', icon: '🔓' },
     { title: 'Send direct support', description: 'Tip creators directly when support is enabled on their page.', icon: '💸' },
   ],
   trustItems: ['Verified creator page identity', 'Secure checkout', 'Creator-controlled access', 'Built for fan safety'],

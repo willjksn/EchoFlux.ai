@@ -67,6 +67,7 @@ import { db } from "../firebaseConfig";
 import { ReportProblemModal } from "./ReportProblemModal";
 import { Toast } from "./Toast";
 import { readFanCheckoutFetchResult } from "../src/lib/fanCheckoutResponse";
+import { WitmeHeaderLogo } from "./WitmeHeaderLogo";
 
 /** Ensure member-store products have usable Firestore ids (avoids every row showing “Processing…” when id is missing or duplicated). */
 function normalizeMemberTreatProducts(raw: unknown): TreatProduct[] {
@@ -2391,31 +2392,6 @@ export const FanStorefrontView: React.FC = () => {
   /* Neutral theme defaults - creators should customize */
   const defaultBg = "#fafafa";
   const defaultPrimary = "#6366f1";
-  const headerLogoRaw =
-    (creator?.logo && String(creator.logo).trim()) ||
-    (creator?.logoUrl && String(creator.logoUrl).trim()) ||
-    "";
-  const headerLogoCandidates = React.useMemo(() => {
-    if (!headerLogoRaw) return [] as string[];
-    const normalized = normalizeFirebaseStorageObjectPath(headerLogoRaw);
-    return normalized !== headerLogoRaw ? [headerLogoRaw, normalized] : [headerLogoRaw];
-  }, [headerLogoRaw]);
-  const [headerLogoIndex, setHeaderLogoIndex] = useState(0);
-  const [headerLogoFailed, setHeaderLogoFailed] = useState(false);
-  useEffect(() => {
-    setHeaderLogoIndex(0);
-    setHeaderLogoFailed(false);
-  }, [headerLogoRaw]);
-  const headerLogoSrc = headerLogoCandidates[headerLogoIndex];
-  const showHeaderLogo = Boolean(headerLogoSrc) && !headerLogoFailed;
-  const onHeaderLogoError = useCallback(() => {
-    const next = headerLogoIndex + 1;
-    if (next < headerLogoCandidates.length) {
-      setHeaderLogoIndex(next);
-      return;
-    }
-    setHeaderLogoFailed(true);
-  }, [headerLogoIndex, headerLogoCandidates.length]);
 
   // Membership gating values must be computed before any early return to keep hook order stable.
   const creatorRequiresPaidMembership = creator?.monetization?.freeAccessEnabled !== true;
@@ -2574,6 +2550,10 @@ export const FanStorefrontView: React.FC = () => {
   }
 
   const { theme, displayName, avatar, logo, bio, sections, sectionsOrder, rules, landingContent, monetization } = creator;
+  const communityNameRaw =
+    (creator?.landingContent?.perksTitle || "").trim() ||
+    (creator?.fanAuthBranding?.communityName || "").trim();
+  const communityName = communityNameRaw || displayName || "Member Access";
   const creatorAvatarRaw =
     (typeof avatar === "string" && avatar.trim() ? avatar.trim() : "") ||
     (typeof creator.avatarUrl === "string" && creator.avatarUrl.trim() ? creator.avatarUrl.trim() : "");
@@ -2628,7 +2608,9 @@ export const FanStorefrontView: React.FC = () => {
       : "Free"
     : "Not active";
   const memberHubWelcomeLine = (() => {
-    const community = (creator.fanAuthBranding?.communityName || "").trim();
+    const community =
+      (creator.landingContent?.perksTitle || "").trim() ||
+      (creator.fanAuthBranding?.communityName || "").trim();
     if (community) return `Welcome to ${community}`;
     const name = typeof displayName === "string" && displayName.trim() ? displayName.trim() : "";
     if (name) return `Welcome to ${name}'s member hub`;
@@ -2640,7 +2622,6 @@ export const FanStorefrontView: React.FC = () => {
     profileDraft.bio?.trim() && !isEchoFluxDefaultFanBio(profileDraft.bio) ? profileDraft.bio.trim() : "";
   // Nav tabs: order from sectionsOrder, filtered by sections; hide Messages when chat disabled.
   const baseMemberTabKeys = (sectionsOrder || ["feed", "treats", "tip", "messages", "about"])
-    .filter((key) => key !== "about")
     .filter((key) => key !== "saved" && (sections as Record<string, boolean>)?.[key] !== false)
     .filter((key) => key !== "messages" || chatEnabled)
     .filter((key) => !purchaseOnlyAccess || key === "treats" || key === "tip");
@@ -2919,24 +2900,19 @@ export const FanStorefrontView: React.FC = () => {
       >
         <div className="storefront-member-header-row flex items-center justify-between px-4 sm:px-6 py-3 gap-2 min-w-0 max-w-[1360px] mx-auto w-full">
           <div className="storefront-header-left">
-            {showHeaderLogo ? (
-              <img
-                key={headerLogoSrc}
-                src={headerLogoSrc}
-                alt={displayName}
-                className="storefront-header-logo"
-                onError={onHeaderLogoError}
-              />
+            {creatorAvatar ? (
+              <img src={creatorAvatar} alt="" className="w-9 h-9 rounded-full object-cover flex-shrink-0" style={avatarCropStyle} />
             ) : (
-              <div className="storefront-header-wordmark" aria-label={`${displayName} logo`}>
-                <span className="storefront-header-wordmark-main">
-                  {creator.handle?.toLowerCase() === "stormijxo" ? "STORMI J XO" : (displayName || "Creator").toUpperCase()}
-                </span>
-                <span className="storefront-header-wordmark-sub">
-                  {(creator.fanAuthBranding?.communityName || "Member Access").trim() || "Member Access"}
-                </span>
+              <div className="w-9 h-9 rounded-full flex items-center justify-center text-xs font-semibold text-white flex-shrink-0" style={{ background: primary }}>
+                {displayName?.charAt(0) || "?"}
               </div>
             )}
+            <div className="min-w-0">
+              <WitmeHeaderLogo color={primary} className="h-8 w-auto max-w-[170px]" />
+              <p className="truncate text-sm font-semibold" style={{ color: primary, letterSpacing: "0.01em" }}>
+                {communityName}
+              </p>
+            </div>
           </div>
           <nav className="storefront-header-nav">
             {memberTabKeys.map((key) => {

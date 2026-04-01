@@ -95,12 +95,12 @@ const DEFAULT_LANDING_CONTENT: StorefrontLandingContent = {
   memberStoreLoadingMessage: "Loading…",
   storeLandingHeadline: "Demo store headline",
   storeLandingDescription: "Demo store description text.",
-  storeLandingCtaLabel: "Shop treats",
-  publicStoreCardTitle: "Treat store",
+  storeLandingCtaLabel: "Open store",
+  publicStoreCardTitle: "Store",
   publicStoreCardDescription:
     "Demo public store description text.",
-  publicStoreOpenCtaLabel: "Open treat store",
-  publicStoreModalTitle: "Treat store",
+  publicStoreOpenCtaLabel: "Open store",
+  publicStoreModalTitle: "Store",
   publicStoreModalEmptyMessage: "Nothing available right now.",
 };
 
@@ -115,31 +115,6 @@ const FAN_HUB_PREVIEW_THEME_EVENT = "echoflux:fanhub-preview-theme-changed";
 
 function clampPercent(n: number, min: number, max: number) {
   return Math.max(min, Math.min(max, n));
-}
-
-/** Parse CSS object-position for avatar crop sliders (matches StorefrontPreview). */
-function parseAvatarPercentPair(s: string | undefined | null): [number, number] {
-  if (s == null || s === "" || s === "center") return [50, 50];
-  const t = String(s).trim();
-  const mComma = t.match(/^([\d.]+)%\s*,\s*([\d.]+)%$/);
-  if (mComma) {
-    return [clampPercent(parseFloat(mComma[1]), 0, 100), clampPercent(parseFloat(mComma[2]), 0, 100)];
-  }
-  const m = t.match(/^([\d.]+)%\s+([\d.]+)%$/);
-  if (m) {
-    return [clampPercent(parseFloat(m[1]), 0, 100), clampPercent(parseFloat(m[2]), 0, 100)];
-  }
-  const m1 = t.match(/^([\d.]+)%$/);
-  if (m1) return [clampPercent(parseFloat(m1[1]), 0, 100), 50];
-  if (t === "top") return [50, 0];
-  if (t === "bottom") return [50, 100];
-  if (t === "left") return [0, 50];
-  if (t === "right") return [100, 50];
-  return [50, 50];
-}
-
-function formatAvatarPercentPair(x: number, y: number) {
-  return `${clampPercent(Math.round(x * 10) / 10, 0, 100)}% ${clampPercent(Math.round(y * 10) / 10, 0, 100)}%`;
 }
 
 function LandingBodyModeToggle({
@@ -607,7 +582,6 @@ export const MyPageBuilder: React.FC = () => {
   const [saving, setSaving] = useState(false);
   const [handleSaving, setHandleSaving] = useState(false);
   const [avatarUploading, setAvatarUploading] = useState(false);
-  const [logoUploading, setLogoUploading] = useState(false);
   const [previewMode, setPreviewMode] = useState<"landing" | "member">("landing");
   const [saveBtnHover, setSaveBtnHover] = useState(false);
   const [previewFramingTool, setPreviewFramingTool] = useState<
@@ -1161,60 +1135,6 @@ export const MyPageBuilder: React.FC = () => {
     }
   };
 
-  const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    e.target.value = "";
-    if (!file || !creatorId) return;
-    setLogoUploading(true);
-    try {
-      const path = `users/${creatorId}/storefront_logo/${Date.now()}.${file.type.split("/")[1] || "jpg"}`;
-      const storageRef = ref(storage, path);
-      await uploadBytes(storageRef, file, { contentType: file.type });
-      const url = await getDownloadURL(storageRef);
-      updateDraft({ logo: url, logoUrl: url });
-
-      // Persist immediately so live landing can render logo without waiting for full form save.
-      try {
-        const cleanHandle = String(draft.handle ?? "")
-          .replace("@", "")
-          .toLowerCase()
-          .trim();
-        // Best-effort client-side handle mapping repair.
-        if (db && creatorId && cleanHandle) {
-          await setDoc(doc(db, "creatorHandles", cleanHandle), { creatorId }, { merge: true });
-        }
-        const token = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
-        if (token) {
-          const res = await fetch("/api/updateCreatorStorefront", {
-            method: "POST",
-            headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-            body: JSON.stringify({
-              handle: (draft.handle ?? "").replace("@", "").toLowerCase().trim(),
-              logo: url,
-              logoUrl: url,
-            }),
-          });
-
-          // Local dev fallback when /api route isn't available
-          if (!res.ok && res.status === 404 && db && creatorId) {
-            await setDoc(
-              doc(db, "creators", creatorId),
-              { logo: url, logoUrl: url, updatedAt: new Date().toISOString() },
-              { merge: true }
-            );
-          }
-        }
-      } catch (persistErr) {
-        console.warn("[MyPageBuilder] Logo auto-persist failed; keep using Save button.", persistErr);
-      }
-    } catch (err) {
-      console.error(err);
-      showToast?.("Failed to upload logo", "error");
-    } finally {
-      setLogoUploading(false);
-    }
-  };
-
   const [heroImageUploading, setHeroImageUploading] = useState(false);
   const handleHeroImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -1583,7 +1503,7 @@ export const MyPageBuilder: React.FC = () => {
                 </div>
                 <p className="text-xs text-gray-500 mt-1">{(draft.bio ?? "").length}/500</p>
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 gap-4">
                 <div>
                   <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Feed Avatar</label>
                   <p className="text-xs text-gray-400 mb-2">Shown on your posts</p>
@@ -1626,89 +1546,15 @@ export const MyPageBuilder: React.FC = () => {
                   })()}
                   {avatarUploading && <p className="text-xs text-gray-500 mt-1">Uploading…</p>}
                 </div>
-                <div>
-                  <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Header Logo</label>
-                  <p className="text-xs text-gray-400 mb-1">
-                    Click the box below to upload — it appears in the landing header (left of Sign up / Log in) in the preview and on your live page after you save.
-                  </p>
-                  <p className="text-[11px] text-gray-400 mb-2">Optimal: 400×100px or similar 3:1–4:1 ratio (wide, not square).</p>
-                  <label className="flex flex-col items-center justify-center w-full min-h-[100px] h-28 rounded-lg border-2 border-dashed border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-900/50 cursor-pointer hover:border-primary-500 overflow-hidden p-2">
-                    {draft.logo ? (
-                      <img src={draft.logo} alt="Logo" className="max-w-full max-h-full w-auto h-auto object-contain" />
-                    ) : (
-                      <ImageIcon className="w-8 h-8 text-gray-400" />
-                    )}
-                    <input type="file" accept="image/*" className="hidden" onChange={handleLogoUpload} disabled={logoUploading} />
-                  </label>
-                  {logoUploading && <p className="text-xs text-gray-500 mt-1">Uploading…</p>}
-                </div>
               </div>
               {draft.avatar ? (
                 <div className="mt-1.5 rounded-md border border-indigo-200 dark:border-indigo-800 bg-indigo-50/70 dark:bg-indigo-950/30 px-2 py-1.5">
                   <div className="flex items-center justify-between gap-2 mb-1">
-                    <span className="text-[10px] font-medium text-indigo-900 dark:text-indigo-200">Avatar crop</span>
-                    <span
-                      className="text-[9px] text-indigo-800/85 dark:text-indigo-300/90 truncate max-w-[14rem]"
-                      title="Very tall/narrow photos fill the width first, so H may barely move; V usually does more."
-                    >
-                      H works best on wider photos
+                    <span className="text-[10px] font-medium text-indigo-900 dark:text-indigo-200">Avatar position</span>
+                    <span className="text-[9px] text-indigo-800/85 dark:text-indigo-300/90 truncate max-w-[14rem]">
+                      Drag directly in the avatar circle
                     </span>
                   </div>
-                  {(() => {
-                    const [px, py] = parseAvatarPercentPair(draft.avatarObjectPosition);
-                    return (
-                      <div className="grid grid-cols-2 gap-x-2 gap-y-0.5">
-                        <div className="min-w-0">
-                          <label className="flex justify-between text-[9px] text-indigo-900 dark:text-indigo-200/90 tabular-nums">
-                            <span>H</span>
-                            <span>{typeof px === "number" ? px : 50}</span>
-                          </label>
-                          <input
-                            type="range"
-                            min={0}
-                            max={100}
-                            step={1}
-                            value={Number.isFinite(px) ? px : 50}
-                            onChange={(e) => {
-                              const nv = Number(e.target.value);
-                              setDraft((prev) => {
-                                const [, py0] = parseAvatarPercentPair(prev.avatarObjectPosition);
-                                return {
-                                  ...prev,
-                                  avatarObjectPosition: formatAvatarPercentPair(nv, py0),
-                                };
-                              });
-                            }}
-                            className="w-full h-1 accent-indigo-600"
-                          />
-                        </div>
-                        <div className="min-w-0">
-                          <label className="flex justify-between text-[9px] text-indigo-900 dark:text-indigo-200/90 tabular-nums">
-                            <span>V</span>
-                            <span>{typeof py === "number" ? py : 50}</span>
-                          </label>
-                          <input
-                            type="range"
-                            min={0}
-                            max={100}
-                            step={1}
-                            value={Number.isFinite(py) ? py : 50}
-                            onChange={(e) => {
-                              const nv = Number(e.target.value);
-                              setDraft((prev) => {
-                                const [px0] = parseAvatarPercentPair(prev.avatarObjectPosition);
-                                return {
-                                  ...prev,
-                                  avatarObjectPosition: formatAvatarPercentPair(px0, nv),
-                                };
-                              });
-                            }}
-                            className="w-full h-1 accent-indigo-600"
-                          />
-                        </div>
-                      </div>
-                    );
-                  })()}
                   <div className="flex flex-wrap gap-1 mt-1 items-center">
                     <button
                       type="button"
@@ -1719,7 +1565,7 @@ export const MyPageBuilder: React.FC = () => {
                           : "border-indigo-300 dark:border-indigo-600 bg-white dark:bg-gray-800 text-indigo-900 dark:text-indigo-100"
                       }`}
                     >
-                      {previewFramingTool === "panAvatar" ? "Dragging — use circle above" : "Drag to pan (circle above)"}
+                      {previewFramingTool === "panAvatar" ? "Dragging — move avatar" : "Enable drag mode"}
                     </button>
                     {previewFramingTool === "panAvatar" && (
                       <button
@@ -2813,103 +2659,6 @@ export const MyPageBuilder: React.FC = () => {
             </div>
           </CollapsibleSection>
 
-          <CollapsibleSection title="Member hub name & sign-in branding">
-            <p className="text-xs text-gray-500 dark:text-gray-400 mb-3 pt-2">
-              Name your space for fans (e.g. Inner Circle). That name appears on the log in / sign up modal and in members’ profile settings as their welcome line. If you leave it blank, we use your display name instead. Log in / Sign up also uses your theme; if the theme is still the default indigo, fans see a soft pink/burgundy auth modal until you customize colors. Override auth colors below (optional).
-            </p>
-            <div className="space-y-3">
-              <div>
-                <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
-                  Member hub / community name
-                </label>
-                <input
-                  type="text"
-                  value={draft.fanAuthBranding?.communityName ?? ""}
-                  onChange={(e) =>
-                    updateDraft({
-                      fanAuthBranding: {
-                        ...draft.fanAuthBranding,
-                        communityName: e.target.value.trim() || undefined,
-                      },
-                    })
-                  }
-                  placeholder='e.g. Inner Circle, The Lounge, or your brand name'
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
-                />
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Auth primary (buttons)</label>
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="color"
-                      value={
-                        draft.fanAuthBranding?.primaryColor &&
-                        /^#[0-9A-Fa-f]{6}$/.test(draft.fanAuthBranding.primaryColor)
-                          ? draft.fanAuthBranding.primaryColor
-                          : "#d9468c"
-                      }
-                      onChange={(e) =>
-                        updateDraft({
-                          fanAuthBranding: { ...draft.fanAuthBranding, primaryColor: e.target.value },
-                        })
-                      }
-                      className="w-8 h-8 rounded border border-gray-300 dark:border-gray-600 cursor-pointer"
-                    />
-                    <input
-                      type="text"
-                      value={draft.fanAuthBranding?.primaryColor ?? ""}
-                      onChange={(e) =>
-                        updateDraft({
-                          fanAuthBranding: {
-                            ...draft.fanAuthBranding,
-                            primaryColor: e.target.value.trim() || undefined,
-                          },
-                        })
-                      }
-                      placeholder="Leave blank to use theme primary"
-                      className="flex-1 min-w-0 px-2 py-1.5 text-xs border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                    />
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Headings / labels</label>
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="color"
-                      value={
-                        draft.fanAuthBranding?.accentTextColor &&
-                        /^#[0-9A-Fa-f]{6}$/.test(draft.fanAuthBranding.accentTextColor)
-                          ? draft.fanAuthBranding.accentTextColor
-                          : "#4a2c2c"
-                      }
-                      onChange={(e) =>
-                        updateDraft({
-                          fanAuthBranding: { ...draft.fanAuthBranding, accentTextColor: e.target.value },
-                        })
-                      }
-                      className="w-8 h-8 rounded border border-gray-300 dark:border-gray-600 cursor-pointer"
-                    />
-                    <input
-                      type="text"
-                      value={draft.fanAuthBranding?.accentTextColor ?? ""}
-                      onChange={(e) =>
-                        updateDraft({
-                          fanAuthBranding: {
-                            ...draft.fanAuthBranding,
-                            accentTextColor: e.target.value.trim() || undefined,
-                          },
-                        })
-                      }
-                      placeholder="Leave blank to use theme text"
-                      className="flex-1 min-w-0 px-2 py-1.5 text-xs border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                    />
-                  </div>
-                </div>
-              </div>
-            </div>
-          </CollapsibleSection>
-
           {/* Sections */}
           <CollapsibleSection title="Member Sections">
             <div className="space-y-3 pt-4">
@@ -2931,14 +2680,20 @@ export const MyPageBuilder: React.FC = () => {
                     checked={draft.sections?.[key] ?? true}
                     onChange={(e) => {
                       const v = e.target.checked;
-                      if (key === "treats" && !v) {
-                        updateDraft({
-                          sections: { ...draft.sections, ...DEFAULT_SECTIONS, treats: false },
-                          publicTreatsOnLanding: false,
-                        });
-                      } else {
-                        updateDraft({ sections: { ...draft.sections, ...DEFAULT_SECTIONS, [key]: v } });
-                      }
+                      setDraft((prev) => {
+                        const nextSections = { ...DEFAULT_SECTIONS, ...(prev.sections || {}), [key]: v };
+                        if (key === "treats" && !v) {
+                          return {
+                            ...prev,
+                            sections: { ...nextSections, treats: false },
+                            publicTreatsOnLanding: false,
+                          };
+                        }
+                        return {
+                          ...prev,
+                          sections: nextSections,
+                        };
+                      });
                     }}
                     className="rounded border-gray-300 dark:border-gray-600 text-primary-600"
                   />
@@ -2948,7 +2703,7 @@ export const MyPageBuilder: React.FC = () => {
                 <div>
                   <span className="text-sm text-gray-700 dark:text-gray-300">Guest checkout on landing</span>
                   <p className="text-xs text-gray-400 dark:text-gray-500">
-                    The treat-store promo already shows on your landing when Store is enabled. Enable this to let visitors buy without signing in (Stripe collects email).
+                    The store promo already shows on your landing when Store is enabled. Enable this to let visitors buy without signing in (Stripe collects email).
                   </p>
                 </div>
                 <input

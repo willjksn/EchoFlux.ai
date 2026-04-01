@@ -23,13 +23,13 @@ const DEFAULTS: ResolvedStoreCopy = {
   memberStoreLoadingMessage: "Loading…",
   storeLandingHeadline: "Demo store headline",
   storeLandingDescription: "Demo store description text.",
-  storeLandingCtaLabel: "Shop treats",
-  publicStoreCardTitle: "Treat store",
+  storeLandingCtaLabel: "Open store",
+  publicStoreCardTitle: "Store",
   publicStoreCardDescription: "Demo public store description text.",
-  publicStoreOpenCtaLabel: "Open treat store",
-  publicStoreModalTitle: "Treat store",
+  publicStoreOpenCtaLabel: "Open store",
+  publicStoreModalTitle: "Store",
   publicStoreModalEmptyMessage:
-    "No treats are listed for guest checkout yet. Check back soon — or become a member for the full store.",
+    "No store items are listed for guest checkout yet. Check back soon — or become a member for full access.",
 };
 
 function pick(lc: StorefrontLandingContent | null | undefined, key: keyof StorefrontLandingContent): string {

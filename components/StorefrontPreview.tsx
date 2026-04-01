@@ -61,6 +61,7 @@ import { resolveStoreCopy } from "../src/lib/storefrontStoreCopy";
 import { resolvePricingLandingCopy } from "../src/lib/pricingLandingCopy";
 import { resolveTipSectionCopy } from "../src/lib/tipSectionCopy";
 import { normalizeHeroMediaForStorefront } from "../src/lib/storefrontHeroNormalize";
+import { WitmeHeaderLogo } from "./WitmeHeaderLogo";
 
 export type StorefrontHeroMediaItem = NonNullable<CreatorStorefrontSettings["heroMedia"]>[number];
 
@@ -154,25 +155,6 @@ function LandingListMarkerGlyph({ marker, color }: { marker: LandingSectionListM
 const LANDING_MAIN_MAX = "max-w-[720px] mx-auto w-full";
 /** Builder preview header row. */
 const LANDING_HEADER_MAX = "max-w-[720px] mx-auto w-full";
-
-/** Normalize Firebase Storage /o/{object} path encoding for legacy URLs. */
-function normalizeFirebaseStorageObjectPath(url: string): string {
-  try {
-    const u = new URL(url);
-    if (!u.hostname.includes("firebasestorage.googleapis.com")) return url;
-    const marker = "/o/";
-    const idx = u.pathname.indexOf(marker);
-    if (idx < 0) return url;
-    const head = u.pathname.slice(0, idx + marker.length);
-    const rawObject = u.pathname.slice(idx + marker.length);
-    const decoded = decodeURIComponent(rawObject);
-    const reencoded = encodeURIComponent(decoded);
-    if (reencoded === rawObject) return url;
-    return `${u.origin}${head}${reencoded}${u.search}`;
-  } catch {
-    return url;
-  }
-}
 
 // Helper to generate inline styles from TextStyle
 function getTextStyleCSS(
@@ -456,9 +438,8 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
   const textColor = theme.text || DEFAULT_TEXT;
   const isDark = isDarkBackground(background);
   const live = liveLanding;
-  const liveLogoScale = 1.95;
-  const liveAuthScale = 1.15;
-  const liveAuthShiftLeftPx = 56;
+  const liveAuthScale = 1;
+  const liveAuthShiftLeftPx = 0;
   // Match stormijxo.com: full-width header row, but centered readable content column.
   const landingMainMaxClass = LANDING_MAIN_MAX;
   const landingHeaderMaxClass = live ? "max-w-[1360px] mx-auto w-full" : LANDING_HEADER_MAX;
@@ -547,7 +528,6 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
   const sectionsOrder = config.sectionsOrder ?? DEFAULT_SECTION_ORDER;
   const chatEnabledPreview = config.monetization?.chatEnabled !== false;
   const memberTabs = sectionsOrder
-    .filter((key) => key !== "about")
     .filter((key) => key !== "saved" && (sections as Record<string, boolean>)?.[key] !== false)
     .filter((key) => key !== "messages" || chatEnabledPreview);
   const { user, showToast } = useAppContext();
@@ -646,32 +626,6 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
   const avatar = config.avatar;
   /** Same crop for every circular avatar in the preview. */
   const avatarCropStyle: React.CSSProperties = getAvatarCropStyle(config.avatarObjectPosition);
-  const cfgLogo = config as { logo?: string; logoUrl?: string };
-  const logo =
-    (cfgLogo.logo && String(cfgLogo.logo).trim()) ||
-    (cfgLogo.logoUrl && String(cfgLogo.logoUrl).trim()) ||
-    undefined;
-  const [logoImageFailed, setLogoImageFailed] = useState(false);
-  const logoCandidates = useMemo(() => {
-    if (!logo) return [] as string[];
-    const normalized = normalizeFirebaseStorageObjectPath(logo);
-    return normalized !== logo ? [logo, normalized] : [logo];
-  }, [logo]);
-  const [logoCandidateIndex, setLogoCandidateIndex] = useState(0);
-  const logoSrc = logoCandidates[logoCandidateIndex];
-  useEffect(() => {
-    setLogoImageFailed(false);
-    setLogoCandidateIndex(0);
-  }, [logo]);
-  const showLogoImage = Boolean(logoSrc) && !logoImageFailed;
-  const onLogoError = useCallback(() => {
-    const next = logoCandidateIndex + 1;
-    if (next < logoCandidates.length) {
-      setLogoCandidateIndex(next);
-      return;
-    }
-    setLogoImageFailed(true);
-  }, [logoCandidateIndex, logoCandidates.length]);
   const showDisplayNameOnLanding = config.showDisplayNameOnLanding !== false;
   const cfgHeroUrl = (config as { heroImageUrl?: string }).heroImageUrl;
   const heroMedia = useMemo(
@@ -990,74 +944,18 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
                 href={live.homeHref ?? "/"}
                 className="flex items-center gap-2 min-h-[56px] min-w-0 flex-1 no-underline text-inherit"
               >
-                {showLogoImage ? (
-                  <img
-                    key={logoSrc}
-                    src={logoSrc}
-                    alt={displayName}
-                    className={`${live ? "h-12 max-h-12 max-w-[620px]" : "h-14 max-h-14 max-w-[320px]"} w-auto object-contain object-left flex-shrink-0`}
-                    style={live ? { transform: `scale(${liveLogoScale})`, transformOrigin: "left center" } : undefined}
-                    onError={onLogoError}
-                  />
-                ) : avatar ? (
-                  <img
-                    src={avatar}
-                    alt=""
-                    className="w-8 h-8 rounded-full object-cover flex-shrink-0"
-                    style={{ border: `2px solid ${primary}40`, ...avatarCropStyle }}
-                  />
-                ) : (
-                  <div
-                    className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-semibold text-white flex-shrink-0"
-                    style={{ background: primary }}
-                  >
-                    {displayName?.charAt(0) || "?"}
-                  </div>
-                )}
-                {!showLogoImage && (
-                  <span className="text-sm font-semibold truncate min-w-0" style={{ color: primary, letterSpacing: "0.01em" }}>
-                    {displayName || "My Page"}
-                  </span>
-                )}
+                <WitmeHeaderLogo color={primary} className="h-10 w-auto max-w-[220px] flex-shrink-0 sm:h-11" />
               </a>
             ) : (
               <div
                 className="flex items-center gap-2 min-h-[56px] min-w-0 flex-1"
                 aria-label="Storefront preview"
               >
-                {showLogoImage ? (
-                  <img
-                    key={logoSrc}
-                    src={logoSrc}
-                    alt={displayName}
-                    className={`${live ? "h-12 max-h-12 max-w-[620px]" : "h-14 max-h-14 max-w-[320px]"} w-auto object-contain object-left flex-shrink-0`}
-                    style={live ? { transform: `scale(${liveLogoScale})`, transformOrigin: "left center" } : undefined}
-                    onError={onLogoError}
-                  />
-                ) : avatar ? (
-                  <img
-                    src={avatar}
-                    alt=""
-                    className="w-8 h-8 rounded-full object-cover flex-shrink-0"
-                    style={{ border: `2px solid ${primary}40`, ...avatarCropStyle }}
-                  />
-                ) : (
-                  <div
-                    className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-semibold text-white flex-shrink-0"
-                    style={{ background: primary }}
-                  >
-                    {displayName?.charAt(0) || "?"}
-                  </div>
-                )}
-                {!showLogoImage && (
-                  <span className="text-sm font-semibold truncate min-w-0" style={{ color: primary, letterSpacing: "0.01em" }}>
-                    {displayName || "My Page"}
-                  </span>
-                )}
+                <WitmeHeaderLogo color={primary} className="h-10 w-auto max-w-[220px] flex-shrink-0 sm:h-11" />
               </div>
             )}
             <div
-              className="flex gap-2 sm:gap-3 items-center flex-shrink-0 ml-2"
+              className="ml-2 flex flex-shrink-0 items-center gap-2 self-center sm:gap-3"
               style={
                 live
                   ? {
@@ -1830,7 +1728,7 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
                     aria-label={
                       live
                         ? live.showGuestTreatsCard
-                          ? "Open treat store"
+                          ? "Open store"
                           : "Sign up to access the store"
                         : "Preview: store CTA"
                     }
@@ -2006,27 +1904,7 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
           {/* Member Header — outside scroll so notification dropdown isn’t clipped */}
           <header className="flex items-center justify-between px-4 py-3 flex-shrink-0 gap-2" style={previewHeaderChrome}>
             <div className="flex items-center gap-2 min-h-[56px]">
-              {showLogoImage ? (
-                <img
-                  key={logoSrc}
-                  src={logoSrc}
-                  alt={displayName}
-                  className="h-12 w-auto max-w-[300px] object-contain object-left"
-                  onError={onLogoError}
-                />
-              ) : avatar ? (
-                <img
-                  src={avatar}
-                  alt=""
-                  className="w-8 h-8 rounded-full object-cover"
-                  style={{ border: `2px solid ${primary}40`, ...avatarCropStyle }}
-                />
-              ) : (
-                <div className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-semibold text-white" style={{ background: primary }}>
-                  {displayName?.charAt(0) || "?"}
-                </div>
-              )}
-              {!showLogoImage && <span className="text-sm font-semibold" style={{ color: primary, letterSpacing: "0.01em" }}>{displayName || "My Page"}</span>}
+              <WitmeHeaderLogo color={primary} className="h-8 w-auto max-w-[170px]" />
             </div>
             <nav className="flex items-center gap-1 flex-1 justify-center min-w-0 overflow-x-auto">
               {memberTabs.map((key) => (
@@ -2126,7 +2004,12 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
                   <div className="feed-card-header">
                     <div className="feed-card-avatar">
                       {avatar ? (
-                        <img src={avatar} alt="" className="feed-card-avatar-img" style={avatarCropStyle} />
+                        <img
+                          src={avatar}
+                          alt=""
+                          className="feed-card-avatar-img"
+                          style={{ objectFit: "contain", objectPosition: "center" }}
+                        />
                       ) : (
                         <span className="feed-card-avatar-initial">{(displayName || "?")[0].toUpperCase()}</span>
                       )}

@@ -32,10 +32,10 @@ const DEFAULT_CONFIG: WitmeLandingConfig = {
   heroTrustText: "Verified fan-safe pages powered by EchoFlux.ai",
   featureCards: [
     { title: "Start memberships", description: "Join ongoing access when a creator opens member tiers.", icon: "👥" },
-    { title: "Unlock private drops", description: "Get access to paid posts, drops, and off-feed content.", icon: "🔓" },
+    { title: "Unlock store drops", description: "Get access to paid posts, drops, and off-feed content from Store.", icon: "🔓" },
     { title: "Send direct support", description: "Tip creators directly when support is enabled on their page.", icon: "💸" },
     { title: "Open direct chat", description: "Message creators when they choose to open DMs.", icon: "💬" },
-    { title: "Book private sessions", description: "Reserve 1:1 chat or video time when session slots are available.", icon: "🗓️" },
+    { title: "Book store sessions", description: "Reserve 1:1 chat or video time when session slots are available in Store.", icon: "🗓️" },
     { title: "Claim creator offers", description: "Access creator-specific offers, perks, and premium experiences.", icon: "✨" },
   ],
   trustItems: [
