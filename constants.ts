@@ -83,6 +83,7 @@ export const KNOWN_APP_ROUTES: readonly string[] = [
   '/reset-password',
   '/premium-studio-upgrade',
   '/fan-hub',
+  '/witme-page',
   '/data-deletion',
 ] as const;
 
@@ -199,180 +200,112 @@ export type VideoMinutePackId = (typeof VIDEO_MINUTE_PACKS)[number]['id'];
  * Creators may edit or replace this text. Not a substitute for legal advice.
  * Covers: memberships, tips, digital products, messaging, feed, EchoFlux/Fan Hub platform role, Stripe, Firebase-class hosting.
  */
-export const DEFAULT_PRIVACY_POLICY = `Last updated: March 28, 2026
+export const DEFAULT_PRIVACY_POLICY = `Last updated: March 30, 2026
+WHO THIS POLICY COVERS
+This Privacy Policy explains how information is handled when you use this creator page and related fan features (the "Service"), including account access, memberships, paid content, direct messages, tips, and session bookings where enabled. The page is operated by the creator shown on this profile ("we," "us," "our"), and runs on EchoFlux / Fan Hub infrastructure.
 
-WHO WE ARE AND WHAT THIS PAGE COVERS
-This Privacy Policy describes how information is collected, used, shared, and protected when you visit this creator page, create an account, purchase a membership or other offerings, send messages, or otherwise use this Fan Hub experience (the "Service"). The Service may be operated by the creator or brand shown on this page ("we," "us," or "our"). Certain technology used to run this page (including hosting, authentication, payments, and related infrastructure) may be provided by EchoFlux, Fan Hub, EngageSuite, or affiliated service providers (together, the "Platform"). Where the Platform processes personal data on our behalf, we remain responsible to you for how the Service uses your information as described here, subject to the practices of independent payment and infrastructure providers as noted below.
-
-ECHOFLUX PLATFORM POLICIES
-EchoFlux publishes platform-wide terms and privacy information at https://echoflux.ai/terms and https://echoflux.ai/privacy. Those documents describe how the Platform processes data for shared login, checkout, fraud prevention, security, and operations when you use Fan Hub or related EchoFlux services. This page supplements (and does not replace) those disclosures for creator-specific practices we describe here.
-
-ECHOFLUX DOES NOT CONTROL OR ANSWER FOR THE CREATOR
-The creator or brand operating this Fan Hub ("we" in this Policy) decides what to post, sell, message, and how to use fan information they can see in their tools. EchoFlux and the Platform do not endorse, verify, supervise, or take responsibility for the creator's content, promises, refund decisions, tax or legal compliance, or how the creator handles personal data beyond what the Platform processes as described at echoflux.ai/privacy. Questions about this creator's practices should go to the creator first. EchoFlux is not liable to you for the creator's actions or omissions, except where mandatory law does not allow that limitation.
-
-SCOPE
-This policy applies to visitors, registered users, paying members, guests who check out with limited profiles, and anyone who interacts with this site or linked checkout flows. It does not apply to third-party websites, apps, or social networks you access through links we provide; those sites have their own policies.
-
-FAN HUB FEATURES THIS POLICY MAY COVER
-Depending on what the creator enables, the Service may include: a public landing page; member-only feed and saved posts; direct messaging between you and the creator; tips and recurring memberships; digital products and unlocks; live or scheduled video sessions (often via a third-party video provider); notifications; and optional custom domains. Data needed to run each feature is processed as described in the sections below.
-
-INFORMATION WE COLLECT
-• Account and identity: When you sign up or log in, we may collect your email address, display name or username, profile details you choose to provide, and a unique user identifier tied to your account.
-• Guest or limited checkout: If you purchase before completing a full member profile, we may still collect email, Stripe customer identifiers, and purchase metadata needed to deliver access and, where applicable, link the purchase when you later create or sign in to an account.
-• Membership and purchases: If you subscribe, tip, unlock content, or buy digital products or sessions from the creator's store, we receive transaction-related information (such as amount, product type, and status). We do not receive your full card number or CVV on our servers; payment data is handled by our payment processor as described under Payments below.
-• Content and activity: We collect content you submit (for example posts you comment on, likes, saved items where the feature exists, and direct messages you send or receive through the Service). We may also collect technical data such as device type, browser, approximate location derived from IP address, timestamps, and diagnostic logs needed to operate and secure the Service.
-• Communications: If you contact us by email or through the Service, we retain those communications to respond and improve support.
-• Creator-added tools: If we enable additional features (for example waitlists, forms, or integrations), we will use information you submit through those features only as disclosed when you use them.
+WHAT WE COLLECT
+• Account details: email, username/display name, account identifiers, and profile settings.
+• Purchase and billing metadata: membership status, product type, amount, timestamps, and payment status.
+• Creator-page interactions: direct messages, purchases, fan actions, and support requests.
+• Device and log data: browser type, IP-based region, timestamps, and security diagnostics.
+• Guest checkout details: limited account and transaction metadata needed to deliver purchased access.
 
 HOW WE USE INFORMATION
-We use personal information to: create and manage accounts; authenticate you; process memberships, tips, unlocks, and other purchases; deliver member-only content and features (including feeds and messaging); send service-related notices (such as receipts, password resets, and important policy updates); enforce our Terms of Service; detect, prevent, and address fraud, abuse, and security issues; comply with legal obligations; and improve reliability and performance of the Service. With your consent where required, we may also send promotional messages about this creator's offerings; you may opt out of marketing where applicable.
+We use information to provide the Service, process purchases, deliver paid access, send receipts and service notices, prevent fraud and abuse, enforce terms, and improve reliability.
 
-LEGAL BASES (WHERE APPLICABLE)
-If you are in the European Economic Area, UK, or similar regions, we rely on: performance of a contract (to provide what you paid for); legitimate interests (security, analytics, improving the Service, and protecting our rights); consent (where we ask for it, e.g. certain cookies or marketing); and legal obligation where the law requires us to process data.
+PAYMENTS
+Payments are processed by Stripe. Card and bank details are handled by Stripe and are not stored on this creator page backend. Stripe's privacy policy applies to payment data: https://stripe.com/privacy
 
-PAYMENTS — STRIPE
-Payments (including subscriptions, tips, and purchases) are processed by Stripe, Inc. and/or its affiliates, including where Stripe Connect is used so that payouts may go to the creator or their business. Card and bank details are collected and stored by Stripe according to Stripe's own privacy policy: https://stripe.com/privacy
-We receive limited payment information from Stripe (such as payment status, last four digits of a card where shown, and customer identifiers) to fulfill your orders and support billing questions.
+WHO CAN SEE WHAT
+• The creator can see fan data needed to deliver their offerings (for example: display name, contact details provided through purchases, and purchase history on this page).
+• The creator cannot see your purchases with other creators.
+• Message and safety-report data may be reviewed for policy, abuse, legal, or security reasons.
 
-PLATFORM AND INFRASTRUCTURE PROVIDERS
-To operate the Service, data may be processed by trusted service providers (subprocessors), which may include: cloud hosting and databases; authentication services; email or notification delivery; error monitoring; and security tools. These providers are permitted to use data only to perform services for us and are subject to confidentiality and security obligations. The Platform may update subprocessors over time; material changes are typically reflected in the operator's main site privacy policy or notices where required.
+SERVICE PROVIDERS
+We use providers for hosting, authentication, storage, security, analytics, notifications, and payments. These providers process data only as needed to operate the Service.
 
-COOKIES AND SIMILAR TECHNOLOGIES
-We and our providers may use cookies, local storage, and similar technologies to keep you signed in, remember preferences, prevent fraud, and understand how the Service is used. You can control some cookies through your browser settings; blocking required cookies may limit certain features.
+COOKIES AND SIMILAR TOOLS
+We use cookies/local storage for sign-in, preferences, analytics, and abuse prevention. Required cookies are necessary for core functionality.
 
-MESSAGES AND MEMBER-ONLY CONTENT
-Direct messages and member-only posts or media are stored so we can display them to you and the creator (and authorized moderators) within the Service. You must not export, scrape, or misuse this data outside the Service; see our Terms of Service. We do not use your private messages to train public AI models unless we separately disclose that and obtain any required consent.
+DATA RETENTION
+Data is retained as needed to run the Service, meet legal obligations, resolve disputes, and enforce agreements. Deletion requests may be subject to legal retention exceptions.
 
-AUTOMATED OR AI-ASSISTED FEATURES
-If the Service includes chatbots, content recommendations, or other automated features, we will process inputs and outputs as needed to run those features. Do not submit sensitive personal data (such as government IDs, health information, or payment details) in free-text fields unless a form explicitly requests it.
-
-SAFETY, BLOCKING, AND REPORTS
-Creators may block specific fans from sending messages or completing new purchases as implemented on the Platform. If you submit a safety report, we collect the information you provide (such as reason, message references, and timestamps) to review abuse, protect users, and comply with law. Report data may be accessible to the creator, the Platform, and law enforcement when required.
-
-SHARING OF INFORMATION
-We do not sell your personal information for money. We may share information: with the Platform and service providers as described above; with the creator's authorized team members or agents who help run this page; when required by law, legal process, or to protect rights and safety; and in connection with a business transfer (e.g. merger), subject to appropriate safeguards. Aggregated or de-identified data that cannot reasonably identify you may be used for analytics or reporting.
-
-INTERNATIONAL TRANSFERS
-If you access the Service from outside the country where our servers or providers are located, your information may be transferred to and processed in the United States or other countries. Where required, we use appropriate safeguards (such as standard contractual clauses) for cross-border transfers.
-
-RETENTION
-We retain information as long as your account is active, as needed to provide the Service, and as required for legal, tax, audit, and dispute-resolution purposes. Message and transaction records may be kept for a period consistent with those needs. When data is no longer required, we delete or anonymize it subject to backup and archival practices.
-
-YOUR RIGHTS AND CHOICES
-Depending on where you live, you may have rights to access, correct, delete, or export your personal data; object to or restrict certain processing; withdraw consent; and opt out of certain "sales" or "sharing" as defined under U.S. state laws. To exercise rights, contact us using the method shown on this page or in your account settings. You may also have the right to complain to a data protection authority. We will not discriminate against you for exercising privacy rights. For requests that concern only how the creator uses information in their business (for example, marketing lists they maintain outside the Platform), contact the creator; EchoFlux cannot control the creator's independent practices and is not responsible for them.
+YOUR RIGHTS
+Depending on your location, you may have rights to access, correct, delete, export, or object to certain processing. To submit requests, contact the creator through this page or contact EchoFlux support at contact@echoflux.ai for platform-level requests.
 
 SECURITY
-We use administrative, technical, and organizational measures designed to protect personal information. No online service is completely secure; you are responsible for maintaining the confidentiality of your password and for activity under your account.
+We use reasonable administrative and technical safeguards. No system is perfectly secure.
 
 CHILDREN
-The Service is not directed to children under 13 (or the age of digital consent in your region). We do not knowingly collect personal information from children. If you believe we have collected information from a child, contact us so we can delete it.
+This Service is not intended for minors. Accounts and purchases require adult eligibility.
 
-CHANGES TO THIS POLICY
-We may update this Privacy Policy from time to time. We will post the updated version on this page and may change the "Last updated" date. For material changes, we may provide additional notice (for example by email or a banner). Continued use of the Service after the effective date of changes constitutes acceptance of the updated policy where permitted by law.
+CHANGES
+We may update this policy and will revise the date above when updates are posted.
 
 CONTACT
-For privacy questions, data requests, or concerns about this creator page, contact the creator using the contact options provided on this site. For questions specifically about EchoFlux / Fan Hub platform practices, you may also refer to the contact information published on echoflux.ai or the main application privacy policy.
+For creator-page privacy questions, contact the creator through this page. For EchoFlux platform privacy questions, contact: contact@echoflux.ai
 
-NOTICE TO CALIFORNIA AND OTHER U.S. STATE RESIDENTS (SUMMARY)
-Residents of California and certain other states may have rights to know, access, delete, or correct personal information, and to opt out of certain processing or appeal our responses, depending on applicable law. California residents may request information about categories of personal information collected, sources, purposes, disclosures, and rights to access, delete, and opt out of certain sharing. We do not "sell" personal information for money in the traditional sense; we use service providers as described above. You may designate an authorized agent to make requests where the law allows. For requests about data the creator alone controls on their Fan Hub, we may coordinate with the creator where appropriate.
-
-This default policy is a starting template. Creators should review it with qualified legal counsel and adapt it to their jurisdiction, offerings, and data practices.`;
+This is a default template. Creators should review and adapt this text with legal counsel for their jurisdiction and business model.`;
 
 /**
  * Default Terms of Service for creator Fan Hub / storefront pages.
  * Creators may edit or replace this text. Not a substitute for legal advice.
  * Strong content-protection language retained; expanded for subscriptions, tips, store purchases, platform role, liability.
  */
-export const DEFAULT_TERMS_OF_SERVICE = `Last updated: March 28, 2026
+export const DEFAULT_TERMS_OF_SERVICE = `Last updated: March 30, 2026
+1. ACCEPTANCE
+By using this creator page and related fan features (the "Service"), you agree to these Terms and the Privacy Policy on this page.
 
-1. AGREEMENT
-By accessing or using this creator page, Fan Hub, member area, checkout pages, or any related features (together, the "Service"), you agree to these Terms of Service ("Terms") and our Privacy Policy. If you do not agree, do not use the Service. The Service may be offered by the creator or brand identified on this page ("we," "us," or "our"). The Service may be powered by technology provided by EchoFlux, Fan Hub, EngageSuite, or related providers (the "Platform"). You acknowledge that the Platform is a technology and infrastructure provider and that your agreement to pay for and receive creator offerings is primarily with us; the Platform's own terms and policies may also apply to your use of the underlying software, including https://echoflux.ai/terms and https://echoflux.ai/privacy when you use shared authentication or checkout.
+2. WHO OPERATES THIS PAGE
+This page is operated by the creator shown on this profile ("we," "us," "our") and powered by EchoFlux / Fan Hub technology. Your purchases are primarily with the creator operating this page.
 
-2. ELIGIBILITY AND ACCOUNTS
-You must be at least 18 years old (or the age of majority where you live, if higher) to use the Service. You must provide accurate registration information and keep your login credentials secure. You are responsible for all activity under your account. Notify us promptly of any unauthorized use. We may refuse service, close accounts, or limit features for violations of these Terms or applicable law.
+3. ELIGIBILITY
+You must be at least 18 years old (or the age of majority in your jurisdiction) to use paid features.
 
-3. DESCRIPTION OF THE SERVICE
-The Service may include: a public landing page; member subscriptions; paywalled or member-only feed posts, images, or videos; saved posts or bookmarks where available; tips; one-time purchases such as digital products, unlocks, or booked experiences from the creator's store; direct messaging between you and the creator; live or scheduled video sessions (which may use third-party video infrastructure); comments or engagement features; optional custom domains; and other tools we enable from time to time. Payments to the creator are typically processed through Stripe (including Stripe Connect); the Platform may charge the creator a separate platform fee on Fan Hub revenue, which does not change your checkout price unless we expressly state otherwise at purchase. We may add, change, or discontinue features with reasonable notice where practicable. The Service is provided "as is" without guarantee of uninterrupted or error-free operation.
+4. SERVICE FEATURES
+Depending on what is enabled by the creator, the Service may include memberships, paid posts, direct messages, tips, one-time offers, and scheduled or live sessions.
 
-3A. RELATIONSHIP BETWEEN YOU, THE CREATOR, AND THE PLATFORM
-Your purchases, memberships, tips, and digital access are agreements with the creator (us on this page), not with EchoFlux. EchoFlux, Fan Hub, EngageSuite, and related Platform operators ("EchoFlux") furnish software, hosting, authentication, Stripe-based checkout integration, and safety tooling. EchoFlux is not your seller, employer, agent, or partner of the creator. EchoFlux does not review, approve, or guarantee creator content, pricing, refunds, tax treatment, identity beyond routine sign-in, or any statement the creator makes on this page or in messages.
+5. VARIABLE CREATOR OFFERINGS
+Not every feature is available on every creator page. The creator controls which offers are active.
 
-3B. ECHOFLUX NOT RESPONSIBLE FOR CREATORS — RELEASE
-To the fullest extent permitted by applicable law, you acknowledge and agree that: (i) EchoFlux is not liable for any loss, harm, or dispute arising from the creator's content, conduct, products, services, messages, refund decisions, failure to deliver, alleged misrepresentation, infringement, privacy practices specific to the creator's own use of your data, or any interaction between you and the creator; (ii) any such matter is solely between you and the creator, and you look only to the creator for remedies (subject to Stripe's role in payment processing and rights you cannot waive under mandatory consumer law); (iii) EchoFlux does not warrant that creators will comply with law or these Terms; (iv) you release and hold harmless EchoFlux and its affiliates, officers, directors, employees, and contractors from claims, demands, and damages (actual and consequential) of every kind arising out of or in any way connected with disputes involving the creator or the Service content, except for EchoFlux's own gross negligence, fraud, or willful misconduct where such exclusion is not enforceable.
+6. PAYMENTS AND RENEWALS
+Payments are processed through Stripe. Memberships may renew automatically until canceled. Pricing and billing terms are shown at checkout.
 
-3C. BLOCKING, REPORTS, AND ENFORCEMENT
-We or the Platform may block or restrict access to messaging or new purchases if you are blocked by the creator or for violations of these Terms or law. You may use in-product reporting tools where available. We and the Platform may investigate reports, suspend access, and cooperate with law enforcement as required. EchoFlux may take action for platform safety or legal reasons; that does not make EchoFlux responsible for ongoing moderation of the creator's page.
+7. REFUNDS
+Unless required by law or stated at checkout, digital purchases are generally final after delivery. Charge issues should be reported promptly.
 
-4. MEMBERSHIPS AND RECURRING SUBSCRIPTIONS
-If you purchase a recurring membership, you authorize us (through our payment processor, Stripe) to charge your payment method on each billing cycle until you cancel. Pricing, billing frequency, and what is included are shown at checkout or on this page. You may cancel before the next billing date as described in checkout receipts, account tools, or Stripe's customer billing portal where available. Cancellation typically stops future charges; it does not always refund the current period unless required by law or expressly stated at purchase.
+8. CREATOR INTERACTION
+Creators may use assistants or team support for page operations, messages, and fulfillment. Response times and availability are not guaranteed.
 
-5. TIPS, ONE-TIME PURCHASES, AND DIGITAL GOODS
-Tips, unlocks, and other one-time charges are final once successfully processed unless otherwise required by law or expressly stated at checkout. Digital content and access are deemed delivered when made available in your account. You waive any statutory right of withdrawal for digital content where the law allows waiver once delivery has begun.
+9. CONTENT USE RULES
+Content on this page is for personal, on-platform use only. You may not copy, record, scrape, redistribute, or resell creator content or private messages without written permission.
 
-6. SCHEDULED SESSIONS, STORE PURCHASES, AND THIRD-PARTY TOOLS
-If you book live chat, video, or similar sessions, additional rules (including scheduling, no-shows, and rescheduling) may apply as shown at purchase. Sessions may use third-party video or communication tools; your use of those tools may be subject to the third party's terms. We are not responsible for failures of third-party networks or equipment outside our reasonable control.
+10. PROHIBITED CONDUCT
+You may not use this Service for harassment, hate, impersonation, fraud, unlawful activity, non-consensual content, exploitative content, or rights infringement.
 
-7. PAYMENTS, TAXES, AND STRIPE
-Payments are processed by Stripe. You agree to Stripe's terms and privacy policy (https://stripe.com/legal and https://stripe.com/privacy). You are responsible for any taxes associated with your purchases except where we are legally required to collect them. If a payment fails, we may suspend access until payment succeeds.
+11. MODERATION AND BLOCKING
+The creator and platform may block accounts, remove content, restrict features, or suspend access for safety, policy, legal, or payment reasons.
 
-8. REFUNDS AND CHARGEBACKS
-Unless otherwise stated at checkout or required by law, fees are non-refundable. If you dispute a charge with your bank ("chargeback") without first contacting us in good faith, we may terminate your access and pursue available remedies. We may grant refunds or credits in our sole discretion where appropriate.
+12. INTELLECTUAL PROPERTY
+Creator content belongs to the creator or their licensors. Platform software and branding belong to EchoFlux and its licensors.
 
-9. INTELLECTUAL PROPERTY
-All content on the Service (including images, videos, text, graphics, logos, and software), except content you submit as a user, is owned by us or our licensors and is protected by copyright, trademark, and other laws. Except for the limited rights in Section 11, no rights are granted to you.
+13. DISCLAIMER
+The Service is provided as-is and as-available. We do not guarantee uninterrupted access, specific outcomes, or specific response quality.
 
-10. YOUR CONTENT AND LICENSE TO US
-If you submit comments, messages, or other content ("User Content"), you represent that you have the rights to do so. You grant us a non-exclusive, worldwide, royalty-free license to host, store, display, reproduce, and distribute User Content solely to operate, promote, and improve the Service and enforce these Terms. You may not submit illegal, infringing, or harmful User Content.
+14. LIABILITY LIMITS
+To the fullest extent permitted by law, indirect or consequential damages are excluded. Disputes about creator-specific offerings are generally between the fan and the creator.
 
-11. LICENSE TO YOU — LIMITED ACCESS ONLY
-Subject to these Terms and your payment where required, we grant you a personal, non-exclusive, non-transferable, revocable license to access and view Content through the Service during your active membership or entitlement. No other rights are granted.
+15. ECHOFLUX PLATFORM ROLE
+EchoFlux provides infrastructure, checkout integration, authentication, and safety tooling. EchoFlux is not the seller of the creator's offerings on this page.
 
-12. USE OF CONTENT — PERSONAL VIEWING ONLY
-Content is for your personal, non-commercial viewing only while you are in good standing. You may not publicly perform, broadcast, sublicense, or exploit Content except as expressly allowed in writing.
+16. CHANGES
+We may update these Terms and will update the date above when changes are posted.
 
-13. STRICT PROHIBITION — NO COPYING, DOWNLOADING, OR REDISTRIBUTION OF MEDIA
-YOU ARE STRICTLY PROHIBITED from downloading, copying, saving, capturing, screen-recording, photographing, mirroring, scraping, distributing, selling, licensing, or using in any way—for any reason—any images, videos, audio, or other media ("Content") you access through the Service, except temporary caching strictly necessary for your browser to display the page. This includes use on social media, messaging apps, other websites, AI training datasets, or commercial products. Violation is a material breach and may result in immediate termination, forfeiture of fees, and legal action.
+17. CONTACT
+For questions about this creator page, contact the creator through available contact methods. For platform-level questions, contact EchoFlux at contact@echoflux.ai
 
-14. IN-APP MESSAGES — CONFIDENTIAL; NO USE OUTSIDE THE SERVICE
-Direct messages and similar communications ("Messages") are confidential. YOU MAY NOT copy, download, save, screenshot, record, share, distribute, republish, or use Messages—or excerpts—outside the Service, except where the law prohibits such a restriction. You may not use Messages for harassment, extortion, or unlawful purposes. Violation may result in immediate termination, forfeiture of fees, and legal action.
-
-15. LEGAL CONSEQUENCES AND ENFORCEMENT
-Unauthorized use of Content or Messages may violate copyright, right of publicity, contract, privacy, and computer-fraud laws and may result in criminal penalties and civil liability, including statutory damages, injunctive relief, and attorneys' fees where allowed. We may cooperate with law enforcement and pursue all available remedies.
-
-16. PROHIBITED CONDUCT
-You agree not to: harass, threaten, or harm others; impersonate any person or entity; spam or scrape the Service; circumvent paywalls or access controls; introduce malware; attempt unauthorized access to systems or other users' data; use the Service for illegal activity; or violate any applicable third-party platform rules when linking from or to the Service.
-
-17. MODERATION AND TERMINATION
-We may remove Content or User Content, restrict features, or terminate or suspend your access at any time, with or without notice, for breach of these Terms, risk, non-payment, or operational reasons. Upon termination, Sections that by nature should survive (including intellectual property, limitations of liability, indemnity, and disputes) will survive.
-
-18. DISCLAIMERS
-TO THE MAXIMUM EXTENT PERMITTED BY LAW, THE SERVICE IS PROVIDED "AS IS" AND "AS AVAILABLE" WITHOUT WARRANTIES OF ANY KIND, WHETHER EXPRESS OR IMPLIED, INCLUDING MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, AND NON-INFRINGEMENT. WE DO NOT WARRANT THAT THE SERVICE WILL BE UNINTERRUPTED, SECURE, OR ERROR-FREE. ECHOFLUX AND THE PLATFORM MAKE NO WARRANTY REGARDING THE CREATOR, THE ACCURACY OF ANY CREATOR CONTENT, OR OUTCOMES OF YOUR DEALINGS WITH THE CREATOR.
-
-19. LIMITATION OF LIABILITY
-TO THE MAXIMUM EXTENT PERMITTED BY LAW: (A) IN NO EVENT SHALL WE (THE CREATOR), OUR AFFILIATES, OR ECHOFLUX / THE PLATFORM BE LIABLE FOR ANY INDIRECT, INCIDENTAL, SPECIAL, CONSEQUENTIAL, OR PUNITIVE DAMAGES, OR LOSS OF PROFITS, DATA, OR GOODWILL, ARISING FROM YOUR USE OF THE SERVICE. (B) THE CREATOR'S AGGREGATE LIABILITY TO YOU FOR CLAIMS RELATING TO THE SERVICE (YOUR PURCHASES, CONTENT ACCESS, AND DEALINGS WITH US AS CREATOR) SHALL NOT EXCEED THE GREATER OF (I) THE AMOUNTS YOU PAID TO US FOR THE SERVICE IN THE THREE (3) MONTHS BEFORE THE CLAIM OR (II) ONE HUNDRED U.S. DOLLARS (US$100), EXCEPT WHERE LIABILITY CANNOT BE LIMITED BY LAW. (C) ECHOFLUX AND THE PLATFORM SHALL NOT BE LIABLE FOR ANY DAMAGES ARISING FROM THE CREATOR'S CONTENT, CONDUCT, OFFERINGS, OR DISPUTES BETWEEN YOU AND THE CREATOR (SEE SECTION 3B). ECHOFLUX'S TOTAL AGGREGATE LIABILITY TO YOU FOR ANY CLAIM NOT EXCLUDED BY SECTION 3B SHALL NOT EXCEED ONE HUNDRED U.S. DOLLARS (US$100). (D) THE LIMITATIONS IN THIS SECTION APPLY EVEN IF A REMEDY FAILS OF ITS ESSENTIAL PURPOSE, EXCEPT WHERE PROHIBITED BY LAW.
-
-20. INDEMNITY
-You agree to indemnify, defend, and hold harmless us (the creator), our affiliates, and our and their directors, employees, and agents, and EchoFlux / the Platform and their affiliates, directors, employees, and agents, from any claims, damages, losses, or expenses (including reasonable attorneys' fees) arising from: (i) your use of the Service; (ii) your User Content; (iii) your breach of these Terms; or (iv) your violation of law or third-party rights. EchoFlux is named here so it may rely on this indemnity where claims arise from your conduct (for example, misuse, harassment, or unlawful redistribution of content) and not from EchoFlux's own independent wrongdoing.
-
-21. GOVERNING LAW AND DISPUTES
-These Terms are governed by the laws of the United States and the state or country in which the creator primarily operates, without regard to conflict-of-law principles, except that some consumer protection laws in your place of residence may still apply. You agree that courts in that jurisdiction have personal jurisdiction over disputes arising from these Terms, unless mandatory law requires otherwise. If you are a consumer in the EU/UK, you may also have mandatory rights in your home country.
-
-22. CHANGES TO THESE TERMS
-We may modify these Terms from time to time. We will post the updated Terms on this page and update the "Last updated" date. If changes are material, we may provide additional notice. Continued use after the effective date constitutes acceptance unless applicable law requires a different process.
-
-23. MISCELLANEOUS
-If any provision is unenforceable, the remaining provisions remain in effect. These Terms and the Privacy Policy are the entire agreement between you and us regarding the Service (subject to Stripe and Platform terms where applicable). Failure to enforce a provision is not a waiver.
-
-24. CREATOR OBLIGATIONS AND INDEMNITY OF ECHOFLUX (WHEN YOU ARE THE CREATOR OPERATING THIS PAGE)
-If you are the creator publishing this default text, you agree that you—not EchoFlux—are solely and exclusively responsible to fans and third parties for: your Fan Hub content and listings; products, services, and sessions you offer; pricing and descriptions; messages and community moderation; refunds and chargebacks (except as Stripe's rules apply); tax filings and regulatory compliance; accuracy of your Stripe Connect and payout information; and your use of fan personal data you receive through the Service. EchoFlux does not supervise your page and does not take responsibility for your business decisions or legal compliance. You will not use the Service for illegal, infringing, or non-consensual material. To the fullest extent permitted by law, you will defend, indemnify, and hold harmless EchoFlux, Fan Hub, EngageSuite, the Platform, and their respective affiliates, directors, officers, employees, and contractors from and against any claims, damages, losses, liabilities, fines, and expenses (including reasonable attorneys' fees) brought by any fan or third party arising out of or related to your Fan Hub, your content, your offerings, your conduct, or your handling of user data—whether or not EchoFlux is also named in the claim. Section 20 addresses indemnities from fans for their own conduct.
-
-25. NO PROFESSIONAL ADVICE
-This default text is not legal, tax, or financial advice. Creators should have counsel review governing law, refund rules, and disclosures for their jurisdiction.
-
-26. CONTACT
-For questions about these Terms or the Service, use the contact method provided on this creator page. For questions specifically about EchoFlux or Fan Hub platform practices, see https://echoflux.ai/terms and the contact information published there.
-
-This default agreement is a starting template. Creators should have it reviewed by qualified legal counsel and adjust governing law, business name, refund policy, and offerings to match their situation.`;
+This default template is not legal advice. Creators should review and adapt it with qualified legal counsel.`;
 
 export const defaultSettings: Settings = {
   autoReply: true,

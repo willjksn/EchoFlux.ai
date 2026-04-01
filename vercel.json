@@ -19,6 +19,54 @@
       "destination": "/api/:path*"
     },
     {
+      "source": "/discover",
+      "has": [
+        {
+          "type": "header",
+          "key": "host",
+          "value": "([a-z0-9-]+\\.)*witme\\.io"
+        },
+        {
+          "type": "header",
+          "key": "user-agent",
+          "value": ".*(facebookexternalhit|Twitterbot|Slackbot|Discordbot|LinkedInBot|WhatsApp|TelegramBot|Googlebot|bingbot|DuckDuckBot|Pinterestbot|SkypeUriPreview|ia_archiver).*"
+        }
+      ],
+      "destination": "/api/ogDiscoverPreview"
+    },
+    {
+      "source": "/:handle((?!api|discover|dashboard|settings|admin|terms|privacy|pricing|faq|about|contact|studio|fan|compose|calendar|my-vault|automation|email-center|reset-password)[A-Za-z0-9_-]+)",
+      "has": [
+        {
+          "type": "header",
+          "key": "host",
+          "value": "([a-z0-9-]+\\.)*witme\\.io"
+        },
+        {
+          "type": "header",
+          "key": "user-agent",
+          "value": ".*(facebookexternalhit|Twitterbot|Slackbot|Discordbot|LinkedInBot|WhatsApp|TelegramBot|Googlebot|bingbot|DuckDuckBot|Pinterestbot|SkypeUriPreview|ia_archiver).*"
+        }
+      ],
+      "destination": "/api/ogCreatorPreview?handle=:handle"
+    },
+    {
+      "source": "/",
+      "has": [
+        {
+          "type": "header",
+          "key": "host",
+          "value": "([a-z0-9-]+\\.)*witme\\.io"
+        },
+        {
+          "type": "header",
+          "key": "user-agent",
+          "value": ".*(facebookexternalhit|Twitterbot|Slackbot|Discordbot|LinkedInBot|WhatsApp|TelegramBot|Googlebot|bingbot|DuckDuckBot|Pinterestbot|SkypeUriPreview|ia_archiver).*"
+        }
+      ],
+      "destination": "/api/ogHomePreview"
+    },
+    {
       "source": "/((?!api).*)",
       "destination": "/index.html"
     }

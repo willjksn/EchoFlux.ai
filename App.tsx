@@ -45,6 +45,8 @@ import { CRMSidebar } from './components/CRMSidebar';
 import { AdGenerator } from './components/AdGenerator';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { FanStorefrontView } from './components/FanStorefrontView';
+import { WitmeDiscoverPage, WitmeHomepage } from './components/WitmeHomepage';
+import { WitmePageManager } from './components/WitmePageManager';
 import { KNOWN_APP_ROUTES } from './constants';
 import { isCustomDomainStorefrontPath } from './src/lib/storefrontCustomDomain';
 import { useOAuthReturnHandler } from './src/hooks/useOAuthReturnHandler';
@@ -90,6 +92,7 @@ const pageTitles: Record<Page, string> = {
     emailCenter: 'Email Center',
     premiumStudioUpgrade: 'Unlock Premium Studio',
     fanHub: 'Fan Hub',
+    witmePage: 'Witme Page',
 };
 
 const MainContent: React.FC = () => {
@@ -195,6 +198,7 @@ const MainContent: React.FC = () => {
             }
             case 'emailCenter': return <EmailCenterPage />;
             case 'premiumStudioUpgrade': return <PremiumStudioUpgrade />;
+            case 'witmePage': return user?.role === 'Admin' ? <WitmePageManager /> : <Dashboard />;
             case 'fanHub': {
                 const hasAccess = user?.plan === 'Elite' || user?.plan === 'Agency' || user?.plan === 'OnlyFansStudio';
                 if (!hasAccess) return <PremiumStudioUpgrade />;
@@ -242,6 +246,14 @@ const AppContent: React.FC = () => {
     const normalizedPath = pathname.replace(/\/+$/, '') || '/';
     const isKnownAppRoute = (KNOWN_APP_ROUTES as readonly string[]).includes(normalizedPath);
     const hostname = typeof window !== 'undefined' ? window.location.hostname : '';
+    const isWitmeHost = /^([a-z0-9-]+\.)*witme\.io$/i.test(hostname);
+    const isWitmePreview = (() => {
+        if (typeof window === 'undefined') return false;
+        return new URLSearchParams(window.location.search).get('witmePreview') === '1';
+    })();
+    const isWitmeRootPath = (isWitmeHost || isWitmePreview) && normalizedPath === '/';
+    const isWitmeDiscoverPath = (isWitmeHost || isWitmePreview) && normalizedPath === '/discover';
+    const isWitmeSurface = isWitmeRootPath || isWitmeDiscoverPath;
     /** stormijxo.com → /, /terms, /privacy, /{handle} (see storefrontCustomDomain + creatorDomains map) */
     const isCustomDomainSf =
         typeof window !== 'undefined' && isCustomDomainStorefrontPath(pathname, hostname);
@@ -261,6 +273,10 @@ const AppContent: React.FC = () => {
                 /^\/(?:u|link)\/[^/]+$/.test(np) ||
                 isStorefrontMemberSubpathPlain ||
                 isStorefrontLegacyMemberSubpath));
+
+    if (isWitmeDiscoverPath) {
+        return <WitmeDiscoverPage />;
+    }
 
     if (isStorefrontPath) {
         return <FanStorefrontView />;
@@ -366,6 +382,7 @@ const AppContent: React.FC = () => {
     // Safety: if a user becomes unauthenticated while on an authenticated route (e.g. sign out, token expiry),
     // ensure the browser URL doesn't stay stuck on /dashboard while we render the public landing UI.
     useEffect(() => {
+        if (isWitmeSurface) return;
         if (typeof window === 'undefined') return;
         if (isAuthLoading) return;
         if (isAuthenticated) return;
@@ -405,12 +422,13 @@ const AppContent: React.FC = () => {
             path === '/premium-studio-upgrade' ||
             path === '/studio' ||
             path === '/fan' ||
-            path === '/fan-hub';
+            path === '/fan-hub' ||
+            path === '/witme-page';
 
         if (isProtectedRoute) {
             window.history.replaceState({}, '', '/');
         }
-    }, [isAuthenticated, isAuthLoading]);
+    }, [isAuthenticated, isAuthLoading, isWitmeSurface]);
 
     // If invite-granted access expired, route user to Pricing to upgrade (Stripe flow remains unchanged).
     const hasShownExpiredToastRef = useRef(false);
@@ -435,6 +453,7 @@ const AppContent: React.FC = () => {
     // Only sync from URL to activePage on initial load or browser navigation (back/forward)
     // NOTE: For authenticated users, UIContext handles URL syncing, so we only do this for unauthenticated users
     useEffect(() => {
+        if (isWitmeSurface) return;
         // Skip URL syncing for authenticated users - UIContext handles it
         if (isAuthenticated) return;
         
@@ -482,12 +501,13 @@ const AppContent: React.FC = () => {
         return () => {
             window.removeEventListener('popstate', syncUrlToPage);
         };
-    }, [isAuthenticated, setActivePage]); // Only run when auth state changes, not when activePage changes
+    }, [isAuthenticated, setActivePage, isWitmeSurface]); // Only run when auth state changes, not when activePage changes
 
     // Update URL when page changes (for privacy policy, terms, etc.)
     // NOTE: For authenticated users, UIContext handles URL syncing, so we only do this for unauthenticated users
     // or for pages that UIContext doesn't handle (public pages)
     useEffect(() => {
+        if (isWitmeSurface) return;
         // Skip URL syncing for authenticated users - UIContext handles it
         if (isAuthenticated) return;
         
@@ -505,9 +525,10 @@ const AppContent: React.FC = () => {
         if (path && window.location.pathname !== path) {
             window.history.pushState({}, '', path);
         }
-    }, [activePage, isAuthenticated]);
+    }, [activePage, isAuthenticated, isWitmeSurface]);
 
     useEffect(() => {
+        if (isWitmeSurface) return;
         // Capture referral code from URL (e.g., ?ref=CODE)
         const urlParams = new URLSearchParams(window.location.search);
         const referralCode = urlParams.get('ref');
@@ -706,7 +727,7 @@ const AppContent: React.FC = () => {
             // Not authenticated and no pending signup - clear onboarding
             setOnboardingStep('none');
         }
-    }, [isAuthenticated, user, setUser, selectedPlan, openPaymentModal]);
+    }, [isAuthenticated, user, setUser, selectedPlan, openPaymentModal, isWitmeSurface]);
 
     useEffect(() => {
         // Finalize Stripe checkout after redirect:
@@ -993,6 +1014,11 @@ const AppContent: React.FC = () => {
         if (isResetPasswordAction) {
             return <ResetPassword />;
         }
+    }
+
+    // witme.io root is the fan-facing trust/discovery destination layer.
+    if (isWitmeRootPath) {
+        return <WitmeHomepage />;
     }
 
     // Debug logging

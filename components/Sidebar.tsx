@@ -1,6 +1,6 @@
 import React from 'react';
 import { Page } from '../types';
-import { DashboardIcon, SettingsIcon, LogoIcon, ComposeIcon, AdminIcon, CalendarIcon, TargetIcon, SparklesIcon, ImageIcon, HeartIcon } from './icons/UIIcons';
+import { DashboardIcon, SettingsIcon, LogoIcon, ComposeIcon, AdminIcon, CalendarIcon, TargetIcon, SparklesIcon, ImageIcon, HeartIcon, GlobeIcon } from './icons/UIIcons';
 import { useAppContext } from './AppContext';
 
 interface NavItemProps {
@@ -57,6 +57,7 @@ export const Sidebar: React.FC = () => {
     { page: 'mediaLibrary', icon: <ImageIcon />, label: 'Vault' },
     ...(hasFanHubAccess ? [{ page: (hasPremiumStudioAccess ? 'onlyfansStudio' : 'premiumStudioUpgrade') as Page, icon: <SparklesIcon />, label: 'Premium Studio' }] : []),
     ...((hasFanHubAccess || hasPremiumStudioAccess) ? [{ page: 'fanHub' as Page, icon: <HeartIcon />, label: 'Fan Hub', tourId: 'tour-step-fanhub-nav' }] : []),
+    { page: 'witmePage', icon: <GlobeIcon />, label: 'Witme Page' },
     { page: 'settings', icon: <SettingsIcon />, label: 'Settings' },
     { page: 'admin', icon: <AdminIcon />, label: 'Admin' },
   ];
@@ -81,6 +82,8 @@ export const Sidebar: React.FC = () => {
               return hasFanHubAccess && !hasPremiumStudioAccess;
           case 'fanHub':
               return hasFanHubAccess || hasPremiumStudioAccess;
+          case 'witmePage':
+              return user.role === 'Admin';
           default:
               return false;
       }

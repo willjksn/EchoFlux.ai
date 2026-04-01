@@ -13,7 +13,7 @@ import { AdminFeedbackFormBuilder } from './AdminFeedbackFormBuilder';
 import { AdminITSupportPanel } from './AdminITSupportPanel';
 import { InviteCodeManager } from './InviteCodeManager';
 import { WaitlistManager } from './WaitlistManager';
-import { TeamIcon, DollarSignIcon, UserPlusIcon, ArrowUpCircleIcon, ImageIcon, VideoIcon, LockIcon, TrendingIcon, TrashIcon, HeartIcon, StarIcon, ChatIcon } from './icons/UIIcons';
+import { TeamIcon, DollarSignIcon, UserPlusIcon, ArrowUpCircleIcon, ImageIcon, VideoIcon, LockIcon, TrendingIcon, TrashIcon, HeartIcon, StarIcon, ChatIcon, GlobeIcon } from './icons/UIIcons';
 import { db, auth } from '../firebaseConfig';
 import { collection, query, orderBy, onSnapshot, setDoc, doc, getDoc, deleteField, getDocs } from 'firebase/firestore';
 import { useAppContext } from './AppContext';
@@ -239,6 +239,11 @@ export const AdminDashboard: React.FC = () => {
         };
     } | null>(null);
     const [isLoadingVideoStats, setIsLoadingVideoStats] = useState(true);
+    const [witmeOverview, setWitmeOverview] = useState<{ pageViews: number; uniqueVisitors: number; loading: boolean }>({
+        pageViews: 0,
+        uniqueVisitors: 0,
+        loading: true,
+    });
     
     // Reset to page 1 when search term changes
     useEffect(() => {
@@ -271,6 +276,30 @@ export const AdminDashboard: React.FC = () => {
         };
         
         fetchVideoStats();
+    }, [currentUser?.role]);
+
+    useEffect(() => {
+        const fetchWitmeOverview = async () => {
+            if (currentUser?.role !== 'Admin') return;
+            setWitmeOverview((prev) => ({ ...prev, loading: true }));
+            try {
+                const token = await auth.currentUser?.getIdToken(true);
+                if (!token) return;
+                const res = await fetch('/api/adminWitmeAnalytics?days=30', {
+                    headers: { Authorization: `Bearer ${token}` },
+                });
+                if (!res.ok) return;
+                const data = await res.json();
+                setWitmeOverview({
+                    pageViews: Number(data?.totals?.pageViews || 0),
+                    uniqueVisitors: Number(data?.totals?.uniqueVisitors || 0),
+                    loading: false,
+                });
+            } catch {
+                setWitmeOverview((prev) => ({ ...prev, loading: false }));
+            }
+        };
+        fetchWitmeOverview();
     }, [currentUser?.role]);
 
     // Fan Hub revenue: top-level `orders` (Stripe webhook) via admin API — not creators/{id}/orders mirror
@@ -992,7 +1021,7 @@ export const AdminDashboard: React.FC = () => {
             {activeTab === 'overview' && (
                 <>
             {/* Key Metrics - Echoflux Business Overview */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 md:gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 md:gap-6">
                 <StatCard title="Total Users" value={totalUsers} icon={<TeamIcon />}/>
                 <StatCard title="New Users (30d)" value={newUsersCount} icon={<UserPlusIcon />}/>
                 <div className="bg-gradient-to-br from-blue-500 to-indigo-600 p-4 md:p-6 rounded-xl shadow-md text-white">
@@ -1031,6 +1060,24 @@ export const AdminDashboard: React.FC = () => {
                     </p>
                     <p className="text-xs opacity-75 mt-1">{(fanHubRevenue.commissionRate * 100).toFixed(0)}% of transactions</p>
                 </div>
+                <button
+                    type="button"
+                    onClick={() => setActivePage('witmePage')}
+                    className="text-left bg-gradient-to-br from-cyan-500 to-blue-600 p-4 md:p-6 rounded-xl shadow-md text-white hover:opacity-95 transition"
+                >
+                    <div className="flex items-center gap-3 mb-2">
+                        <div className="p-2 bg-white/20 rounded-full">
+                            <GlobeIcon className="w-5 h-5" />
+                        </div>
+                        <p className="text-sm font-medium opacity-90">Witme Views (30d)</p>
+                    </div>
+                    <p className="text-2xl md:text-3xl font-bold">
+                        {witmeOverview.loading ? '...' : witmeOverview.pageViews.toLocaleString()}
+                    </p>
+                    <p className="text-xs opacity-75 mt-1">
+                        {witmeOverview.loading ? 'Loading traffic' : `${witmeOverview.uniqueVisitors.toLocaleString()} unique visitors`}
+                    </p>
+                </button>
             </div>
 
             {/* Total Echoflux Revenue Summary */}

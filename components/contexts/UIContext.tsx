@@ -70,6 +70,29 @@ const RETURN_PARAM_KEYS = new Set([
   'canceled',
 ]);
 
+const isWitmeSurfacePath = (path: string): boolean => {
+  const p = (path || '/').split('?')[0].split('#')[0].replace(/\/+$/, '') || '/';
+  return p === '/' || p === '/discover';
+};
+
+const isWitmePreviewMode = (): boolean => {
+  if (typeof window === 'undefined') return false;
+  const host = window.location.hostname || '';
+  const isWitmeHost = /^([a-z0-9-]+\.)*witme\.io$/i.test(host);
+  if (isWitmeHost) return true;
+
+  try {
+    const fromQuery = new URLSearchParams(window.location.search).get('witmePreview') === '1';
+    if (fromQuery) {
+      window.sessionStorage.setItem('witmePreview', '1');
+      return true;
+    }
+    return window.sessionStorage.getItem('witmePreview') === '1';
+  } catch {
+    return false;
+  }
+};
+
 function mergePathPreservingReturnParams(targetPath: string): string {
   if (typeof window === 'undefined') return targetPath;
   const search = window.location.search;
@@ -168,6 +191,7 @@ export const UIProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
         emailCenter: '/email-center',
         premiumStudioUpgrade: '/premium-studio-upgrade',
         fanHub: '/fan',
+        witmePage: '/witme-page',
     };
 
     const pathToPage: Record<string, Page> = Object.entries(pageToPath).reduce((acc, [page, path]) => {
@@ -200,6 +224,7 @@ export const UIProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
     pathToPage['/premium-studio-upgrade'] = 'premiumStudioUpgrade';
     pathToPage['/studio'] = 'onlyfansStudio';
     pathToPage['/fan'] = 'fanHub';
+    pathToPage['/witme-page'] = 'witmePage';
     // Legacy
     pathToPage['/premium-content-studio'] = 'onlyfansStudio';
     pathToPage['/fan-hub'] = 'fanHub';
@@ -223,6 +248,7 @@ export const UIProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
         if (typeof window === 'undefined') return;
 
         const currentPath = normalizePath(window.location.pathname);
+        if (isWitmePreviewMode() && isWitmeSurfacePath(currentPath)) return;
 
         // Never hijack public bio pages (e.g. /username) or special flows (e.g. /reset-password).
         if (!isRoutableAppPath(currentPath)) return;
@@ -268,6 +294,7 @@ export const UIProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
         if (!user?.id) return; // only do this for authenticated app navigation
 
         const currentPath = normalizePath(window.location.pathname);
+        if (isWitmePreviewMode() && isWitmeSurfacePath(currentPath)) return;
         // Avoid rewriting public bio pages / special flows.
         if (!isRoutableAppPath(currentPath) || currentPath === '/reset-password') return;
 
@@ -303,6 +330,7 @@ export const UIProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
 
         const onPopState = () => {
             const p = normalizePath(window.location.pathname);
+            if (isWitmePreviewMode() && isWitmeSurfacePath(p)) return;
             const mapped = pathToPage[p];
             if (mapped) setActivePageState(mapped);
         };
