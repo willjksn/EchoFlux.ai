@@ -1,5 +1,6 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { getAdminDb } from "./_firebaseAdmin.js";
+import { DEFAULT_SHOWCASE_CREATORS, sanitizeShowcaseCreators, type WitmeShowcaseCreator } from "./_witmeShowcase.js";
 
 type FeatureCard = {
   title: string;
@@ -21,6 +22,7 @@ type WitmeLandingConfig = {
   trustItems: string[];
   liveMoments: string[];
   legalLinks: LegalLink[];
+  showcaseCreators: WitmeShowcaseCreator[];
 };
 
 const DEFAULT_CONFIG: WitmeLandingConfig = {
@@ -58,6 +60,7 @@ const DEFAULT_CONFIG: WitmeLandingConfig = {
     { label: "Guidelines", url: "/content-guidelines.html" },
     { label: "Support", url: "mailto:contact@echoflux.ai" },
   ],
+  showcaseCreators: DEFAULT_SHOWCASE_CREATORS,
 };
 
 function sanitizeString(value: unknown, max = 300): string {
@@ -67,6 +70,9 @@ function sanitizeString(value: unknown, max = 300): string {
 
 function sanitizeConfig(input: unknown): WitmeLandingConfig {
   const src = (input && typeof input === "object" ? input : {}) as Record<string, unknown>;
+  const hasShowcaseKey = Object.prototype.hasOwnProperty.call(src, "showcaseCreators");
+  const showcaseCreators = sanitizeShowcaseCreators(src.showcaseCreators, hasShowcaseKey);
+
   const cardsRaw = Array.isArray(src.featureCards) ? src.featureCards : [];
   const featureCards: FeatureCard[] = cardsRaw
     .map((card) => {
@@ -110,6 +116,7 @@ function sanitizeConfig(input: unknown): WitmeLandingConfig {
     trustItems: trustItems.length > 0 ? trustItems : DEFAULT_CONFIG.trustItems,
     liveMoments: liveMoments.length > 0 ? liveMoments : DEFAULT_CONFIG.liveMoments,
     legalLinks: legalLinks.length > 0 ? legalLinks : DEFAULT_CONFIG.legalLinks,
+    showcaseCreators,
   };
 }
 

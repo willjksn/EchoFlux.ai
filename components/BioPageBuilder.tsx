@@ -4,6 +4,8 @@ import { useAppContext } from './AppContext';
 import { BioLink, SocialBioLink, Platform } from '../types';
 import { TrashIcon, PlusIcon, UploadIcon, LinkIcon, CheckCircleIcon, MailIcon, CameraIcon, UserIcon, EmojiIcon, FaceSmileIcon, CatIcon, PizzaIcon, SoccerBallIcon, CarIcon, LightbulbIcon, HeartIcon, EditIcon, MobileIcon } from './icons/UIIcons';
 import { EMOJIS, EMOJI_CATEGORIES, Emoji } from './emojiData';
+import { useCreatorHandle } from '../src/hooks/useCreatorHandle';
+import { filterEmojisForSjHeartAccess, canUseSjHeartEmoji } from '../src/lib/customEmoji';
 import { BioPageSubscribersPanel } from './BioPageSubscribersPanel';
 import { storage } from '../firebaseConfig';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
@@ -273,6 +275,11 @@ const BioPreview: React.FC<{ config: any }> = ({ config }) => {
 
 export const BioPageBuilder: React.FC = () => {
     const { bioPage, setBioPage, showToast, saveBioPage, user, socialAccounts } = useAppContext();
+    const creatorHandleFromDoc = useCreatorHandle(user?.id);
+    const allowSjHeartEmoji = canUseSjHeartEmoji({
+        creatorHandle: creatorHandleFromDoc,
+        viewerIsAdmin: user?.role === 'Admin',
+    });
     const [newLinkTitle, setNewLinkTitle] = useState('');
     const [newLinkUrl, setNewLinkUrl] = useState('');
     const [isSaving, setIsSaving] = useState(false);
@@ -301,30 +308,32 @@ export const BioPageBuilder: React.FC = () => {
     const bioEmojiButtonRef = useRef<HTMLButtonElement>(null);
     
     const nameFilteredEmojis = useMemo(() => {
+        const base = filterEmojisForSjHeartAccess(EMOJIS, allowSjHeartEmoji);
         const lowercasedTerm = nameEmojiSearchTerm.toLowerCase();
-        
+
         if (lowercasedTerm) {
-            return EMOJIS.filter(e =>
+            return base.filter(e =>
                 e.description.toLowerCase().includes(lowercasedTerm) ||
                 e.aliases.some(a => a.includes(lowercasedTerm))
             );
         }
-        
-        return EMOJIS.filter(e => e.category === nameActiveEmojiCategory);
-    }, [nameEmojiSearchTerm, nameActiveEmojiCategory]);
+
+        return base.filter(e => e.category === nameActiveEmojiCategory);
+    }, [nameEmojiSearchTerm, nameActiveEmojiCategory, allowSjHeartEmoji]);
     
     const bioFilteredEmojis = useMemo(() => {
+        const base = filterEmojisForSjHeartAccess(EMOJIS, allowSjHeartEmoji);
         const lowercasedTerm = bioEmojiSearchTerm.toLowerCase();
-        
+
         if (lowercasedTerm) {
-            return EMOJIS.filter(e =>
+            return base.filter(e =>
                 e.description.toLowerCase().includes(lowercasedTerm) ||
                 e.aliases.some(a => a.includes(lowercasedTerm))
             );
         }
-        
-        return EMOJIS.filter(e => e.category === bioActiveEmojiCategory);
-    }, [bioEmojiSearchTerm, bioActiveEmojiCategory]);
+
+        return base.filter(e => e.category === bioActiveEmojiCategory);
+    }, [bioEmojiSearchTerm, bioActiveEmojiCategory, allowSjHeartEmoji]);
     
     useLayoutEffect(() => {
         if (isNameEmojiPickerOpen && nameInputRef.current) {

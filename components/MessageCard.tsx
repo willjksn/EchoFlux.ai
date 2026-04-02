@@ -6,6 +6,7 @@ import { InstagramIcon, TikTokIcon, XIcon, ThreadsIcon, YouTubeIcon, LinkedInIco
 import { EditIcon, RedoIcon, CheckCircleIcon, VoiceIcon, FlagIcon, UserIcon, EmojiIcon, FaceSmileIcon, CatIcon, PizzaIcon, SoccerBallIcon, CarIcon, LightbulbIcon, HeartIcon, StarIcon, TrashIcon } from './icons/UIIcons';
 import { useAppContext } from './AppContext';
 import { EMOJIS, EMOJI_CATEGORIES, Emoji } from './emojiData';
+import { filterEmojisForSjHeartAccess, renderTextWithCustomEmoji } from '../src/lib/customEmoji';
 
 const platformIcons: { [key in Message['platform']]: React.ReactElement<{ className?: string }> } = {
   Instagram: <InstagramIcon />,
@@ -102,16 +103,18 @@ export const MessageCard: React.FC<MessageCardProps> = ({ message, id, isSelecte
   
   const filteredEmojis = useMemo(() => {
     const lowercasedTerm = emojiSearchTerm.toLowerCase();
-    
+    const allowSjHeart = user?.role === "Admin";
+    const base = filterEmojisForSjHeartAccess(EMOJIS, allowSjHeart);
+
     if (lowercasedTerm) {
-        return EMOJIS.filter(e =>
+        return base.filter(e =>
             e.description.toLowerCase().includes(lowercasedTerm) ||
             e.aliases.some(a => a.includes(lowercasedTerm))
         );
     }
-    
-    return EMOJIS.filter(e => e.category === activeEmojiCategory);
-  }, [emojiSearchTerm, activeEmojiCategory]);
+
+    return base.filter(e => e.category === activeEmojiCategory);
+  }, [emojiSearchTerm, activeEmojiCategory, user?.role]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -292,7 +295,9 @@ export const MessageCard: React.FC<MessageCardProps> = ({ message, id, isSelecte
                     <span className="text-sm font-medium capitalize">{message.platform} &middot; {message.type}</span>
                 </div>
                 </div>
-                <p className="mt-2 text-gray-700 dark:text-gray-300">{message.content}</p>
+                <p className="mt-2 text-gray-700 dark:text-gray-300">
+                  {renderTextWithCustomEmoji(message.content, { viewerIsAdmin: user?.role === "Admin" })}
+                </p>
             </div>
           </div>
 
@@ -367,16 +372,20 @@ export const MessageCard: React.FC<MessageCardProps> = ({ message, id, isSelecte
                           />
                         </div>
                         <div className="grid grid-cols-8 gap-1 overflow-y-auto max-h-64 pr-1 scrollbar-thin">
-                            {filteredEmojis.map(({ emoji, description }) => (
+                            {filteredEmojis.map(({ emoji, description, imageUrl, insertText }) => (
                                 <button 
                                     key={description} 
                                     type="button"
-                                    onClick={() => handleEmojiSelect(emoji)}
+                                    onClick={() => handleEmojiSelect(insertText ?? emoji)}
                                     className="text-2xl p-1 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 flex justify-center items-center"
                                     title={description}
                                     aria-label={description}
                                 >
-                                    {emoji}
+                                    {imageUrl ? (
+                                      <img src={imageUrl} alt={description} className="w-7 h-7 object-contain" />
+                                    ) : (
+                                      emoji
+                                    )}
                                 </button>
                             ))}
                         </div>

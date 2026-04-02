@@ -31,6 +31,8 @@ import {
 } from './icons/UIIcons';
 import { MusicTrack } from '../types';
 import { EMOJIS, EMOJI_CATEGORIES, Emoji } from './emojiData';
+import { useCreatorHandle } from '../src/hooks/useCreatorHandle';
+import { filterEmojisForSjHeartAccess, canUseSjHeartEmoji } from '../src/lib/customEmoji';
 import { getMusicTracks, searchMusicTracks, getMusicGenres, getMusicMoods } from '../src/services/musicService';
 import {
   InstagramIcon,
@@ -148,6 +150,11 @@ export const MediaBox: React.FC<MediaBoxProps> = ({
   onToggleHashtags,
 }) => {
   const { user, setUser, showToast, setActivePage } = useAppContext();
+  const creatorHandleFromDoc = useCreatorHandle(user?.id);
+  const allowSjHeartEmoji = canUseSjHeartEmoji({
+    creatorHandle: creatorHandleFromDoc,
+    viewerIsAdmin: user?.role === 'Admin',
+  });
   const [isGenerating, setIsGenerating] = useState(false);
   const [showMediaLibraryModal, setShowMediaLibraryModal] = useState(false);
   const [libraryMediaItems, setLibraryMediaItems] = useState<MediaLibraryItem[]>([]);
@@ -578,8 +585,8 @@ export const MediaBox: React.FC<MediaBoxProps> = ({
 
 
   const filteredEmojis = useMemo(() => {
-    let emojis = EMOJIS;
-    
+    let emojis = filterEmojisForSjHeartAccess(EMOJIS, allowSjHeartEmoji);
+
     if (emojiSearchTerm) {
       const searchLower = emojiSearchTerm.toLowerCase();
       emojis = emojis.filter(e => 
@@ -589,9 +596,9 @@ export const MediaBox: React.FC<MediaBoxProps> = ({
     } else {
       emojis = emojis.filter(e => e.category === activeEmojiCategory);
     }
-    
+
     return emojis;
-  }, [emojiSearchTerm, activeEmojiCategory]);
+  }, [emojiSearchTerm, activeEmojiCategory, allowSjHeartEmoji]);
 
   const handleEmojiSelect = (emoji: string) => {
     if (captionTextareaRef.current) {

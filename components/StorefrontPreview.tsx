@@ -62,6 +62,7 @@ import { resolvePricingLandingCopy } from "../src/lib/pricingLandingCopy";
 import { resolveTipSectionCopy } from "../src/lib/tipSectionCopy";
 import { normalizeHeroMediaForStorefront } from "../src/lib/storefrontHeroNormalize";
 import { WitmeHeaderLogo } from "./WitmeHeaderLogo";
+import { renderTextWithCustomEmoji, type SjHeartEmojiAccessContext } from "../src/lib/customEmoji";
 
 export type StorefrontHeroMediaItem = NonNullable<CreatorStorefrontSettings["heroMedia"]>[number];
 
@@ -531,6 +532,14 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
     .filter((key) => key !== "saved" && (sections as Record<string, boolean>)?.[key] !== false)
     .filter((key) => key !== "messages" || chatEnabledPreview);
   const { user, showToast } = useAppContext();
+
+  const sjHeartEmojiCtx: SjHeartEmojiAccessContext = useMemo(
+    () => ({
+      creatorHandle: config.handle,
+      viewerIsAdmin: user?.role === "Admin",
+    }),
+    [config.handle, user?.role]
+  );
 
   const joinFanVideoSessionPreview = useCallback(
     async (sessionId: string, creatorIdForSession: string) => {
@@ -1173,7 +1182,7 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
                         Boolean(textStyles.heroTagline?.fontSize)
                       )}
                     >
-                      {heroTagline}
+                      {renderTextWithCustomEmoji(heroTagline, sjHeartEmojiCtx)}
                     </p>
                   )}
                   <p
@@ -1192,7 +1201,7 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
                       Boolean(textStyles.heroPromise?.fontSize)
                     )}
                   >
-                    {heroPromise}
+                    {renderTextWithCustomEmoji(heroPromise, sjHeartEmojiCtx)}
                   </p>
                   {heroSubline && (
                     <p
@@ -1211,7 +1220,7 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
                         Boolean(textStyles.heroSubline?.fontSize)
                       )}
                     >
-                      {heroSubline}
+                      {renderTextWithCustomEmoji(heroSubline, sjHeartEmojiCtx)}
                     </p>
                   )}
                   {heroSubline2 && (
@@ -1227,7 +1236,7 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
                         Boolean(textStyles.heroSubline2?.fontSize)
                       )}
                     >
-                      {heroSubline2}
+                      {renderTextWithCustomEmoji(heroSubline2, sjHeartEmojiCtx)}
                     </p>
                   )}
                   {!heroSubline && !heroSubline2 && <div className="mb-3" />}
@@ -1250,14 +1259,14 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
                     <h1 className="font-bold mb-0.5" style={getTextStyleCSS(textStyles.displayName, { fontSize: "1.125rem", color: landingPageText, ...heroTextBase })}>{displayName}</h1>
                   )}
                   {heroTagline && (
-                    <p className="text-xs mb-0.5" style={getTextStyleCSS(textStyles.heroTagline, { fontSize: "0.75rem", color: landingPageMuted, ...heroTextBase })}>{heroTagline}</p>
+                    <p className="text-xs mb-0.5" style={getTextStyleCSS(textStyles.heroTagline, { fontSize: "0.75rem", color: landingPageMuted, ...heroTextBase })}>{renderTextWithCustomEmoji(heroTagline, sjHeartEmojiCtx)}</p>
                   )}
-                  <p className="text-xs" style={getTextStyleCSS(textStyles.heroPromise, { fontSize: "0.75rem", color: primary, ...heroTextBase })}>{heroPromise}</p>
+                  <p className="text-xs" style={getTextStyleCSS(textStyles.heroPromise, { fontSize: "0.75rem", color: primary, ...heroTextBase })}>{renderTextWithCustomEmoji(heroPromise, sjHeartEmojiCtx)}</p>
                   {heroSubline && (
-                    <p className="text-[11px] mt-0.5 mb-0.5" style={getTextStyleCSS(textStyles.heroSubline, { color: landingPageMutedStrong, ...heroTextBase })}>{heroSubline}</p>
+                    <p className="text-[11px] mt-0.5 mb-0.5" style={getTextStyleCSS(textStyles.heroSubline, { color: landingPageMutedStrong, ...heroTextBase })}>{renderTextWithCustomEmoji(heroSubline, sjHeartEmojiCtx)}</p>
                   )}
                   {heroSubline2 && (
-                    <p className="text-[10px] mb-1" style={getTextStyleCSS(textStyles.heroSubline2, { color: landingPageMuted, ...heroTextBase })}>{heroSubline2}</p>
+                    <p className="text-[10px] mb-1" style={getTextStyleCSS(textStyles.heroSubline2, { color: landingPageMuted, ...heroTextBase })}>{renderTextWithCustomEmoji(heroSubline2, sjHeartEmojiCtx)}</p>
                   )}
                   {socialLinks.length > 0 && (
                     <div className="flex gap-2 mt-1">

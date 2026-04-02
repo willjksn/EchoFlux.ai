@@ -1,6 +1,7 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { getAdminDb } from "./_firebaseAdmin.js";
 import { verifyAuth } from "./verifyAuth.js";
+import { DEFAULT_SHOWCASE_CREATORS, sanitizeShowcaseCreators, type WitmeShowcaseCreator } from "./_witmeShowcase.js";
 
 type FeatureCard = {
   title: string;
@@ -22,6 +23,7 @@ type WitmeLandingConfig = {
   trustItems: string[];
   liveMoments: string[];
   legalLinks: LegalLink[];
+  showcaseCreators: WitmeShowcaseCreator[];
 };
 
 const DEFAULT_CONFIG: WitmeLandingConfig = {
@@ -59,6 +61,7 @@ const DEFAULT_CONFIG: WitmeLandingConfig = {
     { label: "Guidelines", url: "/content-guidelines.html" },
     { label: "Support", url: "mailto:contact@echoflux.ai" },
   ],
+  showcaseCreators: DEFAULT_SHOWCASE_CREATORS,
 };
 
 function sanitizeString(value: unknown, max = 300): string {
@@ -68,6 +71,9 @@ function sanitizeString(value: unknown, max = 300): string {
 
 function sanitizeConfig(input: unknown): WitmeLandingConfig {
   const src = (input && typeof input === "object" ? input : {}) as Record<string, unknown>;
+  const hasShowcaseKey = Object.prototype.hasOwnProperty.call(src, "showcaseCreators");
+  const showcaseCreators = sanitizeShowcaseCreators(src.showcaseCreators, hasShowcaseKey);
+
   const cardsRaw = Array.isArray(src.featureCards) ? src.featureCards : [];
   const featureCards: FeatureCard[] = cardsRaw
     .map((card) => {
@@ -111,6 +117,7 @@ function sanitizeConfig(input: unknown): WitmeLandingConfig {
     trustItems: trustItems.length > 0 ? trustItems : DEFAULT_CONFIG.trustItems,
     liveMoments: liveMoments.length > 0 ? liveMoments : DEFAULT_CONFIG.liveMoments,
     legalLinks: legalLinks.length > 0 ? legalLinks : DEFAULT_CONFIG.legalLinks,
+    showcaseCreators,
   };
 }
 
@@ -158,8 +165,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
     return;
   }
 
-  const action = typeof req.body?.action === "string" ? req.body.action : "saveDraft";
-  const incomingConfig = sanitizeConfig(req.body?.config ?? DEFAULT_CONFIG);
+  let rawBody: Record<string, unknown> = {};
+  const b = req.body;
+  if (typeof b === "string") {
+    try {
+      rawBody = JSON.parse(b) as Record<string, unknown>;
+    } catch {
+      rawBody = {};
+    }
+  } else if (b && typeof b === "object" && !Array.isArray(b)) {
+    rawBody = b as Record<string, unknown>;
+  }
+
+  const action = typeof rawBody.action === "string" ? rawBody.action : "saveDraft";
+  const incomingConfig = sanitizeConfig(rawBody.config ?? DEFAULT_CONFIG);
   const now = new Date().toISOString();
   const ref = db.collection("siteConfig").doc("witmeLanding");
   const existing = await ref.get();
@@ -178,13 +197,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
       },
       { merge: true }
     );
-    res.status(200).json({ success: true, status: "published", publishedAt: now });
+    res.status(200).json({
+      success: true,
+      status: "published",
+      publishedAt: now,
+      updatedAt: now,
+      draft: incomingConfig,
+      published: incomingConfig,
+    });
     return;
   }
 
   await ref.set(
     {
       draft: incomingConfig,
+      // Keep stored published payload as-is on draft save (do not re-sanitize into Firestore — avoids clobbering legacy shapes).
       published: currentData.published ?? DEFAULT_CONFIG,
       updatedAt: now,
       updatedBy: authUser.uid,
@@ -193,5 +220,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
     },
     { merge: true }
   );
-  res.status(200).json({ success: true, status: "draft_saved", updatedAt: now });
+  const publishedForResponse = sanitizeConfig(currentData.published ?? DEFAULT_CONFIG);
+  res.status(200).json({
+    success: true,
+    status: "draft_saved",
+    updatedAt: now,
+    draft: incomingConfig,
+    published: publishedForResponse,
+  });
 }

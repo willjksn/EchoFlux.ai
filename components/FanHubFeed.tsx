@@ -25,6 +25,7 @@ import { getAvatarCropStyle } from "../src/lib/avatarCrop";
 import { inferIsVideoFromUrl, normalizePostMediaTypes } from "../src/lib/mediaUrlInfer";
 import { ViewPostModalVideo } from "./ViewPostModalVideo";
 import { feedCommentAuthorLabel, feedCommentAuthorInitial } from "../src/lib/feedCommentLabel";
+import { renderTextWithCustomEmoji, type SjHeartEmojiAccessContext } from "../src/lib/customEmoji";
 
 /** Themed multi-media count pill — tints border/background/shadow from creator storefront `theme.primary` */
 function normalizeThemePrimary(hex: string | undefined): string | undefined {
@@ -407,11 +408,23 @@ const DEMO_POSTS: FeedPost[] = [
   },
 ];
 
-function FeedCardCaptionOverlay({ caption, style: captionStyle, size }: { caption: string; style?: string; size?: number }) {
+function FeedCardCaptionOverlay({
+  caption,
+  style: captionStyle,
+  size,
+  sjHeartEmojiCtx,
+}: {
+  caption: string;
+  style?: string;
+  size?: number;
+  sjHeartEmojiCtx: SjHeartEmojiAccessContext;
+}) {
   if (!caption?.trim()) return null;
   return (
     <div className={`feed-card-caption-overlay feed-card-caption-overlay-${captionStyle || "static"}`} aria-hidden>
-      <span className="feed-card-caption-overlay-text" style={size != null && size > 0 ? { fontSize: `${size}px` } : undefined}>{caption}</span>
+      <span className="feed-card-caption-overlay-text" style={size != null && size > 0 ? { fontSize: `${size}px` } : undefined}>
+        {renderTextWithCustomEmoji(caption, sjHeartEmojiCtx)}
+      </span>
     </div>
   );
 }
@@ -433,6 +446,7 @@ function FeedCard({
   onTogglePin,
   creatorThemePrimary,
   hideTipButtons,
+  sjHeartEmojiCtx,
 }: {
   post: FeedPost;
   creatorName: string;
@@ -453,6 +467,7 @@ function FeedCard({
   creatorThemePrimary?: string;
   /** Global creator visibility setting applied to all posts for fans. */
   hideTipButtons?: boolean;
+  sjHeartEmojiCtx: SjHeartEmojiAccessContext;
 }) {
   const countBadgeStyle = useMemo(
     () => feedCardCountThemedStyle(creatorThemePrimary),
@@ -902,7 +917,7 @@ function FeedCard({
               {feedVideoMuted ? <VolumeOffIcon /> : <VolumeOnIcon />}
             </button>
             {showCaptionOnMedia && (
-              <FeedCardCaptionOverlay caption={post.body} style={captionStyle} size={post.overlayTextSize} />
+              <FeedCardCaptionOverlay caption={post.body} style={captionStyle} size={post.overlayTextSize} sjHeartEmojiCtx={sjHeartEmojiCtx} />
             )}
             {renderCarouselArrows()}
             {renderCountBadge()}
@@ -917,7 +932,7 @@ function FeedCard({
               loading={slideIdx === 0 ? "lazy" : "eager"}
             />
             {showCaptionOnMedia && (
-              <FeedCardCaptionOverlay caption={post.body} style={captionStyle} size={post.overlayTextSize} />
+              <FeedCardCaptionOverlay caption={post.body} style={captionStyle} size={post.overlayTextSize} sjHeartEmojiCtx={sjHeartEmojiCtx} />
             )}
             {renderCarouselArrows()}
             {renderCountBadge()}
@@ -987,7 +1002,7 @@ function FeedCard({
       <div className="feed-card-body">
         <p className="feed-card-caption">
           <span className="caption-username">{creatorName}</span>
-          {post.body || ""}
+          {renderTextWithCustomEmoji(post.body || "", sjHeartEmojiCtx)}
         </p>
         {post.poll && post.poll.question && post.poll.options?.length >= 2 && (
           <div className="feed-card-poll">
@@ -1046,7 +1061,7 @@ function FeedCard({
                   visibleComments.slice(0, 2).map((c, i) => (
                     <div key={i} className="feed-card-comment">
                       <span className="comment-username">{feedCommentAuthorLabel(c)}</span>
-                      {c.text}
+                      {renderTextWithCustomEmoji(c.text, sjHeartEmojiCtx)}
                     </div>
                   ))
                 )}
@@ -1213,7 +1228,7 @@ function FeedCard({
                 <div className="feed-comments-modal-panel">
                   {post.body?.trim() ? (
                     <div className="feed-comments-modal-post-body">
-                      <p>{post.body}</p>
+                      <p>{renderTextWithCustomEmoji(post.body, sjHeartEmojiCtx)}</p>
                     </div>
                   ) : null}
                   <div className="feed-comments-modal-list">
@@ -1230,7 +1245,7 @@ function FeedCard({
                             <div className="feed-comments-modal-item-body">
                               <p className="feed-comments-modal-text">
                                 <span className="comment-username">{authorName}</span>
-                                <span className="feed-comments-modal-comment-body">{c.text}</span>
+                                <span className="feed-comments-modal-comment-body">{renderTextWithCustomEmoji(c.text, sjHeartEmojiCtx)}</span>
                               </p>
                             </div>
                           </div>
@@ -1300,6 +1315,7 @@ export const FanHubFeed: React.FC<{ isAdminMode?: boolean }> = ({ isAdminMode = 
     avatarObjectPosition?: string;
     /** Storefront theme primary (hex) for feed UI accents */
     themePrimary?: string;
+    handle?: string;
   }>({});
   const creatorId = user?.id;
   const canUseAIReplies = hasEliteAccess(user);
@@ -1310,6 +1326,14 @@ export const FanHubFeed: React.FC<{ isAdminMode?: boolean }> = ({ isAdminMode = 
   const creatorAvatar =
     creatorStorefront.avatar?.trim() || (user as { photoURL?: string })?.photoURL || undefined;
   const avatarObjectPosition = creatorStorefront.avatarObjectPosition;
+
+  const sjHeartEmojiCtx = useMemo<SjHeartEmojiAccessContext>(
+    () => ({
+      creatorHandle: creatorStorefront.handle,
+      viewerIsAdmin: user?.role === "Admin",
+    }),
+    [creatorStorefront.handle, user?.role]
+  );
 
   useEffect(() => {
     if (!creatorId || !db) {
@@ -1329,6 +1353,7 @@ export const FanHubFeed: React.FC<{ isAdminMode?: boolean }> = ({ isAdminMode = 
           avatarObjectPosition:
             typeof d.avatarObjectPosition === "string" ? d.avatarObjectPosition : undefined,
           themePrimary: typeof tp === "string" && tp.trim() ? tp.trim() : undefined,
+          handle: typeof d.handle === "string" && d.handle.trim() ? d.handle.trim() : undefined,
         });
       })
       .catch(() => {});
@@ -1811,6 +1836,7 @@ export const FanHubFeed: React.FC<{ isAdminMode?: boolean }> = ({ isAdminMode = 
                 onTogglePin={handleTogglePin}
                 creatorThemePrimary={creatorStorefront.themePrimary}
                 hideTipButtons={feedSettings.hideTipButton}
+                sjHeartEmojiCtx={sjHeartEmojiCtx}
               />
             ))}
           </div>

@@ -78,6 +78,9 @@ export const db = initializeFirestore(app, {
 });
 export const storage = getStorage(app);
 
+/** Configured default bucket id (for Storage URL checks). */
+export const firebaseStorageBucket = firebaseConfig.storageBucket ?? "";
+
 // ------------------------------------------------------------
 // Cloud Functions — *must* be initialized after app & auth
 // ------------------------------------------------------------

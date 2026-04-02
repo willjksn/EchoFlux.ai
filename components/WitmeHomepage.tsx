@@ -1,4 +1,9 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import {
+  DEFAULT_SHOWCASE_CREATORS,
+  type WitmeShowcaseCreator,
+  witmeCreatorPagePath,
+} from '../src/lib/witmeShowcase';
 
 interface WitmeHomepageProps {
   onExploreCreators?: () => void;
@@ -9,18 +14,83 @@ interface WitmeHomepageProps {
   disableRemoteConfig?: boolean;
 }
 
-interface CreatorCard {
-  name: string;
-  handle: string;
-  descriptor: string;
-  tags: string[];
-  image: string;
-  spotlight: string;
-}
+const liveStorefrontHref = (c: WitmeShowcaseCreator): string | null => {
+  if (!c.linkLive) return null;
+  const path = witmeCreatorPagePath(c.pageSlug);
+  return path || null;
+};
 
-const creatorPathFromHandle = (handle: string): string => {
-  const normalized = handle.trim().replace(/^@+/, '').toLowerCase();
-  return `/${normalized}`;
+const showcaseObjectStyle = (objectPosition?: string): React.CSSProperties => {
+  const pos =
+    objectPosition != null && String(objectPosition).trim() !== ''
+      ? String(objectPosition).trim()
+      : '50% 50%';
+  return { objectFit: 'cover' as const, objectPosition: pos };
+};
+
+const VIDEO_LOOP_FADE_MS = 380;
+
+const ShowcaseMedia: React.FC<{
+  url: string;
+  mediaKind: WitmeShowcaseCreator['mediaKind'];
+  alt: string;
+  className: string;
+  objectPosition?: string;
+}> = ({ url, mediaKind, alt, className, objectPosition }) => {
+  const u = url.trim();
+  const fitStyle = showcaseObjectStyle(objectPosition);
+  const videoRef = useRef<HTMLVideoElement>(null);
+
+  useEffect(() => {
+    const v = videoRef.current;
+    if (!v || mediaKind !== 'video' || !u) return;
+
+    let fadeTimer = 0;
+    const handleEnded = () => {
+      v.style.opacity = '0';
+      fadeTimer = window.setTimeout(() => {
+        const onSeeked = () => {
+          v.style.opacity = '1';
+        };
+        v.addEventListener('seeked', onSeeked, { once: true });
+        v.currentTime = 0;
+        void v.play().catch(() => {
+          v.removeEventListener('seeked', onSeeked);
+          v.style.opacity = '1';
+        });
+      }, VIDEO_LOOP_FADE_MS);
+    };
+
+    v.addEventListener('ended', handleEnded);
+    return () => {
+      v.removeEventListener('ended', handleEnded);
+      window.clearTimeout(fadeTimer);
+      v.style.opacity = '1';
+    };
+  }, [mediaKind, u]);
+
+  if (!u) {
+    return <div className={`${className} bg-white/10`} aria-hidden />;
+  }
+  if (mediaKind === 'video') {
+    return (
+      <video
+        ref={videoRef}
+        src={u}
+        className={`${className} transition-opacity ease-in-out`}
+        style={{
+          ...fitStyle,
+          transitionDuration: `${VIDEO_LOOP_FADE_MS}ms`,
+        }}
+        muted
+        playsInline
+        autoPlay
+        preload="metadata"
+        aria-label={alt}
+      />
+    );
+  }
+  return <img src={u} alt={alt} className={className} style={fitStyle} loading="lazy" />;
 };
 
 interface ActionItem {
@@ -50,58 +120,8 @@ export interface WitmeLandingConfig {
   trustItems: string[];
   liveMoments: string[];
   legalLinks: LegalLink[];
+  showcaseCreators: WitmeShowcaseCreator[];
 }
-
-const featuredCreators: CreatorCard[] = [
-  {
-    name: 'Stormi JXO',
-    handle: '@stormijxo',
-    descriptor: 'Premium creator page + direct fan access',
-    tags: ['Memberships', 'Paid Posts', 'Messages'],
-    image: 'https://images.unsplash.com/photo-1524504388940-b1c1722653e1?auto=format&fit=crop&w=900&q=80',
-    spotlight: 'New member-only drop is live now',
-  },
-  {
-    name: 'Jalen Brooks',
-    handle: '@jalenbuilds',
-    descriptor: 'Fitness + performance coaching',
-    tags: ['Sessions', 'Tips', 'Exclusive Access'],
-    image: 'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?auto=format&fit=crop&w=900&q=80',
-    spotlight: 'Opened 8 new coaching session slots',
-  },
-  {
-    name: 'Nia Sol',
-    handle: '@niasolmusic',
-    descriptor: 'Music process + unreleased cuts',
-    tags: ['Memberships', 'Paid Posts', 'Tips'],
-    image: 'https://images.unsplash.com/photo-1488426862026-3ee34a7d66df?auto=format&fit=crop&w=900&q=80',
-    spotlight: 'Posted an unreleased demo for members',
-  },
-  {
-    name: 'Evan Cole',
-    handle: '@evancoach',
-    descriptor: 'Mindset + creator growth',
-    tags: ['Sessions', 'Messages', 'Premium Access'],
-    image: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=900&q=80',
-    spotlight: 'Direct Q&A messages enabled this week',
-  },
-  {
-    name: 'Leah Park',
-    handle: '@leahframes',
-    descriptor: 'Photography + behind-the-scenes',
-    tags: ['Paid Posts', 'Memberships', 'Exclusive Access'],
-    image: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=900&q=80',
-    spotlight: 'New BTS set available for paid unlock',
-  },
-  {
-    name: 'Kai Moreno',
-    handle: '@kaifilms',
-    descriptor: 'Short films + creative breakdowns',
-    tags: ['Messages', 'Tips', 'Sessions'],
-    image: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=900&q=80',
-    spotlight: 'Hosting a creator breakdown session',
-  },
-];
 
 const fanActions: ActionItem[] = [
   { title: 'Start memberships', description: 'Join ongoing access when a creator opens member tiers.', icon: '👥' },
@@ -145,6 +165,7 @@ const defaultWitmeConfig: WitmeLandingConfig = {
   trustItems,
   liveMoments,
   legalLinks: defaultLegalLinks,
+  showcaseCreators: DEFAULT_SHOWCASE_CREATORS,
 };
 
 const offerModes: OfferMode[] = [
@@ -233,7 +254,20 @@ const useWitmeLandingConfig = (enabled = true): WitmeLandingConfig => {
         if (!res.ok) return;
         const data = await res.json();
         if (cancelled || !data?.config) return;
-        setConfig((prev) => ({ ...prev, ...data.config }));
+        setConfig((prev) => ({
+          ...prev,
+          ...data.config,
+          showcaseCreators: Array.isArray(data.config.showcaseCreators)
+            ? data.config.showcaseCreators.map((c: WitmeShowcaseCreator) => ({
+                ...c,
+                mediaKind: c.mediaKind === 'video' ? 'video' : 'image',
+                mediaObjectPosition:
+                  typeof c.mediaObjectPosition === 'string' && c.mediaObjectPosition.trim() !== ''
+                    ? c.mediaObjectPosition.trim()
+                    : '50% 50%',
+              }))
+            : prev.showcaseCreators,
+        }));
       } catch {}
     };
     load();
@@ -307,8 +341,10 @@ const HeroSection: React.FC<{
   title: string;
   description: string;
   trustText: string;
+  showcaseCreators: WitmeShowcaseCreator[];
   enableTracking?: boolean;
-}> = ({ onExploreCreators, title, description, trustText, enableTracking = true }) => {
+}> = ({ onExploreCreators, title, description, trustText, showcaseCreators, enableTracking = true }) => {
+  const heroTiles = showcaseCreators.slice(0, 4);
   return (
     <section className={`${sectionClass} pt-12 pb-10 sm:pt-16 sm:pb-14`}>
       <div className="relative grid grid-cols-1 gap-10 lg:grid-cols-2 lg:items-center">
@@ -342,13 +378,18 @@ const HeroSection: React.FC<{
         </div>
 
         <div className="grid grid-cols-2 gap-3 sm:gap-4">
-          {featuredCreators.slice(0, 4).map((creator, idx) => (
+          {heroTiles.map((creator, idx) => (
             <article
-              key={creator.handle}
-              className="overflow-hidden rounded-2xl border border-white/15 bg-white/10 backdrop-blur transition hover:-translate-y-1"
-              style={{ animation: `floatCard ${4.5 + idx * 0.5}s ease-in-out ${idx * 0.15}s infinite` }}
+              key={`${creator.handle}-${idx}`}
+              className="overflow-hidden rounded-2xl border border-white/15 bg-white/10 backdrop-blur"
             >
-              <img src={creator.image} alt={creator.name} className="h-28 w-full object-cover sm:h-32" loading="lazy" />
+              <ShowcaseMedia
+                url={creator.imageUrl}
+                mediaKind={creator.mediaKind}
+                alt={creator.name}
+                className="h-28 w-full sm:h-32"
+                objectPosition={creator.mediaObjectPosition}
+              />
               <div className="p-3 sm:p-4">
                 <p className="text-sm font-semibold text-white">{creator.name}</p>
                 <p className="mt-0.5 text-xs text-gray-400">{creator.handle}</p>
@@ -375,19 +416,30 @@ const TrustStrip: React.FC<{ items: string[] }> = ({ items }) => (
   </section>
 );
 
-const FeaturedNowSection: React.FC<{ enableTracking?: boolean }> = ({ enableTracking = true }) => {
+const FeaturedNowSection: React.FC<{ showcaseCreators: WitmeShowcaseCreator[]; enableTracking?: boolean }> = ({
+  showcaseCreators,
+  enableTracking = true,
+}) => {
   const [activeIdx, setActiveIdx] = useState(0);
   const [paused, setPaused] = useState(false);
 
   useEffect(() => {
+    if (showcaseCreators.length === 0) return;
     if (paused) return;
     const timer = window.setInterval(() => {
-      setActiveIdx((prev) => (prev + 1) % featuredCreators.length);
+      setActiveIdx((prev) => (prev + 1) % showcaseCreators.length);
     }, 3800);
     return () => window.clearInterval(timer);
-  }, [paused]);
+  }, [paused, showcaseCreators.length]);
 
-  const active = featuredCreators[activeIdx];
+  useEffect(() => {
+    if (activeIdx >= showcaseCreators.length) setActiveIdx(0);
+  }, [activeIdx, showcaseCreators.length]);
+
+  if (showcaseCreators.length === 0) return null;
+
+  const active = showcaseCreators[activeIdx];
+  const viewHref = liveStorefrontHref(active);
 
   return (
     <section className={`${sectionClass} py-10 sm:py-12`}>
@@ -398,32 +450,38 @@ const FeaturedNowSection: React.FC<{ enableTracking?: boolean }> = ({ enableTrac
       >
         <div className="absolute inset-0 bg-gradient-to-r from-sky-300/10 via-transparent to-fuchsia-300/10" />
         <div className="relative grid gap-5 sm:grid-cols-[220px_1fr] sm:items-center">
-          <img
-            src={active.image}
+          <ShowcaseMedia
+            url={active.imageUrl}
+            mediaKind={active.mediaKind}
             alt={active.name}
-            className="h-44 w-full rounded-2xl object-cover sm:h-40 sm:w-[220px]"
-            loading="lazy"
+            className="h-44 w-full rounded-2xl sm:h-40 sm:w-[220px]"
+            objectPosition={active.mediaObjectPosition}
           />
           <div>
             <p className="text-xs uppercase tracking-[0.18em] text-gray-300">Live on witme</p>
             <h3 className="mt-2 text-2xl font-semibold text-white">{active.name}</h3>
             <p className="mt-1 text-sm text-gray-300">{active.handle} · {active.descriptor}</p>
             <p className="mt-4 text-base text-gray-100">{active.spotlight}</p>
-            <a
-              href={creatorPathFromHandle(active.handle)}
-              className="mt-5 inline-flex items-center rounded-full bg-white px-4 py-2 text-sm font-semibold text-gray-900 transition hover:bg-gray-200"
-              onClick={() => {
-                if (enableTracking) trackWitmeEvent('creator_card_click', { handle: active.handle, location: 'featured_now' });
-              }}
-            >
-              View page
-            </a>
+            {viewHref ? (
+              <a
+                href={viewHref}
+                className="mt-5 inline-flex items-center rounded-full bg-white px-4 py-2 text-sm font-semibold text-gray-900 transition hover:bg-gray-200"
+                onClick={() => {
+                  if (enableTracking) trackWitmeEvent('creator_card_click', { handle: active.handle, location: 'featured_now' });
+                }}
+              >
+                View page
+              </a>
+            ) : (
+              <p className="mt-5 text-sm text-gray-400">More verified pages coming soon</p>
+            )}
           </div>
         </div>
         <div className="relative mt-5 flex items-center gap-2">
-          {featuredCreators.map((creator, idx) => (
+          {showcaseCreators.map((creator, idx) => (
             <button
-              key={creator.handle}
+              key={`${creator.handle}-dot-${idx}`}
+              type="button"
               onClick={() => setActiveIdx(idx)}
               aria-label={`Show ${creator.name}`}
               className={`h-2.5 rounded-full transition ${
@@ -437,33 +495,60 @@ const FeaturedNowSection: React.FC<{ enableTracking?: boolean }> = ({ enableTrac
   );
 };
 
-const FeaturedCreatorsGrid: React.FC = () => (
+const FeaturedCreatorsGrid: React.FC<{ showcaseCreators: WitmeShowcaseCreator[]; enableTracking?: boolean }> = ({
+  showcaseCreators,
+  enableTracking = true,
+}) => (
   <section id="featured-creators" className={`${sectionClass} py-12 sm:py-16`}>
     <div className="mb-7 sm:mb-9">
       <h2 className="text-2xl font-semibold text-white sm:text-3xl">Featured creator pages</h2>
       <p className="mt-2 text-sm text-gray-300 sm:text-base">Browse real creator pages in one trusted destination.</p>
     </div>
     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-      {featuredCreators.map((creator) => (
-        <article
-          key={creator.handle}
-          className="group overflow-hidden rounded-2xl border border-white/15 bg-white/10 transition hover:-translate-y-1 hover:border-white/30 hover:bg-white/15"
-        >
-          <img src={creator.image} alt={creator.name} className="h-44 w-full object-cover" loading="lazy" />
-          <div className="p-4">
-            <p className="text-base font-semibold text-white">{creator.name}</p>
-            <p className="mt-0.5 text-sm text-gray-400">{creator.handle}</p>
-            <p className="mt-3 text-sm text-gray-300">{creator.descriptor}</p>
-            <div className="mt-4 flex flex-wrap gap-2">
-              {creator.tags.map((tag) => (
-                <span key={tag} className="rounded-full border border-white/15 bg-black/20 px-2.5 py-1 text-xs text-gray-200">
-                  {tag}
-                </span>
-              ))}
+      {showcaseCreators.map((creator, idx) => {
+        const href = liveStorefrontHref(creator);
+        return (
+          <article
+            key={`${creator.handle}-grid-${idx}`}
+            className="group overflow-hidden rounded-2xl border border-white/15 bg-white/10 transition hover:border-white/30 hover:bg-white/15"
+          >
+            <ShowcaseMedia
+              url={creator.imageUrl}
+              mediaKind={creator.mediaKind}
+              alt={creator.name}
+              className="h-44 w-full"
+              objectPosition={creator.mediaObjectPosition}
+            />
+            <div className="p-4">
+              <p className="text-base font-semibold text-white">{creator.name}</p>
+              <p className="mt-0.5 text-sm text-gray-400">{creator.handle}</p>
+              <p className="mt-3 text-sm text-gray-300">{creator.descriptor}</p>
+              <div className="mt-4 flex flex-wrap gap-2">
+                {creator.tags.map((tag) => (
+                  <span key={tag} className="rounded-full border border-white/15 bg-black/20 px-2.5 py-1 text-xs text-gray-200">
+                    {tag}
+                  </span>
+                ))}
+              </div>
+              <div className="mt-4">
+                {href ? (
+                  <a
+                    href={href}
+                    className="inline-flex items-center rounded-full bg-white/90 px-3 py-1.5 text-xs font-semibold text-gray-900 transition hover:bg-white"
+                    onClick={() => {
+                      if (enableTracking) trackWitmeEvent('creator_card_click', { handle: creator.handle, location: 'featured_grid' });
+                    }}
+                  >
+                    View page
+                  </a>
+                ) : (
+                  <span className="text-xs text-gray-500">Preview style — page coming soon</span>
+                )}
+              </div>
             </div>
-          </div>
-        </article>
-      ))}
+          </article>
+        );
+      })}
     </div>
   </section>
 );
@@ -663,11 +748,6 @@ export const WitmeHomepage: React.FC<WitmeHomepageProps> = ({
           0% { transform: translateX(0); }
           100% { transform: translateX(-33.333%); }
         }
-        @keyframes floatCard {
-          0% { transform: translateY(0px); }
-          50% { transform: translateY(-5px); }
-          100% { transform: translateY(0px); }
-        }
       `}</style>
       <div className="pointer-events-none absolute inset-0 -z-0">
         <div className="absolute -top-24 left-1/2 h-72 w-72 -translate-x-1/2 rounded-full bg-sky-300/30 blur-3xl" />
@@ -680,11 +760,12 @@ export const WitmeHomepage: React.FC<WitmeHomepageProps> = ({
           title={landingConfig.heroTitle}
           description={landingConfig.heroDescription}
           trustText={landingConfig.heroTrustText}
+          showcaseCreators={landingConfig.showcaseCreators}
           enableTracking={!disableTracking}
         />
         <TrustStrip items={landingConfig.trustItems} />
-        <FeaturedNowSection enableTracking={!disableTracking} />
-        <FeaturedCreatorsGrid />
+        <FeaturedNowSection showcaseCreators={landingConfig.showcaseCreators} enableTracking={!disableTracking} />
+        <FeaturedCreatorsGrid showcaseCreators={landingConfig.showcaseCreators} enableTracking={!disableTracking} />
         <FanActionsSection actions={landingConfig.featureCards} />
         <CreatorExperienceSection />
         <FanConfidenceSection />
@@ -714,11 +795,13 @@ export const WitmeDiscoverPage: React.FC<{ echofluxUrl?: string }> = ({ echoflux
   const backHref = previewSuffix ? `/${previewSuffix}` : '/';
   const discoverHref = `/discover${previewSuffix}`;
 
+  const showcase = landingConfig.showcaseCreators;
+
   const filteredCreators = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
-    if (!normalizedQuery) return featuredCreators;
+    if (!normalizedQuery) return showcase;
 
-    return featuredCreators.filter((creator) => {
+    return showcase.filter((creator) => {
       const haystack = [
         creator.name,
         creator.handle,
@@ -730,7 +813,7 @@ export const WitmeDiscoverPage: React.FC<{ echofluxUrl?: string }> = ({ echoflux
 
       return haystack.includes(normalizedQuery);
     });
-  }, [query]);
+  }, [query, showcase]);
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-[#26324a] via-[#202b3f] to-[#182031] text-white">
@@ -771,33 +854,46 @@ export const WitmeDiscoverPage: React.FC<{ echofluxUrl?: string }> = ({ echoflux
             </div>
           ) : (
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {filteredCreators.map((creator) => (
-                <article
-                  key={creator.handle}
-                  className="group overflow-hidden rounded-2xl border border-white/10 bg-white/5 transition hover:border-white/20 hover:bg-white/10"
-                >
-                  <img src={creator.image} alt={creator.name} className="h-44 w-full object-cover" loading="lazy" />
-                  <div className="p-4">
-                    <p className="text-base font-semibold text-white">{creator.name}</p>
-                    <p className="mt-0.5 text-sm text-gray-400">{creator.handle}</p>
-                    <p className="mt-3 text-sm text-gray-300">{creator.descriptor}</p>
-                    <div className="mt-4 flex flex-wrap gap-2">
-                      {creator.tags.map((tag) => (
-                        <span key={tag} className="rounded-full border border-white/15 bg-black/20 px-2.5 py-1 text-xs text-gray-200">
-                          {tag}
-                        </span>
-                      ))}
+              {filteredCreators.map((creator, idx) => {
+                const href = liveStorefrontHref(creator);
+                return (
+                  <article
+                    key={`${creator.handle}-discover-${idx}`}
+                    className="group overflow-hidden rounded-2xl border border-white/10 bg-white/5 transition hover:border-white/20 hover:bg-white/10"
+                  >
+                    <ShowcaseMedia
+                      url={creator.imageUrl}
+                      mediaKind={creator.mediaKind}
+                      alt={creator.name}
+                      className="h-44 w-full"
+                      objectPosition={creator.mediaObjectPosition}
+                    />
+                    <div className="p-4">
+                      <p className="text-base font-semibold text-white">{creator.name}</p>
+                      <p className="mt-0.5 text-sm text-gray-400">{creator.handle}</p>
+                      <p className="mt-3 text-sm text-gray-300">{creator.descriptor}</p>
+                      <div className="mt-4 flex flex-wrap gap-2">
+                        {creator.tags.map((tag) => (
+                          <span key={tag} className="rounded-full border border-white/15 bg-black/20 px-2.5 py-1 text-xs text-gray-200">
+                            {tag}
+                          </span>
+                        ))}
+                      </div>
+                      {href ? (
+                        <a
+                          href={href}
+                          className="mt-5 inline-flex items-center rounded-full bg-white px-4 py-2 text-xs font-semibold text-gray-900 transition hover:bg-gray-200"
+                          onClick={() => trackWitmeEvent('creator_card_click', { handle: creator.handle, location: 'discover_grid' })}
+                        >
+                          View page
+                        </a>
+                      ) : (
+                        <p className="mt-5 text-xs text-gray-500">Page coming soon</p>
+                      )}
                     </div>
-                    <a
-                      href={creatorPathFromHandle(creator.handle)}
-                      className="mt-5 inline-flex items-center rounded-full bg-white px-4 py-2 text-xs font-semibold text-gray-900 transition hover:bg-gray-200"
-                      onClick={() => trackWitmeEvent('creator_card_click', { handle: creator.handle, location: 'discover_grid' })}
-                    >
-                      View page
-                    </a>
-                  </div>
-                </article>
-              ))}
+                  </article>
+                );
+              })}
             </div>
           )}
         </section>

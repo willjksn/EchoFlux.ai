@@ -3,6 +3,8 @@ import { Platform, Post, CalendarEvent } from '../types';
 import { useAppContext } from './AppContext';
 import { UploadIcon, SparklesIcon, CheckCircleIcon, RefreshIcon, CalendarIcon, TrashIcon, XMarkIcon, EmojiIcon, FaceSmileIcon, CatIcon, PizzaIcon, SoccerBallIcon, CarIcon, LightbulbIcon, HeartIcon, PlusIcon } from './icons/UIIcons';
 import { EMOJIS, EMOJI_CATEGORIES, Emoji } from './emojiData';
+import { useCreatorHandle } from '../src/hooks/useCreatorHandle';
+import { filterEmojisForSjHeartAccess, canUseSjHeartEmoji } from '../src/lib/customEmoji';
 
 const categoryIcons: Record<string, React.ReactNode> = {
     FaceSmileIcon: <FaceSmileIcon className="w-5 h-5"/>,
@@ -85,6 +87,11 @@ export const Automation: React.FC = () => {
   const [activeEmojiCategory, setActiveEmojiCategory] = useState<Emoji['category']>(EMOJI_CATEGORIES[0].name);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const dropZoneRef = useRef<HTMLDivElement>(null);
+  const creatorHandleFromDoc = useCreatorHandle(user?.id);
+  const allowSjHeartEmoji = canUseSjHeartEmoji({
+    creatorHandle: creatorHandleFromDoc,
+    viewerIsAdmin: user?.role === 'Admin',
+  });
 
   const goalOptions = useMemo(
     () => [
@@ -110,8 +117,8 @@ export const Automation: React.FC = () => {
   );
 
   const filteredEmojis = useMemo(() => {
-    let emojis = EMOJIS;
-    
+    let emojis = filterEmojisForSjHeartAccess(EMOJIS, allowSjHeartEmoji);
+
     if (emojiSearchTerm) {
       const searchLower = emojiSearchTerm.toLowerCase();
       emojis = emojis.filter(e => 
@@ -121,9 +128,9 @@ export const Automation: React.FC = () => {
     } else {
       emojis = emojis.filter(e => e.category === activeEmojiCategory);
     }
-    
+
     return emojis;
-  }, [emojiSearchTerm, activeEmojiCategory]);
+  }, [emojiSearchTerm, activeEmojiCategory, allowSjHeartEmoji]);
 
   // Close emoji picker when clicking outside
     useEffect(() => {

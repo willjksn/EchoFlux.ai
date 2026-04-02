@@ -6,10 +6,24 @@ service firebase.storage {
     /** -------------------------------------------------------
      *  Helper: Check if the authenticated user is an Admin
      *  ------------------------------------------------------- */
+    /** App convention: `users/{uid}.role` is `Admin` (Firestore lookup can fail if doc missing — prefer path-scoped rules). */
     function isAdmin() {
       return request.auth != null
         && firestore.exists(/databases/(default)/documents/users/$(request.auth.uid))
-        && firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.role == 'Admin';
+        && (
+          firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.role == 'Admin'
+          || firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.role == 'admin'
+        );
+    }
+
+    /** Witme showcase uploads: images or short videos only, max ~50MB. */
+    function isWitmeShowcaseMedia() {
+      return request.resource != null
+        && request.resource.size < 50 * 1024 * 1024
+        && (
+          request.resource.contentType.matches('image/.*')
+          || request.resource.contentType.matches('video/.*')
+        );
     }
     
     /** -------------------------------------------------------
@@ -36,6 +50,26 @@ service firebase.storage {
       // Allow read/write for authenticated users (app enforces Admin access)
       // TODO: Tighten this to use isAdmin() once Firestore checks are reliable
       allow read, write: if isAuthenticated();
+    }
+
+    /**
+     * Witme marketing showcase (home / discover)
+     * - Public read: fans load URLs without signing in.
+     * - New uploads: `witme_showcase/{auth.uid}/...` so writes do not depend on Firestore role from Storage rules.
+     * - Legacy flat objects `witme_showcase/{file}` (no uid folder): read public; mutate only via Admin (Firestore).
+     */
+    match /witme_showcase/{userId}/{allPaths=**} {
+      allow read: if true;
+      allow create: if isOwner(userId) && isWitmeShowcaseMedia();
+      allow update: if isOwner(userId) && isWitmeShowcaseMedia();
+      allow delete: if isOwner(userId) || isAdmin();
+    }
+
+    match /witme_showcase/{legacyFile} {
+      allow read: if true;
+      allow create: if isAdmin() && isWitmeShowcaseMedia();
+      allow update: if isAdmin() && isWitmeShowcaseMedia();
+      allow delete: if isAdmin();
     }
     
     /** -------------------------------------------------------

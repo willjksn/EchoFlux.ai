@@ -5,6 +5,8 @@ export interface Emoji {
   description: string;
   category: 'Smileys & People' | 'Animals & Nature' | 'Food & Drink' | 'Activities' | 'Travel & Places' | 'Objects' | 'Symbols';
   aliases: string[];
+  imageUrl?: string;
+  insertText?: string;
 }
 
 export const EMOJI_CATEGORIES = [
@@ -559,6 +561,7 @@ export const EMOJIS: Emoji[] = [
   { emoji: '♒', description: 'Aquarius', category: 'Symbols', aliases: ['zodiac'] },
   { emoji: '♓', description: 'Pisces', category: 'Symbols', aliases: ['zodiac'] },
   { emoji: '🆔', description: 'ID button', category: 'Symbols', aliases: ['identity'] },
+  { emoji: '🩷', description: 'SJ heart', category: 'Symbols', aliases: ['sjheart', 'sj', 'stormijxo', 'heart'], imageUrl: '/emojis/sj-heart-emoji-128.png', insertText: ':sjheart:' },
   { emoji: '⚛️', description: 'atom symbol', category: 'Symbols', aliases: ['science'] },
   { emoji: '🉑', description: 'Japanese “acceptable” button', category: 'Symbols', aliases: ['ok'] },
   { emoji: '☢️', description: 'radioactive', category: 'Symbols', aliases: ['danger'] },

@@ -1,10 +1,13 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useMemo } from "react";
 import ReactDOM from "react-dom";
 import { EMOJIS, EMOJI_CATEGORIES } from "./emojiData";
+import { filterEmojisForSjHeartAccess } from "../src/lib/customEmoji";
 
 interface EmojiPickerProps {
   onSelect: (emoji: string) => void;
   onClose: () => void;
+  /** When false (default), the SJ custom emoji tile is hidden. */
+  includeSjHeartEmoji?: boolean;
 }
 
 const CategoryIcons: Record<string, string> = {
@@ -17,11 +20,16 @@ const CategoryIcons: Record<string, string> = {
   "Symbols": "❤️",
 };
 
-export const EmojiPicker: React.FC<EmojiPickerProps> = ({ onSelect, onClose }) => {
+export const EmojiPicker: React.FC<EmojiPickerProps> = ({ onSelect, onClose, includeSjHeartEmoji = false }) => {
   const [search, setSearch] = useState("");
   const [activeCategory, setActiveCategory] = useState<string>("Smileys & People");
   const containerRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
+
+  const emojiSource = useMemo(
+    () => filterEmojisForSjHeartAccess(EMOJIS, includeSjHeartEmoji),
+    [includeSjHeartEmoji]
+  );
 
   useEffect(() => {
     searchRef.current?.focus();
@@ -45,16 +53,16 @@ export const EmojiPicker: React.FC<EmojiPickerProps> = ({ onSelect, onClose }) =
   }, [onClose]);
 
   const filteredEmojis = search.trim()
-    ? EMOJIS.filter(
+    ? emojiSource.filter(
         (e) =>
           e.emoji.includes(search) ||
           e.description.toLowerCase().includes(search.toLowerCase()) ||
           e.aliases.some((a) => a.toLowerCase().includes(search.toLowerCase()))
       )
-    : EMOJIS.filter((e) => e.category === activeCategory);
+    : emojiSource.filter((e) => e.category === activeCategory);
 
-  const handleEmojiClick = (emoji: string) => {
-    onSelect(emoji);
+  const handleEmojiClick = (emoji: { emoji: string; insertText?: string }) => {
+    onSelect(emoji.insertText ?? emoji.emoji);
   };
 
   return (
@@ -123,7 +131,7 @@ export const EmojiPicker: React.FC<EmojiPickerProps> = ({ onSelect, onClose }) =
             <button
               key={`${emoji.emoji}-${idx}`}
               type="button"
-              onClick={() => handleEmojiClick(emoji.emoji)}
+              onClick={() => handleEmojiClick(emoji)}
               style={{
                 width: "44px",
                 height: "44px",
@@ -132,7 +140,7 @@ export const EmojiPicker: React.FC<EmojiPickerProps> = ({ onSelect, onClose }) =
                 border: "none",
                 cursor: "pointer",
                 background: "transparent",
-                fontSize: "28px",
+                fontSize: emoji.imageUrl ? "18px" : "28px",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
@@ -147,7 +155,15 @@ export const EmojiPicker: React.FC<EmojiPickerProps> = ({ onSelect, onClose }) =
                 e.currentTarget.style.background = "transparent";
               }}
             >
-              {emoji.emoji}
+              {emoji.imageUrl ? (
+                <img
+                  src={emoji.imageUrl}
+                  alt={emoji.description}
+                  style={{ width: "30px", height: "30px", objectFit: "contain" }}
+                />
+              ) : (
+                emoji.emoji
+              )}
             </button>
           ))}
         </div>
@@ -209,9 +225,10 @@ export const EmojiPicker: React.FC<EmojiPickerProps> = ({ onSelect, onClose }) =
 
 interface EmojiButtonProps {
   onSelect: (emoji: string) => void;
+  includeSjHeartEmoji?: boolean;
 }
 
-export const EmojiButton: React.FC<EmojiButtonProps> = ({ onSelect }) => {
+export const EmojiButton: React.FC<EmojiButtonProps> = ({ onSelect, includeSjHeartEmoji = false }) => {
   const [open, setOpen] = useState(false);
   const [position, setPosition] = useState<{ top: number; left: number } | null>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
@@ -259,21 +276,6 @@ export const EmojiButton: React.FC<EmojiButtonProps> = ({ onSelect }) => {
     }
   };
 
-  // Close on scroll
-  useEffect(() => {
-    if (!open) return;
-    
-    const handleScroll = () => {
-      setOpen(false);
-    };
-    
-    // Listen to scroll on window and any scrollable parent
-    window.addEventListener("scroll", handleScroll, true);
-    return () => {
-      window.removeEventListener("scroll", handleScroll, true);
-    };
-  }, [open]);
-
   // Close on window resize
   useEffect(() => {
     if (!open) return;
@@ -306,6 +308,7 @@ export const EmojiButton: React.FC<EmojiButtonProps> = ({ onSelect }) => {
       {open && position && (
         <EmojiPickerPortal position={position}>
           <EmojiPicker
+            includeSjHeartEmoji={includeSjHeartEmoji}
             onSelect={(emoji) => {
               onSelect(emoji);
               setOpen(false);

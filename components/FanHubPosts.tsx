@@ -21,6 +21,8 @@ import { DmAudioPlayer } from "./DmAudioPlayer";
 import { RecordingDurationLabel } from "./RecordingDurationLabel";
 import { FanHubFeed, type FeedPost } from "./FanHubFeed";
 import { EmojiButton } from "./EmojiPicker";
+import { useCreatorHandle } from "../src/hooks/useCreatorHandle";
+import { canUseSjHeartEmoji } from "../src/lib/customEmoji";
 
 type CaptionStyle = "static" | "scroll-up" | "scroll-across" | "dissolve";
 type AiTone = "" | "flirty" | "casual" | "motivational" | "premium" | "playful" | "mysterious" | "confident" | "custom";
@@ -243,6 +245,11 @@ export const FanHubPosts: React.FC = () => {
   
   const fileInputRef = useRef<HTMLInputElement>(null);
   const creatorId = user?.uid || user?.id;
+  const creatorHandleFromDoc = useCreatorHandle(creatorId);
+  const includeSjHeartEmoji = canUseSjHeartEmoji({
+    creatorHandle: creatorHandleFromDoc,
+    viewerIsAdmin: user?.role === "Admin",
+  });
   
   // Get minimum date (today) for date picker
   const getMinDate = () => {
@@ -1368,7 +1375,7 @@ DO NOT include hashtags.`;
                     className="w-full px-3 py-2 pr-12 border border-gray-200 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white resize-none focus:ring-2 focus:ring-pink-500 focus:border-transparent"
                   />
                   <div className="absolute right-2 top-2">
-                    <EmojiButton onSelect={(emoji) => setCaption((prev) => prev + emoji)} />
+                    <EmojiButton includeSjHeartEmoji={includeSjHeartEmoji} onSelect={(emoji) => setCaption((prev) => prev + emoji)} />
                   </div>
                   <div className="absolute right-2 bottom-2 text-xs text-gray-400">
                     {caption.length}/2200

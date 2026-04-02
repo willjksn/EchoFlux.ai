@@ -2,6 +2,8 @@ import React, { useState, useRef, ChangeEvent, useEffect, useMemo, useLayoutEffe
 import { CameraIcon, TrashIcon, CheckCircleIcon, CalendarIcon, CreditCardIcon, LockIcon, EmojiIcon, FaceSmileIcon, CatIcon, PizzaIcon, SoccerBallIcon, CarIcon, LightbulbIcon, HeartIcon } from './icons/UIIcons';
 import { EMOJIS, EMOJI_CATEGORIES, Emoji } from './emojiData';
 import { useAppContext } from './AppContext';
+import { useCreatorHandle } from '../src/hooks/useCreatorHandle';
+import { filterEmojisForSjHeartAccess, canUseSjHeartEmoji } from '../src/lib/customEmoji';
 import { User, MediaItem, Client, Plan } from '../types';
 import { ReferralSystem } from './ReferralSystem';
 
@@ -29,6 +31,11 @@ const SettingsSection: React.FC<{ title: string; children: React.ReactNode }> = 
 
 export const Profile: React.FC = () => {
     const { user, setUser, setActivePage, selectedClient, clients, setClients, showToast, openPaymentModal, setPricingView } = useAppContext();
+    const creatorHandleFromDoc = useCreatorHandle(user?.id);
+    const allowSjHeartEmoji = canUseSjHeartEmoji({
+        creatorHandle: creatorHandleFromDoc,
+        viewerIsAdmin: user?.role === 'Admin',
+    });
     const [isEditing, setIsEditing] = useState(false);
     const [editableUser, setEditableUser] = useState<User | null>(user);
     const fileInputRef = useRef<HTMLInputElement>(null);
@@ -53,26 +60,28 @@ export const Profile: React.FC = () => {
     const bioEmojiButtonRef = useRef<HTMLButtonElement>(null);
     
     const nameFilteredEmojis = useMemo(() => {
+        const base = filterEmojisForSjHeartAccess(EMOJIS, allowSjHeartEmoji);
         const lowercasedTerm = nameEmojiSearchTerm.toLowerCase();
         if (lowercasedTerm) {
-            return EMOJIS.filter(e =>
+            return base.filter(e =>
                 e.description.toLowerCase().includes(lowercasedTerm) ||
                 e.aliases.some(a => a.includes(lowercasedTerm))
             );
         }
-        return EMOJIS.filter(e => e.category === nameActiveEmojiCategory);
-    }, [nameEmojiSearchTerm, nameActiveEmojiCategory]);
+        return base.filter(e => e.category === nameActiveEmojiCategory);
+    }, [nameEmojiSearchTerm, nameActiveEmojiCategory, allowSjHeartEmoji]);
     
     const bioFilteredEmojis = useMemo(() => {
+        const base = filterEmojisForSjHeartAccess(EMOJIS, allowSjHeartEmoji);
         const lowercasedTerm = bioEmojiSearchTerm.toLowerCase();
         if (lowercasedTerm) {
-            return EMOJIS.filter(e =>
+            return base.filter(e =>
                 e.description.toLowerCase().includes(lowercasedTerm) ||
                 e.aliases.some(a => a.includes(lowercasedTerm))
             );
         }
-        return EMOJIS.filter(e => e.category === bioActiveEmojiCategory);
-    }, [bioEmojiSearchTerm, bioActiveEmojiCategory]);
+        return base.filter(e => e.category === bioActiveEmojiCategory);
+    }, [bioEmojiSearchTerm, bioActiveEmojiCategory, allowSjHeartEmoji]);
     
     useLayoutEffect(() => {
         if (isNameEmojiPickerOpen && nameInputRef.current) {

@@ -46,6 +46,9 @@ service-account.jsonl
 *.jsonl
 .cursor/
 
+# Local scratch (never commit)
+tmp/
+
 # Playwright / E2E artifacts
 test-results/
 playwright-report/

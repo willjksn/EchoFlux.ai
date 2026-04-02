@@ -3096,6 +3096,7 @@ export const FanStorefrontView: React.FC = () => {
             {activeTab === "feed" && !needsPaidUpgrade && (
               <FanMemberFeed
                 creatorId={creator.creatorId}
+                creatorHandle={creator.handle}
                 displayName={displayName}
                 avatar={creatorAvatar}
                 avatarObjectPosition={creator.avatarObjectPosition}
@@ -3112,6 +3113,7 @@ export const FanStorefrontView: React.FC = () => {
             {activeTab === "saved" && (
               <FanMemberSaved
                 creatorId={creator.creatorId}
+                creatorHandle={creator.handle}
                 displayName={displayName}
                 avatar={creatorAvatar}
                 avatarObjectPosition={creator.avatarObjectPosition}

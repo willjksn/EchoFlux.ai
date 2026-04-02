@@ -24,6 +24,7 @@ import {
 import { StorefrontPreview } from "./StorefrontPreview";
 import { UserIcon, ImageIcon, GlobeIcon } from "./icons/UIIcons";
 import { EmojiButton } from "./EmojiPicker";
+import { canUseSjHeartEmoji } from "../src/lib/customEmoji";
 
 const DEFAULT_SECTIONS: NonNullable<CreatorStorefrontSettings["sections"]> = {
   feed: true,
@@ -589,6 +590,11 @@ export const MyPageBuilder: React.FC = () => {
   >("off");
   const [previewFocusPhotoSlot, setPreviewFocusPhotoSlot] = useState(0);
   const previewScrollRef = useRef<HTMLDivElement>(null);
+
+  const includeSjHeartEmoji = useMemo(
+    () => canUseSjHeartEmoji({ creatorHandle: draft.handle, viewerIsAdmin: user?.role === "Admin" }),
+    [draft.handle, user?.role]
+  );
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -1466,7 +1472,7 @@ export const MyPageBuilder: React.FC = () => {
                     placeholder="Your name"
                     className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                   />
-                  <EmojiButton onSelect={(emoji) => updateDraft({ displayName: (draft.displayName ?? "") + emoji })} />
+                  <EmojiButton includeSjHeartEmoji={includeSjHeartEmoji} onSelect={(emoji) => updateDraft({ displayName: (draft.displayName ?? "") + emoji })} />
                 </div>
                 <label className="flex items-center gap-2 mt-2 cursor-pointer">
                   <input
@@ -1498,7 +1504,7 @@ export const MyPageBuilder: React.FC = () => {
                     className="w-full px-3 py-2 pr-12 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                   />
                   <div className="absolute right-2 top-2">
-                    <EmojiButton onSelect={(emoji) => updateDraft({ bio: (draft.bio ?? "") + emoji })} />
+                    <EmojiButton includeSjHeartEmoji={includeSjHeartEmoji} onSelect={(emoji) => updateDraft({ bio: (draft.bio ?? "") + emoji })} />
                   </div>
                 </div>
                 <p className="text-xs text-gray-500 mt-1">{(draft.bio ?? "").length}/500</p>
@@ -1769,7 +1775,7 @@ export const MyPageBuilder: React.FC = () => {
                     placeholder="e.g., Content creator & model"
                     className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                   />
-                  <EmojiButton onSelect={(emoji) => updateDraft({ heroTagline: (draft.heroTagline ?? "") + emoji })} />
+                  <EmojiButton includeSjHeartEmoji={includeSjHeartEmoji} onSelect={(emoji) => updateDraft({ heroTagline: (draft.heroTagline ?? "") + emoji })} />
                 </div>
               </div>
               <div>
@@ -1789,7 +1795,7 @@ export const MyPageBuilder: React.FC = () => {
                     placeholder="e.g., Your access to the real me"
                     className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                   />
-                  <EmojiButton onSelect={(emoji) => updateDraft({ heroPromise: (draft.heroPromise ?? "") + emoji })} />
+                  <EmojiButton includeSjHeartEmoji={includeSjHeartEmoji} onSelect={(emoji) => updateDraft({ heroPromise: (draft.heroPromise ?? "") + emoji })} />
                 </div>
               </div>
               <div>
@@ -1810,7 +1816,7 @@ export const MyPageBuilder: React.FC = () => {
                     placeholder="e.g., Join for exclusive content and DMs"
                     className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                   />
-                  <EmojiButton onSelect={(emoji) => updateDraft({ heroSubline: (draft.heroSubline ?? "") + emoji })} />
+                  <EmojiButton includeSjHeartEmoji={includeSjHeartEmoji} onSelect={(emoji) => updateDraft({ heroSubline: (draft.heroSubline ?? "") + emoji })} />
                 </div>
               </div>
               <div>
@@ -1833,7 +1839,7 @@ export const MyPageBuilder: React.FC = () => {
                     placeholder="e.g., Cancel anytime · Secure checkout"
                     className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                   />
-                  <EmojiButton onSelect={(emoji) => updateDraft({ heroSubline2: (draft.heroSubline2 ?? "") + emoji })} />
+                  <EmojiButton includeSjHeartEmoji={includeSjHeartEmoji} onSelect={(emoji) => updateDraft({ heroSubline2: (draft.heroSubline2 ?? "") + emoji })} />
                 </div>
               </div>
             </div>
@@ -1952,7 +1958,7 @@ export const MyPageBuilder: React.FC = () => {
                     placeholder="Section title"
                     className="flex-1 px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                   />
-                  <EmojiButton onSelect={(emoji) => updateLandingContent("perksTitle", (draft.landingContent?.perksTitle ?? "") + emoji)} />
+                  <EmojiButton includeSjHeartEmoji={includeSjHeartEmoji} onSelect={(emoji) => updateLandingContent("perksTitle", (draft.landingContent?.perksTitle ?? "") + emoji)} />
                 </div>
                 <div className="flex items-center justify-between mb-1">
                   <span className="text-xs text-gray-500 dark:text-gray-400">Description</span>
@@ -1971,7 +1977,7 @@ export const MyPageBuilder: React.FC = () => {
                     className="w-full px-3 py-1.5 pr-12 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                   />
                   <div className="absolute right-2 top-1.5">
-                    <EmojiButton onSelect={(emoji) => updateLandingContent("perksText", (draft.landingContent?.perksText ?? "") + emoji)} />
+                    <EmojiButton includeSjHeartEmoji={includeSjHeartEmoji} onSelect={(emoji) => updateLandingContent("perksText", (draft.landingContent?.perksText ?? "") + emoji)} />
                   </div>
                 </div>
                 <div className="mt-3 space-y-2">
@@ -2027,6 +2033,7 @@ export const MyPageBuilder: React.FC = () => {
                       />
                       <div className="absolute right-2 top-1.5">
                         <EmojiButton
+                          includeSjHeartEmoji={includeSjHeartEmoji}
                           onSelect={(emoji) => {
                             setDraft((prev) => {
                               const lc = prev.landingContent ?? DEFAULT_LANDING_CONTENT;
@@ -2064,7 +2071,7 @@ export const MyPageBuilder: React.FC = () => {
                     placeholder="Section title"
                     className="flex-1 px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                   />
-                  <EmojiButton onSelect={(emoji) => updateLandingContent("previewTitle", (draft.landingContent?.previewTitle ?? "") + emoji)} />
+                  <EmojiButton includeSjHeartEmoji={includeSjHeartEmoji} onSelect={(emoji) => updateLandingContent("previewTitle", (draft.landingContent?.previewTitle ?? "") + emoji)} />
                 </div>
                 <div className="flex items-center justify-between mb-1">
                   <span className="text-xs text-gray-500 dark:text-gray-400">Subline under title (pink)</span>
@@ -2083,7 +2090,7 @@ export const MyPageBuilder: React.FC = () => {
                     className="w-full px-3 py-1.5 pr-12 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                   />
                   <div className="absolute right-2 top-1.5">
-                    <EmojiButton onSelect={(emoji) => updateLandingContent("previewText", (draft.landingContent?.previewText ?? "") + emoji)} />
+                    <EmojiButton includeSjHeartEmoji={includeSjHeartEmoji} onSelect={(emoji) => updateLandingContent("previewText", (draft.landingContent?.previewText ?? "") + emoji)} />
                   </div>
                 </div>
                 <div className="mt-3 space-y-2">
@@ -2139,6 +2146,7 @@ export const MyPageBuilder: React.FC = () => {
                       />
                       <div className="absolute right-2 top-1.5">
                         <EmojiButton
+                          includeSjHeartEmoji={includeSjHeartEmoji}
                           onSelect={(emoji) => {
                             setDraft((prev) => {
                               const lc = prev.landingContent ?? DEFAULT_LANDING_CONTENT;
@@ -2192,7 +2200,7 @@ export const MyPageBuilder: React.FC = () => {
                     placeholder="Section title"
                     className="flex-1 px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                   />
-                  <EmojiButton onSelect={(emoji) => updateLandingContent("energyTitle", (draft.landingContent?.energyTitle ?? "") + emoji)} />
+                  <EmojiButton includeSjHeartEmoji={includeSjHeartEmoji} onSelect={(emoji) => updateLandingContent("energyTitle", (draft.landingContent?.energyTitle ?? "") + emoji)} />
                 </div>
                 <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
                   <span className="text-xs font-medium text-gray-500 dark:text-gray-400">Body under title</span>
@@ -2214,6 +2222,7 @@ export const MyPageBuilder: React.FC = () => {
                       />
                       <div className="absolute right-2 top-1.5">
                         <EmojiButton
+                          includeSjHeartEmoji={includeSjHeartEmoji}
                           onSelect={(emoji) => {
                             setDraft((prev) => {
                               const lc = prev.landingContent ?? DEFAULT_LANDING_CONTENT;
@@ -2261,6 +2270,7 @@ export const MyPageBuilder: React.FC = () => {
                     />
                     <div className="absolute right-2 top-1.5">
                       <EmojiButton
+                        includeSjHeartEmoji={includeSjHeartEmoji}
                         onSelect={(emoji) => {
                           setDraft((prev) => {
                             const lc = prev.landingContent ?? DEFAULT_LANDING_CONTENT;
@@ -2314,7 +2324,7 @@ export const MyPageBuilder: React.FC = () => {
                     placeholder="Section title"
                     className="flex-1 px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                   />
-                  <EmojiButton onSelect={(emoji) => updateLandingContent("boundaryTitle", (draft.landingContent?.boundaryTitle ?? "") + emoji)} />
+                  <EmojiButton includeSjHeartEmoji={includeSjHeartEmoji} onSelect={(emoji) => updateLandingContent("boundaryTitle", (draft.landingContent?.boundaryTitle ?? "") + emoji)} />
                 </div>
                 <div className="flex items-center justify-between mb-1">
                   <span className="text-xs text-gray-500 dark:text-gray-400">Intro paragraph (optional if you use lines below)</span>
@@ -2333,7 +2343,7 @@ export const MyPageBuilder: React.FC = () => {
                     className="w-full px-3 py-1.5 pr-12 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                   />
                   <div className="absolute right-2 top-1.5">
-                    <EmojiButton onSelect={(emoji) => updateLandingContent("boundaryText", (draft.landingContent?.boundaryText ?? "") + emoji)} />
+                    <EmojiButton includeSjHeartEmoji={includeSjHeartEmoji} onSelect={(emoji) => updateLandingContent("boundaryText", (draft.landingContent?.boundaryText ?? "") + emoji)} />
                   </div>
                 </div>
                 <div className="mt-3 space-y-2">

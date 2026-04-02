@@ -26,6 +26,7 @@ import { ViewPostModalVideo } from "./ViewPostModalVideo";
 import { feedCommentAuthorLabel, feedCommentAuthorInitial } from "../src/lib/feedCommentLabel";
 import { readFanCheckoutFetchResult } from "../src/lib/fanCheckoutResponse";
 import { useAppContext } from "./AppContext";
+import { renderTextWithCustomEmoji, type SjHeartEmojiAccessContext } from "../src/lib/customEmoji";
 
 const SAVED_BY_CREATOR_KEY = "savedPostIdsByCreator";
 const INLINE_COMMENT_PREVIEW_MAX = 120;
@@ -273,6 +274,8 @@ export interface FanFeedVisibilitySettings {
 
 interface FanMemberFeedProps {
   creatorId: string;
+  /** Storefront URL handle — used for SJ custom emoji visibility */
+  creatorHandle?: string;
   displayName: string;
   avatar?: string;
   /** CSS object-position for circular avatar (matches storefront “pan avatar”). */
@@ -852,6 +855,7 @@ function FanMemberPostDetailModal({
   unlockingPostId,
   onUnlockPost,
   onUnlockNeedSignIn,
+  sjHeartEmojiCtx,
 }: {
   open: boolean;
   onClose: () => void;
@@ -880,6 +884,7 @@ function FanMemberPostDetailModal({
   unlockingPostId?: string | null;
   onUnlockPost?: (postId: string) => void | Promise<void>;
   onUnlockNeedSignIn?: (message: string) => void;
+  sjHeartEmojiCtx: SjHeartEmojiAccessContext;
 }) {
   useEffect(() => {
     if (!open) return;
@@ -973,7 +978,7 @@ function FanMemberPostDetailModal({
               <div className="feed-comments-modal-panel">
                 {post.content?.trim() ? (
                   <div className="feed-comments-modal-post-body">
-                    <p>{post.content}</p>
+                    <p>{renderTextWithCustomEmoji(post.content, sjHeartEmojiCtx)}</p>
                     <p className="fan-member-viewpost-date-inline">{formatPostCalendarDate(post.createdAt)}</p>
                   </div>
                 ) : (
@@ -1002,7 +1007,9 @@ function FanMemberPostDetailModal({
                             <div className="feed-comments-modal-item-body">
                               <p className="feed-comments-modal-text">
                                 <span className="comment-username">{c.author}</span>
-                                <span className="feed-comments-modal-comment-body">{c.text}</span>
+                                <span className="feed-comments-modal-comment-body">
+                                  {renderTextWithCustomEmoji(c.text, sjHeartEmojiCtx)}
+                                </span>
                               </p>
                             </div>
                           </div>
@@ -1086,6 +1093,7 @@ function formatTimeAgo(date: Date): string {
 
 export const FanMemberFeed: React.FC<FanMemberFeedProps> = ({
   creatorId,
+  creatorHandle,
   displayName,
   avatar,
   avatarObjectPosition,
@@ -1098,7 +1106,14 @@ export const FanMemberFeed: React.FC<FanMemberFeedProps> = ({
   tipHeading = "Support this creator",
   tipSubline = "Choose an amount to send support.",
 }) => {
-  const { showToast } = useAppContext();
+  const { showToast, user } = useAppContext();
+  const sjHeartEmojiCtx = useMemo<SjHeartEmojiAccessContext>(
+    () => ({
+      creatorHandle,
+      viewerIsAdmin: user?.role === "Admin",
+    }),
+    [creatorHandle, user?.role]
+  );
   const unlockedFanPostIdSet = useMemo(() => new Set(unlockedFanPostIdsProp), [unlockedFanPostIdsProp]);
   const avatarCropStyle: React.CSSProperties = getAvatarCropStyle(avatarObjectPosition);
   const creatorAvatarSrc = typeof avatar === "string" && avatar.trim() ? avatar.trim() : undefined;
@@ -1486,7 +1501,7 @@ export const FanMemberFeed: React.FC<FanMemberFeedProps> = ({
               <div className="feed-card-body">
                 <p>
                   <span style={{ fontWeight: 600, color: primary, marginRight: "0.35rem" }}>{displayName}</span>
-                  {post.content}
+                  {renderTextWithCustomEmoji(post.content, sjHeartEmojiCtx)}
                 </p>
               </div>
 
@@ -1511,7 +1526,9 @@ export const FanMemberFeed: React.FC<FanMemberFeedProps> = ({
                     return (
                     <p key={inlineKey} className="m-0 text-sm" style={{ color: "var(--fan-text, #1f2937)" }}>
                       <span style={{ fontWeight: 600, marginRight: "0.35rem" }}>{c.author}</span>
-                      {expanded || !truncated ? c.text : preview}
+                      {expanded || !truncated
+                        ? renderTextWithCustomEmoji(c.text, sjHeartEmojiCtx)
+                        : renderTextWithCustomEmoji(preview, sjHeartEmojiCtx)}
                       {truncated ? (
                         <button
                           type="button"
@@ -1683,6 +1700,7 @@ export const FanMemberFeed: React.FC<FanMemberFeedProps> = ({
         unlockingPostId={unlockingPostId}
         onUnlockPost={handleUnlockPost}
         onUnlockNeedSignIn={(m) => showToast?.(m, "error")}
+        sjHeartEmojiCtx={sjHeartEmojiCtx}
       />
     </div>
   );
@@ -1691,6 +1709,7 @@ export const FanMemberFeed: React.FC<FanMemberFeedProps> = ({
 /** Saved posts view for a fan: loads savedPostIdsByCreator[creatorId] and fetches each post */
 interface FanMemberSavedProps {
   creatorId: string;
+  creatorHandle?: string;
   displayName: string;
   avatar?: string;
   avatarObjectPosition?: string;
@@ -1704,6 +1723,7 @@ interface FanMemberSavedProps {
 
 export const FanMemberSaved: React.FC<FanMemberSavedProps> = ({
   creatorId,
+  creatorHandle,
   displayName,
   avatar,
   avatarObjectPosition,
@@ -1713,7 +1733,14 @@ export const FanMemberSaved: React.FC<FanMemberSavedProps> = ({
   unlockedFanPostIds: unlockedFanPostIdsSaved = [],
   onBackToFeed,
 }) => {
-  const { showToast: showToastSaved } = useAppContext();
+  const { showToast: showToastSaved, user: userSaved } = useAppContext();
+  const sjHeartEmojiCtxSaved = useMemo<SjHeartEmojiAccessContext>(
+    () => ({
+      creatorHandle,
+      viewerIsAdmin: userSaved?.role === "Admin",
+    }),
+    [creatorHandle, userSaved?.role]
+  );
   const unlockedFanPostIdSetSaved = useMemo(() => new Set(unlockedFanPostIdsSaved), [unlockedFanPostIdsSaved]);
   const [unlockingPostIdSaved, setUnlockingPostIdSaved] = useState<string | null>(null);
   const handleUnlockPostSaved = useCallback(
@@ -1929,7 +1956,7 @@ export const FanMemberSaved: React.FC<FanMemberSavedProps> = ({
               <div className="fan-feed-post-content">
                 <p>
                   <span style={{ fontWeight: 600, color: primary, marginRight: "0.35rem" }}>{displayName}</span>
-                  {post.content}
+                  {renderTextWithCustomEmoji(post.content, sjHeartEmojiCtxSaved)}
                 </p>
               </div>
               {!(feedSettings?.hideComments || post.hideComments) && (
@@ -1953,7 +1980,9 @@ export const FanMemberSaved: React.FC<FanMemberSavedProps> = ({
                     return (
                     <p key={inlineKey} className="m-0 text-sm" style={{ color: "var(--fan-text, #1f2937)" }}>
                       <span style={{ fontWeight: 600, marginRight: "0.35rem" }}>{c.author}</span>
-                      {expanded || !truncated ? c.text : preview}
+                      {expanded || !truncated
+                        ? renderTextWithCustomEmoji(c.text, sjHeartEmojiCtxSaved)
+                        : renderTextWithCustomEmoji(preview, sjHeartEmojiCtxSaved)}
                       {truncated ? (
                         <button
                           type="button"
@@ -2010,6 +2039,7 @@ export const FanMemberSaved: React.FC<FanMemberSavedProps> = ({
         unlockingPostId={unlockingPostIdSaved}
         onUnlockPost={handleUnlockPostSaved}
         onUnlockNeedSignIn={(m) => showToastSaved?.(m, "error")}
+        sjHeartEmojiCtx={sjHeartEmojiCtxSaved}
       />
     </div>
   );
