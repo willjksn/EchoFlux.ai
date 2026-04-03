@@ -8,12 +8,25 @@ export async function readFanCheckoutFetchResult(res: Response): Promise<{
 }> {
   const text = await res.text();
   try {
-    const data = text ? (JSON.parse(text) as { url?: string; error?: string; message?: string; details?: string }) : {};
+    const data = text
+      ? (JSON.parse(text) as {
+          url?: string;
+          error?: string;
+          message?: string;
+          details?: string;
+          hint?: string;
+        })
+      : {};
+    const errStr = typeof data.error === "string" ? data.error.trim() : "";
+    const msgStr = typeof data.message === "string" ? data.message.trim() : "";
+    const detailsStr = typeof data.details === "string" ? data.details.trim() : "";
+    const hintStr = typeof data.hint === "string" ? data.hint.trim() : "";
     const serverMessage =
-      (typeof data.error === "string" && data.error.trim()) ||
-      (typeof data.message === "string" && data.message.trim()) ||
-      (typeof data.details === "string" && data.details.trim()) ||
-      "";
+      errStr && msgStr && errStr === "Checkout failed" && msgStr !== errStr
+        ? `${errStr} ${msgStr}`
+        : errStr && hintStr && errStr === "Stripe is not configured"
+          ? `${errStr} ${hintStr}`
+          : errStr || msgStr || detailsStr || hintStr || "";
     return {
       ok: res.ok,
       url: typeof data.url === "string" ? data.url : undefined,

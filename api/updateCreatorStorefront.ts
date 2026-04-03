@@ -97,12 +97,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           }
         }
         if (handle) {
+          const newHandleRef = db.collection("creatorHandles").doc(handle);
+          const newHandleSnap = await tx.get(newHandleRef);
+          if (newHandleSnap.exists) {
+            const mapped = (newHandleSnap.data() as { creatorId?: string } | undefined)?.creatorId;
+            if (mapped && mapped !== creatorId) {
+              throw new Error("HANDLE_TAKEN");
+            }
+          }
           const reservedUsernameRef = db.collection("usernames").doc(handle);
           const reservedUsernameSnap = await tx.get(reservedUsernameRef);
           if (reservedUsernameSnap.exists) {
             throw new Error("HANDLE_RESERVED_BY_USERNAME");
           }
-          tx.set(db.collection("creatorHandles").doc(handle), { creatorId });
+          tx.set(newHandleRef, { creatorId });
         }
         tx.set(creatorRef, payload, { merge: true });
       });
@@ -137,6 +145,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const msg = e instanceof Error ? e.message : "Update failed";
     if (msg === "HANDLE_RESERVED_BY_USERNAME") {
       return res.status(409).json({ error: "This handle is reserved by a fan username." });
+    }
+    if (msg === "HANDLE_TAKEN") {
+      return res.status(409).json({ error: "This handle is already taken by another creator." });
     }
     return res.status(500).json({ error: "Update failed", message: msg });
   }

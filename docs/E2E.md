@@ -26,6 +26,14 @@ The GitHub Actions workflow runs `npm run build`, installs Chromium, then `playw
 | Variable | Purpose |
 |----------|---------|
 | `E2E_PUBLIC_HANDLE` | Optional. If set, the storefront smoke test requests `/{handle}` (must exist in your deployed/staging data). |
+| `E2E_LOGIN_EMAIL` | Optional. With `E2E_LOGIN_PASSWORD`, runs `e2e/creator-login.spec.ts`: email/password sign-in from the landing page (Firebase). Use a **dedicated test account**; set via shell or CI secrets — do not commit. |
+| `E2E_LOGIN_PASSWORD` | Optional. Password for `E2E_LOGIN_EMAIL`. |
+
+### Creator login test notes
+
+- The app must not block the account (maintenance bypass, invite-only redemption, etc., depending on your env flags at **build** time).
+- If invite-only mode is on and the user has not redeemed a code, the test still passes after auth when the **Invite Required** screen appears (Firebase sign-in succeeded).
+- Preview uses `http://127.0.0.1:4173`; ensure that origin is allowed for your Firebase web API key / authorized domains.
 
 ## Guest checkout & member purchase (not automated yet)
 

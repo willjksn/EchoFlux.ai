@@ -17,6 +17,35 @@ export const DEFAULT_FAN_HUB_THEME = {
 
 export type CreatorFanHubTheme = typeof DEFAULT_FAN_HUB_THEME;
 
+const FAN_HUB_THEME_SESSION_PREFIX = "echoflux:fanhub-theme-v1:";
+
+function readCachedTheme(creatorId: string): CreatorFanHubTheme | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.sessionStorage.getItem(FAN_HUB_THEME_SESSION_PREFIX + creatorId);
+    if (!raw) return null;
+    const o = JSON.parse(raw) as Partial<CreatorFanHubTheme>;
+    if (typeof o.primary !== "string" || typeof o.background !== "string") return null;
+    return {
+      ...DEFAULT_FAN_HUB_THEME,
+      ...o,
+      accentHover: typeof o.accentHover === "string" ? o.accentHover : o.primary || DEFAULT_FAN_HUB_THEME.primary,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function writeCachedTheme(creatorId: string, t: CreatorFanHubTheme) {
+  try {
+    if (typeof window !== "undefined") {
+      window.sessionStorage.setItem(FAN_HUB_THEME_SESSION_PREFIX + creatorId, JSON.stringify(t));
+    }
+  } catch {
+    /* quota / private mode */
+  }
+}
+
 function mergeTheme(raw: Partial<CreatorStorefrontSettings["theme"]> | undefined): CreatorFanHubTheme {
   if (!raw) return { ...DEFAULT_FAN_HUB_THEME };
   const m = mergeFanHubStorefrontTheme(raw as Record<string, unknown>);
@@ -36,22 +65,34 @@ function mergeTheme(raw: Partial<CreatorStorefrontSettings["theme"]> | undefined
  * Loads `creators/{creatorId}.theme` so Fan Hub can match the public storefront (e.g. stormijxo).
  */
 export function useCreatorFanHubTheme(creatorId: string | undefined): CreatorFanHubTheme {
-  const [theme, setTheme] = useState<CreatorFanHubTheme>(DEFAULT_FAN_HUB_THEME);
+  const [theme, setTheme] = useState<CreatorFanHubTheme>(() => {
+    if (!creatorId) return DEFAULT_FAN_HUB_THEME;
+    return readCachedTheme(creatorId) ?? DEFAULT_FAN_HUB_THEME;
+  });
 
   useEffect(() => {
     if (!creatorId || !db) {
       setTheme(DEFAULT_FAN_HUB_THEME);
       return;
     }
+    const cached = readCachedTheme(creatorId);
+    if (cached) setTheme(cached);
+
     let cancelled = false;
     (async () => {
       try {
         const snap = await getDoc(doc(db, "creators", creatorId));
-        if (cancelled || !snap.exists()) return;
+        if (cancelled) return;
+        if (!snap.exists()) {
+          if (!cached) setTheme(DEFAULT_FAN_HUB_THEME);
+          return;
+        }
         const data = snap.data() as Partial<CreatorStorefrontSettings>;
-        setTheme(mergeTheme(data.theme));
+        const next = mergeTheme(data.theme);
+        setTheme(next);
+        writeCachedTheme(creatorId, next);
       } catch {
-        if (!cancelled) setTheme(DEFAULT_FAN_HUB_THEME);
+        if (!cancelled && !cached) setTheme(DEFAULT_FAN_HUB_THEME);
       }
     })();
     return () => {

@@ -88,6 +88,9 @@
 .dark .stormij-theme:not(.stormij-theme--light) .dark\:bg-primary-900\/30 {
   background-color: color-mix(in srgb, var(--fan-primary, #6366f1) 30%, transparent) !important;
 }
+.dark .stormij-theme:not(.stormij-theme--light) .dark\:bg-primary-900\/20 {
+  background-color: color-mix(in srgb, var(--fan-primary, #6366f1) 20%, transparent) !important;
+}
 .stormij-theme .text-primary-600 {
   color: var(--fan-primary, #6366f1) !important;
 }

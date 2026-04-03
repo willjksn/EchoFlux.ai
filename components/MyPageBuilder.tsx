@@ -1519,7 +1519,7 @@ export const MyPageBuilder: React.FC = () => {
                       <label
                         className={`flex flex-col items-center justify-center w-20 h-20 rounded-full border-2 border-dashed border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-900/50 overflow-hidden ${
                           panHere
-                            ? "pointer-events-none cursor-default border-indigo-300 dark:border-indigo-600"
+                            ? "pointer-events-none cursor-default border-primary-500 dark:border-primary-500"
                             : "cursor-pointer hover:border-primary-500"
                         }`}
                       >
@@ -1527,7 +1527,7 @@ export const MyPageBuilder: React.FC = () => {
                           <div
                             className={`relative h-full w-full rounded-full overflow-hidden ${
                               panHere
-                                ? "pointer-events-auto cursor-grab active:cursor-grabbing touch-none ring-2 ring-indigo-500 ring-offset-2 ring-offset-gray-50 dark:ring-offset-gray-900"
+                                ? "pointer-events-auto cursor-grab active:cursor-grabbing touch-none ring-2 ring-primary-500 ring-offset-2 ring-offset-gray-50 dark:ring-offset-gray-900"
                                 : ""
                             }`}
                             onPointerDown={panHere ? onBuilderAvatarPanPointerDown : undefined}
@@ -1554,10 +1554,10 @@ export const MyPageBuilder: React.FC = () => {
                 </div>
               </div>
               {draft.avatar ? (
-                <div className="mt-1.5 rounded-md border border-indigo-200 dark:border-indigo-800 bg-indigo-50/70 dark:bg-indigo-950/30 px-2 py-1.5">
+                <div className="mt-1.5 rounded-md border border-primary-500 bg-primary-50 dark:bg-primary-900/20 px-2 py-1.5">
                   <div className="flex items-center justify-between gap-2 mb-1">
-                    <span className="text-[10px] font-medium text-indigo-900 dark:text-indigo-200">Avatar position</span>
-                    <span className="text-[9px] text-indigo-800/85 dark:text-indigo-300/90 truncate max-w-[14rem]">
+                    <span className="text-[10px] font-medium text-primary-900 dark:text-primary-100">Avatar position</span>
+                    <span className="text-[9px] text-primary-700 dark:text-primary-300 truncate max-w-[14rem]">
                       Drag directly in the avatar circle
                     </span>
                   </div>
@@ -1567,8 +1567,8 @@ export const MyPageBuilder: React.FC = () => {
                       onClick={() => setPreviewFramingTool((t) => (t === "panAvatar" ? "off" : "panAvatar"))}
                       className={`rounded px-1.5 py-0.5 text-[9px] font-medium border ${
                         previewFramingTool === "panAvatar"
-                          ? "border-indigo-600 bg-indigo-600 text-white dark:border-indigo-500 dark:bg-indigo-600"
-                          : "border-indigo-300 dark:border-indigo-600 bg-white dark:bg-gray-800 text-indigo-900 dark:text-indigo-100"
+                          ? "border-primary-600 bg-primary-600 text-white"
+                          : "border-primary-500 dark:border-primary-500 bg-white dark:bg-gray-800 text-primary-900 dark:text-primary-100"
                       }`}
                     >
                       {previewFramingTool === "panAvatar" ? "Dragging — move avatar" : "Enable drag mode"}
@@ -1577,7 +1577,7 @@ export const MyPageBuilder: React.FC = () => {
                       <button
                         type="button"
                         onClick={() => setPreviewFramingTool("off")}
-                        className="rounded px-1.5 py-0.5 text-[9px] font-medium border border-indigo-300 dark:border-indigo-600 bg-white dark:bg-gray-800 text-indigo-900 dark:text-indigo-100"
+                        className="rounded px-1.5 py-0.5 text-[9px] font-medium border border-primary-500 dark:border-primary-500 bg-white dark:bg-gray-800 text-primary-900 dark:text-primary-100"
                       >
                         Done
                       </button>
@@ -1585,7 +1585,7 @@ export const MyPageBuilder: React.FC = () => {
                     <button
                       type="button"
                       onClick={() => updateDraft({ avatarObjectPosition: undefined })}
-                      className="text-[9px] text-indigo-700 dark:text-indigo-300 underline"
+                      className="text-[9px] text-primary-700 dark:text-primary-300 underline"
                     >
                       Reset
                     </button>
@@ -1657,9 +1657,9 @@ export const MyPageBuilder: React.FC = () => {
                 </div>
 
                 {(heroHasFullBackground || heroGridSlotCount > 0) && (
-                  <div className="mt-3 rounded-lg border border-indigo-200 dark:border-indigo-800 bg-indigo-50/60 dark:bg-indigo-950/30 px-3 py-2 space-y-1.5">
-                    <p className="text-xs font-semibold text-indigo-900 dark:text-indigo-200">Fine-tune in Landing preview →</p>
-                    <p className="text-[11px] text-indigo-800/80 dark:text-indigo-300/90 leading-snug">
+                  <div className="mt-3 rounded-lg border border-primary-500 bg-primary-50 dark:bg-primary-900/20 px-3 py-2 space-y-1.5">
+                    <p className="text-xs font-semibold text-primary-900 dark:text-primary-100">Fine-tune in Landing preview →</p>
+                    <p className="text-[11px] text-primary-700 dark:text-primary-300 leading-snug">
                       Turn on a mode, drag on the preview (right), then Save.
                     </p>
                     <div className="flex flex-wrap gap-1.5 items-center">
@@ -1673,8 +1673,8 @@ export const MyPageBuilder: React.FC = () => {
                             }}
                             className={`rounded-md px-2 py-1 text-xs font-medium border ${
                               previewFramingTool === "panBg"
-                                ? "border-indigo-600 bg-indigo-600 text-white"
-                                : "border-indigo-300 dark:border-indigo-600 bg-white dark:bg-gray-800 text-indigo-900 dark:text-indigo-100"
+                                ? "border-primary-600 bg-primary-600 text-white"
+                                : "border-primary-500 dark:border-primary-500 bg-white dark:bg-gray-800 text-primary-900 dark:text-primary-100"
                             }`}
                           >
                             Pan background
@@ -1687,8 +1687,8 @@ export const MyPageBuilder: React.FC = () => {
                             }}
                             className={`rounded-md px-2 py-1 text-xs font-medium border ${
                               previewFramingTool === "panAvatar"
-                                ? "border-indigo-600 bg-indigo-600 text-white"
-                                : "border-indigo-300 dark:border-indigo-600 bg-white dark:bg-gray-800 text-indigo-900 dark:text-indigo-100"
+                                ? "border-primary-600 bg-primary-600 text-white"
+                                : "border-primary-500 dark:border-primary-500 bg-white dark:bg-gray-800 text-primary-900 dark:text-primary-100"
                             }`}
                           >
                             Pan overlay avatar
@@ -1704,8 +1704,8 @@ export const MyPageBuilder: React.FC = () => {
                           }}
                           className={`rounded-md px-2 py-1 text-xs font-medium border ${
                             previewFramingTool === "focusPhoto"
-                              ? "border-indigo-600 bg-indigo-600 text-white"
-                              : "border-indigo-300 dark:border-indigo-600 bg-white dark:bg-gray-800 text-indigo-900 dark:text-indigo-100"
+                              ? "border-primary-600 bg-primary-600 text-white"
+                              : "border-primary-500 dark:border-primary-500 bg-white dark:bg-gray-800 text-primary-900 dark:text-primary-100"
                           }`}
                         >
                           Photo focus
@@ -1715,14 +1715,14 @@ export const MyPageBuilder: React.FC = () => {
                         <button
                           type="button"
                           onClick={() => setPreviewFramingTool("off")}
-                          className="text-xs text-indigo-700 dark:text-indigo-300 underline"
+                          className="text-xs text-primary-700 dark:text-primary-300 underline"
                         >
                           Done
                         </button>
                       )}
                     </div>
                     {previewFramingTool === "focusPhoto" && heroGridSlotCount > 1 && (
-                      <div className="flex flex-wrap gap-1 items-center text-[11px] text-indigo-800 dark:text-indigo-300">
+                      <div className="flex flex-wrap gap-1 items-center text-[11px] text-primary-700 dark:text-primary-300">
                         <span>Which photo:</span>
                         {Array.from({ length: heroGridSlotCount }, (_, slot) => (
                           <button
@@ -1731,8 +1731,8 @@ export const MyPageBuilder: React.FC = () => {
                             onClick={() => setPreviewFocusPhotoSlot(slot)}
                             className={`min-w-[1.5rem] rounded px-1.5 py-0.5 font-medium ${
                               previewFocusPhotoSlot === slot
-                                ? "bg-indigo-600 text-white"
-                                : "bg-white dark:bg-gray-800 text-indigo-900 dark:text-indigo-100 border border-indigo-200 dark:border-indigo-600"
+                                ? "bg-primary-600 text-white"
+                                : "bg-white dark:bg-gray-800 text-primary-900 dark:text-primary-100 border border-primary-500 dark:border-primary-500"
                             }`}
                           >
                             {slot + 1}
@@ -1741,17 +1741,17 @@ export const MyPageBuilder: React.FC = () => {
                       </div>
                     )}
                     {previewFramingTool === "panBg" && (
-                      <p className="text-[11px] text-indigo-800/90 dark:text-indigo-300/90">
+                      <p className="text-[11px] text-primary-700 dark:text-primary-300">
                         Drag on the dark banner overlay to frame the background.
                       </p>
                     )}
                     {previewFramingTool === "panAvatar" && heroHasFullBackground && (
-                      <p className="text-[11px] text-indigo-800/90 dark:text-indigo-300/90">
+                      <p className="text-[11px] text-primary-700 dark:text-primary-300">
                         Drag the circle on the banner in the preview.
                       </p>
                     )}
                     {previewFramingTool === "focusPhoto" && (
-                      <p className="text-[11px] text-indigo-800/90 dark:text-indigo-300/90">
+                      <p className="text-[11px] text-primary-700 dark:text-primary-300">
                         Drag the highlighted hero thumbnail to change what part of the image is visible.
                       </p>
                     )}

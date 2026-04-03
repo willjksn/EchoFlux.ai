@@ -95,7 +95,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const stripe = getPlatformStripe();
   if (!stripe) {
-    return res.status(503).json({ error: "Stripe is not configured" });
+    const useTest =
+      (process.env.STRIPE_USE_TEST_MODE || "").toString().toLowerCase().trim() === "true" ||
+      (process.env.STRIPE_USE_TEST_MODE || "").toString().toLowerCase().trim() === "1";
+    return res.status(503).json({
+      error: "Stripe is not configured",
+      code: "STRIPE_NOT_CONFIGURED",
+      hint: useTest
+        ? "Test mode requires sk_test_ in STRIPE_SECRET_KEY_Test / STRIPE_SECRET_KEY_TEST (or STRIPE_SECRET_KEY). Key/mode mismatch is rejected."
+        : "Live mode requires sk_live_ in STRIPE_SECRET_KEY_LIVE (or STRIPE_SECRET_KEY). Key/mode mismatch is rejected.",
+    });
   }
 
   const body = (req.body || {}) as {
@@ -111,7 +120,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     guestProduct?: boolean;
   };
 
-  const { creatorId, type, productId, postId, subscriptionPriceCents, amountCents, tipHandle, successUrl, cancelUrl, guestProduct } = body;
+  const creatorId = typeof body.creatorId === "string" ? body.creatorId.trim() : "";
+  const { type, productId, postId, subscriptionPriceCents, amountCents, tipHandle, successUrl, cancelUrl, guestProduct } = body;
   if (!creatorId || !type) {
     return res.status(400).json({ error: "creatorId and type are required" });
   }
@@ -550,6 +560,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
     }
     const msg = e instanceof Error ? e.message : "Checkout failed";
-    return res.status(500).json({ error: "Checkout failed", message: msg });
+    // Single user-visible string so clients that only read `error` still show the cause.
+    return res.status(500).json({
+      error: msg && msg !== "Checkout failed" ? `Checkout failed: ${msg}` : "Checkout failed",
+      code: "CHECKOUT_UNEXPECTED",
+      message: msg,
+    });
   }
 }

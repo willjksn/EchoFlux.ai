@@ -946,10 +946,14 @@ export const LoginModal: React.FC<LoginModalProps> = ({
               )}
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                <label
+                  htmlFor="echoflux-login-email"
+                  className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+                >
                   Email
                 </label>
                 <input
+                  id="echoflux-login-email"
                   type="email"
                   value={email}
                   onChange={(e) => {
@@ -968,11 +972,15 @@ export const LoginModal: React.FC<LoginModalProps> = ({
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                <label
+                  htmlFor="echoflux-login-password"
+                  className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+                >
                   Password
                 </label>
                 <div className="relative">
                   <input
+                    id="echoflux-login-password"
                     type={showPassword ? 'text' : 'password'}
                     value={password}
                     onChange={(e) => {
@@ -1182,10 +1190,14 @@ export const LoginModal: React.FC<LoginModalProps> = ({
                       </p>
                       <div className="space-y-3">
                         <div>
-                          <label className="block text-xs font-medium text-blue-900 dark:text-blue-200 mb-1">
+                          <label
+                            htmlFor="echoflux-forgot-email"
+                            className="block text-xs font-medium text-blue-900 dark:text-blue-200 mb-1"
+                          >
                             Email Address
                           </label>
                           <input
+                            id="echoflux-forgot-email"
                             type="email"
                             value={forgotPasswordEmail}
                             onChange={(e) => setForgotPasswordEmail(e.target.value)}
