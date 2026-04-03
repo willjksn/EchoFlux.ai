@@ -148,6 +148,17 @@ const FeedHeaderGridIcon = () => (
   </svg>
 );
 
+const FeedHeaderListIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+    <line x1="8" y1="6" x2="21" y2="6" strokeLinecap="round" />
+    <line x1="8" y1="12" x2="21" y2="12" strokeLinecap="round" />
+    <line x1="8" y1="18" x2="21" y2="18" strokeLinecap="round" />
+    <circle cx="4" cy="6" r="1.2" />
+    <circle cx="4" cy="12" r="1.2" />
+    <circle cx="4" cy="18" r="1.2" />
+  </svg>
+);
+
 const FeedHeaderBackIcon = () => (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
     <path d="M15 18l-6-6 6-6" strokeLinecap="round" strokeLinejoin="round" />
@@ -175,6 +186,12 @@ function FanFeedHeaderChrome({
   savedLinkVariant: "go-to-saved" | "current-saved";
   onOpenSaved?: () => void;
 }) {
+  const isGridToggle = leftIcon === "grid-toggle";
+  const resolvedToggleTitle =
+    feedLayoutMode === "grid" ? "Switch to feed view" : "Switch to grid view";
+  const effectiveTitle = isGridToggle ? resolvedToggleTitle : leftTitle;
+  const effectiveAriaLabel = isGridToggle ? resolvedToggleTitle : leftAriaLabel;
+
   return (
     <div className="fan-hub-feed-chrome -mx-1 mb-1">
       <div className="feed-header-wrap">
@@ -182,14 +199,21 @@ function FanFeedHeaderChrome({
           <button
             type="button"
             className="feed-view-toggle"
-            title={leftTitle}
-            aria-label={leftAriaLabel}
-            aria-pressed={leftIcon === "grid-toggle" && feedLayoutMode ? feedLayoutMode === "grid" : undefined}
+            title={effectiveTitle}
+            aria-label={effectiveAriaLabel}
+            aria-pressed={isGridToggle && feedLayoutMode ? feedLayoutMode === "grid" : undefined}
             data-feed-layout-toggle="true"
-            data-feed-layout={leftIcon === "grid-toggle" && feedLayoutMode ? feedLayoutMode : undefined}
+            data-feed-layout={isGridToggle && feedLayoutMode ? feedLayoutMode : undefined}
+            data-feed-header-action={isGridToggle ? "toggle-layout" : "back-to-feed"}
             onClick={onLeftClick}
           >
-            {leftIcon === "back" ? <FeedHeaderBackIcon /> : <FeedHeaderGridIcon />}
+            {leftIcon === "back" ? (
+              <FeedHeaderBackIcon />
+            ) : feedLayoutMode === "grid" ? (
+              <FeedHeaderListIcon />
+            ) : (
+              <FeedHeaderGridIcon />
+            )}
           </button>
           <div className="feed-header-right">
             {savedLinkVariant === "go-to-saved" ? (
