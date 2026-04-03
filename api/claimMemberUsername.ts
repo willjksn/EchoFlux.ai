@@ -3,7 +3,7 @@
  * Body: { username: string, creatorId: string }
  * - Creates usernames/{lowercase} -> { uid }
  * - Sets users/{uid}.username (server only; clients cannot write this field)
- * - Denormalizes username onto existing creators/*/fans/{uid} docs (none yet if pre-checkout paid signup)
+ * - Denormalizes username onto existing creators/{cid}/fans/{uid} docs (none yet if pre-checkout paid signup)
  */
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { FieldPath } from "firebase-admin/firestore";

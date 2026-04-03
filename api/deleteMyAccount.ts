@@ -3,8 +3,8 @@
  * - Blocks if `creators/{uid}` exists (EchoFlux creator storefront owner — use app data deletion).
  * - Cancels active Stripe fan→creator subscriptions without proration/credits (no refund of the current period via this API), then deletes those subscriber docs.
  * - Removes `usernames/{handle}` when owned by uid
- * - Deletes all `creators/*/fans/{uid}` and mirror fan preferences
- * - Deletes all `creatorEntitlements/*/grants/{uid}`
+ * - Deletes all creators/{cid}/fans/{uid} fan-member docs and mirror fan preferences
+ * - Deletes all creatorEntitlements/{cid}/grants/{uid} grant docs
  * - Deletes `fanDmThreads` for each creator–fan pair (messages + thread doc)
  * - Deletes `users/{uid}` and Firebase Auth user
  */
@@ -35,6 +35,16 @@ function isCreatorPlatformOwner(
   return false;
 }
 
+/** Firebase Admin Auth errors often use `errorInfo.code` instead of top-level `code`. */
+function firebaseAuthErrorCode(err: unknown): string | undefined {
+  if (!err || typeof err !== "object") return undefined;
+  const o = err as { code?: string; errorInfo?: { code?: string } };
+  if (typeof o.code === "string" && o.code.length > 0) return o.code;
+  const info = o.errorInfo;
+  if (info && typeof info.code === "string" && info.code.length > 0) return info.code;
+  return undefined;
+}
+
 function resolveConnectAccountId(creatorData: Record<string, unknown> | undefined): string | null {
   if (!creatorData) return null;
   const d = creatorData as {
@@ -60,8 +70,6 @@ function resolveConnectAccountId(creatorData: Record<string, unknown> | undefine
 async function cancelStripeSubscriptionsForFan(db: Firestore, uid: string, creatorIds: Set<string>): Promise<void> {
   const stripe = getPlatformStripe();
   if (!stripe || creatorIds.size === 0) return;
-
-  const cancelParams = { prorate: false as const, invoice_now: false as const };
 
   for (const creatorId of creatorIds) {
     const subRef = db.collection("creatorSubscribers").doc(creatorId).collection("subscribers").doc(uid);
@@ -95,9 +103,9 @@ async function cancelStripeSubscriptionsForFan(db: Firestore, uid: string, creat
 
       try {
         if (!isPlatform && connectId) {
-          await stripe.subscriptions.cancel(subscriptionId, cancelParams, { stripeAccount: connectId });
+          await stripe.subscriptions.cancel(subscriptionId, { stripeAccount: connectId });
         } else {
-          await stripe.subscriptions.cancel(subscriptionId, cancelParams);
+          await stripe.subscriptions.cancel(subscriptionId);
         }
       } catch (e: unknown) {
         const msg = e instanceof Error ? e.message : String(e);
@@ -124,7 +132,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
   const uid = decoded.uid;
 
-  const db = getAdminDb();
+  let db: Firestore;
+  try {
+    db = getAdminDb();
+  } catch (e: unknown) {
+    console.error("deleteMyAccount: getAdminDb:", e);
+    return res.status(500).json({ error: "Database unavailable" });
+  }
   if (!db) {
     return res.status(500).json({ error: "Database unavailable" });
   }
@@ -225,8 +239,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const adminApp = getAdminApp();
       await adminApp.auth().deleteUser(uid);
     } catch (e: unknown) {
-      const code = (e as { code?: string })?.code;
-      if (code !== "auth/user-not-found") {
+      const code = firebaseAuthErrorCode(e);
+      if (code === "auth/user-not-found") {
+        /* Already removed from Auth; Firestore cleanup still applied */
+      } else {
         console.error("deleteMyAccount: auth.deleteUser:", e);
         throw e;
       }
@@ -235,6 +251,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(200).json({ success: true });
   } catch (e: unknown) {
     console.error("deleteMyAccount:", e);
-    return res.status(500).json({ error: "Failed to delete account" });
+    const msg = e instanceof Error ? e.message : String(e);
+    const code = firebaseAuthErrorCode(e);
+    return res.status(500).json({
+      error: "Failed to delete account",
+      ...(process.env.NODE_ENV === "development" || process.env.VERCEL_ENV === "preview"
+        ? { details: msg, code: code ?? undefined }
+        : {}),
+    });
   }
 }
