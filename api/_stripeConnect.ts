@@ -50,6 +50,23 @@ export function getStripeOptions(connectedAccountId?: string | null): { stripeAc
   return { stripeAccount: connectedAccountId };
 }
 
+/**
+ * stripe-node treats the 2nd argument as request options only if it contains a known key
+ * (e.g. stripeAccount). Passing `{}` leaves an extra `[object Object]` arg and throws
+ * "Unknown arguments ... Did you mean to pass an options object?"
+ */
+export function checkoutSessionsCreate(
+  stripe: Stripe,
+  params: Stripe.Checkout.SessionCreateParams,
+  connectedAccountId?: string | null,
+): Promise<Stripe.Response<Stripe.Checkout.Session>> {
+  const id = typeof connectedAccountId === "string" ? connectedAccountId.trim() : "";
+  if (id) {
+    return stripe.checkout.sessions.create(params, { stripeAccount: id });
+  }
+  return stripe.checkout.sessions.create(params);
+}
+
 export function isStripeConfigured(): boolean {
   return !!platformStripe && !!stripeSecretKey;
 }

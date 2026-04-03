@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import type { DocumentSnapshot } from "firebase-admin/firestore";
 import Stripe from "stripe";
-import { getPlatformStripe, getStripeOptions } from "./_stripeConnect.js";
+import { getPlatformStripe, checkoutSessionsCreate } from "./_stripeConnect.js";
 import { getAdminDb } from "./_firebaseAdmin.js";
 import { verifyAuth } from "./verifyAuth.js";
 import { isFanBlocked } from "./_fanDmHelpers.js";
@@ -245,9 +245,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
     }
 
-    // For platform owners: no stripeAccount option (direct to platform), no fees
-    // For regular creators: use Connect account with 10% platform fee
-    const opts = isPlatformOwner ? {} : getStripeOptions(connectAccountId);
+    // For platform owners: create session on platform (no Stripe-Account header).
+    // For regular creators: act as connected account. Never pass `{}` as 2nd arg — stripe-node rejects it.
+    const connectIdForCheckout = isPlatformOwner ? null : connectAccountId;
     const displayName =
       creatorData?.displayName ||
       creatorData?.handle ||
@@ -295,7 +295,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           ...(isPlatformOwner ? {} : { application_fee_percent: Math.round(PLATFORM_FEE_PERCENT * 100) }),
         },
       };
-      const session = await stripe.checkout.sessions.create(sessionParams, opts);
+      const session = await checkoutSessionsCreate(stripe, sessionParams, connectIdForCheckout);
       return res.status(200).json({ url: session.url, sessionId: session.id });
     }
 
@@ -368,7 +368,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           },
         }),
       };
-      const session = await stripe.checkout.sessions.create(sessionParams, opts);
+      const session = await checkoutSessionsCreate(stripe, sessionParams, connectIdForCheckout);
       return res.status(200).json({ url: session.url, sessionId: session.id });
     }
 
@@ -459,7 +459,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
               },
             }),
       };
-      const session = await stripe.checkout.sessions.create(unlockSessionParams, opts);
+      const session = await checkoutSessionsCreate(stripe, unlockSessionParams, connectIdForCheckout);
       return res.status(200).json({ url: session.url, sessionId: session.id });
     }
 
@@ -501,7 +501,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           },
         }),
       };
-      const session = await stripe.checkout.sessions.create(tipSessionParams, opts);
+      const session = await checkoutSessionsCreate(stripe, tipSessionParams, connectIdForCheckout);
       return res.status(200).json({ url: session.url, sessionId: session.id });
     }
 
