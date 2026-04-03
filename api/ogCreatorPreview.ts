@@ -58,7 +58,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
   }
 
   const title = `${displayName} (@${handle}) | witme.io`;
-  const description = `View @${handle}'s verified creator page on witme.io.`;
+  const description = `View @${handle}'s creator page on witme.io.`;
   const canonical = `https://witme.io/${encodeURIComponent(handle)}`;
 
   const html = `<!doctype html>

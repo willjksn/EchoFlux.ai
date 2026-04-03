@@ -61,17 +61,29 @@ type WitmeAnalyticsResponse = {
 
 const DEFAULT_CONFIG: WitmeLandingConfig = {
   heroBadge: 'witme.io',
-  heroTitle: 'Find the real creator page first.',
+  heroTitle: 'Support the creators you love—in one place.',
   heroDescription:
-    'Verify creator pages, then support, unlock, message, and book directly in one trusted fan flow.',
-  heroTrustText: 'Verified fan-safe pages powered by EchoFlux.ai',
+    'Get closer with member drops, unlocks, tips, and DMs—all on their page. One link from their bio is all you need to back them for real.',
+  heroTrustText: 'One page. One link for fans.',
   featureCards: [
     { title: 'Start memberships', description: 'Join ongoing access when a creator opens member tiers.', icon: '👥' },
     { title: 'Unlock store drops', description: 'Get access to paid posts, drops, and off-feed content from Store.', icon: '🔓' },
     { title: 'Send direct support', description: 'Tip creators directly when support is enabled on their page.', icon: '💸' },
+    {
+      title: 'Messages',
+      description: 'Chat with creators when they turn on messages—right from their page, no app hopping.',
+      icon: '💬',
+    },
+    {
+      title: 'Catch every update',
+      description:
+        'Posts, store highlights, and shared links land on their page—keep up without digging through bios or scattered stories.',
+      icon: '🔔',
+    },
+    { title: 'Claim creator offers', description: 'Access creator-specific offers, perks, and premium experiences.', icon: '✨' },
   ],
-  trustItems: ['Verified creator page identity', 'Secure checkout', 'Creator-controlled access', 'Built for fan safety'],
-  liveMoments: ['stormijxo posted a new private drop', 'New session slots opened', 'Fans unlocked verified content'],
+  trustItems: ['Creator pages on witme', 'Secure checkout', 'Creator-controlled access', 'Built for fan safety'],
+  liveMoments: ['stormijxo posted a new private drop', 'New posts went live on witme', 'Fans unlocked a new drop'],
   legalLinks: [
     { label: 'Terms', url: '/fan-terms-of-use.html' },
     { label: 'Privacy', url: '/fan-privacy-policy.html' },

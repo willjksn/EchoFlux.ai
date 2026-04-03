@@ -127,13 +127,22 @@ const fanActions: ActionItem[] = [
   { title: 'Start memberships', description: 'Join ongoing access when a creator opens member tiers.', icon: '👥' },
   { title: 'Unlock store drops', description: 'Get access to paid posts, drops, and off-feed content from Store.', icon: '🔓' },
   { title: 'Send direct support', description: 'Tip creators directly when support is enabled on their page.', icon: '💸' },
-  { title: 'Open direct chat', description: 'Message creators when they choose to open DMs.', icon: '💬' },
-  { title: 'Book store sessions', description: 'Reserve 1:1 chat or video time when session slots are available in Store.', icon: '🗓️' },
+  {
+    title: 'Messages',
+    description: 'Chat with creators when they turn on messages—right from their page, no app hopping.',
+    icon: '💬',
+  },
+  {
+    title: 'Catch every update',
+    description:
+      'Posts, store highlights, and shared links land on their page—keep up without digging through bios or scattered stories.',
+    icon: '🔔',
+  },
   { title: 'Claim creator offers', description: 'Access creator-specific offers, perks, and premium experiences.', icon: '✨' },
 ];
 
 const trustItems = [
-  'Verified creator page identity',
+  'Creator pages on witme',
   'Secure checkout',
   'Creator-controlled access',
   'Built for fan safety',
@@ -141,8 +150,8 @@ const trustItems = [
 
 const liveMoments = [
   'stormijxo posted a new private drop',
-  'New session slots opened',
-  'Fans unlocked verified content',
+  'New posts went live on witme',
+  'Fans unlocked a new drop',
   'Direct support was sent',
   'Creator pages updated today',
 ];
@@ -158,14 +167,63 @@ const defaultLegalLinks: LegalLink[] = [
 
 const defaultWitmeConfig: WitmeLandingConfig = {
   heroBadge: 'witme.io',
-  heroTitle: 'Find the real creator page first.',
-  heroDescription: 'Verify creator pages, then support, unlock, message, and book directly in one trusted fan flow.',
-  heroTrustText: 'Verified fan-safe pages powered by EchoFlux.ai',
+  heroTitle: 'Support the creators you love—in one place.',
+  heroDescription:
+    'Get closer with member drops, unlocks, tips, and DMs—all on their page. One link from their bio is all you need to back them for real.',
+  heroTrustText: 'One page. One link for fans.',
   featureCards: fanActions,
   trustItems,
   liveMoments,
   legalLinks: defaultLegalLinks,
   showcaseCreators: DEFAULT_SHOWCASE_CREATORS,
+};
+
+/** Map legacy saved Witme config cards to current titles/copy (Firestore may still have old strings). */
+const normalizeLandingFeatureCards = (cards: ActionItem[]): ActionItem[] =>
+  cards.map((c) => {
+    const updatesCard = {
+      title: 'Catch every update',
+      description:
+        'Posts, store highlights, and shared links land on their page—keep up without digging through bios or scattered stories.',
+    };
+    if (
+      c.title === 'Book store sessions' ||
+      c.title === 'Book sessions' ||
+      c.title === 'Private sessions'
+    ) {
+      return { ...c, ...updatesCard, icon: '🔔' };
+    }
+    if (c.title === 'Open direct chat') {
+      return {
+        ...c,
+        title: 'Messages',
+        description: 'Chat with creators when they turn on messages—right from their page, no app hopping.',
+      };
+    }
+    return c;
+  });
+
+const normalizeLandingCopy = (config: WitmeLandingConfig): WitmeLandingConfig => {
+  let { heroTitle, heroDescription, heroTrustText } = config;
+  if (heroTitle.trim() === 'Find the real creator page first.') {
+    heroTitle = defaultWitmeConfig.heroTitle;
+  }
+  if (heroTitle.trim() === 'Discover creators. Support them in one place.') {
+    heroTitle = defaultWitmeConfig.heroTitle;
+  }
+  if (/powered by echoflux/i.test(heroDescription)) {
+    heroDescription = defaultWitmeConfig.heroDescription;
+  }
+  if (/verify creator pages/i.test(heroDescription)) {
+    heroDescription = defaultWitmeConfig.heroDescription;
+  }
+  if (/without extra apps or hunting for the right link/i.test(heroDescription)) {
+    heroDescription = defaultWitmeConfig.heroDescription;
+  }
+  if (/echoflux/i.test(heroTrustText)) {
+    heroTrustText = defaultWitmeConfig.heroTrustText;
+  }
+  return { ...config, heroTitle, heroDescription, heroTrustText };
 };
 
 const offerModes: OfferMode[] = [
@@ -254,20 +312,26 @@ const useWitmeLandingConfig = (enabled = true): WitmeLandingConfig => {
         if (!res.ok) return;
         const data = await res.json();
         if (cancelled || !data?.config) return;
-        setConfig((prev) => ({
-          ...prev,
-          ...data.config,
-          showcaseCreators: Array.isArray(data.config.showcaseCreators)
-            ? data.config.showcaseCreators.map((c: WitmeShowcaseCreator) => ({
-                ...c,
-                mediaKind: c.mediaKind === 'video' ? 'video' : 'image',
-                mediaObjectPosition:
-                  typeof c.mediaObjectPosition === 'string' && c.mediaObjectPosition.trim() !== ''
-                    ? c.mediaObjectPosition.trim()
-                    : '50% 50%',
-              }))
-            : prev.showcaseCreators,
-        }));
+        setConfig((prev) => {
+          const nextBase = { ...prev, ...data.config } as WitmeLandingConfig;
+          const merged: WitmeLandingConfig = {
+            ...nextBase,
+            featureCards: Array.isArray(data.config.featureCards)
+              ? normalizeLandingFeatureCards(data.config.featureCards as ActionItem[])
+              : nextBase.featureCards,
+            showcaseCreators: Array.isArray(data.config.showcaseCreators)
+              ? data.config.showcaseCreators.map((c: WitmeShowcaseCreator) => ({
+                  ...c,
+                  mediaKind: c.mediaKind === 'video' ? 'video' : 'image',
+                  mediaObjectPosition:
+                    typeof c.mediaObjectPosition === 'string' && c.mediaObjectPosition.trim() !== ''
+                      ? c.mediaObjectPosition.trim()
+                      : '50% 50%',
+                }))
+              : nextBase.showcaseCreators,
+          };
+          return normalizeLandingCopy(merged);
+        });
       } catch {}
     };
     load();
@@ -369,7 +433,7 @@ const HeroSection: React.FC<{
               }}
               className="inline-flex items-center justify-center rounded-full bg-gradient-to-r from-indigo-200 to-white px-6 py-3 text-sm font-semibold text-gray-900 transition hover:from-white hover:to-indigo-100"
             >
-              Explore verified creators
+              Explore creators
             </button>
             <p className="inline-flex items-center justify-center rounded-full border border-white/25 bg-white/[0.08] px-6 py-3 text-sm font-medium text-gray-100">
               {trustText}
@@ -473,7 +537,7 @@ const FeaturedNowSection: React.FC<{ showcaseCreators: WitmeShowcaseCreator[]; e
                 View page
               </a>
             ) : (
-              <p className="mt-5 text-sm text-gray-400">More verified pages coming soon</p>
+              <p className="mt-5 text-sm text-gray-400">More pages coming soon</p>
             )}
           </div>
         </div>
@@ -502,7 +566,7 @@ const FeaturedCreatorsGrid: React.FC<{ showcaseCreators: WitmeShowcaseCreator[];
   <section id="featured-creators" className={`${sectionClass} py-12 sm:py-16`}>
     <div className="mb-7 sm:mb-9">
       <h2 className="text-2xl font-semibold text-white sm:text-3xl">Featured creator pages</h2>
-      <p className="mt-2 text-sm text-gray-300 sm:text-base">Browse real creator pages in one trusted destination.</p>
+      <p className="mt-2 text-sm text-gray-300 sm:text-base">Browse creator pages in one destination.</p>
     </div>
     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
       {showcaseCreators.map((creator, idx) => {
@@ -553,6 +617,51 @@ const FeaturedCreatorsGrid: React.FC<{ showcaseCreators: WitmeShowcaseCreator[];
   </section>
 );
 
+const CreatorsJoinSection: React.FC<{ echofluxUrl: string; enableTracking?: boolean }> = ({
+  echofluxUrl,
+  enableTracking = true,
+}) => {
+  const base = echofluxUrl.replace(/\/$/, '');
+  return (
+    <section className={`${sectionClass} pb-12 sm:pb-16`}>
+      <div className="rounded-3xl border border-white/15 bg-gradient-to-br from-indigo-500/15 via-white/[0.08] to-fuchsia-500/10 p-6 sm:p-8">
+        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-indigo-200">Creators</p>
+        <h2 className="mt-2 text-2xl font-semibold text-white sm:text-3xl">Join witme—your link fans actually use</h2>
+        <p className="mt-3 max-w-3xl text-sm text-gray-100 sm:text-base">
+          Give your audience one memorable place to subscribe, shop, tip, book time, and slide into your DMs. No more
+          buried links or “which page is real?”—just you, front and center.
+        </p>
+        <p className="mt-4 max-w-3xl text-sm text-gray-300 sm:text-base">
+          <span className="font-semibold text-white">Powered by EchoFlux</span>—the creator studio behind memberships,
+          store, sessions, and fan chat. witme is where fans land; EchoFlux is where you run the business.
+        </p>
+        <div className="mt-6 flex flex-wrap gap-3">
+          <a
+            href={base}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={() => {
+              if (enableTracking) trackWitmeEvent('creator_join_click', { location: 'creators_join', href: base });
+            }}
+            className="inline-flex items-center justify-center rounded-full bg-white px-6 py-3 text-sm font-semibold text-gray-900 transition hover:bg-gray-100"
+          >
+            Get Started
+          </a>
+          <a
+            href="mailto:contact@echoflux.ai?subject=witme%20creator%20inquiry"
+            className="inline-flex items-center justify-center rounded-full border border-white/25 bg-white/[0.08] px-6 py-3 text-sm font-medium text-white transition hover:bg-white/15"
+            onClick={() => {
+              if (enableTracking) trackWitmeEvent('creator_join_email_click', { location: 'creators_join' });
+            }}
+          >
+            Questions? Contact us
+          </a>
+        </div>
+      </div>
+    </section>
+  );
+};
+
 const FanActionsSection: React.FC<{ actions: ActionItem[] }> = ({ actions }) => (
   <section className={`${sectionClass} pb-12 sm:pb-16`}>
     <h2 className="text-2xl font-semibold text-white sm:text-3xl">What fans can do</h2>
@@ -561,7 +670,7 @@ const FanActionsSection: React.FC<{ actions: ActionItem[] }> = ({ actions }) => 
     </p>
     <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
       {actions.map((action) => (
-        <article key={action.title} className="rounded-2xl border border-white/15 bg-white/10 p-5 transition hover:-translate-y-1 hover:bg-white/15">
+        <article key={action.title} className="rounded-2xl border border-white/15 bg-white/10 p-5 transition hover:bg-white/15">
           <div className="text-xl">{action.icon}</div>
           <h3 className="mt-3 text-base font-semibold text-white">{action.title}</h3>
           <p className="mt-2 text-sm text-gray-300">{action.description}</p>
@@ -620,8 +729,8 @@ const CreatorExperienceSection: React.FC = () => {
 const FanConfidenceSection: React.FC = () => (
   <section className={`${sectionClass} pb-14 sm:pb-20`}>
     <div className="rounded-3xl border border-white/15 bg-white/[0.08] p-6 sm:p-8">
-      <p className="text-xs uppercase tracking-[0.2em] text-gray-300">Why fans trust witme</p>
-      <h2 className="mt-2 text-2xl font-semibold text-white sm:text-3xl">A trusted home for creator pages</h2>
+      <p className="text-xs uppercase tracking-[0.2em] text-gray-300">Why fans use witme</p>
+      <h2 className="mt-2 text-2xl font-semibold text-white sm:text-3xl">One place for creator pages</h2>
       <div className="mt-5 grid gap-3 sm:grid-cols-3">
         <div className="rounded-2xl border border-white/15 bg-white/10 p-4">
           <p className="text-sm font-semibold text-white">Secure checkout</p>
@@ -633,35 +742,42 @@ const FanConfidenceSection: React.FC = () => (
         </div>
         <div className="rounded-2xl border border-white/15 bg-white/10 p-4">
           <p className="text-sm font-semibold text-white">Clean fan flow</p>
-          <p className="mt-2 text-xs text-gray-200">Discover, verify, support, and stay connected in one place.</p>
+          <p className="mt-2 text-xs text-gray-200">Discover, support, and stay connected without bouncing between apps.</p>
         </div>
       </div>
     </div>
   </section>
 );
 
-const VerificationSection: React.FC = () => (
+const FanHowItWorksSection: React.FC = () => (
   <section className={`${sectionClass} pb-12 sm:pb-16`}>
     <div className="rounded-3xl border border-white/15 bg-white/[0.07] p-6 sm:p-8">
-      <p className="text-xs uppercase tracking-[0.18em] text-gray-300">Creator verification</p>
-      <h2 className="mt-2 text-2xl font-semibold text-white sm:text-3xl">How fans verify pages on witme</h2>
+      <p className="text-xs uppercase tracking-[0.18em] text-gray-300">How it works</p>
+      <h2 className="mt-2 text-2xl font-semibold text-white sm:text-3xl">Your link to everything they offer</h2>
       <div className="mt-5 grid gap-3 sm:grid-cols-3">
         <div className="rounded-2xl border border-white/15 bg-white/10 p-4">
-          <p className="text-sm font-semibold text-white">1) Check the handle</p>
-          <p className="mt-2 text-xs text-gray-200">Match the creator handle with links they post on Instagram, X, or other official channels.</p>
-        </div>
-        <div className="rounded-2xl border border-white/15 bg-white/10 p-4">
-          <p className="text-sm font-semibold text-white">2) Use secure checkout</p>
-          <p className="mt-2 text-xs text-gray-200">Purchases run through protected payment rails with creator-level access controls.</p>
-        </div>
-        <div className="rounded-2xl border border-white/15 bg-white/10 p-4">
-          <p className="text-sm font-semibold text-white">3) Report concerns fast</p>
+          <p className="text-sm font-semibold text-white">One link from them</p>
           <p className="mt-2 text-xs text-gray-200">
-            If something looks off, contact{' '}
-            <a className="underline decoration-white/30 underline-offset-2 hover:decoration-white" href="mailto:contact@echoflux.ai?subject=witme%20report">
+            Creators share a single witme URL—save or bookmark it so you always land on the page they run.
+          </p>
+        </div>
+        <div className="rounded-2xl border border-white/15 bg-white/10 p-4">
+          <p className="text-sm font-semibold text-white">Choose how you show up</p>
+          <p className="mt-2 text-xs text-gray-200">
+            Memberships, unlocks, tips, and messages appear when a creator turns them on—see what’s live on their page.
+          </p>
+        </div>
+        <div className="rounded-2xl border border-white/15 bg-white/10 p-4">
+          <p className="text-sm font-semibold text-white">Need a hand?</p>
+          <p className="mt-2 text-xs text-gray-200">
+            Questions about a purchase or your account? Email{' '}
+            <a
+              className="underline decoration-white/30 underline-offset-2 hover:decoration-white"
+              href="mailto:contact@echoflux.ai?subject=witme%20help"
+            >
               support
-            </a>{' '}
-            and we will review.
+            </a>
+            .
           </p>
         </div>
       </div>
@@ -686,7 +802,7 @@ const Footer: React.FC<{
           }}
           className="transition hover:text-white"
         >
-          Explore verified creators
+          Explore creators
         </button>
         {legalLinks.map((link) => (
           <a
@@ -717,10 +833,16 @@ export const WitmeHomepage: React.FC<WitmeHomepageProps> = ({
   disableRemoteConfig = false,
 }) => {
   const remoteConfig = useWitmeLandingConfig(!disableRemoteConfig);
-  const landingConfig = previewConfig || remoteConfig;
+  const landingConfig = useMemo(() => {
+    const raw = previewConfig || remoteConfig;
+    return normalizeLandingCopy({
+      ...raw,
+      featureCards: normalizeLandingFeatureCards(raw.featureCards),
+    });
+  }, [previewConfig, remoteConfig]);
 
   useWitmeSeo({
-    title: 'witme.io - Verified creator pages for fans',
+    title: 'witme.io - Creator pages for fans',
     description: landingConfig.heroDescription,
     path: '/',
     imageUrl: 'https://witme.io/witme-og.png',
@@ -766,10 +888,11 @@ export const WitmeHomepage: React.FC<WitmeHomepageProps> = ({
         <TrustStrip items={landingConfig.trustItems} />
         <FeaturedNowSection showcaseCreators={landingConfig.showcaseCreators} enableTracking={!disableTracking} />
         <FeaturedCreatorsGrid showcaseCreators={landingConfig.showcaseCreators} enableTracking={!disableTracking} />
+        <CreatorsJoinSection echofluxUrl={echofluxUrl} enableTracking={!disableTracking} />
         <FanActionsSection actions={landingConfig.featureCards} />
         <CreatorExperienceSection />
         <FanConfidenceSection />
-        <VerificationSection />
+        <FanHowItWorksSection />
         <Footer echofluxUrl={echofluxUrl} onExploreCreators={handleExplore} legalLinks={landingConfig.legalLinks} enableTracking={!disableTracking} />
       </div>
     </div>
@@ -780,8 +903,8 @@ export const WitmeDiscoverPage: React.FC<{ echofluxUrl?: string }> = ({ echoflux
   const landingConfig = useWitmeLandingConfig();
 
   useWitmeSeo({
-    title: 'Browse verified creators | witme.io',
-    description: 'Find official creator pages by name, handle, and offering type on witme.io.',
+    title: 'Browse creators | witme.io',
+    description: 'Find creator pages by name, handle, and offering type on witme.io.',
     path: '/discover',
     imageUrl: 'https://witme.io/witme-og-discover.png',
   });
@@ -829,9 +952,9 @@ export const WitmeDiscoverPage: React.FC<{ echofluxUrl?: string }> = ({ echoflux
             <span>Back to</span>
             <img src="/witme-wordmark.svg" alt="witme" className="h-7 w-auto sm:h-8" loading="lazy" />
           </a>
-          <h1 className="mt-4 text-3xl font-semibold tracking-tight text-white sm:text-4xl">Browse verified creators</h1>
+          <h1 className="mt-4 text-3xl font-semibold tracking-tight text-white sm:text-4xl">Browse creators</h1>
           <p className="mt-3 max-w-2xl text-sm text-gray-300 sm:text-base">
-            Find official creator pages before you subscribe, unlock, message, or send support.
+            Find creator pages before you subscribe, unlock, message, or send support.
           </p>
           <div className="mt-6">
             <label htmlFor="creator-search" className="sr-only">
