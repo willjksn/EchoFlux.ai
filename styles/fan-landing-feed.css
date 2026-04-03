@@ -1138,7 +1138,8 @@
 
 /* Multi-slide media: avoid scroll anchoring jumping the viewport when slide height changes */
 .fan-member-content--feed .feed-card-media-wrap.fan-feed-media-carousel,
-.fan-member-content--feed-column .feed-card-media-wrap.fan-feed-media-carousel {
+.fan-member-content--feed-column .feed-card-media-wrap.fan-feed-media-carousel,
+.fan-hub-feed-chrome .feed-card-media-wrap.fan-feed-media-carousel {
   overflow-anchor: none;
 }
 
@@ -1160,8 +1161,9 @@
   width: 100%;
   height: auto;
   max-height: 600px;
-  object-fit: cover;
-  object-position: center top;
+  /* Match images: full frame visible (cover was cropping portrait / tall videos vs older image-only posts). */
+  object-fit: contain;
+  object-position: center center;
   display: block;
 }
 

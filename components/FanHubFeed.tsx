@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
+import React, { useState, useEffect, useLayoutEffect, useMemo, useRef, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { useAppContext } from "./AppContext";
 import { ECHOFLUX_ELITE_MONTHLY_USD } from "../constants";
@@ -27,6 +27,10 @@ import { inferIsVideoFromUrl, normalizePostMediaTypes } from "../src/lib/mediaUr
 import { ViewPostModalVideo } from "./ViewPostModalVideo";
 import { feedCommentAuthorLabel, feedCommentAuthorInitial } from "../src/lib/feedCommentLabel";
 import { renderTextWithCustomEmoji, type SjHeartEmojiAccessContext } from "../src/lib/customEmoji";
+import {
+  captureFanFeedCarouselScrollSnaps,
+  restoreFanFeedCarouselScrollSnaps,
+} from "../src/lib/fanFeedCarouselScrollRestore";
 
 /** Themed multi-media count pill — tints border/background/shadow from creator storefront `theme.primary` */
 function normalizeThemePrimary(hex: string | undefined): string | undefined {
@@ -541,10 +545,14 @@ function FeedCard({
   const isLiked = !!currentUserId && (post.likedBy ?? []).includes(currentUserId);
   const isSaved = savedPostIds.includes(post.id);
   const feedVideoRef = useRef<HTMLVideoElement | null>(null);
+  const carouselRootRef = useRef<HTMLDivElement | null>(null);
+  const feedCarouselScrollSnapsRef = useRef<ReturnType<typeof captureFanFeedCarouselScrollSnaps> | null>(null);
   const [feedVideoPlaying, setFeedVideoPlaying] = useState(false);
   const [feedVideoMuted, setFeedVideoMuted] = useState(true);
   const [adminMenuOpen, setAdminMenuOpen] = useState(false);
   const adminMenuRef = useRef<HTMLDivElement | null>(null);
+
+  const inFeedCarouselClass = showMediaCarousel ? " fan-feed-media-carousel" : "";
 
   useEffect(() => {
     if (!commentsOpen) return;
@@ -595,12 +603,26 @@ function FeedCard({
     setFeedVideoPlaying(false);
   }, [slideIdx]);
 
+  useLayoutEffect(() => {
+    const snaps = feedCarouselScrollSnapsRef.current;
+    if (!snaps?.length) return;
+    feedCarouselScrollSnapsRef.current = null;
+    restoreFanFeedCarouselScrollSnaps(snaps);
+    const id = window.requestAnimationFrame(() => {
+      restoreFanFeedCarouselScrollSnaps(snaps);
+      window.requestAnimationFrame(() => restoreFanFeedCarouselScrollSnaps(snaps));
+    });
+    return () => window.cancelAnimationFrame(id);
+  }, [slideIdx]);
+
   const carouselPrev = useCallback(
     (e: React.MouseEvent) => {
       e.preventDefault();
       e.stopPropagation();
       if (mediaCount <= 1) return;
+      feedCarouselScrollSnapsRef.current = captureFanFeedCarouselScrollSnaps(carouselRootRef.current);
       setMediaSlideIndex((i) => Math.max(0, i - 1));
+      (e.currentTarget as HTMLButtonElement).blur();
     },
     [mediaCount]
   );
@@ -610,7 +632,9 @@ function FeedCard({
       e.preventDefault();
       e.stopPropagation();
       if (mediaCount <= 1) return;
+      feedCarouselScrollSnapsRef.current = captureFanFeedCarouselScrollSnaps(carouselRootRef.current);
       setMediaSlideIndex((i) => Math.min(mediaCount - 1, i + 1));
+      (e.currentTarget as HTMLButtonElement).blur();
     },
     [mediaCount]
   );
@@ -880,7 +904,8 @@ function FeedCard({
       {currentUrl ? (
         currentIsVideo ? (
           <div
-            className="feed-card-media-wrap feed-card-media-wrap-video"
+            ref={carouselRootRef}
+            className={`feed-card-media-wrap feed-card-media-wrap-video${inFeedCarouselClass}`}
             role="button"
             tabIndex={0}
             onClick={videoAreaClick}
@@ -924,7 +949,7 @@ function FeedCard({
             {renderCountBadge()}
           </div>
         ) : (
-          <div className="feed-card-media-wrap">
+          <div ref={carouselRootRef} className={`feed-card-media-wrap${inFeedCarouselClass}`}>
             <img
               key={`${post.id}-hub-i-${slideIdx}`}
               src={currentUrl}
@@ -1238,6 +1263,12 @@ function FeedCard({
                     ) : (
                       visibleComments.map((c, idx) => {
                         const authorName = feedCommentAuthorLabel(c);
+                        const isCreatorComment =
+                          !!c.isCreatorReply ||
+                          (!!currentUserId &&
+                            typeof c.authorId === "string" &&
+                            c.authorId.length > 0 &&
+                            c.authorId === currentUserId);
                         return (
                           <div className="feed-comments-modal-item" key={`${idx}-${c.text.slice(0, 12)}`}>
                             <div className="feed-comments-modal-item-avatar" aria-hidden>
@@ -1245,7 +1276,18 @@ function FeedCard({
                             </div>
                             <div className="feed-comments-modal-item-body">
                               <p className="feed-comments-modal-text">
-                                <span className="comment-username">{authorName}</span>
+                                <span className="feed-comments-modal-comment-author-row">
+                                  <span className="comment-username">{authorName}</span>
+                                  <span
+                                    className={
+                                      isCreatorComment
+                                        ? "feed-comments-modal-role-badge feed-comments-modal-role-badge--creator"
+                                        : "feed-comments-modal-role-badge feed-comments-modal-role-badge--fan"
+                                    }
+                                  >
+                                    {isCreatorComment ? "Creator" : "Fan"}
+                                  </span>
+                                </span>
                                 <span className="feed-comments-modal-comment-body">{renderTextWithCustomEmoji(c.text, sjHeartEmojiCtx)}</span>
                               </p>
                             </div>

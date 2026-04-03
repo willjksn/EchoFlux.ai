@@ -921,8 +921,8 @@
   width: 100%;
   height: auto;
   max-height: 600px;
-  object-fit: cover;
-  object-position: center top;
+  object-fit: contain;
+  object-position: center center;
   display: block;
 }
 
@@ -1628,8 +1628,8 @@
   .feed-comments-modal.feed-comments-modal--stack {
     max-width: min(96vw, 1120px);
     width: 100%;
-    height: min(92vh, 940px);
-    max-height: min(92vh, 940px);
+    height: min(94vh, 1020px);
+    max-height: min(94vh, 1020px);
   }
 }
 .feed-comments-modal-content.feed-comments-modal-content--stack {
@@ -1661,6 +1661,10 @@
     min-height: 0;
     max-height: none;
     align-self: stretch;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #0a0a0a;
   }
 }
 .feed-comments-modal-media-wrap--carousel {
@@ -1711,11 +1715,12 @@
 @media (min-width: 769px) {
   .feed-comments-modal-content--stack:not(.no-media) .feed-comments-modal-media:not(.feed-comments-modal-media-video--loop),
   .feed-comments-modal-content--stack:not(.no-media) .feed-comments-modal-media-video:not(.feed-comments-modal-media-video--loop) {
-    max-height: 100%;
+    width: 100%;
+    height: 100%;
     max-width: 100%;
-    width: auto;
-    height: auto;
+    max-height: 100%;
     object-fit: contain;
+    object-position: center center;
   }
 }
 .feed-comments-modal-content--stack .feed-comments-modal-panel {
@@ -1733,12 +1738,35 @@
     width: 50%;
     max-width: none;
     min-width: 0;
+    min-height: 0;
     border-top: none;
     border-left: 1px solid rgba(156, 163, 175, 0.2);
     overflow: hidden;
   }
   .dark .feed-comments-modal-content--stack:not(.no-media) .feed-comments-modal-panel {
     border-left-color: rgba(75, 85, 99, 0.3);
+  }
+  /* Keep caption + composer visible: caption scrolls, list fills middle, compose pinned bottom */
+  .feed-comments-modal-content--stack:not(.no-media) .feed-comments-modal-post-body {
+    flex-shrink: 0;
+    max-height: min(28vh, 220px);
+    overflow-y: auto;
+  }
+  .feed-comments-modal-content--stack:not(.no-media) .feed-comments-modal-list {
+    flex: 1 1 auto;
+    min-height: 6rem;
+    overflow-y: auto;
+  }
+  .feed-comments-modal-content--stack:not(.no-media) .feed-comments-modal-compose {
+    flex-shrink: 0;
+    margin-top: auto;
+    border-top: 1px solid rgba(156, 163, 175, 0.2);
+    padding-top: 0.75rem;
+    background: #fff;
+  }
+  .dark .feed-comments-modal-content--stack:not(.no-media) .feed-comments-modal-compose {
+    border-top-color: rgba(75, 85, 99, 0.35);
+    background: #111827;
   }
 }
 .feed-comments-modal-content--stack.no-media .feed-comments-modal-panel {
@@ -2010,13 +2038,46 @@
   line-height: 1.55;
   color: #1f2937;
 }
+.feed-comments-modal-comment-author-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+  margin: 0 0 0.2rem;
+}
 .feed-comments-modal-text .comment-username {
-  display: block;
+  display: inline;
   font-weight: 700;
   color: #030712;
-  margin: 0 0 0.2rem;
+  margin: 0;
   font-size: 0.9rem;
   letter-spacing: 0.01em;
+}
+.feed-comments-modal-role-badge {
+  display: inline-block;
+  font-size: 0.625rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  padding: 0.15rem 0.45rem;
+  border-radius: 4px;
+  line-height: 1.2;
+}
+.feed-comments-modal-role-badge--creator {
+  background: rgba(99, 102, 241, 0.2);
+  color: #4338ca;
+}
+.feed-comments-modal-role-badge--fan {
+  background: rgba(107, 114, 128, 0.18);
+  color: #4b5563;
+}
+.dark .feed-comments-modal-role-badge--creator {
+  background: rgba(129, 140, 248, 0.28);
+  color: #e0e7ff;
+}
+.dark .feed-comments-modal-role-badge--fan {
+  background: rgba(156, 163, 175, 0.22);
+  color: #e5e7eb;
 }
 .feed-comments-modal-text .feed-comments-modal-comment-body {
   display: block;

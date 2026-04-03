@@ -27,46 +27,14 @@ import { feedCommentAuthorLabel, feedCommentAuthorInitial } from "../src/lib/fee
 import { readFanCheckoutFetchResult } from "../src/lib/fanCheckoutResponse";
 import { useAppContext } from "./AppContext";
 import { renderTextWithCustomEmoji, type SjHeartEmojiAccessContext } from "../src/lib/customEmoji";
+import {
+  captureFanFeedCarouselScrollSnaps,
+  restoreFanFeedCarouselScrollSnaps,
+} from "../src/lib/fanFeedCarouselScrollRestore";
 
 const SAVED_BY_CREATOR_KEY = "savedPostIdsByCreator";
 const INLINE_COMMENT_PREVIEW_MAX = 120;
 const EMPTY_FAN_POST_UNLOCK_SET = new Set<string>();
-
-/** Snapshots vertical scroll for the carousel’s scroll chain so slide changes don’t jump the viewport. */
-type FanFeedScrollSnap = { el: HTMLElement | Document; top: number; left: number };
-
-function captureFanFeedCarouselScrollSnaps(root: HTMLElement | null): FanFeedScrollSnap[] {
-  if (typeof document === "undefined" || typeof window === "undefined") return [];
-  const out: FanFeedScrollSnap[] = [];
-  let el: HTMLElement | null = root;
-  while (el) {
-    const st = getComputedStyle(el);
-    const oy = st.overflowY;
-    const ox = st.overflowX;
-    const yScroll =
-      (oy === "auto" || oy === "scroll" || oy === "overlay") && el.scrollHeight > el.clientHeight + 1;
-    const xScroll =
-      (ox === "auto" || ox === "scroll" || ox === "overlay") && el.scrollWidth > el.clientWidth + 1;
-    if (yScroll || xScroll) {
-      out.push({ el, top: el.scrollTop, left: el.scrollLeft });
-    }
-    el = el.parentElement;
-  }
-  out.push({ el: document.documentElement, top: window.scrollY, left: window.scrollX });
-  return out;
-}
-
-function restoreFanFeedCarouselScrollSnaps(snaps: FanFeedScrollSnap[]) {
-  for (let i = snaps.length - 1; i >= 0; i--) {
-    const { el, top, left } = snaps[i];
-    if (el === document.documentElement) {
-      window.scrollTo(left, top);
-    } else {
-      (el as HTMLElement).scrollTop = top;
-      (el as HTMLElement).scrollLeft = left;
-    }
-  }
-}
 
 const FEED_TIP_PRESET_USD = [5, 10, 25, 50, 100, 250] as const;
 
@@ -292,7 +260,12 @@ const CarouselChevronRight = () => (
 );
 
 /** Visible comments from Firestore (non-hidden) */
-export type FanMemberPostComment = { author: string; text: string };
+export type FanMemberPostComment = {
+  author: string;
+  text: string;
+  authorId?: string;
+  isCreatorReply?: boolean;
+};
 
 interface Post {
   id: string;
@@ -434,7 +407,12 @@ function postFromFirestore(docId: string, data: DocumentData): Post | null {
       author: typeof o.author === "string" ? o.author : undefined,
       isCreatorReply: !!o.isCreatorReply,
     });
-    commentsList.push({ author, text });
+    commentsList.push({
+      author,
+      text,
+      ...(typeof o.authorId === "string" && o.authorId.trim() ? { authorId: o.authorId.trim() } : {}),
+      isCreatorReply: !!o.isCreatorReply,
+    });
   }
   const lc = parseLockedContent(data.lockedContent);
   const commentsCountFallback =
@@ -1046,21 +1024,40 @@ function FanMemberPostDetailModal({
                       {!post.commentsList?.length ? (
                         <p className="feed-comments-modal-empty">No comments yet.</p>
                       ) : (
-                        post.commentsList.map((c, idx) => (
-                          <div className="feed-comments-modal-item" key={`${post.id}-c-${idx}`}>
-                            <div className="feed-comments-modal-item-avatar" aria-hidden>
-                              <span>{feedCommentAuthorInitial(c.author)}</span>
+                        post.commentsList.map((c, idx) => {
+                          const isCreatorComment =
+                            !!c.isCreatorReply ||
+                            (!!creatorId &&
+                              typeof c.authorId === "string" &&
+                              c.authorId.length > 0 &&
+                              c.authorId === creatorId);
+                          return (
+                            <div className="feed-comments-modal-item" key={`${post.id}-c-${idx}`}>
+                              <div className="feed-comments-modal-item-avatar" aria-hidden>
+                                <span>{feedCommentAuthorInitial(c.author)}</span>
+                              </div>
+                              <div className="feed-comments-modal-item-body">
+                                <p className="feed-comments-modal-text">
+                                  <span className="feed-comments-modal-comment-author-row">
+                                    <span className="comment-username">{c.author}</span>
+                                    <span
+                                      className={
+                                        isCreatorComment
+                                          ? "feed-comments-modal-role-badge feed-comments-modal-role-badge--creator"
+                                          : "feed-comments-modal-role-badge feed-comments-modal-role-badge--fan"
+                                      }
+                                    >
+                                      {isCreatorComment ? "Creator" : "Fan"}
+                                    </span>
+                                  </span>
+                                  <span className="feed-comments-modal-comment-body">
+                                    {renderTextWithCustomEmoji(c.text, sjHeartEmojiCtx)}
+                                  </span>
+                                </p>
+                              </div>
                             </div>
-                            <div className="feed-comments-modal-item-body">
-                              <p className="feed-comments-modal-text">
-                                <span className="comment-username">{c.author}</span>
-                                <span className="feed-comments-modal-comment-body">
-                                  {renderTextWithCustomEmoji(c.text, sjHeartEmojiCtx)}
-                                </span>
-                              </p>
-                            </div>
-                          </div>
-                        ))
+                          );
+                        })
                       )}
                     </div>
                     {onSubmitComment ? (
