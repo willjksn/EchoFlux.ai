@@ -148,12 +148,20 @@ const FeedHeaderGridIcon = () => (
   </svg>
 );
 
-/** Same chrome on main feed and Saved tab: left = feed↔saved, right = saved count */
+const FeedHeaderBackIcon = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+    <path d="M15 18l-6-6 6-6" strokeLinecap="round" strokeLinejoin="round" />
+  </svg>
+);
+
+/** Main feed: left = list↔grid; Saved tab: left = back to feed; right = Saved Posts count / current */
 function FanFeedHeaderChrome({
   savedCount,
   onLeftClick,
   leftTitle,
   leftAriaLabel,
+  leftIcon,
+  feedLayoutMode,
   savedLinkVariant,
   onOpenSaved,
 }: {
@@ -161,6 +169,9 @@ function FanFeedHeaderChrome({
   onLeftClick: () => void;
   leftTitle: string;
   leftAriaLabel: string;
+  leftIcon: "grid-toggle" | "back";
+  /** When set (main feed only), exposes layout for a11y + debugging; matches Fan Hub admin toggle. */
+  feedLayoutMode?: "feed" | "grid";
   savedLinkVariant: "go-to-saved" | "current-saved";
   onOpenSaved?: () => void;
 }) {
@@ -168,8 +179,17 @@ function FanFeedHeaderChrome({
     <div className="fan-hub-feed-chrome -mx-1 mb-1">
       <div className="feed-header-wrap">
         <div className="feed-header">
-          <button type="button" className="feed-view-toggle" title={leftTitle} aria-label={leftAriaLabel} onClick={onLeftClick}>
-            <FeedHeaderGridIcon />
+          <button
+            type="button"
+            className="feed-view-toggle"
+            title={leftTitle}
+            aria-label={leftAriaLabel}
+            aria-pressed={leftIcon === "grid-toggle" && feedLayoutMode ? feedLayoutMode === "grid" : undefined}
+            data-feed-layout-toggle="true"
+            data-feed-layout={leftIcon === "grid-toggle" && feedLayoutMode ? feedLayoutMode : undefined}
+            onClick={onLeftClick}
+          >
+            {leftIcon === "back" ? <FeedHeaderBackIcon /> : <FeedHeaderGridIcon />}
           </button>
           <div className="feed-header-right">
             {savedLinkVariant === "go-to-saved" ? (
@@ -1132,6 +1152,7 @@ export const FanMemberFeed: React.FC<FanMemberFeedProps> = ({
   const [tipCustomAmount, setTipCustomAmount] = useState("");
   const [tipLoading, setTipLoading] = useState(false);
   const [unlockingPostId, setUnlockingPostId] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<"feed" | "grid">("feed");
   const { detailPost, detailLoading, reload: reloadDetailPost } = useMemberPostDetail(creatorId, viewPostId);
   const [fanPublicProfile, setFanPublicProfile] = useState<{ photoURL?: string; displayName?: string }>({});
 
@@ -1394,13 +1415,16 @@ export const FanMemberFeed: React.FC<FanMemberFeedProps> = ({
     <div className="fan-member-feed">
       <FanFeedHeaderChrome
         savedCount={bookmarkedPosts.size}
-        onLeftClick={() => onOpenSaved?.()}
-        leftTitle="Open saved posts"
-        leftAriaLabel="Open saved posts"
+        onLeftClick={() => setViewMode((m) => (m === "feed" ? "grid" : "feed"))}
+        leftTitle={viewMode === "feed" ? "Switch to grid view" : "Switch to feed view"}
+        leftAriaLabel={viewMode === "feed" ? "Switch to grid view" : "Switch to feed view"}
+        leftIcon="grid-toggle"
+        feedLayoutMode={viewMode}
         savedLinkVariant="go-to-saved"
         onOpenSaved={onOpenSaved}
       />
 
+      {viewMode === "feed" ? (
       <div className="fan-feed-posts">
         {posts.length === 0 ? (
           <div className="fan-feed-empty">
@@ -1589,6 +1613,41 @@ export const FanMemberFeed: React.FC<FanMemberFeedProps> = ({
           ))
         )}
       </div>
+      ) : (
+        <>
+          {posts.length === 0 ? (
+            <div className="fan-feed-empty">
+              <p>No posts yet. Check back soon!</p>
+            </div>
+          ) : (
+            <div className="feed-grid">
+              {posts.map((post) => {
+                const firstUrl = post.mediaUrls?.[0];
+                const isVideo =
+                  post.mediaTypes?.[0] === "video" || (firstUrl ? inferIsVideoFromUrl(firstUrl) : false);
+                return (
+                  <button
+                    key={post.id}
+                    type="button"
+                    className="feed-grid-item"
+                    onClick={() => setViewPostId(post.id)}
+                  >
+                    {firstUrl ? (
+                      isVideo ? (
+                        <video src={firstUrl} muted playsInline preload="metadata" />
+                      ) : (
+                        <img src={firstUrl} alt="" loading="lazy" />
+                      )
+                    ) : (
+                      <div className="feed-grid-item-text">{post.content?.slice(0, 100) || "Post"}</div>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </>
+      )}
 
       {tipSheetOpen ? (
         <div
@@ -1717,7 +1776,7 @@ interface FanMemberSavedProps {
   feedSettings?: FanFeedVisibilitySettings;
   fanId: string | undefined;
   unlockedFanPostIds?: string[];
-  /** Return to main feed (same control as grid on feed opens Saved) */
+  /** Navigate back to the home feed from the Saved tab. */
   onBackToFeed: () => void;
 }
 
@@ -1885,6 +1944,7 @@ export const FanMemberSaved: React.FC<FanMemberSavedProps> = ({
           onLeftClick={onBackToFeed}
           leftTitle="Back to feed"
           leftAriaLabel="Back to feed"
+          leftIcon="back"
           savedLinkVariant="current-saved"
         />
         <div className="fan-feed-loading">
@@ -1902,6 +1962,7 @@ export const FanMemberSaved: React.FC<FanMemberSavedProps> = ({
         onLeftClick={onBackToFeed}
         leftTitle="Back to feed"
         leftAriaLabel="Back to feed"
+        leftIcon="back"
         savedLinkVariant="current-saved"
       />
       <div className="fan-feed-header pt-1">

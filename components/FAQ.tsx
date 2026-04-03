@@ -3,7 +3,23 @@ import React, { useState } from 'react';
 const faqData = [
     {
         question: "Who is EchoFlux.ai for right now?",
-        answer: "We're focused on creators. Everything is tuned for personal brands: follower growth, engagement, and fast publishing."
+        answer: "We're focused on creators. Everything is tuned for personal brands: follower growth, engagement, fast publishing, and running your fan business from one place."
+    },
+    {
+        question: "What is EchoFlux.ai?",
+        answer: "EchoFlux.ai is your creator studio—the app you sign into to plan content with AI, manage your calendar, run Fan Hub (memberships, store, tips, messages, sessions), and control how fans experience your brand. All configuration and day-to-day work happens here."
+    },
+    {
+        question: "What is Fan Hub?",
+        answer: "Fan Hub is your built-in fan storefront and community surface inside EchoFlux. You customize your page, turn on what you want (subscriptions, tips, paid posts, digital products, DMs, video sessions, branding), and set pricing. Fans only see what you enable; you stay in control of offers and access."
+    },
+    {
+        question: "What is witme.io?",
+        answer: "witme.io is the public, fan-friendly home for creator pages. It’s where many fans land from your bio link: one place to join, shop, tip, and message—without hunting across apps. What they can do there matches what you’ve turned on in Fan Hub. There isn’t a separate “witme signup” for creators; you run everything from EchoFlux and share your witme.io URL (for example witme.io/yourhandle) with your audience."
+    },
+    {
+        question: "How do EchoFlux, Fan Hub, and witme fit together?",
+        answer: "EchoFlux is where you work. Fan Hub is the fan experience you configure inside EchoFlux. witme.io is often the link you give fans so they open that experience in a simple, trusted destination. Same account and settings—three layers of the same product, not three disconnected tools."
     },
     {
         question: "What platforms can I plan content for?",
@@ -19,7 +35,7 @@ const faqData = [
     },
     {
         question: "Can I replace Linktree with EchoFlux?",
-        answer: "Yes. Our Bio Link Page gives you a branded mobile page with optional email capture so you can grow owned audience directly from Instagram or TikTok."
+        answer: "Yes. Our Bio Link Page gives you a branded mobile page with optional email capture so you can grow owned audience directly from Instagram or TikTok. For a full fan storefront (memberships, store, tips, messages), point people to your page on witme.io—powered by what you run in Fan Hub."
     },
     {
         question: "Do you have an AI assistant or chatbot?",
@@ -68,7 +84,9 @@ export const FAQ: React.FC = () => {
         <div className="max-w-4xl mx-auto space-y-8">
             <div className="text-center">
                 <h2 className="text-3xl font-bold text-gray-900 dark:text-white">Frequently Asked Questions</h2>
-                <p className="mt-2 text-lg text-gray-500 dark:text-gray-400">Everything you need to know about the platform.</p>
+                <p className="mt-2 text-lg text-gray-500 dark:text-gray-400">
+                    EchoFlux, Fan Hub, witme.io, content tools, and billing—what creators ask us most.
+                </p>
             </div>
             <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-md">
                 {faqData.map((faq, index) => (

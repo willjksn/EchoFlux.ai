@@ -424,6 +424,8 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
   liveLanding,
 }) => {
   const [activeTab, setActiveTab] = useState<string>("home");
+  /** Member Home/Feed preview: same list↔grid toggle as live FanMemberFeed + FanHubFeed */
+  const [memberFeedViewMode, setMemberFeedViewMode] = useState<"feed" | "grid">("feed");
   const [tipAmount, setTipAmount] = useState<string>("");
   const framingTool = previewFraming?.tool ?? "off";
   const focusPhotoSlot = previewFraming?.focusPhotoSlot ?? 0;
@@ -614,6 +616,12 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
       : activeTab === "messages" && !memberTabs.includes("messages")
         ? memberTabs[0] ?? "feed"
         : activeTab;
+
+  useEffect(() => {
+    if (previewMode !== "member" || (effectiveTab !== "home" && effectiveTab !== "feed")) {
+      setMemberFeedViewMode("feed");
+    }
+  }, [previewMode, effectiveTab]);
 
   const unreadMessageTabCount = useUnreadNewMessageNotificationCount(
     previewMode === "member" ? null : false
@@ -915,7 +923,7 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
 
   return (
     <div
-      className={`stormij-theme ${
+      className={`stormij-theme${previewMode === "member" ? " stormij-theme--light" : ""} ${
         live
           ? previewMode === "landing"
             ? "min-h-screen w-full fan-storefront-live"
@@ -1986,10 +1994,14 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
                       <button
                         type="button"
                         className="feed-view-toggle"
-                        title="Grid view"
-                        aria-label="Grid view"
+                        title={memberFeedViewMode === "feed" ? "Switch to grid view" : "Switch to feed view"}
+                        aria-label={memberFeedViewMode === "feed" ? "Switch to grid view" : "Switch to feed view"}
+                        aria-pressed={memberFeedViewMode === "grid"}
+                        data-feed-layout-toggle="true"
+                        data-feed-layout={memberFeedViewMode}
+                        onClick={() => setMemberFeedViewMode((m) => (m === "feed" ? "grid" : "feed"))}
                       >
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
                           <rect x="3" y="3" width="7" height="7" rx="1" />
                           <rect x="14" y="3" width="7" height="7" rx="1" />
                           <rect x="3" y="14" width="7" height="7" rx="1" />
@@ -2008,92 +2020,109 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
                     </div>
                   </div>
                 </div>
-                {/* Sample Feed Post - same order as real feed: header > media > actions > body */}
-                <article className={`feed-card${isDark ? " storefront-preview-feed-card--dark" : ""}`}>
-                  <div className="feed-card-header">
-                    <div className="feed-card-avatar">
-                      {avatar ? (
-                        <img
-                          src={avatar}
-                          alt=""
-                          className="feed-card-avatar-img"
-                          style={{ objectFit: "contain", objectPosition: "center" }}
-                        />
-                      ) : (
-                        <span className="feed-card-avatar-initial">{(displayName || "?")[0].toUpperCase()}</span>
-                      )}
-                    </div>
-                    <div className="feed-card-creator">
-                      <span className="feed-card-username">{displayName}</span>
-                    </div>
-                    <span className="feed-card-time">31 mins</span>
-                  </div>
-
-                  <div className="feed-card-media-wrap">
-                    <img
-                      src="https://images.unsplash.com/photo-1517841905240-472988babdf9?w=600&h=700&fit=crop&crop=face"
-                      alt="Demo post"
-                      className="feed-card-media"
-                      style={{ objectFit: "cover" }}
-                    />
-                  </div>
-
-                  <div className="feed-card-actions">
-                    <button type="button" className="feed-card-action-link">
-                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                        <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
-                      </svg>
-                      <span className="feed-card-action-count">42</span>
-                    </button>
-                    <button type="button" className="feed-card-action-link">
-                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-                      </svg>
-                      <span className="feed-card-action-count">2</span>
-                    </button>
-                    <button type="button" className="feed-card-send-tip">
-                      <span className="tip-currency">$</span>
-                      <span>SEND TIP</span>
-                    </button>
-                    <button type="button" className="feed-card-action-btn bookmark-btn" title="Save post">
-                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />
-                      </svg>
-                    </button>
-                  </div>
-
-                  <div className="feed-card-body">
-                    <p className="m-0">
-                      <span style={{ fontWeight: 600, color: primary, marginRight: "0.35rem" }}>{displayName}</span>
-                      Good morning everyone 🌸
-                    </p>
+                {/* Sample feed: list ↔ grid matches live FanMemberFeed / FanHubFeed */}
+                {memberFeedViewMode === "grid" ? (
+                  <div className="feed-grid">
                     <button
                       type="button"
-                      className="mt-2 fan-feed-view-comments-link"
-                      style={{ color: isDark ? `${textColor}99` : undefined }}
+                      className="feed-grid-item"
+                      onClick={() => setMemberFeedViewMode("feed")}
+                      aria-label="Open demo post (switch to feed view)"
                     >
-                      View all 2 comments
+                      <img
+                        src="https://images.unsplash.com/photo-1517841905240-472988babdf9?w=600&h=700&fit=crop&crop=face"
+                        alt=""
+                        loading="lazy"
+                      />
                     </button>
-                    <div className="mt-1.5">
+                  </div>
+                ) : (
+                  <article className={`feed-card${isDark ? " storefront-preview-feed-card--dark" : ""}`}>
+                    <div className="feed-card-header">
+                      <div className="feed-card-avatar">
+                        {avatar ? (
+                          <img
+                            src={avatar}
+                            alt=""
+                            className="feed-card-avatar-img"
+                            style={{ objectFit: "contain", objectPosition: "center" }}
+                          />
+                        ) : (
+                          <span className="feed-card-avatar-initial">{(displayName || "?")[0].toUpperCase()}</span>
+                        )}
+                      </div>
+                      <div className="feed-card-creator">
+                        <span className="feed-card-username">{displayName}</span>
+                      </div>
+                      <span className="feed-card-time">31 mins</span>
+                    </div>
+
+                    <div className="feed-card-media-wrap">
+                      <img
+                        src="https://images.unsplash.com/photo-1517841905240-472988babdf9?w=600&h=700&fit=crop&crop=face"
+                        alt="Demo post"
+                        className="feed-card-media"
+                        style={{ objectFit: "cover" }}
+                      />
+                    </div>
+
+                    <div className="feed-card-actions">
+                      <button type="button" className="feed-card-action-link">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
+                        </svg>
+                        <span className="feed-card-action-count">42</span>
+                      </button>
+                      <button type="button" className="feed-card-action-link">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+                        </svg>
+                        <span className="feed-card-action-count">2</span>
+                      </button>
+                      <button type="button" className="feed-card-send-tip">
+                        <span className="tip-currency">$</span>
+                        <span>SEND TIP</span>
+                      </button>
+                      <button type="button" className="feed-card-action-btn bookmark-btn" title="Save post">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />
+                        </svg>
+                      </button>
+                    </div>
+
+                    <div className="feed-card-body">
                       <p className="m-0">
-                        <span style={{ fontWeight: 600, marginRight: "0.35rem" }}>sarah_m</span>
-                        Love this! ☕
+                        <span style={{ fontWeight: 600, color: primary, marginRight: "0.35rem" }}>{displayName}</span>
+                        Good morning everyone 🌸
                       </p>
-                      <p className="m-0 mt-1">
-                        <span style={{ fontWeight: 600, marginRight: "0.35rem" }}>jules_k</span>
-                        This made my morning 💗
-                      </p>
+                      <button
+                        type="button"
+                        className="mt-2 fan-feed-view-comments-link"
+                        style={{ color: isDark ? `${textColor}99` : undefined }}
+                      >
+                        View all 2 comments
+                      </button>
+                      <div className="mt-1.5">
+                        <p className="m-0">
+                          <span style={{ fontWeight: 600, marginRight: "0.35rem" }}>sarah_m</span>
+                          Love this! ☕
+                        </p>
+                        <p className="m-0 mt-1">
+                          <span style={{ fontWeight: 600, marginRight: "0.35rem" }}>jules_k</span>
+                          This made my morning 💗
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        className="mt-2 fan-feed-view-post-link"
+                        style={{ color: isDark ? `${textColor}cc` : undefined }}
+                      >
+                        View post
+                      </button>
                     </div>
-                    <button
-                      type="button"
-                      className="mt-2 fan-feed-view-post-link"
-                      style={{ color: isDark ? `${textColor}cc` : undefined }}
-                    >
-                      View post
-                    </button>
-                  </div>
-                </article>
-                
+                  </article>
+                )}
+
                 <p className="text-center text-xs" style={{ color: `${textColor}66` }}>
                   Preview — actual feed will show real posts
                 </p>

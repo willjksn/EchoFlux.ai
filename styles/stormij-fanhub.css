@@ -1,5 +1,6 @@
 /* Fan Hub theme — scoped to .stormij-theme. */
 /* Per-creator colors: parent sets --fan-primary, --fan-bg, --fan-text (etc.) inline — do not assign fixed brand hex here. */
+/* `.stormij-theme--light` on a root: skip `html.dark` stormij overrides (EchoFlux may set dark while this subtree stays creator-branded light). */
 .stormij-theme {
   --bg: var(--fan-bg, #fafafa);
   --bg-card: #fff;
@@ -78,13 +79,13 @@
 .stormij-theme .bg-primary-50 {
   background-color: color-mix(in srgb, var(--fan-primary, #6366f1) 12%, #fff) !important;
 }
-.dark .stormij-theme .dark\:bg-primary-900\/20 {
+.dark .stormij-theme:not(.stormij-theme--light) .dark\:bg-primary-900\/20 {
   background-color: color-mix(in srgb, var(--fan-primary, #6366f1) 22%, transparent) !important;
 }
 .stormij-theme .bg-primary-100 {
   background-color: color-mix(in srgb, var(--fan-primary, #6366f1) 18%, #fff) !important;
 }
-.dark .stormij-theme .dark\:bg-primary-900\/30 {
+.dark .stormij-theme:not(.stormij-theme--light) .dark\:bg-primary-900\/30 {
   background-color: color-mix(in srgb, var(--fan-primary, #6366f1) 30%, transparent) !important;
 }
 .stormij-theme .text-primary-600 {
@@ -434,7 +435,7 @@
   border-radius: 20px 20px 0 0;
 }
 /* Dark: subtle primary rim only */
-.dark .stormij-theme .fan-hub-feed-chrome {
+.dark .stormij-theme:not(.stormij-theme--light) .fan-hub-feed-chrome {
   background: linear-gradient(
     180deg,
     color-mix(in srgb, var(--fan-primary) 12%, #0f172a) 0%,
@@ -449,7 +450,7 @@
   border-radius: 16px;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
 }
-.dark .stormij-theme .feed-header-wrap {
+.dark .stormij-theme:not(.stormij-theme--light) .feed-header-wrap {
   background: linear-gradient(165deg, #1e293b 0%, #0f172a 55%, #0c1222 100%);
   border-color: color-mix(in srgb, var(--fan-primary) 20%, #334155);
   box-shadow:
@@ -460,7 +461,7 @@
 .stormij-theme .feed-title {
   color: color-mix(in srgb, var(--fan-primary) 28%, var(--fan-text, #1f2937));
 }
-.dark .stormij-theme .feed-title {
+.dark .stormij-theme:not(.stormij-theme--light) .feed-title {
   color: color-mix(in srgb, var(--fan-primary) 38%, #f1f5f9);
 }
 
@@ -482,13 +483,13 @@
 .stormij-theme .feed-saved-link:active {
   transform: translateY(0);
 }
-.dark .stormij-theme .feed-saved-link {
+.dark .stormij-theme:not(.stormij-theme--light) .feed-saved-link {
   border-color: color-mix(in srgb, var(--fan-primary) 24%, #4b5563);
   background: #111827;
   color: color-mix(in srgb, var(--fan-primary) 42%, #e2e8f0);
 }
-.dark .stormij-theme .feed-saved-link:hover,
-.dark .stormij-theme .feed-saved-link:active {
+.dark .stormij-theme:not(.stormij-theme--light) .feed-saved-link:hover,
+.dark .stormij-theme:not(.stormij-theme--light) .feed-saved-link:active {
   background: #1f2937;
   border-color: color-mix(in srgb, var(--fan-primary) 34%, #6b7280);
   color: color-mix(in srgb, var(--fan-primary) 48%, #f1f5f9);
@@ -504,7 +505,7 @@
   user-select: none;
 }
 .stormij-theme .feed-saved-link.feed-saved-link--current:hover,
-.dark .stormij-theme .feed-saved-link.feed-saved-link--current:hover {
+.dark .stormij-theme:not(.stormij-theme--light) .feed-saved-link.feed-saved-link--current:hover {
   transform: none;
 }
 
@@ -525,20 +526,20 @@
 .stormij-theme .feed-view-toggle:active svg {
   stroke: color-mix(in srgb, var(--fan-primary) 52%, var(--fan-text, #1f2937));
 }
-.dark .stormij-theme .feed-view-toggle {
+.dark .stormij-theme:not(.stormij-theme--light) .feed-view-toggle {
   border-color: color-mix(in srgb, var(--fan-primary) 24%, #4b5563);
   background: #111827;
 }
-.dark .stormij-theme .feed-view-toggle:hover,
-.dark .stormij-theme .feed-view-toggle:active {
+.dark .stormij-theme:not(.stormij-theme--light) .feed-view-toggle:hover,
+.dark .stormij-theme:not(.stormij-theme--light) .feed-view-toggle:active {
   background: #1f2937;
   border-color: color-mix(in srgb, var(--fan-primary) 32%, #6b7280);
 }
-.dark .stormij-theme .feed-view-toggle svg {
+.dark .stormij-theme:not(.stormij-theme--light) .feed-view-toggle svg {
   stroke: color-mix(in srgb, var(--fan-primary) 40%, #cbd5e1);
 }
-.dark .stormij-theme .feed-view-toggle:hover svg,
-.dark .stormij-theme .feed-view-toggle:active svg {
+.dark .stormij-theme:not(.stormij-theme--light) .feed-view-toggle:hover svg,
+.dark .stormij-theme:not(.stormij-theme--light) .feed-view-toggle:active svg {
   stroke: color-mix(in srgb, var(--fan-primary) 55%, #f1f5f9);
 }
 
@@ -552,12 +553,12 @@
   border-color: color-mix(in srgb, var(--fan-primary) 22%, var(--fan-border, #e5e7eb));
   color: color-mix(in srgb, var(--fan-text, #1f2937) 88%, var(--fan-primary));
 }
-.dark .stormij-theme .feed-header-visibility-btn {
+.dark .stormij-theme:not(.stormij-theme--light) .feed-header-visibility-btn {
   border-color: color-mix(in srgb, var(--fan-primary) 24%, #4b5563);
   background: #111827;
   color: color-mix(in srgb, var(--fan-primary) 42%, #e2e8f0);
 }
-.dark .stormij-theme .feed-header-visibility-btn:hover {
+.dark .stormij-theme:not(.stormij-theme--light) .feed-header-visibility-btn:hover {
   background: #1f2937;
   border-color: color-mix(in srgb, var(--fan-primary) 34%, #6b7280);
   color: #f9fafb;
@@ -568,7 +569,7 @@
   background: #fff;
   box-shadow: 0 12px 28px -8px rgba(0, 0, 0, 0.1), 0 4px 10px -6px rgba(0, 0, 0, 0.06);
 }
-.dark .stormij-theme .feed-header-visibility-popover {
+.dark .stormij-theme:not(.stormij-theme--light) .feed-header-visibility-popover {
   border-color: color-mix(in srgb, var(--fan-primary) 18%, #475569);
   background: linear-gradient(180deg, #1e293b 0%, #172033 100%);
   box-shadow:
@@ -576,20 +577,20 @@
     0 20px 40px -12px rgba(0, 0, 0, 0.65);
   color: #e2e8f0;
 }
-.dark .stormij-theme .feed-header-visibility-popover .feed-header-checkbox {
+.dark .stormij-theme:not(.stormij-theme--light) .feed-header-visibility-popover .feed-header-checkbox {
   background: rgba(15, 23, 42, 0.65);
   border-color: color-mix(in srgb, var(--fan-primary) 14%, #475569);
   color: #e2e8f0;
 }
-.dark .stormij-theme .feed-header-visibility-popover .feed-header-checkbox:hover {
+.dark .stormij-theme:not(.stormij-theme--light) .feed-header-visibility-popover .feed-header-checkbox:hover {
   background: rgba(30, 41, 59, 0.95);
   border-color: color-mix(in srgb, var(--fan-primary) 28%, #64748b);
   color: #f8fafc;
 }
-.dark .stormij-theme .feed-header-visibility-popover .feed-header-checkbox span {
+.dark .stormij-theme:not(.stormij-theme--light) .feed-header-visibility-popover .feed-header-checkbox span {
   color: inherit;
 }
-.dark .stormij-theme .feed-header-visibility-popover input[type="checkbox"] {
+.dark .stormij-theme:not(.stormij-theme--light) .feed-header-visibility-popover input[type="checkbox"] {
   accent-color: var(--fan-primary, #818cf8);
 }
 .stormij-theme .feed-header-toggle-segment {
@@ -606,34 +607,34 @@
 .stormij-theme .feed-header-toggle-help {
   color: color-mix(in srgb, var(--fan-text-muted, #6b7280) 82%, var(--fan-primary));
 }
-.dark .stormij-theme .feed-header-toggle-segment {
+.dark .stormij-theme:not(.stormij-theme--light) .feed-header-toggle-segment {
   border-color: color-mix(in srgb, var(--fan-primary) 20%, #475569);
   background: rgba(15, 23, 42, 0.66);
 }
-.dark .stormij-theme .feed-header-toggle-option {
+.dark .stormij-theme:not(.stormij-theme--light) .feed-header-toggle-option {
   color: #cbd5e1;
 }
-.dark .stormij-theme .feed-header-toggle-option.active {
+.dark .stormij-theme:not(.stormij-theme--light) .feed-header-toggle-option.active {
   color: #f8fafc;
   background: rgba(51, 65, 85, 0.92);
 }
-.dark .stormij-theme .feed-header-toggle-label,
-.dark .stormij-theme .feed-header-toggle-help {
+.dark .stormij-theme:not(.stormij-theme--light) .feed-header-toggle-label,
+.dark .stormij-theme:not(.stormij-theme--light) .feed-header-toggle-help {
   color: #cbd5e1;
 }
-.dark .stormij-theme .feed-header-ai-replies {
+.dark .stormij-theme:not(.stormij-theme--light) .feed-header-ai-replies {
   border-color: color-mix(in srgb, var(--fan-primary) 16%, #475569) !important;
 }
 .stormij-theme .feed-header-visibility {
   border-top-color: color-mix(in srgb, var(--fan-primary) 10%, #e5e7eb);
 }
-.dark .stormij-theme .feed-header-visibility {
+.dark .stormij-theme:not(.stormij-theme--light) .feed-header-visibility {
   border-top-color: #4b5563;
 }
 .stormij-theme .feed-header-visibility-label {
   color: color-mix(in srgb, var(--fan-text-muted, #6b7280) 82%, var(--fan-primary));
 }
-.dark .stormij-theme .feed-header-visibility-label {
+.dark .stormij-theme:not(.stormij-theme--light) .feed-header-visibility-label {
   color: #9ca3af;
 }
 .stormij-theme .feed-header-checkbox:hover {
@@ -786,37 +787,37 @@
 .stormij-theme .fan-member-content--feed-column .fan-feed-post-actions {
   border-bottom: none;
 }
-.dark .stormij-theme .fan-member-content--feed .feed-card-actions,
-.dark .stormij-theme .fan-member-content--feed-column .fan-feed-post-actions {
+.dark .stormij-theme:not(.stormij-theme--light) .fan-member-content--feed .feed-card-actions,
+.dark .stormij-theme:not(.stormij-theme--light) .fan-member-content--feed-column .fan-feed-post-actions {
   border-bottom: none;
 }
 /* Video/image letterboxing — same 2.4% surface as feed-header-wrap (not --feed-card-surface 6%). */
 .stormij-theme .feed-card .feed-card-media-wrap {
   background: color-mix(in srgb, var(--fan-primary) 2.4%, #ffffff);
 }
-.dark .stormij-theme .feed-card .feed-card-media-wrap {
+.dark .stormij-theme:not(.stormij-theme--light) .feed-card .feed-card-media-wrap {
   background: #374151;
 }
-.dark .stormij-theme .feed-card-body {
+.dark .stormij-theme:not(.stormij-theme--light) .feed-card-body {
   background: color-mix(in srgb, var(--fan-primary) 6%, #111827);
 }
 .stormij-theme .feed-card .fan-feed-post-footer {
   background: color-mix(in srgb, var(--fan-primary) 2.4%, #ffffff);
 }
-.dark .stormij-theme .feed-card .fan-feed-post-footer {
+.dark .stormij-theme:not(.stormij-theme--light) .feed-card .fan-feed-post-footer {
   background: color-mix(in srgb, var(--fan-primary) 5%, #111827);
 }
-.dark .stormij-theme .feed-card {
+.dark .stormij-theme:not(.stormij-theme--light) .feed-card {
   background: linear-gradient(180deg, #1f2937 0%, #1a1f2c 100%);
   border-color: color-mix(in srgb, var(--fan-primary) 15%, #4b5563);
 }
-.dark .stormij-theme .feed-card:hover {
+.dark .stormij-theme:not(.stormij-theme--light) .feed-card:hover {
   border-color: color-mix(in srgb, var(--fan-primary) 28%, #6b7280);
 }
 .stormij-theme .feed-card-username {
   color: color-mix(in srgb, var(--fan-primary) 32%, #1f1418);
 }
-.dark .stormij-theme .feed-card-username {
+.dark .stormij-theme:not(.stormij-theme--light) .feed-card-username {
   color: color-mix(in srgb, var(--fan-primary) 45%, #e5e7eb);
 }
 
@@ -866,30 +867,30 @@
 .stormij-theme .fan-feed-post-menu:hover {
   background: color-mix(in srgb, var(--fan-primary) 10%, transparent);
 }
-.dark .stormij-theme .fan-feed-post {
+.dark .stormij-theme:not(.stormij-theme--light) .fan-feed-post {
   background: linear-gradient(180deg, #1f2937 0%, #1a1f2c 100%);
   border-color: color-mix(in srgb, var(--fan-primary) 15%, #4b5563);
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
 }
-.dark .stormij-theme .fan-feed-post:hover {
+.dark .stormij-theme:not(.stormij-theme--light) .fan-feed-post:hover {
   border-color: color-mix(in srgb, var(--fan-primary) 28%, #6b7280);
 }
-.dark .stormij-theme .fan-feed-post-header {
+.dark .stormij-theme:not(.stormij-theme--light) .fan-feed-post-header {
   background: linear-gradient(180deg, #1f2937 0%, #1a1f2c 100%);
   border-bottom-color: color-mix(in srgb, var(--fan-primary) 15%, #4b5563);
 }
-.dark .stormij-theme .fan-feed-post-content {
+.dark .stormij-theme:not(.stormij-theme--light) .fan-feed-post-content {
   background: color-mix(in srgb, var(--fan-primary) 6%, #111827);
 }
-.dark .stormij-theme .fan-feed-post-actions {
+.dark .stormij-theme:not(.stormij-theme--light) .fan-feed-post-actions {
   background: linear-gradient(180deg, #1f2937 0%, #111827 100%);
   border-top-color: color-mix(in srgb, var(--fan-primary) 18%, #4b5563);
   border-bottom-color: color-mix(in srgb, var(--fan-primary) 15%, #4b5563);
 }
-.dark .stormij-theme .fan-feed-post .feed-card-media-wrap {
+.dark .stormij-theme:not(.stormij-theme--light) .fan-feed-post .feed-card-media-wrap {
   background: #374151;
 }
-.dark .stormij-theme .fan-feed-post-footer {
+.dark .stormij-theme:not(.stormij-theme--light) .fan-feed-post-footer {
   background: color-mix(in srgb, var(--fan-primary) 5%, #111827);
 }
 
@@ -973,7 +974,7 @@
   border-color: color-mix(in srgb, var(--fan-primary, #6366f1) 22%, #ffffff);
   box-shadow: 0 2px 12px color-mix(in srgb, var(--fan-primary, #6366f1) 32%, transparent);
 }
-.dark .stormij-theme .feed-card-avatar {
+.dark .stormij-theme:not(.stormij-theme--light) .feed-card-avatar {
   background: linear-gradient(
     145deg,
     color-mix(in srgb, var(--fan-primary, #6366f1) 55%, #1f2937) 0%,
@@ -1254,7 +1255,7 @@
   color: color-mix(in srgb, var(--fan-primary, #6366f1) 58%, #0f172a);
   box-shadow: 0 6px 18px color-mix(in srgb, var(--fan-primary, #6366f1) 16%, transparent);
 }
-.dark .stormij-theme .feed-card-count:not(.feed-card-count--themed) {
+.dark .stormij-theme:not(.stormij-theme--light) .feed-card-count:not(.feed-card-count--themed) {
   border-color: color-mix(in srgb, var(--fan-primary, #6366f1) 42%, #475569);
   background: color-mix(in srgb, var(--fan-primary, #6366f1) 16%, #1f2937);
   color: color-mix(in srgb, var(--fan-primary, #6366f1) 88%, #f8fafc);
@@ -1263,7 +1264,7 @@
 .stormij-theme .feed-card-count:not(.feed-card-count--themed) .feed-card-count-item + .feed-card-count-item::before {
   background: color-mix(in srgb, var(--fan-primary, #6366f1) 36%, transparent);
 }
-.dark .stormij-theme .feed-card-count:not(.feed-card-count--themed) .feed-card-count-item + .feed-card-count-item::before {
+.dark .stormij-theme:not(.stormij-theme--light) .feed-card-count:not(.feed-card-count--themed) .feed-card-count-item + .feed-card-count-item::before {
   background: color-mix(in srgb, var(--fan-primary, #6366f1) 48%, transparent);
 }
 
@@ -1373,27 +1374,27 @@
 .stormij-theme .bookmark-btn.bookmarked .bookmark-filled {
   color: var(--fan-primary);
 }
-.dark .stormij-theme .bookmark-btn .bookmark-outline {
+.dark .stormij-theme:not(.stormij-theme--light) .bookmark-btn .bookmark-outline {
   color: color-mix(in srgb, var(--fan-primary) 35%, #9ca3af);
 }
-.dark .stormij-theme .bookmark-btn:hover {
+.dark .stormij-theme:not(.stormij-theme--light) .bookmark-btn:hover {
   background: color-mix(in srgb, var(--fan-primary) 18%, transparent);
 }
-.dark .stormij-theme .bookmark-btn.bookmarked .bookmark-filled {
+.dark .stormij-theme:not(.stormij-theme--light) .bookmark-btn.bookmarked .bookmark-filled {
   color: color-mix(in srgb, var(--fan-primary) 72%, #fff);
 }
 
 .stormij-theme .fan-hub-reward-summary {
   background: color-mix(in srgb, var(--fan-primary, #6366f1) 6%, #f9fafb);
 }
-.dark .stormij-theme .fan-hub-reward-summary {
+.dark .stormij-theme:not(.stormij-theme--light) .fan-hub-reward-summary {
   background: rgba(31, 41, 55, 0.75);
 }
 
 .stormij-theme .fan-hub-monthly-totals-row {
   background: color-mix(in srgb, var(--fan-primary, #6366f1) 7%, #f9fafb);
 }
-.dark .stormij-theme .fan-hub-monthly-totals-row {
+.dark .stormij-theme:not(.stormij-theme--light) .fan-hub-monthly-totals-row {
   background: color-mix(in srgb, var(--fan-primary, #6366f1) 12%, #1f2937);
 }
 
@@ -4352,19 +4353,19 @@ button.treat-card:hover:not(:disabled) .treat-card-cta {
 .stormij-theme .treat-manage-card:hover {
   box-shadow: 0 4px 12px color-mix(in srgb, var(--fan-primary) 22%, transparent);
 }
-.dark .stormij-theme .treat-manage-card {
+.dark .stormij-theme:not(.stormij-theme--light) .treat-manage-card {
   background: linear-gradient(135deg, #1f2937 0%, #111827 100%);
   border-color: color-mix(in srgb, var(--fan-primary) 22%, #4b5563);
   border-left-color: var(--fan-primary, #6366f1);
 }
-.dark .stormij-theme .treat-manage-card:hover {
+.dark .stormij-theme:not(.stormij-theme--light) .treat-manage-card:hover {
   box-shadow: 0 4px 12px color-mix(in srgb, var(--fan-primary) 28%, transparent);
 }
 .stormij-theme .treat-manage-card-qty {
   color: color-mix(in srgb, var(--fan-primary) 42%, var(--fan-text, #374151));
   font-weight: 600;
 }
-.dark .stormij-theme .treat-manage-card-qty {
+.dark .stormij-theme:not(.stormij-theme--light) .treat-manage-card-qty {
   color: color-mix(in srgb, var(--fan-primary) 55%, #e5e7eb);
 }
 .treat-manage-card.archived {
@@ -5985,14 +5986,14 @@ button.treat-card:hover:not(:disabled) .treat-card-cta {
   );
   border-color: color-mix(in srgb, var(--fan-primary) 14%, var(--fan-border, #e5e7eb));
 }
-.dark .stormij-theme .purchases-stat {
+.dark .stormij-theme:not(.stormij-theme--light) .purchases-stat {
   background: linear-gradient(140deg, #1f2937 0%, #111827 100%);
   border-color: color-mix(in srgb, var(--fan-primary) 22%, #4b5563);
 }
 .stormij-theme .purchases-stat-scheduled {
   color: color-mix(in srgb, var(--fan-primary) 48%, var(--fan-text, #1f2937)) !important;
 }
-.dark .stormij-theme .purchases-stat-scheduled {
+.dark .stormij-theme:not(.stormij-theme--light) .purchases-stat-scheduled {
   color: color-mix(in srgb, var(--fan-primary) 55%, #e2e8f0) !important;
 }
 
@@ -6485,7 +6486,7 @@ button.treat-card:hover:not(:disabled) .treat-card-cta {
     color-mix(in srgb, var(--fan-primary) 1%, var(--fan-bg, #fafafa)) 100%
   );
 }
-.dark .stormij-theme .storefront-member-header {
+.dark .stormij-theme:not(.stormij-theme--light) .storefront-member-header {
   border-bottom-color: color-mix(in srgb, var(--fan-primary) 22%, #334155);
   background: linear-gradient(
     180deg,
@@ -6514,6 +6515,45 @@ button.treat-card:hover:not(:disabled) .treat-card-cta {
   min-height: 48px;
   flex-shrink: 0;
   padding-right: 1.25rem;
+}
+
+/*
+ * Member storefront header should show only the witme wordmark. Older JS bundles still mount the
+ * creator avatar + community subtitle; hide them here so production caches don’t keep showing both.
+ */
+.storefront-member-header .storefront-header-left > img.w-9,
+.storefront-member-header .storefront-header-left > img[class*="rounded-full"] {
+  display: none !important;
+}
+.storefront-member-header .storefront-header-left > div.w-9.h-9.rounded-full.flex-shrink-0 {
+  display: none !important;
+}
+.storefront-member-header .storefront-header-left .min-w-0 > p {
+  display: none !important;
+}
+
+/* Wordmark-only member header: render only the logo in this slot. */
+.storefront-member-header .storefront-header-left--witme-wordmark {
+  font-size: 0 !important;
+  line-height: 0 !important;
+  color: transparent !important;
+}
+.storefront-member-header .storefront-header-left--witme-wordmark > :not(svg),
+.storefront-member-header .storefront-header-left--witme-wordmark > :not(svg) * {
+  display: none !important;
+}
+.storefront-member-header .storefront-header-left--witme-wordmark svg {
+  display: block;
+}
+
+/*
+ * Defense-in-depth for older member-header markup on production:
+ * hide creator-avatar/subtitle content in the left slot even when nested.
+ */
+.storefront-member-header .storefront-header-left [class*="rounded-full"],
+.storefront-member-header .storefront-header-left p,
+.storefront-member-header .storefront-header-left small {
+  display: none !important;
 }
 
 .storefront-header-avatar {
@@ -6612,7 +6652,7 @@ button.treat-card:hover:not(:disabled) .treat-card-cta {
 
 .storefront-member-header.storefront-member-header--leftnav .storefront-header-nav {
   justify-content: flex-start;
-  margin-left: 4rem;
+  margin-left: 0.75rem;
 }
 
 .storefront-header-actions {
@@ -7050,7 +7090,7 @@ button.treat-card:hover:not(:disabled) .treat-card-cta {
   color: var(--text, #1f2937);
 }
 
-.dark .stormij-theme .tip-amounts-heading {
+.dark .stormij-theme:not(.stormij-theme--light) .tip-amounts-heading {
   color: #f3f4f6;
 }
 
@@ -7074,7 +7114,7 @@ button.treat-card:hover:not(:disabled) .treat-card-cta {
   transition: all 0.2s ease;
 }
 
-.dark .stormij-theme .tip-preset-btn {
+.dark .stormij-theme:not(.stormij-theme--light) .tip-preset-btn {
   background: color-mix(in srgb, var(--fan-primary, #6366f1) 10%, rgba(255, 255, 255, 0.04));
   color: color-mix(in srgb, var(--fan-primary, #6366f1) 68%, #e5e7eb);
   border-color: color-mix(in srgb, var(--fan-primary, #6366f1) 42%, transparent);
@@ -7108,7 +7148,7 @@ button.treat-card:hover:not(:disabled) .treat-card-cta {
   margin-bottom: 0.35rem;
 }
 
-.dark .stormij-theme .tip-custom-label {
+.dark .stormij-theme:not(.stormij-theme--light) .tip-custom-label {
   color: #f3f4f6;
 }
 
@@ -7123,7 +7163,7 @@ button.treat-card:hover:not(:disabled) .treat-card-cta {
   color: var(--text, #1f2937);
 }
 
-.dark .stormij-theme .tip-custom-input {
+.dark .stormij-theme:not(.stormij-theme--light) .tip-custom-input {
   background: color-mix(in srgb, var(--fan-primary, #6366f1) 10%, rgba(255, 255, 255, 0.04));
   color: color-mix(in srgb, var(--fan-primary, #6366f1) 28%, #ffffff);
   border-color: color-mix(in srgb, var(--fan-primary, #6366f1) 45%, transparent);
@@ -7179,7 +7219,7 @@ button.treat-card:hover:not(:disabled) .treat-card-cta {
   margin: 0;
 }
 
-.dark .stormij-theme .tip-thanks {
+.dark .stormij-theme:not(.stormij-theme--light) .tip-thanks {
   color: #f3f4f6;
 }
 
@@ -7283,7 +7323,7 @@ button.treat-card:hover:not(:disabled) .treat-card-cta {
 .stormij-theme .fh-dm-bubble--them .fh-dm-bubble__delete {
   color: #6b7280;
 }
-.dark .stormij-theme .fh-dm-bubble--them .fh-dm-bubble__delete {
+.dark .stormij-theme:not(.stormij-theme--light) .fh-dm-bubble--them .fh-dm-bubble__delete {
   color: #9ca3af;
 }
 .stormij-theme .fh-dm-bubble--me {
@@ -7303,7 +7343,7 @@ button.treat-card:hover:not(:disabled) .treat-card-cta {
   border: 1px solid #e5e7eb;
   border-radius: 14px 14px 14px 4px;
 }
-.dark .stormij-theme .fh-dm-bubble--them {
+.dark .stormij-theme:not(.stormij-theme--light) .fh-dm-bubble--them {
   background: #3d3848;
   color: #f3f4f6;
 }
@@ -7318,7 +7358,7 @@ button.treat-card:hover:not(:disabled) .treat-card-cta {
 .stormij-theme .fh-dm-bubble--them .fh-dm-bubble__head {
   color: #6b7280;
 }
-.dark .stormij-theme .fh-dm-bubble--them .fh-dm-bubble__head {
+.dark .stormij-theme:not(.stormij-theme--light) .fh-dm-bubble--them .fh-dm-bubble__head {
   color: #9ca3af;
 }
 .stormij-theme .fh-dm-bubble__body {
@@ -7345,7 +7385,7 @@ button.treat-card:hover:not(:disabled) .treat-card-cta {
 .stormij-theme .fh-dm-bubble--them .fh-dm-bubble__foot {
   color: #6b7280;
 }
-.dark .stormij-theme .fh-dm-bubble--them .fh-dm-bubble__foot {
+.dark .stormij-theme:not(.stormij-theme--light) .fh-dm-bubble--them .fh-dm-bubble__foot {
   color: #9ca3af;
 }
 
@@ -7360,13 +7400,13 @@ button.treat-card:hover:not(:disabled) .treat-card-cta {
 .stormij-theme .fan-member-messages-list .fh-dm-chat-row--out .fh-dm-bubble .fh-dm-bubble__foot {
   color: #6b7280 !important;
 }
-.dark .stormij-theme .fan-member-messages-list .fh-dm-chat-row--out .fh-dm-bubble {
+.dark .stormij-theme:not(.stormij-theme--light) .fan-member-messages-list .fh-dm-chat-row--out .fh-dm-bubble {
   background: #374151 !important;
   color: #f3f4f6 !important;
   border-color: #4b5563 !important;
 }
-.dark .stormij-theme .fan-member-messages-list .fh-dm-chat-row--out .fh-dm-bubble .fh-dm-bubble__head,
-.dark .stormij-theme .fan-member-messages-list .fh-dm-chat-row--out .fh-dm-bubble .fh-dm-bubble__foot {
+.dark .stormij-theme:not(.stormij-theme--light) .fan-member-messages-list .fh-dm-chat-row--out .fh-dm-bubble .fh-dm-bubble__head,
+.dark .stormij-theme:not(.stormij-theme--light) .fan-member-messages-list .fh-dm-chat-row--out .fh-dm-bubble .fh-dm-bubble__foot {
   color: #9ca3af !important;
 }
 .stormij-theme .fan-member-messages-list .fh-dm-chat-row--in .fh-dm-bubble {
@@ -7388,7 +7428,7 @@ button.treat-card:hover:not(:disabled) .treat-card-cta {
   color: var(--text-muted, #6b7280);
   align-self: flex-start;
 }
-.dark .stormij-theme .fh-dm-meta-below {
+.dark .stormij-theme:not(.stormij-theme--light) .fh-dm-meta-below {
   color: #9ca3af;
 }
 
@@ -7407,7 +7447,7 @@ button.treat-card:hover:not(:disabled) .treat-card-cta {
   font-weight: 700;
   color: var(--text, #111827);
 }
-.dark .stormij-theme .fh-dm-sidebar-header h2 {
+.dark .stormij-theme:not(.stormij-theme--light) .fh-dm-sidebar-header h2 {
   color: #f3f4f6;
 }
 .stormij-theme .fh-dm-sidebar-icon-btn {
@@ -7427,11 +7467,11 @@ button.treat-card:hover:not(:disabled) .treat-card-cta {
   background: color-mix(in srgb, var(--fan-primary, #6366f1) 22%, transparent);
   color: var(--fan-primary, #6366f1);
 }
-.dark .stormij-theme .fh-dm-sidebar-icon-btn {
+.dark .stormij-theme:not(.stormij-theme--light) .fh-dm-sidebar-icon-btn {
   background: color-mix(in srgb, var(--fan-primary, #6366f1) 18%, #1f2937);
   color: color-mix(in srgb, var(--fan-primary, #6366f1) 78%, #e2e8f0);
 }
-.dark .stormij-theme .fh-dm-sidebar-icon-btn:hover {
+.dark .stormij-theme:not(.stormij-theme--light) .fh-dm-sidebar-icon-btn:hover {
   background: color-mix(in srgb, var(--fan-primary, #6366f1) 28%, #1f2937);
   color: color-mix(in srgb, var(--fan-primary, #6366f1) 88%, #f8fafc);
 }
@@ -7446,7 +7486,7 @@ button.treat-card:hover:not(:disabled) .treat-card-cta {
   background: var(--surface, #fff);
   color: var(--text, #111827);
 }
-.dark .stormij-theme .fh-dm-sidebar-search {
+.dark .stormij-theme:not(.stormij-theme--light) .fh-dm-sidebar-search {
   background: #1f2937;
   border-color: #374151;
   color: #f3f4f6;
@@ -7471,10 +7511,10 @@ button.treat-card:hover:not(:disabled) .treat-card-cta {
   background: color-mix(in srgb, var(--fan-primary, #6366f1) 14%, #ffffff);
   color: color-mix(in srgb, var(--fan-primary, #6366f1) 68%, var(--fan-text, #1f2937));
 }
-.dark .stormij-theme .fh-dm-tab {
+.dark .stormij-theme:not(.stormij-theme--light) .fh-dm-tab {
   color: #9ca3af;
 }
-.dark .stormij-theme .fh-dm-tab--active {
+.dark .stormij-theme:not(.stormij-theme--light) .fh-dm-tab--active {
   background: color-mix(in srgb, var(--fan-primary, #6366f1) 22%, #1f2937);
   color: color-mix(in srgb, var(--fan-primary, #6366f1) 82%, #f1f5f9);
 }
@@ -7492,7 +7532,7 @@ button.treat-card:hover:not(:disabled) .treat-card-cta {
 .stormij-theme .fh-dm-thread-row__main:hover {
   background: color-mix(in srgb, var(--fan-primary, #6366f1) 9%, var(--surface, #ffffff));
 }
-.dark .stormij-theme .fh-dm-thread-row__main:hover {
+.dark .stormij-theme:not(.stormij-theme--light) .fh-dm-thread-row__main:hover {
   background: color-mix(in srgb, var(--fan-primary, #6366f1) 14%, #1f2937);
 }
 .stormij-theme .fh-dm-modal-member-btn {
@@ -7503,7 +7543,7 @@ button.treat-card:hover:not(:disabled) .treat-card-cta {
 .stormij-theme .fh-dm-modal-member-btn:hover:not(:disabled) {
   background: color-mix(in srgb, var(--fan-primary, #6366f1) 10%, var(--surface, #ffffff));
 }
-.dark .stormij-theme .fh-dm-modal-member-btn:hover:not(:disabled) {
+.dark .stormij-theme:not(.stormij-theme--light) .fh-dm-modal-member-btn:hover:not(:disabled) {
   background: color-mix(in srgb, var(--fan-primary, #6366f1) 14%, #1f2937);
 }
 .stormij-theme .fh-dm-thread-row__top {
@@ -7561,7 +7601,7 @@ button.treat-card:hover:not(:disabled) .treat-card-cta {
   padding: 0.35rem 0;
   z-index: 70;
 }
-.dark .stormij-theme .fh-dm-thread-menu {
+.dark .stormij-theme:not(.stormij-theme--light) .fh-dm-thread-menu {
   background: #1f2937;
   border-color: #374151;
 }
@@ -7579,7 +7619,7 @@ button.treat-card:hover:not(:disabled) .treat-card-cta {
   color: var(--text, #111827);
   text-align: left;
 }
-.dark .stormij-theme .fh-dm-thread-menu__item {
+.dark .stormij-theme:not(.stormij-theme--light) .fh-dm-thread-menu__item {
   color: #f3f4f6;
 }
 .stormij-theme .fh-dm-thread-menu__item:hover:not(:disabled) {
@@ -7687,7 +7727,7 @@ button.treat-card:hover:not(:disabled) .treat-card-cta {
   box-shadow: 0 20px 50px rgba(0, 0, 0, 0.2);
   overflow: hidden;
 }
-.dark .stormij-theme .fh-dm-modal {
+.dark .stormij-theme:not(.stormij-theme--light) .fh-dm-modal {
   background: #1f2937;
   color: #f3f4f6;
 }
@@ -7830,7 +7870,7 @@ button.treat-card:hover:not(:disabled) .treat-card-cta {
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
   border: 1px solid rgba(0, 0, 0, 0.06);
 }
-.dark .stormij-theme .fh-dm-voice-note__pill {
+.dark .stormij-theme:not(.stormij-theme--light) .fh-dm-voice-note__pill {
   background: #1e293b;
   border-color: rgba(255, 255, 255, 0.08);
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
@@ -7849,7 +7889,7 @@ button.treat-card:hover:not(:disabled) .treat-card-cta {
   color: #111;
   cursor: pointer;
 }
-.dark .stormij-theme .fh-dm-voice-note__play {
+.dark .stormij-theme:not(.stormij-theme--light) .fh-dm-voice-note__play {
   color: #f1f5f9;
 }
 .stormij-theme .fh-dm-voice-note__play:hover {
@@ -7882,7 +7922,7 @@ button.treat-card:hover:not(:disabled) .treat-card-cta {
     #e5e7eb 100%
   );
 }
-.dark .stormij-theme .fh-dm-voice-note__range::-webkit-slider-runnable-track {
+.dark .stormij-theme:not(.stormij-theme--light) .fh-dm-voice-note__range::-webkit-slider-runnable-track {
   background: linear-gradient(
     to right,
     var(--fan-primary, #6366f1) 0%,
@@ -7905,7 +7945,7 @@ button.treat-card:hover:not(:disabled) .treat-card-cta {
   border-radius: 2px;
   background: #e5e7eb;
 }
-.dark .stormij-theme .fh-dm-voice-note__range::-moz-range-track {
+.dark .stormij-theme:not(.stormij-theme--light) .fh-dm-voice-note__range::-moz-range-track {
   background: #334155;
 }
 .stormij-theme .fh-dm-voice-note__range::-moz-range-progress {
@@ -7927,7 +7967,7 @@ button.treat-card:hover:not(:disabled) .treat-card-cta {
   color: #111;
   cursor: pointer;
 }
-.dark .stormij-theme .fh-dm-voice-note__icon {
+.dark .stormij-theme:not(.stormij-theme--light) .fh-dm-voice-note__icon {
   color: #e2e8f0;
 }
 .stormij-theme .fh-dm-voice-note__icon:hover {
@@ -8177,7 +8217,7 @@ button.treat-card:hover:not(:disabled) .treat-card-cta {
   border-color: color-mix(in srgb, var(--fan-text, #111827) 12%, transparent);
   border-bottom-color: var(--fan-primary, #6366f1);
 }
-.dark .stormij-theme .fh-live-spinner {
+.dark .stormij-theme:not(.stormij-theme--light) .fh-live-spinner {
   border-color: rgba(255, 255, 255, 0.12);
   border-bottom-color: var(--fan-primary, #6366f1);
 }
@@ -8219,7 +8259,7 @@ button.treat-card:hover:not(:disabled) .treat-card-cta {
   background: color-mix(in srgb, var(--fan-primary) 14%, #ffffff);
   color: color-mix(in srgb, var(--fan-primary) 38%, var(--fan-text, #1f2937));
 }
-.dark .stormij-theme .fh-live-filter-active {
+.dark .stormij-theme:not(.stormij-theme--light) .fh-live-filter-active {
   background: color-mix(in srgb, var(--fan-primary) 22%, #1f2937);
   color: color-mix(in srgb, var(--fan-primary) 58%, #e2e8f0);
 }
@@ -8232,14 +8272,14 @@ button.treat-card:hover:not(:disabled) .treat-card-cta {
   border-color: color-mix(in srgb, var(--fan-primary) 35%, #93c5fd);
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--fan-primary) 22%, transparent);
 }
-.dark .stormij-theme .fh-live-input:focus {
+.dark .stormij-theme:not(.stormij-theme--light) .fh-live-input:focus {
   border-color: color-mix(in srgb, var(--fan-primary) 45%, #475569);
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--fan-primary) 30%, transparent);
 }
 .stormij-theme .fh-live-dropdown-item:hover {
   background: color-mix(in srgb, var(--fan-primary) 8%, #ffffff);
 }
-.dark .stormij-theme .fh-live-dropdown-item:hover {
+.dark .stormij-theme:not(.stormij-theme--light) .fh-live-dropdown-item:hover {
   background: color-mix(in srgb, var(--fan-primary) 14%, #0f172a);
 }
 .stormij-theme .fh-live-fan-chip-avatar {
@@ -8256,7 +8296,7 @@ button.treat-card:hover:not(:disabled) .treat-card-cta {
   );
   color: color-mix(in srgb, var(--fan-primary) 55%, var(--fan-text, #374151));
 }
-.dark .stormij-theme .fh-live-fan-chip-avatar {
+.dark .stormij-theme:not(.stormij-theme--light) .fh-live-fan-chip-avatar {
   background: linear-gradient(
     to bottom right,
     color-mix(in srgb, var(--fan-primary) 28%, #1e293b),
@@ -8274,7 +8314,7 @@ button.treat-card:hover:not(:disabled) .treat-card-cta {
     color-mix(in srgb, var(--fan-primary) 12%, #ffffff)
   );
 }
-.dark .stormij-theme .fh-live-selected-card {
+.dark .stormij-theme:not(.stormij-theme--light) .fh-live-selected-card {
   border-color: color-mix(in srgb, var(--fan-primary) 32%, #334155);
   background: linear-gradient(
     to bottom right,
@@ -8285,14 +8325,14 @@ button.treat-card:hover:not(:disabled) .treat-card-cta {
 .stormij-theme .fh-live-accent-text {
   color: var(--fan-primary, #6366f1);
 }
-.dark .stormij-theme .fh-live-accent-text {
+.dark .stormij-theme:not(.stormij-theme--light) .fh-live-accent-text {
   color: color-mix(in srgb, var(--fan-primary) 70%, #e2e8f0);
 }
 .stormij-theme .fh-live-session-active {
   background: color-mix(in srgb, var(--fan-primary) 16%, #ffffff);
   color: color-mix(in srgb, var(--fan-primary) 42%, var(--fan-text, #1f2937));
 }
-.dark .stormij-theme .fh-live-session-active {
+.dark .stormij-theme:not(.stormij-theme--light) .fh-live-session-active {
   background: color-mix(in srgb, var(--fan-primary) 22%, #1f2937);
   color: color-mix(in srgb, var(--fan-primary) 62%, #e2e8f0);
 }

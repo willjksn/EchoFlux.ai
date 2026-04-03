@@ -20,12 +20,15 @@ const liveStorefrontHref = (c: WitmeShowcaseCreator): string | null => {
   return path || null;
 };
 
-const showcaseObjectStyle = (objectPosition?: string): React.CSSProperties => {
+const showcaseObjectStyle = (
+  objectPosition?: string,
+  fit: 'cover' | 'contain' = 'cover',
+): React.CSSProperties => {
   const pos =
     objectPosition != null && String(objectPosition).trim() !== ''
       ? String(objectPosition).trim()
       : '50% 50%';
-  return { objectFit: 'cover' as const, objectPosition: pos };
+  return { objectFit: fit, objectPosition: pos };
 };
 
 const VIDEO_LOOP_FADE_MS = 380;
@@ -36,9 +39,11 @@ const ShowcaseMedia: React.FC<{
   alt: string;
   className: string;
   objectPosition?: string;
-}> = ({ url, mediaKind, alt, className, objectPosition }) => {
+  /** `contain` shows the full frame (letterboxed); `cover` fills the box (may crop). */
+  objectFit?: 'cover' | 'contain';
+}> = ({ url, mediaKind, alt, className, objectPosition, objectFit = 'cover' }) => {
   const u = url.trim();
-  const fitStyle = showcaseObjectStyle(objectPosition);
+  const fitStyle = showcaseObjectStyle(objectPosition, objectFit);
   const videoRef = useRef<HTMLVideoElement>(null);
 
   useEffect(() => {
@@ -574,15 +579,18 @@ const FeaturedCreatorsGrid: React.FC<{ showcaseCreators: WitmeShowcaseCreator[];
         return (
           <article
             key={`${creator.handle}-grid-${idx}`}
-            className="group overflow-hidden rounded-2xl border border-white/15 bg-white/10 transition hover:border-white/30 hover:bg-white/15"
+            className="group flex flex-col overflow-hidden rounded-2xl border border-white/15 bg-white/10 transition hover:border-white/30 hover:bg-white/15"
           >
-            <ShowcaseMedia
-              url={creator.imageUrl}
-              mediaKind={creator.mediaKind}
-              alt={creator.name}
-              className="h-44 w-full"
-              objectPosition={creator.mediaObjectPosition}
-            />
+            <div className="relative h-56 w-full shrink-0 overflow-hidden bg-gradient-to-b from-black/50 to-black/25 sm:h-64 lg:h-72">
+              <ShowcaseMedia
+                url={creator.imageUrl}
+                mediaKind={creator.mediaKind}
+                alt={creator.name}
+                className="absolute inset-0 h-full w-full"
+                objectPosition={creator.mediaObjectPosition}
+                objectFit="contain"
+              />
+            </div>
             <div className="p-4">
               <p className="text-base font-semibold text-white">{creator.name}</p>
               <p className="mt-0.5 text-sm text-gray-400">{creator.handle}</p>
@@ -982,15 +990,18 @@ export const WitmeDiscoverPage: React.FC<{ echofluxUrl?: string }> = ({ echoflux
                 return (
                   <article
                     key={`${creator.handle}-discover-${idx}`}
-                    className="group overflow-hidden rounded-2xl border border-white/10 bg-white/5 transition hover:border-white/20 hover:bg-white/10"
+                    className="group flex flex-col overflow-hidden rounded-2xl border border-white/10 bg-white/5 transition hover:border-white/20 hover:bg-white/10"
                   >
-                    <ShowcaseMedia
-                      url={creator.imageUrl}
-                      mediaKind={creator.mediaKind}
-                      alt={creator.name}
-                      className="h-44 w-full"
-                      objectPosition={creator.mediaObjectPosition}
-                    />
+                    <div className="relative h-56 w-full shrink-0 overflow-hidden bg-gradient-to-b from-black/50 to-black/25 sm:h-64 lg:h-72">
+                      <ShowcaseMedia
+                        url={creator.imageUrl}
+                        mediaKind={creator.mediaKind}
+                        alt={creator.name}
+                        className="absolute inset-0 h-full w-full"
+                        objectPosition={creator.mediaObjectPosition}
+                        objectFit="contain"
+                      />
+                    </div>
                     <div className="p-4">
                       <p className="text-base font-semibold text-white">{creator.name}</p>
                       <p className="mt-0.5 text-sm text-gray-400">{creator.handle}</p>

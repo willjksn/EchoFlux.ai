@@ -21,6 +21,38 @@ import "../styles/fan-auth-modal.css";
 const DEFAULT_FAN_AUTH_ACCENT = "#4a2c2c";
 const BUILTIN_DEFAULT_PRIMARY = "#6366f1";
 
+/** True when Google returns 403 / key or referrer rejection on Identity Toolkit (not wrong password). */
+function isFirebaseIdentityToolkitConfigBlock(ex: unknown): boolean {
+  const msg = String((ex as Error)?.message || "");
+  const code = String((ex as { code?: string })?.code || "");
+  const status = (ex as { customData?: { status?: number } })?.customData?.status;
+  if (code === "auth/invalid-api-key") return true;
+  if (status === 403) return true;
+  if (/\b403\b|REQUEST_DENIED|PERMISSION_DENIED|API key not valid|referr?er not allowed/i.test(msg)) return true;
+  if (/identitytoolkit\.googleapis\.com/i.test(msg)) return true;
+  return false;
+}
+
+/** DevTools often collapses `console.error({ ex })` to "Object" — log plain fields. */
+function logFanAuthError(context: string, ex: unknown): void {
+  const e = ex as {
+    code?: string;
+    message?: string;
+    name?: string;
+    customData?: { status?: number; [k: string]: unknown };
+  };
+  const status = e?.customData && typeof e.customData === "object" ? (e.customData as { status?: number }).status : undefined;
+  console.error(`[FanAuth] ${context}`, {
+    code: e?.code,
+    message: e?.message,
+    httpStatus: status,
+    hint:
+      status === 403 || /\b403\b/i.test(String(e?.message))
+        ? "Fix: Firebase Auth → Authorized domains + Google Cloud Browser API key referrer allowlist + Identity Toolkit API."
+        : undefined,
+  });
+}
+
 function lightenHex(hex: string, amount = 0.35): string {
   const n = hex.replace("#", "");
   if (n.length !== 6) return hex;
@@ -282,7 +314,7 @@ export const FanAuthModal: React.FC<FanAuthModalProps> = ({
       onClose();
     } catch (ex: unknown) {
       const code = (ex as { code?: string })?.code || "";
-      console.error("Fan auth email flow failed:", { mode, code, ex });
+      logFanAuthError(`email flow failed (mode=${mode})`, ex);
       if (code === "auth/email-already-in-use") {
         // Retry as login so one email can be reused across creators seamlessly.
         try {
@@ -314,9 +346,29 @@ export const FanAuthModal: React.FC<FanAuthModalProps> = ({
       } else if (code === "auth/too-many-requests") {
         setFormError("Too many attempts. Please wait a bit and try again.");
         showToast?.("Too many attempts. Please wait and try again.", "error");
+      } else if (code === "auth/invalid-api-key") {
+        setFormError(
+          "This app’s Firebase API key is missing, wrong, or not allowed for this site. Check VITE_FIREBASE_API_KEY matches Project settings in Firebase Console, and in Google Cloud → Credentials allow this origin on the Browser key.",
+        );
+        showToast?.("Invalid or blocked Firebase API key.", "error");
+      } else if (code === "auth/network-request-failed") {
+        if (typeof navigator !== "undefined" && !navigator.onLine) {
+          setFormError("You appear to be offline. Check your connection and try again.");
+          showToast?.("You're offline.", "error");
+        } else {
+          setFormError(
+            "Could not reach Firebase Authentication. In DevTools → Network, if signInWithPassword shows HTTP 403, add this origin to Firebase → Authentication → Authorized domains and allow the same origin under your Browser API key’s HTTP referrer restrictions (Google Cloud → Credentials).",
+          );
+          showToast?.("Can't reach Firebase. If Network shows 403, fix domains + API key.", "error");
+        }
       } else if (code === "auth/operation-not-allowed") {
         setFormError("Email/password sign-in is disabled in Firebase Auth for this project.");
         showToast?.("Email/password sign-in is disabled in Firebase Auth.", "error");
+      } else if (isFirebaseIdentityToolkitConfigBlock(ex)) {
+        setFormError(
+          "Sign-in was blocked by Google before your email/password was checked (often HTTP 403). Add this exact origin (scheme + host + port) to Firebase Console → Authentication → Settings → Authorized domains. In Google Cloud Console → APIs & Services → Credentials, open the Browser API key used by this app: allow this origin under Website restrictions and ensure Identity Toolkit API is not blocked.",
+        );
+        showToast?.("Sign-in blocked (Firebase / Google). Check authorized domains and Browser API key restrictions.", "error");
       } else {
         const fallback = (ex as Error)?.message || "Something went wrong.";
         setFormError(code ? `${fallback} (${code})` : fallback);
@@ -363,11 +415,18 @@ export const FanAuthModal: React.FC<FanAuthModalProps> = ({
         }
       }
       const code = (ex as { code?: string })?.code;
-      console.error("Fan auth Google flow failed:", { code, ex });
+      logFanAuthError("Google flow failed", ex);
       if (code !== "auth/popup-closed-by-user") {
-        const msg = (ex as Error)?.message || "Google sign-in failed.";
-        setFormError(code ? `${msg} (${code})` : msg);
-        showToast?.(msg, "error");
+        if (isFirebaseIdentityToolkitConfigBlock(ex)) {
+          setFormError(
+            "Google sign-in was blocked by Google before it could finish (often HTTP 403). Add this origin to Firebase Authentication → Authorized domains and allow it on the Browser API key in Google Cloud (Identity Toolkit API).",
+          );
+          showToast?.("Sign-in blocked (Firebase / Google). Check authorized domains and API key.", "error");
+        } else {
+          const msg = (ex as Error)?.message || "Google sign-in failed.";
+          setFormError(code ? `${msg} (${code})` : msg);
+          showToast?.(msg, "error");
+        }
       }
     } finally {
       setLoading(false);
@@ -386,10 +445,17 @@ export const FanAuthModal: React.FC<FanAuthModalProps> = ({
       setForgotOpen(false);
     } catch (ex: unknown) {
       const code = (ex as { code?: string })?.code || "";
-      console.error("Fan auth password reset failed:", { code, ex });
-      const msg = (ex as Error)?.message || "Could not send reset email.";
-      setFormError(code ? `${msg} (${code})` : msg);
-      showToast?.("Could not send reset email.", "error");
+      logFanAuthError("password reset failed", ex);
+      if (isFirebaseIdentityToolkitConfigBlock(ex)) {
+        setFormError(
+          "Reset email could not be sent: Firebase blocked the request (often HTTP 403). Check Authorized domains and the Browser API key (referrer restrictions + Identity Toolkit API) in Google Cloud.",
+        );
+        showToast?.("Password reset blocked (Firebase / Google). Check API key and domains.", "error");
+      } else {
+        const msg = (ex as Error)?.message || "Could not send reset email.";
+        setFormError(code ? `${msg} (${code})` : msg);
+        showToast?.("Could not send reset email.", "error");
+      }
     }
   };
 

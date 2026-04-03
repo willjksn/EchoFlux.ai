@@ -553,7 +553,7 @@ export const CreatorOnboardingModal: React.FC<CreatorOnboardingModalProps> = ({ 
                             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Your page URL</label>
                             <div className="flex gap-2">
                                 <span className="flex items-center px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-l-md bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400">
-                                    echoflux.ai/
+                                    witme.io/
                                 </span>
                                 <input
                                     type="text"
@@ -787,3 +787,4 @@ export const CreatorOnboardingModal: React.FC<CreatorOnboardingModalProps> = ({ 
         </div>
     );
 };
+

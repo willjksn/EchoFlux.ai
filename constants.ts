@@ -394,7 +394,7 @@ export const getTourStepsForPlan = (user: User): TourStep[] => {
 
     if (hasFanHubAccess) {
         steps.push({ elementId: 'tour-step-fanhub-nav', page: 'fanHub', title: 'Fan Hub', content: 'Build your fan community: customize your page, post to the feed, sell from your store, and message fans.', position: 'right' });
-        steps.push({ elementId: 'tour-step-fanhub-mypage', page: 'fanHub', title: 'My Page', content: 'Set your handle (echoflux.ai/you), theme, and landing content. Preview how fans see your page.', position: 'bottom' });
+        steps.push({ elementId: 'tour-step-fanhub-mypage', page: 'fanHub', title: 'My Page', content: 'Set your handle (witme.io/you), theme, and landing content. Preview how fans see your page.', position: 'bottom' });
     }
 
     steps.push({

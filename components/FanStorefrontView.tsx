@@ -584,7 +584,7 @@ function TipSection({
 }
 
 export const FanStorefrontView: React.FC = () => {
-  const { showToast, activePage, toast } = useAppContext();
+  const { showToast, activePage, toast, isDarkMode } = useAppContext();
   const pathname = usePathname();
   const [handle, setHandle] = useState<string | null>(() => parseHandleFromPath().handle);
   const [legalSubpage, setLegalSubpage] = useState<"terms" | "privacy" | null>(() => parseHandleFromPath().subpage);
@@ -2411,6 +2411,52 @@ export const FanStorefrontView: React.FC = () => {
     ? false
     : forceCreatorPreviewLanding || !isLoggedIn || (!requiresPaidToAccess && !hasMemberAreaAccess);
 
+  /**
+   * Member hub must not follow EchoFlux `html.dark` (UIContext). That class turns on `.dark .stormij-theme`
+   * overrides and Tailwind `dark:` utilities and produces a half-light/half-dark mix.
+   * UIProvider applies `dark` in a passive effect that runs after child effects, so we strip again via
+   * `setTimeout(0)` (and when `isDarkMode` changes) while `showLanding` is false.
+   */
+  const memberHtmlDarkSnapshotRef = useRef<boolean | null>(null);
+  useEffect(() => {
+    if (typeof document === "undefined") return undefined;
+    const root = document.documentElement;
+
+    if (showLanding) {
+      if (memberHtmlDarkSnapshotRef.current !== null) {
+        if (memberHtmlDarkSnapshotRef.current) root.classList.add("dark");
+        else root.classList.remove("dark");
+        memberHtmlDarkSnapshotRef.current = null;
+      }
+      return undefined;
+    }
+
+    if (memberHtmlDarkSnapshotRef.current === null) {
+      memberHtmlDarkSnapshotRef.current = root.classList.contains("dark");
+    }
+
+    return () => {
+      if (memberHtmlDarkSnapshotRef.current !== null) {
+        if (memberHtmlDarkSnapshotRef.current) root.classList.add("dark");
+        else root.classList.remove("dark");
+        memberHtmlDarkSnapshotRef.current = null;
+      }
+    };
+  }, [showLanding]);
+
+  useEffect(() => {
+    if (typeof document === "undefined" || showLanding) return undefined;
+    const root = document.documentElement;
+    const strip = () => {
+      root.classList.remove("dark");
+    };
+    strip();
+    const t = window.setTimeout(strip, 0);
+    return () => {
+      window.clearTimeout(t);
+    };
+  }, [showLanding, isDarkMode]);
+
   useEffect(() => {
     if (!needsPaidUpgrade || previewMember || isViewingOwnStorefront) return;
     if ((purchaseOnlyAccess || paidPageUnsubscribed) && !["tip", "purchases", "profile"].includes(activeTab)) {
@@ -2521,7 +2567,7 @@ export const FanStorefrontView: React.FC = () => {
     const loadingPrimary = creator?.theme?.primary || defaultPrimary;
     return (
       <>
-        <div className="stormij-theme storefront-landing-wrap min-h-screen flex items-center justify-center">
+        <div className="stormij-theme stormij-theme--light storefront-landing-wrap min-h-screen flex items-center justify-center">
           <div className="text-center" style={{ color: "var(--text-muted)" }}>
             <div
               className="animate-spin rounded-full h-10 w-10 border-2 border-t-transparent mx-auto mb-3"
@@ -2538,7 +2584,7 @@ export const FanStorefrontView: React.FC = () => {
   if (error || !creator) {
     return (
       <>
-        <div className="stormij-theme storefront-landing-wrap min-h-screen flex items-center justify-center">
+        <div className="stormij-theme stormij-theme--light storefront-landing-wrap min-h-screen flex items-center justify-center">
           <div className="text-center max-w-md px-4" style={{ color: "var(--text)" }}>
             <h1 className="text-xl font-semibold mb-2">Not found</h1>
             <p style={{ color: "var(--text-muted)" }}>{error || "This creator page doesn't exist."}</p>
@@ -2550,10 +2596,6 @@ export const FanStorefrontView: React.FC = () => {
   }
 
   const { theme, displayName, avatar, logo, bio, sections, sectionsOrder, rules, landingContent, monetization } = creator;
-  const communityNameRaw =
-    (creator?.landingContent?.perksTitle || "").trim() ||
-    (creator?.fanAuthBranding?.communityName || "").trim();
-  const communityName = communityNameRaw || displayName || "Member Access";
   const creatorAvatarRaw =
     (typeof avatar === "string" && avatar.trim() ? avatar.trim() : "") ||
     (typeof creator.avatarUrl === "string" && creator.avatarUrl.trim() ? creator.avatarUrl.trim() : "");
@@ -2857,7 +2899,7 @@ export const FanStorefrontView: React.FC = () => {
 
   return (
     <div
-      className="min-h-screen stormij-theme"
+      className="min-h-screen stormij-theme stormij-theme--light"
       style={{ 
         fontFamily: globalFont,
         backgroundColor: bg,
@@ -2893,26 +2935,15 @@ export const FanStorefrontView: React.FC = () => {
           onComplete={() => setMemberUsernameRequired(false)}
         />
       )}
-      {/* Member Header */}
+      {/* Member Header — witme wordmark only (no creator avatar / community subtitle) */}
       <header
         className="storefront-member-header storefront-member-header--leftnav"
+        data-witme-member-header="wordmark-only"
         style={{ backgroundColor: `${primary}14` }}
       >
         <div className="storefront-member-header-row flex items-center justify-between px-4 sm:px-6 py-3 gap-2 min-w-0 max-w-[1360px] mx-auto w-full">
-          <div className="storefront-header-left">
-            {creatorAvatar ? (
-              <img src={creatorAvatar} alt="" className="w-9 h-9 rounded-full object-cover flex-shrink-0" style={avatarCropStyle} />
-            ) : (
-              <div className="w-9 h-9 rounded-full flex items-center justify-center text-xs font-semibold text-white flex-shrink-0" style={{ background: primary }}>
-                {displayName?.charAt(0) || "?"}
-              </div>
-            )}
-            <div className="min-w-0">
-              <WitmeHeaderLogo color={primary} className="h-8 w-auto max-w-[170px]" />
-              <p className="truncate text-sm font-semibold" style={{ color: primary, letterSpacing: "0.01em" }}>
-                {communityName}
-              </p>
-            </div>
+          <div className="storefront-header-left storefront-header-left--witme-wordmark flex items-center min-h-0 min-w-0">
+            <WitmeHeaderLogo color={primary} className="h-8 w-auto max-w-[170px] shrink-0" />
           </div>
           <nav className="storefront-header-nav">
             {memberTabKeys.map((key) => {
