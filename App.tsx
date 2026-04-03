@@ -47,7 +47,12 @@ import { ErrorBoundary } from './components/ErrorBoundary';
 import { FanStorefrontView } from './components/FanStorefrontView';
 import { WitmeDiscoverPage, WitmeHomepage } from './components/WitmeHomepage';
 import { WitmePageManager } from './components/WitmePageManager';
-import { KNOWN_APP_ROUTES } from './constants';
+import {
+  KNOWN_APP_ROUTES,
+  ECHOFLUX_ELITE_MONTHLY_USD,
+  ECHOFLUX_PRO_MONTHLY_USD,
+  echofluxEffectiveMonthlyWhenAnnualUsd,
+} from './constants';
 import { isCustomDomainStorefrontPath } from './src/lib/storefrontCustomDomain';
 import { useOAuthReturnHandler } from './src/hooks/useOAuthReturnHandler';
 import { ResetPassword } from './components/ResetPassword';
@@ -626,8 +631,22 @@ const AppContent: React.FC = () => {
                     const cycle = (attempt?.billingCycle === 'annually' ? 'annually' : 'monthly') as 'monthly' | 'annually';
                     const planName = attempt.plan as Plan;
                     const planData = planName === 'Pro'
-                        ? { name: 'Pro', price: cycle === 'annually' ? 23 : 29, cycle }
-                        : { name: 'Elite', price: cycle === 'annually' ? 47 : 59, cycle };
+                        ? {
+                            name: 'Pro' as const,
+                            price:
+                              cycle === 'annually'
+                                ? echofluxEffectiveMonthlyWhenAnnualUsd(ECHOFLUX_PRO_MONTHLY_USD)
+                                : ECHOFLUX_PRO_MONTHLY_USD,
+                            cycle,
+                          }
+                        : {
+                            name: 'Elite' as const,
+                            price:
+                              cycle === 'annually'
+                                ? echofluxEffectiveMonthlyWhenAnnualUsd(ECHOFLUX_ELITE_MONTHLY_USD)
+                                : ECHOFLUX_ELITE_MONTHLY_USD,
+                            cycle,
+                          };
 
                     // Mark that we're prompting for this attempt
                     if (attemptTs) {
@@ -710,9 +729,9 @@ const AppContent: React.FC = () => {
                     setOnboardingStep('creator');
                 } else if (selectedPlan === 'Pro' || selectedPlan === 'Elite') {
                     // Paid plan - open payment modal instead of plan selector
-                    const planData = selectedPlan === 'Pro' 
-                        ? { name: 'Pro', price: 29, cycle: 'monthly' as const }
-                        : { name: 'Elite', price: 59, cycle: 'monthly' as const };
+                    const planData = selectedPlan === 'Pro'
+                        ? { name: 'Pro', price: ECHOFLUX_PRO_MONTHLY_USD, cycle: 'monthly' as const }
+                        : { name: 'Elite', price: ECHOFLUX_ELITE_MONTHLY_USD, cycle: 'monthly' as const };
                     openPaymentModal(planData);
                     setSelectedPlan(null); // Clear selected plan
                     // Don't set onboarding step yet - wait for payment to complete

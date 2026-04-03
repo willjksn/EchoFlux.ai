@@ -5,13 +5,13 @@ export const Terms: React.FC = () => {
         <div className="max-w-4xl mx-auto space-y-8">
             <div className="bg-white dark:bg-gray-800 p-8 rounded-xl shadow-md">
                 <h2 className="text-3xl font-bold text-gray-900 dark:text-white">Terms of Service</h2>
-                <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">Last updated: March 30, 2026</p>
+                <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">Last updated: April 3, 2026</p>
 
                 <div className="mt-6 prose prose-lg dark:prose-invert max-w-none text-gray-700 dark:text-gray-300">
                     <p>
-                        These Terms govern your use of EchoFlux.ai and witme.io, including creator tools, fan-facing creator pages,
-                        messaging, subscriptions, paid content, tips, sessions, and related checkout flows. By using the service,
-                        you agree to these Terms.
+                        These Terms govern your use of <strong>EchoFlux.ai</strong> (creator studio, dashboard, and configuration) and{' '}
+                        <strong>witme.io</strong> (public creator pages and fan checkout), including messaging, subscriptions, paid
+                        content, tips, sessions, and related flows. By using the service, you agree to these Terms.
                     </p>
 
                     <h3 className="text-xl font-bold text-gray-900 dark:text-white mt-8 mb-2">1. Eligibility</h3>
@@ -22,16 +22,17 @@ export const Terms: React.FC = () => {
 
                     <h3 className="text-xl font-bold text-gray-900 dark:text-white mt-8 mb-2">2. Platform Structure</h3>
                     <p>
-                        EchoFlux.ai is the creator operating platform. witme.io is the fan-facing destination where creator pages live.
-                        Creator pages may include memberships, paid posts, store items, direct messages, tips, and session offers.
+                        <strong>EchoFlux.ai</strong> is where creators sign in, build content, configure their page, and manage payouts.{' '}
+                        <strong>witme.io</strong> is the fan-facing site where each creator&apos;s public page lives (for example
+                        witme.io/handle). The same account system and Stripe-powered checkout may be used across both properties.
                     </p>
                     <ul className="list-disc pl-6 space-y-2 mt-2">
                         <li>
-                            <strong>Creator access:</strong> Creator accounts are tied to EchoFlux subscriptions. There is no separate
-                            creator application required through witme.io.
+                            <strong>Creator access:</strong> Creator accounts and paid studio plans are managed through EchoFlux.ai.
+                            There is no separate creator &quot;application&quot; on witme.io—witme.io hosts the pages fans visit.
                         </li>
                         <li>
-                            <strong>Fan access:</strong> Fans can browse creator pages and purchase whatever a creator enables on their page.
+                            <strong>Fan access:</strong> Fans browse witme.io creator pages and purchase whatever that creator enables.
                         </li>
                         <li>
                             <strong>Feature variability:</strong> Not every creator page has the same offerings.
@@ -53,6 +54,16 @@ export const Terms: React.FC = () => {
                         <li>
                             <strong>Refunds:</strong> Digital access is generally final unless required by law or otherwise stated at checkout.
                             For creator-page purchases, the creator controls the offer and delivery; platform-level rules and applicable law still apply.
+                        </li>
+                        <li>
+                            <strong>Fan account deletion:</strong> If you delete your fan/member account, access ends immediately and
+                            recurring memberships to creators are canceled so you are not charged again. That does not refund amounts
+                            already billed for the current period unless required by law or stated at checkout.
+                        </li>
+                        <li>
+                            <strong>Membership cancel (without deleting account):</strong> If you cancel a recurring membership to a
+                            creator, access typically continues until the end of the billing period you already paid for, unless
+                            checkout or the creator states otherwise.
                         </li>
                         <li>
                             <strong>Charge disputes:</strong> If you believe a charge is unauthorized, contact support promptly so we can review.
@@ -102,8 +113,8 @@ export const Terms: React.FC = () => {
 
                     <h3 className="text-xl font-bold text-gray-900 dark:text-white mt-8 mb-2">8. Intellectual Property</h3>
                     <p>
-                        EchoFlux software and branding are owned by EchoFlux. Creators and users keep ownership of their own submitted content,
-                        while granting the limited rights needed to operate the platform.
+                        EchoFlux / witme software, names, and branding are owned by their respective licensors. Creators and users keep
+                        ownership of their own submitted content, while granting the limited rights needed to operate the platform.
                     </p>
 
                     <h3 className="text-xl font-bold text-gray-900 dark:text-white mt-8 mb-2">9. Availability and Liability</h3>

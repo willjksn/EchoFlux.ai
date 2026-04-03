@@ -3,7 +3,7 @@
  * Body: { username: string, creatorId: string }
  * - Creates usernames/{lowercase} -> { uid }
  * - Sets users/{uid}.username (server only; clients cannot write this field)
- * - Denormalizes username onto all creators' fans subcollections for this fan
+ * - Denormalizes username onto existing creators/*/fans/{uid} docs (none yet if pre-checkout paid signup)
  */
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { FieldPath } from "firebase-admin/firestore";
@@ -56,11 +56,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const creatorSnap = await db.collection("creators").doc(creatorId).get();
   if (!creatorSnap.exists) {
     return res.status(404).json({ error: "Creator not found" });
-  }
-
-  const fanSnap = await db.collection("creators").doc(creatorId).collection("fans").doc(uid).get();
-  if (!fanSnap.exists) {
-    return res.status(403).json({ error: "Join this creator's page before choosing a username." });
   }
 
   const userRef = db.collection("users").doc(uid);

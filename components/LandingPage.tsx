@@ -36,7 +36,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onGetSta
   const inviteOnlyMode = isInviteOnlyMode();
   const legalTitle =
     legalModal === 'about'
-      ? 'About EchoFlux.ai'
+      ? 'About EchoFlux.ai & witme.io'
       : legalModal === 'terms'
         ? 'Terms of Service'
         : legalModal === 'privacy'
@@ -101,7 +101,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onGetSta
                   <div className="min-w-0 max-w-full overflow-hidden">
                     <div className="inline-flex items-center rounded-full bg-primary-50 px-3 py-1 text-xs font-medium text-primary-700 ring-1 ring-inset ring-primary-200 backdrop-blur dark:bg-white/10 dark:text-primary-100 dark:ring-white/20">
                       <span className="mr-1.5 h-1.5 w-1.5 rounded-full bg-emerald-500 dark:bg-emerald-400 animate-pulse" />
-                      All-in-one creator platform
+                      EchoFlux studio + witme.io fan pages
                     </div>
 
                     <h1 className="mt-6 text-4xl font-extrabold tracking-tight text-gray-900 dark:text-white sm:text-5xl lg:text-6xl max-w-full break-words">
@@ -112,8 +112,16 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onGetSta
                     </h1>
 
                     <p className="mt-6 max-w-xl text-lg text-gray-700 dark:text-primary-100 sm:text-xl max-w-full break-words">
-                      EchoFlux is the all-in-one platform for creators. Plan content with AI, build your Fan Hub storefront, 
-                      connect with your audience, and monetize your passion — all in one place.
+                      EchoFlux.ai is your creator studio—AI planning, vault, and payouts. Your public fan page lives on{' '}
+                      <a
+                        href="https://witme.io"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="font-semibold text-primary-700 underline-offset-2 hover:underline dark:text-primary-200"
+                      >
+                        witme.io
+                      </a>{' '}
+                      (e.g. witme.io/yourname), where fans subscribe, shop, tip, and message you.
                     </p>
 
                     <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center">
@@ -154,7 +162,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onGetSta
                       <div className="mt-6 rounded-xl border border-gray-200 bg-white p-4 text-gray-900 shadow-sm dark:border-white/20 dark:bg-white/5 dark:text-white">
                         <div className="text-base font-semibold">Start building today</div>
                         <div className="mt-2 text-sm text-gray-700 dark:text-primary-100/90">
-                          Sign up to create your Fan Hub, plan content, and start growing your audience.
+                          Sign up to launch your witme.io page from EchoFlux, plan content with AI, and grow your audience.
                         </div>
                       </div>
                     )}
@@ -269,11 +277,11 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onGetSta
                 Fan Hub
               </div>
               <h2 className="text-4xl font-extrabold text-gray-900 dark:text-white sm:text-5xl">
-                Your storefront. Your community.
+                Your witme link. Your community.
               </h2>
               <p className="mt-4 text-xl text-gray-600 dark:text-gray-300 max-w-3xl mx-auto">
-                Create a beautiful, customizable page where your fans can subscribe, tip, buy exclusive content, 
-                and connect with you directly.
+                Fans open your page on witme.io—you customize it, set pricing, and run memberships, tips, store, and DMs from
+                EchoFlux.
               </p>
             </div>
 
@@ -382,10 +390,10 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onGetSta
                 onClick={handleGetStarted}
                 className="inline-flex items-center justify-center rounded-lg bg-primary-600 px-8 py-4 text-lg font-semibold text-white shadow-lg hover:bg-primary-700 transition"
               >
-                Create your Fan Hub
+                Create your witme page
               </button>
               <p className="mt-3 text-sm text-gray-500 dark:text-gray-400">
-                Free to set up. Only pay when you start earning.
+                Fan-facing URL on witme.io. Free to set up; platform fees apply when you earn.
               </p>
             </div>
           </div>
@@ -396,7 +404,9 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onGetSta
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                 <div className="text-center mb-12">
                     <h2 className="text-3xl font-extrabold text-gray-900 dark:text-white">Built for Every Creator</h2>
-                    <p className="mt-4 text-xl text-gray-500 dark:text-gray-400">Whether you're just starting out or scaling your brand, EchoFlux has the tools you need.</p>
+                    <p className="mt-4 text-xl text-gray-500 dark:text-gray-400">
+                      Whether you are starting out or scaling, EchoFlux runs your business and witme.io is the link fans save.
+                    </p>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
                     <div className="bg-white dark:bg-gray-900 p-8 rounded-2xl shadow-lg border-t-4 border-blue-500 hover:-translate-y-1 transition-transform">
@@ -414,7 +424,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onGetSta
                         </div>
                         <h3 className="text-xl font-bold text-center text-gray-900 dark:text-white mb-4">Community Builders</h3>
                         <p className="text-gray-600 dark:text-gray-300 text-center">
-                            Create your Fan Hub storefront and build a loyal community. Connect with fans through messages, posts, and exclusive content.
+                            Share one witme.io URL in your bio. Fans join, subscribe, and shop there while you manage everything in EchoFlux.
                         </p>
                     </div>
                     <div className="bg-white dark:bg-gray-900 p-8 rounded-2xl shadow-lg border-t-4 border-green-500 hover:-translate-y-1 transition-transform">
@@ -454,8 +464,8 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onGetSta
                         <Feature icon={<ImageIcon />} title="My Vault">
                            Upload and organize your images, videos, and audio files. Reuse assets across your social posts and Fan Hub.
                         </Feature>
-                        <Feature icon={<HeartIcon />} title="Fan Hub Storefront">
-                           Your personalized page where fans subscribe, tip, buy products, and connect with you directly.
+                        <Feature icon={<HeartIcon />} title="witme.io fan page">
+                           Your public page at witme.io/yourhandle—subscriptions, tips, store, and DMs—configured from EchoFlux.
                         </Feature>
                         <Feature icon={<ChatIcon />} title="AI Assistant">
                            Get content ideas, brainstorm angles, and generate captions with a creator-focused AI assistant built into the app.
@@ -488,8 +498,10 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onGetSta
                     </div>
 
                     <div className="relative">
-                        <h3 className="text-2xl font-extrabold text-gray-900 dark:text-white tracking-tight sm:text-3xl">2. Build Your Fan Hub</h3>
-                        <p className="mt-3 text-lg text-gray-500 dark:text-gray-400">Customize your storefront with your branding. Set up subscriptions, products, and tip options. Your page goes live instantly.</p>
+                        <h3 className="text-2xl font-extrabold text-gray-900 dark:text-white tracking-tight sm:text-3xl">2. Launch on witme.io</h3>
+                        <p className="mt-3 text-lg text-gray-500 dark:text-gray-400">
+                          Pick your handle, theme, and offers in EchoFlux. Fans use your witme.io link to subscribe, shop, and message you.
+                        </p>
                     </div>
 
                      <div className="mt-10 -mx-4 relative lg:mt-0" aria-hidden="true">
@@ -497,8 +509,10 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onGetSta
                     </div>
 
                     <div className="relative">
-                        <h3 className="text-2xl font-extrabold text-gray-900 dark:text-white tracking-tight sm:text-3xl">3. Grow & Monetize</h3>
-                        <p className="mt-3 text-lg text-gray-500 dark:text-gray-400">Use AI tools to plan content, post to social platforms, and drive fans to your Fan Hub. Watch your community and revenue grow.</p>
+                        <h3 className="text-2xl font-extrabold text-gray-900 dark:text-white tracking-tight sm:text-3xl">3. Grow & monetize</h3>
+                        <p className="mt-3 text-lg text-gray-500 dark:text-gray-400">
+                          Plan content with AI, post everywhere, and send traffic to your witme.io page. Stripe handles payouts and renewals.
+                        </p>
                     </div>
                 </div>
             </div>
@@ -518,7 +532,18 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onGetSta
                         <LogoIcon />
                         <span className="ml-2 text-xl font-bold" style={{ color: '#2563eb' }}>EchoFlux.ai</span>
                      </button>
-                    <p className="text-gray-500 dark:text-gray-400 text-base">The all-in-one creator platform. AI content tools + Fan Hub storefront.</p>
+                    <p className="text-gray-500 dark:text-gray-400 text-base">
+                      Creator studio at EchoFlux.ai. Fan-facing pages on{' '}
+                      <a
+                        href="https://witme.io"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-primary-600 hover:underline dark:text-primary-400"
+                      >
+                        witme.io
+                      </a>
+                      .
+                    </p>
                     <div className="flex space-x-6">
                         <a href="https://x.com/echoflux_ai" target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-gray-500 dark:hover:text-gray-300 transition-colors" aria-label="Follow us on X">
                             <span className="sr-only">X</span>
@@ -566,7 +591,9 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onGetSta
                 </div>
             </div>
             <div className="mt-12 border-t border-gray-200 dark:border-gray-700 pt-8 md:flex md:items-center md:justify-between">
-                <p className="text-base text-gray-400 md:order-1">&copy; 2026 EchoFlux.ai. All rights reserved.</p>
+                <p className="text-base text-gray-400 md:order-1">
+                  &copy; 2026 EchoFlux.ai &amp; witme.io. All rights reserved.
+                </p>
                 <div className="mt-8 md:mt-0 md:order-2 flex space-x-6">
                     <a href="/terms-of-service.html" className="text-base text-gray-400 hover:text-gray-500 dark:hover:text-gray-300">Terms</a>
                     <a href="/privacy-policy.html" className="text-base text-gray-400 hover:text-gray-500 dark:hover:text-gray-300">Privacy</a>

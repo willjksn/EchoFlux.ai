@@ -101,7 +101,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (u.length >= 3 && /^[a-z0-9_]+$/.test(u)) {
       memberUsername = u;
     }
-    if (subscribed && !memberUsername) {
+    // Same gate for free and paid: any signed-in fan on this storefront must pick @handle (claim API allows pre-membership).
+    if (!memberUsername) {
       memberUsernameRequired = true;
     }
 

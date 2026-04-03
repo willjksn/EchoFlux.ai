@@ -5,7 +5,9 @@ import { storage } from "../firebaseConfig";
 import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
 import {
   EmailAuthProvider,
+  GoogleAuthProvider,
   reauthenticateWithCredential,
+  reauthenticateWithPopup,
   sendPasswordResetEmail,
   updatePassword,
   updateProfile,
@@ -101,6 +103,45 @@ function isEchoFluxDefaultFanBio(bio: string): boolean {
     s === "welcome to engagesuite!" ||
     s === "welcome to engagesuite"
   );
+}
+
+/** Parse `users/{uid}` for fan member profile tab (Firestore + Auth fallbacks). */
+function parseFanMemberProfileFromUserDoc(
+  d: Record<string, unknown>,
+  authDisplayName: string | null | undefined,
+  authPhotoURL: string | null | undefined
+): {
+  firstName: string;
+  lastName: string;
+  bio: string;
+  photoURL: string;
+  username: string;
+} {
+  const displayNameRaw =
+    (typeof d.displayName === "string" && d.displayName.trim()) ||
+    authDisplayName ||
+    "";
+  const firstName =
+    (typeof d.firstName === "string" && d.firstName.trim()) ||
+    (displayNameRaw ? displayNameRaw.split(/\s+/)[0] : "");
+  const lastName =
+    (typeof d.lastName === "string" && d.lastName.trim()) ||
+    (displayNameRaw.includes(" ") ? displayNameRaw.split(/\s+/).slice(1).join(" ") : "");
+  const bioRaw =
+    (typeof d.bio === "string" && d.bio.trim()) ||
+    (typeof d.memberBio === "string" && d.memberBio.trim()) ||
+    "";
+  const bio = isEchoFluxDefaultFanBio(bioRaw) ? "" : bioRaw;
+  const photoURL =
+    (typeof d.photoURL === "string" && d.photoURL.trim()) ||
+    (typeof d.avatar === "string" && d.avatar.trim()) ||
+    authPhotoURL ||
+    "";
+  const username =
+    (typeof d.username === "string" && d.username.trim())
+      ? normalizeMemberUsername(d.username)
+      : "";
+  return { firstName, lastName, bio, photoURL, username };
 }
 
 export type StorefrontCreator = {
@@ -676,10 +717,35 @@ export const FanStorefrontView: React.FC = () => {
   const [usernameState, setUsernameState] = useState<"idle" | "checking" | "available" | "taken" | "current" | "invalid">("idle");
   const [usernameMsg, setUsernameMsg] = useState("");
   const [avatarUploading, setAvatarUploading] = useState(false);
+  /** When URL is set but the image fails in prod (expired token, 403, etc.), show initials until URL changes. */
+  const [memberProfilePhotoLoadFailed, setMemberProfilePhotoLoadFailed] = useState(false);
   const [passwordCurrent, setPasswordCurrent] = useState("");
   const [passwordNext, setPasswordNext] = useState("");
   const [passwordConfirm, setPasswordConfirm] = useState("");
   const [passwordSaving, setPasswordSaving] = useState(false);
+  const [fanDeleteModalOpen, setFanDeleteModalOpen] = useState(false);
+  const [fanDeleteConfirmInput, setFanDeleteConfirmInput] = useState("");
+  const [fanDeletePassword, setFanDeletePassword] = useState("");
+  const [fanDeleteAccountLoading, setFanDeleteAccountLoading] = useState(false);
+
+  const isProfileDirty =
+    profileDraft.firstName.trim() !== profileInitial.firstName.trim() ||
+    profileDraft.lastName.trim() !== profileInitial.lastName.trim() ||
+    profileDraft.bio.trim() !== profileInitial.bio.trim() ||
+    (profileDraft.photoURL || "") !== (profileInitial.photoURL || "") ||
+    normalizeMemberUsername(usernameDraft || "") !== normalizeMemberUsername(usernameInitial || "");
+
+  const profileUserDocSyncRef = useRef({
+    isDirty: false,
+    usernameDraft: "",
+    usernameInitial: "",
+  });
+  profileUserDocSyncRef.current = {
+    isDirty: isProfileDirty,
+    usernameDraft,
+    usernameInitial,
+  };
+
   const autoSubscribeRedirectingRef = useRef(false);
   const [sessionAlerts, setSessionAlerts] = useState<HeaderSessionAlert[]>([]);
   const sessionAlertIdsRef = useRef<Set<string> | null>(null);
@@ -1951,74 +2017,86 @@ export const FanStorefrontView: React.FC = () => {
 
   useEffect(() => {
     if (activeTab !== "profile" || !auth.currentUser?.uid) return;
+    const uid = auth.currentUser.uid;
     let cancelled = false;
-    (async () => {
-      try {
-        const snap = await getDoc(doc(db, "users", auth.currentUser!.uid));
+    const userRef = doc(db, "users", uid);
+    const applyFallbackFromAuth = () => {
+      const dn = auth.currentUser?.displayName || "";
+      setProfileDraft({
+        firstName: dn ? dn.split(/\s+/)[0] : "",
+        lastName: dn.includes(" ") ? dn.split(/\s+/).slice(1).join(" ") : "",
+        bio: "",
+        photoURL: auth.currentUser?.photoURL || "",
+      });
+      setProfileInitial({
+        firstName: dn ? dn.split(/\s+/)[0] : "",
+        lastName: dn.includes(" ") ? dn.split(/\s+/).slice(1).join(" ") : "",
+        bio: "",
+        photoURL: auth.currentUser?.photoURL || "",
+      });
+      setUsernameDraft("");
+      setUsernameInitial("");
+      setUsernameState("idle");
+      setUsernameMsg("");
+    };
+    const unsub = onSnapshot(
+      userRef,
+      (snap) => {
+        if (cancelled) return;
         const d = (snap.data() || {}) as Record<string, unknown>;
-        const displayNameRaw =
-          (typeof d.displayName === "string" && d.displayName.trim()) ||
-          auth.currentUser?.displayName ||
-          "";
-        const firstName =
-          (typeof d.firstName === "string" && d.firstName.trim()) ||
-          (displayNameRaw ? displayNameRaw.split(/\s+/)[0] : "");
-        const lastName =
-          (typeof d.lastName === "string" && d.lastName.trim()) ||
-          (displayNameRaw.includes(" ") ? displayNameRaw.split(/\s+/).slice(1).join(" ") : "");
-        const bioRaw =
-          (typeof d.bio === "string" && d.bio.trim()) ||
-          (typeof d.memberBio === "string" && d.memberBio.trim()) ||
-          "";
-        const bio = isEchoFluxDefaultFanBio(bioRaw) ? "" : bioRaw;
-        const photoURL =
-          (typeof d.photoURL === "string" && d.photoURL.trim()) ||
-          (typeof d.avatar === "string" && d.avatar.trim()) ||
-          auth.currentUser?.photoURL ||
-          "";
-        const username =
-          (typeof d.username === "string" && d.username.trim())
-            ? normalizeMemberUsername(d.username)
-            : "";
-        if (!cancelled) {
-          setProfileDraft({ firstName, lastName, bio, photoURL });
-          setProfileInitial({ firstName, lastName, bio, photoURL });
-          setUsernameDraft(username);
-          setUsernameInitial(username);
-          if (username) {
+        const parsed = parseFanMemberProfileFromUserDoc(
+          d,
+          auth.currentUser?.displayName,
+          auth.currentUser?.photoURL
+        );
+        const { isDirty, usernameDraft: ud, usernameInitial: ui } = profileUserDocSyncRef.current;
+        if (!isDirty) {
+          setProfileDraft({
+            firstName: parsed.firstName,
+            lastName: parsed.lastName,
+            bio: parsed.bio,
+            photoURL: parsed.photoURL,
+          });
+          setProfileInitial({
+            firstName: parsed.firstName,
+            lastName: parsed.lastName,
+            bio: parsed.bio,
+            photoURL: parsed.photoURL,
+          });
+          setUsernameDraft(parsed.username);
+          setUsernameInitial(parsed.username);
+          if (parsed.username) {
             setUsernameState("current");
             setUsernameMsg("Your current username.");
           } else {
             setUsernameState("idle");
             setUsernameMsg("");
           }
+          return;
         }
-      } catch {
-        if (!cancelled) {
-          const dn = auth.currentUser?.displayName || "";
-          setProfileDraft({
-            firstName: dn ? dn.split(/\s+/)[0] : "",
-            lastName: dn.includes(" ") ? dn.split(/\s+/).slice(1).join(" ") : "",
-            bio: "",
-            photoURL: auth.currentUser?.photoURL || "",
-          });
-          setProfileInitial({
-            firstName: dn ? dn.split(/\s+/)[0] : "",
-            lastName: dn.includes(" ") ? dn.split(/\s+/).slice(1).join(" ") : "",
-            bio: "",
-            photoURL: auth.currentUser?.photoURL || "",
-          });
-          setUsernameDraft("");
-          setUsernameInitial("");
-          setUsernameState("idle");
-          setUsernameMsg("");
+        const normServer = parsed.username;
+        const normDraft = normalizeMemberUsername(ud || "");
+        const normInit = normalizeMemberUsername(ui || "");
+        if (normDraft === normInit && normServer && normServer !== normInit) {
+          setUsernameDraft(normServer);
+          setUsernameInitial(normServer);
+          setUsernameState("current");
+          setUsernameMsg("Your current username.");
         }
+      },
+      () => {
+        if (!cancelled) applyFallbackFromAuth();
       }
-    })();
+    );
     return () => {
       cancelled = true;
+      unsub();
     };
-  }, [activeTab, isLoggedIn]);
+  }, [activeTab, isLoggedIn, auth.currentUser?.uid]);
+
+  useEffect(() => {
+    setMemberProfilePhotoLoadFailed(false);
+  }, [profileDraft.photoURL]);
 
   useEffect(() => {
     if (activeTab !== "profile" || !auth.currentUser) return;
@@ -2086,13 +2164,6 @@ export const FanStorefrontView: React.FC = () => {
       window.clearTimeout(t);
     };
   }, [activeTab, usernameDraft, usernameInitial]);
-
-  const isProfileDirty =
-    profileDraft.firstName.trim() !== profileInitial.firstName.trim() ||
-    profileDraft.lastName.trim() !== profileInitial.lastName.trim() ||
-    profileDraft.bio.trim() !== profileInitial.bio.trim() ||
-    (profileDraft.photoURL || "") !== (profileInitial.photoURL || "") ||
-    normalizeMemberUsername(usernameDraft || "") !== normalizeMemberUsername(usernameInitial || "");
 
   const handleProfileSave = useCallback(async () => {
     if (!auth.currentUser?.uid) return;
@@ -2172,14 +2243,7 @@ export const FanStorefrontView: React.FC = () => {
         await uploadBytes(storageRef, file, { contentType: file.type || "image/jpeg" });
         const url = await getDownloadURL(storageRef);
         setProfileDraft((prev) => ({ ...prev, photoURL: url }));
-        setProfileInitial((prev) => ({ ...prev, photoURL: url }));
-        await setDoc(
-          doc(db, "users", auth.currentUser.uid),
-          { photoURL: url, avatar: url, updatedAt: new Date().toISOString() },
-          { merge: true }
-        );
-        await updateProfile(auth.currentUser, { photoURL: url });
-        showToast("Avatar updated.", "success");
+        showToast("Photo added. Click Save changes to apply.", "success");
       } catch (e) {
         showToast(e instanceof Error ? e.message : "Could not upload avatar.", "error");
       } finally {
@@ -2232,6 +2296,79 @@ export const FanStorefrontView: React.FC = () => {
       setPasswordSaving(false);
     }
   }, [passwordCurrent, passwordNext, passwordConfirm, showToast]);
+
+  const closeFanDeleteModal = useCallback(() => {
+    setFanDeleteModalOpen(false);
+    setFanDeleteConfirmInput("");
+    setFanDeletePassword("");
+  }, []);
+
+  const handleFanDeleteAccount = useCallback(async () => {
+    const u = auth.currentUser;
+    if (!u) {
+      showToast("Sign in to delete your account.", "error");
+      return;
+    }
+    if (fanDeleteConfirmInput.trim().toUpperCase() !== "DELETE") {
+      showToast('Type DELETE to confirm.', "error");
+      return;
+    }
+    const providerId = u.providerData[0]?.providerId || "";
+    try {
+      if (providerId === "password") {
+        const pw = fanDeletePassword.trim();
+        if (!pw) {
+          showToast("Enter your current password to confirm.", "error");
+          return;
+        }
+        const email = u.email;
+        if (!email) {
+          showToast("No email on this account.", "error");
+          return;
+        }
+        await reauthenticateWithCredential(u, EmailAuthProvider.credential(email, pw));
+      } else if (providerId === "google.com") {
+        await reauthenticateWithPopup(u, new GoogleAuthProvider());
+      } else {
+        showToast(
+          "This sign-in method can’t be confirmed on this page. Contact support to delete your account.",
+          "error"
+        );
+        return;
+      }
+
+      setFanDeleteAccountLoading(true);
+      const token = await u.getIdToken(true);
+      const res = await fetch("/api/deleteMyAccount", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error((data as { error?: string }).error || "Could not delete account.");
+      }
+      showToast("Your account was deleted.", "success");
+      closeFanDeleteModal();
+      try {
+        await auth.signOut();
+      } catch {
+        /* ignore */
+      }
+      const h = creator?.handle?.trim();
+      window.location.href = h ? `/${h}` : "/";
+    } catch (e: unknown) {
+      const code = (e as { code?: string })?.code;
+      if (code === "auth/wrong-password" || code === "auth/invalid-credential") {
+        showToast("Incorrect password. Try again.", "error");
+      } else if (code === "auth/popup-closed-by-user") {
+        showToast("Sign-in was cancelled.", "info");
+      } else {
+        showToast(e instanceof Error ? e.message : "Could not delete account.", "error");
+      }
+    } finally {
+      setFanDeleteAccountLoading(false);
+    }
+  }, [creator?.handle, fanDeleteConfirmInput, fanDeletePassword, showToast, closeFanDeleteModal]);
 
   const fetchDmThreadAndMessages = useCallback(async () => {
     if (!creator?.creatorId || !auth.currentUser || activeTab !== "messages") return;
@@ -2590,6 +2727,28 @@ export const FanStorefrontView: React.FC = () => {
     if (fromForm) return fromForm;
     return auth.currentUser?.displayName?.trim() || "Member";
   }, [profileDraft.firstName, profileDraft.lastName, auth.currentUser?.displayName]);
+
+  /** Initials for member profile avatar when no photo (uses draft names, then Auth display name / email). */
+  const memberProfileAvatarInitials = useMemo(() => {
+    const f = profileDraft.firstName.trim();
+    const l = profileDraft.lastName.trim();
+    if (f && l) return `${f.charAt(0)}${l.charAt(0)}`.toUpperCase();
+    if (f) return f.charAt(0).toUpperCase();
+    if (l) return l.charAt(0).toUpperCase();
+    const dn = auth.currentUser?.displayName?.trim();
+    if (dn) {
+      const parts = dn.split(/\s+/).filter(Boolean);
+      if (parts.length >= 2) {
+        return `${parts[0].charAt(0)}${parts[parts.length - 1].charAt(0)}`.toUpperCase();
+      }
+      return dn.charAt(0).toUpperCase();
+    }
+    const em = auth.currentUser?.email?.trim();
+    return (em?.charAt(0) || "U").toUpperCase();
+  }, [profileDraft.firstName, profileDraft.lastName, auth.currentUser?.displayName, auth.currentUser?.email]);
+
+  const memberProfilePhotoSrc = (profileDraft.photoURL || "").trim();
+  const showMemberProfilePhotoImg = Boolean(memberProfilePhotoSrc) && !memberProfilePhotoLoadFailed;
 
   const profileMemberAtHandle = useMemo(() => {
     const u = normalizeMemberUsername(usernameInitial || usernameDraft || "");
@@ -3004,7 +3163,7 @@ export const FanStorefrontView: React.FC = () => {
           }
         }}
       />
-      {memberUsernameRequired && creator && !previewMember && hasMemberAreaAccess && (
+      {memberUsernameRequired && creator && !previewMember && isLoggedIn && !isViewingOwnStorefront && (
         <MemberUsernameGateModal
           creatorId={creator.creatorId}
           creatorDisplayName={displayName}
@@ -3016,6 +3175,98 @@ export const FanStorefrontView: React.FC = () => {
           }}
         />
       )}
+      {fanDeleteModalOpen && creator ? (
+        <div
+          className="fixed inset-0 z-[110] flex items-center justify-center p-4"
+          style={{ backgroundColor: "rgba(0,0,0,0.55)" }}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="fan-delete-account-title"
+        >
+          <div
+            className="w-full max-w-md rounded-2xl p-6 shadow-xl"
+            style={{ backgroundColor: "#fff", color: theme?.text || "#1f2937" }}
+          >
+            <h2 id="fan-delete-account-title" className="text-lg font-bold mb-2">
+              Delete your account?
+            </h2>
+            <p className="text-sm mb-3 opacity-90">
+              You will lose this login everywhere on this platform (member access, purchases, messages). Type{" "}
+              <strong>DELETE</strong> to confirm.
+            </p>
+            <label className="block text-xs font-medium mb-1" htmlFor="fan-delete-confirm">
+              Confirmation
+            </label>
+            <input
+              id="fan-delete-confirm"
+              className="w-full px-3 py-2 rounded-lg border text-sm mb-3"
+              style={{
+                borderColor: "color-mix(in srgb, #b91c1c 35%, transparent)",
+                backgroundColor: "white",
+                color: "var(--fan-text, #1f2937)",
+              }}
+              value={fanDeleteConfirmInput}
+              onChange={(e) => setFanDeleteConfirmInput(e.target.value)}
+              placeholder="DELETE"
+              autoComplete="off"
+            />
+            {auth.currentUser?.providerData[0]?.providerId === "password" ? (
+              <>
+                <label className="block text-xs font-medium mb-1" htmlFor="fan-delete-password">
+                  Current password
+                </label>
+                <input
+                  id="fan-delete-password"
+                  type="password"
+                  className="w-full px-3 py-2 rounded-lg border text-sm mb-3"
+                  style={{
+                    borderColor: "color-mix(in srgb, var(--fan-primary, #6366f1) 18%, transparent)",
+                    backgroundColor: "white",
+                    color: "var(--fan-text, #1f2937)",
+                  }}
+                  value={fanDeletePassword}
+                  onChange={(e) => setFanDeletePassword(e.target.value)}
+                  placeholder="Your password"
+                  autoComplete="current-password"
+                />
+              </>
+            ) : auth.currentUser?.providerData[0]?.providerId === "google.com" ? (
+              <p className="text-xs opacity-80 mb-3">You will be asked to sign in with Google to confirm.</p>
+            ) : (
+              <p className="text-xs text-amber-800 mb-3">
+                This account uses a sign-in method we can’t verify here. Contact support to delete it.
+              </p>
+            )}
+            <div className="flex flex-wrap gap-2 justify-end">
+              <button
+                type="button"
+                className="px-4 py-2 rounded-lg text-sm font-medium border"
+                style={{ borderColor: `${primary}66`, color: primary }}
+                disabled={fanDeleteAccountLoading}
+                onClick={closeFanDeleteModal}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="px-4 py-2 rounded-lg text-sm font-semibold text-white disabled:opacity-50"
+                style={{ backgroundColor: "#b91c1c" }}
+                disabled={
+                  fanDeleteAccountLoading ||
+                  fanDeleteConfirmInput.trim().toUpperCase() !== "DELETE" ||
+                  (auth.currentUser?.providerData[0]?.providerId !== "password" &&
+                    auth.currentUser?.providerData[0]?.providerId !== "google.com")
+                }
+                onClick={() => {
+                  void handleFanDeleteAccount();
+                }}
+              >
+                {fanDeleteAccountLoading ? "Deleting…" : "Delete forever"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
       {/* Member Header — witme wordmark only (no creator avatar / community subtitle) */}
       <header
         className="storefront-member-header storefront-member-header--leftnav"
@@ -3627,32 +3878,54 @@ export const FanStorefrontView: React.FC = () => {
                       }}
                     />
                     <div className="flex items-center gap-3">
-                      <button
-                        type="button"
-                        className="relative shrink-0 rounded-full border-0 p-0 cursor-pointer bg-transparent focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--fan-primary,#6366f1)] focus-visible:ring-offset-2 disabled:opacity-60"
-                        disabled={avatarUploading}
-                        onClick={() => profileAvatarInputRef.current?.click()}
-                        aria-label={profileDraft.photoURL ? "Change profile photo" : "Upload profile photo"}
-                      >
-                        {profileDraft.photoURL ? (
-                          <img
-                            src={profileDraft.photoURL}
-                            alt=""
-                            className="w-20 h-20 rounded-full object-cover border-2 border-white shadow-sm"
-                            style={avatarCropStyle}
-                          />
-                        ) : (
-                          <span className="storefront-profile-menu-avatar storefront-profile-menu-avatar-fallback w-20 h-20 text-xl inline-flex items-center justify-center">
-                            {memberAvatarInitial}
-                          </span>
-                        )}
-                        <span
-                          className="absolute bottom-0 right-0 text-[10px] font-medium px-1.5 py-0.5 rounded-md shadow-sm"
-                          style={{ backgroundColor: `${primary}f2`, color: "#fff" }}
+                      <div className="relative shrink-0">
+                        <button
+                          type="button"
+                          className="relative rounded-full border-0 p-0 cursor-pointer bg-transparent focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--fan-primary,#6366f1)] focus-visible:ring-offset-2 disabled:opacity-60"
+                          disabled={avatarUploading}
+                          onClick={() => profileAvatarInputRef.current?.click()}
+                          aria-label={
+                            showMemberProfilePhotoImg || memberProfilePhotoSrc
+                              ? "Change profile photo"
+                              : "Upload profile photo"
+                          }
                         >
-                          {avatarUploading ? "…" : "Photo"}
-                        </span>
-                      </button>
+                          {showMemberProfilePhotoImg ? (
+                            <img
+                              src={memberProfilePhotoSrc}
+                              alt=""
+                              className="w-20 h-20 rounded-full object-cover border-2 border-white shadow-sm"
+                              style={{ objectFit: "cover", objectPosition: "center" }}
+                              onError={() => setMemberProfilePhotoLoadFailed(true)}
+                            />
+                          ) : (
+                            <span className="storefront-profile-menu-avatar storefront-profile-menu-avatar-fallback w-20 h-20 text-xl inline-flex items-center justify-center">
+                              {memberProfileAvatarInitials}
+                            </span>
+                          )}
+                          <span
+                            className="absolute bottom-0 right-0 text-[10px] font-medium px-1.5 py-0.5 rounded-md shadow-sm"
+                            style={{ backgroundColor: `${primary}f2`, color: "#fff" }}
+                          >
+                            {avatarUploading ? "…" : "Photo"}
+                          </span>
+                        </button>
+                        {memberProfilePhotoSrc ? (
+                          <button
+                            type="button"
+                            className="absolute -top-0.5 -right-0.5 z-10 flex h-6 min-w-[1.5rem] items-center justify-center rounded-full border-2 border-white bg-red-600 px-1 text-[11px] font-bold leading-none text-white shadow-sm hover:bg-red-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-400 focus-visible:ring-offset-1 disabled:opacity-50"
+                            disabled={avatarUploading}
+                            aria-label="Remove profile photo"
+                            title="Remove photo"
+                            onClick={() => {
+                              setMemberProfilePhotoLoadFailed(false);
+                              setProfileDraft((p) => ({ ...p, photoURL: "" }));
+                            }}
+                          >
+                            ×
+                          </button>
+                        ) : null}
+                      </div>
                       <div>
                         <p className="fan-profile-name m-0">{profileDisplayName}</p>
                         <p className="fan-member-about-text m-0 text-sm">
@@ -3910,6 +4183,38 @@ export const FanStorefrontView: React.FC = () => {
                     </div>
                   </div>
                 </div>
+                {!previewMember && !isViewingOwnStorefront ? (
+                  <div className="fan-member-about-section">
+                    <h3 className="fan-member-about-heading">Account</h3>
+                    <div
+                      className="fan-profile-panel"
+                      style={{
+                        borderColor: "color-mix(in srgb, #b91c1c 28%, transparent)",
+                        backgroundColor: "color-mix(in srgb, #b91c1c 06%, white)",
+                      }}
+                    >
+                      <p className="fan-member-about-text m-0 text-sm" style={{ color: "var(--fan-text, #1f2937)" }}>
+                        Permanently delete your member account, @username, memberships on creator pages, purchase
+                        unlocks, and DMs tied to this login. Active paid subscriptions are ended in Stripe so you are
+                        not charged again; this does not refund your current billing period. This cannot be undone.
+                      </p>
+                      <div className="mt-3">
+                        <button
+                          type="button"
+                          className="px-4 py-2 rounded-lg text-sm font-semibold text-white border-0 disabled:opacity-50"
+                          style={{ backgroundColor: "#b91c1c" }}
+                          onClick={() => {
+                            setFanDeleteConfirmInput("");
+                            setFanDeletePassword("");
+                            setFanDeleteModalOpen(true);
+                          }}
+                        >
+                          Delete my account
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ) : null}
                 <div className="fan-member-about-section">
                   <div className="flex items-center justify-between gap-3">
                     <h3 className="fan-member-about-heading m-0">IT support threads</h3>

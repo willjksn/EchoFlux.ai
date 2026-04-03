@@ -1,6 +1,7 @@
 import React from 'react';
 import { SparklesIcon } from './icons/UIIcons';
 import { useAppContext } from './AppContext';
+import { ECHOFLUX_ELITE_MONTHLY_USD } from '../constants';
 
 const ELITE_HIGHLIGHTS = [
   'Drops & PPV Planner (plan + price + publish)',
@@ -16,7 +17,7 @@ export const PremiumStudioUpgrade: React.FC = () => {
   const { setActivePage, openPaymentModal } = useAppContext();
 
   const handleUpgradeToElite = () => {
-    openPaymentModal({ name: 'Elite', price: 79, cycle: 'monthly' });
+    openPaymentModal({ name: 'Elite', price: ECHOFLUX_ELITE_MONTHLY_USD, cycle: 'monthly' });
   };
 
   const handleSeeWhatIncluded = () => {

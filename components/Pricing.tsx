@@ -2,6 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { CheckIcon } from './icons/UIIcons';
 import { useAppContext } from './AppContext';
 import { Page, Plan } from '../types';
+import {
+  ECHOFLUX_ELITE_MONTHLY_USD,
+  ECHOFLUX_PRO_MONTHLY_USD,
+  echofluxAnnualTotalUsd,
+  echofluxEffectiveMonthlyWhenAnnualUsd,
+} from '../constants';
 
 interface PricingProps {
     onGetStartedClick?: () => void;
@@ -25,15 +31,15 @@ const allCreatorTiers = [
     },
     {
         name: 'Pro',
-        priceMonthly: 19,
-        priceAnnually: 15,
-        description: 'Everything you need to create content and monetize with Fan Hub.',
+        priceMonthly: ECHOFLUX_PRO_MONTHLY_USD,
+        priceAnnually: echofluxEffectiveMonthlyWhenAnnualUsd(ECHOFLUX_PRO_MONTHLY_USD),
+        description: 'Everything you need to create content and monetize—with your public page on witme.io.',
         features: [
             'AI captions (fair use)',
             'Content strategy & trends',
             'Content calendar with reminders',
             'My Vault (5 GB storage)',
-            'Fan Hub storefront',
+            'Fan Hub + witme.io page (witme.io/yourhandle)',
             'Subscriptions, tips, and store',
             'Fan messages',
             '100 video chat minutes/month',
@@ -45,8 +51,8 @@ const allCreatorTiers = [
     },
     {
         name: 'Elite',
-        priceMonthly: 39,
-        priceAnnually: 31,
+        priceMonthly: ECHOFLUX_ELITE_MONTHLY_USD,
+        priceAnnually: echofluxEffectiveMonthlyWhenAnnualUsd(ECHOFLUX_ELITE_MONTHLY_USD),
         description: 'For serious creators who want advanced tools and more video time.',
         features: [
             'Everything in Pro',
@@ -190,7 +196,8 @@ export const Pricing: React.FC<PricingProps> = ({ onGetStartedClick, onNavigateR
                         Simple, Transparent Pricing
                     </h2>
                     <p className="mt-4 text-lg text-gray-500 dark:text-gray-400">
-                        Start with a 7-day free trial. No charge until the trial ends. Cancel anytime.
+                        Start with a 7-day free trial on Pro or Elite. Your fan-facing link is on witme.io; billing is through EchoFlux.
+                        No charge until the trial ends. Cancel anytime.
                     </p>
                 </div>
 
@@ -213,7 +220,12 @@ export const Pricing: React.FC<PricingProps> = ({ onGetStartedClick, onNavigateR
                     {pricingTiers.map((tier) => {
                         const isCurrentPlan = currentPlan === tier.name;
                         const price = billingCycle === 'monthly' ? tier.priceMonthly : tier.priceAnnually;
-                        const annualTotal = billingCycle === 'annually' ? (tier.priceAnnually * 12) : null;
+                        const annualTotal =
+                          billingCycle === 'annually' && tier.priceMonthly > 0
+                            ? echofluxAnnualTotalUsd(tier.priceMonthly)
+                            : null;
+                        const priceLabel =
+                          price % 1 === 0 ? String(price) : price.toFixed(2);
                         
                         const handleButtonClick = () => {
                             if (isCurrentPlan) return;
@@ -247,12 +259,12 @@ export const Pricing: React.FC<PricingProps> = ({ onGetStartedClick, onNavigateR
                                 </div>
                                 <div className="mt-4">
                                     <>
-                                        <span className="text-4xl font-extrabold text-gray-900 dark:text-white">${price}</span>
+                                        <span className="text-4xl font-extrabold text-gray-900 dark:text-white">${priceLabel}</span>
                                         <span className="text-base font-medium text-gray-500 dark:text-gray-400">/{billingCycle === 'monthly' ? 'mo' : 'mo'}</span>
                                     </>
-                                    {billingCycle === 'annually' && tier.priceAnnually > 0 && (
+                                    {billingCycle === 'annually' && annualTotal != null && (
                                       <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                                        Billed annually (${annualTotal?.toFixed(0)}/year)
+                                        Billed annually (${annualTotal.toFixed(2)}/year)
                                       </div>
                                     )}
                                 </div>

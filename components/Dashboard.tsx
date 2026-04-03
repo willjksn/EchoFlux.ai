@@ -12,7 +12,7 @@ import { LiveVideoChatManager } from './LiveVideoChatManager';
 import { FeedbackSurveyModal, type FeedbackMilestone } from './FeedbackSurveyModal';
 import { CustomFeedbackFormModal } from './CustomFeedbackFormModal';
 import { isInviteOnlyMode } from '../src/utils/inviteOnly';
-import { OFFLINE_MODE } from '../constants';
+import { ECHOFLUX_ELITE_MONTHLY_USD, ECHOFLUX_PRO_MONTHLY_USD, OFFLINE_MODE } from '../constants';
 
 const platformFilterIcons: { [key in Platform]: React.ReactNode } = {
   Instagram: <InstagramIcon />,
@@ -2963,34 +2963,36 @@ export const Dashboard: React.FC = () => {
         </button>
       </div>
 
-      {/* Revenue Overview Banner */}
-      <div className="bg-gradient-to-r from-gray-900 to-gray-800 dark:from-gray-800 dark:to-gray-700 p-6 rounded-xl shadow-lg text-white">
+      {/* Revenue Overview Banner — light card in light mode, dark gradient only in dark mode */}
+      <div className="bg-gradient-to-r from-slate-50 via-gray-50 to-slate-100 dark:from-gray-800 dark:via-gray-800 dark:to-gray-700 p-6 rounded-xl shadow-lg border border-gray-200/80 dark:border-gray-600/50 text-gray-900 dark:text-white">
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
           <div>
-            <p className="text-sm opacity-70 mb-1">Total Users</p>
-            <p className="text-3xl font-bold">{userEngagementData?.conversionFunnel?.total?.toLocaleString() ?? '—'}</p>
-            <p className="text-xs opacity-60 mt-1">
+            <p className="text-sm text-gray-500 dark:opacity-70 mb-1">Total Users</p>
+            <p className="text-3xl font-bold text-gray-900 dark:text-white">
+              {userEngagementData?.conversionFunnel?.total?.toLocaleString() ?? '—'}
+            </p>
+            <p className="text-xs text-gray-500 dark:opacity-60 mt-1">
               +{isLoadingAdminSignupCounts ? '—' : adminSignupCounts.last7d} this week
             </p>
           </div>
           <div>
-            <p className="text-sm opacity-70 mb-1">Subscription MRR</p>
-            <p className="text-3xl font-bold text-blue-300">
-              ${userEngagementData ? ((userEngagementData.conversionFunnel.pro * 29) + (userEngagementData.conversionFunnel.elite * 79)).toLocaleString() : '—'}
+            <p className="text-sm text-gray-500 dark:opacity-70 mb-1">Subscription MRR</p>
+            <p className="text-3xl font-bold text-blue-600 dark:text-blue-300">
+              ${userEngagementData ? ((userEngagementData.conversionFunnel.pro * ECHOFLUX_PRO_MONTHLY_USD) + (userEngagementData.conversionFunnel.elite * ECHOFLUX_ELITE_MONTHLY_USD)).toLocaleString() : '—'}
             </p>
-            <p className="text-xs opacity-60 mt-1">Pro + Elite plans</p>
+            <p className="text-xs text-gray-500 dark:opacity-60 mt-1">Pro + Elite plans</p>
           </div>
           <div>
-            <p className="text-sm opacity-70 mb-1">Fan Hub Commission</p>
-            <p className="text-3xl font-bold text-green-300">$0.00</p>
-            <p className="text-xs opacity-60 mt-1">10% of creator earnings</p>
+            <p className="text-sm text-gray-500 dark:opacity-70 mb-1">Fan Hub Commission</p>
+            <p className="text-3xl font-bold text-emerald-600 dark:text-green-300">$0.00</p>
+            <p className="text-xs text-gray-500 dark:opacity-60 mt-1">10% of creator earnings</p>
           </div>
-          <div className="border-l border-white/20 pl-6">
-            <p className="text-sm opacity-70 mb-1">Total Revenue</p>
-            <p className="text-3xl font-bold text-primary-300">
-              ${userEngagementData ? ((userEngagementData.conversionFunnel.pro * 29) + (userEngagementData.conversionFunnel.elite * 79)).toLocaleString() : '—'}
+          <div className="border-l border-gray-200 dark:border-white/20 pl-6">
+            <p className="text-sm text-gray-500 dark:opacity-70 mb-1">Total Revenue</p>
+            <p className="text-3xl font-bold text-primary-600 dark:text-primary-300">
+              ${userEngagementData ? ((userEngagementData.conversionFunnel.pro * ECHOFLUX_PRO_MONTHLY_USD) + (userEngagementData.conversionFunnel.elite * ECHOFLUX_ELITE_MONTHLY_USD)).toLocaleString() : '—'}
             </p>
-            <p className="text-xs opacity-60 mt-1">Monthly</p>
+            <p className="text-xs text-gray-500 dark:opacity-60 mt-1">Monthly</p>
           </div>
         </div>
       </div>
@@ -3085,7 +3087,7 @@ export const Dashboard: React.FC = () => {
                 <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Plan Breakdown</h4>
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
-                    <span className="text-sm text-gray-600 dark:text-gray-400">Pro ($19/mo)</span>
+                    <span className="text-sm text-gray-600 dark:text-gray-400">Pro (${ECHOFLUX_PRO_MONTHLY_USD}/mo)</span>
                     <div className="flex items-center gap-3">
                       <div className="w-24 bg-gray-200 dark:bg-gray-700 rounded-full h-2">
                         <div 
@@ -3099,7 +3101,7 @@ export const Dashboard: React.FC = () => {
                     </div>
                   </div>
                   <div className="flex items-center justify-between">
-                    <span className="text-sm text-gray-600 dark:text-gray-400">Elite ($39/mo)</span>
+                    <span className="text-sm text-gray-600 dark:text-gray-400">Elite (${ECHOFLUX_ELITE_MONTHLY_USD}/mo)</span>
                     <div className="flex items-center gap-3">
                       <div className="w-24 bg-gray-200 dark:bg-gray-700 rounded-full h-2">
                         <div 
@@ -3121,11 +3123,11 @@ export const Dashboard: React.FC = () => {
                   <div>
                     <p className="text-sm font-medium text-gray-700 dark:text-gray-300">Monthly Subscription Revenue</p>
                     <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                      {userEngagementData.conversionFunnel.pro} Pro × $19 + {userEngagementData.conversionFunnel.elite} Elite × $39
+                      {userEngagementData.conversionFunnel.pro} Pro × ${ECHOFLUX_PRO_MONTHLY_USD} + {userEngagementData.conversionFunnel.elite} Elite × ${ECHOFLUX_ELITE_MONTHLY_USD}
                     </p>
                   </div>
                   <p className="text-2xl font-bold text-primary-600 dark:text-primary-400">
-                    ${((userEngagementData.conversionFunnel.pro * 19) + (userEngagementData.conversionFunnel.elite * 39)).toLocaleString()}
+                    ${((userEngagementData.conversionFunnel.pro * ECHOFLUX_PRO_MONTHLY_USD) + (userEngagementData.conversionFunnel.elite * ECHOFLUX_ELITE_MONTHLY_USD)).toLocaleString()}
                   </p>
                 </div>
               </div>

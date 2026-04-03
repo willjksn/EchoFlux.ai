@@ -14,7 +14,6 @@ import {
 import type { FanAuthBranding } from "../types";
 import { useAppContext } from "./AppContext";
 import { isMaintenanceMode, canBypassMaintenance } from "../src/utils/maintenance";
-import { validateMemberUsernameFormat, normalizeMemberUsername } from "../src/lib/memberUsername";
 import { FAN_STOREFRONT_SIGNUP_SESSION_KEY } from "../constants";
 import "../styles/fan-auth-modal.css";
 
@@ -130,7 +129,6 @@ export const FanAuthModal: React.FC<FanAuthModalProps> = ({
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [fullName, setFullName] = useState("");
-  const [username, setUsername] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [acceptedTerms, setAcceptedTerms] = useState(false);
@@ -171,9 +169,7 @@ export const FanAuthModal: React.FC<FanAuthModalProps> = ({
   const signupTitle = branding?.signupTitle?.trim() || "Create your account";
   const signupSubtitle =
     branding?.signupSubtitle?.trim() ||
-    (freeAccessEnabled
-      ? "Create your account to join this page."
-      : "Create your account, then continue to secure checkout.");
+    "Create your account. You'll choose your member username next.";
 
   const mark = logo || avatar;
   const validatePassword = (p: string): string | null => {
@@ -194,7 +190,8 @@ export const FanAuthModal: React.FC<FanAuthModalProps> = ({
     return miss.length ? `Password needs: ${miss.join(", ")}` : null;
   };
 
-  const tryJoinFreeAndUsername = async (uname: string) => {
+  /** Free pages: create fans/{uid} after auth so entitlement + username gate work. Username is set in MemberUsernameGateModal. */
+  const tryJoinFreeMembershipIfEnabled = async () => {
     if (!freeAccessEnabled || !auth.currentUser) return;
     try {
       const token = await auth.currentUser.getIdToken(true);
@@ -205,30 +202,12 @@ export const FanAuthModal: React.FC<FanAuthModalProps> = ({
       });
       const joinData = await join.json().catch(() => ({}));
       if (!join.ok) {
-        // Non-fatal: auth already succeeded, but membership bootstrap endpoint failed.
         const joinErr = (joinData as { error?: string }).error || "Signed in, but couldn't auto-join free membership yet.";
         setFormError(joinErr);
         showToast?.(joinErr, "info");
         return;
       }
-      const trimmed = uname.trim();
-      if (!trimmed) return;
-      const fmt = validateMemberUsernameFormat(trimmed);
-      if (fmt) {
-        showToast?.(fmt, "error");
-        return;
-      }
-      const claim = await fetch("/api/claimMemberUsername", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ username: normalizeMemberUsername(trimmed), creatorId }),
-      });
-      const claimData = await claim.json().catch(() => ({}));
-      if (!claim.ok) {
-        showToast?.((claimData as { error?: string }).error || "Account created — set your username next.", "info");
-      }
     } catch {
-      // Non-fatal in local dev when /api proxy is not configured.
       showToast?.("Signed in, but membership sync is temporarily unavailable.", "info");
     }
   };
@@ -254,7 +233,7 @@ export const FanAuthModal: React.FC<FanAuthModalProps> = ({
         }
         await signInWithEmailAndPassword(auth, email.trim(), password);
         if (freeAccessEnabled) {
-          await tryJoinFreeAndUsername("");
+          await tryJoinFreeMembershipIfEnabled();
         }
         showToast?.("You're in!", "success");
         onSuccess?.();
@@ -269,16 +248,11 @@ export const FanAuthModal: React.FC<FanAuthModalProps> = ({
       const pwMsg = validatePassword(password);
       if (pwMsg) err.password = pwMsg;
       if (password !== confirmPassword) err.confirmPassword = "Passwords do not match.";
-      if (freeAccessEnabled) {
-        const uerr = validateMemberUsernameFormat(username);
-        if (uerr) err.username = uerr;
-      }
       if (!acceptedTerms) err.terms = "Accept the Terms and Privacy Policy to continue.";
       if (Object.keys(err).length) {
         setFieldErrors(err);
         const first =
           err.fullName ||
-          err.username ||
           err.email ||
           err.password ||
           err.confirmPassword ||
@@ -297,7 +271,7 @@ export const FanAuthModal: React.FC<FanAuthModalProps> = ({
           try {
             await signInWithEmailAndPassword(auth, email.trim(), password);
             if (freeAccessEnabled) {
-              await tryJoinFreeAndUsername(username);
+              await tryJoinFreeMembershipIfEnabled();
             }
             showToast?.("Welcome back! We signed you in to continue.", "success");
             onSuccess?.();
@@ -331,7 +305,7 @@ export const FanAuthModal: React.FC<FanAuthModalProps> = ({
         throw createErr;
       }
       await updateProfile(cred.user, { displayName: fullName.trim() });
-      await tryJoinFreeAndUsername(username);
+      await tryJoinFreeMembershipIfEnabled();
       showToast?.("Account created!", "success");
       onSuccess?.();
       onClose();
@@ -343,7 +317,7 @@ export const FanAuthModal: React.FC<FanAuthModalProps> = ({
         try {
           await signInWithEmailAndPassword(auth, email.trim(), password);
           if (freeAccessEnabled) {
-            await tryJoinFreeAndUsername(username);
+            await tryJoinFreeMembershipIfEnabled();
           }
           showToast?.("Welcome back! We signed you in to continue.", "success");
           onSuccess?.();
@@ -424,7 +398,7 @@ export const FanAuthModal: React.FC<FanAuthModalProps> = ({
       const provider = new GoogleAuthProvider();
       await signInWithPopup(auth, provider);
       if (freeAccessEnabled) {
-        await tryJoinFreeAndUsername("");
+        await tryJoinFreeMembershipIfEnabled();
       }
       showToast?.("You're in!", "success");
       onSuccess?.();
@@ -588,21 +562,6 @@ export const FanAuthModal: React.FC<FanAuthModalProps> = ({
                   autoComplete="name"
                 />
                 {fieldErrors.fullName && <p className="fan-auth-err">{fieldErrors.fullName}</p>}
-                <label className="fan-auth-label" style={{ color: accentText }}>
-                  Username{freeAccessEnabled ? " *" : ""}
-                </label>
-                {freeAccessEnabled && (
-                  <p className="fan-auth-hint">3–32 characters: lowercase letters, numbers, and underscores only.</p>
-                )}
-                <input
-                  className="fan-auth-input"
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ""))}
-                  placeholder="your_handle"
-                  autoComplete="nickname"
-                  maxLength={32}
-                />
-                {fieldErrors.username && <p className="fan-auth-err">{fieldErrors.username}</p>}
               </>
             )}
             <label className="fan-auth-label" style={{ color: accentText }}>

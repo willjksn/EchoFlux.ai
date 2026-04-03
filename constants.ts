@@ -28,6 +28,35 @@ export const STOREFRONT_CONTENT_POLICY = {
  */
 export const FAN_STOREFRONT_SIGNUP_SESSION_KEY = 'echofluxFanStorefrontSignup';
 
+/** EchoFlux creator subscriptions: monthly USD and fixed annual totals (match Stripe yearly prices). */
+export const ECHOFLUX_PRO_MONTHLY_USD = 29;
+export const ECHOFLUX_ELITE_MONTHLY_USD = 59;
+export const ECHOFLUX_PRO_ANNUAL_TOTAL_USD = 276;
+export const ECHOFLUX_ELITE_ANNUAL_TOTAL_USD = 564;
+
+/** Only used when `monthlyUsd` is not Pro/Elite (20% off 12× monthly). */
+const ECHOFLUX_ANNUAL_FALLBACK_DISCOUNT = 0.2;
+
+/** Total charged per year when billed annually (USD). */
+export function echofluxAnnualTotalUsd(monthlyUsd: number): number {
+  if (monthlyUsd === ECHOFLUX_PRO_MONTHLY_USD) return ECHOFLUX_PRO_ANNUAL_TOTAL_USD;
+  if (monthlyUsd === ECHOFLUX_ELITE_MONTHLY_USD) return ECHOFLUX_ELITE_ANNUAL_TOTAL_USD;
+  return Math.round(monthlyUsd * 12 * (1 - ECHOFLUX_ANNUAL_FALLBACK_DISCOUNT) * 100) / 100;
+}
+
+/** Effective monthly equivalent when on annual (for UI): annual total ÷ 12. */
+export function echofluxEffectiveMonthlyWhenAnnualUsd(monthlyUsd: number): number {
+  const annual = echofluxAnnualTotalUsd(monthlyUsd);
+  return Math.round((annual / 12) * 100) / 100;
+}
+
+/** Stripe Checkout annual line-item override (cents). */
+export function echofluxAnnualTotalCents(monthlyUsd: number): number {
+  if (monthlyUsd === ECHOFLUX_PRO_MONTHLY_USD) return Math.round(ECHOFLUX_PRO_ANNUAL_TOTAL_USD * 100);
+  if (monthlyUsd === ECHOFLUX_ELITE_MONTHLY_USD) return Math.round(ECHOFLUX_ELITE_ANNUAL_TOTAL_USD * 100);
+  return Math.round(monthlyUsd * 100 * 12 * (1 - ECHOFLUX_ANNUAL_FALLBACK_DISCOUNT));
+}
+
 // Analytics UI is currently disabled in the app.
 export const ANALYTICS_ENABLED = false;
 
@@ -200,9 +229,9 @@ export type VideoMinutePackId = (typeof VIDEO_MINUTE_PACKS)[number]['id'];
  * Creators may edit or replace this text. Not a substitute for legal advice.
  * Covers: memberships, tips, digital products, messaging, feed, EchoFlux/Fan Hub platform role, Stripe, Firebase-class hosting.
  */
-export const DEFAULT_PRIVACY_POLICY = `Last updated: March 30, 2026
+export const DEFAULT_PRIVACY_POLICY = `Last updated: April 3, 2026
 WHO THIS POLICY COVERS
-This Privacy Policy explains how information is handled when you use this creator page and related fan features (the "Service"), including account access, memberships, paid content, direct messages, tips, and session bookings where enabled. The page is operated by the creator shown on this profile ("we," "us," "our"), and runs on EchoFlux / Fan Hub infrastructure.
+This Privacy Policy explains how information is handled when you use this creator page and related fan features (the "Service"), including account access, memberships, paid content, direct messages, tips, and session bookings where enabled. The page is operated by the creator shown on this profile ("we," "us," "our"). The page is hosted on witme.io and connected to EchoFlux / Fan Hub infrastructure operated by the platform.
 
 WHAT WE COLLECT
 • Account details: email, username/display name, account identifiers, and profile settings.
@@ -253,12 +282,12 @@ This is a default template. Creators should review and adapt this text with lega
  * Creators may edit or replace this text. Not a substitute for legal advice.
  * Strong content-protection language retained; expanded for subscriptions, tips, store purchases, platform role, liability.
  */
-export const DEFAULT_TERMS_OF_SERVICE = `Last updated: March 30, 2026
+export const DEFAULT_TERMS_OF_SERVICE = `Last updated: April 3, 2026
 1. ACCEPTANCE
 By using this creator page and related fan features (the "Service"), you agree to these Terms and the Privacy Policy on this page.
 
 2. WHO OPERATES THIS PAGE
-This page is operated by the creator shown on this profile ("we," "us," "our") and powered by EchoFlux / Fan Hub technology. Your purchases are primarily with the creator operating this page.
+This page is operated by the creator shown on this profile ("we," "us," "our"). It is hosted on witme.io and powered by EchoFlux / Fan Hub technology. Your purchases are primarily with the creator operating this page.
 
 3. ELIGIBILITY
 You must be at least 18 years old (or the age of majority in your jurisdiction) to use paid features.
@@ -272,8 +301,8 @@ Not every feature is available on every creator page. The creator controls which
 6. PAYMENTS AND RENEWALS
 Payments are processed through Stripe. Memberships may renew automatically until canceled. Pricing and billing terms are shown at checkout.
 
-7. REFUNDS
-Unless required by law or stated at checkout, digital purchases are generally final after delivery. Charge issues should be reported promptly.
+7. REFUNDS AND ACCOUNT DELETION
+Unless required by law or stated at checkout, digital purchases are generally final after delivery. Charge issues should be reported promptly. If you delete your fan account, access ends immediately and recurring memberships are canceled so you are not charged again; that does not automatically refund amounts already billed for the current period unless required by law or stated at checkout. Canceling a membership without deleting your account usually keeps access until the end of the period you already paid for.
 
 8. CREATOR INTERACTION
 Creators may use assistants or team support for page operations, messages, and fulfillment. Response times and availability are not guaranteed.
@@ -288,7 +317,7 @@ You may not use this Service for harassment, hate, impersonation, fraud, unlawfu
 The creator and platform may block accounts, remove content, restrict features, or suspend access for safety, policy, legal, or payment reasons.
 
 12. INTELLECTUAL PROPERTY
-Creator content belongs to the creator or their licensors. Platform software and branding belong to EchoFlux and its licensors.
+Creator content belongs to the creator or their licensors. Platform software and branding (EchoFlux / witme.io) belong to their respective licensors.
 
 13. DISCLAIMER
 The Service is provided as-is and as-available. We do not guarantee uninterrupted access, specific outcomes, or specific response quality.
@@ -296,8 +325,8 @@ The Service is provided as-is and as-available. We do not guarantee uninterrupte
 14. LIABILITY LIMITS
 To the fullest extent permitted by law, indirect or consequential damages are excluded. Disputes about creator-specific offerings are generally between the fan and the creator.
 
-15. ECHOFLUX PLATFORM ROLE
-EchoFlux provides infrastructure, checkout integration, authentication, and safety tooling. EchoFlux is not the seller of the creator's offerings on this page.
+15. PLATFORM ROLE (ECHOFLUX / WITME.IO)
+EchoFlux and witme.io provide infrastructure, checkout integration, authentication, and safety tooling. The platform is not the seller of the creator's offerings on this page.
 
 16. CHANGES
 We may update these Terms and will update the date above when changes are posted.

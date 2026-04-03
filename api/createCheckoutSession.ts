@@ -1,5 +1,10 @@
 import { VercelRequest, VercelResponse } from '@vercel/node';
 import Stripe from 'stripe';
+import {
+  echofluxAnnualTotalCents,
+  ECHOFLUX_ELITE_MONTHLY_USD,
+  ECHOFLUX_PRO_MONTHLY_USD,
+} from '../constants.js';
 import { verifyAuth } from './verifyAuth.js';
 
 // Initialize Stripe only if secret key is available
@@ -136,12 +141,10 @@ const PLAN_PRICE_IDS: Record<string, { monthly: string; annually: string }> = {
   },
 };
 
-// Annual pricing overrides (in cents) to ensure "amount due today" matches the billed-annual totals.
-// This avoids relying on potentially misconfigured Stripe annual Price IDs (e.g. $23/yr instead of $276/yr).
-// If you change annual pricing, update these values.
+// Annual pricing overrides (in cents); Pro $276/yr, Elite $564/yr — keep in sync with `constants.ts`.
 const ANNUAL_TOTAL_OVERRIDE_CENTS: Record<string, number> = {
-  Pro: 27600,
-  Elite: 56400,
+  Pro: echofluxAnnualTotalCents(ECHOFLUX_PRO_MONTHLY_USD),
+  Elite: echofluxAnnualTotalCents(ECHOFLUX_ELITE_MONTHLY_USD),
 };
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {

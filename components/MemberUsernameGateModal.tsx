@@ -119,8 +119,7 @@ export const MemberUsernameGateModal: React.FC<Props> = ({
           Choose your member name
         </h2>
         <p className="text-sm mb-4 opacity-80">
-          Pick a unique username for {creatorDisplayName}&apos;s member area. This is how you&apos;ll show up in the
-          community (not your email).
+          Pick a unique handle for member areas. This is how you show up for {creatorDisplayName} (not your email).
         </p>
         <label className="block text-sm font-medium mb-1" htmlFor="member-username-input">
           Username

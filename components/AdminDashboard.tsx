@@ -148,10 +148,10 @@ const planColorMap: Record<PlanKey, string> = {
 };
 
 const planPrices: Record<PlanKey, number> = { 
-    'Free': 0, 
+    'Free': 0,
     'Caption': 9,
     'Pro': 29, 
-    'Elite': 79, 
+    'Elite': 59, 
     'Agency': 599, 
     'Growth': 249, 
     'Starter': 99,
@@ -1080,18 +1080,18 @@ export const AdminDashboard: React.FC = () => {
                 </button>
             </div>
 
-            {/* Total Echoflux Revenue Summary */}
-            <div className="bg-gradient-to-r from-gray-900 to-gray-800 dark:from-gray-800 dark:to-gray-700 p-6 rounded-xl shadow-lg text-white">
+            {/* Total Echoflux Revenue Summary — light card in light mode */}
+            <div className="bg-gradient-to-r from-slate-50 via-gray-50 to-slate-100 dark:from-gray-800 dark:via-gray-800 dark:to-gray-700 p-6 rounded-xl shadow-lg border border-gray-200/80 dark:border-gray-600/50 text-gray-900 dark:text-white">
                 <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
                     <div>
-                        <h3 className="text-lg font-bold opacity-90">Total Echoflux Revenue</h3>
-                        <p className="text-sm opacity-70 mt-1">Subscription MRR + Fan Hub Commission</p>
+                        <h3 className="text-lg font-bold text-gray-900 dark:text-white">Total Echoflux Revenue</h3>
+                        <p className="text-sm text-gray-500 dark:opacity-70 mt-1">Subscription MRR + Fan Hub Commission</p>
                     </div>
                     <div className="text-right">
-                        <p className="text-3xl md:text-4xl font-bold">
+                        <p className="text-3xl md:text-4xl font-bold text-primary-600 dark:text-white">
                             ${(simulatedMRR + (isLoadingFanHubRevenue ? 0 : fanHubRevenue.echofluxCommission)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </p>
-                        <p className="text-sm opacity-70 mt-1">per month</p>
+                        <p className="text-sm text-gray-500 dark:opacity-70 mt-1">per month</p>
                     </div>
                 </div>
             </div>

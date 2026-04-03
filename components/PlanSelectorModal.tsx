@@ -3,6 +3,12 @@ import { useAppContext } from './AppContext';
 import { Plan, UserType } from '../types';
 import { CheckIcon } from './icons/UIIcons';
 import { createAccountFromPendingSignup } from '../src/utils/createAccountFromPendingSignup';
+import {
+  ECHOFLUX_ELITE_MONTHLY_USD,
+  ECHOFLUX_PRO_MONTHLY_USD,
+  echofluxAnnualTotalUsd,
+  echofluxEffectiveMonthlyWhenAnnualUsd,
+} from '../constants';
 
 interface PlanSelectorModalProps {
     userType?: UserType; // Optional now since new users don't have userType yet
@@ -14,8 +20,8 @@ interface PlanSelectorModalProps {
 const creatorPlans = [
     { 
         name: 'Pro' as Plan, 
-        priceMonthly: 29,
-        priceAnnually: 23,
+        priceMonthly: ECHOFLUX_PRO_MONTHLY_USD,
+        priceAnnually: echofluxEffectiveMonthlyWhenAnnualUsd(ECHOFLUX_PRO_MONTHLY_USD),
         description: 'For creators building their brand',
         features: [
             'Plan My Week',
@@ -31,8 +37,8 @@ const creatorPlans = [
     },
     { 
         name: 'Elite' as Plan, 
-        priceMonthly: 79,
-        priceAnnually: 63,
+        priceMonthly: ECHOFLUX_ELITE_MONTHLY_USD,
+        priceAnnually: echofluxEffectiveMonthlyWhenAnnualUsd(ECHOFLUX_ELITE_MONTHLY_USD),
         description: 'For monetized creators maximizing revenue',
         features: [
             'Advanced Plan My Week options',
@@ -76,8 +82,16 @@ export const PlanSelectorModal: React.FC<PlanSelectorModalProps> = ({ userType, 
                 if (attempt?.accountCreated && attempt?.resumeCheckout && (attempt?.plan === 'Pro' || attempt?.plan === 'Elite')) {
                     const cycle = (attempt?.billingCycle === 'annually' ? 'annually' : 'monthly') as 'monthly' | 'annually';
                     const planData = attempt.plan === 'Pro'
-                        ? { name: 'Pro' as Plan, price: cycle === 'annually' ? 23 : 29, cycle }
-                        : { name: 'Elite' as Plan, price: cycle === 'annually' ? 47 : 59, cycle };
+                        ? {
+                            name: 'Pro' as Plan,
+                            price: cycle === 'annually' ? echofluxEffectiveMonthlyWhenAnnualUsd(ECHOFLUX_PRO_MONTHLY_USD) : ECHOFLUX_PRO_MONTHLY_USD,
+                            cycle,
+                          }
+                        : {
+                            name: 'Elite' as Plan,
+                            price: cycle === 'annually' ? echofluxEffectiveMonthlyWhenAnnualUsd(ECHOFLUX_ELITE_MONTHLY_USD) : ECHOFLUX_ELITE_MONTHLY_USD,
+                            cycle,
+                          };
                     
                     // Mark as prompted to prevent duplicate openings
                     const attemptTs = typeof attempt?.timestamp === 'number' ? attempt.timestamp : null;
@@ -255,14 +269,15 @@ export const PlanSelectorModal: React.FC<PlanSelectorModalProps> = ({ userType, 
                                 
                                 <div className="mb-3">
                                     <span className="text-3xl font-bold text-gray-900 dark:text-white">
-                                        ${billingCycle === 'annually' ? plan.priceAnnually : plan.priceMonthly}
+                                        $
+                                        {(billingCycle === 'annually' ? plan.priceAnnually : plan.priceMonthly).toFixed(2).replace(/\.00$/, '')}
                                     </span>
                                     <span className="text-gray-500 dark:text-gray-400 text-sm ml-1">
                                         /{billingCycle === 'annually' ? 'mo' : 'mo'}
                                     </span>
-                                    {billingCycle === 'annually' && plan.priceAnnually > 0 && (
+                                    {billingCycle === 'annually' && plan.priceMonthly > 0 && (
                                         <div className="text-xs text-gray-400 dark:text-gray-500 mt-1">
-                                            Billed annually (${Math.round(plan.priceAnnually * 12)}/year)
+                                            Billed annually (${echofluxAnnualTotalUsd(plan.priceMonthly).toFixed(2)}/year)
                                         </div>
                                     )}
                                 </div>

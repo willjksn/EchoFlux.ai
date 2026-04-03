@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useAppContext } from './AppContext';
+import { ECHOFLUX_ELITE_MONTHLY_USD } from '../constants';
 import { hasEliteAccess } from '../src/utils/planAccess';
 import { auth, db } from '../firebaseConfig';
 import { doc, getDoc, collection, getDocs, addDoc, Timestamp, updateDoc, serverTimestamp } from 'firebase/firestore';
@@ -696,7 +697,7 @@ export const OnlyFansSextingSession: React.FC = () => {
                 className={`chat-session-ai-chatbot-btn ${chatBotEnabled ? 'active' : ''} ${!canUseChatBot ? 'chat-session-ai-chatbot-btn--locked' : ''}`}
                 onClick={() => {
                   if (!canUseChatBot) {
-                    openPaymentModal?.({ name: 'Elite', price: 79, cycle: 'monthly' });
+                    openPaymentModal?.({ name: 'Elite', price: ECHOFLUX_ELITE_MONTHLY_USD, cycle: 'monthly' });
                     showToast('AI Chat Bot is an Elite feature. Upgrade to unlock.', 'info');
                     return;
                   }

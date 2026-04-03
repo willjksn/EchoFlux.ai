@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { useAppContext } from "./AppContext";
+import { ECHOFLUX_ELITE_MONTHLY_USD } from "../constants";
 import { hasEliteAccess } from "../src/utils/planAccess";
 import {
   collection,
@@ -1791,7 +1792,7 @@ export const FanHubFeed: React.FC<{ isAdminMode?: boolean }> = ({ isAdminMode = 
                           <button
                             type="button"
                             className="text-xs font-medium fh-link hover:underline"
-                            onClick={() => { openPaymentModal?.({ name: "Elite", price: 79, cycle: "monthly" }); }}
+                            onClick={() => { openPaymentModal?.({ name: "Elite", price: ECHOFLUX_ELITE_MONTHLY_USD, cycle: "monthly" }); }}
                           >
                             Upgrade to Elite
                           </button>

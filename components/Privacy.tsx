@@ -5,12 +5,13 @@ export const Privacy: React.FC = () => {
         <div className="max-w-4xl mx-auto space-y-8">
             <div className="bg-white dark:bg-gray-800 p-8 rounded-xl shadow-md">
                 <h2 className="text-3xl font-bold text-gray-900 dark:text-white">Privacy Policy</h2>
-                <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">Last updated: March 30, 2026</p>
+                <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">Last updated: April 3, 2026</p>
 
                 <div className="mt-6 prose prose-lg dark:prose-invert max-w-none text-gray-700 dark:text-gray-300">
                     <p>
-                        This Privacy Policy explains how EchoFlux.ai and witme.io collect, use, and protect personal information
-                        when you use creator tools, fan-facing creator pages, checkout, messaging, and related platform features.
+                        This Privacy Policy explains how <strong>EchoFlux.ai</strong> (creator studio) and <strong>witme.io</strong> (fan
+                        discovery and creator pages) collect, use, and protect personal information when you use dashboards, public
+                        creator pages, checkout, messaging, and related features.
                     </p>
 
                     <h3 className="text-xl font-bold text-gray-900 dark:text-white mt-8 mb-2">1. Information We Collect</h3>
@@ -29,13 +30,14 @@ export const Privacy: React.FC = () => {
                     <h4 className="font-semibold mt-4">c. Device and usage data</h4>
                     <p>
                         We collect technical data such as browser type, approximate location based on IP, timestamps,
-                        and diagnostic logs for security and reliability.
+                        and diagnostic logs for security and reliability. When you browse witme.io (including discovery or showcase
+                        areas), we may log page views and coarse usage events to operate the site and understand traffic.
                     </p>
 
                     <h3 className="text-xl font-bold text-gray-900 dark:text-white mt-8 mb-2">2. How We Use Your Information</h3>
                     <p>We use information to:</p>
                     <ul className="list-disc pl-6 space-y-2 mt-2">
-                        <li>Provide and maintain EchoFlux.ai and witme.io services</li>
+                        <li>Provide and maintain EchoFlux.ai (studio) and witme.io (public pages and fan experience)</li>
                         <li>Process payments and payouts through Stripe</li>
                         <li>Deliver creator page access, memberships, messages, and purchased content</li>
                         <li>Send operational notices such as receipts, security alerts, and policy updates</li>
@@ -55,8 +57,8 @@ export const Privacy: React.FC = () => {
                     <h3 className="text-xl font-bold text-gray-900 dark:text-white mt-8 mb-2">4. Fan Hub and witme Data Visibility</h3>
                     <h4 className="font-semibold mt-4">a. What creators can see</h4>
                     <p>
-                        Creators can view data needed to run their pages, such as fan display names, contact details provided through
-                        purchases, and purchase history tied to their own page.
+                        Creators can view data needed to run their witme.io pages and Fan Hub tools, such as fan display names, contact
+                        details provided through purchases, and purchase history tied to their own page.
                     </p>
 
                     <h4 className="font-semibold mt-4">b. What creators cannot see</h4>
@@ -136,11 +138,12 @@ export const Privacy: React.FC = () => {
                     </p>
 
                     <h3 className="text-xl font-bold text-gray-900 dark:text-white mt-8 mb-2">
-                        13. Platform and Creator Roles
+                        13. Platform and creator roles
                     </h3>
                     <p>
-                        EchoFlux handles platform-level operations, security, and infrastructure. Creators are responsible for
-                        creator-specific practices on their pages. Where needed, we may route requests to the relevant creator.
+                        EchoFlux.ai handles studio operations, security, and infrastructure for creators; witme.io surfaces the public
+                        pages fans visit. Creators are responsible for creator-specific practices on their pages. Where needed, we may
+                        route requests to the relevant creator.
                     </p>
 
                     <div className="mt-8 p-6 border-l-4 border-primary-400 bg-primary-50 dark:bg-primary-900/30 rounded-r-lg">

@@ -199,7 +199,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
                         // Remove undefined values before saving to Firestore
                         const cleanUser = removeUndefined(newUser);
-                        await setDoc(ref, cleanUser);
+                        // Fan signup may run claimMemberUsername in parallel; it merges `username` onto this doc first.
+                        // setDoc without merge would replace the whole document and wipe `username`.
+                        await setDoc(ref, cleanUser, { merge: fromFanStorefrontSignup });
                     
                         // Clear pendingPlan from localStorage after use
                         try {
