@@ -75,8 +75,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         });
       }
     }
-    if (uid === t.creatorId && typeof body.fanId === "string" && body.fanId.trim() && body.fanId.trim() !== t.fanId) {
-      return res.status(400).json({ error: "fanId does not match this thread" });
+    if (uid === t.creatorId) {
+      const bodyCreator = typeof body.creatorId === "string" ? body.creatorId.trim() : "";
+      if (bodyCreator && bodyCreator !== t.creatorId) {
+        return res.status(400).json({ error: "creatorId does not match this thread" });
+      }
+      const bodyFan = typeof body.fanId === "string" ? body.fanId.trim() : "";
+      if (bodyFan && bodyFan !== t.fanId) {
+        return res.status(400).json({ error: "fanId does not match this thread" });
+      }
+    }
+    // Doc id must always match embedded participants (one thread per creator–fan pair).
+    if (getThreadId(t.creatorId, t.fanId) !== threadId) {
+      return res.status(400).json({ error: "Invalid thread record" });
     }
   } else if (creatorId && fanId) {
     creatorIdFinal = creatorId;
@@ -87,6 +98,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
   } else {
     return res.status(400).json({ error: "threadId or (creatorId and fanId) is required" });
+  }
+
+  if (getThreadId(creatorIdFinal, fanIdFinal) !== threadId) {
+    return res.status(400).json({ error: "Thread ID does not match creator and fan" });
   }
 
   try {
@@ -126,6 +141,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         updatedAt: now,
       });
     } else {
+      const existing = threadSnap.data() as { creatorId?: string; fanId?: string } | undefined;
+      if (existing?.creatorId !== creatorIdFinal || existing?.fanId !== fanIdFinal) {
+        return res.status(409).json({ error: "Thread participants do not match this conversation" });
+      }
       const update: Record<string, unknown> = {
         lastMessageAt: now,
         lastMessagePreview: previewText,

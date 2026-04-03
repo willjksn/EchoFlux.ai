@@ -3878,10 +3878,10 @@ export const FanStorefrontView: React.FC = () => {
                       }}
                     />
                     <div className="flex items-center gap-3">
-                      <div className="relative shrink-0">
+                      <div className="relative h-20 w-20 shrink-0">
                         <button
                           type="button"
-                          className="relative rounded-full border-0 p-0 cursor-pointer bg-transparent focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--fan-primary,#6366f1)] focus-visible:ring-offset-2 disabled:opacity-60"
+                          className="fan-profile-hero-avatar-btn relative flex h-20 w-20 shrink-0 items-center justify-center rounded-full border-0 p-0 cursor-pointer bg-transparent focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--fan-primary,#6366f1)] focus-visible:ring-offset-2 disabled:opacity-60"
                           disabled={avatarUploading}
                           onClick={() => profileAvatarInputRef.current?.click()}
                           aria-label={
@@ -3894,20 +3894,23 @@ export const FanStorefrontView: React.FC = () => {
                             <img
                               src={memberProfilePhotoSrc}
                               alt=""
-                              className="w-20 h-20 rounded-full object-cover border-2 border-white shadow-sm"
+                              className="h-full w-full rounded-full object-cover border-2 border-white shadow-sm"
                               style={{ objectFit: "cover", objectPosition: "center" }}
                               onError={() => setMemberProfilePhotoLoadFailed(true)}
                             />
                           ) : (
-                            <span className="storefront-profile-menu-avatar storefront-profile-menu-avatar-fallback w-20 h-20 text-xl inline-flex items-center justify-center">
+                            <span
+                              className="fan-profile-hero-avatar-initials flex h-full w-full items-center justify-center rounded-full text-xl font-bold text-white shadow-sm"
+                              aria-hidden
+                            >
                               {memberProfileAvatarInitials}
                             </span>
                           )}
                           <span
-                            className="absolute bottom-0 right-0 text-[10px] font-medium px-1.5 py-0.5 rounded-md shadow-sm"
+                            className="pointer-events-none absolute bottom-0 right-0 z-[1] text-[9px] font-semibold leading-none px-1 py-0.5 rounded-md shadow-sm ring-2 ring-white"
                             style={{ backgroundColor: `${primary}f2`, color: "#fff" }}
                           >
-                            {avatarUploading ? "…" : "Photo"}
+                            {avatarUploading ? "…" : showMemberProfilePhotoImg ? "Edit" : "Add"}
                           </span>
                         </button>
                         {memberProfilePhotoSrc ? (

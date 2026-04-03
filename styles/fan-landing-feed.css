@@ -2740,6 +2740,20 @@
   box-shadow: 0 8px 18px color-mix(in srgb, var(--fan-primary, #6366f1) 10%, transparent);
 }
 
+/* Fixed 80×80 avatar: fallback uses % sizing in menu CSS; hero button must own dimensions */
+.fan-profile-hero-avatar-btn {
+  box-sizing: border-box;
+}
+
+.fan-profile-hero-avatar-initials {
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--fan-primary, #6366f1) 76%, #ffffff) 0%,
+    var(--fan-primary, #6366f1) 60%,
+    color-mix(in srgb, var(--fan-primary, #6366f1) 78%, #000000) 100%
+  );
+}
+
 .fan-profile-panel {
   border: 1px solid color-mix(in srgb, var(--fan-primary, #6366f1) 22%, transparent);
   border-radius: 16px;

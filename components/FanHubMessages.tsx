@@ -479,6 +479,8 @@ export const FanHubMessages: React.FC = () => {
       const token = auth.currentUser ? await auth.currentUser.getIdToken() : null;
       const body: Record<string, string> = {
         threadId: selectedThread.id,
+        creatorId: selectedThread.creatorId,
+        fanId: selectedThread.fanId,
         content: content.trim(),
       };
       if (attachmentUrl) {

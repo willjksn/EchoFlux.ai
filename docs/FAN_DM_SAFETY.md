@@ -4,6 +4,15 @@ Fan–creator DMs, report message, block fan, and bans are implemented via **ser
 
 ---
 
+## Creator handles vs fan usernames vs DM threads
+
+- **Creator handle** (e.g. `witme.io/yourname`): Unique per creator via `creatorHandles/{handle}`. Fans land on a storefront by handle; each creator account has one handle namespace.
+- **Fan member username** (`@handle` on `users/{uid}`): **Globally unique** across the platform (see `usernames/{lowercase}` and `claimMemberUsername`). The same fan account and username can hold memberships with **many** creators.
+- **DM isolation:** Each **creator + fan** pair has **exactly one** thread. `threadId = [creatorId, fanId].sort().join('_')`. Messages in `fanDmThreads/{threadId}/messages` belong only to that pair. A message from Creator A to Fan X **never** appears in Creator B’s inbox; Fan X has **separate** threads with A and B.
+- **`POST /api/fanDmSend`:** Fans sending with `threadId` must also send `creatorId` matching the thread (prevents a stale `threadId` from another storefront). Creators should send `threadId` plus `creatorId` and `fanId` matching the selected thread. The API rejects mismatches and verifies the document id matches `getThreadId(creatorId, fanId)`.
+
+---
+
 ## Collections
 
 | Collection | Purpose |
