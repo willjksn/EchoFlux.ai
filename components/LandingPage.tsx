@@ -227,7 +227,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onGetSta
                         <div className="rounded-xl bg-gray-50 dark:bg-white/5 p-3 text-xs text-gray-800 dark:text-gray-200">
                           <div className="flex items-center justify-between">
                             <span className="font-medium">Your Fan Hub</span>
-                            <span className="text-[0.7rem] text-primary-700 dark:text-primary-100">echoflux.ai/yourname</span>
+                            <span className="text-[0.7rem] text-primary-700 dark:text-primary-100">witme.io/yourname</span>
                           </div>
                           <ul className="mt-2 space-y-1 text-[0.7rem] text-gray-600 dark:text-gray-300">
                             <li>• Customizable storefront with your branding</li>
@@ -275,6 +275,38 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onGetSta
                 Create a beautiful, customizable page where your fans can subscribe, tip, buy exclusive content, 
                 and connect with you directly.
               </p>
+            </div>
+
+            <div className="mb-12 flex justify-center px-2">
+              <div className="max-w-2xl rounded-2xl border border-primary-200/90 bg-white/90 px-5 py-4 text-center shadow-sm dark:border-white/10 dark:bg-gray-800/90">
+                <div className="flex justify-center">
+                  <img
+                    src="/witme-wordmark-on-light.svg"
+                    alt="witme"
+                    className="h-7 w-auto sm:h-8 dark:hidden"
+                    loading="lazy"
+                  />
+                  <img
+                    src="/witme-wordmark-on-dark.svg"
+                    alt="witme"
+                    className="hidden h-7 w-auto sm:h-8 dark:block"
+                    loading="lazy"
+                  />
+                </div>
+                <p className="mt-3 text-sm text-gray-600 dark:text-gray-300">
+                  Fans browse creator pages on{' '}
+                  <a
+                    href="https://witme.io"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="font-medium text-primary-600 underline-offset-2 hover:underline dark:text-primary-300"
+                  >
+                    witme.io
+                  </a>
+                  . Share it in your bio—everything they do there (subscribe, shop, tip, message) is powered by what you
+                  set up in EchoFlux.
+                </p>
+              </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
