@@ -6517,6 +6517,30 @@ button.treat-card:hover:not(:disabled) .treat-card-cta {
   padding-right: 1.25rem;
 }
 
+/* Member header logo should always match landing header size, including legacy markup. */
+.storefront-member-header .storefront-header-left svg[aria-label="witme"] {
+  height: 2.5rem !important; /* h-10 */
+  width: auto;
+  max-width: 220px;
+}
+@media (min-width: 640px) {
+  .storefront-member-header .storefront-header-left svg[aria-label="witme"] {
+    height: 2.75rem !important; /* sm:h-11 */
+  }
+}
+
+/* Member header wordmark should match landing header logo size. */
+.storefront-member-header .storefront-header-left--witme-wordmark svg {
+  height: 2.5rem !important; /* h-10 */
+  width: auto;
+  max-width: 220px;
+}
+@media (min-width: 640px) {
+  .storefront-member-header .storefront-header-left--witme-wordmark svg {
+    height: 2.75rem !important; /* sm:h-11 */
+  }
+}
+
 /*
  * Member storefront header should show only the witme wordmark. Older JS bundles still mount the
  * creator avatar + community subtitle; hide them here so production caches don’t keep showing both.
@@ -8336,3 +8360,4 @@ button.treat-card:hover:not(:disabled) .treat-card-cta {
   background: color-mix(in srgb, var(--fan-primary) 22%, #1f2937);
   color: color-mix(in srgb, var(--fan-primary) 62%, #e2e8f0);
 }
+

@@ -2943,7 +2943,7 @@ export const FanStorefrontView: React.FC = () => {
       >
         <div className="storefront-member-header-row flex items-center justify-between px-4 sm:px-6 py-3 gap-2 min-w-0 max-w-[1360px] mx-auto w-full">
           <div className="storefront-header-left storefront-header-left--witme-wordmark flex items-center min-h-0 min-w-0">
-            <WitmeHeaderLogo color={primary} className="h-8 w-auto max-w-[170px] shrink-0" />
+            <WitmeHeaderLogo color={primary} className="h-10 w-auto max-w-[220px] shrink-0 sm:h-11" />
           </div>
           <nav className="storefront-header-nav">
             {memberTabKeys.map((key) => {

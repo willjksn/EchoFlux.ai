@@ -25,12 +25,31 @@ const BUILTIN_DEFAULT_PRIMARY = "#6366f1";
 function isFirebaseIdentityToolkitConfigBlock(ex: unknown): boolean {
   const msg = String((ex as Error)?.message || "");
   const code = String((ex as { code?: string })?.code || "");
-  const status = (ex as { customData?: { status?: number } })?.customData?.status;
+  const status = getHttpStatusFromFirebaseError(ex);
   if (code === "auth/invalid-api-key") return true;
   if (status === 403) return true;
   if (/\b403\b|REQUEST_DENIED|PERMISSION_DENIED|API key not valid|referr?er not allowed/i.test(msg)) return true;
   if (/identitytoolkit\.googleapis\.com/i.test(msg)) return true;
   return false;
+}
+
+function getHttpStatusFromFirebaseError(ex: unknown): number | undefined {
+  const e = ex as {
+    status?: number;
+    customData?: { status?: number; _serverResponse?: string };
+  };
+  if (typeof e?.status === "number") return e.status;
+  if (typeof e?.customData?.status === "number") return e.customData.status;
+  if (typeof e?.customData?._serverResponse === "string") {
+    // Firebase sometimes tucks HTTP status into a JSON serverResponse string.
+    try {
+      const parsed = JSON.parse(e.customData._serverResponse) as { error?: { code?: number } };
+      if (typeof parsed?.error?.code === "number") return parsed.error.code;
+    } catch {
+      /* ignore */
+    }
+  }
+  return undefined;
 }
 
 /** DevTools often collapses `console.error({ ex })` to "Object" — log plain fields. */
@@ -41,16 +60,20 @@ function logFanAuthError(context: string, ex: unknown): void {
     name?: string;
     customData?: { status?: number; [k: string]: unknown };
   };
-  const status = e?.customData && typeof e.customData === "object" ? (e.customData as { status?: number }).status : undefined;
-  console.error(`[FanAuth] ${context}`, {
-    code: e?.code,
-    message: e?.message,
-    httpStatus: status,
-    hint:
-      status === 403 || /\b403\b/i.test(String(e?.message))
-        ? "Fix: Firebase Auth → Authorized domains + Google Cloud Browser API key referrer allowlist + Identity Toolkit API."
-        : undefined,
-  });
+  const status = getHttpStatusFromFirebaseError(ex);
+  const hint =
+    status === 403 || /\b403\b/i.test(String(e?.message))
+      ? "Fix: Firebase Auth Authorized domains + Google Cloud Browser API key referrer allowlist + Identity Toolkit API."
+      : undefined;
+  // Keep first line fully expanded so minified prod logs never show just "Object".
+  console.error(
+    `[FanAuth] ${context} | code=${String(e?.code || "")} | status=${String(status ?? "")} | message=${String(
+      e?.message || "",
+    )}`,
+  );
+  if (hint) console.error(`[FanAuth] hint: ${hint}`);
+  // Include raw error separately for deep inspection when needed.
+  console.debug("[FanAuth] raw error:", ex);
 }
 
 function lightenHex(hex: string, amount = 0.35): string {

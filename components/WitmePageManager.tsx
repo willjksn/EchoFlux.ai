@@ -95,20 +95,59 @@ const DEFAULT_CONFIG: WitmeLandingConfig = {
   showcaseCreators: DEFAULT_SHOWCASE_CREATORS.map((c) => ({ ...c })),
 };
 
-const mergeWitmeLandingFromApi = (raw: WitmeLandingConfig): WitmeLandingConfig => ({
-  ...DEFAULT_CONFIG,
-  ...raw,
-  showcaseCreators: Array.isArray(raw.showcaseCreators)
-    ? raw.showcaseCreators.map((c) => ({
-        ...c,
-        mediaKind: c.mediaKind === 'video' ? 'video' : 'image',
-        mediaObjectPosition:
-          typeof c.mediaObjectPosition === 'string' && c.mediaObjectPosition.trim() !== ''
-            ? c.mediaObjectPosition.trim()
-            : '50% 50%',
-      }))
-    : DEFAULT_CONFIG.showcaseCreators,
-});
+const normalizeLandingCopy = (config: WitmeLandingConfig): WitmeLandingConfig => {
+  let { heroTitle, heroDescription, heroTrustText } = config;
+  const titleRaw = heroTitle.trim();
+  const descRaw = heroDescription.trim();
+  const trustRaw = heroTrustText.trim();
+  if (/find the real creator page first/i.test(titleRaw)) {
+    heroTitle = DEFAULT_CONFIG.heroTitle;
+  }
+  if (/discover creators.*support them in one place/i.test(titleRaw)) {
+    heroTitle = DEFAULT_CONFIG.heroTitle;
+  }
+  if (/powered by echoflux/i.test(descRaw)) {
+    heroDescription = DEFAULT_CONFIG.heroDescription;
+  }
+  if (/verify creator pages/i.test(descRaw)) {
+    heroDescription = DEFAULT_CONFIG.heroDescription;
+  }
+  if (/without extra apps or hunting for the right link/i.test(descRaw)) {
+    heroDescription = DEFAULT_CONFIG.heroDescription;
+  }
+  if (/member drops.*unlocks.*tips.*dms/i.test(descRaw)) {
+    heroDescription = DEFAULT_CONFIG.heroDescription;
+  }
+  if (/one link from (their|your) bio.*all you need/i.test(descRaw)) {
+    heroDescription = DEFAULT_CONFIG.heroDescription;
+  }
+  if (/echoflux/i.test(trustRaw)) {
+    heroTrustText = DEFAULT_CONFIG.heroTrustText;
+  }
+  return { ...config, heroTitle, heroDescription, heroTrustText };
+};
+
+const formatAnalyticsDateMdy = (dateStr: string): string => {
+  const d = new Date(dateStr);
+  if (!Number.isFinite(d.getTime())) return dateStr;
+  return `${d.getMonth() + 1}-${d.getDate()}-${d.getFullYear()}`;
+};
+
+const mergeWitmeLandingFromApi = (raw: WitmeLandingConfig): WitmeLandingConfig =>
+  normalizeLandingCopy({
+    ...DEFAULT_CONFIG,
+    ...raw,
+    showcaseCreators: Array.isArray(raw.showcaseCreators)
+      ? raw.showcaseCreators.map((c) => ({
+          ...c,
+          mediaKind: c.mediaKind === 'video' ? 'video' : 'image',
+          mediaObjectPosition:
+            typeof c.mediaObjectPosition === 'string' && c.mediaObjectPosition.trim() !== ''
+              ? c.mediaObjectPosition.trim()
+              : '50% 50%',
+        }))
+      : DEFAULT_CONFIG.showcaseCreators,
+  });
 
 const showcaseFrameMediaStyle = (objectPosition?: string): React.CSSProperties => ({
   objectFit: 'cover',
@@ -1132,14 +1171,16 @@ export const WitmePageManager: React.FC = () => {
                     const max = Math.max(1, ...(analytics.dailySeries || []).map((d) => d.pageViews));
                     return (analytics.dailySeries || []).map((row) => (
                       <div key={row.date} className="grid grid-cols-[110px_1fr_70px] items-center gap-2 text-xs">
-                        <span className="text-gray-500 dark:text-gray-400">{row.date}</span>
+                        <span className="text-gray-500 dark:text-gray-400">{formatAnalyticsDateMdy(row.date)}</span>
                         <div className="h-2 rounded bg-gray-200 dark:bg-gray-700">
                           <div
                             className="h-2 rounded bg-primary-500"
                             style={{ width: `${Math.max(4, (row.pageViews / max) * 100)}%` }}
                           />
                         </div>
-                        <span className="text-right font-semibold text-gray-700 dark:text-gray-200">{row.pageViews}</span>
+                        <span className="text-right font-semibold text-gray-700 dark:text-gray-200">
+                          {Number(row.pageViews || 0).toLocaleString()}
+                        </span>
                       </div>
                     ));
                   })()}

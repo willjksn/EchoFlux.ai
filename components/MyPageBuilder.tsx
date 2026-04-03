@@ -1351,10 +1351,10 @@ export const MyPageBuilder: React.FC = () => {
   // State for legal modals
   const [legalModalOpen, setLegalModalOpen] = useState<"terms" | "privacy" | null>(null);
 
-  const previewUrl =
-    draft.handle && typeof window !== "undefined"
-      ? `${window.location.origin}/${(draft.handle as string).replace("@", "").toLowerCase().trim()}`
-      : "";
+  const normalizedHandle = (draft.handle as string | undefined)?.replace("@", "").toLowerCase().trim() || "";
+  const previewUrl = normalizedHandle ? `https://witme.io/${normalizedHandle}` : "";
+  const previewLandingUrl = previewUrl ? `${previewUrl}?landing=1` : "";
+  const previewMemberUrl = previewUrl ? `${previewUrl}?preview=member` : "";
 
   const handleCleanForCheck = handleInput.replace("@", "").toLowerCase().trim();
   const savedHandleForCheck = String(saved.handle ?? "").replace("@", "").toLowerCase().trim();
@@ -3295,11 +3295,11 @@ export const MyPageBuilder: React.FC = () => {
               >
                 Member
               </button>
-              {draft.handle?.trim() && draft.handle !== "preview" && (
+              {normalizedHandle && normalizedHandle !== "preview" && (
                 <>
                   <button
                     type="button"
-                    onClick={() => window.open(`/${draft.handle}?landing=1`, "_blank")}
+                    onClick={() => window.open(previewLandingUrl, "_blank")}
                     className="px-2 py-1.5 rounded-lg text-xs font-medium bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700"
                     title="Open public landing (?landing=1 — use while signed in to preview like a visitor)"
                   >
@@ -3307,7 +3307,7 @@ export const MyPageBuilder: React.FC = () => {
                   </button>
                   <button
                     type="button"
-                    onClick={() => window.open(`/${draft.handle}?preview=member`, "_blank")}
+                    onClick={() => window.open(previewMemberUrl, "_blank")}
                     className="px-2 py-1.5 rounded-lg text-xs font-medium bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 flex items-center gap-1"
                     title="Open member shell preview (?preview=member)"
                   >

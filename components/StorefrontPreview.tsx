@@ -1921,7 +1921,7 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
           {/* Member Header — outside scroll so notification dropdown isn’t clipped */}
           <header className="flex items-center justify-between px-4 py-3 flex-shrink-0 gap-2" style={previewHeaderChrome}>
             <div className="flex items-center gap-2 min-h-[56px]">
-              <WitmeHeaderLogo color={primary} className="h-8 w-auto max-w-[170px]" />
+              <WitmeHeaderLogo color={primary} className="h-10 w-auto max-w-[220px] flex-shrink-0 sm:h-11" />
             </div>
             <nav className="flex items-center gap-1 flex-1 justify-center min-w-0 overflow-x-auto">
               {memberTabs.map((key) => (
@@ -2432,3 +2432,4 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
     </div>
   );
 };
+
