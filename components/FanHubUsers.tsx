@@ -323,13 +323,13 @@ export const FanHubUsers: React.FC = () => {
         };
 
         if (type === "tip") existing.tips += amount;
-        else if (type === "unlock" || type === "unlock_media") existing.unlocks += amount;
+        else if (type === "unlock" || type === "unlock_media" || type === "post_unlock") existing.unlocks += amount;
         else existing.treats += amount;
         existing.total += amount;
 
         if (isInCurrentMonth(orderDate)) {
           if (type === "tip") existing.mtdTips += amount;
-          else if (type === "unlock" || type === "unlock_media") existing.mtdUnlocks += amount;
+          else if (type === "unlock" || type === "unlock_media" || type === "post_unlock") existing.mtdUnlocks += amount;
           else existing.mtdTreats += amount;
         }
 

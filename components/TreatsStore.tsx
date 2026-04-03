@@ -163,6 +163,21 @@ export const TreatsStore: React.FC = () => {
   const [scheduledTreats, setScheduledTreats] = useState<ScheduledPurchase[]>([]);
   const [upcomingSessions, setUpcomingSessions] = useState<UpcomingSession[]>([]);
 
+  /** Match FanStorefrontView: Stripe replaces `{CHECKOUT_SESSION_ID}`; `purchase_sync` triggers /api/syncFanCheckoutSession after return. */
+  const buildTreatsStoreSuccessUrl = useCallback((returnHref: string) => {
+    try {
+      const u = new URL(returnHref);
+      const p = new URLSearchParams(u.search.startsWith("?") ? u.search.slice(1) : u.search);
+      p.set("store_purchase", "success");
+      p.set("purchase_sync", "1");
+      const enc = p.toString();
+      u.search = enc ? `${enc}&session_id={CHECKOUT_SESSION_ID}` : `purchase_sync=1&session_id={CHECKOUT_SESSION_ID}`;
+      return u.toString();
+    } catch {
+      return returnHref;
+    }
+  }, []);
+
   const fetchProducts = useCallback(async (opts?: { quiet?: boolean }) => {
     if (!creatorId) return;
     const quiet = opts?.quiet === true;
@@ -217,6 +232,42 @@ export const TreatsStore: React.FC = () => {
   useEffect(() => {
     fetchProducts();
   }, [fetchProducts]);
+
+  /** Creator fan-preview checkout returns here; webhook may lag — same sync as member storefront. */
+  useEffect(() => {
+    if (typeof window === "undefined" || !creatorId || !auth.currentUser) return;
+    const params = new URLSearchParams(window.location.search);
+    const sid = params.get("session_id");
+    if (!sid || params.get("purchase_sync") !== "1") return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const token = await auth.currentUser!.getIdToken(true);
+        const res = await fetch("/api/syncFanCheckoutSession", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ sessionId: sid, creatorId }),
+        });
+        if (cancelled) return;
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          if (import.meta.env.DEV) console.warn("TreatsStore syncFanCheckoutSession", res.status, data);
+          return;
+        }
+        const url = new URL(window.location.href);
+        url.searchParams.delete("session_id");
+        url.searchParams.delete("purchase_sync");
+        const qs = url.searchParams.toString();
+        window.history.replaceState({}, "", url.pathname + (qs ? `?${qs}` : "") + (url.hash || ""));
+        void fetchProducts({ quiet: true });
+      } catch (e) {
+        if (import.meta.env.DEV) console.warn("TreatsStore checkout sync", e);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [creatorId, fetchProducts]);
 
   /** After returning from Stripe Checkout (member product). */
   useEffect(() => {
@@ -569,8 +620,7 @@ export const TreatsStore: React.FC = () => {
     try {
       const token = await auth.currentUser.getIdToken(true);
       const returnUrl = window.location.href;
-      const successUrl = new URL(returnUrl);
-      successUrl.searchParams.set("store_purchase", "success");
+      const successUrl = buildTreatsStoreSuccessUrl(returnUrl);
       const res = await fetch("/api/createFanCheckoutSession", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
@@ -578,7 +628,7 @@ export const TreatsStore: React.FC = () => {
           creatorId,
           type: "product",
           productId,
-          successUrl: successUrl.toString(),
+          successUrl,
           cancelUrl: returnUrl,
         }),
       });

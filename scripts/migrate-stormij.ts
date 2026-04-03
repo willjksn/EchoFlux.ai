@@ -519,8 +519,19 @@ async function migrateMembers(
 
         const periodEnd = data.subscriptionCurrentPeriodEnd || data.current_period_end || data.currentPeriodEnd || null;
 
-        // Store as fan in Echoflux
-        const joinedAt = data.createdAt || admin.firestore.FieldValue.serverTimestamp();
+        // Preserve original join/signup time — do not use serverTimestamp() unless no date exists on Stormij
+        // (serverTimestamp() would make every fan look like they signed up on migration day).
+        const joinedAt =
+          data.createdAt ||
+          data.joinedAt ||
+          data.subscribedAt ||
+          data.signupAt ||
+          data.signupDate ||
+          data.memberSince ||
+          data.created_at ||
+          data.joined_at ||
+          data.subscribed_at ||
+          admin.firestore.FieldValue.serverTimestamp();
         const echofluxMember: Record<string, unknown> = {
           id: doc.id,
           creatorId,

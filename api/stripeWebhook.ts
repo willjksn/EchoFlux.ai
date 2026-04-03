@@ -56,17 +56,27 @@ async function readRawBody(req: VercelRequest): Promise<Buffer> {
 }
 
 function verifyWebhookSignature(rawBody: Buffer, sig: string): Stripe.Event {
-  if (webhookSecret) {
+  const secrets = [
+    ...new Set(
+      [webhookSecret, connectWebhookSecret].filter((s): s is string => typeof s === 'string' && s.length > 0),
+    ),
+  ];
+  if (secrets.length === 0) {
+    throw new Error(
+      'Webhook signature verification failed: set STRIPE_WEBHOOK_SECRET and/or STRIPE_CONNECT_WEBHOOK_SECRET',
+    );
+  }
+  const errors: string[] = [];
+  for (const secret of secrets) {
     try {
-      return stripe.webhooks.constructEvent(rawBody, sig, webhookSecret);
-    } catch (_) {
-      // fall through to Connect secret
+      return stripe.webhooks.constructEvent(rawBody, sig, secret);
+    } catch (e: unknown) {
+      errors.push(e instanceof Error ? e.message : String(e));
     }
   }
-  if (connectWebhookSecret) {
-    return stripe.webhooks.constructEvent(rawBody, sig, connectWebhookSecret);
-  }
-  throw new Error('Webhook signature verification failed (no valid secret)');
+  throw new Error(
+    `Webhook signature verification failed. Fan Hub Connect checkouts need STRIPE_CONNECT_WEBHOOK_SECRET from your Connect webhook endpoint in Stripe (same URL as platform or a Connect-only endpoint). Attempts: ${errors.join(' | ')}`,
+  );
 }
 
 const FAN_HUB_CHECKOUT_TYPES = new Set(['subscription', 'product', 'tip', 'post_unlock']);
@@ -104,6 +114,12 @@ export async function processFanHubCheckoutSessionCompleted(
     return false;
   }
 
+  const dupOrder = await db.collection('orders').where('stripeSessionId', '==', session.id).limit(1).get();
+  if (!dupOrder.empty) {
+    console.log(`Fan hub: skip duplicate checkout.session.completed session=${session.id}`);
+    return true;
+  }
+
   const now = new Date().toISOString();
 
   if (type === 'subscription' && session.subscription) {
@@ -116,7 +132,7 @@ export async function processFanHubCheckoutSessionCompleted(
     const unlocked = Array.isArray(existing?.unlockedProductIds) ? existing.unlockedProductIds : [];
     await grantRef.set({ subscription: true, unlockedProductIds: unlocked, updatedAt: now }, { merge: true });
 
-    const orderRef = db.collection('orders').doc();
+    const orderRef = db.collection('orders').doc(session.id);
     await orderRef.set({
       creatorId,
       fanId,
@@ -214,7 +230,7 @@ export async function processFanHubCheckoutSessionCompleted(
 
     const productTitle =
       (typeof session.metadata?.productTitle === 'string' && session.metadata.productTitle.trim()) || null;
-    const orderRef = db.collection('orders').doc();
+    const orderRef = db.collection('orders').doc(session.id);
     await orderRef.set({
       creatorId,
       fanId,
@@ -300,7 +316,7 @@ export async function processFanHubCheckoutSessionCompleted(
     const paymentIntentId = typeof session.payment_intent === 'string' ? session.payment_intent : (session.payment_intent as Stripe.PaymentIntent)?.id;
     const amountTotal = session.amount_total ?? 0;
 
-    const orderRef = db.collection('orders').doc();
+    const orderRef = db.collection('orders').doc(session.id);
     await orderRef.set({
       creatorId,
       fanId,
@@ -374,7 +390,7 @@ export async function processFanHubCheckoutSessionCompleted(
     const amountTotal = session.amount_total ?? 0;
     const tipHandle = session.metadata?.tipHandle || 'Anonymous';
 
-    const orderRef = db.collection('orders').doc();
+    const orderRef = db.collection('orders').doc(session.id);
     await orderRef.set({
       creatorId,
       fanId,

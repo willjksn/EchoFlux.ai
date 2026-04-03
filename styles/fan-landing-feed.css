@@ -2964,3 +2964,52 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* ---------------------------------------------------------------------------
+   Feed & view-post media — production parity with localhost (full frame, no cover crop).
+   Some cached builds or cascade order can let generic `.fan-feed-media-video { cover }` or
+   other rules win; these selectors match real storefront / Fan Hub DOM and load last.
+   --------------------------------------------------------------------------- */
+.stormij-theme .fan-member-feed .feed-card-media-wrap,
+.fan-member-feed .feed-card-media-wrap,
+.fan-hub-feed-chrome .feed-card > .feed-card-media-wrap {
+  aspect-ratio: unset !important;
+  height: auto !important;
+  min-height: 0;
+}
+
+.stormij-theme .fan-member-feed .feed-card-media-wrap .feed-card-media,
+.fan-member-feed .feed-card-media-wrap .feed-card-media {
+  width: 100% !important;
+  height: auto !important;
+  max-height: 600px;
+  object-fit: contain !important;
+  object-position: center top;
+  display: block;
+}
+
+.stormij-theme .fan-member-feed .feed-card-media-wrap .feed-card-media-video,
+.fan-member-feed .feed-card-media-wrap .feed-card-media-video {
+  width: 100% !important;
+  height: auto !important;
+  max-height: 600px;
+  object-fit: contain !important;
+  object-position: center center;
+  display: block;
+}
+
+.fan-member-content--feed .feed-card-media-wrap .feed-card-media,
+.fan-member-content--feed-column .feed-card-media-wrap .feed-card-media,
+.fan-hub-feed-chrome .feed-card-media-wrap .feed-card-media,
+.fan-member-content--feed .feed-card-media-wrap .feed-card-media-video,
+.fan-member-content--feed-column .feed-card-media-wrap .feed-card-media-video,
+.fan-hub-feed-chrome .feed-card-media-wrap .feed-card-media-video {
+  object-fit: contain !important;
+}
+
+.feed-comments-modal-content--stack .feed-comments-modal-media,
+.feed-comments-modal-content--stack .feed-comments-modal-media-video,
+.feed-comments-modal-content--stack .feed-comments-modal-media-video--loop {
+  object-fit: contain !important;
+  object-position: center center !important;
+}
