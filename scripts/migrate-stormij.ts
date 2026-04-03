@@ -562,6 +562,23 @@ async function migrateMembers(
   return stat;
 }
 
+/** Best-effort fan Firebase UID from Stormij purchase doc (for grants backfill). */
+function inferFanIdFromStormijPurchase(data: Record<string, unknown>): string | null {
+  const candidates = [
+    data.uid,
+    data.userId,
+    data.fanId,
+    data.memberUid,
+    data.customerId,
+    data.memberId,
+    data.firebaseUid,
+  ];
+  for (const c of candidates) {
+    if (typeof c === 'string' && c.trim().length > 0) return c.trim();
+  }
+  return null;
+}
+
 /**
  * Migrate Purchases (transaction history)
  */
@@ -581,7 +598,7 @@ async function migratePurchases(
     console.log(`   Found ${snapshot.size} purchases in Stormij`);
 
     if (dryRun) {
-      console.log('   [DRY RUN] Would migrate purchases');
+      console.log('   [DRY RUN] Would migrate purchases (includes fanId when present on Stormij docs)');
       stat.skipped = snapshot.size;
       return stat;
     }
@@ -589,19 +606,32 @@ async function migratePurchases(
     for (const doc of snapshot.docs) {
       try {
         const data = doc.data();
-        
+        const stormijCreator =
+          typeof data.creatorId === 'string' ? data.creatorId.trim() : '';
+        if (stormijCreator && stormijCreator !== creatorId) {
+          stat.skipped++;
+          continue;
+        }
+
+        const fanId = inferFanIdFromStormijPurchase(data);
+        const treatId =
+          (typeof data.treatId === 'string' && data.treatId.trim()) ||
+          (typeof data.productId === 'string' && data.productId.trim()) ||
+          null;
+
         const echofluxPurchase = {
           id: doc.id,
           creatorId,
           email: data.email || null,
           productName: data.productName || null,
-          treatId: data.treatId || null,
+          treatId,
           amountCents: data.amountCents || 0,
           purchasedAt: data.createdAt || data.purchasedAt || null,
           scheduleStatus: data.scheduleStatus || 'pending',
           scheduledDate: data.scheduledDate || null,
           scheduledTime: data.scheduledTime || null,
           scheduledAt: data.scheduledAt || null,
+          ...(fanId ? { fanId } : {}),
           // Migration metadata
           migratedFrom: 'stormij',
           migratedAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -909,10 +939,13 @@ async function main() {
     console.log('\n✅ Migration completed successfully!');
     console.log(`\nNext steps:`);
     console.log(`1. Verify data in Echoflux Firebase Console`);
-    console.log(`2. If you migrated conversations, sync DMs for Fan Hub Messages:`);
+    console.log(`2. If you migrated conversations, copy them into fanDmThreads (Fan Hub + member Messages read this):`);
     console.log(`   npm run sync:fan-dm-threads -- --creator-id=${creatorId}`);
-    console.log(`3. Test the page at echoflux.ai/${ECHOFLUX_CREATOR_HANDLE}`);
-    console.log(`4. Hero/avatar: re-run site_config migration if URLs were added in Stormij, or set in My Page`);
+    console.log(`3. If you migrated purchases, merge treat unlocks into entitlements (Your purchases tab reads grants):`);
+    console.log(`   npm run backfill:stormij-purchases-to-grants -- --creator-id=${creatorId}`);
+    console.log(`   (dry-run: add --dry-run)`);
+    console.log(`4. Test the page at echoflux.ai/${ECHOFLUX_CREATOR_HANDLE}`);
+    console.log(`5. Hero/avatar: re-run site_config migration if URLs were added in Stormij, or set in My Page`);
   } else {
     console.log('\n⚠️  Migration completed with errors. Review the errors above.');
   }

@@ -22,11 +22,16 @@ interface FanUser {
   plan: string | null;
   signupDate: Date;
   remainingAccess: "Active" | "Expired" | "Cancelled" | string;
-  /** Month-to-date (calendar month) from orders — matches Monthly Totals row */
-  monthlySpendCents: number;
-  storePurchasesCents: number;
-  tipsCents: number;
-  unlocksCents: number;
+  /** All-time: fans.totalSpentCents baseline + sum of all orders (migrated Stormij orders keep old dates; this still counts) */
+  lifetimeSpendCents: number;
+  lifetimeStorePurchasesCents: number;
+  lifetimeTipsCents: number;
+  lifetimeUnlocksCents: number;
+  /** Calendar month-to-date from orders — summed in the Monthly Totals row only */
+  mtdSpendCents: number;
+  mtdStorePurchasesCents: number;
+  mtdTipsCents: number;
+  mtdUnlocksCents: number;
   lastActiveAt: Date | null;
   avatarUrl?: string;
 }
@@ -416,6 +421,72 @@ export const FanHubUsers: React.FC = () => {
         // Manual users collection may not exist
       }
 
+      // Same fan can appear twice after migration: e.g. `fans/{stormijUid}` from members vs `orders` keyed by
+      // EchoFlux Auth uid (resolved from email in backfill). Merge rows that share the same email.
+      type MapRow = (typeof userMap extends Map<string, infer R> ? R : never);
+      const mergeFanRowsByEmail = (map: Map<string, MapRow>) => {
+        const emailToIds = new Map<string, string[]>();
+        for (const [id, row] of map) {
+          const em = typeof row.email === "string" ? row.email.trim().toLowerCase() : "";
+          if (!em) continue;
+          const list = emailToIds.get(em) || [];
+          list.push(id);
+          emailToIds.set(em, list);
+        }
+        const pickCanonical = (ids: string[]): string => {
+          let best = ids[0];
+          let bestScore = -1;
+          for (const id of ids) {
+            const r = map.get(id);
+            if (!r) continue;
+            const score = r.treats + r.tips + r.unlocks;
+            if (score > bestScore) {
+              bestScore = score;
+              best = id;
+            }
+          }
+          if (bestScore > 0) return best;
+          const uidLike = ids.find((id) => !id.includes("@") && id.length >= 20);
+          return uidLike ?? ids[0];
+        };
+        for (const ids of emailToIds.values()) {
+          if (ids.length <= 1) continue;
+          const canonical = pickCanonical(ids);
+          const base = map.get(canonical);
+          if (!base) continue;
+          for (const oid of ids) {
+            if (oid === canonical) continue;
+            const o = map.get(oid);
+            if (!o) continue;
+            base.tips += o.tips;
+            base.treats += o.treats;
+            base.unlocks += o.unlocks;
+            base.total += o.total;
+            base.mtdTips += o.mtdTips;
+            base.mtdTreats += o.mtdTreats;
+            base.mtdUnlocks += o.mtdUnlocks;
+            if (!base.email && o.email) base.email = o.email;
+            if (!base.displayName && o.displayName) base.displayName = o.displayName;
+            if (!base.username && o.username) base.username = o.username;
+            if (!base.storedRole && o.storedRole) base.storedRole = o.storedRole;
+            if (!base.subscriptionStatus && o.subscriptionStatus) base.subscriptionStatus = o.subscriptionStatus;
+            if (!base.subscribedAt && o.subscribedAt) base.subscribedAt = o.subscribedAt;
+            if (o.lastActive && (!base.lastActive || o.lastActive > base.lastActive)) base.lastActive = o.lastActive;
+            if (o.firstOrder && (!base.firstOrder || o.firstOrder < base.firstOrder)) base.firstOrder = o.firstOrder;
+            if (o.cancelAtPeriodEnd) base.cancelAtPeriodEnd = true;
+            if (o.subscriptionCurrentPeriodEnd) {
+              const cur = base.subscriptionCurrentPeriodEnd;
+              const next = o.subscriptionCurrentPeriodEnd;
+              if (!cur || next.getTime() > cur.getTime()) base.subscriptionCurrentPeriodEnd = next;
+            }
+            if (!base.avatarUrl && o.avatarUrl) base.avatarUrl = o.avatarUrl;
+            map.delete(oid);
+          }
+          base.id = canonical;
+        }
+      };
+      mergeFanRowsByEmail(userMap);
+
       // Merge `users/{fanId}` so @username shows when `fans` doc lacks it (Stripe + claimed handles)
       const profileIds = [...userMap.keys()];
       const PROFILE_CHUNK = 30;
@@ -499,6 +570,12 @@ export const FanHubUsers: React.FC = () => {
         const mtdTips = data.mtdTips ?? 0;
         const mtdTreats = data.mtdTreats ?? 0;
         const mtdUnlocks = data.mtdUnlocks ?? 0;
+        const tips = data.tips ?? 0;
+        const treats = data.treats ?? 0;
+        const unlocks = data.unlocks ?? 0;
+        const totalTracked = data.total ?? 0;
+        const lifetimeFromOrders = tips + treats + unlocks;
+        const lifetimeSpendCents = Math.max(totalTracked, lifetimeFromOrders);
         return {
           id: data.id,
           name,
@@ -508,10 +585,14 @@ export const FanHubUsers: React.FC = () => {
           plan,
           signupDate: data.subscribedAt || data.firstOrder || new Date(),
           remainingAccess,
-          monthlySpendCents: mtdTips + mtdTreats + mtdUnlocks,
-          storePurchasesCents: mtdTreats,
-          tipsCents: mtdTips,
-          unlocksCents: mtdUnlocks,
+          lifetimeSpendCents,
+          lifetimeStorePurchasesCents: treats,
+          lifetimeTipsCents: tips,
+          lifetimeUnlocksCents: unlocks,
+          mtdSpendCents: mtdTips + mtdTreats + mtdUnlocks,
+          mtdStorePurchasesCents: mtdTreats,
+          mtdTipsCents: mtdTips,
+          mtdUnlocksCents: mtdUnlocks,
           lastActiveAt: data.lastActive,
           avatarUrl: data.avatarUrl,
         };
@@ -765,10 +846,10 @@ export const FanHubUsers: React.FC = () => {
 
   // Calculate monthly totals
   const monthlyTotals = {
-    spend: users.reduce((sum, u) => sum + u.monthlySpendCents, 0),
-    purchases: users.reduce((sum, u) => sum + u.storePurchasesCents, 0),
-    tips: users.reduce((sum, u) => sum + u.tipsCents, 0),
-    unlocks: users.reduce((sum, u) => sum + u.unlocksCents, 0),
+    spend: users.reduce((sum, u) => sum + u.mtdSpendCents, 0),
+    purchases: users.reduce((sum, u) => sum + u.mtdStorePurchasesCents, 0),
+    tips: users.reduce((sum, u) => sum + u.mtdTipsCents, 0),
+    unlocks: users.reduce((sum, u) => sum + u.mtdUnlocksCents, 0),
   };
 
   if (!user?.id) {
@@ -831,16 +912,16 @@ export const FanHubUsers: React.FC = () => {
         )}
       </td>
       <td className="px-4 py-3 text-sm text-gray-700 dark:text-gray-300">
-        {formatCents(fanUser.monthlySpendCents)}
+        {formatCents(fanUser.lifetimeSpendCents)}
       </td>
       <td className="px-4 py-3 text-sm text-gray-700 dark:text-gray-300">
-        {formatCents(fanUser.storePurchasesCents)}
+        {formatCents(fanUser.lifetimeStorePurchasesCents)}
       </td>
       <td className="px-4 py-3 text-sm text-gray-700 dark:text-gray-300">
-        {formatCents(fanUser.tipsCents)}
+        {formatCents(fanUser.lifetimeTipsCents)}
       </td>
       <td className="px-4 py-3 text-sm text-gray-700 dark:text-gray-300">
-        {formatCents(fanUser.unlocksCents)}
+        {formatCents(fanUser.lifetimeUnlocksCents)}
       </td>
       <td className="px-4 py-3">
         {showActions && (
@@ -963,10 +1044,10 @@ export const FanHubUsers: React.FC = () => {
                     Remaining Access
                   </th>
                   <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                    Monthly Spend
+                    Total spend
                   </th>
                   <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                    Store Purchases
+                    Store
                   </th>
                   <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                     Tips
@@ -992,7 +1073,7 @@ export const FanHubUsers: React.FC = () => {
                       >
                         Σ
                       </div>
-                      <span className="font-semibold text-gray-900 dark:text-white">Monthly Totals</span>
+                      <span className="font-semibold text-gray-900 dark:text-white">This month (orders)</span>
                     </div>
                   </td>
                   <td className="px-4 py-3 text-gray-400">—</td>
@@ -1385,19 +1466,19 @@ export const FanHubUsers: React.FC = () => {
                   <div className="space-y-1 text-sm">
                     <div className="flex justify-between">
                       <span className="text-gray-600 dark:text-gray-400">Total Spent</span>
-                      <span className="font-medium text-gray-900 dark:text-white">{formatCents(selectedUser.monthlySpendCents)}</span>
+                      <span className="font-medium text-gray-900 dark:text-white">{formatCents(selectedUser.lifetimeSpendCents)}</span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-gray-600 dark:text-gray-400">Tips</span>
-                      <span className="font-medium text-gray-900 dark:text-white">{formatCents(selectedUser.tipsCents)}</span>
+                      <span className="font-medium text-gray-900 dark:text-white">{formatCents(selectedUser.lifetimeTipsCents)}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-gray-600 dark:text-gray-400">Store Purchases</span>
-                      <span className="font-medium text-gray-900 dark:text-white">{formatCents(selectedUser.storePurchasesCents)}</span>
+                      <span className="text-gray-600 dark:text-gray-400">Store</span>
+                      <span className="font-medium text-gray-900 dark:text-white">{formatCents(selectedUser.lifetimeStorePurchasesCents)}</span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-gray-600 dark:text-gray-400">Unlocks</span>
-                      <span className="font-medium text-gray-900 dark:text-white">{formatCents(selectedUser.unlocksCents)}</span>
+                      <span className="font-medium text-gray-900 dark:text-white">{formatCents(selectedUser.lifetimeUnlocksCents)}</span>
                     </div>
                   </div>
                 ) : (

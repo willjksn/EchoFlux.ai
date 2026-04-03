@@ -139,6 +139,14 @@ If chats in your EchoFlux project are still only under the **root** collection `
 npm run sync:fan-dm-threads -- --creator-id=YOUR_CREATOR_ID --source=root
 ```
 
+**Purchases vs “Your purchases” on the storefront:** `migrate-stormij` copies Stormij rows into top-level **`purchases`**, but the member **Purchases** tab uses **`creatorEntitlements/{creatorId}/grants/{fanUid}.unlockedProductIds`** (same product ids as **`products`**). After migrating purchases, run:
+
+```bash
+npm run backfill:stormij-purchases-to-grants -- --creator-id=YOUR_CREATOR_ID
+```
+
+Use `--dry-run` first. Re-run **`migrate-stormij` with `purchases`** if your EchoFlux `purchases` docs predate **`fanId`** on the doc—the script now stores fan UIDs when Stormij includes them; otherwise the backfill resolves fans by **email** via Firebase Auth.
+
 **After migration, fan cards + chat session pickers read `users/{creatorId}/onlyfans_fan_preferences`.** That is **not** filled by `migrate-stormij.ts`. Run the one-off backfill once per creator:
 
 ```bash
