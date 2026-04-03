@@ -5,7 +5,7 @@ import { initializeApp, getApps, cert } from 'firebase-admin/app';
 import { recordPlanChangeEvent } from './_planChangeEvents.js';
 import { grantReferralRewardOnConversion } from './_grantReferralReward.js';
 import {
-  upsertFanHubFanPreferenceFromMember,
+  reconcileFanHubFanPreferenceForMember,
   ensureFanDmThreadForMember,
 } from './_syncFanHubFanPreference.js';
 import { mergeGuestTreatPurchasesIntoUid } from './_mergeGuestFanPurchases.js';
@@ -76,7 +76,8 @@ const FAN_HUB_CHECKOUT_TYPES = new Set(['subscription', 'product', 'tip', 'post_
  * platform-account checkouts (e.g. PLATFORM_OWNER_CREATOR_IDS / Stormij).
  * Returns true if this session was handled as fan hub (caller should skip EchoFlux creator billing).
  */
-async function processFanHubCheckoutSessionCompleted(
+/** Exported for POST /api/syncFanCheckoutSession when webhooks are delayed (member returns before Firestore updates). */
+export async function processFanHubCheckoutSessionCompleted(
   db: Firestore,
   session: Stripe.Checkout.Session,
 ): Promise<boolean> {
@@ -183,6 +184,12 @@ async function processFanHubCheckoutSessionCompleted(
     }
 
     try {
+      await reconcileFanHubFanPreferenceForMember(db, creatorId, fanId, now, 'stripe_subscription_checkout');
+    } catch (e) {
+      console.error('reconcileFanHubFanPreference (subscription checkout):', e);
+    }
+
+    try {
       const cust =
         typeof session.customer === 'string'
           ? session.customer
@@ -268,9 +275,9 @@ async function processFanHubCheckoutSessionCompleted(
 
     if (!isGuestFan) {
       try {
-        await upsertFanHubFanPreferenceFromMember(db, creatorId, fanId, now, 'stripe_product');
+        await reconcileFanHubFanPreferenceForMember(db, creatorId, fanId, now, 'stripe_product');
       } catch (e) {
-        console.error('syncFanHubFanPreference (product):', e);
+        console.error('reconcileFanHubFanPreference (product):', e);
       }
     }
 
@@ -347,9 +354,9 @@ async function processFanHubCheckoutSessionCompleted(
     }
 
     try {
-      await upsertFanHubFanPreferenceFromMember(db, creatorId, fanId, now, 'stripe_post_unlock');
+      await reconcileFanHubFanPreferenceForMember(db, creatorId, fanId, now, 'stripe_post_unlock');
     } catch (e) {
-      console.error('syncFanHubFanPreference (post_unlock):', e);
+      console.error('reconcileFanHubFanPreference (post_unlock):', e);
     }
 
     const statsRef = db.collection('creatorStats').doc(creatorId);
@@ -417,9 +424,9 @@ async function processFanHubCheckoutSessionCompleted(
     }
 
     try {
-      await upsertFanHubFanPreferenceFromMember(db, creatorId, fanId, now, 'stripe_tip');
+      await reconcileFanHubFanPreferenceForMember(db, creatorId, fanId, now, 'stripe_tip');
     } catch (e) {
-      console.error('syncFanHubFanPreference (tip):', e);
+      console.error('reconcileFanHubFanPreference (tip):', e);
     }
 
     const statsRef = db.collection('creatorStats').doc(creatorId);
@@ -496,9 +503,9 @@ async function processFanHubSubscriptionUpdated(
       updatedAt: now,
     });
     try {
-      await upsertFanHubFanPreferenceFromMember(db, creatorId, fanId, now, 'stripe_subscription_updated');
+      await reconcileFanHubFanPreferenceForMember(db, creatorId, fanId, now, 'stripe_subscription_updated');
     } catch (e) {
-      console.error('syncFanHubFanPreference (subscription updated):', e);
+      console.error('reconcileFanHubFanPreference (subscription updated):', e);
     }
   }
 
@@ -531,9 +538,9 @@ async function processFanHubSubscriptionDeleted(db: Firestore, subscription: Str
       updatedAt: now,
     });
     try {
-      await upsertFanHubFanPreferenceFromMember(db, creatorId, fanId, now, 'stripe_subscription_canceled');
+      await reconcileFanHubFanPreferenceForMember(db, creatorId, fanId, now, 'stripe_subscription_canceled');
     } catch (e) {
-      console.error('syncFanHubFanPreference (subscription deleted):', e);
+      console.error('reconcileFanHubFanPreference (subscription deleted):', e);
     }
   }
 

@@ -64,6 +64,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (uid !== t.creatorId && uid !== t.fanId) {
       return res.status(403).json({ error: "Not a participant" });
     }
+    // Fans must pass creatorId matching the thread. Otherwise a stale threadId from another
+    // creator's storefront could deliver messages to the wrong inbox.
+    if (uid === t.fanId) {
+      const bodyCreator = typeof body.creatorId === "string" ? body.creatorId.trim() : "";
+      if (!bodyCreator || bodyCreator !== t.creatorId) {
+        return res.status(400).json({
+          error: "creatorId must match the creator you are messaging",
+          code: "CREATOR_THREAD_MISMATCH",
+        });
+      }
+    }
+    if (uid === t.creatorId && typeof body.fanId === "string" && body.fanId.trim() && body.fanId.trim() !== t.fanId) {
+      return res.status(400).json({ error: "fanId does not match this thread" });
+    }
   } else if (creatorId && fanId) {
     creatorIdFinal = creatorId;
     fanIdFinal = fanId;

@@ -75,6 +75,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   try {
     await db.runTransaction(async (tx) => {
+      // All reads before any writes (Firestore requirement).
       const creatorHandleSnap = await tx.get(creatorHandleRef);
       if (creatorHandleSnap.exists) {
         throw new Error("RESERVED_CREATOR_HANDLE");
@@ -86,13 +87,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           throw new Error("TAKEN");
         }
       }
-      tx.set(unameRef, { uid, updatedAt: now });
+      let oldOwner: string | undefined;
       if (oldUnameRef) {
         const oldSnap = await tx.get(oldUnameRef);
-        const oldOwner = (oldSnap.data() as { uid?: string } | undefined)?.uid;
-        if (!oldOwner || oldOwner === uid) {
-          tx.delete(oldUnameRef);
-        }
+        oldOwner = (oldSnap.data() as { uid?: string } | undefined)?.uid;
+      }
+      tx.set(unameRef, { uid, updatedAt: now });
+      if (oldUnameRef && (!oldOwner || oldOwner === uid)) {
+        tx.delete(oldUnameRef);
       }
       tx.set(
         userRef,

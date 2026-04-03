@@ -132,7 +132,10 @@ export const MemberUsernameGateModal: React.FC<Props> = ({
           <input
             id="member-username-input"
             type="text"
-            autoComplete="username"
+            name="member_handle"
+            autoComplete="off"
+            autoCorrect="off"
+            spellCheck={false}
             maxLength={32}
             className="flex-1 rounded-lg border px-3 py-2 text-base outline-none focus:ring-2"
             style={{ borderColor: `${primaryColor}55`, color: textColor }}

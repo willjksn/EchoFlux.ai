@@ -615,7 +615,14 @@ export const FanHubUsers: React.FC = () => {
     try {
       // Delete from fans collection (primary)
       await deleteDoc(doc(db, "creators", user.id, "fans", fanUser.id));
-      
+
+      // Fans tab / CRM card (synced via Admin API)
+      try {
+        await deleteDoc(doc(db, "users", user.id, "onlyfans_fan_preferences", fanUser.id));
+      } catch {
+        /* no pref doc */
+      }
+
       // Also try to delete from legacy fanUsers collection
       const manualUsersRef = collection(db, "creators", user.id, "fanUsers");
       const q = query(manualUsersRef, where("email", "==", fanUser.email));

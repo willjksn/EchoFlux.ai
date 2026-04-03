@@ -416,6 +416,14 @@ function buildPublicCheckoutUrl(pathname: string, search = "", hash = ""): strin
   return `${window.location.origin}${pathname}${search}${hash}`;
 }
 
+/** Merge query params then append Stripe's literal `{CHECKOUT_SESSION_ID}` (URLSearchParams encodes `{}` and breaks substitution). */
+function buildMemberCheckoutSuccessSearch(currentSearch: string) {
+  const p = new URLSearchParams(currentSearch.startsWith("?") ? currentSearch.slice(1) : currentSearch);
+  p.set("purchase_sync", "1");
+  const enc = p.toString();
+  return enc ? `${enc}&session_id={CHECKOUT_SESSION_ID}` : `purchase_sync=1&session_id={CHECKOUT_SESSION_ID}`;
+}
+
 const TIP_PRESET_AMOUNTS = [5, 10, 25, 50, 100, 250];
 
 const DmPhotoIcon = () => (
@@ -641,6 +649,8 @@ export const FanStorefrontView: React.FC = () => {
   const dmMessagesEndRef = useRef<HTMLDivElement | null>(null);
   const { ref: dmTextareaRef } = useAutosizeTextarea(dmInput);
   const dmFileInputRef = useRef<HTMLInputElement | null>(null);
+  const profileAvatarInputRef = useRef<HTMLInputElement | null>(null);
+  const dmThreadFetchGen = useRef(0);
   const dmMediaRecorderRef = useRef<MediaRecorder | null>(null);
   const dmMediaChunksRef = useRef<Blob[]>([]);
   const [dmRecordingVoice, setDmRecordingVoice] = useState(false);
@@ -1524,6 +1534,7 @@ export const FanStorefrontView: React.FC = () => {
     if (typeof window === "undefined" || !creator?.creatorId || !isLoggedIn) return;
     const params = new URLSearchParams(window.location.search);
     if (params.get("post_unlock") !== "1") return;
+    if (params.get("session_id")) return; // session_id path: member checkout sync effect runs first
     void refetchMemberEntitlement();
     params.delete("post_unlock");
     const qs = params.toString();
@@ -1532,6 +1543,47 @@ export const FanStorefrontView: React.FC = () => {
       "",
       window.location.pathname + (qs ? `?${qs}` : "") + (window.location.hash || "")
     );
+  }, [creator?.creatorId, isLoggedIn, refetchMemberEntitlement]);
+
+  /** Member checkout return: apply Firestore same as webhook when session_id is present (webhook delay). */
+  useEffect(() => {
+    if (typeof window === "undefined" || !creator?.creatorId || !isLoggedIn || !auth.currentUser) return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("treat_success") === "1") return;
+    const sid = params.get("session_id");
+    const purchaseSync = params.get("purchase_sync") === "1";
+    const postUnlock = params.get("post_unlock") === "1";
+    if (!sid || (!purchaseSync && !postUnlock)) return;
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const token = await auth.currentUser!.getIdToken(true);
+        const res = await fetch("/api/syncFanCheckoutSession", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ sessionId: sid, creatorId: creator.creatorId }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (cancelled) return;
+        if (!res.ok) {
+          console.warn("syncFanCheckoutSession", res.status, data);
+        }
+        await refetchMemberEntitlement();
+        const url = new URL(window.location.href);
+        url.searchParams.delete("session_id");
+        url.searchParams.delete("purchase_sync");
+        url.searchParams.delete("post_unlock");
+        const qs = url.searchParams.toString();
+        window.history.replaceState({}, "", url.pathname + (qs ? `?${qs}` : "") + (url.hash || ""));
+      } catch (e) {
+        if (!cancelled) console.warn("member checkout sync", e);
+        void refetchMemberEntitlement();
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [creator?.creatorId, isLoggedIn, refetchMemberEntitlement]);
 
   const fetchTreats = useCallback(async () => {
@@ -1719,7 +1771,11 @@ export const FanStorefrontView: React.FC = () => {
       const token = await auth.currentUser.getIdToken(true);
       const currentUrl = typeof window !== "undefined" ? new URL(window.location.href) : null;
       const successUrl = currentUrl
-        ? buildPublicCheckoutUrl(currentUrl.pathname, currentUrl.search, currentUrl.hash)
+        ? buildPublicCheckoutUrl(
+            currentUrl.pathname,
+            `?${buildMemberCheckoutSuccessSearch(currentUrl.search)}`,
+            currentUrl.hash
+          )
         : undefined;
       const cancelUrl = currentUrl
         ? (() => {
@@ -1812,7 +1868,12 @@ export const FanStorefrontView: React.FC = () => {
     setPurchasingId(pid);
     try {
       const token = await auth.currentUser.getIdToken(true);
-      const successUrl = buildPublicCheckoutUrl(window.location.pathname, window.location.search, window.location.hash);
+      const u = new URL(typeof window !== "undefined" ? window.location.href : "https://local/");
+      const successUrl = buildPublicCheckoutUrl(
+        u.pathname,
+        `?${buildMemberCheckoutSuccessSearch(u.search)}`,
+        u.hash
+      );
       const cancelUrl = buildPublicCheckoutUrl(window.location.pathname, window.location.search, window.location.hash);
       const res = await fetch("/api/createFanCheckoutSession", {
         method: "POST",
@@ -2111,6 +2172,7 @@ export const FanStorefrontView: React.FC = () => {
         await uploadBytes(storageRef, file, { contentType: file.type || "image/jpeg" });
         const url = await getDownloadURL(storageRef);
         setProfileDraft((prev) => ({ ...prev, photoURL: url }));
+        setProfileInitial((prev) => ({ ...prev, photoURL: url }));
         await setDoc(
           doc(db, "users", auth.currentUser.uid),
           { photoURL: url, avatar: url, updatedAt: new Date().toISOString() },
@@ -2173,26 +2235,30 @@ export const FanStorefrontView: React.FC = () => {
 
   const fetchDmThreadAndMessages = useCallback(async () => {
     if (!creator?.creatorId || !auth.currentUser || activeTab !== "messages") return;
+    const gen = ++dmThreadFetchGen.current;
     setDmLoading(true);
     try {
       const token = await auth.currentUser.getIdToken(true);
+      const cid = creator.creatorId;
       const [threadsRes, bannedRes] = await Promise.all([
         fetch("/api/fanDmThreads?as=fan", { headers: { Authorization: `Bearer ${token}` } }),
-        fetch(`/api/checkFanBanned?creatorId=${encodeURIComponent(creator.creatorId)}`, {
+        fetch(`/api/checkFanBanned?creatorId=${encodeURIComponent(cid)}`, {
           headers: { Authorization: `Bearer ${token}` },
         }),
       ]);
+      if (gen !== dmThreadFetchGen.current) return;
       const threadsData = await threadsRes.json().catch(() => ({}));
       const bannedData = await bannedRes.json().catch(() => ({}));
       setFanBanned(!!(bannedData as { banned?: boolean }).banned);
       const threads = (threadsData.threads as FanDmThread[]) || [];
-      const withCreator = threads.find((t) => t.creatorId === creator.creatorId);
+      const withCreator = threads.find((t) => t.creatorId === cid);
       setDmThread(withCreator || null);
       if (withCreator) {
         const msgRes = await fetch(
           `/api/fanDmMessages?threadId=${encodeURIComponent(withCreator.id)}`,
           { headers: { Authorization: `Bearer ${token}` } }
         );
+        if (gen !== dmThreadFetchGen.current) return;
         const msgData = await msgRes.json().catch(() => ({}));
         setDmMessages(Array.isArray(msgData.messages) ? msgData.messages : []);
         const raw = msgData.labels as { fan?: unknown; creator?: unknown } | undefined;
@@ -2206,13 +2272,23 @@ export const FanStorefrontView: React.FC = () => {
         setDmLabels(null);
       }
     } catch {
-      setDmThread(null);
-      setDmMessages([]);
-      setDmLabels(null);
+      if (gen === dmThreadFetchGen.current) {
+        setDmThread(null);
+        setDmMessages([]);
+        setDmLabels(null);
+      }
     } finally {
-      setDmLoading(false);
+      if (gen === dmThreadFetchGen.current) {
+        setDmLoading(false);
+      }
     }
   }, [creator?.creatorId, activeTab]);
+
+  useEffect(() => {
+    setDmThread(null);
+    setDmMessages([]);
+    setDmLabels(null);
+  }, [creator?.creatorId]);
 
   useEffect(() => {
     if (activeTab === "messages" && creator?.creatorId && isLoggedIn) fetchDmThreadAndMessages();
@@ -2264,7 +2340,9 @@ export const FanStorefrontView: React.FC = () => {
         fanId: auth.currentUser.uid,
         content: content.trim(),
       };
-      if (dmThread) body.threadId = dmThread.id;
+      if (dmThread && dmThread.creatorId === creator.creatorId) {
+        body.threadId = dmThread.id;
+      }
       if (attachmentUrl) {
         body.attachmentUrl = attachmentUrl;
         if (attachmentType) body.attachmentType = attachmentType;
@@ -2926,13 +3004,16 @@ export const FanStorefrontView: React.FC = () => {
           }
         }}
       />
-      {memberUsernameRequired && creator && !previewMember && hasAccessByCurrentMembership && (
+      {memberUsernameRequired && creator && !previewMember && hasMemberAreaAccess && (
         <MemberUsernameGateModal
           creatorId={creator.creatorId}
           creatorDisplayName={displayName}
           primaryColor={primary}
           textColor={theme?.text}
-          onComplete={() => setMemberUsernameRequired(false)}
+          onComplete={() => {
+            setMemberUsernameRequired(false);
+            void refetchMemberEntitlement();
+          }}
         />
       )}
       {/* Member Header — witme wordmark only (no creator avatar / community subtitle) */}
@@ -3532,19 +3613,46 @@ export const FanStorefrontView: React.FC = () => {
                     }}
                   >
                     <h3 className="fan-profile-section-title">Profile Information</h3>
+                    <input
+                      ref={profileAvatarInputRef}
+                      type="file"
+                      accept="image/*"
+                      className="sr-only"
+                      tabIndex={-1}
+                      aria-hidden
+                      onChange={(e) => {
+                        const f = e.target.files?.[0];
+                        e.target.value = "";
+                        if (f) void handleProfileAvatarUpload(f);
+                      }}
+                    />
                     <div className="flex items-center gap-3">
-                      {profileDraft.photoURL ? (
-                        <img
-                          src={profileDraft.photoURL}
-                          alt=""
-                          className="w-20 h-20 rounded-full object-cover border-2 border-white shadow-sm"
-                          style={avatarCropStyle}
-                        />
-                      ) : (
-                        <span className="storefront-profile-menu-avatar storefront-profile-menu-avatar-fallback w-20 h-20 text-xl">
-                          {memberAvatarInitial}
+                      <button
+                        type="button"
+                        className="relative shrink-0 rounded-full border-0 p-0 cursor-pointer bg-transparent focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--fan-primary,#6366f1)] focus-visible:ring-offset-2 disabled:opacity-60"
+                        disabled={avatarUploading}
+                        onClick={() => profileAvatarInputRef.current?.click()}
+                        aria-label={profileDraft.photoURL ? "Change profile photo" : "Upload profile photo"}
+                      >
+                        {profileDraft.photoURL ? (
+                          <img
+                            src={profileDraft.photoURL}
+                            alt=""
+                            className="w-20 h-20 rounded-full object-cover border-2 border-white shadow-sm"
+                            style={avatarCropStyle}
+                          />
+                        ) : (
+                          <span className="storefront-profile-menu-avatar storefront-profile-menu-avatar-fallback w-20 h-20 text-xl inline-flex items-center justify-center">
+                            {memberAvatarInitial}
+                          </span>
+                        )}
+                        <span
+                          className="absolute bottom-0 right-0 text-[10px] font-medium px-1.5 py-0.5 rounded-md shadow-sm"
+                          style={{ backgroundColor: `${primary}f2`, color: "#fff" }}
+                        >
+                          {avatarUploading ? "…" : "Photo"}
                         </span>
-                      )}
+                      </button>
                       <div>
                         <p className="fan-profile-name m-0">{profileDisplayName}</p>
                         <p className="fan-member-about-text m-0 text-sm">
@@ -3567,6 +3675,10 @@ export const FanStorefrontView: React.FC = () => {
                             setUsernameDraft(normalizeMemberUsername(e.target.value).replace(/[^a-z0-9_]/g, ""))
                           }
                           className="fan-profile-username-input"
+                          name="member_handle"
+                          autoComplete="off"
+                          autoCorrect="off"
+                          spellCheck={false}
                           placeholder="your_username"
                           maxLength={32}
                         />
@@ -3627,27 +3739,19 @@ export const FanStorefrontView: React.FC = () => {
                       />
                     </div>
                     <div className="flex flex-wrap gap-2 mt-3 items-center">
-                      <label
-                        className="storefront-cancel-membership-btn cursor-pointer"
+                      <button
+                        type="button"
+                        className="storefront-cancel-membership-btn"
                         style={{
                           color: primary,
                           borderColor: `${primary}66`,
                           backgroundColor: `${primary}0f`,
                         }}
+                        disabled={avatarUploading}
+                        onClick={() => profileAvatarInputRef.current?.click()}
                       >
-                        {avatarUploading ? "Uploading image..." : "Upload image"}
-                        <input
-                          type="file"
-                          accept="image/*"
-                          className="hidden"
-                          onChange={(e) => {
-                            const f = e.target.files?.[0];
-                            if (f) {
-                              void handleProfileAvatarUpload(f);
-                            }
-                          }}
-                        />
-                      </label>
+                        {avatarUploading ? "Uploading…" : "Upload image"}
+                      </button>
                       <button
                         type="button"
                         className="storefront-cancel-membership-btn"

@@ -1,4 +1,5 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
+import { FieldPath } from "firebase-admin/firestore";
 import { withErrorHandling, getVerifyAuth } from "./_errorHandler.js";
 import { getAdminDb, getAdminApp } from "./_firebaseAdmin.js";
 
@@ -59,6 +60,24 @@ async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
         console.error("Error deleting user from Auth:", authError);
         // Continue anyway - we'll still delete from Firestore
       }
+    }
+
+    // Remove this account from every creator's fan list and Fans-tab cards (member uid = doc id).
+    try {
+      const fanRefs = await db.collectionGroup("fans").where(FieldPath.documentId(), "==", userId).get();
+      for (const d of fanRefs.docs) {
+        const parent = d.ref.parent?.parent;
+        const creatorId = parent?.id;
+        if (!creatorId) continue;
+        await d.ref.delete();
+        try {
+          await db.collection("users").doc(creatorId).collection("onlyfans_fan_preferences").doc(userId).delete();
+        } catch {
+          /* no card */
+        }
+      }
+    } catch (cgErr) {
+      console.warn("adminDeleteUser: collectionGroup fans cleanup:", cgErr);
     }
 
     // Delete user document from Firestore

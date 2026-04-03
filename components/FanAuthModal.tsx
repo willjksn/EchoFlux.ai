@@ -599,7 +599,7 @@ export const FanAuthModal: React.FC<FanAuthModalProps> = ({
                   value={username}
                   onChange={(e) => setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ""))}
                   placeholder="your_handle"
-                  autoComplete="username"
+                  autoComplete="nickname"
                   maxLength={32}
                 />
                 {fieldErrors.username && <p className="fan-auth-err">{fieldErrors.username}</p>}

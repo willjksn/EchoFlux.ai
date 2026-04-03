@@ -2,7 +2,7 @@ import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { getAdminDb } from "./_firebaseAdmin.js";
 import { verifyAuth } from "./verifyAuth.js";
 import {
-  upsertFanHubFanPreferenceFromMember,
+  reconcileFanHubFanPreferenceForMember,
   ensureFanDmThreadForMember,
 } from "./_syncFanHubFanPreference.js";
 
@@ -78,10 +78,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const syncFanHubFanCardAndThread = async () => {
       try {
-        await upsertFanHubFanPreferenceFromMember(db, creatorId, fanId, now, "free_membership");
+        await reconcileFanHubFanPreferenceForMember(db, creatorId, fanId, now, "free_membership");
         await ensureFanDmThreadForMember(db, creatorId, fanId, now);
       } catch (e) {
-        console.error("syncFanHubFanPreference (free join):", e);
+        console.error("reconcileFanHubFanPreference (free join):", e);
       }
     };
 

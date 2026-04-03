@@ -86,8 +86,11 @@ function buildTipCheckoutReturnUrl(pathname: string, search: string, hash = ""):
 function buildPostUnlockCheckoutReturnUrls(): { successUrl?: string; cancelUrl?: string } {
   if (typeof window === "undefined") return {};
   const u = new URL(window.location.href);
-  u.searchParams.set("post_unlock", "1");
-  const successUrl = buildTipCheckoutReturnUrl(u.pathname, u.search, u.hash || "");
+  const p = new URLSearchParams(u.search.startsWith("?") ? u.search.slice(1) : u.search);
+  p.set("post_unlock", "1");
+  const enc = p.toString();
+  const qs = enc ? `${enc}&session_id={CHECKOUT_SESSION_ID}` : `post_unlock=1&session_id={CHECKOUT_SESSION_ID}`;
+  const successUrl = buildTipCheckoutReturnUrl(u.pathname, `?${qs}`, u.hash || "");
   const c = new URL(window.location.href);
   const cancelUrl = buildTipCheckoutReturnUrl(c.pathname, c.search, c.hash || "");
   return { successUrl, cancelUrl };

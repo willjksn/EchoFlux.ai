@@ -67,6 +67,21 @@ export function checkoutSessionsCreate(
   return stripe.checkout.sessions.create(params);
 }
 
+export function checkoutSessionsRetrieve(
+  stripe: Stripe,
+  sessionId: string,
+  connectedAccountId?: string | null,
+  expand: string[] = ["subscription", "payment_intent"],
+): Promise<Stripe.Response<Stripe.Checkout.Session>> {
+  const id = typeof connectedAccountId === "string" ? connectedAccountId.trim() : "";
+  const params: Stripe.Checkout.SessionRetrieveParams =
+    expand.length > 0 ? { expand } : {};
+  if (id) {
+    return stripe.checkout.sessions.retrieve(sessionId, params, { stripeAccount: id });
+  }
+  return stripe.checkout.sessions.retrieve(sessionId, params);
+}
+
 export function isStripeConfigured(): boolean {
   return !!platformStripe && !!stripeSecretKey;
 }

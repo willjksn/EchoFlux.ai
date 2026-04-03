@@ -18,6 +18,65 @@ function subscriptionTierFromFanStatus(subStatus: string): "Free" | "Paid" {
   return "Free";
 }
 
+/**
+ * Fans tab cards read `users/{creatorId}/onlyfans_fan_preferences/{fanId}`.
+ * Keep a card while the fan is still a member (paid/free/past_due) or has any spend/tips/purchases on the fan row.
+ * Drop the card when subscription has fully lapsed and there is no purchase/tip history on that row.
+ */
+export function shouldRetainFanHubFanCardFromFanRow(fan: Record<string, unknown>): boolean {
+  const sub = typeof fan.subscriptionStatus === "string" ? fan.subscriptionStatus : "";
+  if (sub === "active" || sub === "trialing" || sub === "free" || sub === "past_due") {
+    return true;
+  }
+  const spent = typeof fan.totalSpentCents === "number" ? fan.totalSpentCents : 0;
+  const tips = typeof fan.totalTipsCents === "number" ? fan.totalTipsCents : 0;
+  const purchases = typeof fan.purchaseCount === "number" ? fan.purchaseCount : 0;
+  const tipCount = typeof fan.tipCount === "number" ? fan.tipCount : 0;
+  return spent > 0 || tips > 0 || purchases > 0 || tipCount > 0;
+}
+
+export async function removeFanHubFanPreference(
+  db: Firestore,
+  creatorId: string,
+  fanId: string,
+): Promise<void> {
+  await db.collection("users").doc(creatorId).collection("onlyfans_fan_preferences").doc(fanId).delete();
+}
+
+/**
+ * After `creators/{creatorId}/fans/{fanId}` changes (or is removed), either refresh or delete the Fans-tab card.
+ * Manual CRM fans (pref doc only, no `memberSource`) are left alone when the fan row is missing.
+ */
+export async function reconcileFanHubFanPreferenceForMember(
+  db: Firestore,
+  creatorId: string,
+  fanId: string,
+  nowIso: string,
+  source: string,
+): Promise<void> {
+  const fanRef = db.collection("creators").doc(creatorId).collection("fans").doc(fanId);
+  const prefRef = db.collection("users").doc(creatorId).collection("onlyfans_fan_preferences").doc(fanId);
+  const [fanSnap, prefSnap] = await Promise.all([fanRef.get(), prefRef.get()]);
+
+  if (!fanSnap.exists) {
+    if (!prefSnap.exists) return;
+    const pref = prefSnap.data() as Record<string, unknown> | undefined;
+    const linked = typeof pref?.memberSource === "string" && pref.memberSource.length > 0;
+    if (linked) {
+      await prefRef.delete();
+    }
+    return;
+  }
+
+  const fanRow = fanSnap.data() as Record<string, unknown>;
+  if (!shouldRetainFanHubFanCardFromFanRow(fanRow)) {
+    await prefRef.delete();
+    return;
+  }
+
+  await upsertFanHubFanPreferenceFromMember(db, creatorId, fanId, nowIso, source);
+}
+
 export async function upsertFanHubFanPreferenceFromMember(
   db: Firestore,
   creatorId: string,

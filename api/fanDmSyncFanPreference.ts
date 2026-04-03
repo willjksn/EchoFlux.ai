@@ -2,7 +2,7 @@ import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { getAdminDb } from "./_firebaseAdmin.js";
 import { verifyAuth } from "./verifyAuth.js";
 import { isFanBlocked } from "./_fanDmHelpers.js";
-import { upsertFanHubFanPreferenceFromMember } from "./_syncFanHubFanPreference.js";
+import { reconcileFanHubFanPreferenceForMember } from "./_syncFanHubFanPreference.js";
 
 /**
  * Creator-only: ensure `users/{creatorId}/onlyfans_fan_preferences/{fanId}` exists
@@ -35,7 +35,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     const now = new Date().toISOString();
-    await upsertFanHubFanPreferenceFromMember(db, creatorId, fanId, now, "dm_open_fan_card");
+    await reconcileFanHubFanPreferenceForMember(db, creatorId, fanId, now, "dm_open_fan_card");
 
     return res.status(200).json({ ok: true, creatorId, fanId });
   } catch (e: unknown) {
