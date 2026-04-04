@@ -188,10 +188,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const updated = updatedResp as unknown as Stripe.Subscription;
       const periodEnd = (updated as any).current_period_end as number | null;
 
+      const periodEndIso = periodEnd ? new Date(periodEnd * 1000).toISOString() : null;
       await userRef.set(
         {
           cancelAtPeriodEnd: true,
-          subscriptionEndDate: periodEnd ? new Date(periodEnd * 1000).toISOString() : null,
+          subscriptionEndDate: periodEndIso,
+          subscriptionCurrentPeriodEnd: periodEndIso,
           subscriptionStatus: updated.status,
         },
         { merge: true }
@@ -375,6 +377,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
     }
 
+    const subAfterPlanChange = await stripe.subscriptions.retrieve(subscriptionId);
+    const cpeRaw = (subAfterPlanChange as { current_period_end?: number }).current_period_end;
+    const subscriptionCurrentPeriodEnd =
+      typeof cpeRaw === 'number' && Number.isFinite(cpeRaw)
+        ? new Date(cpeRaw * 1000).toISOString()
+        : null;
+
     const nowIso = new Date().toISOString();
     await userRef.set(
       {
@@ -382,7 +391,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         billingCycle,
         cancelAtPeriodEnd: false,
         subscriptionEndDate: null,
-        subscriptionStatus: subscription.status,
+        subscriptionCurrentPeriodEnd,
+        subscriptionStatus: subAfterPlanChange.status,
         subscriptionStartDate: nowIso,
         monthlyCaptionGenerationsUsed: 0,
         monthlyImageGenerationsUsed: 0,

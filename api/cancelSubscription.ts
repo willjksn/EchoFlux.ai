@@ -107,19 +107,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         subscriptionEndDate: periodEnd
           ? new Date(periodEnd * 1000).toISOString()
           : null,
+        subscriptionCurrentPeriodEnd: periodEnd
+          ? new Date(periodEnd * 1000).toISOString()
+          : null,
         subscriptionStatus: subscription.status,
       }, { merge: true });
       const endDate = periodEnd
         ? new Date(periodEnd * 1000).toLocaleDateString()
         : 'the end of your billing period';
 
+      const periodEndIso = periodEnd ? new Date(periodEnd * 1000).toISOString() : null;
       return res.status(200).json({
         success: true,
         message: `Subscription will cancel at the end of your billing period (${endDate}). You'll retain full access until then.`,
         cancelAtPeriodEnd: true,
-        subscriptionEndDate: periodEnd
-          ? new Date(periodEnd * 1000).toISOString()
-          : null,
+        subscriptionEndDate: periodEndIso,
+        subscriptionCurrentPeriodEnd: periodEndIso,
       });
     } else if (action === 'reactivate') {
       // Reactivate subscription (remove cancellation).
@@ -144,10 +147,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         cancel_at_period_end: false,
       });
 
+      const cpe = (subscription as { current_period_end?: number }).current_period_end;
+      const subscriptionCurrentPeriodEnd =
+        typeof cpe === 'number' && Number.isFinite(cpe)
+          ? new Date(cpe * 1000).toISOString()
+          : null;
+
       // Update user document
       await userDoc.ref.set({
         cancelAtPeriodEnd: false,
         subscriptionEndDate: null,
+        subscriptionCurrentPeriodEnd,
         subscriptionStatus: subscription.status,
       }, { merge: true });
 
@@ -155,6 +165,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         success: true,
         message: 'Subscription reactivated successfully!',
         cancelAtPeriodEnd: false,
+        subscriptionCurrentPeriodEnd,
       });
     } else {
       return res.status(400).json({ error: 'Invalid action. Use "cancel" or "reactivate"' });

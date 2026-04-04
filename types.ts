@@ -808,8 +808,12 @@ export interface User {
   subscriptionEndDate?: string; // ISO timestamp when subscription ends (if cancelled)
   cancelAtPeriodEnd?: boolean; // Whether subscription is set to cancel at period end
   subscriptionStartDate?: string; // ISO timestamp when current subscription started
+  /** Current Stripe billing period end (ISO); updated on subscription webhooks — for renewal / remaining access UI */
+  subscriptionCurrentPeriodEnd?: string;
   trialEndDate?: string; // ISO timestamp when trial period ends (for trial notifications)
-  billingCycle?: 'monthly' | 'annually'; // Billing cycle for current plan
+  /** Stripe subscription status (e.g. active, trialing) — merged from Firestore */
+  subscriptionStatus?: string;
+  billingCycle?: 'monthly' | 'annually' | 'annual'; // Stripe webhook may use `annual` for yearly
   pendingPlan?: Plan | null; // Scheduled downgrade plan (effective at next renewal)
   pendingBillingCycle?: 'monthly' | 'annually' | null; // Scheduled downgrade billing cycle
   pendingPlanEffectiveDate?: string | null; // ISO timestamp when scheduled plan takes effect

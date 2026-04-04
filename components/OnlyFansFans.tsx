@@ -21,6 +21,46 @@ function normDisplayLabel(s: string): string {
   return s.trim().toLowerCase().replace(/\s+/g, ' ');
 }
 
+function fanInitialsFromName(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return '?';
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
+
+/** Fan Hub grid / detail: photo from Firestore when available */
+function FanGridAvatar({
+  avatarUrl,
+  name,
+  sizeClass = 'w-12 h-12',
+}: {
+  avatarUrl?: string | null;
+  name: string;
+  sizeClass?: string;
+}) {
+  const [failed, setFailed] = useState(false);
+  const url = typeof avatarUrl === 'string' ? avatarUrl.trim() : '';
+  const showImg = url.length > 0 && !failed;
+  return (
+    <div
+      className={`flex-shrink-0 rounded-full overflow-hidden flex items-center justify-center text-sm font-semibold ${sizeClass} ${
+        showImg ? 'bg-gray-200 dark:bg-gray-600' : 'bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300'
+      }`}
+    >
+      {showImg ? (
+        <img
+          src={url}
+          alt=""
+          className="w-full h-full object-cover"
+          onError={() => setFailed(true)}
+        />
+      ) : (
+        fanInitialsFromName(name)
+      )}
+    </div>
+  );
+}
+
 /** Match DM thread → Fans grid row by uid first, then display label / email on preferences. */
 function findFanForPendingSelection(fans: Fan[], pending: PendingFansTabSelection): Fan | undefined {
   const id = pending.fanId.trim();
@@ -64,6 +104,8 @@ interface FanActivity {
 interface Fan {
     id: string;
     name: string;
+    /** From creators/.../fans.avatarUrl or users/{fanId}.avatar / photoURL */
+    avatarUrl?: string | null;
     preferences: {
         preferredTone?: 'soft' | 'dominant' | 'playful' | 'dirty' | 'Bold';
         favoriteSessionType?: string;
@@ -80,6 +122,7 @@ interface Fan {
         notes?: string;
         reminders?: Array<{ id: string; text: string; date: string }>;
         tags?: string[];
+        email?: string;
         engagementHistory?: Array<{
             sessionId: string;
             date: string;
@@ -119,6 +162,9 @@ export const OnlyFansFans: React.FC = () => {
         description?: string;
         date: string;
         status: 'ordered' | 'in-progress' | 'delivered' | 'cancelled';
+        /** Calendar row vs Fan Hub Stripe product order */
+        source: 'calendar' | 'order';
+        amountCents?: number;
     }>>([]);
     const [isLoadingCustomContent, setIsLoadingCustomContent] = useState(false);
     const [editingCustomContentId, setEditingCustomContentId] = useState<string | null>(null);
@@ -149,34 +195,125 @@ export const OnlyFansFans: React.FC = () => {
     const [blockingFanId, setBlockingFanId] = useState<string | null>(null);
     const fanDetailsPanelRef = useRef<HTMLDivElement | null>(null);
 
-    // Load custom content for a specific fan
-    const loadCustomContent = async (fanId: string) => {
+    const orderScheduleToCustomStatus = (
+        s: string | undefined
+    ): 'ordered' | 'in-progress' | 'delivered' | 'cancelled' => {
+        const x = (s || 'pending').toLowerCase();
+        if (x === 'completed') return 'delivered';
+        if (x === 'scheduled') return 'in-progress';
+        if (x === 'cancelled') return 'cancelled';
+        return 'ordered';
+    };
+
+    function fanOrderMatchesFan(
+        o: { fanId: string; fanEmail?: string },
+        fanId: string,
+        fanEmailNorm: string | null
+    ): boolean {
+        if (o.fanId === fanId) return true;
+        if (fanEmailNorm && o.fanEmail && o.fanEmail.trim().toLowerCase() === fanEmailNorm) return true;
+        if (fanEmailNorm && typeof o.fanId === 'string' && o.fanId.includes('@')) {
+            if (o.fanId.trim().toLowerCase() === fanEmailNorm) return true;
+        }
+        return false;
+    }
+
+    // Calendar custom events + Fan Hub store product orders (same data as User Management / Purchases)
+    const loadCustomContent = async (fanId: string, fanEmail?: string | null) => {
         if (!user?.id) return;
         setIsLoadingCustomContent(true);
+        const fanEmailNorm = typeof fanEmail === 'string' && fanEmail.trim() ? fanEmail.trim().toLowerCase() : null;
         try {
             const eventsSnap = await getDocs(collection(db, 'users', user.id, 'onlyfans_calendar_events'));
-            const customItems = eventsSnap.docs
-                .map(doc => {
-                    const data = doc.data();
+            const calendarItems = eventsSnap.docs
+                .map((d) => {
+                    const data = d.data();
                     return {
-                        id: doc.id,
-                        ...data
+                        id: d.id,
+                        ...data,
                     };
                 })
-                .filter((event: any) => 
-                    event.contentType === 'custom' && 
-                    event.fanId === fanId
+                .filter(
+                    (event: Record<string, unknown>) =>
+                        event.contentType === 'custom' && event.fanId === fanId
                 )
-                .map((event: any) => ({
+                .map((event: Record<string, unknown> & { id: string }) => ({
                     id: event.id,
-                    title: event.title || '',
-                    description: event.description || '',
-                    date: event.date || '',
-                    status: event.customStatus || 'ordered' as 'ordered' | 'in-progress' | 'delivered' | 'cancelled'
+                    title: (event.title as string) || '',
+                    description: (event.description as string) || '',
+                    date: (event.date as string) || '',
+                    status:
+                        (event.customStatus as 'ordered' | 'in-progress' | 'delivered' | 'cancelled') || 'ordered',
+                    source: 'calendar' as const,
                 }))
-                .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-            
-            setCustomContent(customItems);
+                .filter((row) => {
+                    const t = Date.parse(row.date);
+                    return Number.isFinite(t);
+                });
+
+            let orderItems: typeof calendarItems = [];
+            try {
+                const token = auth.currentUser ? await auth.currentUser.getIdToken() : null;
+                const res = await fetch('/api/creatorOrders?limit=500', {
+                    headers: token ? { Authorization: `Bearer ${token}` } : {},
+                });
+                if (res.ok) {
+                    const data = (await res.json()) as {
+                        orders?: Array<{
+                            id: string;
+                            fanId: string;
+                            fanEmail?: string;
+                            type: string;
+                            productTitle?: string;
+                            amountCents: number;
+                            status: string;
+                            createdAt: string;
+                            scheduleStatus?: string;
+                            scheduledDate?: string | null;
+                            scheduledTime?: string | null;
+                        }>;
+                    };
+                    const orders = data.orders || [];
+                    orderItems = orders
+                        .filter(
+                            (o) =>
+                                o.type === 'product' &&
+                                o.status !== 'refunded' &&
+                                fanOrderMatchesFan(o, fanId, fanEmailNorm)
+                        )
+                        .map((o) => {
+                            const parts: string[] = [];
+                            if (typeof o.amountCents === 'number' && o.amountCents > 0) {
+                                parts.push(`$${(o.amountCents / 100).toFixed(2)}`);
+                            }
+                            if (o.scheduledDate) {
+                                parts.push(`Scheduled ${o.scheduledDate}${o.scheduledTime ? ` ${o.scheduledTime}` : ''}`);
+                            } else if (o.scheduleStatus && o.scheduleStatus !== 'pending') {
+                                parts.push(`Fulfillment: ${o.scheduleStatus}`);
+                            }
+                            const title =
+                                typeof o.productTitle === 'string' && o.productTitle.trim()
+                                    ? o.productTitle.trim()
+                                    : 'Store purchase';
+                            return {
+                                id: `order-${o.id}`,
+                                title,
+                                description: parts.length ? parts.join(' · ') : 'Fan Hub store',
+                                date: o.createdAt || new Date(0).toISOString(),
+                                status: orderScheduleToCustomStatus(o.scheduleStatus),
+                                source: 'order' as const,
+                                amountCents: o.amountCents,
+                            };
+                        });
+                }
+            } catch (e) {
+                console.warn('OnlyFansFans: creatorOrders for custom content', e);
+            }
+
+            const merged = [...calendarItems, ...orderItems].sort(
+                (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+            );
+            setCustomContent(merged);
         } catch (error) {
             console.error('Error loading custom content:', error);
             showToast?.('Failed to load custom content', 'error');
@@ -206,6 +343,7 @@ export const OnlyFansFans: React.FC = () => {
                                 ? data.displayName.trim()
                                 : null;
                         let email: string | null = typeof data.email === 'string' ? data.email : null;
+                        let avatarUrl: string | null = null;
 
                         try {
                             const [uSnap, fSnap] = await Promise.all([
@@ -220,6 +358,8 @@ export const OnlyFansFans: React.FC = () => {
                                     displayName = fd.displayName.trim();
                                 }
                                 if (!email && typeof fd.email === 'string' && fd.email) email = fd.email;
+                                const fAv = fd.avatarUrl ?? fd.photoUrl;
+                                if (typeof fAv === 'string' && fAv.trim()) avatarUrl = fAv.trim();
                             }
                             if (uSnap.exists()) {
                                 const ud = uSnap.data() as Record<string, unknown>;
@@ -232,6 +372,12 @@ export const OnlyFansFans: React.FC = () => {
                                     displayName = ud.displayName.trim();
                                 }
                                 if (!email && typeof ud.email === 'string' && ud.email) email = ud.email;
+                                const uAv =
+                                    (typeof ud.avatar === 'string' && ud.avatar.trim()) ||
+                                    (typeof ud.photoURL === 'string' && ud.photoURL.trim()) ||
+                                    (typeof ud.photoUrl === 'string' && ud.photoUrl.trim()) ||
+                                    '';
+                                if (uAv) avatarUrl = uAv;
                             }
                         } catch (e) {
                             console.warn('OnlyFansFans: enrich fan row', fanId, e);
@@ -240,9 +386,15 @@ export const OnlyFansFans: React.FC = () => {
                         const prefName = typeof data.name === 'string' ? data.name : null;
                         const listName = fanHubListLabel(username, displayName, email, prefName);
 
+                        const prefAvatar =
+                            typeof (data as { avatarUrl?: unknown }).avatarUrl === 'string'
+                                ? (data as { avatarUrl: string }).avatarUrl.trim()
+                                : '';
+
                         return {
                             id: fanId,
                             name: listName,
+                            avatarUrl: avatarUrl || prefAvatar || undefined,
                             preferences: {
                                 ...data,
                                 spendingLevel:
@@ -268,6 +420,7 @@ export const OnlyFansFans: React.FC = () => {
                                 notes: data.notes || '',
                                 reminders: data.reminders || [],
                                 tags: data.tags || [],
+                                email: email || (typeof data.email === 'string' ? data.email : undefined),
                             },
                         };
                     })
@@ -497,7 +650,7 @@ export const OnlyFansFans: React.FC = () => {
     useEffect(() => {
         if (selectedFan) {
             loadFanActivity(selectedFan.id);
-            loadCustomContent(selectedFan.id);
+            loadCustomContent(selectedFan.id, selectedFan.preferences.email ?? null);
             setShowActivities(false); // Reset activities visibility when fan changes
         } else {
             setCustomContent([]);
@@ -597,10 +750,6 @@ export const OnlyFansFans: React.FC = () => {
         });
 
         return filtered;
-    };
-
-    const getInitials = (name: string) => {
-        return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
     };
 
     const getTierColor = (tier?: string) => {
@@ -964,10 +1113,7 @@ export const OnlyFansFans: React.FC = () => {
                                     </div>
 
                                     <div className="flex items-start gap-3">
-                                        {/* Avatar */}
-                                        <div className="flex-shrink-0 w-12 h-12 rounded-full bg-primary-100 dark:bg-primary-900/30 flex items-center justify-center text-primary-700 dark:text-primary-300 font-semibold">
-                                            {getInitials(fan.name)}
-                                        </div>
+                                        <FanGridAvatar avatarUrl={fan.avatarUrl} name={fan.name} />
 
                                         {/* Fan Info */}
                                         <div className="flex-1 min-w-0">
@@ -1136,13 +1282,20 @@ export const OnlyFansFans: React.FC = () => {
             {/* Selected Fan Details Panel */}
             {selectedFan && viewMode === 'grid' && (
                 <div ref={fanDetailsPanelRef} className="mt-6 bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
-                    <div className="flex items-center justify-between mb-4">
-                        <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
-                            Fan Details: {selectedFan.name}
-                        </h2>
+                    <div className="flex items-center justify-between mb-4 gap-3">
+                        <div className="flex items-center gap-3 min-w-0">
+                            <FanGridAvatar
+                                avatarUrl={selectedFan.avatarUrl}
+                                name={selectedFan.name}
+                                sizeClass="w-14 h-14 text-base"
+                            />
+                            <h2 className="text-xl font-semibold text-gray-900 dark:text-white truncate">
+                                Fan Details: {selectedFan.name}
+                            </h2>
+                        </div>
                         <button
                             onClick={() => setSelectedFan(null)}
-                            className="text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
+                            className="text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white flex-shrink-0"
                         >
                             Close
                         </button>
@@ -1226,19 +1379,24 @@ export const OnlyFansFans: React.FC = () => {
                     {/* Custom Content Section */}
                     <div className="mb-4 border-t border-gray-200 dark:border-gray-700 pt-4">
                         <div className="flex items-center justify-between mb-3">
-                            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Custom Content</h3>
+                            <div>
+                                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Custom Content</h3>
+                                <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                                    Calendar requests and paid Fan Hub store items (e.g. video replies) for this fan.
+                                </p>
+                            </div>
                         </div>
                         {isLoadingCustomContent ? (
                             <div className="text-center py-4 text-gray-500 dark:text-gray-400">Loading...</div>
                         ) : customContent.length === 0 ? (
                             <div className="text-center py-4 text-gray-500 dark:text-gray-400 text-sm">
-                                No custom content orders yet.
+                                No calendar custom requests or Fan Hub store purchases for this fan yet.
                             </div>
                         ) : (
                             <div className="space-y-2">
                                 {customContent.map((item) => (
                                     <div key={item.id} className="p-3 bg-gray-50 dark:bg-gray-900/40 rounded-lg border border-gray-200 dark:border-gray-700">
-                                        {editingCustomContentId === item.id ? (
+                                        {editingCustomContentId === item.id && item.source === 'calendar' ? (
                                             <div className="space-y-2">
                                                 <input
                                                     type="text"
@@ -1275,7 +1433,7 @@ export const OnlyFansFans: React.FC = () => {
                                                                     description: editCustomDescription,
                                                                     customStatus: editCustomStatus,
                                                                 });
-                                                                await loadCustomContent(selectedFan.id);
+                                                                await loadCustomContent(selectedFan.id, selectedFan.preferences.email ?? null);
                                                                 setEditingCustomContentId(null);
                                                                 showToast?.('Custom content updated!', 'success');
                                                             } catch (error) {
@@ -1304,8 +1462,17 @@ export const OnlyFansFans: React.FC = () => {
                                             <div>
                                                 <div className="flex items-start justify-between">
                                                     <div className="flex-1">
-                                                        <div className="flex items-center gap-2 mb-1">
+                                                        <div className="flex items-center gap-2 mb-1 flex-wrap">
                                                             <h4 className="text-sm font-semibold text-gray-900 dark:text-white">{item.title}</h4>
+                                                            <span
+                                                                className={`text-xs px-2 py-0.5 rounded ${
+                                                                    item.source === 'order'
+                                                                        ? 'bg-violet-100 dark:bg-violet-900/35 text-violet-800 dark:text-violet-200'
+                                                                        : 'bg-slate-200 dark:bg-slate-600 text-slate-800 dark:text-slate-100'
+                                                                }`}
+                                                            >
+                                                                {item.source === 'order' ? 'Fan Hub store' : 'Calendar'}
+                                                            </span>
                                                             <span className={`text-xs px-2 py-0.5 rounded ${
                                                                 item.status === 'ordered' ? 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300' :
                                                                 item.status === 'in-progress' ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300' :
@@ -1323,7 +1490,14 @@ export const OnlyFansFans: React.FC = () => {
                                                         <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">
                                                             {new Date(item.date).toLocaleDateString()}
                                                         </p>
+                                                        {item.source === 'order' && (
+                                                            <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">
+                                                                Update delivery status in{' '}
+                                                                <span className="font-medium text-gray-700 dark:text-gray-300">Fan Hub → Purchases</span>.
+                                                            </p>
+                                                        )}
                                                     </div>
+                                                    {item.source === 'calendar' && (
                                                     <div className="flex gap-1 ml-2">
                                                         <button
                                                             onClick={() => {
@@ -1342,7 +1516,7 @@ export const OnlyFansFans: React.FC = () => {
                                                                 if (!user?.id || !confirm('Are you sure you want to delete this custom content?')) return;
                                                                 try {
                                                                     await deleteDoc(doc(db, 'users', user.id, 'onlyfans_calendar_events', item.id));
-                                                                    await loadCustomContent(selectedFan.id);
+                                                                    await loadCustomContent(selectedFan.id, selectedFan.preferences.email ?? null);
                                                                     showToast?.('Custom content deleted', 'success');
                                                                 } catch (error) {
                                                                     console.error('Error deleting custom content:', error);
@@ -1355,6 +1529,7 @@ export const OnlyFansFans: React.FC = () => {
                                                             <TrashIcon className="w-4 h-4" />
                                                         </button>
                                                     </div>
+                                                    )}
                                                 </div>
                                             </div>
                                         )}

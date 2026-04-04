@@ -777,6 +777,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             const trialEndDate = subscription.trial_end 
               ? new Date(subscription.trial_end * 1000).toISOString() 
               : null;
+            const cpe = (subscription as { current_period_end?: number }).current_period_end;
+            const subscriptionCurrentPeriodEnd =
+              typeof cpe === 'number' && Number.isFinite(cpe)
+                ? new Date(cpe * 1000).toISOString()
+                : null;
 
             await userRef.set({
               plan: planName,
@@ -788,6 +793,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
               billingCycle,
               cancelAtPeriodEnd: false,
               subscriptionEndDate: null,
+              subscriptionCurrentPeriodEnd,
               trialEndDate, // Store trial end date for notifications
               monthlyCaptionGenerationsUsed: 0,
               monthlyImageGenerationsUsed: 0,
@@ -853,6 +859,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           // Capture trial end date if subscription is in trial
           const trialEnd = (subscription as { trial_end?: number }).trial_end;
           const trialEndDate = trialEnd ? new Date(trialEnd * 1000).toISOString() : null;
+          const subscriptionCurrentPeriodEnd =
+            typeof periodEnd === 'number' && Number.isFinite(periodEnd)
+              ? new Date(periodEnd * 1000).toISOString()
+              : null;
           
           await userDoc.ref.set({
             plan: planName,
@@ -863,6 +873,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             subscriptionEndDate: subscription.cancel_at_period_end && periodEnd
               ? new Date(periodEnd * 1000).toISOString()
               : null,
+            subscriptionCurrentPeriodEnd,
             trialEndDate, // Update trial end date for notifications
           }, { merge: true });
 
@@ -893,6 +904,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             subscriptionStatus: 'canceled',
             cancelAtPeriodEnd: false,
             subscriptionEndDate: new Date().toISOString(),
+            subscriptionCurrentPeriodEnd: null,
+            trialEndDate: null,
           }, { merge: true });
 
           console.log(`Subscription canceled for user ${userDoc.id}`);

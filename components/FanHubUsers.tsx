@@ -20,7 +20,8 @@ interface FanUser {
   memberUsername?: string | null;
   role: UserRole;
   plan: string | null;
-  signupDate: Date;
+  /** Earliest known: fan subscribedAt / first order / users.signupDate — null if unknown */
+  signupDate: Date | null;
   remainingAccess: "Active" | "Expired" | "Cancelled" | string;
   /** All-time: fans.totalSpentCents baseline + sum of all orders (migrated Stormij orders keep old dates; this still counts) */
   lifetimeSpendCents: number;
@@ -77,7 +78,8 @@ function formatCents(cents: number): string {
   return "$" + (cents / 100).toFixed(2);
 }
 
-function formatDate(date: Date): string {
+function formatDate(date: Date | null): string {
+  if (!date || !Number.isFinite(date.getTime())) return "—";
   return date.toLocaleDateString("en-US", { month: "numeric", day: "numeric", year: "numeric" });
 }
 
@@ -230,6 +232,8 @@ export const FanHubUsers: React.FC = () => {
         cancelAtPeriodEnd?: boolean;
         /** ISO or Date from webhook — end of current paid period */
         subscriptionCurrentPeriodEnd?: Date | null;
+        /** From users/{uid}.signupDate when fan doc has no timeline */
+        profileSignupAt?: Date | null;
       }>();
 
       // First, fetch from creators/{creatorId}/fans collection (Stripe subscribers and purchasers)
@@ -327,6 +331,7 @@ export const FanHubUsers: React.FC = () => {
           total: 0,
           lastActive: null,
           firstOrder: null,
+          profileSignupAt: null as Date | null,
         };
 
         if (type === "tip") existing.tips += amount;
@@ -421,6 +426,7 @@ export const FanHubUsers: React.FC = () => {
               total: 0,
               lastActive: createdAt,
               firstOrder: createdAt,
+              profileSignupAt: createdAt,
             });
           }
         });
@@ -486,6 +492,11 @@ export const FanHubUsers: React.FC = () => {
               const next = o.subscriptionCurrentPeriodEnd;
               if (!cur || next.getTime() > cur.getTime()) base.subscriptionCurrentPeriodEnd = next;
             }
+            if (o.profileSignupAt) {
+              const cur = base.profileSignupAt;
+              const next = o.profileSignupAt;
+              if (!cur || next.getTime() < cur.getTime()) base.profileSignupAt = next;
+            }
             if (!base.avatarUrl && o.avatarUrl) base.avatarUrl = o.avatarUrl;
             map.delete(oid);
           }
@@ -523,6 +534,12 @@ export const FanHubUsers: React.FC = () => {
               if (!entry.storedRole) {
                 const fromUser = parseFanMemberRoleFromFirestore(u);
                 if (fromUser) entry.storedRole = fromUser;
+              }
+              const profileSu = firestoreDate(u.signupDate);
+              if (profileSu) {
+                if (!entry.profileSignupAt || profileSu.getTime() < entry.profileSignupAt.getTime()) {
+                  entry.profileSignupAt = profileSu;
+                }
               }
             } catch {
               /* ignore */
@@ -584,7 +601,11 @@ export const FanHubUsers: React.FC = () => {
         const lifetimeFromOrders = tips + treats + unlocks;
         const lifetimeSpendCents = Math.max(totalTracked, lifetimeFromOrders);
         const signupDate =
-          earlierDate(data.subscribedAt, data.firstOrder) ?? data.subscribedAt ?? data.firstOrder ?? new Date();
+          earlierDate(earlierDate(data.subscribedAt, data.firstOrder), data.profileSignupAt ?? null) ??
+          data.subscribedAt ??
+          data.firstOrder ??
+          data.profileSignupAt ??
+          null;
         return {
           id: data.id,
           name,
@@ -617,7 +638,9 @@ export const FanHubUsers: React.FC = () => {
         if (a.plan !== "Active" && b.plan === "Active") return 1;
         const rr = roleRank(a.role) - roleRank(b.role);
         if (rr !== 0) return rr;
-        return b.signupDate.getTime() - a.signupDate.getTime();
+        const tb = b.signupDate?.getTime() ?? 0;
+        const ta = a.signupDate?.getTime() ?? 0;
+        return tb - ta;
       });
 
       // Add demo users if no real users exist
@@ -1046,7 +1069,10 @@ export const FanHubUsers: React.FC = () => {
                   <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                     Plan
                   </th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                  <th
+                    className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider"
+                    title="Member since: earliest of subscription start, first purchase, or EchoFlux account signup (when linked)."
+                  >
                     Signup Date
                   </th>
                   <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">

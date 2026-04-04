@@ -747,24 +747,52 @@ export const Settings: React.FC = () => {
     const isSubscriptionCancelled = user?.cancelAtPeriodEnd === true;
     const subscriptionEndDate = user?.subscriptionEndDate;
     const billingCycle = user?.billingCycle || 'monthly';
+    const subscriptionCurrentPeriodEnd = user?.subscriptionCurrentPeriodEnd;
+    const trialEndDate = user?.trialEndDate;
+    const subscriptionStatus = (user?.subscriptionStatus || '').toLowerCase();
 
-    // Calculate remaining access time
-    const getRemainingAccessTime = () => {
-        if (!subscriptionEndDate) return null;
-        const endDate = new Date(subscriptionEndDate);
-        const now = new Date();
-        const diffMs = endDate.getTime() - now.getTime();
-        
-        if (diffMs <= 0) return { expired: true, days: 0, hours: 0, minutes: 0 };
-        
+    type RemainingParts = { days: number; hours: number; minutes: number; expired: boolean; endDate: Date };
+
+    const diffUntilEnd = (endIso: string | undefined | null): RemainingParts | null => {
+        if (!endIso) return null;
+        const endDate = new Date(endIso);
+        if (Number.isNaN(endDate.getTime())) return null;
+        const diffMs = endDate.getTime() - Date.now();
+        if (diffMs <= 0) return { expired: true, days: 0, hours: 0, minutes: 0, endDate };
         const days = Math.floor(diffMs / (1000 * 60 * 60 * 24));
         const hours = Math.floor((diffMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
         const minutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
-        
-        return { days, hours, minutes, expired: false };
+        return { days, hours, minutes, expired: false, endDate };
     };
 
-    const remainingTime = getRemainingAccessTime();
+    /** Cancel-at-period-end — same instant as end of current Stripe period */
+    const remainingTime =
+        user?.cancelAtPeriodEnd && subscriptionEndDate ? diffUntilEnd(subscriptionEndDate) : null;
+
+    /** Trial, active renewal, or cancel — single summary under Current Plan */
+    const accessSummary: { label: string; parts: RemainingParts } | null = (() => {
+        if (user?.cancelAtPeriodEnd && subscriptionEndDate) {
+            const parts = diffUntilEnd(subscriptionEndDate);
+            if (parts && !parts.expired) return { label: 'Access until', parts };
+            return null;
+        }
+        if (subscriptionStatus === 'trialing' && trialEndDate) {
+            const parts = diffUntilEnd(trialEndDate);
+            if (parts && !parts.expired) return { label: 'Trial ends', parts };
+            return null;
+        }
+        if (isPremiumPlan && subscriptionCurrentPeriodEnd) {
+            const parts = diffUntilEnd(subscriptionCurrentPeriodEnd);
+            if (parts && !parts.expired) {
+                const label =
+                    billingCycle === 'annually' || billingCycle === 'annual'
+                        ? 'Current annual period ends'
+                        : 'Next billing date';
+                return { label, parts };
+            }
+        }
+        return null;
+    })();
 
     const handleCancelSubscription = async () => {
         if (!user) return;
@@ -794,6 +822,7 @@ export const Settings: React.FC = () => {
                 ...user, 
                 cancelAtPeriodEnd: true,
                 subscriptionEndDate: data.subscriptionEndDate || null,
+                subscriptionCurrentPeriodEnd: data.subscriptionCurrentPeriodEnd ?? user.subscriptionCurrentPeriodEnd,
             });
             
             showToast(data.message || 'Subscription cancelled. You will retain access until the end of your billing period.', 'success');
@@ -833,7 +862,8 @@ export const Settings: React.FC = () => {
             await setUser({ 
                 ...user, 
                 cancelAtPeriodEnd: false,
-                subscriptionEndDate: null,
+                subscriptionEndDate: undefined,
+                subscriptionCurrentPeriodEnd: data.subscriptionCurrentPeriodEnd ?? user.subscriptionCurrentPeriodEnd,
             });
             
             showToast(data.message || 'Subscription reactivated successfully!', 'success');
@@ -1226,14 +1256,43 @@ Return only the rewritten personality description.
                              <div>
                                  <p className="text-gray-900 dark:text-white font-medium">Current Plan</p>
                                  <p className="text-2xl font-bold text-primary-600">{user.plan}</p>
-                                 {isSubscriptionCancelled && subscriptionEndDate && remainingTime && !remainingTime.expired && (
-                                     <div className="mt-2 flex items-center gap-2 text-sm text-amber-600 dark:text-amber-400">
-                                         <ClockIcon className="w-4 h-4" />
+                                 {accessSummary && (
+                                     <div
+                                         className={`mt-2 flex items-center gap-2 text-sm ${
+                                             isSubscriptionCancelled
+                                                 ? 'text-amber-600 dark:text-amber-400'
+                                                 : 'text-slate-600 dark:text-slate-300'
+                                         }`}
+                                     >
+                                         <ClockIcon className="w-4 h-4 flex-shrink-0" />
                                          <span>
-                                             Access until {new Date(subscriptionEndDate).toLocaleDateString()} 
-                                             {remainingTime.days !== undefined && remainingTime.days > 0 && (
-                                                 ` (${remainingTime.days} ${remainingTime.days === 1 ? 'day' : 'days'} remaining)`
+                                             {accessSummary.label}{' '}
+                                             {accessSummary.parts.endDate.toLocaleDateString()}
+                                             {accessSummary.parts.days > 0 && (
+                                                 <span>
+                                                     {' '}
+                                                     ({accessSummary.parts.days}{' '}
+                                                     {accessSummary.parts.days === 1 ? 'day' : 'days'} remaining)
+                                                 </span>
                                              )}
+                                             {accessSummary.parts.days === 0 &&
+                                                 accessSummary.parts.hours > 0 && (
+                                                     <span>
+                                                         {' '}
+                                                         ({accessSummary.parts.hours}{' '}
+                                                         {accessSummary.parts.hours === 1 ? 'hour' : 'hours'} remaining)
+                                                     </span>
+                                                 )}
+                                             {accessSummary.parts.days === 0 &&
+                                                 accessSummary.parts.hours === 0 &&
+                                                 accessSummary.parts.minutes > 0 && (
+                                                     <span>
+                                                         {' '}
+                                                         ({accessSummary.parts.minutes}{' '}
+                                                         {accessSummary.parts.minutes === 1 ? 'minute' : 'minutes'}{' '}
+                                                         remaining)
+                                                     </span>
+                                                 )}
                                          </span>
                                      </div>
                                  )}

@@ -89,6 +89,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     let stripeSubscriptionId: string | null = null;
     let stripeCustomerId: string | null = null;
     let subscriptionStatus: string | null = null;
+    let subscriptionCurrentPeriodEnd: string | undefined;
+    let trialEndDate: string | undefined;
 
     try {
       const subObj = session.subscription;
@@ -101,6 +103,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         stripeSubscriptionId = subscription.id;
         stripeCustomerId = subscription.customer as string;
         subscriptionStatus = subscription.status;
+        const cpe = (subscription as { current_period_end?: number }).current_period_end;
+        if (typeof cpe === 'number' && Number.isFinite(cpe)) {
+          subscriptionCurrentPeriodEnd = new Date(cpe * 1000).toISOString();
+        }
+        const te = (subscription as { trial_end?: number | null }).trial_end;
+        if (typeof te === 'number' && Number.isFinite(te)) {
+          trialEndDate = new Date(te * 1000).toISOString();
+        }
       }
     } catch (err) {
       console.warn('verifyCheckoutSession: failed to resolve subscription from session:', err);
@@ -117,6 +127,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         subscriptionStatus: subscriptionStatus || undefined,
         stripeCustomerId: stripeCustomerId || undefined,
         stripeSubscriptionId: stripeSubscriptionId || undefined,
+        subscriptionCurrentPeriodEnd: subscriptionCurrentPeriodEnd || undefined,
+        trialEndDate: trialEndDate || undefined,
         monthlyCaptionGenerationsUsed: 0,
         monthlyImageGenerationsUsed: 0,
         monthlyVideoGenerationsUsed: 0,
