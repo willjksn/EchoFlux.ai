@@ -70,6 +70,7 @@ import { ReportProblemModal } from "./ReportProblemModal";
 import { Toast } from "./Toast";
 import { readFanCheckoutFetchResult, FAN_TIP_CHECKOUT_SUCCESS_QS } from "../src/lib/fanCheckoutResponse";
 import { WitmeHeaderLogo } from "./WitmeHeaderLogo";
+import { formatFanStorefrontDocumentTitle, getFanFacingSiteTitle } from "../src/lib/fanFacingSiteTitle";
 
 /** Ensure member-store products have usable Firestore ids (avoids every row showing “Processing…” when id is missing or duplicated). */
 function normalizeMemberTreatProducts(raw: unknown): TreatProduct[] {
@@ -800,6 +801,36 @@ export const FanStorefrontView: React.FC = () => {
     }
     return false;
   }, []);
+
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    const prev = document.title;
+    const brand = getFanFacingSiteTitle();
+    const label =
+      (creator?.displayName && creator.displayName.trim()) ||
+      (creator?.handle && creator.handle.trim()) ||
+      (handle && handle.trim()) ||
+      "";
+
+    let next: string;
+    if (legalSubpage === "terms") {
+      next = label ? `Terms · ${label} · ${brand}` : `Terms · ${brand}`;
+    } else if (legalSubpage === "privacy") {
+      next = label ? `Privacy · ${label} · ${brand}` : `Privacy · ${brand}`;
+    } else if (creator) {
+      next = formatFanStorefrontDocumentTitle(creator.displayName, creator.handle);
+    } else if (error) {
+      next = `Page not found · ${brand}`;
+    } else if (handle) {
+      next = formatFanStorefrontDocumentTitle(undefined, handle);
+    } else {
+      next = brand;
+    }
+    document.title = next;
+    return () => {
+      document.title = prev;
+    };
+  }, [creator, error, handle, legalSubpage]);
 
   useEffect(() => {
     const uid = auth.currentUser?.uid;
