@@ -722,6 +722,9 @@ export const Dashboard: React.FC = () => {
   const [adminBilling, setAdminBilling] = useState<{ failed: any[]; renewals: any[] }>({ failed: [], renewals: [] });
   const [adminBillingError, setAdminBillingError] = useState<string | null>(null);
   const [isLoadingAdminBilling, setIsLoadingAdminBilling] = useState(false);
+  /** Echoflux share of Fan Hub gross (matches AdminDashboard / adminFanHubRevenue). */
+  const [adminFanHubCommissionUsd, setAdminFanHubCommissionUsd] = useState(0);
+  const [isLoadingAdminFanHubCommission, setIsLoadingAdminFanHubCommission] = useState(false);
   const [adminOnlyFansUsage, setAdminOnlyFansUsage] = useState<any | null>(null);
   const [adminOnlyFansUsageError, setAdminOnlyFansUsageError] = useState<string | null>(null);
   const [isLoadingAdminOnlyFansUsage, setIsLoadingAdminOnlyFansUsage] = useState(false);
@@ -870,6 +873,40 @@ export const Dashboard: React.FC = () => {
     };
 
     loadUserEngagement();
+    return () => {
+      isMounted = false;
+    };
+  }, [enableAdminDashboardV2, user?.role]);
+
+  // Admin banner: Fan Hub commission from top-level `orders` (same API as full Admin panel)
+  useEffect(() => {
+    if (!enableAdminDashboardV2 || user?.role !== 'Admin') return;
+    let isMounted = true;
+
+    const loadFanHubCommission = async () => {
+      setIsLoadingAdminFanHubCommission(true);
+      try {
+        const token = await auth.currentUser?.getIdToken(true);
+        if (!token) return;
+        const commissionRate = 0.1;
+        const res = await fetch('/api/adminFanHubRevenue?limit=5000', {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!res.ok) {
+          console.error('adminFanHubRevenue (dashboard):', res.status, await res.text());
+          return;
+        }
+        const data = (await res.json()) as { totalRevenue?: number };
+        const totalRevenue = Number(data?.totalRevenue ?? 0);
+        if (isMounted) setAdminFanHubCommissionUsd(totalRevenue * commissionRate);
+      } catch (e) {
+        console.error('adminFanHubRevenue (dashboard):', e);
+      } finally {
+        if (isMounted) setIsLoadingAdminFanHubCommission(false);
+      }
+    };
+
+    loadFanHubCommission();
     return () => {
       isMounted = false;
     };
@@ -2948,7 +2985,16 @@ export const Dashboard: React.FC = () => {
       </div>
   );
 
-  const renderAdminDashboardView = () => (
+  const renderAdminDashboardView = () => {
+    const subscriptionMrrUsd = userEngagementData
+      ? userEngagementData.conversionFunnel.pro * ECHOFLUX_PRO_MONTHLY_USD +
+        userEngagementData.conversionFunnel.elite * ECHOFLUX_ELITE_MONTHLY_USD
+      : null;
+    const fanHubCommForTotal = isLoadingAdminFanHubCommission ? 0 : adminFanHubCommissionUsd;
+    const totalRevenueCombinedUsd =
+      subscriptionMrrUsd != null ? subscriptionMrrUsd + fanHubCommForTotal : null;
+
+    return (
     <div id="tour-step-1-dashboard" className="space-y-6 max-w-7xl mx-auto w-full">
       <div className="flex items-center justify-between gap-3">
         <div>
@@ -2978,21 +3024,28 @@ export const Dashboard: React.FC = () => {
           <div>
             <p className="text-sm text-gray-500 dark:opacity-70 mb-1">Subscription MRR</p>
             <p className="text-3xl font-bold text-blue-600 dark:text-blue-300">
-              ${userEngagementData ? ((userEngagementData.conversionFunnel.pro * ECHOFLUX_PRO_MONTHLY_USD) + (userEngagementData.conversionFunnel.elite * ECHOFLUX_ELITE_MONTHLY_USD)).toLocaleString() : '—'}
+              {subscriptionMrrUsd != null ? `$${subscriptionMrrUsd.toLocaleString()}` : '—'}
             </p>
             <p className="text-xs text-gray-500 dark:opacity-60 mt-1">Pro + Elite plans</p>
           </div>
           <div>
             <p className="text-sm text-gray-500 dark:opacity-70 mb-1">Fan Hub Commission</p>
-            <p className="text-3xl font-bold text-emerald-600 dark:text-green-300">$0.00</p>
-            <p className="text-xs text-gray-500 dark:opacity-60 mt-1">10% of creator earnings</p>
+            <p className="text-3xl font-bold text-emerald-600 dark:text-green-300">
+              {isLoadingAdminFanHubCommission ? '…' : `$${adminFanHubCommissionUsd.toFixed(2)}`}
+            </p>
+            <p className="text-xs text-gray-500 dark:opacity-60 mt-1">10% of Fan Hub gross (orders)</p>
           </div>
           <div className="border-l border-gray-200 dark:border-white/20 pl-6">
             <p className="text-sm text-gray-500 dark:opacity-70 mb-1">Total Revenue</p>
             <p className="text-3xl font-bold text-primary-600 dark:text-primary-300">
-              ${userEngagementData ? ((userEngagementData.conversionFunnel.pro * ECHOFLUX_PRO_MONTHLY_USD) + (userEngagementData.conversionFunnel.elite * ECHOFLUX_ELITE_MONTHLY_USD)).toLocaleString() : '—'}
+              {totalRevenueCombinedUsd != null
+                ? `$${totalRevenueCombinedUsd.toLocaleString(undefined, {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2,
+                  })}`
+                : '—'}
             </p>
-            <p className="text-xs text-gray-500 dark:opacity-60 mt-1">Monthly</p>
+            <p className="text-xs text-gray-500 dark:opacity-60 mt-1">MRR + Fan Hub commission</p>
           </div>
         </div>
       </div>
@@ -3308,7 +3361,8 @@ export const Dashboard: React.FC = () => {
         </div>
       )}
     </div>
-  );
+    );
+  };
 
 
   if (enableAdminDashboardV2) {

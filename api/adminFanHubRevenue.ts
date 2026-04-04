@@ -84,14 +84,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const creatorId = typeof d.creatorId === "string" ? d.creatorId : "";
       if (!creatorId) continue;
 
+      const status = typeof d.status === "string" ? d.status : "";
+      if (status === "refunded") continue;
+
       const amount = dollarsFromOrder(d);
       const orderType = (d.type as string) || "product";
 
       totalRevenue += amount;
       byCreatorId[creatorId] = (byCreatorId[creatorId] ?? 0) + amount;
 
+      // stripeWebhook writes post_unlock for paid post unlocks; legacy may use "unlock"
       if (orderType === "tip") tips += amount;
-      else if (orderType === "unlock") unlocks += amount;
+      else if (orderType === "unlock" || orderType === "post_unlock") unlocks += amount;
       else if (orderType === "subscription") subscriptions += amount;
       else treats += amount;
 
