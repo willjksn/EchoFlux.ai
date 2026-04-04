@@ -1721,13 +1721,21 @@ export const FanStorefrontView: React.FC = () => {
     !previewMember &&
     (!isLoggedIn || !(subscribed && (creator?.monetization?.freeAccessEnabled === true || membershipType === "paid")));
 
+  /** Guest treat shop on landing: creator allows public store + viewer is not a subscribed member in hub mode (see docs/LOCAL_DEV.md). */
+  const landingGuestTreatCommerceEnabled =
+    creator?.publicTreatsOnLanding === true &&
+    onPublicLanding &&
+    creator?.sections?.treats !== false;
+
   useEffect(() => {
     if (
       !creator?.creatorId ||
       creator.sections?.treats === false ||
-      !onPublicLanding
+      !onPublicLanding ||
+      creator.publicTreatsOnLanding !== true
     ) {
-      if (!onPublicLanding) setLandingTreatsProducts([]);
+      setLandingTreatsProducts([]);
+      setLandingTreatsLoading(false);
       return;
     }
     let cancelled = false;
@@ -1754,6 +1762,7 @@ export const FanStorefrontView: React.FC = () => {
   }, [
     creator?.creatorId,
     creator?.sections?.treats,
+    creator?.publicTreatsOnLanding,
     onPublicLanding,
   ]);
 
@@ -3127,7 +3136,10 @@ export const FanStorefrontView: React.FC = () => {
           sectionsTreatsEnabled={creator.sections?.treats !== false}
           landingTreatProducts={landingTreatsProducts}
           landingTreatsLoading={landingTreatsLoading}
-          onGuestPurchaseTreat={handleGuestTreatPurchase}
+          landingGuestTreatCommerceEnabled={landingGuestTreatCommerceEnabled}
+          onGuestPurchaseTreat={
+            landingGuestTreatCommerceEnabled ? handleGuestTreatPurchase : undefined
+          }
           guestTreatPurchasingId={guestTreatPurchasingId}
           treatLinkAccountMessage={treatLinkMessage}
           termsHref={storefrontTermsPath}

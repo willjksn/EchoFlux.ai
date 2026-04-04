@@ -79,6 +79,8 @@ interface FanLandingPageProps {
   isLoggedIn: boolean;
   publicTreatsOnLanding?: boolean;
   sectionsTreatsEnabled?: boolean;
+  /** When true, landing treat CTA opens guest checkout (not “sign up first”). Set from FanStorefrontView when `publicTreatsOnLanding` + public landing context. */
+  landingGuestTreatCommerceEnabled?: boolean;
   landingTreatProducts?: TreatProduct[];
   landingTreatsLoading?: boolean;
   onGuestPurchaseTreat?: (productId: string) => void;
@@ -199,10 +201,7 @@ export const FanLandingPage: React.FC<FanLandingPageProps> = ({
   const termsHref = termsHrefProp ?? `/${creator.handle}/terms`;
   const privacyHref = privacyHrefProp ?? `/${creator.handle}/privacy`;
 
-  const showLandingTreatEntry =
-    sectionsTreatsEnabled &&
-    !!onGuestPurchaseTreat &&
-    (landingTreatsLoading || landingTreatProducts.length > 0);
+  const showLandingTreatEntry = landingGuestTreatCommerceEnabled && !!onGuestPurchaseTreat;
 
   const storeCopy = useMemo(() => resolveStoreCopy(creatorLandingContent), [creatorLandingContent]);
 
