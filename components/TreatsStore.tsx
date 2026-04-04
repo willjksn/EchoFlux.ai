@@ -16,6 +16,7 @@ import {
 import type { TreatProduct, TreatProductType } from "../types";
 import { SparklesIcon, CalendarIcon } from "./icons/UIIcons";
 import { useCreatorStoreCopy } from "../src/hooks/useCreatorStoreCopy";
+import { creatorIdFirestoreQueryVariants, normalizeCreatorId } from "../src/lib/creatorIdNormalize";
 
 function formatPrice(cents: number | null | undefined): string {
   const n = Number(cents);
@@ -61,9 +62,10 @@ function firestoreDocToTreatProduct(d: QueryDocumentSnapshot): TreatProduct {
     updatedRaw && typeof (updatedRaw as { toDate?: () => Date }).toDate === "function"
       ? (updatedRaw as { toDate: () => Date }).toDate().toISOString()
       : String(updatedRaw ?? "");
+  const rawC = String(x.creatorId ?? "");
   return {
     id: d.id,
-    creatorId: String(x.creatorId ?? ""),
+    creatorId: normalizeCreatorId(rawC) || rawC,
     type: ((x.type as TreatProductType) || "custom") as TreatProductType,
     title: String(x.title ?? ""),
     description: typeof x.description === "string" ? x.description : undefined,
@@ -144,8 +146,12 @@ const SettingsIcon = () => (
 
 export const TreatsStore: React.FC = () => {
   const { user, showToast } = useAppContext();
-  /** Align with API / Firestore rules (Firebase uid). */
-  const creatorId = auth.currentUser?.uid ?? user?.id;
+  /** Prefer Auth uid (canonical); strip accidental `--collection=` suffix from profile ids. */
+  const creatorIdRaw = auth.currentUser?.uid ?? user?.id;
+  const creatorId =
+    creatorIdRaw !== undefined && creatorIdRaw !== null && String(creatorIdRaw).trim() !== ""
+      ? normalizeCreatorId(String(creatorIdRaw)) || String(creatorIdRaw).trim()
+      : undefined;
   const [products, setProducts] = useState<TreatProduct[]>([]);
   const [loading, setLoading] = useState(true);
   /** Defer purchases/sessions listeners until products request finishes so the tab feels fast. */
@@ -194,7 +200,30 @@ export const TreatsStore: React.FC = () => {
       );
       if (res.ok) {
         const data = await res.json();
-        setProducts((data.products as TreatProduct[]) || []);
+        let prods = (data.products as TreatProduct[]) || [];
+        if (
+          prods.length === 0 &&
+          user?.id &&
+          auth.currentUser?.uid &&
+          user.id !== auth.currentUser.uid
+        ) {
+          const res2 = await fetch(
+            `/api/products?creatorId=${encodeURIComponent(user.id)}&includeArchived=true`,
+            { headers: token ? { Authorization: `Bearer ${token}` } : {} }
+          );
+          if (res2.ok) {
+            const d2 = await res2.json();
+            const p2 = (d2.products as TreatProduct[]) || [];
+            if (p2.length > 0) {
+              console.warn(
+                "[TreatsStore] Products loaded with profile user.id (Auth uid had none). Check `products.creatorId` in Firestore.",
+                { authUid: auth.currentUser.uid, profileUserId: user.id }
+              );
+              prods = p2;
+            }
+          }
+        }
+        setProducts(prods);
         return;
       }
       const data = await res.json().catch(() => ({}));
@@ -206,9 +235,33 @@ export const TreatsStore: React.FC = () => {
         return;
       }
       try {
-        const q = query(collection(db, "products"), where("creatorId", "==", creatorId));
-        const snap = await getDocs(q);
-        let list = snap.docs.map(firestoreDocToTreatProduct);
+        const loadFs = async (cid: string) => {
+          const qs = query(collection(db, "products"), where("creatorId", "==", cid));
+          const snap = await getDocs(qs);
+          return snap.docs.map(firestoreDocToTreatProduct);
+        };
+        let list: TreatProduct[] = [];
+        for (const cid of creatorIdFirestoreQueryVariants(creatorId)) {
+          const rows = await loadFs(cid);
+          if (rows.length > 0) {
+            list = rows;
+            break;
+          }
+        }
+        if (
+          list.length === 0 &&
+          user?.id &&
+          auth.currentUser?.uid &&
+          user.id !== auth.currentUser.uid
+        ) {
+          for (const cid of creatorIdFirestoreQueryVariants(user.id)) {
+            const alt = await loadFs(cid);
+            if (alt.length > 0) {
+              list = alt;
+              break;
+            }
+          }
+        }
         list.sort((a, b) => {
           const orderDiff = (a.sortOrder ?? 0) - (b.sortOrder ?? 0);
           if (orderDiff !== 0) return orderDiff;
@@ -227,7 +280,7 @@ export const TreatsStore: React.FC = () => {
         setTreatsDataReady(true);
       }
     }
-  }, [creatorId]);
+  }, [creatorId, user?.id]);
 
   useEffect(() => {
     fetchProducts();
@@ -603,7 +656,7 @@ export const TreatsStore: React.FC = () => {
   };
 
   const handlePurchase = async (productId: string) => {
-    const product = visibleProducts.find((p) => p.id === productId);
+    const product = products.find((p) => p.id === productId);
     if (!product) return;
     const soldOut =
       typeof product.quantityLimit === "number" &&
@@ -614,7 +667,8 @@ export const TreatsStore: React.FC = () => {
       showToast?.("Sign in to complete checkout.", "info");
       return;
     }
-    if (!creatorId) return;
+    const checkoutCreatorId = (product.creatorId && String(product.creatorId).trim()) || creatorId;
+    if (!checkoutCreatorId) return;
 
     setPurchaseLoading(productId);
     try {
@@ -625,7 +679,7 @@ export const TreatsStore: React.FC = () => {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({
-          creatorId,
+          creatorId: checkoutCreatorId,
           type: "product",
           productId,
           successUrl,
@@ -659,8 +713,18 @@ export const TreatsStore: React.FC = () => {
     [products]
   );
 
-  // Use actual products only - no demo data
+  /**
+   * Member-tab storefront uses visibility + showInMemberStore. This screen only ever loads `products`
+   * for the signed-in creator, so when that filter yields nothing we still show the same non-archived
+   * rows as Manage (matches the grid you see on stormijxo / Studio Store preview).
+   */
   const displayTreats = visibleProducts;
+  const nonArchivedProducts = useMemo(() => products.filter((p) => !p.archived), [products]);
+  const fanStoreGridItems = useMemo(() => {
+    if (displayTreats.length > 0) return displayTreats;
+    if (nonArchivedProducts.length > 0) return nonArchivedProducts;
+    return displayTreats;
+  }, [displayTreats, nonArchivedProducts]);
 
   if (!creatorId) {
     return (
@@ -772,13 +836,13 @@ export const TreatsStore: React.FC = () => {
               </header>
               {loading ? (
                 <p className="treats-stormij-panel-state">{storeCopy.memberStoreLoadingMessage}</p>
-              ) : displayTreats.length === 0 ? (
+              ) : fanStoreGridItems.length === 0 ? (
                 <p className="treats-stormij-panel-state treats-stormij-panel-state--empty">
                   {storeCopy.memberStoreEmptyMessage}
                 </p>
               ) : (
                 <div className="treats-stormij-grid">
-                  {displayTreats.map((p) => {
+                  {fanStoreGridItems.map((p) => {
                     const soldOut =
                       typeof p.quantityLimit === "number" &&
                       p.quantityLimit > 0 &&

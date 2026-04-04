@@ -10,7 +10,7 @@
     "allowSyntheticDefaultImports": true,
     "skipLibCheck": true
   },
-  "include": ["api/**/*.ts"],
+  "include": ["api/**/*.ts", "src/lib/creatorIdNormalize.ts"],
   "exclude": [
     "node_modules",
     "dist",

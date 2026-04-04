@@ -2,6 +2,7 @@ import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { getAdminDb } from "./_firebaseAdmin.js";
 import { verifyAuth } from "./verifyAuth.js";
 import type { TreatProduct, TreatProductType } from "../../types";
+import { creatorIdFirestoreQueryVariants, normalizeCreatorId } from "../src/lib/creatorIdNormalize";
 
 const COLLECTION = "products";
 
@@ -9,9 +10,10 @@ function toProduct(doc: FirebaseFirestore.DocumentSnapshot): TreatProduct {
   const d = doc.data() as Record<string, unknown>;
   const q = d.quantityLimit;
   const s = d.soldCount;
+  const rawCreator = String(d.creatorId ?? "");
   return {
     id: doc.id,
-    creatorId: d.creatorId as string,
+    creatorId: normalizeCreatorId(rawCreator) || rawCreator,
     type: d.type as TreatProductType,
     title: d.title as string,
     description: d.description as string | undefined,
@@ -92,8 +94,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(401).json({ error: "Unauthorized" });
     }
     const body = req.body as Record<string, unknown>;
-    const creatorId = body.creatorId as string;
-    if (creatorId !== decoded.uid) {
+    const rawBodyCreator = String(body.creatorId ?? "").trim();
+    const fromBody = normalizeCreatorId(rawBodyCreator) || rawBodyCreator;
+    if (!fromBody || fromBody !== decoded.uid) {
       return res.status(403).json({ error: "creatorId must match authenticated user" });
     }
     const type = (body.type as TreatProductType) || "custom";
@@ -120,7 +123,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
       const ref = db.collection(COLLECTION).doc();
       const doc: Record<string, unknown> = {
-        creatorId,
+        creatorId: decoded.uid,
         type,
         title,
         description: description || null,
@@ -129,6 +132,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         imageUrl: imageUrl || null,
         archived: false,
         visible,
+        showOnLandingPage,
+        showInMemberStore,
         sortOrder: 0,
         soldCount: 0,
         createdAt: now,
@@ -161,7 +166,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const snap = await ref.get();
       if (!snap.exists) return res.status(404).json({ error: "Product not found" });
       const data = snap.data() as Record<string, unknown>;
-      if (data.creatorId !== decoded.uid) return res.status(403).json({ error: "Forbidden" });
+      const storedCreator = String(data.creatorId ?? "");
+      if (normalizeCreatorId(storedCreator) !== decoded.uid) {
+        return res.status(403).json({ error: "Forbidden" });
+      }
 
       const updates: Record<string, unknown> = { updatedAt: new Date().toISOString() };
       if (typeof body.title === "string") updates.title = body.title.trim();
@@ -207,7 +215,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const snap = await ref.get();
       if (!snap.exists) return res.status(404).json({ error: "Product not found" });
       const data = snap.data() as Record<string, unknown>;
-      if (data.creatorId !== decoded.uid) return res.status(403).json({ error: "Forbidden" });
+      const storedCreator = String(data.creatorId ?? "");
+      if (normalizeCreatorId(storedCreator) !== decoded.uid) {
+        return res.status(403).json({ error: "Forbidden" });
+      }
       await ref.delete();
       return res.status(200).json({ success: true });
     } catch (e: unknown) {

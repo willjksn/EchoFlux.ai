@@ -1,8 +1,16 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { useAppContext } from "./AppContext";
 import { auth, db } from "../firebaseConfig";
-import { collection, getDocs } from "firebase/firestore";
+import {
+  collection,
+  getDocs,
+  limit,
+  orderBy,
+  query,
+  type QueryDocumentSnapshot,
+} from "firebase/firestore";
 import { formatFanDisplayLabel } from "../src/lib/fanHubDisplay";
+import { inferIsAudioFromUrl, inferIsVideoFromUrl, normalizePostMediaTypes } from "../src/lib/mediaUrlInfer";
 
 type DateRange = "7d" | "30d" | "90d" | "all";
 
@@ -42,6 +50,34 @@ interface Transaction {
   fanEmail: string;
   createdAt: Date;
   productName?: string;
+}
+
+/** One row in the last-12-months revenue table */
+interface MonthlyRow {
+  key: string;
+  label: string;
+  totalCents: number;
+  tipsCents: number;
+  subscriptionsCents: number;
+  storeCents: number;
+  newMembers: number;
+}
+
+interface EngagementHighlight {
+  postId: string;
+  body: string;
+  thumbUrl: string | null;
+  /** First slot is video — use <video> preview; <img> fails for mp4 etc. */
+  thumbIsVideo: boolean;
+  likes: number;
+  comments: number;
+}
+
+interface EngagementStats {
+  postsThisMonth: number;
+  totalLikes: number;
+  topLikes: EngagementHighlight | null;
+  topComments: EngagementHighlight | null;
 }
 
 const TrendUpIcon = () => (
@@ -157,6 +193,236 @@ function orderRowExportType(typeRaw: string): string {
   return "Store";
 }
 
+function monthLabelShort(monthStart: Date): string {
+  const m = monthStart.toLocaleDateString("en-US", { month: "short" });
+  const yy = String(monthStart.getFullYear()).slice(-2);
+  return `${m} ${yy}`;
+}
+
+/** Calendar year months from February through the current month (newest first). January alone if we’re in Jan. */
+function buildFebThroughCurrentMonthlyRows(
+  orders: Array<{ createdAt?: string; amountCents?: number; type?: string; productType?: string }>,
+  prefMeta: Map<string, { createdAt: Date | null; updatedAt: Date | null }>,
+  fanSpending: Map<string, { firstOrder: Date }>
+): MonthlyRow[] {
+  const now = new Date();
+  const y = now.getFullYear();
+  const cm = now.getMonth();
+  const startMonth = cm >= 1 ? 1 : 0;
+  const allFanIds = new Set<string>([...prefMeta.keys(), ...fanSpending.keys()]);
+
+  const fanFirstSeen = (id: string): Date | null => {
+    const meta = prefMeta.get(id);
+    const spend = fanSpending.get(id);
+    const times: number[] = [];
+    if (meta?.createdAt) times.push(meta.createdAt.getTime());
+    if (spend) times.push(spend.firstOrder.getTime());
+    if (times.length === 0) return null;
+    return new Date(Math.min(...times));
+  };
+
+  const rows: MonthlyRow[] = [];
+  for (let m = cm; m >= startMonth; m--) {
+    const monthStart = new Date(y, m, 1);
+    const year = monthStart.getFullYear();
+    const month = monthStart.getMonth();
+    const start = new Date(year, month, 1, 0, 0, 0, 0);
+    const endCal = new Date(year, month + 1, 0, 23, 59, 59, 999);
+    const isCurrentMonth = m === cm;
+    const end = isCurrentMonth ? new Date(Math.min(now.getTime(), endCal.getTime())) : endCal;
+
+    let tipsCents = 0;
+    let subscriptionsCents = 0;
+    let storeCents = 0;
+    for (const o of orders) {
+      const orderDate = new Date(o.createdAt ?? 0);
+      if (Number.isNaN(orderDate.getTime()) || orderDate < start || orderDate > end) continue;
+      const amount = o.amountCents || 0;
+      const typ = o.type || o.productType || "";
+      if (typ === "tip") tipsCents += amount;
+      else if (typ === "subscription") subscriptionsCents += amount;
+      else storeCents += amount;
+    }
+
+    let newMembers = 0;
+    allFanIds.forEach((id) => {
+      const first = fanFirstSeen(id);
+      if (first && first >= start && first <= end) newMembers++;
+    });
+
+    rows.push({
+      key: `${year}-${month}`,
+      label: monthLabelShort(monthStart),
+      totalCents: tipsCents + subscriptionsCents + storeCents,
+      tipsCents,
+      subscriptionsCents,
+      storeCents,
+      newMembers,
+    });
+  }
+  return rows;
+}
+
+function pickPostThumbFromDoc(x: Record<string, unknown>): { thumbUrl: string | null; thumbIsVideo: boolean } {
+  const urls = Array.isArray(x.mediaUrls)
+    ? (x.mediaUrls as string[]).filter((u) => typeof u === "string" && u.trim())
+    : [];
+  const rawTypes = Array.isArray(x.mediaTypes) ? (x.mediaTypes as string[]) : [];
+  const types = normalizePostMediaTypes(urls, rawTypes);
+  let firstVideo: string | null = null;
+  for (let i = 0; i < urls.length; i++) {
+    const u = urls[i].trim();
+    if (!u || inferIsAudioFromUrl(u)) continue;
+    const isVid = types[i] === "video" || inferIsVideoFromUrl(u);
+    if (!isVid) return { thumbUrl: u, thumbIsVideo: false };
+    if (!firstVideo) firstVideo = u;
+  }
+  if (firstVideo) return { thumbUrl: firstVideo, thumbIsVideo: true };
+  const single = typeof x.mediaUrl === "string" ? x.mediaUrl.trim() : "";
+  if (single && !inferIsAudioFromUrl(single)) {
+    return { thumbUrl: single, thumbIsVideo: inferIsVideoFromUrl(single) };
+  }
+  return { thumbUrl: null, thumbIsVideo: false };
+}
+
+function parseFanPostForAnalytics(docSnap: QueryDocumentSnapshot): {
+  id: string;
+  body: string;
+  thumbUrl: string | null;
+  thumbIsVideo: boolean;
+  likes: number;
+  comments: number;
+  status: string;
+  at: Date;
+} | null {
+  const x = docSnap.data() as Record<string, unknown>;
+  const status = String(x.status ?? "published").trim().toLowerCase();
+  if (status === "draft") return null;
+  const raw = x.publishedAt ?? x.createdAt;
+  let at = new Date(0);
+  if (
+    raw &&
+    typeof raw === "object" &&
+    "toDate" in raw &&
+    typeof (raw as { toDate?: () => Date }).toDate === "function"
+  ) {
+    try {
+      at = (raw as { toDate: () => Date }).toDate();
+    } catch {
+      at = new Date(0);
+    }
+  } else if (typeof raw === "string") {
+    const d = new Date(raw);
+    at = Number.isNaN(d.getTime()) ? new Date(0) : d;
+  }
+  const likes =
+    typeof x.likeCount === "number" ? x.likeCount : typeof x.likesCount === "number" ? x.likesCount : 0;
+  let comments = 0;
+  if (typeof x.commentsCount === "number") comments = x.commentsCount;
+  else if (Array.isArray(x.comments)) comments = x.comments.length;
+  const { thumbUrl: thumb, thumbIsVideo } = pickPostThumbFromDoc(x);
+  const body =
+    typeof x.body === "string"
+      ? x.body
+      : typeof x.caption === "string"
+        ? x.caption
+        : typeof x.content === "string"
+          ? x.content
+          : "";
+  return {
+    id: docSnap.id,
+    body: body.trim(),
+    thumbUrl: thumb,
+    thumbIsVideo,
+    likes,
+    comments,
+    status,
+    at,
+  };
+}
+
+async function loadEngagementStats(creatorUserId: string): Promise<EngagementStats> {
+  const empty: EngagementStats = {
+    postsThisMonth: 0,
+    totalLikes: 0,
+    topLikes: null,
+    topComments: null,
+  };
+  if (!db) return empty;
+
+  const now = new Date();
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
+
+  let snapshots: QueryDocumentSnapshot[] = [];
+  try {
+    const pq = query(
+      collection(db, "creators", creatorUserId, "fanPosts"),
+      orderBy("createdAt", "desc"),
+      limit(500)
+    );
+    snapshots = (await getDocs(pq)).docs;
+  } catch {
+    try {
+      snapshots = (await getDocs(collection(db, "creators", creatorUserId, "fanPosts"))).docs;
+    } catch {
+      return empty;
+    }
+  }
+
+  const parsed = snapshots
+    .map(parseFanPostForAnalytics)
+    .filter((p): p is NonNullable<typeof p> => p != null);
+  const published = parsed.filter((p) => p.status === "published");
+
+  let totalLikes = 0;
+  let postsThisMonth = 0;
+  for (const p of published) {
+    totalLikes += p.likes;
+    if (p.at >= monthStart && p.at <= now) postsThisMonth++;
+  }
+
+  const thisMonth = published.filter((p) => p.at >= monthStart && p.at <= now);
+  let topLikes: EngagementHighlight | null = null;
+  let topComments: EngagementHighlight | null = null;
+  for (const p of thisMonth) {
+    const h: EngagementHighlight = {
+      postId: p.id,
+      body: p.body,
+      thumbUrl: p.thumbUrl,
+      thumbIsVideo: p.thumbIsVideo,
+      likes: p.likes,
+      comments: p.comments,
+    };
+    if (!topLikes || p.likes > topLikes.likes) topLikes = h;
+    if (!topComments || p.comments > topComments.comments) topComments = h;
+  }
+
+  return { postsThisMonth, totalLikes, topLikes, topComments };
+}
+
+function EngagementMediaThumb({ url, isVideo }: { url: string | null; isVideo: boolean }) {
+  if (!url) {
+    return (
+      <div className="w-full h-full flex items-center justify-center text-[10px] text-gray-400 text-center px-1">
+        No media
+      </div>
+    );
+  }
+  if (isVideo) {
+    return (
+      <video
+        src={url}
+        className="w-full h-full object-cover bg-black"
+        muted
+        playsInline
+        preload="metadata"
+        aria-hidden
+      />
+    );
+  }
+  return <img src={url} alt="" className="w-full h-full object-cover" loading="lazy" decoding="async" />;
+}
+
 export const FanHubAnalytics: React.FC = () => {
   const { user, showToast } = useAppContext();
   const [dateRange, setDateRange] = useState<DateRange>("30d");
@@ -181,6 +447,45 @@ export const FanHubAnalytics: React.FC = () => {
   const [recentTransactions, setRecentTransactions] = useState<Transaction[]>([]);
   /** Orders in selected date range (for CSV export). */
   const [rangeOrders, setRangeOrders] = useState<Record<string, unknown>[]>([]);
+  const [monthlyRows, setMonthlyRows] = useState<MonthlyRow[]>([]);
+  const [engagement, setEngagement] = useState<EngagementStats>({
+    postsThisMonth: 0,
+    totalLikes: 0,
+    topLikes: null,
+    topComments: null,
+  });
+  const [showLast12, setShowLast12] = useState(true);
+
+  const handleExportTransactionsCsv = useCallback(() => {
+    if (rangeOrders.length === 0) {
+      showToast?.("No transactions in the selected period", "info");
+      return;
+    }
+    const header = ["Date", "Type", "Amount (USD)", "Fan name", "Fan email", "Product", "Order ID"];
+    const lines = rangeOrders.map((o) => {
+      const rec = o as Record<string, unknown>;
+      const date =
+        typeof rec.createdAt === "string" ? String(rec.createdAt).slice(0, 10) : "";
+      const type = orderRowExportType(String(rec.type || rec.productType || ""));
+      const amt = ((Number(rec.amountCents) || 0) / 100).toFixed(2);
+      const fanName = String(rec.fanName ?? "");
+      const fanEmail = String(rec.fanEmail ?? rec.fanId ?? "");
+      const product = String(rec.productTitle ?? rec.productId ?? "");
+      const id = String(rec.id ?? "");
+      return [date, type, amt, fanName, fanEmail, product, id].map(csvEscapeCell).join(",");
+    });
+    const csv = [header.map(csvEscapeCell).join(","), ...lines].join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `fan-hub-transactions-${dateRange}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+    showToast?.("CSV downloaded", "success");
+  }, [rangeOrders, dateRange, showToast]);
 
   const loadAnalytics = useCallback(async () => {
     if (!user?.id) return;
@@ -192,7 +497,7 @@ export const FanHubAnalytics: React.FC = () => {
       const startDate = getDateRangeStart(dateRange);
 
       // Fetch orders for revenue calculation
-      const ordersRes = await fetch("/api/creatorOrders?limit=500", { headers });
+      const ordersRes = await fetch("/api/creatorOrders?limit=1000", { headers });
       let orders: any[] = [];
       if (ordersRes.ok) {
         const data = await ordersRes.json();
@@ -401,6 +706,21 @@ export const FanHubAnalytics: React.FC = () => {
         }));
       setTopFans(topFansList);
 
+      setMonthlyRows(buildFebThroughCurrentMonthlyRows(orders, prefMeta, fanSpending));
+
+      try {
+        const eg = await loadEngagementStats(user.id);
+        setEngagement(eg);
+      } catch (engErr) {
+        console.warn("FanHubAnalytics: engagement load failed", engErr);
+        setEngagement({
+          postsThisMonth: 0,
+          totalLikes: 0,
+          topLikes: null,
+          topComments: null,
+        });
+      }
+
     } catch (error) {
       console.error("Error loading fan hub analytics:", error);
       showToast?.("Failed to load analytics", "error");
@@ -604,6 +924,189 @@ export const FanHubAnalytics: React.FC = () => {
           />
         </div>
       </div>
+
+      {/* Monthly revenue: Feb → current month; Hide = this month only */}
+      <section
+        className="rounded-2xl border p-5 sm:p-6"
+        style={{
+          background:
+            "linear-gradient(180deg, color-mix(in srgb, var(--fan-primary, #be185d) 5%, var(--fan-bg, #ffffff)) 0%, var(--fan-bg, #ffffff) 100%)",
+          borderColor: "color-mix(in srgb, var(--fan-primary, #be185d) 20%, var(--fan-border, #e5e7eb))",
+        }}
+      >
+        <div className="flex items-center justify-between gap-3 mb-4">
+          <div className="flex items-center gap-2 min-w-0">
+            <span
+              className="w-1 h-5 rounded-full shrink-0"
+              style={{ background: "var(--fan-primary, #be185d)" }}
+              aria-hidden
+            />
+            <h2
+              className="text-xs sm:text-sm font-semibold tracking-[0.12em] uppercase truncate"
+              style={{ color: "var(--fan-text, #111827)" }}
+            >
+              {showLast12 ? "Monthly revenue (Feb – now)" : "This month"}
+            </h2>
+          </div>
+          <button
+            type="button"
+            onClick={() => setShowLast12((v) => !v)}
+            className="text-sm font-medium shrink-0 hover:opacity-80"
+            style={{ color: "var(--fan-primary, #be185d)" }}
+          >
+            {showLast12 ? "Hide" : "Show"}
+          </button>
+        </div>
+        {(() => {
+          const tableRows = showLast12 ? monthlyRows : monthlyRows.slice(0, 1);
+          if (tableRows.length === 0) {
+            return (
+              <p className="text-sm text-gray-500 dark:text-gray-400">
+                No months in range yet.
+              </p>
+            );
+          }
+          return (
+            <>
+              <div className="bg-white dark:bg-gray-900/40 rounded-xl border border-black/[0.06] dark:border-white/10 overflow-x-auto shadow-sm">
+                <table className="w-full text-sm min-w-[640px]">
+                  <thead>
+                    <tr
+                      className="text-left border-b border-gray-100 dark:border-gray-700"
+                      style={{ color: "color-mix(in srgb, var(--fan-text, #111827) 45%, transparent)" }}
+                    >
+                      <th className="py-3 px-3 text-[10px] sm:text-xs font-medium uppercase tracking-wider">Month</th>
+                      <th className="py-3 px-3 text-[10px] sm:text-xs font-medium uppercase tracking-wider">Total</th>
+                      <th className="py-3 px-3 text-[10px] sm:text-xs font-medium uppercase tracking-wider">Tips</th>
+                      <th className="py-3 px-3 text-[10px] sm:text-xs font-medium uppercase tracking-wider">Subscriptions</th>
+                      <th className="py-3 px-3 text-[10px] sm:text-xs font-medium uppercase tracking-wider">Store</th>
+                      <th className="py-3 px-3 text-[10px] sm:text-xs font-medium uppercase tracking-wider">New members</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {tableRows.map((row) => (
+                      <tr
+                        key={row.key}
+                        className="border-b border-gray-100 dark:border-gray-700/80 last:border-0"
+                      >
+                        <td className="py-3 px-3 text-gray-700 dark:text-gray-300">{row.label}</td>
+                        <td
+                          className="py-3 px-3 font-semibold tabular-nums"
+                          style={{ color: "var(--fan-primary, #be185d)" }}
+                        >
+                          {formatCents(row.totalCents)}
+                        </td>
+                        <td className="py-3 px-3 text-gray-600 dark:text-gray-400 tabular-nums">
+                          {formatCents(row.tipsCents)}
+                        </td>
+                        <td className="py-3 px-3 text-gray-600 dark:text-gray-400 tabular-nums">
+                          {formatCents(row.subscriptionsCents)}
+                        </td>
+                        <td className="py-3 px-3 text-gray-600 dark:text-gray-400 tabular-nums">
+                          {formatCents(row.storeCents)}
+                        </td>
+                        <td className="py-3 px-3 text-gray-600 dark:text-gray-400 tabular-nums">
+                          {row.newMembers}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <p className="mt-3 text-xs" style={{ color: "color-mix(in srgb, var(--fan-text, #111827) 50%, transparent)" }}>
+                {showLast12
+                  ? "February through the current month this calendar year. Totals use your most recent 1,000 orders. Store includes treats and content unlocks."
+                  : "Current month only. Use Show for February through today."}
+              </p>
+            </>
+          );
+        })()}
+      </section>
+
+      {/* Content & engagement — fan feed posts */}
+      <section
+        className="rounded-2xl border p-5 sm:p-6"
+        style={{
+          background:
+            "linear-gradient(180deg, color-mix(in srgb, var(--fan-primary, #be185d) 5%, var(--fan-bg, #ffffff)) 0%, var(--fan-bg, #ffffff) 100%)",
+          borderColor: "color-mix(in srgb, var(--fan-primary, #be185d) 20%, var(--fan-border, #e5e7eb))",
+        }}
+      >
+        <div className="flex items-center gap-2 mb-5">
+          <span
+            className="w-1 h-5 rounded-full shrink-0"
+            style={{ background: "var(--fan-primary, #be185d)" }}
+            aria-hidden
+          />
+          <h2
+            className="text-xs sm:text-sm font-semibold tracking-[0.12em] uppercase"
+            style={{ color: "var(--fan-text, #111827)" }}
+          >
+            Content &amp; engagement
+          </h2>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-5">
+          <div className="bg-white dark:bg-gray-900/40 rounded-xl border border-black/[0.06] dark:border-white/10 p-4 shadow-sm">
+            <p className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-1">Posts this month</p>
+            <p
+              className="text-3xl font-bold tabular-nums"
+              style={{ color: "var(--fan-primary, #be185d)" }}
+            >
+              {engagement.postsThisMonth}
+            </p>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Feed posts</p>
+          </div>
+          <div className="bg-white dark:bg-gray-900/40 rounded-xl border border-black/[0.06] dark:border-white/10 p-4 shadow-sm">
+            <p className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-1">Total likes</p>
+            <p
+              className="text-3xl font-bold tabular-nums"
+              style={{ color: "var(--fan-primary, #be185d)" }}
+            >
+              {engagement.totalLikes.toLocaleString()}
+            </p>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Across all published posts</p>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          {(["likes", "comments"] as const).map((kind) => {
+            const h = kind === "likes" ? engagement.topLikes : engagement.topComments;
+            const title = kind === "likes" ? "Most likes" : "Most comments";
+            return (
+              <div
+                key={kind}
+                className="bg-white dark:bg-gray-900/40 rounded-xl border border-black/[0.06] dark:border-white/10 p-4 shadow-sm"
+              >
+                <p className="font-semibold text-base" style={{ color: "var(--fan-primary, #be185d)" }}>
+                  {title}
+                </p>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">This month</p>
+                {h ? (
+                  <div className="flex gap-3">
+                    <div className="w-20 h-20 shrink-0 rounded-lg overflow-hidden bg-gray-100 dark:bg-gray-800 border border-gray-100 dark:border-gray-700">
+                      <EngagementMediaThumb url={h.thumbUrl} isVideo={h.thumbIsVideo} />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm text-gray-700 dark:text-gray-300 line-clamp-3">{h.body || "—"}</p>
+                      <p className="mt-2 text-sm font-medium tabular-nums" style={{ color: "var(--fan-primary, #be185d)" }}>
+                        {kind === "likes" ? `${h.likes} likes` : `${h.comments} comments`}
+                      </p>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-sm text-gray-500 dark:text-gray-400">
+                    No published posts this month yet.
+                  </p>
+                )}
+              </div>
+            );
+          })}
+        </div>
+        <p className="mt-3 text-xs" style={{ color: "color-mix(in srgb, var(--fan-text, #111827) 50%, transparent)" }}>
+          Highlights use up to 500 recent feed posts. Totals count all published posts in that set.
+        </p>
+      </section>
 
       {/* Two Column Layout: Top Fans & Recent Transactions */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
