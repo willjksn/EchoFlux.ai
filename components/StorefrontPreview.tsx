@@ -1046,7 +1046,7 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
                 onPointerCancel={handleBgPointerUp}
               />
             )}
-            <div className={landingMainMaxClass}>
+            <div className={`${landingMainMaxClass} min-w-0`}>
             {fullBgItem && (
               <div
                 className={`absolute z-10 w-24 h-24 rounded-full overflow-hidden border-4 border-white shadow-lg bg-gray-100 ${
@@ -1086,7 +1086,13 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
               <div
                 className={
                   heroLayoutEffective === "split" || heroLayoutEffective === "splitRight"
-                    ? `relative flex flex-row gap-6 items-start ${heroLayoutEffective === "splitRight" ? "flex-row-reverse" : ""}`
+                    ? live
+                      ? `relative flex w-full min-w-0 flex-col gap-4 items-center text-center md:flex-row md:gap-6 md:items-start md:text-left ${
+                          heroLayoutEffective === "splitRight" ? "md:flex-row-reverse" : ""
+                        }`
+                      : `relative flex flex-row gap-6 items-start ${
+                          heroLayoutEffective === "splitRight" ? "flex-row-reverse" : ""
+                        }`
                     : "relative flex flex-col items-center text-center max-w-[420px] mx-auto"
                 }
                 style={heroLayoutEffective === "centered" ? { maxWidth: "380px", padding: "0.5rem 0" } : undefined}
@@ -1194,7 +1200,7 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
                     </p>
                   )}
                   <p
-                    className={`mb-2 ${isHeroSplit ? "text-balance md:whitespace-nowrap" : ""}`}
+                    className={`mb-2 ${isHeroSplit ? "text-balance whitespace-normal md:whitespace-nowrap" : ""}`}
                     style={scaleHeroSplitTextStyle(
                       getTextStyleCSS(textStyles.heroPromise, {
                         fontSize:
@@ -1249,7 +1255,15 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
                   )}
                   {!heroSubline && !heroSubline2 && <div className="mb-3" />}
                   {socialLinks.length > 0 && (
-                    <div className={`flex gap-2 ${heroLayoutEffective === "split" || heroLayoutEffective === "splitRight" ? "justify-start" : "justify-center"}`}>
+                    <div
+                      className={`flex gap-2 ${
+                        heroLayoutEffective === "split" || heroLayoutEffective === "splitRight"
+                          ? live
+                            ? "justify-center md:justify-start"
+                            : "justify-start"
+                          : "justify-center"
+                      }`}
+                    >
                     {socialLinks.map((link) => (
                       <a key={link.key} href={link.url} target="_blank" rel="noopener noreferrer" className="w-7 h-7 rounded-lg flex items-center justify-center transition-transform hover:scale-110" style={getSocialIconStyle(link.key, primary)}>
                         {link.icon}
