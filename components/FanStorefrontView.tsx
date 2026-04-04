@@ -349,48 +349,60 @@ function applyFanStorefrontMemberUrl(
   window.history.replaceState(null, "", path + (qs ? `?${qs}` : "") + hash);
 }
 
+/** Second path segment: public landing (members signed in see hub at /{handle}; this forces the marketing page). Shorter than `?landing=1`. */
+const FAN_STOREFRONT_PUBLIC_LANDING_SLUG = "p";
+
 /**
  * Path → handle + legal subpage + optional member nav segment (path-based tabs).
- * - Default domain: /{handle}, /{handle}/terms|privacy|{nav}, legacy /u|link/{handle}/...
- * - Custom domain: /, /terms|privacy, /{nav} at root hub, /{handle}, /{handle}/{nav}
+ * - Default domain: /{handle}, /{handle}/p (public landing), /{handle}/terms|privacy|{nav}, legacy /u|link/{handle}/...
+ * - Custom domain: /, /p (public landing when member), /terms|privacy, /{nav} at root hub, /{handle}, /{handle}/{nav}
  */
 function parseHandleFromPath(): {
   handle: string | null;
   subpage: "terms" | "privacy" | null;
   memberNavSlug: string | null;
+  /** `/{handle}/p` or custom `/p` — same effect as `?landing=1` */
+  publicLandingPath: boolean;
 } {
   if (typeof window === "undefined") {
-    return { handle: null, subpage: null, memberNavSlug: null };
+    return { handle: null, subpage: null, memberNavSlug: null, publicLandingPath: false };
   }
   const path = window.location.pathname.replace(/\/+$/, "") || "/";
   const parts = path.slice(1).split("/").filter(Boolean);
   const host = window.location.hostname;
   const custom = isConfiguredCustomStorefrontHost(host);
+  const pubSlug = FAN_STOREFRONT_PUBLIC_LANDING_SLUG;
 
   if (custom) {
     if (parts.length === 0) {
-      return { handle: null, subpage: null, memberNavSlug: null };
+      return { handle: null, subpage: null, memberNavSlug: null, publicLandingPath: false };
+    }
+    if (parts.length === 1 && parts[0] === pubSlug) {
+      return { handle: null, subpage: null, memberNavSlug: null, publicLandingPath: true };
     }
     if (parts.length === 1 && (parts[0] === "terms" || parts[0] === "privacy")) {
-      return { handle: null, subpage: parts[0] as "terms" | "privacy", memberNavSlug: null };
+      return { handle: null, subpage: parts[0] as "terms" | "privacy", memberNavSlug: null, publicLandingPath: false };
     }
     if (parts.length === 1 && isMemberPathSlug(parts[0])) {
-      return { handle: null, subpage: null, memberNavSlug: parts[0].toLowerCase() };
+      return { handle: null, subpage: null, memberNavSlug: parts[0].toLowerCase(), publicLandingPath: false };
     }
     if (parts.length === 1 && /^[a-z0-9_]+$/i.test(parts[0])) {
-      return { handle: decodeHandleSegment(parts[0]), subpage: null, memberNavSlug: null };
+      return { handle: decodeHandleSegment(parts[0]), subpage: null, memberNavSlug: null, publicLandingPath: false };
     }
     if (parts.length === 2) {
       const a = parts[0];
       const b = parts[1].toLowerCase();
+      if (b === pubSlug && /^[a-z0-9_]+$/i.test(a)) {
+        return { handle: decodeHandleSegment(a), subpage: null, memberNavSlug: null, publicLandingPath: true };
+      }
       if (b === "terms" || b === "privacy") {
-        return { handle: decodeHandleSegment(a), subpage: b as "terms" | "privacy", memberNavSlug: null };
+        return { handle: decodeHandleSegment(a), subpage: b as "terms" | "privacy", memberNavSlug: null, publicLandingPath: false };
       }
       if (/^[a-z0-9_]+$/i.test(a) && isMemberPathSlug(b)) {
-        return { handle: decodeHandleSegment(a), subpage: null, memberNavSlug: b };
+        return { handle: decodeHandleSegment(a), subpage: null, memberNavSlug: b, publicLandingPath: false };
       }
     }
-    return { handle: null, subpage: null, memberNavSlug: null };
+    return { handle: null, subpage: null, memberNavSlug: null, publicLandingPath: false };
   }
 
   const legacyFull = path.match(/^\/(?:u|link)\/([^/]+)(?:\/([^/]+))?$/);
@@ -398,24 +410,30 @@ function parseHandleFromPath(): {
     const h = decodeHandleSegment(legacyFull[1]);
     const rest = (legacyFull[2] || "").toLowerCase();
     if (rest === "terms" || rest === "privacy") {
-      return { handle: h, subpage: rest as "terms" | "privacy", memberNavSlug: null };
+      return { handle: h, subpage: rest as "terms" | "privacy", memberNavSlug: null, publicLandingPath: false };
+    }
+    if (rest === pubSlug) {
+      return { handle: h, subpage: null, memberNavSlug: null, publicLandingPath: true };
     }
     if (rest && isMemberPathSlug(rest)) {
-      return { handle: h, subpage: null, memberNavSlug: rest };
+      return { handle: h, subpage: null, memberNavSlug: rest, publicLandingPath: false };
     }
-    return { handle: h, subpage: null, memberNavSlug: null };
+    return { handle: h, subpage: null, memberNavSlug: null, publicLandingPath: false };
   }
 
   const handleSeg = parts[0];
-  if (!handleSeg) return { handle: null, subpage: null, memberNavSlug: null };
+  if (!handleSeg) return { handle: null, subpage: null, memberNavSlug: null, publicLandingPath: false };
   const seg1 = (parts[1] || "").toLowerCase();
   if (seg1 === "terms" || seg1 === "privacy") {
-    return { handle: decodeHandleSegment(handleSeg), subpage: seg1 as "terms" | "privacy", memberNavSlug: null };
+    return { handle: decodeHandleSegment(handleSeg), subpage: seg1 as "terms" | "privacy", memberNavSlug: null, publicLandingPath: false };
+  }
+  if (seg1 === pubSlug) {
+    return { handle: decodeHandleSegment(handleSeg), subpage: null, memberNavSlug: null, publicLandingPath: true };
   }
   if (seg1 && isMemberPathSlug(seg1)) {
-    return { handle: decodeHandleSegment(handleSeg), subpage: null, memberNavSlug: seg1 };
+    return { handle: decodeHandleSegment(handleSeg), subpage: null, memberNavSlug: seg1, publicLandingPath: false };
   }
-  return { handle: decodeHandleSegment(handleSeg), subpage: null, memberNavSlug: null };
+  return { handle: decodeHandleSegment(handleSeg), subpage: null, memberNavSlug: null, publicLandingPath: false };
 }
 
 function normalizeHandleKey(input: string | null | undefined): string {
@@ -759,8 +777,10 @@ export const FanStorefrontView: React.FC = () => {
 
   const urlParams = typeof window !== "undefined" ? new URLSearchParams(window.location.search) : null;
   const previewMember = urlParams?.get("preview") === "member";
-  /** Logged-in members normally skip landing; creators use this to see the public landing while signed in. */
-  const forcePublicLanding = urlParams?.get("landing") === "1";
+  /** Logged-in members normally skip landing; `/{handle}/p` or `?landing=1` forces the public marketing page. */
+  const forcePublicLanding =
+    urlParams?.get("landing") === "1" ||
+    (typeof window !== "undefined" && parseHandleFromPath().publicLandingPath);
 
   const unreadMessageTabCount = useUnreadNewMessageNotificationCount(
     isLoggedIn && creator ? creator.creatorId : false
@@ -3115,7 +3135,7 @@ export const FanStorefrontView: React.FC = () => {
   const storefrontHomePath =
     typeof window !== "undefined" && isConfiguredCustomStorefrontHost(window.location.hostname)
       ? "/"
-      : `/${creator.handle}?landing=1`;
+      : `/${creator.handle}/${FAN_STOREFRONT_PUBLIC_LANDING_SLUG}`;
 
   if (showLanding) {
     return (

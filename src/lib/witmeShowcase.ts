@@ -1,4 +1,4 @@
-/** Witme homepage / discover showcase rows — managed via Admin Witme Page control panel. */
+/** Witme homepage / discover showcase — managed via Admin Witme Page control panel. */
 
 export type WitmeShowcaseCreator = {
   name: string;
@@ -14,87 +14,36 @@ export type WitmeShowcaseCreator = {
   mediaObjectPosition: string;
   descriptor: string;
   tags: string[];
-  /** Short line for the “featured now” carousel */
+  /** Short line for spotlight / admin tooling */
   spotlight: string;
   /** If true, “View page” links to /{pageSlug}. If false, decorative only (no storefront link). */
   linkLive: boolean;
+  /** When true (and linkLive + slug), shown in the homepage Featured section. Multiple → compact grid; one → large spotlight. */
+  isFeatured: boolean;
+  /** How media is fit in the homepage Featured block only (Discover / other surfaces stay cover). */
+  featuredMediaFit: "cover" | "contain";
 };
 
-/** Shipped default when Firestore has no `showcaseCreators` yet — one live creator + decorative fillers. */
-export const DEFAULT_SHOWCASE_CREATORS: WitmeShowcaseCreator[] = [
-  {
-    name: "Stormi JXO",
-    handle: "@stormijxo",
-    pageSlug: "stormijxo",
-    descriptor: "Premium creator page + direct fan access",
-    tags: ["Memberships", "Paid Posts", "Messages"],
-    imageUrl: "https://images.unsplash.com/photo-1524504388940-b1c1722653e1?auto=format&fit=crop&w=900&q=80",
-    mediaKind: "image",
-    mediaObjectPosition: "50% 50%",
-    spotlight: "New member-only drop is live now",
-    linkLive: true,
-  },
-  {
-    name: "Jalen Brooks",
-    handle: "@jalenbuilds",
-    pageSlug: "",
-    descriptor: "Fitness + performance coaching",
-    tags: ["Sessions", "Tips", "Exclusive Access"],
-    imageUrl: "https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?auto=format&fit=crop&w=900&q=80",
-    mediaKind: "image",
-    mediaObjectPosition: "50% 50%",
-    spotlight: "Opened 8 new coaching session slots",
-    linkLive: false,
-  },
-  {
-    name: "Nia Sol",
-    handle: "@niasolmusic",
-    pageSlug: "",
-    descriptor: "Music process + unreleased cuts",
-    tags: ["Memberships", "Paid Posts", "Tips"],
-    imageUrl: "https://images.unsplash.com/photo-1488426862026-3ee34a7d66df?auto=format&fit=crop&w=900&q=80",
-    mediaKind: "image",
-    mediaObjectPosition: "50% 50%",
-    spotlight: "Posted an unreleased demo for members",
-    linkLive: false,
-  },
-  {
-    name: "Evan Cole",
-    handle: "@evancoach",
-    pageSlug: "",
-    descriptor: "Mindset + creator growth",
-    tags: ["Sessions", "Messages", "Premium Access"],
-    imageUrl: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=900&q=80",
-    mediaKind: "image",
-    mediaObjectPosition: "50% 50%",
-    spotlight: "Direct Q&A messages enabled this week",
-    linkLive: false,
-  },
-  {
-    name: "Leah Park",
-    handle: "@leahframes",
-    pageSlug: "",
-    descriptor: "Photography + behind-the-scenes",
-    tags: ["Paid Posts", "Memberships", "Exclusive Access"],
-    imageUrl: "https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=900&q=80",
-    mediaKind: "image",
-    mediaObjectPosition: "50% 50%",
-    spotlight: "New BTS set available for paid unlock",
-    linkLive: false,
-  },
-  {
-    name: "Kai Moreno",
-    handle: "@kaifilms",
-    pageSlug: "",
-    descriptor: "Short films + creative breakdowns",
-    tags: ["Messages", "Tips", "Sessions"],
-    imageUrl: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=900&q=80",
-    mediaKind: "image",
-    mediaObjectPosition: "50% 50%",
-    spotlight: "Hosting a creator breakdown session",
-    linkLive: false,
-  },
-];
+/**
+ * Default shipped showcase: one live creator only (no placeholder directory rows).
+ * Hero / featured imagery: brand OG asset until admin sets creator media in Witme Page manager.
+ */
+export const WITME_DEFAULT_FEATURED_CREATOR: WitmeShowcaseCreator = {
+  name: "Stormi J",
+  handle: "@stormijxo",
+  pageSlug: "stormijxo",
+  descriptor: "Quiet confidence. Real moments. Closer access.",
+  tags: ["Memberships", "Store", "Messages"],
+  imageUrl: "https://witme.io/witme-og.png",
+  mediaKind: "image",
+  mediaObjectPosition: "50% 50%",
+  spotlight: "Live creator page on WitMe",
+  linkLive: true,
+  isFeatured: true,
+  featuredMediaFit: "cover",
+};
+
+export const DEFAULT_SHOWCASE_CREATORS: WitmeShowcaseCreator[] = [WITME_DEFAULT_FEATURED_CREATOR];
 
 export function witmeCreatorPagePath(pageSlug: string): string {
   const s = pageSlug.trim().toLowerCase().replace(/^\/+/, "");

@@ -46,6 +46,7 @@ import { AdGenerator } from './components/AdGenerator';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { FanStorefrontView } from './components/FanStorefrontView';
 import { FanOnlyEchoFluxShell } from './components/FanOnlyEchoFluxShell';
+import { WitmeCreatorsApplyPage } from './components/WitmeCreatorsApplyPage';
 import { WitmeDiscoverPage, WitmeHomepage } from './components/WitmeHomepage';
 import { WitmePageManager } from './components/WitmePageManager';
 import {
@@ -259,16 +260,17 @@ const AppContent: React.FC = () => {
     })();
     const isWitmeRootPath = (isWitmeHost || isWitmePreview) && normalizedPath === '/';
     const isWitmeDiscoverPath = (isWitmeHost || isWitmePreview) && normalizedPath === '/discover';
-    const isWitmeSurface = isWitmeRootPath || isWitmeDiscoverPath;
+    const isCreatorsApplyPath = normalizedPath === '/creators/apply';
+    const isWitmeSurface = isWitmeRootPath || isWitmeDiscoverPath || isCreatorsApplyPath;
     /** stormijxo.com → /, /terms, /privacy, /{handle} (see storefrontCustomDomain + creatorDomains map) */
     const isCustomDomainSf =
         typeof window !== 'undefined' && isCustomDomainStorefrontPath(pathname, hostname);
     const np = pathname.replace(/\/+$/, '') || '/';
     // Member hub second segment (path-based tabs); keep list in sync with FanStorefrontView member URLs
     const isStorefrontMemberSubpathPlain =
-        /^\/[^/]+\/(?:terms|privacy|feed|home|store|treats|purchases|tip|messages|profile|saved|about)$/i.test(np);
+        /^\/[^/]+\/(?:terms|privacy|p|feed|home|store|treats|purchases|tip|messages|profile|saved|about)$/i.test(np);
     const isStorefrontLegacyMemberSubpath =
-        /^\/(?:u|link)\/[^/]+\/(?:terms|privacy|feed|home|store|treats|purchases|tip|messages|profile|saved|about)$/i.test(
+        /^\/(?:u|link)\/[^/]+\/(?:terms|privacy|p|feed|home|store|treats|purchases|tip|messages|profile|saved|about)$/i.test(
             np
         );
     const isStorefrontPath =
@@ -282,6 +284,10 @@ const AppContent: React.FC = () => {
 
     if (isWitmeDiscoverPath) {
         return <WitmeDiscoverPage />;
+    }
+
+    if (isCreatorsApplyPath) {
+        return <WitmeCreatorsApplyPage />;
     }
 
     if (isStorefrontPath) {

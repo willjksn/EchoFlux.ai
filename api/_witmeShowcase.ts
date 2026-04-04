@@ -9,82 +9,26 @@ export type WitmeShowcaseCreator = {
   tags: string[];
   spotlight: string;
   linkLive: boolean;
+  isFeatured: boolean;
+  featuredMediaFit: "cover" | "contain";
 };
 
-export const DEFAULT_SHOWCASE_CREATORS: WitmeShowcaseCreator[] = [
-  {
-    name: "Stormi JXO",
-    handle: "@stormijxo",
-    pageSlug: "stormijxo",
-    descriptor: "Premium creator page + direct fan access",
-    tags: ["Memberships", "Paid Posts", "Messages"],
-    imageUrl: "https://images.unsplash.com/photo-1524504388940-b1c1722653e1?auto=format&fit=crop&w=900&q=80",
-    mediaKind: "image",
-    mediaObjectPosition: "50% 50%",
-    spotlight: "New member-only drop is live now",
-    linkLive: true,
-  },
-  {
-    name: "Jalen Brooks",
-    handle: "@jalenbuilds",
-    pageSlug: "",
-    descriptor: "Fitness + performance coaching",
-    tags: ["Sessions", "Tips", "Exclusive Access"],
-    imageUrl: "https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?auto=format&fit=crop&w=900&q=80",
-    mediaKind: "image",
-    mediaObjectPosition: "50% 50%",
-    spotlight: "Opened 8 new coaching session slots",
-    linkLive: false,
-  },
-  {
-    name: "Nia Sol",
-    handle: "@niasolmusic",
-    pageSlug: "",
-    descriptor: "Music process + unreleased cuts",
-    tags: ["Memberships", "Paid Posts", "Tips"],
-    imageUrl: "https://images.unsplash.com/photo-1488426862026-3ee34a7d66df?auto=format&fit=crop&w=900&q=80",
-    mediaKind: "image",
-    mediaObjectPosition: "50% 50%",
-    spotlight: "Posted an unreleased demo for members",
-    linkLive: false,
-  },
-  {
-    name: "Evan Cole",
-    handle: "@evancoach",
-    pageSlug: "",
-    descriptor: "Mindset + creator growth",
-    tags: ["Sessions", "Messages", "Premium Access"],
-    imageUrl: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=900&q=80",
-    mediaKind: "image",
-    mediaObjectPosition: "50% 50%",
-    spotlight: "Direct Q&A messages enabled this week",
-    linkLive: false,
-  },
-  {
-    name: "Leah Park",
-    handle: "@leahframes",
-    pageSlug: "",
-    descriptor: "Photography + behind-the-scenes",
-    tags: ["Paid Posts", "Memberships", "Exclusive Access"],
-    imageUrl: "https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=900&q=80",
-    mediaKind: "image",
-    mediaObjectPosition: "50% 50%",
-    spotlight: "New BTS set available for paid unlock",
-    linkLive: false,
-  },
-  {
-    name: "Kai Moreno",
-    handle: "@kaifilms",
-    pageSlug: "",
-    descriptor: "Short films + creative breakdowns",
-    tags: ["Messages", "Tips", "Sessions"],
-    imageUrl: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=900&q=80",
-    mediaKind: "image",
-    mediaObjectPosition: "50% 50%",
-    spotlight: "Hosting a creator breakdown session",
-    linkLive: false,
-  },
-];
+export const WITME_DEFAULT_FEATURED_CREATOR: WitmeShowcaseCreator = {
+  name: "Stormi J",
+  handle: "@stormijxo",
+  pageSlug: "stormijxo",
+  descriptor: "Quiet confidence. Real moments. Closer access.",
+  tags: ["Memberships", "Store", "Messages"],
+  imageUrl: "https://witme.io/witme-og.png",
+  mediaKind: "image",
+  mediaObjectPosition: "50% 50%",
+  spotlight: "Live creator page on WitMe",
+  linkLive: true,
+  isFeatured: true,
+  featuredMediaFit: "cover",
+};
+
+export const DEFAULT_SHOWCASE_CREATORS: WitmeShowcaseCreator[] = [WITME_DEFAULT_FEATURED_CREATOR];
 
 function sanitizeString(value: unknown, max = 300): string {
   if (typeof value !== "string") return "";
@@ -142,7 +86,6 @@ export function sanitizeShowcaseCreators(input: unknown, hasShowcaseKey: boolean
       const handle = sanitizeString(r.handle, 80);
       let pageSlug = normalizePageSlug(r.pageSlug);
       if (!pageSlug) pageSlug = slugFromHandleDisplay(handle);
-      // Firebase download URLs with tokens are often 400–2000+ chars; truncating breaks the link.
       const imageUrl = sanitizeShowcaseImageUrl(r.imageUrl, 4096);
       const mediaKind: "image" | "video" = r.mediaKind === "video" ? "video" : "image";
       const mediaObjectPosition = sanitizeMediaObjectPosition(r.mediaObjectPosition);
@@ -154,7 +97,23 @@ export function sanitizeShowcaseCreators(input: unknown, hasShowcaseKey: boolean
         .slice(0, 8);
       let linkLive = r.linkLive === true;
       if (linkLive && !pageSlug) linkLive = false;
-      return { name, handle, pageSlug, imageUrl, mediaKind, mediaObjectPosition, descriptor, tags, spotlight, linkLive };
+      const isFeatured = r.isFeatured === true;
+      const fitRaw = sanitizeString(r.featuredMediaFit, 12).toLowerCase();
+      const featuredMediaFit: "cover" | "contain" = fitRaw === "contain" ? "contain" : "cover";
+      return {
+        name,
+        handle,
+        pageSlug,
+        imageUrl,
+        mediaKind,
+        mediaObjectPosition,
+        descriptor,
+        tags,
+        spotlight,
+        linkLive,
+        isFeatured,
+        featuredMediaFit,
+      };
     })
     .filter((c) => c.name && c.imageUrl)
     .slice(0, 24);

@@ -70,6 +70,7 @@ export const CONNECTION_VISIBLE_PLATFORMS = ['Instagram', 'X', 'Facebook'] as co
  */
 export const KNOWN_APP_ROUTES: readonly string[] = [
   '/',
+  '/creators/apply',
   '/dashboard',
   '/analytics',
   '/settings',

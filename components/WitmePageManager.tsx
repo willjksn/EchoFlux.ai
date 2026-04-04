@@ -145,23 +145,36 @@ const mergeWitmeLandingFromApi = (raw: WitmeLandingConfig): WitmeLandingConfig =
             typeof c.mediaObjectPosition === 'string' && c.mediaObjectPosition.trim() !== ''
               ? c.mediaObjectPosition.trim()
               : '50% 50%',
+          isFeatured: c.isFeatured === true,
+          featuredMediaFit: c.featuredMediaFit === 'contain' ? 'contain' : 'cover',
         }))
       : DEFAULT_CONFIG.showcaseCreators,
   });
 
-const showcaseFrameMediaStyle = (objectPosition?: string): React.CSSProperties => ({
-  objectFit: 'cover',
+const showcaseFrameMediaStyle = (
+  objectPosition: string | undefined,
+  objectFit: 'cover' | 'contain',
+  previewZoom = 1,
+): React.CSSProperties => {
+  const pos =
+    objectPosition != null && String(objectPosition).trim() !== '' ? String(objectPosition).trim() : '50% 50%';
+  const z = Number.isFinite(previewZoom) && previewZoom > 0 ? previewZoom : 1;
+  return {
+    objectFit,
+    objectPosition: pos,
+    ...(z !== 1 ? { transform: `scale(${z})`, transformOrigin: 'center center' } : {}),
+  };
+};
+
+const showcaseFeaturedPreviewStyle = (
+  objectPosition: string | undefined,
+  fit: 'cover' | 'contain',
+): React.CSSProperties => ({
+  objectFit: fit,
   objectPosition:
     objectPosition != null && String(objectPosition).trim() !== '' ? String(objectPosition).trim() : '50% 50%',
 });
 
-const splitLines = (text: string): string[] =>
-  text
-    .split('\n')
-    .map((line) => line.trim())
-    .filter(Boolean);
-
-const joinLines = (items: string[]): string => items.join('\n');
 const pct = (value: number): string => `${(Number.isFinite(value) ? value : 0).toFixed(2)}%`;
 
 const tagsToCsv = (tags: string[]): string => tags.join(', ');
@@ -183,6 +196,8 @@ const emptyShowcaseRow = (): WitmeShowcaseCreator => ({
   tags: [],
   spotlight: '',
   linkLive: false,
+  isFeatured: false,
+  featuredMediaFit: 'cover',
 });
 
 async function deleteOwnedWitmeShowcaseMedia(imageUrl: string | undefined, ownerUid: string | undefined): Promise<void> {
@@ -200,7 +215,8 @@ async function deleteOwnedWitmeShowcaseMedia(imageUrl: string | undefined, owner
 
 export const WitmePageManager: React.FC = () => {
   const { user, showToast } = useAppContext();
-  const [tab, setTab] = useState<'live' | 'control' | 'analytics'>('live');
+  /** Default to Control Panel so featured creators, crop, and sliders are visible (Live View is preview-only). */
+  const [tab, setTab] = useState<'live' | 'control' | 'analytics'>('control');
   const [draft, setDraft] = useState<WitmeLandingConfig>(DEFAULT_CONFIG);
   const [published, setPublished] = useState<WitmeLandingConfig>(DEFAULT_CONFIG);
   const [loading, setLoading] = useState(true);
@@ -212,8 +228,10 @@ export const WitmePageManager: React.FC = () => {
   const [analytics, setAnalytics] = useState<WitmeAnalyticsResponse | null>(null);
   const [analyticsLoading, setAnalyticsLoading] = useState(false);
 
-  const trustItemsText = useMemo(() => joinLines(draft.trustItems), [draft.trustItems]);
-  const liveMomentsText = useMemo(() => joinLines(draft.liveMoments), [draft.liveMoments]);
+  const homepageFeaturedRows = useMemo(
+    () => draft.showcaseCreators.filter((c) => c.linkLive && c.isFeatured === true),
+    [draft.showcaseCreators],
+  );
 
   const showcaseFileInputRef = useRef<HTMLInputElement>(null);
   const showcasePickIdxRef = useRef<number | null>(null);
@@ -225,6 +243,9 @@ export const WitmePageManager: React.FC = () => {
     startOy: number;
   } | null>(null);
   const [showcaseUploadingIdx, setShowcaseUploadingIdx] = useState<number | null>(null);
+  /** Discover uses contain (full image in card). Cover preview optional for featured-style crops. Zoom is editor-only (not saved). */
+  const [showcaseFocalFrameFit, setShowcaseFocalFrameFit] = useState<'contain' | 'cover'>('contain');
+  const [showcaseFrameZoom, setShowcaseFrameZoom] = useState<Record<number, number>>({});
   /** Showcase `imageUrl` list from last successful load/save (for safe Storage cleanup after save). */
   const lastSavedShowcaseImageUrlsRef = useRef<string[]>([]);
 
@@ -542,15 +563,7 @@ export const WitmePageManager: React.FC = () => {
             </div>
           </div>
           <div className="max-h-[78vh] overflow-y-auto rounded-xl border border-gray-200 dark:border-gray-700">
-            <WitmeHomepage
-              previewConfig={draft}
-              disableSeo
-              disableTracking
-              disableRemoteConfig
-              onExploreCreators={() => {
-                window.open('/discover?witmePreview=1', '_blank', 'noopener,noreferrer');
-              }}
-            />
+            <WitmeHomepage previewConfig={draft} disableSeo disableTracking disableRemoteConfig />
           </div>
           <div className="flex flex-wrap gap-2">
             <a
@@ -582,48 +595,23 @@ export const WitmePageManager: React.FC = () => {
             </div>
           ) : (
             <>
-              <div className="rounded-xl border border-gray-200 bg-white p-4 dark:border-gray-800 dark:bg-gray-900">
-                <h2 className="mb-3 text-sm font-semibold text-gray-900 dark:text-white">Hero</h2>
-                <div className="grid gap-3 md:grid-cols-2">
-                  <input
-                    value={draft.heroBadge}
-                    onChange={(e) => setDraft((prev) => ({ ...prev, heroBadge: e.target.value }))}
-                    placeholder="Hero badge"
-                    className="rounded-lg border border-gray-300 px-3 py-2 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-white"
-                  />
-                  <input
-                    value={draft.heroTrustText}
-                    onChange={(e) => setDraft((prev) => ({ ...prev, heroTrustText: e.target.value }))}
-                    placeholder="Hero trust text"
-                    className="rounded-lg border border-gray-300 px-3 py-2 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-white"
-                  />
-                  <input
-                    value={draft.heroTitle}
-                    onChange={(e) => setDraft((prev) => ({ ...prev, heroTitle: e.target.value }))}
-                    placeholder="Hero title"
-                    className="rounded-lg border border-gray-300 px-3 py-2 text-sm md:col-span-2 dark:border-gray-700 dark:bg-gray-800 dark:text-white"
-                  />
-                  <textarea
-                    value={draft.heroDescription}
-                    onChange={(e) => setDraft((prev) => ({ ...prev, heroDescription: e.target.value }))}
-                    rows={3}
-                    placeholder="Hero description"
-                    className="rounded-lg border border-gray-300 px-3 py-2 text-sm md:col-span-2 dark:border-gray-700 dark:bg-gray-800 dark:text-white"
-                  />
-                </div>
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-900/50">
+                <h2 className="text-sm font-bold text-slate-900 dark:text-white">What controls the live witme.io homepage</h2>
+                <p className="mt-2 text-sm text-slate-700 dark:text-slate-300">
+                  Marketing copy and section layout (hero, &quot;What you&apos;ll find&quot;, etc.) live in code and ship with the app.{' '}
+                  <strong className="text-slate-900 dark:text-white">Here you edit only</strong> what still comes from the CMS:{' '}
+                  <strong>Discover + Featured creators</strong> (rows below), <strong>media crop / focal point</strong>, and{' '}
+                  <strong>footer legal links</strong>. Use <strong>Live View</strong> to preview your draft before publishing.
+                </p>
               </div>
 
-              <div className="rounded-xl border border-gray-200 bg-white p-4 dark:border-gray-800 dark:bg-gray-900">
-                <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+              <div className="rounded-xl border-2 border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-900">
+                <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
                   <div>
-                    <h2 className="text-sm font-semibold text-gray-900 dark:text-white">Showcase creators</h2>
+                    <h2 className="text-base font-bold tracking-tight text-gray-900 dark:text-white">Creators &amp; homepage Featured</h2>
                     <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                      Home hero tiles, featured carousel, grid, and Discover use this list. Turn on{' '}
-                      <span className="font-medium text-gray-700 dark:text-gray-300">Live page link</span> only when{' '}
-                      <code className="rounded bg-gray-100 px-1 dark:bg-gray-800">witme.io/…</code> should open that storefront.
-                      Leave it off for decorative filler. Upload images or short looping videos (Firebase path{' '}
-                      <code className="rounded bg-gray-100 px-1 dark:bg-gray-800">witme_showcase/</code>
-                      , public read after you deploy updated storage rules).
+                      Discover lists every row that has media. The witme.io <strong className="text-gray-700 dark:text-gray-200">Featured</strong> section only shows rows with{' '}
+                      <strong className="text-gray-700 dark:text-gray-200">Featured on homepage</strong> (and Live link + slug + image).
                     </p>
                   </div>
                   <button
@@ -634,11 +622,57 @@ export const WitmePageManager: React.FC = () => {
                         showcaseCreators: [...prev.showcaseCreators, emptyShowcaseRow()],
                       }))
                     }
-                    className="inline-flex items-center gap-1 rounded-md border border-gray-300 px-2 py-1 text-xs dark:border-gray-700"
+                    className="inline-flex items-center gap-1 rounded-md border border-gray-300 px-3 py-1.5 text-xs font-medium dark:border-gray-700"
                   >
                     <PlusIcon className="w-4 h-4" />
-                    Add row
+                    Add creator row
                   </button>
+                </div>
+
+                <div className="mb-5 rounded-xl border-2 border-amber-400/80 bg-gradient-to-br from-amber-50 to-orange-50/80 p-4 shadow-sm dark:border-amber-500/50 dark:from-amber-950/50 dark:to-orange-950/30">
+                  <p className="text-xs font-bold uppercase tracking-wider text-amber-900 dark:text-amber-200">Homepage Featured editor</p>
+                  <p className="mt-2 text-sm text-amber-950 dark:text-amber-50">
+                    Use the checkboxes on each row below: <strong>Live page link</strong>, then <strong>Featured on homepage</strong>. One featured → large spotlight; two or more → compact grid.
+                    Drag the media frame or use <strong>focal sliders</strong>. <strong>Featured image fit</strong> applies to multi-featured cards; the large single spotlight always shows the full media.
+                  </p>
+                  <div className="mt-3 rounded-lg bg-white/70 px-3 py-2 text-xs dark:bg-black/20">
+                    {homepageFeaturedRows.length === 0 ? (
+                      <span className="font-medium text-amber-900 dark:text-amber-100">
+                        No homepage featured rows yet — turn on &quot;Featured on homepage&quot; on a live row below.
+                      </span>
+                    ) : (
+                      <span className="text-amber-950 dark:text-amber-50">
+                        <span className="font-semibold">Featured now ({homepageFeaturedRows.length}):</span>{' '}
+                        {homepageFeaturedRows
+                          .map((c) => c.name.trim() || c.handle.trim() || c.pageSlug.trim() || 'Unnamed')
+                          .join(' · ')}
+                      </span>
+                    )}
+                  </div>
+                  <p className="mt-2 text-[11px] text-amber-900/80 dark:text-amber-200/90">
+                    Uploads: Firebase <code className="rounded bg-black/10 px-1 dark:bg-white/10">witme_showcase/</code>
+                  </p>
+                </div>
+                <div className="mb-4 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2.5 text-xs text-gray-600 dark:border-gray-700 dark:bg-gray-800/50 dark:text-gray-300">
+                  <span className="font-semibold text-gray-800 dark:text-gray-200">Focal / drag frame</span>
+                  <label className="flex flex-wrap items-center gap-2">
+                    <span className="text-gray-500 dark:text-gray-400">Show as</span>
+                    <select
+                      value={showcaseFocalFrameFit}
+                      onChange={(e) => {
+                        const v = e.target.value === 'cover' ? 'cover' : 'contain';
+                        setShowcaseFocalFrameFit(v);
+                        setShowcaseFrameZoom({});
+                      }}
+                      className="rounded-md border border-gray-300 bg-white px-2 py-1 dark:border-gray-600 dark:bg-gray-900 dark:text-white"
+                    >
+                      <option value="contain">Full image (matches Discover)</option>
+                      <option value="cover">Cover crop preview</option>
+                    </select>
+                  </label>
+                  <span className="max-w-xl text-gray-500 dark:text-gray-400">
+                    Default matches Discover (full image in the card). Switch to cover to preview a tight crop. Ctrl+scroll or per-row zoom (not saved).
+                  </span>
                 </div>
                 <input
                   ref={showcaseFileInputRef}
@@ -648,27 +682,84 @@ export const WitmePageManager: React.FC = () => {
                   onChange={onShowcaseFilePicked}
                 />
                 <div className="space-y-4">
-                  {draft.showcaseCreators.map((row, idx) => (
+                  {draft.showcaseCreators.map((row, idx) => {
+                    const [posX, posY] = parseObjectPositionPercentPair(row.mediaObjectPosition);
+                    const frameZoom = showcaseFrameZoom[idx] ?? 1;
+                    const featuredPreviewFit: 'cover' | 'contain' =
+                      homepageFeaturedRows.length === 1 ? 'contain' : row.featuredMediaFit === 'contain' ? 'contain' : 'cover';
+                    return (
                     <div
                       key={`showcase-${idx}`}
-                      className="grid gap-2 rounded-lg border border-gray-200 p-3 dark:border-gray-700"
+                      className={`grid gap-2 rounded-lg border p-3 dark:border-gray-700 ${
+                        row.isFeatured === true && row.linkLive
+                          ? 'border-amber-400/90 bg-amber-50/40 ring-2 ring-amber-400/50 dark:border-amber-600/60 dark:bg-amber-950/25 dark:ring-amber-500/35'
+                          : 'border-gray-200 dark:border-gray-700'
+                      }`}
                     >
                       <div className="flex flex-wrap items-center justify-between gap-2">
-                        <label className="flex cursor-pointer items-center gap-2 text-xs text-gray-700 dark:text-gray-300">
-                          <input
-                            type="checkbox"
-                            checked={row.linkLive}
-                            onChange={(e) =>
-                              setDraft((prev) => {
-                                const next = [...prev.showcaseCreators];
-                                next[idx] = { ...next[idx], linkLive: e.target.checked };
-                                return { ...prev, showcaseCreators: next };
-                              })
-                            }
-                            className="rounded border-gray-300 dark:border-gray-600"
-                          />
-                          Live page link (View page → /your-slug)
-                        </label>
+                        <div className="flex flex-wrap items-center gap-4">
+                          <label className="flex cursor-pointer items-center gap-2 text-xs text-gray-700 dark:text-gray-300">
+                            <input
+                              type="checkbox"
+                              checked={row.linkLive}
+                              onChange={(e) =>
+                                setDraft((prev) => {
+                                  const next = [...prev.showcaseCreators];
+                                  const linkLive = e.target.checked;
+                                  next[idx] = {
+                                    ...next[idx],
+                                    linkLive,
+                                    ...(linkLive ? {} : { isFeatured: false }),
+                                  };
+                                  return { ...prev, showcaseCreators: next };
+                                })
+                              }
+                              className="rounded border-gray-300 dark:border-gray-600"
+                            />
+                            Live page link
+                          </label>
+                          <label
+                            className={`flex cursor-pointer items-center gap-2 text-xs ${
+                              row.linkLive ? 'text-gray-700 dark:text-gray-300' : 'cursor-not-allowed text-gray-400 dark:text-gray-600'
+                            }`}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={row.isFeatured === true}
+                              disabled={!row.linkLive}
+                              onChange={(e) =>
+                                setDraft((prev) => {
+                                  const next = [...prev.showcaseCreators];
+                                  next[idx] = { ...next[idx], isFeatured: e.target.checked };
+                                  return { ...prev, showcaseCreators: next };
+                                })
+                              }
+                              className="rounded border-gray-300 dark:border-gray-600"
+                            />
+                            Featured on homepage
+                          </label>
+                          <label className="flex items-center gap-1.5 text-xs text-gray-600 dark:text-gray-400">
+                            <span className="whitespace-nowrap">Featured image fit</span>
+                            <select
+                              value={row.featuredMediaFit === 'contain' ? 'contain' : 'cover'}
+                              disabled={row.isFeatured !== true}
+                              onChange={(e) =>
+                                setDraft((prev) => {
+                                  const next = [...prev.showcaseCreators];
+                                  next[idx] = {
+                                    ...next[idx],
+                                    featuredMediaFit: e.target.value === 'contain' ? 'contain' : 'cover',
+                                  };
+                                  return { ...prev, showcaseCreators: next };
+                                })
+                              }
+                              className="rounded-md border border-gray-300 px-2 py-1 text-xs dark:border-gray-600 dark:bg-gray-800 dark:text-white disabled:opacity-50"
+                            >
+                              <option value="cover">Cover (fill, may crop)</option>
+                              <option value="contain">Contain (full image)</option>
+                            </select>
+                          </label>
+                        </div>
                         <button
                           type="button"
                           onClick={() =>
@@ -775,12 +866,33 @@ export const WitmePageManager: React.FC = () => {
                         {row.imageUrl.trim() ? (
                           <div className="md:col-span-2">
                             <p className="mb-1 text-xs font-medium text-gray-600 dark:text-gray-400">
-                              Frame preview — drag to reposition (matches witme cards: cover crop)
+                              Frame preview — drag or use sliders for focal point (
+                              {showcaseFocalFrameFit === 'contain'
+                                ? 'full image in frame, same idea as Discover'
+                                : 'cover crop; pair with zoom below'})
                             </p>
                             <div
                               role="presentation"
-                              className="relative max-h-52 w-full max-w-lg cursor-grab overflow-hidden rounded-lg border border-gray-200 bg-gray-100 active:cursor-grabbing dark:border-gray-600 dark:bg-gray-800/50 select-none touch-none"
+                              className="relative max-h-80 min-h-[11rem] w-full max-w-2xl cursor-grab overflow-hidden rounded-lg border border-gray-200 bg-gray-100 active:cursor-grabbing dark:border-gray-600 dark:bg-gray-800/50 select-none touch-none"
                               style={{ aspectRatio: '16 / 10' }}
+                              onWheel={(e) => {
+                                if (!e.ctrlKey && !e.metaKey) return;
+                                e.preventDefault();
+                                const factor = e.deltaY > 0 ? 0.9 : 1.11;
+                                setShowcaseFrameZoom((prev) => {
+                                  const cur = prev[idx] ?? 1;
+                                  const next = Math.min(2.5, Math.max(0.35, cur * factor));
+                                  return { ...prev, [idx]: next };
+                                });
+                              }}
+                              onDoubleClick={(e) => {
+                                e.preventDefault();
+                                setShowcaseFrameZoom((prev) => {
+                                  const next = { ...prev };
+                                  delete next[idx];
+                                  return next;
+                                });
+                              }}
                               onPointerDown={(e) => {
                                 e.preventDefault();
                                 (e.currentTarget as HTMLDivElement).setPointerCapture(e.pointerId);
@@ -801,7 +913,11 @@ export const WitmePageManager: React.FC = () => {
                                 <video
                                   src={row.imageUrl}
                                   className="h-full w-full pointer-events-none"
-                                  style={showcaseFrameMediaStyle(row.mediaObjectPosition)}
+                                  style={showcaseFrameMediaStyle(
+                                    row.mediaObjectPosition,
+                                    showcaseFocalFrameFit,
+                                    frameZoom,
+                                  )}
                                   muted
                                   loop
                                   playsInline
@@ -813,13 +929,133 @@ export const WitmePageManager: React.FC = () => {
                                   src={row.imageUrl}
                                   alt=""
                                   className="h-full w-full pointer-events-none"
-                                  style={showcaseFrameMediaStyle(row.mediaObjectPosition)}
+                                  style={showcaseFrameMediaStyle(
+                                    row.mediaObjectPosition,
+                                    showcaseFocalFrameFit,
+                                    frameZoom,
+                                  )}
                                 />
                               )}
                             </div>
-                            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                              Same pan behavior as Fan Hub → My Page → reposition avatar: drag until the crop looks right, then Save draft.
+                            <div className="mt-2 flex max-w-2xl flex-col gap-2 sm:flex-row sm:items-center">
+                              <label className="flex flex-1 flex-col gap-1 text-xs text-gray-600 dark:text-gray-400 sm:min-w-0">
+                                <span className="font-medium text-gray-700 dark:text-gray-300">
+                                  Preview zoom (editor only, not saved)
+                                </span>
+                                <input
+                                  type="range"
+                                  min={35}
+                                  max={250}
+                                  step={1}
+                                  value={Math.round(frameZoom * 100)}
+                                  onChange={(e) => {
+                                    const v = parseInt(e.target.value, 10) / 100;
+                                    setShowcaseFrameZoom((prev) => ({ ...prev, [idx]: v }));
+                                  }}
+                                  className="w-full accent-primary-600"
+                                />
+                              </label>
+                              <button
+                                type="button"
+                                className="shrink-0 self-start rounded-md border border-gray-300 px-2 py-1 text-[11px] font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-800"
+                                onClick={() =>
+                                  setShowcaseFrameZoom((prev) => {
+                                    const next = { ...prev };
+                                    delete next[idx];
+                                    return next;
+                                  })
+                                }
+                              >
+                                Reset zoom
+                              </button>
+                            </div>
+                            <div className="mt-3 grid max-w-2xl gap-3 sm:grid-cols-2">
+                              <label className="block text-xs text-gray-600 dark:text-gray-400">
+                                <span className="mb-1 block font-medium text-gray-700 dark:text-gray-300">Focal horizontal</span>
+                                <input
+                                  type="range"
+                                  min={0}
+                                  max={100}
+                                  step={0.5}
+                                  value={posX}
+                                  onChange={(e) => {
+                                    const x = parseFloat(e.target.value);
+                                    setDraft((prev) => {
+                                      const next = [...prev.showcaseCreators];
+                                      next[idx] = {
+                                        ...next[idx],
+                                        mediaObjectPosition: formatObjectPositionPercentPair(x, posY),
+                                      };
+                                      return { ...prev, showcaseCreators: next };
+                                    });
+                                  }}
+                                  className="w-full accent-primary-600"
+                                />
+                              </label>
+                              <label className="block text-xs text-gray-600 dark:text-gray-400">
+                                <span className="mb-1 block font-medium text-gray-700 dark:text-gray-300">Focal vertical</span>
+                                <input
+                                  type="range"
+                                  min={0}
+                                  max={100}
+                                  step={0.5}
+                                  value={posY}
+                                  onChange={(e) => {
+                                    const y = parseFloat(e.target.value);
+                                    setDraft((prev) => {
+                                      const next = [...prev.showcaseCreators];
+                                      next[idx] = {
+                                        ...next[idx],
+                                        mediaObjectPosition: formatObjectPositionPercentPair(posX, y),
+                                      };
+                                      return { ...prev, showcaseCreators: next };
+                                    });
+                                  }}
+                                  className="w-full accent-primary-600"
+                                />
+                              </label>
+                            </div>
+                            <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                              Discover uses <strong className="font-medium text-gray-700 dark:text-gray-300">contain</strong> (full image). Large single spotlight uses full media too; multi-featured cards use{' '}
+                              <strong className="font-medium text-gray-700 dark:text-gray-300">Featured image fit</strong> below. Double-click the frame to reset zoom.
                             </p>
+                            {row.isFeatured ? (
+                              <div className="mt-4 rounded-lg border border-dashed border-gray-300 bg-gray-50/80 p-3 dark:border-gray-600 dark:bg-gray-800/40">
+                                <p className="mb-2 text-xs font-medium text-gray-700 dark:text-gray-300">
+                                  Homepage Featured block — approximate left column (tall)
+                                </p>
+                                <div
+                                  className="relative w-full max-w-[220px] overflow-hidden rounded-lg border border-gray-200 bg-gray-900/10 dark:border-gray-600"
+                                  style={{ aspectRatio: '5 / 6' }}
+                                >
+                                  {row.mediaKind === 'video' ? (
+                                    <video
+                                      src={row.imageUrl}
+                                      className="h-full w-full pointer-events-none"
+                                      style={showcaseFeaturedPreviewStyle(row.mediaObjectPosition, featuredPreviewFit)}
+                                      muted
+                                      loop
+                                      playsInline
+                                      autoPlay
+                                      preload="metadata"
+                                    />
+                                  ) : (
+                                    <img
+                                      src={row.imageUrl}
+                                      alt=""
+                                      className="h-full w-full pointer-events-none"
+                                      style={showcaseFeaturedPreviewStyle(row.mediaObjectPosition, featuredPreviewFit)}
+                                    />
+                                  )}
+                                </div>
+                                <p className="mt-1.5 text-[11px] text-gray-500 dark:text-gray-400">
+                                  {homepageFeaturedRows.length === 1
+                                    ? 'Single spotlight on witme shows the full media (contain).'
+                                    : `Multi-featured grid uses your Featured image fit (${row.featuredMediaFit}).`}{' '}
+                                  Publish to update the live site.
+                                </p>
+                              </div>
+                            ) : null}
                           </div>
                         ) : null}
                         <textarea
@@ -861,96 +1097,8 @@ export const WitmePageManager: React.FC = () => {
                         />
                       </div>
                     </div>
-                  ))}
-                </div>
-              </div>
-
-              <div className="rounded-xl border border-gray-200 bg-white p-4 dark:border-gray-800 dark:bg-gray-900">
-                <div className="mb-3 flex items-center justify-between">
-                  <h2 className="text-sm font-semibold text-gray-900 dark:text-white">Feature Cards</h2>
-                  <button
-                    onClick={() =>
-                      setDraft((prev) => ({
-                        ...prev,
-                        featureCards: [...prev.featureCards, { title: 'New card', description: 'Describe this card', icon: '✨' }],
-                      }))
-                    }
-                    className="inline-flex items-center gap-1 rounded-md border border-gray-300 px-2 py-1 text-xs dark:border-gray-700"
-                  >
-                    <PlusIcon className="w-4 h-4" />
-                    Add card
-                  </button>
-                </div>
-                <div className="space-y-3">
-                  {draft.featureCards.map((card, idx) => (
-                    <div key={`${idx}-${card.title}`} className="grid gap-2 rounded-lg border border-gray-200 p-3 md:grid-cols-12 dark:border-gray-700">
-                      <input
-                        value={card.icon}
-                        onChange={(e) =>
-                          setDraft((prev) => {
-                            const next = [...prev.featureCards];
-                            next[idx] = { ...next[idx], icon: e.target.value };
-                            return { ...prev, featureCards: next };
-                          })
-                        }
-                        className="rounded-md border border-gray-300 px-2 py-2 text-sm md:col-span-1 dark:border-gray-700 dark:bg-gray-800 dark:text-white"
-                      />
-                      <input
-                        value={card.title}
-                        onChange={(e) =>
-                          setDraft((prev) => {
-                            const next = [...prev.featureCards];
-                            next[idx] = { ...next[idx], title: e.target.value };
-                            return { ...prev, featureCards: next };
-                          })
-                        }
-                        className="rounded-md border border-gray-300 px-2 py-2 text-sm md:col-span-4 dark:border-gray-700 dark:bg-gray-800 dark:text-white"
-                      />
-                      <input
-                        value={card.description}
-                        onChange={(e) =>
-                          setDraft((prev) => {
-                            const next = [...prev.featureCards];
-                            next[idx] = { ...next[idx], description: e.target.value };
-                            return { ...prev, featureCards: next };
-                          })
-                        }
-                        className="rounded-md border border-gray-300 px-2 py-2 text-sm md:col-span-6 dark:border-gray-700 dark:bg-gray-800 dark:text-white"
-                      />
-                      <button
-                        onClick={() =>
-                          setDraft((prev) => ({
-                            ...prev,
-                            featureCards: prev.featureCards.filter((_, index) => index !== idx),
-                          }))
-                        }
-                        className="inline-flex items-center justify-center rounded-md border border-red-200 text-red-600 hover:bg-red-50 md:col-span-1 dark:border-red-900/40 dark:text-red-300 dark:hover:bg-red-900/20"
-                      >
-                        <TrashIcon className="w-4 h-4" />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <div className="grid gap-4 md:grid-cols-2">
-                <div className="rounded-xl border border-gray-200 bg-white p-4 dark:border-gray-800 dark:bg-gray-900">
-                  <h2 className="mb-2 text-sm font-semibold text-gray-900 dark:text-white">Trust Strip Items</h2>
-                  <textarea
-                    rows={7}
-                    value={trustItemsText}
-                    onChange={(e) => setDraft((prev) => ({ ...prev, trustItems: splitLines(e.target.value) }))}
-                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-white"
-                  />
-                </div>
-                <div className="rounded-xl border border-gray-200 bg-white p-4 dark:border-gray-800 dark:bg-gray-900">
-                  <h2 className="mb-2 text-sm font-semibold text-gray-900 dark:text-white">Live Moments</h2>
-                  <textarea
-                    rows={7}
-                    value={liveMomentsText}
-                    onChange={(e) => setDraft((prev) => ({ ...prev, liveMoments: splitLines(e.target.value) }))}
-                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-white"
-                  />
+                    );
+                  })}
                 </div>
               </div>
 

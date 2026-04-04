@@ -31,10 +31,10 @@ const CUSTOM_SF_MEMBER_SEGS =
 
 /**
  * True when this path on this host should render the fan storefront (custom domain only).
- * - `/`, `/terms`, `/privacy`
+ * - `/`, `/p` (public landing for signed-in members), `/terms`, `/privacy`
  * - `/{memberTab}` at root hub (e.g. `/messages`, `/store`)
  * - `/{handle}` where handle matches My Page slug `[a-z0-9_]+`
- * - `/{handle}/{memberTab}` or `/{handle}/terms|privacy`
+ * - `/{handle}/{memberTab}` or `/{handle}/terms|privacy|p`
  */
 export function isCustomDomainStorefrontPath(pathname: string, hostname: string): boolean {
   if (!isConfiguredCustomStorefrontHost(hostname)) return false;
@@ -53,7 +53,7 @@ export function isCustomDomainStorefrontPath(pathname: string, hostname: string)
     const b = parts[1];
     if (a === "api" || a.includes(".")) return false;
     if (!/^[a-z0-9_]+$/i.test(a)) return false;
-    if (b === "terms" || b === "privacy") return true;
+    if (b === "terms" || b === "privacy" || b.toLowerCase() === "p") return true;
     return CUSTOM_SF_MEMBER_SEGS.test(b);
   }
   return false;
