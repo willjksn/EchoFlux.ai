@@ -112,7 +112,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onGetSta
                     </h1>
 
                     <p className="mt-6 max-w-xl text-lg text-gray-700 dark:text-primary-100 sm:text-xl max-w-full break-words">
-                      EchoFlux.ai is your creator studio—AI planning, vault, and payouts. Your public fan page lives on{' '}
+                      EchoFlux.ai is your creator studio—planning, vault, and payouts. Your public fan page lives on{' '}
                       <a
                         href="https://witme.io"
                         target="_blank"
@@ -162,7 +162,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onGetSta
                       <div className="mt-6 rounded-xl border border-gray-200 bg-white p-4 text-gray-900 shadow-sm dark:border-white/20 dark:bg-white/5 dark:text-white">
                         <div className="text-base font-semibold">Start building today</div>
                         <div className="mt-2 text-sm text-gray-700 dark:text-primary-100/90">
-                          Sign up to launch your witme.io page from EchoFlux, plan content with AI, and grow your audience.
+                          Sign up to launch your witme.io page from EchoFlux, plan and publish content, and grow your audience.
                         </div>
                       </div>
                     )}
@@ -415,7 +415,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onGetSta
                         </div>
                         <h3 className="text-xl font-bold text-center text-gray-900 dark:text-white mb-4">Growing Creators</h3>
                         <p className="text-gray-600 dark:text-gray-300 text-center">
-                            Build your audience with AI-powered content planning. Create engaging posts for Instagram, TikTok, X, and Facebook.
+                            Build your audience with structured content planning. Create engaging posts for Instagram, TikTok, X, and Facebook.
                         </p>
                     </div>
                     <div className="bg-white dark:bg-gray-900 p-8 rounded-2xl shadow-lg border-t-4 border-purple-500 hover:-translate-y-1 transition-transform">
@@ -444,10 +444,14 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onGetSta
         <div id="features" className="bg-white dark:bg-gray-900 py-24">
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                 <div className="lg:text-center">
-                    <h2 className="text-base text-primary-600 font-semibold tracking-wide uppercase">AI Content Tools</h2>
-                    <p className="mt-2 text-3xl leading-8 font-extrabold tracking-tight text-gray-900 dark:text-white sm:text-4xl">Create Smarter, Not Harder</p>
+                    <h2 className="text-base text-primary-600 font-semibold tracking-wide uppercase">Studio &amp; witme.io</h2>
+                    <p className="mt-2 text-3xl leading-8 font-extrabold tracking-tight text-gray-900 dark:text-white sm:text-4xl">
+                      Run your business from EchoFlux
+                    </p>
                     <p className="mt-4 max-w-2xl text-xl text-gray-500 dark:text-gray-400 lg:mx-auto">
-                        AI-powered tools to help you create content, stay consistent, and grow your audience across all platforms.
+                      Plan content, manage your vault, and configure your public page on witme.io—where fans subscribe, shop, and message{' '}
+                      <span className="font-medium text-gray-700 dark:text-gray-300">you</span>. Optional drafting helpers stay in your studio;
+                      what fans see is always under your control.
                     </p>
                 </div>
                 <div className="mt-12">
@@ -467,14 +471,14 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onGetSta
                         <Feature icon={<HeartIcon />} title="witme.io fan page">
                            Your public page at witme.io/yourhandle—subscriptions, tips, store, and DMs—configured from EchoFlux.
                         </Feature>
-                        <Feature icon={<ChatIcon />} title="AI Assistant">
-                           Get content ideas, brainstorm angles, and generate captions with a creator-focused AI assistant built into the app.
+                        <Feature icon={<ChatIcon />} title="Studio assistant">
+                           Brainstorm ideas and draft captions inside EchoFlux—built for your workflow, not for replacing you with fans.
                         </Feature>
-                        <Feature icon={<ChatIcon />} title="AI Chat Bot (Elite)">
-                           In chat sessions, auto-reply to fans as you with an AI Chat Bot that matches your tone. Click to enable; Pro users see an upgrade prompt to unlock.
+                        <Feature icon={<ChatIcon />} title="Chat session reply drafts (Elite)">
+                           During timed chat sessions, get optional reply suggestions in your voice—you review and send; fans only ever get messages you send. Elite only; Pro sees an upgrade prompt.
                         </Feature>
-                        <Feature icon={<SparklesIcon />} title="AI Comment Replies (Elite)">
-                           Auto-reply to feed comments in your voice. Prioritize fans who tip or buy treats; control reply chance with a slider. Pro users see an upgrade prompt to unlock.
+                        <Feature icon={<SparklesIcon />} title="Feed comment drafts (Elite)">
+                           Draft responses to public feed comments in your tone; you choose what posts. Optionally prioritize supporters who tip or buy. Elite only; Pro sees an upgrade prompt.
                         </Feature>
                     </dl>
                 </div>
@@ -511,7 +515,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onGetSta
                     <div className="relative">
                         <h3 className="text-2xl font-extrabold text-gray-900 dark:text-white tracking-tight sm:text-3xl">3. Grow & monetize</h3>
                         <p className="mt-3 text-lg text-gray-500 dark:text-gray-400">
-                          Plan content with AI, post everywhere, and send traffic to your witme.io page. Stripe handles payouts and renewals.
+                          Plan content, post everywhere, and send traffic to your witme.io page. Stripe handles payouts and renewals.
                         </p>
                     </div>
                 </div>

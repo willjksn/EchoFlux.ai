@@ -6,11 +6,37 @@ import { creatorIdFirestoreQueryVariants, normalizeCreatorId } from "../src/lib/
 
 const COLLECTION = "products";
 
+/** Firestore may store dates as Timestamp objects; JSON responses and Date parsing need ISO strings. */
+function firestoreFieldToIsoString(v: unknown): string {
+  if (v == null) return "";
+  if (typeof v === "string") return v;
+  if (typeof v === "number" && Number.isFinite(v)) return new Date(v).toISOString();
+  if (typeof v === "object") {
+    const o = v as { toDate?: () => Date; _seconds?: number; _nanoseconds?: number };
+    if (typeof o.toDate === "function") {
+      try {
+        const d = o.toDate();
+        if (d instanceof Date && !Number.isNaN(d.getTime())) return d.toISOString();
+      } catch {
+        /* ignore */
+      }
+    }
+    if (typeof o._seconds === "number") {
+      const ns = typeof o._nanoseconds === "number" ? o._nanoseconds : 0;
+      return new Date(o._seconds * 1000 + ns / 1e6).toISOString();
+    }
+  }
+  const d = new Date(String(v));
+  return Number.isNaN(d.getTime()) ? "" : d.toISOString();
+}
+
 function toProduct(doc: FirebaseFirestore.DocumentSnapshot): TreatProduct {
   const d = doc.data() as Record<string, unknown>;
   const q = d.quantityLimit;
   const s = d.soldCount;
   const rawCreator = String(d.creatorId ?? "");
+  const createdAt = firestoreFieldToIsoString(d.createdAt) || new Date(0).toISOString();
+  const updatedAt = firestoreFieldToIsoString(d.updatedAt) || createdAt;
   return {
     id: doc.id,
     creatorId: normalizeCreatorId(rawCreator) || rawCreator,
@@ -27,8 +53,8 @@ function toProduct(doc: FirebaseFirestore.DocumentSnapshot): TreatProduct {
     sortOrder: d.sortOrder as number | undefined,
     quantityLimit: typeof q === "number" ? q : undefined,
     soldCount: typeof s === "number" ? s : undefined,
-    createdAt: d.createdAt as string,
-    updatedAt: d.updatedAt as string,
+    createdAt,
+    updatedAt,
   };
 }
 
@@ -61,15 +87,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const seenDocIds = new Set<string>();
       let products: TreatProduct[] = [];
       for (const cid of variants) {
-        let query = db.collection(COLLECTION).where("creatorId", "==", cid);
-        if (!includeArchived || !isCreator) {
-          query = query.where("archived", "==", false) as FirebaseFirestore.Query;
-        }
-        const snap = await query.limit(500).get();
-        for (const doc of snap.docs) {
-          if (seenDocIds.has(doc.id)) continue;
-          seenDocIds.add(doc.id);
-          products.push(toProduct(doc));
+        try {
+          let query = db.collection(COLLECTION).where("creatorId", "==", cid);
+          if (!includeArchived || !isCreator) {
+            query = query.where("archived", "==", false) as FirebaseFirestore.Query;
+          }
+          const snap = await query.limit(500).get();
+          for (const doc of snap.docs) {
+            if (seenDocIds.has(doc.id)) continue;
+            seenDocIds.add(doc.id);
+            try {
+              products.push(toProduct(doc));
+            } catch (docErr) {
+              console.warn("products GET: skip corrupt product doc", doc.id, docErr);
+            }
+          }
+        } catch (variantErr) {
+          console.warn("products GET: variant query failed", { creatorIdVariant: cid, variantErr });
         }
       }
       if (!isCreator) {

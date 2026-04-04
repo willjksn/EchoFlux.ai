@@ -4,6 +4,27 @@ import { verifyAuth } from "./verifyAuth.js";
 
 const HANDLE_REGEX = /^[a-z0-9_]{3,20}$/;
 
+/** Firestore rejects `undefined` anywhere in nested data; strip before set/merge. */
+function omitUndefinedDeep(value: unknown): unknown {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (value === null || typeof value !== "object") {
+    return value;
+  }
+  if (Array.isArray(value)) {
+    return value.map(omitUndefinedDeep).filter((item) => item !== undefined);
+  }
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+    if (v === undefined) continue;
+    const next = omitUndefinedDeep(v);
+    if (next === undefined) continue;
+    out[k] = next;
+  }
+  return out;
+}
+
 /**
  * POST: Update creator storefront settings. Only the authenticated creator can update their own doc.
  * If handle changed: in a transaction, delete creatorHandles/{oldHandle} (if exists and belongs to this creator),
@@ -112,7 +133,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           }
           tx.set(newHandleRef, { creatorId });
         }
-        tx.set(creatorRef, payload, { merge: true });
+        tx.set(creatorRef, safePayload, { merge: true });
       });
     } else if (handle && HANDLE_REGEX.test(handle)) {
       // Keep creatorHandles mapping in sync even when handle text didn't change.
@@ -133,13 +154,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         if (canRepairMapping) {
           tx.set(handleRef, { creatorId });
         }
-        tx.set(creatorRef, payload, { merge: true });
+        tx.set(creatorRef, safePayload, { merge: true });
       });
     } else {
-      await creatorRef.set(payload, { merge: true });
+      await creatorRef.set(safePayload, { merge: true });
     }
 
-    return res.status(200).json({ success: true, handle: payload.handle });
+    return res.status(200).json({ success: true, handle: safePayload.handle });
   } catch (e: unknown) {
     console.error("updateCreatorStorefront error:", e);
     const msg = e instanceof Error ? e.message : "Update failed";
