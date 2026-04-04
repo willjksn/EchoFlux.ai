@@ -6,6 +6,7 @@ import { useAppContext } from './AppContext';
 import { OFFLINE_MODE } from '../constants';
 import { ReportProblemModal } from './ReportProblemModal';
 import { ShareReviewModal } from './ShareReviewModal';
+import { getAvatarCropStyle } from '../src/lib/avatarCrop';
 
 interface HeaderProps {
   pageTitle: string;
@@ -259,12 +260,20 @@ export const Header: React.FC<HeaderProps> = ({ pageTitle }) => {
             )}
           </div>
           <div id="tour-step-5-profile-avatar" className="relative" ref={profileRef}>
-            <button onClick={() => setIsProfileOpen(!isProfileOpen)} className="flex-shrink-0">
-              <img
-                className="h-10 w-10 rounded-full object-cover ring-2 ring-offset-2 ring-offset-gray-100 dark:ring-offset-gray-800 ring-primary-500"
-                src={user.avatar}
-                alt="User"
-              />
+            <button
+              type="button"
+              onClick={() => setIsProfileOpen(!isProfileOpen)}
+              className="flex-shrink-0 rounded-full ring-2 ring-offset-2 ring-offset-gray-100 dark:ring-offset-gray-800 ring-primary-500 focus:outline-none focus-visible:ring-primary-500"
+            >
+              <div className="h-10 w-10 overflow-hidden rounded-full">
+                <img
+                  className="h-full w-full select-none pointer-events-none"
+                  style={getAvatarCropStyle(user.avatarObjectPosition)}
+                  src={user.avatar}
+                  alt="User"
+                  draggable={false}
+                />
+              </div>
             </button>
             {isProfileOpen && (
                 <div className="absolute right-0 mt-2 w-48 bg-white dark:bg-gray-800 rounded-md shadow-lg py-1 ring-1 ring-black ring-opacity-5 z-50">

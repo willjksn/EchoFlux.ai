@@ -1,3 +1,4 @@
+import { createHash } from 'crypto';
 import { VercelRequest, VercelResponse } from '@vercel/node';
 import Stripe from 'stripe';
 import { getFirestore, type Firestore } from 'firebase-admin/firestore';
@@ -112,6 +113,19 @@ export async function processFanHubCheckoutSessionCompleted(
     fanId = `guest_${stripeCustId}`;
   } else if (!fanId || fanId === 'guest_pending') {
     return false;
+  }
+
+  // Landing-page tips without sign-in: metadata still has anon_*; key fans/orders by Stripe customer
+  // (or stable email hash) so repeat tippers merge and show under Tippers / revenue like guest store buyers.
+  if (type === 'tip' && typeof fanId === 'string' && fanId.startsWith('anon_')) {
+    if (stripeCustId) {
+      fanId = `guest_${stripeCustId}`;
+    } else {
+      const raw = (session.customer_details?.email || '').trim().toLowerCase();
+      if (raw) {
+        fanId = `guest_tip_${createHash('sha256').update(raw).digest('hex').slice(0, 32)}`;
+      }
+    }
   }
 
   const dupOrder = await db.collection('orders').where('stripeSessionId', '==', session.id).limit(1).get();
@@ -399,6 +413,8 @@ export async function processFanHubCheckoutSessionCompleted(
       stripePaymentIntentId: paymentIntentId || null,
       amountCents: amountTotal,
       tipHandle,
+      fanEmail: session.customer_details?.email || null,
+      fanName: session.customer_details?.name || null,
       status: 'paid',
       scheduleStatus: 'pending',
       createdAt: now,
@@ -406,7 +422,8 @@ export async function processFanHubCheckoutSessionCompleted(
 
     const fanEmail = session.customer_details?.email || null;
     const fanName = session.customer_details?.name || tipHandle;
-    const isAnonymous = fanId.startsWith('anon_');
+    const metaFanId = (session.metadata?.fanId || '') as string;
+    const isAnonymous = metaFanId.startsWith('anon_');
 
     const fanRef = db.collection('creators').doc(creatorId).collection('fans').doc(fanId);
     const fanSnap = await fanRef.get();
@@ -429,14 +446,29 @@ export async function processFanHubCheckoutSessionCompleted(
         updatedAt: now,
       });
     } else {
-      const fanData = fanSnap.data() as { totalTipsCents?: number; tipCount?: number; totalSpentCents?: number };
-      await fanRef.update({
+      const fanData = fanSnap.data() as {
+        totalTipsCents?: number;
+        tipCount?: number;
+        totalSpentCents?: number;
+        subscriptionStatus?: string | null;
+        role?: string | null;
+      };
+      const sub = fanData.subscriptionStatus;
+      const activeSub = sub === 'active' || sub === 'trialing';
+      const patch: Record<string, unknown> = {
         lastTipAt: now,
         totalTipsCents: (fanData.totalTipsCents || 0) + amountTotal,
         tipCount: (fanData.tipCount || 0) + 1,
         totalSpentCents: (fanData.totalSpentCents || 0) + amountTotal,
         updatedAt: now,
-      });
+      };
+      if (fanEmail && !(fanData as { email?: string }).email) {
+        patch.email = fanEmail;
+      }
+      if (!activeSub && (fanData.role == null || String(fanData.role).trim() === '')) {
+        patch.role = 'tipper';
+      }
+      await fanRef.update(patch);
     }
 
     try {

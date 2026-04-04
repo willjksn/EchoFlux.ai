@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { useAppContext } from "./AppContext";
 import { auth, db } from "../firebaseConfig";
-import { collection, query, getDocs, getDoc, doc, deleteDoc, addDoc, setDoc, serverTimestamp, updateDoc, where } from "firebase/firestore";
+import { collection, query, getDocs, getDoc, doc, addDoc, setDoc, serverTimestamp, updateDoc, where } from "firebase/firestore";
 import {
   formatFanDisplayLabel,
   initialsFromFanLabel,
@@ -564,10 +564,12 @@ export const FanHubUsers: React.FC = () => {
 
         // Role: prefer explicit fans doc (Stormij / Add User), else infer tipper / guest store buyer
         let role: UserRole = (data.storedRole as UserRole) || "member";
-        if (!data.storedRole && String(data.id).startsWith("guest_")) {
-          role = "treat_buyer";
-        } else if (!data.storedRole && !data.subscriptionStatus && data.tips > 0 && data.treats === 0 && data.unlocks === 0) {
+        const onlyTips =
+          data.tips > 0 && data.treats === 0 && data.unlocks === 0;
+        if (!data.storedRole && !data.subscriptionStatus && onlyTips) {
           role = "tipper";
+        } else if (!data.storedRole && String(data.id).startsWith("guest_")) {
+          role = "treat_buyer";
         }
 
         let remainingAccess = formatRemainingAccessForFanRow({
@@ -723,32 +725,43 @@ export const FanHubUsers: React.FC = () => {
 
   const handleDeleteUser = async (fanUser: FanUser) => {
     if (!user?.id) return;
-    if (!confirm(`Are you sure you want to remove ${fanUser.name}?`)) return;
+    if (
+      !confirm(
+        `Remove ${fanUser.name}? This deletes their fan card, DM thread (including video messages), live video chat history with you, and member access for this page.`
+      )
+    ) {
+      return;
+    }
 
     try {
-      // Delete from fans collection (primary)
-      await deleteDoc(doc(db, "creators", user.id, "fans", fanUser.id));
-
-      // Fans tab / CRM card (synced via Admin API)
-      try {
-        await deleteDoc(doc(db, "users", user.id, "onlyfans_fan_preferences", fanUser.id));
-      } catch {
-        /* no pref doc */
+      const token = auth.currentUser ? await auth.currentUser.getIdToken() : null;
+      if (!token) {
+        showToast?.("Please sign in again", "error");
+        return;
       }
 
-      // Also try to delete from legacy fanUsers collection
-      const manualUsersRef = collection(db, "creators", user.id, "fanUsers");
-      const q = query(manualUsersRef, where("email", "==", fanUser.email));
-      const snap = await getDocs(q);
-      for (const docSnap of snap.docs) {
-        await deleteDoc(doc(db, "creators", user.id, "fanUsers", docSnap.id));
+      const res = await fetch("/api/deleteFanHubMember", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          fanId: fanUser.id,
+          fanEmail: fanUser.email || "",
+        }),
+      });
+
+      const data = (await res.json().catch(() => ({}))) as { error?: string };
+      if (!res.ok) {
+        throw new Error(data.error || `Remove failed (${res.status})`);
       }
 
       showToast?.("User removed", "success");
       setUsers((prev) => prev.filter((u) => u.id !== fanUser.id));
     } catch (error) {
       console.error("Error deleting user:", error);
-      showToast?.("Failed to remove user", "error");
+      showToast?.(error instanceof Error ? error.message : "Failed to remove user", "error");
     }
   };
 

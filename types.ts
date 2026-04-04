@@ -761,6 +761,8 @@ export interface User {
   name: string;
   email: string;
   avatar: string;
+  /** CSS object-position for circular profile avatar (e.g. "40% 60%"). */
+  avatarObjectPosition?: string;
   bio: string;
   plan: Plan | null; // null when payment is pending
   role: 'Admin' | 'User';

@@ -42,6 +42,7 @@ function toSession(doc: FirebaseFirestore.DocumentSnapshot): LiveVideoChatSessio
  * POST /api/liveVideoChat?action=start     - Mark session as started (first join)
  * POST /api/liveVideoChat?action=end       - End the session
  * POST /api/liveVideoChat?action=token     - Get meeting token for joining
+ * POST /api/liveVideoChat?action=deleteSession - Creator deletes completed/declined/cancelled/expired session doc
  * GET  /api/liveVideoChat?sessionId=       - Get session details
  * GET  /api/liveVideoChat?creatorId=       - List sessions for creator
  * GET  /api/liveVideoChat?fanId=           - List sessions for fan
@@ -515,6 +516,44 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           quotaRemaining: quotaCheck.remainingMinutes,
           session: { id: sessionRef.id, ...sessionData }
         });
+      }
+
+      // DELETE SESSION — creator removes a terminal session from the list (Firestore + optional Daily room cleanup)
+      if (action === "deleteSession") {
+        const sessionId = body.sessionId as string;
+        const creatorId = body.creatorId as string;
+
+        if (!sessionId || !creatorId) {
+          return res.status(400).json({ error: "sessionId and creatorId required" });
+        }
+
+        if (decoded.uid !== creatorId) {
+          return res.status(403).json({ error: "Only the creator can delete this session" });
+        }
+
+        const sessionRef = db.collection("creators").doc(creatorId).collection("liveVideoChats").doc(sessionId);
+        const doc = await sessionRef.get();
+
+        if (!doc.exists) {
+          return res.status(404).json({ error: "Session not found" });
+        }
+
+        const session = toSession(doc);
+        const deletable: LiveVideoChatStatus[] = ["completed", "declined", "cancelled", "expired"];
+        if (!deletable.includes(session.status)) {
+          return res.status(400).json({
+            error: "Only completed, declined, cancelled, or expired sessions can be deleted",
+          });
+        }
+
+        if (session.roomName) {
+          await deleteVideoRoom(session.roomName).catch(() => {
+            /* room may already be deleted */
+          });
+        }
+
+        await sessionRef.delete();
+        return res.status(200).json({ success: true });
       }
 
       return res.status(400).json({ error: "Invalid action" });

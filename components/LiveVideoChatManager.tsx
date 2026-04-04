@@ -105,6 +105,8 @@ const PhoneIcon = () => (
   </svg>
 );
 
+const TERMINAL_VIDEO_STATUSES = new Set(["completed", "declined", "cancelled", "expired"]);
+
 export const LiveVideoChatManager: React.FC<LiveVideoChatManagerProps> = ({
   creatorId,
   compact = false,
@@ -697,10 +699,22 @@ export const LiveVideoChatManager: React.FC<LiveVideoChatManagerProps> = ({
                       {session.status === "active" ? "Rejoin Call" : "Start Call"}
                     </button>
                   )}
-                  {session.status === "completed" && (
-                    <span className="text-sm text-gray-500 dark:text-gray-400">
-                      {session.minutesUsed}min used
-                    </span>
+                  {TERMINAL_VIDEO_STATUSES.has(session.status) && (
+                    <div className="flex flex-col items-end gap-2 sm:flex-row sm:items-center">
+                      {session.status === "completed" && (
+                        <span className="text-sm text-gray-500 dark:text-gray-400">
+                          {session.minutesUsed}min used
+                        </span>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => void handleDeleteSession(session)}
+                        disabled={actionLoading === session.id}
+                        className="px-3 py-2 text-sm font-medium text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/30 hover:bg-red-100 dark:hover:bg-red-950/50 rounded-lg transition disabled:opacity-50"
+                      >
+                        {actionLoading === session.id ? "…" : "Delete"}
+                      </button>
+                    </div>
                   )}
                 </div>
               </div>

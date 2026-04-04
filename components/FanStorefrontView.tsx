@@ -68,7 +68,7 @@ import { usePathname } from "../src/hooks/usePathname";
 import { db } from "../firebaseConfig";
 import { ReportProblemModal } from "./ReportProblemModal";
 import { Toast } from "./Toast";
-import { readFanCheckoutFetchResult } from "../src/lib/fanCheckoutResponse";
+import { readFanCheckoutFetchResult, FAN_TIP_CHECKOUT_SUCCESS_QS } from "../src/lib/fanCheckoutResponse";
 import { WitmeHeaderLogo } from "./WitmeHeaderLogo";
 
 /** Ensure member-store products have usable Firestore ids (avoids every row showing “Processing…” when id is missing or duplicated). */
@@ -533,7 +533,7 @@ function TipSection({
     setTipLoading(true);
     try {
       const token = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
-      const successUrl = buildPublicCheckoutUrl(window.location.pathname, "?tip=success");
+      const successUrl = buildPublicCheckoutUrl(window.location.pathname, `?${FAN_TIP_CHECKOUT_SUCCESS_QS}`);
       const cancelUrl = buildPublicCheckoutUrl(window.location.pathname, "?tip=cancel");
       const res = await fetch("/api/createFanCheckoutSession", {
         method: "POST",
@@ -1640,6 +1640,7 @@ export const FanStorefrontView: React.FC = () => {
         url.searchParams.delete("session_id");
         url.searchParams.delete("purchase_sync");
         url.searchParams.delete("post_unlock");
+        url.searchParams.delete("tip");
         const qs = url.searchParams.toString();
         window.history.replaceState({}, "", url.pathname + (qs ? `?${qs}` : "") + (url.hash || ""));
       } catch (e) {
@@ -1651,6 +1652,18 @@ export const FanStorefrontView: React.FC = () => {
       cancelled = true;
     };
   }, [creator?.creatorId, isLoggedIn, refetchMemberEntitlement]);
+
+  /** Logged-out tip return: webhook updates Firestore; remove session id from the address bar. */
+  useEffect(() => {
+    if (typeof window === "undefined" || isLoggedIn || !creator?.creatorId) return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("tip") !== "success" || !params.get("session_id")) return;
+    const url = new URL(window.location.href);
+    url.searchParams.delete("session_id");
+    url.searchParams.delete("purchase_sync");
+    const qs = url.searchParams.toString();
+    window.history.replaceState({}, "", url.pathname + (qs ? `?${qs}` : "") + (url.hash || ""));
+  }, [creator?.creatorId, isLoggedIn]);
 
   const fetchTreats = useCallback(async () => {
     if (!creator?.creatorId) return;

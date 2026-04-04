@@ -24,7 +24,7 @@ import { inferIsVideoFromUrl, normalizePostMediaTypes } from "../src/lib/mediaUr
 import { DmAudioPlayer } from "./DmAudioPlayer";
 import { ViewPostModalVideo } from "./ViewPostModalVideo";
 import { feedCommentAuthorLabel, feedCommentAuthorInitial } from "../src/lib/feedCommentLabel";
-import { readFanCheckoutFetchResult } from "../src/lib/fanCheckoutResponse";
+import { readFanCheckoutFetchResult, FAN_TIP_CHECKOUT_SUCCESS_QS } from "../src/lib/fanCheckoutResponse";
 import { useAppContext } from "./AppContext";
 import { renderTextWithCustomEmoji, type SjHeartEmojiAccessContext } from "../src/lib/customEmoji";
 import {
@@ -89,7 +89,7 @@ async function startFanPostUnlockCheckoutSession(creatorId: string, postId: stri
 
 async function startFanTipCheckoutSession(creatorId: string, amountCents: number): Promise<string> {
   const token = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
-  const successUrl = buildTipCheckoutReturnUrl(window.location.pathname, "?tip=success");
+  const successUrl = buildTipCheckoutReturnUrl(window.location.pathname, `?${FAN_TIP_CHECKOUT_SUCCESS_QS}`);
   const cancelUrl = buildTipCheckoutReturnUrl(window.location.pathname, "?tip=cancel");
   const res = await fetch("/api/createFanCheckoutSession", {
     method: "POST",

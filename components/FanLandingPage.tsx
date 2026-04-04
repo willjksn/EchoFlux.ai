@@ -17,7 +17,7 @@ import type {
 } from "../types";
 import { StorefrontPreview } from "./StorefrontPreview";
 import { resolveStoreCopy } from "../src/lib/storefrontStoreCopy";
-import { readFanCheckoutFetchResult } from "../src/lib/fanCheckoutResponse";
+import { readFanCheckoutFetchResult, FAN_TIP_CHECKOUT_SUCCESS_QS } from "../src/lib/fanCheckoutResponse";
 
 interface FanLandingPageProps {
   creator: {
@@ -269,7 +269,7 @@ export const FanLandingPage: React.FC<FanLandingPageProps> = ({
           type: "tip",
           amountCents,
           tipHandle: tipHandle.trim() || undefined,
-          successUrl: `${base}${window.location.pathname}?tip=success`,
+          successUrl: `${base}${window.location.pathname}?${FAN_TIP_CHECKOUT_SUCCESS_QS}`,
           cancelUrl: `${base}${window.location.pathname}`,
         }),
       });

@@ -470,6 +470,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       
       const tipSessionParams: Stripe.Checkout.SessionCreateParams = {
         mode: "payment",
+        /** Ensures `session.customer` (cus_…) on completion so tips key to `guest_${customer}` in Firestore. */
+        customer_creation: "always",
         payment_method_types: ["card"],
         line_items: [
           {

@@ -1,4 +1,4 @@
-import React, { useState, useRef, ChangeEvent, useEffect, useMemo, useLayoutEffect } from 'react';
+import React, { useState, useRef, ChangeEvent, useEffect, useMemo, useLayoutEffect, useCallback } from 'react';
 import { CameraIcon, TrashIcon, CheckCircleIcon, CalendarIcon, CreditCardIcon, LockIcon, EmojiIcon, FaceSmileIcon, CatIcon, PizzaIcon, SoccerBallIcon, CarIcon, LightbulbIcon, HeartIcon } from './icons/UIIcons';
 import { EMOJIS, EMOJI_CATEGORIES, Emoji } from './emojiData';
 import { useAppContext } from './AppContext';
@@ -21,6 +21,12 @@ import { auth, storage } from '../firebaseConfig';
 import * as storageFunctions from 'firebase/storage';
 import { sendPasswordResetEmail } from 'firebase/auth';
 import { listAll, getMetadata, ref } from 'firebase/storage';
+import { getAvatarCropStyle } from '../src/lib/avatarCrop';
+import {
+  clampPan,
+  formatObjectPositionPercentPair,
+  parseObjectPositionPercentPair,
+} from '../src/lib/objectPositionPan';
 
 const SettingsSection: React.FC<{ title: string; children: React.ReactNode }> = ({ title, children }) => (
     <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
@@ -39,8 +45,14 @@ export const Profile: React.FC = () => {
     const [isEditing, setIsEditing] = useState(false);
     const [editableUser, setEditableUser] = useState<User | null>(user);
     const fileInputRef = useRef<HTMLInputElement>(null);
-   
-    
+    const [profileAvatarPanMode, setProfileAvatarPanMode] = useState(false);
+    const profileAvatarPanRef = useRef<{
+        startClientX: number;
+        startClientY: number;
+        startOx: number;
+        startOy: number;
+    } | null>(null);
+
     // Emoji picker state for name field
     const [isNameEmojiPickerOpen, setIsNameEmojiPickerOpen] = useState(false);
     const [nameEmojiSearchTerm, setNameEmojiSearchTerm] = useState('');
@@ -180,11 +192,17 @@ export const Profile: React.FC = () => {
     const handleEditToggle = () => {
         if (isEditing) {
             setEditableUser(user);
+            setProfileAvatarPanMode(false);
         } else {
             setEditableUser(user);
+            setProfileAvatarPanMode(false);
         }
         setIsEditing(!isEditing);
     };
+
+    useEffect(() => {
+        if (!isEditing) setProfileAvatarPanMode(false);
+    }, [isEditing]);
 
     const handleSave = () => {
         if(editableUser) {
@@ -198,6 +216,66 @@ export const Profile: React.FC = () => {
         const { name, value } = e.target;
         setEditableUser(prev => prev ? ({ ...prev, [name]: value }) : null);
     };
+
+    const onProfileAvatarPanPointerDown = useCallback(
+        (e: React.PointerEvent<HTMLDivElement>) => {
+            if (!profileAvatarPanMode || !editableUser?.avatar) return;
+            e.preventDefault();
+            e.stopPropagation();
+            e.currentTarget.setPointerCapture(e.pointerId);
+            const [ox, oy] = parseObjectPositionPercentPair(editableUser.avatarObjectPosition);
+            profileAvatarPanRef.current = {
+                startClientX: e.clientX,
+                startClientY: e.clientY,
+                startOx: ox,
+                startOy: oy,
+            };
+        },
+        [profileAvatarPanMode, editableUser?.avatar, editableUser?.avatarObjectPosition]
+    );
+
+    const onProfileAvatarPanPointerMove = useCallback(
+        (e: React.PointerEvent<HTMLDivElement>) => {
+            if (!profileAvatarPanMode || !profileAvatarPanRef.current) return;
+            const rect = e.currentTarget.getBoundingClientRect();
+            const w = Math.max(rect.width, 1);
+            const h = Math.max(rect.height, 1);
+            const dx = e.clientX - profileAvatarPanRef.current.startClientX;
+            const dy = e.clientY - profileAvatarPanRef.current.startClientY;
+            const sens = 0.85;
+            const nx = clampPan(
+                profileAvatarPanRef.current.startOx - (dx / w) * 100 * sens,
+                0,
+                100
+            );
+            const ny = clampPan(
+                profileAvatarPanRef.current.startOy - (dy / h) * 100 * sens,
+                0,
+                100
+            );
+            setEditableUser((prev) =>
+                prev
+                    ? { ...prev, avatarObjectPosition: formatObjectPositionPercentPair(nx, ny) }
+                    : null
+            );
+            profileAvatarPanRef.current = {
+                startClientX: e.clientX,
+                startClientY: e.clientY,
+                startOx: nx,
+                startOy: ny,
+            };
+        },
+        [profileAvatarPanMode]
+    );
+
+    const onProfileAvatarPanPointerUp = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+        try {
+            e.currentTarget.releasePointerCapture(e.pointerId);
+        } catch {
+            /* ignore */
+        }
+        profileAvatarPanRef.current = null;
+    }, []);
 
     const handleAvatarChange = async (e: ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
@@ -213,7 +291,11 @@ export const Profile: React.FC = () => {
                 const downloadURL = await storageFunctions.getDownloadURL(storageRef);
                 
                 // Update user with Firebase URL (persists across sessions)
-                const updatedUser = { ...editableUser, avatar: downloadURL } as User;
+                const updatedUser = {
+                    ...editableUser,
+                    avatar: downloadURL,
+                    avatarObjectPosition: '50% 50%',
+                } as User;
                 setEditableUser(updatedUser);
                 setUser(updatedUser);
                 
@@ -308,6 +390,15 @@ export const Profile: React.FC = () => {
     const storagePercentage = storageUsage.total > 0 && storageUsage.total !== Infinity 
         ? (storageUsage.used / storageUsage.total) * 100 
         : 0;
+
+    const profileAvatarSrc =
+        canEdit && isEditing && editableUser ? editableUser.avatar : currentData.avatar;
+    const profileAvatarObjectPosition =
+        canEdit && isEditing && editableUser
+            ? editableUser.avatarObjectPosition
+            : !selectedClient && user
+              ? user.avatarObjectPosition
+              : undefined;
 
     // Ads usage disabled
 
@@ -411,20 +502,88 @@ export const Profile: React.FC = () => {
 
             <SettingsSection title="Profile Information">
                 <div className="flex items-center space-x-6">
-                    <div className="relative flex-shrink-0">
-                        <img 
-                            src={canEdit && isEditing && editableUser ? editableUser.avatar : currentData.avatar} 
-                            alt="Profile" 
-                            className="w-28 h-28 aspect-square rounded-full object-cover border-4 border-white dark:border-gray-800 shadow-lg ring-2 ring-gray-200 dark:ring-gray-700" 
-                        />
-                        {isEditing && (
-                            <>
-                                <input type="file" ref={fileInputRef} onChange={handleAvatarChange} className="hidden" accept="image/*" />
-                                <button onClick={() => fileInputRef.current?.click()} className="absolute bottom-0 right-0 p-2 bg-gradient-to-r from-primary-600 to-primary-500 text-white rounded-full hover:from-primary-700 hover:to-primary-600 shadow-md transition-all">
-                                    <CameraIcon className="w-4 h-4" />
-                                </button>
-                            </>
-                        )}
+                    <div className="relative flex flex-col gap-2 flex-shrink-0">
+                        <div className="relative">
+                            {(() => {
+                                const panHere = profileAvatarPanMode && !!profileAvatarSrc;
+                                return (
+                                    <div
+                                        className={`relative w-28 h-28 rounded-full overflow-hidden border-4 border-white dark:border-gray-800 shadow-lg ring-2 ring-gray-200 dark:ring-gray-700 ${
+                                            panHere
+                                                ? 'cursor-grab active:cursor-grabbing touch-none ring-primary-500 dark:ring-primary-400'
+                                                : ''
+                                        }`}
+                                        onPointerDown={panHere ? onProfileAvatarPanPointerDown : undefined}
+                                        onPointerMove={panHere ? onProfileAvatarPanPointerMove : undefined}
+                                        onPointerUp={panHere ? onProfileAvatarPanPointerUp : undefined}
+                                        onPointerCancel={panHere ? onProfileAvatarPanPointerUp : undefined}
+                                    >
+                                        <img
+                                            src={profileAvatarSrc}
+                                            alt="Profile"
+                                            className="w-full h-full pointer-events-none select-none"
+                                            style={getAvatarCropStyle(profileAvatarObjectPosition)}
+                                            draggable={false}
+                                        />
+                                    </div>
+                                );
+                            })()}
+                            {isEditing && (
+                                <>
+                                    <input type="file" ref={fileInputRef} onChange={handleAvatarChange} className="hidden" accept="image/*" />
+                                    <button
+                                        type="button"
+                                        onClick={() => fileInputRef.current?.click()}
+                                        className="absolute bottom-0 right-0 p-2 bg-gradient-to-r from-primary-600 to-primary-500 text-white rounded-full hover:from-primary-700 hover:to-primary-600 shadow-md transition-all"
+                                    >
+                                        <CameraIcon className="w-4 h-4" />
+                                    </button>
+                                </>
+                            )}
+                        </div>
+                        {isEditing && editableUser?.avatar ? (
+                            <div className="max-w-[11rem] rounded-md border border-primary-500 bg-primary-50 dark:bg-primary-900/20 px-2 py-1.5">
+                                <div className="flex items-center justify-between gap-2 mb-1">
+                                    <span className="text-[10px] font-medium text-primary-900 dark:text-primary-100">Photo position</span>
+                                    <span className="text-[9px] text-primary-700 dark:text-primary-300 text-right leading-tight">
+                                        Drag in the circle
+                                    </span>
+                                </div>
+                                <div className="flex flex-wrap gap-1 items-center">
+                                    <button
+                                        type="button"
+                                        onClick={() => setProfileAvatarPanMode((m) => !m)}
+                                        className={`rounded px-1.5 py-0.5 text-[9px] font-medium border ${
+                                            profileAvatarPanMode
+                                                ? 'border-primary-600 bg-primary-600 text-white'
+                                                : 'border-primary-500 dark:border-primary-500 bg-white dark:bg-gray-800 text-primary-900 dark:text-primary-100'
+                                        }`}
+                                    >
+                                        {profileAvatarPanMode ? 'Dragging — move photo' : 'Enable drag mode'}
+                                    </button>
+                                    {profileAvatarPanMode && (
+                                        <button
+                                            type="button"
+                                            onClick={() => setProfileAvatarPanMode(false)}
+                                            className="rounded px-1.5 py-0.5 text-[9px] font-medium border border-primary-500 dark:border-primary-500 bg-white dark:bg-gray-800 text-primary-900 dark:text-primary-100"
+                                        >
+                                            Done
+                                        </button>
+                                    )}
+                                    <button
+                                        type="button"
+                                        onClick={() =>
+                                            setEditableUser((prev) =>
+                                                prev ? { ...prev, avatarObjectPosition: '50% 50%' } : null
+                                            )
+                                        }
+                                        className="text-[9px] text-primary-700 dark:text-primary-300 underline"
+                                    >
+                                        Reset
+                                    </button>
+                                </div>
+                            </div>
+                        ) : null}
                     </div>
                     <div className="flex-1 space-y-2">
                         {canEdit && isEditing && editableUser ? (

@@ -55,7 +55,7 @@ function mapDocToOrder(docSnap: QueryDocumentSnapshot): CreatorOrder {
     createdAt: createdAtToIso(d.createdAt),
     productTitle: (d.productTitle as string) ?? (d.productId as string) ?? undefined,
     fanName: (d.fanName as string) ?? (d.tipHandle as string) ?? null,
-    fanEmail: (d.fanEmail as string) ?? (d.fanId as string) ?? undefined,
+    fanEmail: typeof d.fanEmail === "string" && d.fanEmail.trim() ? d.fanEmail.trim() : undefined,
     scheduleStatus: (d.scheduleStatus as string) || "pending",
     scheduledDate: (d.scheduledDate as string) ?? null,
     scheduledTime: (d.scheduledTime as string) ?? null,

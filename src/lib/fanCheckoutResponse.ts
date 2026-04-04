@@ -1,4 +1,11 @@
 /**
+ * Tip checkout success query: Stripe replaces `{CHECKOUT_SESSION_ID}` literally (do not URL-encode braces).
+ * `purchase_sync=1` lets `FanStorefrontView` POST `/api/syncFanCheckoutSession` when webhooks are slow or missing.
+ */
+export const FAN_TIP_CHECKOUT_SUCCESS_QS =
+  "tip=success&purchase_sync=1&session_id={CHECKOUT_SESSION_ID}";
+
+/**
  * Fan storefront checkout APIs usually return JSON; dev proxy errors may return plain text.
  */
 export async function readFanCheckoutFetchResult(res: Response): Promise<{
