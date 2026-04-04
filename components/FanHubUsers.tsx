@@ -20,6 +20,8 @@ interface FanUser {
   memberUsername?: string | null;
   role: UserRole;
   plan: string | null;
+  /** Raw `creators/.../fans` subscriptionStatus (active / trialing / past_due / …) — used for Stripe cancel UI */
+  subscriptionStatus: string | null;
   /** Earliest known: fan subscribedAt / first order / users.signupDate — null if unknown */
   signupDate: Date | null;
   remainingAccess: "Active" | "Expired" | "Cancelled" | string;
@@ -121,6 +123,17 @@ function planStatusBadgeClass(label: string): string | null {
   return null;
 }
 
+/** Manage User modal: show Stripe cancel when member likely has a billable or cancel-at-period-end sub. */
+function showStripeSubscriptionCancelInManageModal(u: FanUser): boolean {
+  if (u.role !== "member") return false;
+  const st = (u.subscriptionStatus || "").toLowerCase().trim();
+  if (st === "active" || st === "trialing" || st === "past_due") return true;
+  if (u.plan === "Active" || u.plan === "Past Due") return true;
+  if (u.plan === "Purchaser") return true;
+  if (u.remainingAccess.startsWith("until ")) return true;
+  return false;
+}
+
 function getAvatarColor(name: string): string {
   const colors = [
     "bg-indigo-500",
@@ -164,6 +177,7 @@ export const FanHubUsers: React.FC = () => {
   // Grant video minutes state
   const [grantVideoMinutes, setGrantVideoMinutes] = useState(0);
   const [isGrantingMinutes, setIsGrantingMinutes] = useState(false);
+  const [cancelSubLoading, setCancelSubLoading] = useState(false);
 
   // Empty placeholder - users will be loaded from database
   // Demo users are not shown to new creators
@@ -180,9 +194,13 @@ export const FanHubUsers: React.FC = () => {
       // Fetch orders for spend calculation
       const ordersRes = await fetch("/api/creatorOrders?limit=1000", { headers });
       let orders: any[] = [];
+      let earliestPurchaseAtByFanId: Record<string, string> = {};
+      let earliestPurchaseAtByFanEmail: Record<string, string> = {};
       if (ordersRes.ok) {
         const data = await ordersRes.json();
         orders = data.orders || [];
+        earliestPurchaseAtByFanId = (data.earliestPurchaseAtByFanId as Record<string, string>) || {};
+        earliestPurchaseAtByFanEmail = (data.earliestPurchaseAtByFanEmail as Record<string, string>) || {};
       } else if (import.meta.env.DEV && (ordersRes.status === 404 || ordersRes.status === 502)) {
         console.warn(
           `[FanHubUsers] /api/creatorOrders returned ${ordersRes.status}. ` +
@@ -352,6 +370,28 @@ export const FanHubUsers: React.FC = () => {
         userMap.set(fanId, existing);
       });
 
+      const purchaseHintDate = (fanId: string, email: string | null | undefined): Date | null => {
+        const byId = earliestPurchaseAtByFanId[fanId];
+        if (byId) {
+          const d = new Date(byId);
+          if (Number.isFinite(d.getTime())) return d;
+        }
+        const em = typeof email === "string" ? email.trim().toLowerCase() : "";
+        if (em) {
+          const byEm = earliestPurchaseAtByFanEmail[em];
+          if (byEm) {
+            const d = new Date(byEm);
+            if (Number.isFinite(d.getTime())) return d;
+          }
+        }
+        return null;
+      };
+
+      for (const row of userMap.values()) {
+        const pd = purchaseHintDate(row.id, row.email);
+        if (pd && (!row.firstOrder || pd < row.firstOrder)) row.firstOrder = pd;
+      }
+
       // Also check creatorSubscribers for any legacy data
       try {
         const legacySubRef = collection(db, "creatorSubscribers", user.id, "subscribers");
@@ -505,6 +545,11 @@ export const FanHubUsers: React.FC = () => {
       };
       mergeFanRowsByEmail(userMap);
 
+      for (const row of userMap.values()) {
+        const pd = purchaseHintDate(row.id, row.email);
+        if (pd && (!row.firstOrder || pd < row.firstOrder)) row.firstOrder = pd;
+      }
+
       // Merge `users/{fanId}` so @username shows when `fans` doc lacks it (Stripe + claimed handles)
       const profileIds = [...userMap.keys()];
       const PROFILE_CHUNK = 30;
@@ -539,6 +584,12 @@ export const FanHubUsers: React.FC = () => {
               if (profileSu) {
                 if (!entry.profileSignupAt || profileSu.getTime() < entry.profileSignupAt.getTime()) {
                   entry.profileSignupAt = profileSu;
+                }
+              }
+              const userDocCreated = firestoreDate(u.createdAt);
+              if (userDocCreated) {
+                if (!entry.profileSignupAt || userDocCreated.getTime() < entry.profileSignupAt.getTime()) {
+                  entry.profileSignupAt = userDocCreated;
                 }
               }
             } catch {
@@ -615,6 +666,7 @@ export const FanHubUsers: React.FC = () => {
           memberUsername,
           role,
           plan,
+          subscriptionStatus: data.subscriptionStatus ?? null,
           signupDate,
           remainingAccess,
           lifetimeSpendCents,
@@ -786,6 +838,54 @@ export const FanHubUsers: React.FC = () => {
     if (!selectedUser) return;
     // In a real implementation, this would call Firebase Auth to send reset email
     showToast?.(`Password reset email sent to ${selectedUser.email}`, "success");
+  };
+
+  const handleCreatorCancelFanSubscription = async () => {
+    if (!selectedUser || !user?.id) return;
+    if (!showStripeSubscriptionCancelInManageModal(selectedUser)) {
+      showToast?.("No billable Stripe subscription detected for this row.", "error");
+      return;
+    }
+    if (
+      !window.confirm(
+        `Cancel Stripe subscription for ${selectedUser.name}? They keep access until the end of the current billing period. This cannot be undone from here (they may re-subscribe later).`
+      )
+    ) {
+      return;
+    }
+    setCancelSubLoading(true);
+    try {
+      const token = auth.currentUser ? await auth.currentUser.getIdToken() : null;
+      if (!token) {
+        showToast?.("Please sign in again", "error");
+        return;
+      }
+      const res = await fetch("/api/creatorCancelFanSubscription", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ fanId: selectedUser.id }),
+      });
+      const data = (await res.json().catch(() => ({}))) as { error?: string; message?: string; currentPeriodEnd?: string };
+      if (!res.ok) {
+        throw new Error(data.error || `Request failed (${res.status})`);
+      }
+      showToast?.(data.message || "Subscription will cancel at period end.", "success");
+      await loadUsers();
+      setShowManageModal(false);
+      setSelectedUser(null);
+      setNewPassword("");
+      setShowPassword(false);
+      setGrantTreatType("");
+      setGrantTreatCount(1);
+    } catch (e) {
+      console.error("creatorCancelFanSubscription:", e);
+      showToast?.(e instanceof Error ? e.message : "Failed to cancel subscription", "error");
+    } finally {
+      setCancelSubLoading(false);
+    }
   };
 
   const handleGrantTreat = async () => {
@@ -1412,6 +1512,24 @@ export const FanHubUsers: React.FC = () => {
                   Sends an email to {selectedUser.email} with a link to set a new password.
                 </p>
               </div>
+
+              {/* Cancel Stripe subscription (creator) — between password and grant store; scroll modal if needed */}
+              {showStripeSubscriptionCancelInManageModal(selectedUser) && (
+                <div>
+                  <h5 className="text-sm font-semibold text-gray-900 dark:text-white mb-2">Stripe subscription</h5>
+                  <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
+                    Schedule cancellation at the end of their current billing period. Stripe updates access when the period ends (same as if they canceled in the member portal).
+                  </p>
+                  <button
+                    type="button"
+                    onClick={handleCreatorCancelFanSubscription}
+                    disabled={cancelSubLoading}
+                    className="w-full px-4 py-2.5 rounded-lg text-sm font-medium border border-red-300 dark:border-red-800 text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-950/30 hover:bg-red-100 dark:hover:bg-red-950/50 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {cancelSubLoading ? "Canceling…" : "Cancel subscription at period end"}
+                  </button>
+                </div>
+              )}
 
               {/* Grant store redemption */}
               <div>

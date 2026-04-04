@@ -42,6 +42,14 @@ function createdAtToIso(createdAt: unknown): string {
   return new Date(0).toISOString();
 }
 
+/** Earliest timestamp on a migrated / legacy `purchases` doc (Stormij uses purchasedAt). */
+function purchaseActivityMs(d: Record<string, unknown>): number {
+  const a = createdAtToMs(d.purchasedAt);
+  const b = createdAtToMs(d.createdAt);
+  if (a > 0 && b > 0) return Math.min(a, b);
+  return Math.max(a, b);
+}
+
 function mapDocToOrder(docSnap: QueryDocumentSnapshot): CreatorOrder {
   const d = docSnap.data() as Record<string, unknown>;
   return {
@@ -114,7 +122,38 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const orders: CreatorOrder[] = docs.map((docSnap) => mapDocToOrder(docSnap));
 
-    return res.status(200).json({ orders });
+    const earliestPurchaseAtByFanId: Record<string, string> = {};
+    const earliestPurchaseAtByFanEmail: Record<string, string> = {};
+    try {
+      const purchaseCap = 4000;
+      const pSnap = await db
+        .collection("purchases")
+        .where("creatorId", "==", creatorId)
+        .limit(purchaseCap)
+        .get();
+      const bump = (map: Record<string, string>, key: string, ms: number) => {
+        if (!key || ms <= 0) return;
+        const iso = new Date(ms).toISOString();
+        const prev = map[key];
+        if (!prev || Date.parse(prev) > ms) map[key] = iso;
+      };
+      for (const p of pSnap.docs) {
+        const raw = p.data() as Record<string, unknown>;
+        const ms = purchaseActivityMs(raw);
+        if (ms <= 0) continue;
+        const fid = typeof raw.fanId === "string" ? raw.fanId.trim() : "";
+        if (fid) bump(earliestPurchaseAtByFanId, fid, ms);
+        const em = typeof raw.email === "string" ? raw.email.trim().toLowerCase() : "";
+        if (em) bump(earliestPurchaseAtByFanEmail, em, ms);
+      }
+    } catch (purchaseErr: unknown) {
+      console.warn(
+        "creatorOrders: purchases aggregation skipped:",
+        purchaseErr instanceof Error ? purchaseErr.message : purchaseErr
+      );
+    }
+
+    return res.status(200).json({ orders, earliestPurchaseAtByFanId, earliestPurchaseAtByFanEmail });
   } catch (e: unknown) {
     console.error("creatorOrders error:", e);
     const msg = e instanceof Error ? e.message : "Failed to load orders";

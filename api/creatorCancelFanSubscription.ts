@@ -1,8 +1,6 @@
 /**
- * POST: Fan cancels their subscription to a creator (at period end).
- * Auth: fan (Bearer). Body: { creatorId }.
- * Reads stripeSubscriptionId from creatorSubscribers/{creatorId}/subscribers/{fanId}.
- * Webhook customer.subscription.deleted will update Firestore when period ends.
+ * POST: Creator cancels a fan's Stripe subscription (at period end, same as fan self-service).
+ * Auth: creator (Bearer uid). Body: { fanId }.
  */
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { getPlatformStripe } from "./_stripeConnect.js";
@@ -55,12 +53,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (!decoded?.uid) {
     return res.status(401).json({ error: "Unauthorized" });
   }
-  const fanId = decoded.uid;
+  const creatorId = decoded.uid;
 
-  const body = (req.body || {}) as { creatorId?: string };
-  const creatorId = body.creatorId;
-  if (!creatorId || typeof creatorId !== "string") {
-    return res.status(400).json({ error: "creatorId is required" });
+  const body = (req.body || {}) as { fanId?: string };
+  const fanId = typeof body.fanId === "string" ? body.fanId.trim() : "";
+  if (!fanId) {
+    return res.status(400).json({ error: "fanId is required" });
   }
 
   const stripe = getPlatformStripe();
@@ -73,19 +71,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(500).json({ error: "Database unavailable" });
   }
 
-  const subRef = db
-    .collection("creatorSubscribers")
-    .doc(creatorId)
-    .collection("subscribers")
-    .doc(fanId);
+  const fanRef = db.collection("creators").doc(creatorId).collection("fans").doc(fanId);
+  const fanSnap = await fanRef.get();
+  if (!fanSnap.exists) {
+    return res.status(404).json({ error: "No member record for this fan" });
+  }
+
+  const subRef = db.collection("creatorSubscribers").doc(creatorId).collection("subscribers").doc(fanId);
   const subSnap = await subRef.get();
   if (!subSnap.exists) {
-    return res.status(404).json({ error: "No subscription found for this creator" });
+    return res.status(404).json({ error: "No Stripe subscription on file for this member" });
   }
+
   const data = subSnap.data() as { stripeSubscriptionId?: string; status?: string };
-  const subscriptionId = data.stripeSubscriptionId;
+  const subscriptionId =
+    typeof data.stripeSubscriptionId === "string" ? data.stripeSubscriptionId.trim() : "";
   if (!subscriptionId) {
-    return res.status(400).json({ error: "No active subscription to cancel" });
+    return res.status(400).json({ error: "No Stripe subscription id — member may be manual or migrated without billing" });
   }
   if (data.status === "canceled") {
     return res.status(400).json({ error: "Subscription is already canceled" });
@@ -110,6 +112,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   };
   const isPlatform = isCreatorPlatformOwner(creatorId, ownerDetection);
   const connectId = resolveConnectAccountId(creatorData);
+
   const stripeOpts = !isPlatform && connectId ? { stripeAccount: connectId } : undefined;
 
   try {
@@ -118,7 +121,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (subscription.cancel_at_period_end) {
       return res.status(200).json({
         ok: true,
-        message: "Subscription is already set to cancel at the end of the billing period",
+        message: "Already set to cancel at the end of the billing period",
         currentPeriodEnd:
           typeof subCpe === "number" && Number.isFinite(subCpe) ? new Date(subCpe * 1000).toISOString() : null,
       });
@@ -130,12 +133,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     return res.status(200).json({
       ok: true,
-      message: "Subscription will cancel at the end of your current billing period. You keep access until then.",
+      message: "Subscription will cancel at the end of the current billing period. They keep access until then.",
       currentPeriodEnd: periodEnd,
     });
   } catch (e: unknown) {
     const err = e as { message?: string; code?: string };
-    console.error("fanCancelCreatorSubscription error:", err);
+    console.error("creatorCancelFanSubscription error:", err);
     return res.status(500).json({
       error: err?.message || "Failed to cancel subscription",
     });
