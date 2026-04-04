@@ -150,26 +150,30 @@ function buildStorefrontConfig(
   };
 }
 
-export const FanLandingPage: React.FC<FanLandingPageProps> = ({
-  creator,
-  onSubscribe,
-  onJoinFree,
-  onOpenFanAuth,
-  onLogout,
-  subscribing,
-  joiningFree = false,
-  isLoggedIn,
-  publicTreatsOnLanding = false,
-  sectionsTreatsEnabled = true,
-  landingTreatProducts = [],
-  landingTreatsLoading = false,
-  onGuestPurchaseTreat,
-  guestTreatPurchasingId = null,
-  treatLinkAccountMessage = null,
-  termsHref: termsHrefProp,
-  privacyHref: privacyHrefProp,
-  homeHref,
-}) => {
+export const FanLandingPage: React.FC<FanLandingPageProps> = (props) => {
+  const {
+    creator,
+    onSubscribe,
+    onJoinFree,
+    onOpenFanAuth,
+    onLogout,
+    subscribing,
+    joiningFree = false,
+    isLoggedIn,
+    publicTreatsOnLanding = false,
+    sectionsTreatsEnabled = true,
+    landingTreatProducts = [],
+    landingTreatsLoading = false,
+    onGuestPurchaseTreat,
+    guestTreatPurchasingId = null,
+    treatLinkAccountMessage = null,
+    termsHref: termsHrefProp,
+    privacyHref: privacyHrefProp,
+    homeHref,
+  } = props;
+
+  const landingGuestTreatCommerceEnabled = props.landingGuestTreatCommerceEnabled === true;
+
   const { theme, monetization, landingContent: creatorLandingContent } = creator;
   const primary = theme?.primary || "#6366f1";
 

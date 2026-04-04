@@ -40,27 +40,38 @@ function toProduct(doc: FirebaseFirestore.DocumentSnapshot): TreatProduct {
  */
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method === "GET") {
-    const creatorId = req.query.creatorId as string | undefined;
-    if (!creatorId) {
+    const creatorIdParam = req.query.creatorId as string | undefined;
+    if (!creatorIdParam?.trim()) {
       return res.status(400).json({ error: "creatorId is required" });
     }
     const includeArchived = req.query.includeArchived === "true";
     const decoded = await verifyAuth(req);
-    const isCreator = decoded?.uid === creatorId;
+    const normParam = normalizeCreatorId(creatorIdParam);
+    const isCreator = Boolean(decoded?.uid && normalizeCreatorId(decoded.uid) === normParam);
 
     try {
       const db = getAdminDb();
       if (!db) return res.status(500).json({ error: "Database unavailable" });
 
-      let query = db.collection(COLLECTION).where("creatorId", "==", creatorId);
-      // Creator with includeArchived: get all. Otherwise only non-archived.
-      if (!includeArchived || !isCreator) {
-        query = query.where("archived", "==", false) as FirebaseFirestore.Query;
+      /**
+       * Product docs may use legacy `creatorId` strings (e.g. `uid--collection=members`) while
+       * storefront APIs pass the canonical Auth uid — a single equality query would return zero rows.
+       */
+      const variants = creatorIdFirestoreQueryVariants(creatorIdParam);
+      const seenDocIds = new Set<string>();
+      let products: TreatProduct[] = [];
+      for (const cid of variants) {
+        let query = db.collection(COLLECTION).where("creatorId", "==", cid);
+        if (!includeArchived || !isCreator) {
+          query = query.where("archived", "==", false) as FirebaseFirestore.Query;
+        }
+        const snap = await query.limit(500).get();
+        for (const doc of snap.docs) {
+          if (seenDocIds.has(doc.id)) continue;
+          seenDocIds.add(doc.id);
+          products.push(toProduct(doc));
+        }
       }
-      // Simple query - sort client-side to avoid complex composite index requirements
-      const snap = await query.limit(500).get();
-
-      let products = snap.docs.map((doc) => toProduct(doc));
       if (!isCreator) {
         products = products.filter((p) => p.visible);
         const ctx = typeof req.query.context === "string" ? req.query.context : "";
