@@ -35,20 +35,116 @@ function getCreatorId(): string {
 
 const dryRun = process.argv.includes("--dry-run");
 
+function looksLikeStripeOrPaymentId(s: string): boolean {
+  const t = s.trim();
+  return /^(cus_|pm_|pi_|sub_|cs_|seti_|req_|ch_)/i.test(t);
+}
+
 function inferFanUidFromPurchaseDoc(d: Record<string, unknown>): string | null {
   const candidates = [
     d.fanId,
     d.uid,
     d.userId,
+    d.buyerUid,
+    d.purchaserUid,
+    d.firebaseUid,
     d.memberUid,
     d.customerId,
     d.memberId,
-    d.firebaseUid,
+  ];
+  for (const c of candidates) {
+    if (typeof c === "string" && c.trim().length > 0) {
+      const v = c.trim();
+      if (!looksLikeStripeOrPaymentId(v)) return v;
+    }
+  }
+  return null;
+}
+
+/** Same keys as migrate-stormij infers onto `email` (plus any legacy EchoFlux-only fields). */
+function inferEmailFromPurchaseDoc(d: Record<string, unknown>): string | null {
+  const keys = [
+    "email",
+    "fanEmail",
+    "buyerEmail",
+    "customerEmail",
+    "userEmail",
+    "purchaserEmail",
+    "emailAddress",
+    "stripeEmail",
+    "stripeCustomerEmail",
+    "guestEmail",
+  ];
+  for (const k of keys) {
+    const v = d[k];
+    if (typeof v === "string" && v.trim().length > 0) return v.trim();
+  }
+  const customer = d.customer;
+  if (customer && typeof customer === "object" && customer !== null) {
+    const e = (customer as Record<string, unknown>).email;
+    if (typeof e === "string" && e.trim().length > 0) return e.trim();
+  }
+  return null;
+}
+
+/**
+ * Resolve the fan id used in grants/orders/fans subcollections.
+ * Order: Firebase Auth email → users/{uid}.email → creators/.../fans/{docId} where doc id is the
+ * email (Fan Hub "add user" uses email as document id) or field email matches.
+ */
+async function resolveFanIdForPurchase(
+  auth: admin.auth.Auth,
+  db: admin.firestore.Firestore,
+  creatorId: string,
+  rawEmail: string,
+): Promise<string | null> {
+  const trimmed = rawEmail.trim();
+  const norm = trimmed.toLowerCase();
+  try {
+    const u = await auth.getUserByEmail(norm);
+    return u.uid;
+  } catch {
+    /* continue */
+  }
+  for (const candidate of [norm, trimmed]) {
+    try {
+      const q = await db.collection("users").where("email", "==", candidate).limit(1).get();
+      if (!q.empty) return q.docs[0].id;
+    } catch {
+      /* missing index */
+    }
+  }
+  const fansCol = db.collection("creators").doc(creatorId).collection("fans");
+  for (const docId of [norm, trimmed]) {
+    const byId = await fansCol.doc(docId).get();
+    if (byId.exists) return docId;
+  }
+  try {
+    for (const candidate of [norm, trimmed]) {
+      const q = await fansCol.where("email", "==", candidate).limit(1).get();
+      if (!q.empty) return q.docs[0].id;
+    }
+  } catch {
+    /* index */
+  }
+  return null;
+}
+
+function inferTreatIdFromPurchaseDoc(d: Record<string, unknown>): string {
+  const candidates = [
+    d.treatId,
+    d.productId,
+    d.treat_id,
+    d.product_id,
+    d.itemId,
+    d.item_id,
+    d.sku,
+    d.priceId,
   ];
   for (const c of candidates) {
     if (typeof c === "string" && c.trim().length > 0) return c.trim();
   }
-  return null;
+  return "";
 }
 
 function purchaseCreatedAtToIso(purchasedAt: unknown): string {
@@ -103,10 +199,7 @@ async function main() {
       continue;
     }
 
-    const treatId =
-      (typeof d.treatId === "string" && d.treatId.trim()) ||
-      (typeof d.productId === "string" && d.productId.trim()) ||
-      "";
+    const treatId = inferTreatIdFromPurchaseDoc(d);
     if (!treatId) {
       console.warn(`  Skip ${doc.id}: no treatId/productId`);
       skipped++;
@@ -115,19 +208,22 @@ async function main() {
 
     let fanUid = inferFanUidFromPurchaseDoc(d);
 
-    if (!fanUid && typeof d.email === "string" && d.email.trim()) {
-      try {
-        const u = await auth.getUserByEmail(d.email.trim().toLowerCase());
-        fanUid = u.uid;
-      } catch {
-        console.warn(`  Skip ${doc.id}: no fan UID and no Auth user for email`);
+    const lookupEmail = inferEmailFromPurchaseDoc(d);
+    if (!fanUid && lookupEmail) {
+      fanUid = await resolveFanIdForPurchase(auth, db, creatorId, lookupEmail);
+      if (!fanUid) {
+        console.warn(
+          `  Skip ${doc.id}: could not match purchase email to Auth, users/, or creators/.../fans (set purchase.fanId to the id used under creators/.../fans)`
+        );
         skipped++;
         continue;
       }
     }
 
     if (!fanUid) {
-      console.warn(`  Skip ${doc.id}: cannot resolve fan UID (add fanId to purchase or ensure email exists in Auth)`);
+      console.warn(
+        `  Skip ${doc.id}: cannot resolve fan UID (set fanId/uid on purchase or buyer email on purchase + matching EchoFlux Auth user)`
+      );
       skipped++;
       continue;
     }
@@ -152,7 +248,7 @@ async function main() {
       productTitleFromCatalog ||
       (typeof d.productName === "string" && d.productName.trim()) ||
       treatId;
-    const fanEmail = typeof d.email === "string" && d.email.trim() ? d.email.trim() : null;
+    const fanEmail = lookupEmail;
     let fanName: string | null = null;
     try {
       const uSnap = await db.collection("users").doc(fanUid).get();

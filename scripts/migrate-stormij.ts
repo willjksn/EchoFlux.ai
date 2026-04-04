@@ -11,7 +11,10 @@
  * OPTIONS:
  *   --dry-run         Preview what would be migrated without writing
  *   --collection=X    Only migrate specific collections (comma-separated)
- *   --creator-id=X    The Echoflux creator ID to associate data with
+ *   --creator-id=X    The Echoflux creator ID to associate data with (Firebase Auth UID)
+ *   --stormij-purchases-creator-id=X  If Stormij purchase docs use a different creatorId than
+ *                     your EchoFlux UID, pass the value from Stormij so those rows are migrated
+ *                     and rewritten with --creator-id on EchoFlux.
  * 
  * REQUIREMENTS:
  *   - Service account JSON for both Firebase projects
@@ -573,21 +576,80 @@ async function migrateMembers(
   return stat;
 }
 
+/** Stripe / payment ids are not Firebase UIDs — ignore so we fall back to email lookup. */
+function looksLikeStripeOrPaymentId(s: string): boolean {
+  const t = s.trim();
+  return /^(cus_|pm_|pi_|sub_|cs_|seti_|req_|ch_)/i.test(t);
+}
+
 /** Best-effort fan Firebase UID from Stormij purchase doc (for grants backfill). */
 function inferFanIdFromStormijPurchase(data: Record<string, unknown>): string | null {
   const candidates = [
     data.uid,
     data.userId,
     data.fanId,
+    data.buyerUid,
+    data.purchaserUid,
+    data.firebaseUid,
     data.memberUid,
     data.customerId,
     data.memberId,
-    data.firebaseUid,
+  ];
+  for (const c of candidates) {
+    if (typeof c === 'string' && c.trim().length > 0) {
+      const v = c.trim();
+      if (!looksLikeStripeOrPaymentId(v)) return v;
+    }
+  }
+  return null;
+}
+
+/** Stormij may store buyer email under several keys; EchoFlux backfill needs `email` for Auth lookup. */
+function inferBuyerEmailFromStormijPurchase(data: Record<string, unknown>): string | null {
+  const keys = [
+    'email',
+    'fanEmail',
+    'buyerEmail',
+    'customerEmail',
+    'userEmail',
+    'purchaserEmail',
+    'emailAddress',
+    'stripeEmail',
+    'stripeCustomerEmail',
+    'guestEmail',
+  ];
+  for (const k of keys) {
+    const v = data[k];
+    if (typeof v === 'string' && v.trim().length > 0) return v.trim();
+  }
+  const customer = data.customer;
+  if (customer && typeof customer === 'object' && customer !== null) {
+    const e = (customer as Record<string, unknown>).email;
+    if (typeof e === 'string' && e.trim().length > 0) return e.trim();
+  }
+  return null;
+}
+
+function inferTreatIdFromStormijPurchase(data: Record<string, unknown>): string | null {
+  const candidates = [
+    data.treatId,
+    data.productId,
+    data.treat_id,
+    data.product_id,
+    data.itemId,
+    data.item_id,
+    data.sku,
+    data.priceId,
   ];
   for (const c of candidates) {
     if (typeof c === 'string' && c.trim().length > 0) return c.trim();
   }
   return null;
+}
+
+interface MigratePurchasesOptions {
+  /** Stormij `purchases.creatorId` when it is not the same string as EchoFlux `creatorId`. */
+  stormijPurchasesCreatorId?: string;
 }
 
 /**
@@ -597,7 +659,8 @@ async function migratePurchases(
   stormijDb: admin.firestore.Firestore,
   echofluxDb: admin.firestore.Firestore,
   creatorId: string,
-  dryRun: boolean
+  dryRun: boolean,
+  options: MigratePurchasesOptions = {}
 ): Promise<MigrationStats> {
   const stat: MigrationStats = { collection: 'purchases', read: 0, written: 0, skipped: 0, errors: [] };
   
@@ -614,26 +677,33 @@ async function migratePurchases(
       return stat;
     }
 
+    const legacyStormijCreator = options.stormijPurchasesCreatorId?.trim() || '';
+
     for (const doc of snapshot.docs) {
       try {
         const data = doc.data();
         const stormijCreator =
           typeof data.creatorId === 'string' ? data.creatorId.trim() : '';
-        if (stormijCreator && stormijCreator !== creatorId) {
+        const matchesLegacyMap =
+          legacyStormijCreator.length > 0 && stormijCreator === legacyStormijCreator;
+        const includePurchase =
+          !stormijCreator ||
+          stormijCreator === creatorId ||
+          matchesLegacyMap;
+        if (!includePurchase) {
           stat.skipped++;
           continue;
         }
 
         const fanId = inferFanIdFromStormijPurchase(data);
-        const treatId =
-          (typeof data.treatId === 'string' && data.treatId.trim()) ||
-          (typeof data.productId === 'string' && data.productId.trim()) ||
-          null;
+        const treatId = inferTreatIdFromStormijPurchase(data);
+
+        const buyerEmail = inferBuyerEmailFromStormijPurchase(data);
 
         const echofluxPurchase = {
           id: doc.id,
           creatorId,
-          email: data.email || null,
+          email: buyerEmail,
           productName: data.productName || null,
           treatId,
           amountCents: data.amountCents || 0,
@@ -657,6 +727,18 @@ async function migratePurchases(
       }
     }
     console.log('');
+    if (!dryRun && snapshot.size > 0) {
+      console.log(
+        `   Summary: ${stat.written} written, ${stat.skipped} skipped (creator filter: empty creatorId, === EchoFlux UID, or === --stormij-purchases-creator-id)`
+      );
+      if (stat.written === 0 && stat.skipped > 0 && !options.stormijPurchasesCreatorId) {
+        console.log(
+          '   If every purchase was skipped, Stormij likely stores a different creatorId. Run:\n' +
+            '   npm run diagnose:purchases-migration -- --creator-id=YOUR_ECHOFLUX_UID\n' +
+            '   Then re-run migrate with --stormij-purchases-creator-id=VALUE_FROM_STORMIJ'
+        );
+      }
+    }
   } catch (err) {
     stat.errors.push(`Failed to read purchases: ${err}`);
   }
@@ -870,13 +952,19 @@ async function main() {
   const dryRun = args.includes('--dry-run');
   const collectionsArg = args.find(a => a.startsWith('--collection='));
   const creatorIdArg = args.find(a => a.startsWith('--creator-id='));
-  
+  const stormijPurchasesCreatorArg = args.find(a =>
+    a.startsWith('--stormij-purchases-creator-id=')
+  );
+  const stormijPurchasesCreatorId = stormijPurchasesCreatorArg
+    ? stormijPurchasesCreatorArg.split('=').slice(1).join('=').trim() || undefined
+    : undefined;
+
   const collectionsToMigrate = collectionsArg 
     ? collectionsArg.split('=')[1].split(',')
     : ['posts', 'treats', 'members', 'purchases', 'conversations', 'site_config'];
   
   const creatorId = creatorIdArg 
-    ? creatorIdArg.split('=')[1]
+    ? creatorIdArg.split('=').slice(1).join('=').trim()
     : ECHOFLUX_CREATOR_ID;
 
   if (!creatorId) {
@@ -893,6 +981,11 @@ async function main() {
   }
 
   console.log(`Creator ID: ${creatorId}`);
+  if (stormijPurchasesCreatorId) {
+    console.log(
+      `Stormij purchases creatorId (legacy map): ${stormijPurchasesCreatorId} → EchoFlux owner ${creatorId}`
+    );
+  }
   console.log(`Handle: ${ECHOFLUX_CREATOR_HANDLE}`);
   console.log(`Collections: ${collectionsToMigrate.join(', ')}\n`);
 
@@ -914,7 +1007,11 @@ async function main() {
     stats.push(await migrateMembers(stormijDb, echofluxDb, creatorId, dryRun));
   }
   if (collectionsToMigrate.includes('purchases')) {
-    stats.push(await migratePurchases(stormijDb, echofluxDb, creatorId, dryRun));
+    stats.push(
+      await migratePurchases(stormijDb, echofluxDb, creatorId, dryRun, {
+        stormijPurchasesCreatorId,
+      })
+    );
   }
   if (collectionsToMigrate.includes('conversations')) {
     stats.push(await migrateConversations(stormijDb, echofluxDb, creatorId, dryRun));

@@ -70,6 +70,17 @@ It prints fan emails whose **`fans` doc id** (or `uid` field) doesn’t correspo
 
 ---
 
+## EchoFlux creator shell vs fan accounts (same Auth project)
+
+Imported fans share **EchoFlux Firebase Auth** with creators. Access to the **creator dashboard** (echoflux.ai main app) is gated by the Auth custom claim **`creatorApp`**, set server-side from `users/{uid}` + `creators/{uid}` (see `api/_creatorAppClaim.ts`). Fans use the **creator’s storefront URL** (e.g. custom domain); they see **`FanOnlyEchoFluxShell`** if they sign in on the main EchoFlux domain without that claim.
+
+After bulk imports or role changes, run:
+
+```bash
+npm run backfill:creator-app-claims -- --dry-run
+npm run backfill:creator-app-claims
+```
+
 ## Summary
 
 - **“Don’t make them join again” (membership):** keep running **`members` migration** + backfill + correct Stripe metadata where needed.  

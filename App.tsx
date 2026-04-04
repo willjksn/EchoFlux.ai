@@ -45,6 +45,7 @@ import { CRMSidebar } from './components/CRMSidebar';
 import { AdGenerator } from './components/AdGenerator';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { FanStorefrontView } from './components/FanStorefrontView';
+import { FanOnlyEchoFluxShell } from './components/FanOnlyEchoFluxShell';
 import { WitmeDiscoverPage, WitmeHomepage } from './components/WitmeHomepage';
 import { WitmePageManager } from './components/WitmePageManager';
 import {
@@ -291,7 +292,7 @@ const AppContent: React.FC = () => {
     const maintenanceEnabled = isMaintenanceMode();
     const allowedEmail = getAllowedEmail();
 
-    const { isAuthenticated, isAuthLoading, user, setUser, activePage, setActivePage, startTour, isTourActive, toast, showToast, isCRMOpen, setPricingView, handleLogout, selectedPlan, setSelectedPlan, openPaymentModal, isPaymentModalOpen, socialAccounts } = appContext;
+    const { isAuthenticated, isAuthLoading, user, setUser, activePage, setActivePage, startTour, isTourActive, toast, showToast, isCRMOpen, setPricingView, handleLogout, selectedPlan, setSelectedPlan, openPaymentModal, isPaymentModalOpen, socialAccounts, creatorAppAccess, refreshCreatorAppAccess } = appContext;
 
     useOAuthReturnHandler({ showToast, socialAccounts, isAuthLoading });
     
@@ -1154,6 +1155,13 @@ const AppContent: React.FC = () => {
                     </button>
                 </div>
             </div>
+        );
+    }
+
+    const isAdminUser = (user as { role?: string }).role === 'Admin';
+    if (!creatorAppAccess && !isAdminUser) {
+        return (
+            <FanOnlyEchoFluxShell user={user} onLogout={handleLogout} onRefreshAccess={refreshCreatorAppAccess} />
         );
     }
 

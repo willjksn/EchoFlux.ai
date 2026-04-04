@@ -81,6 +81,13 @@ function formatDate(date: Date): string {
   return date.toLocaleDateString("en-US", { month: "numeric", day: "numeric", year: "numeric" });
 }
 
+/** Earliest known activity: fixes Stormij migration where subscribedAt was set to migration day but orders are older. */
+function earlierDate(a: Date | null, b: Date | null): Date | null {
+  if (!a) return b;
+  if (!b) return a;
+  return a.getTime() <= b.getTime() ? a : b;
+}
+
 function getMonthYear(date: Date): string {
   return date.toLocaleDateString("en-US", { month: "long", year: "numeric" });
 }
@@ -576,6 +583,8 @@ export const FanHubUsers: React.FC = () => {
         const totalTracked = data.total ?? 0;
         const lifetimeFromOrders = tips + treats + unlocks;
         const lifetimeSpendCents = Math.max(totalTracked, lifetimeFromOrders);
+        const signupDate =
+          earlierDate(data.subscribedAt, data.firstOrder) ?? data.subscribedAt ?? data.firstOrder ?? new Date();
         return {
           id: data.id,
           name,
@@ -583,7 +592,7 @@ export const FanHubUsers: React.FC = () => {
           memberUsername,
           role,
           plan,
-          signupDate: data.subscribedAt || data.firstOrder || new Date(),
+          signupDate,
           remainingAccess,
           lifetimeSpendCents,
           lifetimeStorePurchasesCents: treats,

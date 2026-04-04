@@ -41,6 +41,7 @@ serviceAccount/
 # Local Firebase credential dumps (never commit)
 echoflux-service-account.json
 stormij-service-account.json
+stormij-users.json
 *-service-account.json
 service-account.jsonl
 *.jsonl

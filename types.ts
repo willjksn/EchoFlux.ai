@@ -1184,6 +1184,9 @@ export interface AppContextType {
   isAuthLoading: boolean;
   isDarkMode: boolean;
   isAuthenticated: boolean;
+  /** Auth claim `creatorApp` or Admin — required for EchoFlux creator shell on main domain */
+  creatorAppAccess: boolean;
+  refreshCreatorAppAccess: () => Promise<void>;
   user: User | null;
   settings: Settings;
   clients: Client[];

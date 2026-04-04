@@ -1,5 +1,5 @@
 import React, { createContext, useState, useEffect, useContext, ReactNode } from 'react';
-import { onAuthStateChanged, signOut } from 'firebase/auth';
+import { onAuthStateChanged, signOut, type User as FirebaseAuthUser } from 'firebase/auth';
 import { doc, getDoc, setDoc, deleteField } from 'firebase/firestore';
 import { auth, db } from '../../firebaseConfig';
 import { User, SocialStats, Platform, Plan } from '../../types';
@@ -9,6 +9,9 @@ interface AuthContextType {
     user: User | null;
     isAuthenticated: boolean;
     isAuthLoading: boolean;
+    /** True when Auth custom claim `creatorApp` is set (or user is Admin). Gates EchoFlux creator shell on main domain. */
+    creatorAppAccess: boolean;
+    refreshCreatorAppAccess: () => Promise<void>;
     setUser: (user: Partial<User> | null) => Promise<void>;
     handleLogout: () => void;
 }
@@ -41,6 +44,43 @@ const generateMockSocialStats = (): Record<Platform, SocialStats> => {
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
     const [user, setUserState] = useState<User | null>(null);
     const [isAuthLoading, setIsAuthLoading] = useState(true);
+    const [creatorAppAccess, setCreatorAppAccess] = useState(false);
+
+    const applyCreatorClaimFromToken = async (fbUser: FirebaseAuthUser): Promise<boolean> => {
+        const tr = await fbUser.getIdTokenResult();
+        return tr.claims.creatorApp === true;
+    };
+
+    const syncCreatorAppClaimWithServer = async (fbUser: FirebaseAuthUser): Promise<boolean> => {
+        try {
+            const idToken = await fbUser.getIdToken();
+            const resp = await fetch('/api/syncCreatorAppClaim', {
+                method: 'POST',
+                headers: { Authorization: `Bearer ${idToken}` },
+            });
+            if (resp.ok) {
+                await fbUser.getIdToken(true);
+            }
+        } catch (e) {
+            console.warn('syncCreatorAppClaim request failed:', e);
+        }
+        return applyCreatorClaimFromToken(fbUser);
+    };
+
+    const refreshCreatorAppAccess = async () => {
+        const fbUser = auth.currentUser;
+        if (!fbUser) {
+            setCreatorAppAccess(false);
+            return;
+        }
+        const u = user;
+        if (u?.role === 'Admin') {
+            setCreatorAppAccess(true);
+            return;
+        }
+        const hasClaim = await syncCreatorAppClaimWithServer(fbUser);
+        setCreatorAppAccess(hasClaim);
+    };
 
     useEffect(() => {
         const unsub = onAuthStateChanged(auth, async (fbUser) => {
@@ -57,12 +97,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                             /* ignore */
                         }
                         const loaded = snap.data() as User;
-
-                    // Default everyone to Creator
-                    if (loaded.userType !== 'Creator') {
-                        loaded.userType = 'Creator';
-                        await setDoc(ref, { userType: 'Creator' }, { merge: true });
-                    }
 
                     // Merge defaults safely
                     const mergedUser: User = {
@@ -141,6 +175,13 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                         console.warn('Subscription/invite expiry check failed:', e);
                     }
 
+                        if (mergedUser.role === 'Admin') {
+                            setCreatorAppAccess(true);
+                        } else {
+                            const hasClaim = await syncCreatorAppClaimWithServer(fbUser);
+                            setCreatorAppAccess(hasClaim);
+                        }
+
                         setUserState(mergedUser);
 
                     } else {
@@ -153,6 +194,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                             // The plan selection flow will create it after plan is selected
                             // Set user state to null so the app knows to show plan selector
                             setUserState(null);
+                            setCreatorAppAccess(false);
                             return;
                         }
                     
@@ -222,6 +264,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     );
                 }
                 setUserState(null);
+                setCreatorAppAccess(false);
             } finally {
                 setIsAuthLoading(false);
             }
@@ -262,6 +305,22 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             }
 
             await setDoc(doc(db, 'users', update.id), clean, { merge: true });
+
+            const mayChangeClaim =
+                clean.hasCompletedOnboarding === true ||
+                typeof clean.plan === "string" ||
+                clean.role === "Admin";
+            if (mayChangeClaim && auth.currentUser) {
+                const u = auth.currentUser;
+                if (clean.role === "Admin" || update.role === "Admin") {
+                    setCreatorAppAccess(true);
+                } else {
+                    void (async () => {
+                        const hasClaim = await syncCreatorAppClaimWithServer(u);
+                        setCreatorAppAccess(hasClaim);
+                    })();
+                }
+            }
         } catch (err) {
             console.error("Firestore update failed:", {
                 err,
@@ -333,6 +392,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
         await signOut(auth);
         setUserState(null);
+        setCreatorAppAccess(false);
     };
 
     return (
@@ -341,6 +401,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 user,
                 isAuthenticated: !!user,
                 isAuthLoading,
+                creatorAppAccess,
+                refreshCreatorAppAccess,
                 setUser,
                 handleLogout,
             }}>

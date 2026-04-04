@@ -1,6 +1,8 @@
 {
   "projects": {
-    "default": "engageai-8f76f"
+    "default": "engageai-8f76f",
+    "stormij": "stormij",
+    "echoflux": "engageai-8f76f"
   },
   "targets": {},
   "etags": {}

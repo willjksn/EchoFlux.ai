@@ -1,7 +1,8 @@
 import { VercelRequest, VercelResponse } from '@vercel/node';
 import Stripe from 'stripe';
 import { verifyAuth } from './verifyAuth.js';
-import { getAdminDb } from './_firebaseAdmin.js';
+import { getAdminApp, getAdminDb } from './_firebaseAdmin.js';
+import { applyCreatorAppClaim } from './_creatorAppClaim.js';
 import { recordPlanChangeEvent } from './_planChangeEvents.js';
 
 // Stripe init mirrors api/createCheckoutSession.ts so behavior stays consistent.
@@ -138,6 +139,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       } catch (err) {
         console.warn('Failed to record plan change event:', err);
       }
+    }
+
+    try {
+      await applyCreatorAppClaim(db, getAdminApp().auth(), decoded.uid);
+    } catch (e) {
+      console.warn('verifyCheckoutSession: applyCreatorAppClaim failed:', e);
     }
 
     return res.status(200).json({
