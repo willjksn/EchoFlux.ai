@@ -60,12 +60,27 @@ function purchaseActivityMs(d: Record<string, unknown>): number {
 
 function mapDocToOrder(docSnap: QueryDocumentSnapshot): CreatorOrder {
   const d = docSnap.data() as Record<string, unknown>;
+  const rawType = typeof d.type === "string" ? d.type.trim().toLowerCase() : "";
+  const normalizedType =
+    rawType === "tip" ||
+    rawType === "subscription" ||
+    rawType === "unlock" ||
+    rawType === "post_unlock" ||
+    rawType === "product"
+      ? rawType
+      : rawType === "treat"
+        ? "product"
+        : "";
+  const inferredType =
+    normalizedType ||
+    (typeof d.tipHandle === "string" && d.tipHandle.trim() ? "tip" : "") ||
+    "product";
   return {
     id: docSnap.id,
     creatorId: (d.creatorId as string) ?? "",
     fanId: (d.fanId as string) ?? "",
     productId: (d.productId as string) ?? null,
-    type: (d.type as string) ?? "product",
+    type: inferredType,
     amountCents: (d.amountCents as number) ?? 0,
     status: (d.status as string) ?? "paid",
     createdAt: createdAtToIso(d.createdAt),

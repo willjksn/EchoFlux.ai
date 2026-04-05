@@ -819,7 +819,12 @@ export const Dashboard: React.FC = () => {
           const isCurrentlyPaying = stripeMrrEligible && stripeStatus === 'active' && hasFuturePeriodEnd;
           if (plan === 'Pro' && isCurrentlyPaying) proCount++;
           else if (plan === 'Elite' && isCurrentlyPaying) eliteCount++;
-          if (stripeMrrEligible) {
+          // Keep command-center MRR strict to avoid stale Stripe rows without a valid period end.
+          const isStrictStripeMrrEligible =
+            stripeMrrEligible &&
+            (stripeStatus === 'active' || stripeStatus === 'trialing') &&
+            hasFuturePeriodEnd;
+          if (isStrictStripeMrrEligible) {
             const planMrrByPlan: Record<string, number> = {
               Caption: 9,
               Pro: 29,

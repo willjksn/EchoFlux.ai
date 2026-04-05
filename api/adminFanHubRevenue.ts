@@ -35,6 +35,23 @@ function dollarsFromOrder(d: Record<string, unknown>): number {
   return 0;
 }
 
+function normalizeOrderType(d: Record<string, unknown>): string {
+  const raw = typeof d.type === "string" ? d.type.trim().toLowerCase() : "";
+  if (
+    raw === "tip" ||
+    raw === "unlock" ||
+    raw === "post_unlock" ||
+    raw === "subscription" ||
+    raw === "product"
+  ) {
+    return raw;
+  }
+  if (raw === "treat") return "product";
+  // Legacy/backfill safety: tip rows may carry tipHandle even if type was stored as product.
+  if (typeof d.tipHandle === "string" && d.tipHandle.trim()) return "tip";
+  return "product";
+}
+
 /**
  * GET: Aggregate Fan Hub Stripe order revenue across all creators (top-level `orders`).
  * Admin-only. Used by AdminDashboard; matches stripeWebhook Fan Hub writes.
@@ -96,7 +113,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (status === "refunded") continue;
 
       const amount = dollarsFromOrder(d);
-      const orderType = (d.type as string) || "product";
+      const orderType = normalizeOrderType(d);
 
       totalRevenue += amount;
       byCreatorId[creatorId] = (byCreatorId[creatorId] ?? 0) + amount;
