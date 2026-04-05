@@ -1589,35 +1589,37 @@ export const MyPageBuilder: React.FC = () => {
           {/* Handle */}
           <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Handle (witme URL)</label>
-            <div className="flex items-center gap-2">
-              <span className="text-gray-500 dark:text-gray-400">witme.io/</span>
-              <input
-                type="text"
-                value={handleInput}
-                onChange={(e) => {
-                  const v = e.target.value.replace("@", "").toLowerCase().replace(/[^a-z0-9_]/g, "");
-                  setHandleInput(v.slice(0, 20));
-                  updateDraft({ handle: v.slice(0, 20) });
-                }}
-                placeholder="your_handle"
-                className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                maxLength={20}
-              />
-              <button
-                type="button"
-                onClick={handleSaveHandle}
-                disabled={
-                  handleSaving ||
-                  saving ||
-                  !handleFormatOk ||
-                  handleCheckStatus === "checking" ||
-                  handleCheckStatus === "taken" ||
-                  handleIsCurrentSaved
-                }
-                className="px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm font-medium text-gray-700 dark:text-gray-200 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors"
-              >
-                {handleSaving ? "Saving…" : "Save handle"}
-              </button>
+            <div className="space-y-2">
+              <div className="flex flex-col sm:flex-row sm:items-center gap-2 min-w-0">
+                <span className="text-gray-500 dark:text-gray-400 shrink-0">witme.io/</span>
+                <input
+                  type="text"
+                  value={handleInput}
+                  onChange={(e) => {
+                    const v = e.target.value.replace("@", "").toLowerCase().replace(/[^a-z0-9_]/g, "");
+                    setHandleInput(v.slice(0, 20));
+                    updateDraft({ handle: v.slice(0, 20) });
+                  }}
+                  placeholder="your_handle"
+                  className="flex-1 min-w-0 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                  maxLength={20}
+                />
+                <button
+                  type="button"
+                  onClick={handleSaveHandle}
+                  disabled={
+                    handleSaving ||
+                    saving ||
+                    !handleFormatOk ||
+                    handleCheckStatus === "checking" ||
+                    handleCheckStatus === "taken" ||
+                    handleIsCurrentSaved
+                  }
+                  className="w-full sm:w-auto px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm font-medium text-gray-700 dark:text-gray-200 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors"
+                >
+                  {handleSaving ? "Saving…" : "Save handle"}
+                </button>
+              </div>
               {handleCheckStatus === "checking" && <span className="text-sm text-gray-500 dark:text-gray-400">Checking…</span>}
               {handleCheckStatus === "available" && (
                 <span

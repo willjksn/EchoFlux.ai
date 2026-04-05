@@ -800,6 +800,8 @@ export const FanStorefrontView: React.FC = () => {
   const [dmPendingAttachmentType, setDmPendingAttachmentType] = useState<DmAttachmentKind | null>(null);
   const [dmPendingAttachmentUploading, setDmPendingAttachmentUploading] = useState(false);
   const dmMessagesEndRef = useRef<HTMLDivElement | null>(null);
+  const dmMessagesListRef = useRef<HTMLDivElement | null>(null);
+  const dmAutoStickToBottomRef = useRef(true);
   const { ref: dmTextareaRef } = useAutosizeTextarea(dmInput);
   const dmFileInputRef = useRef<HTMLInputElement | null>(null);
   const profileAvatarInputRef = useRef<HTMLInputElement | null>(null);
@@ -839,6 +841,12 @@ export const FanStorefrontView: React.FC = () => {
   const [fanDeleteConfirmInput, setFanDeleteConfirmInput] = useState("");
   const [fanDeletePassword, setFanDeletePassword] = useState("");
   const [fanDeleteAccountLoading, setFanDeleteAccountLoading] = useState(false);
+
+  const dmIsNearBottom = useCallback((el: HTMLElement | null): boolean => {
+    if (!el) return true;
+    const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+    return distanceFromBottom <= 72;
+  }, []);
 
   const isProfileDirty =
     profileDraft.firstName.trim() !== profileInitial.firstName.trim() ||
@@ -2739,8 +2747,21 @@ export const FanStorefrontView: React.FC = () => {
 
   useEffect(() => {
     if (activeTab !== "messages" || dmLoading) return;
-    requestAnimationFrame(() => dmMessagesEndRef.current?.scrollIntoView({ behavior: "smooth" }));
+    const listEl = dmMessagesListRef.current;
+    if (!dmAutoStickToBottomRef.current) return;
+    requestAnimationFrame(() => {
+      dmMessagesEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+      if (listEl) {
+        listEl.scrollTop = listEl.scrollHeight;
+      }
+    });
   }, [activeTab, dmMessages, dmLoading]);
+
+  useEffect(() => {
+    if (activeTab === "messages") {
+      dmAutoStickToBottomRef.current = true;
+    }
+  }, [activeTab]);
 
   useEffect(() => {
     return () => {
@@ -2786,7 +2807,8 @@ export const FanStorefrontView: React.FC = () => {
       await fetchDmThreadAndMessages();
       setDmPendingAttachmentUrl(null);
       setDmPendingAttachmentType(null);
-      requestAnimationFrame(() => dmMessagesEndRef.current?.scrollIntoView({ behavior: "smooth" }));
+      dmAutoStickToBottomRef.current = true;
+      requestAnimationFrame(() => dmMessagesEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" }));
     } catch {
       setDmInput(prevInput);
     } finally {
@@ -3942,7 +3964,13 @@ export const FanStorefrontView: React.FC = () => {
                 ) : (
                   <>
                     <p className="fan-member-messages-title">Conversation with {displayName}</p>
-                    <div className="fan-member-messages-list">
+                    <div
+                      ref={dmMessagesListRef}
+                      className="fan-member-messages-list"
+                      onScroll={(e) => {
+                        dmAutoStickToBottomRef.current = dmIsNearBottom(e.currentTarget);
+                      }}
+                    >
                       {dmMessages.length === 0 ? (
                         <p className="fan-member-messages-empty">No messages yet. Say hi below.</p>
                       ) : (

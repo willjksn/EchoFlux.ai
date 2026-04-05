@@ -170,6 +170,8 @@ export const FanHubMessages: React.FC = () => {
   const [deletingThreadId, setDeletingThreadId] = useState<string | null>(null);
   const [deletingMessageId, setDeletingMessageId] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
+  const messagesListRef = useRef<HTMLDivElement | null>(null);
+  const autoStickToBottomRef = useRef(true);
   const { ref: replyTextareaRef } = useAutosizeTextarea(reply);
   const [threadSearchQuery, setThreadSearchQuery] = useState("");
   const [listTab, setListTab] = useState<"all" | "requests">("all");
@@ -191,6 +193,12 @@ export const FanHubMessages: React.FC = () => {
     displayName?: string;
     handle?: string;
   } | null>(null);
+
+  const isNearBottom = useCallback((el: HTMLElement | null): boolean => {
+    if (!el) return true;
+    const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+    return distanceFromBottom <= 72;
+  }, []);
 
   useEffect(() => {
     if (!creatorId) {
@@ -526,8 +534,13 @@ export const FanHubMessages: React.FC = () => {
 
   useEffect(() => {
     if (messagesLoading) return;
+    if (!autoStickToBottomRef.current) return;
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, messagesLoading, selectedThread?.id]);
+
+  useEffect(() => {
+    autoStickToBottomRef.current = true;
+  }, [selectedThread?.id]);
 
   const sendDmWithPayload = async (
     content: string,
@@ -568,6 +581,7 @@ export const FanHubMessages: React.FC = () => {
       void fetchThreads();
       setPendingAttachmentUrl(null);
       setPendingAttachmentType(null);
+      autoStickToBottomRef.current = true;
       requestAnimationFrame(() => messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }));
       showToast?.("Sent", "success");
     } catch (e) {
@@ -1183,7 +1197,13 @@ export const FanHubMessages: React.FC = () => {
                   </button>
                 </div>
               </div>
-              <div className="flex-1 overflow-y-auto p-4 space-y-2 min-w-0 flex flex-col">
+              <div
+                ref={messagesListRef}
+                className="flex-1 overflow-y-auto p-4 space-y-2 min-w-0 flex flex-col"
+                onScroll={(e) => {
+                  autoStickToBottomRef.current = isNearBottom(e.currentTarget);
+                }}
+              >
                 {messagesLoading ? (
                   <p className="text-sm text-gray-500 dark:text-gray-400">Loading messages…</p>
                 ) : messagesError ? (

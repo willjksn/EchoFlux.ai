@@ -685,6 +685,18 @@ function FeedCard({
     else v.pause();
   }, []);
 
+  const pauseFeedVideo = useCallback(() => {
+    const v = feedVideoRef.current;
+    if (!v) return;
+    if (!v.paused) v.pause();
+    setFeedVideoPlaying(false);
+  }, []);
+
+  useEffect(() => {
+    if (!commentsOpen) return;
+    pauseFeedVideo();
+  }, [commentsOpen, pauseFeedVideo]);
+
   const renderCountBadge = () =>
     (mediaTotals.images + mediaTotals.videos) > 1 ? (
       <span
@@ -916,10 +928,11 @@ function FeedCard({
               key={`${post.id}-hub-v-${slideIdx}`}
               ref={feedVideoRef}
               src={currentUrl.includes("#t=") ? currentUrl : `${currentUrl}#t=0.1`}
+              poster={currentUrl}
               muted={feedVideoMuted}
               playsInline
               className="feed-card-media feed-card-media-video"
-              preload="auto"
+              preload="metadata"
               onPlay={() => setFeedVideoPlaying(true)}
               onPause={() => setFeedVideoPlaying(false)}
               onVolumeChange={(e) => setFeedVideoMuted(e.currentTarget.muted)}
@@ -1903,7 +1916,15 @@ export const FanHubFeed: React.FC<{ isAdminMode?: boolean }> = ({ isAdminMode = 
                 >
                   {firstUrl ? (
                     isVideo ? (
-                      <video src={firstUrl} muted playsInline preload="metadata" />
+                      <video
+                        src={firstUrl.includes("#t=") ? firstUrl : `${firstUrl}#t=0.1`}
+                        poster={firstUrl}
+                        muted
+                        playsInline
+                        autoPlay
+                        loop
+                        preload="metadata"
+                      />
                     ) : (
                       <img src={firstUrl} alt="" loading="lazy" />
                     )
