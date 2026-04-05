@@ -28,7 +28,8 @@
     "report:fans-missing-auth": "npx ts-node --esm scripts/reportFansMissingAuth.ts",
     "diagnose:purchases-migration": "npx ts-node --esm scripts/diagnosePurchasesMigration.ts",
     "merge:fan-to-auth-uid": "npx ts-node --esm scripts/mergeFansDocToAuthUid.ts",
-    "backfill:creator-app-claims": "npx ts-node --esm scripts/backfillCreatorAppClaims.ts"
+    "backfill:creator-app-claims": "npx ts-node --esm scripts/backfillCreatorAppClaims.ts",
+    "backfill:fan-subscription-access": "npx ts-node --esm scripts/backfillFanSubscriptionAccess.ts"
   },
   "dependencies": {
     "@google/genai": "^1.0.0",

@@ -79,7 +79,7 @@ export function pickLatestMemberAccessEnd(d: Record<string, unknown>): Date | nu
 }
 
 /**
- * Remaining access line (commit f0e2a71): `until Apr 18, 2026 (29 days left)` when still entitled;
+ * Remaining access line: `29 days left (until Apr 18, 2026)` when still entitled;
  * cancelled with no end date → `Cancelled — end date not on file`.
  */
 export function formatRemainingAccessForFanRow(input: {
@@ -103,7 +103,7 @@ export function formatRemainingAccessForFanRow(input: {
     });
     const days = Math.ceil((endMs - now) / (24 * 60 * 60 * 1000));
     const daysPart = days === 1 ? "1 day left" : `${days} days left`;
-    return `until ${dateStr} (${daysPart})`;
+    return `${daysPart} (until ${dateStr})`;
   };
 
   if (st === "past_due") return "Past Due";

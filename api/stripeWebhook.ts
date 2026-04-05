@@ -45,6 +45,27 @@ console.log(`Stripe webhook initialized in ${useTestMode ? 'TEST' : 'LIVE'} mode
 const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
 const connectWebhookSecret = process.env.STRIPE_CONNECT_WEBHOOK_SECRET;
 
+/**
+ * All signing secrets we accept on this URL. EchoFlux + Connect are required for normal operation;
+ * add STRIPE_STORMIJXO_WEBHOOK_SECRET when the Stormijxo Stripe account (same org, second account)
+ * sends webhooks here so legacy subscriptions keep updating Firestore.
+ */
+function collectStripeWebhookSecrets(): string[] {
+  const out: string[] = [];
+  const add = (s: string | undefined) => {
+    const t = typeof s === "string" ? s.trim() : "";
+    if (t.length > 0) out.push(t);
+  };
+  add(webhookSecret);
+  add(connectWebhookSecret);
+  add(process.env.STRIPE_STORMIJXO_WEBHOOK_SECRET);
+  const more = process.env.STRIPE_ADDITIONAL_WEBHOOK_SECRETS;
+  if (more) {
+    for (const part of more.split(",")) add(part.trim());
+  }
+  return [...new Set(out)];
+}
+
 async function readRawBody(req: VercelRequest): Promise<Buffer> {
   // When `config.api.bodyParser = false`, the request is a raw Node stream.
   // Stripe signature verification requires the exact raw bytes that Stripe sent.
@@ -57,14 +78,11 @@ async function readRawBody(req: VercelRequest): Promise<Buffer> {
 }
 
 function verifyWebhookSignature(rawBody: Buffer, sig: string): Stripe.Event {
-  const secrets = [
-    ...new Set(
-      [webhookSecret, connectWebhookSecret].filter((s): s is string => typeof s === 'string' && s.length > 0),
-    ),
-  ];
+  const secrets = collectStripeWebhookSecrets();
   if (secrets.length === 0) {
     throw new Error(
-      'Webhook signature verification failed: set STRIPE_WEBHOOK_SECRET and/or STRIPE_CONNECT_WEBHOOK_SECRET',
+      "Webhook signature verification failed: set STRIPE_WEBHOOK_SECRET and/or STRIPE_CONNECT_WEBHOOK_SECRET " +
+        "and/or STRIPE_STORMIJXO_WEBHOOK_SECRET (see .env.example)",
     );
   }
   const errors: string[] = [];
@@ -76,7 +94,8 @@ function verifyWebhookSignature(rawBody: Buffer, sig: string): Stripe.Event {
     }
   }
   throw new Error(
-    `Webhook signature verification failed. Fan Hub Connect checkouts need STRIPE_CONNECT_WEBHOOK_SECRET from your Connect webhook endpoint in Stripe (same URL as platform or a Connect-only endpoint). Attempts: ${errors.join(' | ')}`,
+    `Webhook signature verification failed. Fan Hub Connect checkouts need STRIPE_CONNECT_WEBHOOK_SECRET from your Connect webhook endpoint. ` +
+      `Legacy Stormijxo-account events need STRIPE_STORMIJXO_WEBHOOK_SECRET if that account posts to this URL. Attempts: ${errors.join(" | ")}`,
   );
 }
 
@@ -693,8 +712,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  if (!webhookSecret && !connectWebhookSecret) {
-    return res.status(500).json({ error: 'Stripe webhook secret is not configured' });
+  if (collectStripeWebhookSecrets().length === 0) {
+    return res.status(500).json({ error: "Stripe webhook secret is not configured" });
   }
 
   const sig = req.headers['stripe-signature'] as string | undefined;

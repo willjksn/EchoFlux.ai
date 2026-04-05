@@ -21,7 +21,7 @@ import {
   parseObjectPositionPercentPair,
   formatObjectPositionPercentPair,
 } from "../src/lib/objectPositionPan";
-import { StorefrontPreview } from "./StorefrontPreview";
+import { StorefrontPreview, type StorefrontPreviewLiveLanding } from "./StorefrontPreview";
 import { UserIcon, ImageIcon, GlobeIcon } from "./icons/UIIcons";
 import { EmojiButton } from "./EmojiPicker";
 import { canUseSjHeartEmoji } from "../src/lib/customEmoji";
@@ -1371,6 +1371,50 @@ export const MyPageBuilder: React.FC = () => {
     /^[a-z0-9_]+$/.test(handleCleanForCheck);
 
   const storefrontPreviewConfig = useMemo(() => buildStorefrontPreviewConfig(draft), [draft]);
+
+  /** Landing tab: mirror live guest-treat card vs “sign up for store” using draft toggles (open Live for real checkout). */
+  const storefrontLandingLivePreview = useMemo((): StorefrontPreviewLiveLanding | undefined => {
+    if (previewMode !== "landing") return undefined;
+    const toastPreview = (msg: string) => showToast?.(msg, "info");
+    const noop = () => {};
+    return {
+      isLoggedIn: false,
+      isFreeAccess: draft.monetization?.freeAccessEnabled === true,
+      onOpenSignup: () => toastPreview("Preview only — use Live to test signup."),
+      onOpenLogin: () => toastPreview("Preview only — use Live to test login."),
+      onSubscribe: () => toastPreview("Preview only — use Live to subscribe."),
+      onJoinFree: () => toastPreview("Preview only — use Live to join."),
+      subscribing: false,
+      joiningFree: false,
+      isDarkMode: false,
+      onToggleDarkMode: noop,
+      termsHref: "/terms",
+      privacyHref: "/privacy",
+      tipHandle: "",
+      onTipHandleChange: noop,
+      tipCustomAmount: "",
+      onTipCustomAmountChange: noop,
+      onTipPresetDollars: () => toastPreview("Preview only — tips work on your live page."),
+      onTipCustomSubmit: () => toastPreview("Preview only — tips work on your live page."),
+      tipLoading: false,
+      tipError: "",
+      tipsEnabled: draft.monetization?.tipsEnabled !== false,
+      showGuestTreatsCard:
+        draft.publicTreatsOnLanding === true && draft.sections?.treats !== false,
+      onOpenGuestTreats: () =>
+        toastPreview("Preview only — guest store opens on your public landing (Live)."),
+      landingTreatsLoading: false,
+      landingTreatProductCount: 0,
+      treatLinkAccountMessage: null,
+    };
+  }, [
+    previewMode,
+    draft.publicTreatsOnLanding,
+    draft.sections?.treats,
+    draft.monetization?.freeAccessEnabled,
+    draft.monetization?.tipsEnabled,
+    showToast,
+  ]);
 
   if (loading) {
     return (
@@ -3323,6 +3367,7 @@ export const MyPageBuilder: React.FC = () => {
             <StorefrontPreview
               config={storefrontPreviewConfig}
               previewMode={previewMode}
+              liveLanding={storefrontLandingLivePreview}
               previewFraming={{ tool: previewFramingTool, focusPhotoSlot: previewFocusPhotoSlot }}
               onHeroMediaItemPatch={(index, patch) => {
                 setDraft((prev) => {

@@ -9,6 +9,7 @@ import {
   safeUsernameForHandle,
 } from "../src/lib/fanHubDisplay";
 import { pickLatestMemberAccessEnd, formatRemainingAccessForFanRow } from "../src/lib/memberAccessEnd";
+import { authUidFromFanDocId, parseCompoundFanDocumentId } from "../src/lib/compoundFanDocId";
 
 type UserRole = "admin" | "member" | "tipper" | "treat_buyer";
 
@@ -37,6 +38,8 @@ interface FanUser {
   mtdUnlocksCents: number;
   lastActiveAt: Date | null;
   avatarUrl?: string;
+  /** Firebase Auth uid (from plain fan doc id or parsed from `uid-email@…` ids) */
+  authUid?: string;
 }
 
 const PlusIcon = () => (
@@ -85,6 +88,19 @@ function formatDate(date: Date | null): string {
   return date.toLocaleDateString("en-US", { month: "numeric", day: "numeric", year: "numeric" });
 }
 
+/** Firestore / imports sometimes store cancel-at-period-end as string or snake_case. */
+function parseCancelAtPeriodEndFromDoc(d: Record<string, unknown>): boolean {
+  const raw = d.cancelAtPeriodEnd ?? d.cancel_at_period_end;
+  if (raw === true) return true;
+  if (raw === false || raw == null) return false;
+  if (typeof raw === "string") {
+    const t = raw.trim().toLowerCase();
+    return t === "true" || t === "1" || t === "yes";
+  }
+  if (typeof raw === "number") return raw === 1;
+  return false;
+}
+
 /** Earliest known activity: fixes Stormij migration where subscribedAt was set to migration day but orders are older. */
 function earlierDate(a: Date | null, b: Date | null): Date | null {
   if (!a) return b;
@@ -120,6 +136,9 @@ function planStatusBadgeClass(label: string): string | null {
   if (s === "inactive") {
     return "px-2 py-1 text-xs font-medium rounded-full bg-amber-100 text-amber-900 dark:bg-amber-900/30 dark:text-amber-200";
   }
+  if (s.includes("day left")) {
+    return "px-2 py-1 text-xs font-medium rounded-full bg-amber-100 text-amber-900 dark:bg-amber-900/30 dark:text-amber-200";
+  }
   return null;
 }
 
@@ -130,7 +149,8 @@ function showStripeSubscriptionCancelInManageModal(u: FanUser): boolean {
   if (st === "active" || st === "trialing" || st === "past_due") return true;
   if (u.plan === "Active" || u.plan === "Past Due") return true;
   if (u.plan === "Purchaser") return true;
-  if (u.remainingAccess.startsWith("until ")) return true;
+  if (u.remainingAccess.includes("until ")) return true;
+  if (u.remainingAccess.includes("day left")) return true;
   return false;
 }
 
@@ -280,6 +300,11 @@ export const FanHubUsers: React.FC = () => {
         fanDocs.forEach((doc) => {
           const data = doc.data();
           const fanId = doc.id;
+          const fromCompound = parseCompoundFanDocumentId(fanId);
+          const resolvedEmail =
+            (typeof data.email === "string" && data.email.trim()) ||
+            fromCompound.emailFromId ||
+            null;
           const subscribedAt =
             firestoreDate(data.subscribedAt) ??
             firestoreDate(data.createdAt) ??
@@ -300,7 +325,7 @@ export const FanHubUsers: React.FC = () => {
 
           userMap.set(fanId, {
             id: fanId,
-            email: data.email || null,
+            email: resolvedEmail,
             displayName: data.displayName || null,
             username: rawUsername || null,
             storedRole,
@@ -316,7 +341,7 @@ export const FanHubUsers: React.FC = () => {
             lastActive: firestoreDate(data.lastPaymentAt) ?? subscribedAt,
             firstOrder: subscribedAt,
             avatarUrl: data.avatarUrl || undefined,
-            cancelAtPeriodEnd: data.cancelAtPeriodEnd === true,
+            cancelAtPeriodEnd: parseCancelAtPeriodEndFromDoc(data as Record<string, unknown>),
             subscriptionCurrentPeriodEnd,
           });
         });
@@ -418,7 +443,7 @@ export const FanHubUsers: React.FC = () => {
               total: 0,
               lastActive: subscribedAt,
               firstOrder: subscribedAt,
-              cancelAtPeriodEnd: data.cancelAtPeriodEnd === true,
+              cancelAtPeriodEnd: parseCancelAtPeriodEndFromDoc(data as Record<string, unknown>),
               subscriptionCurrentPeriodEnd: legacyPeriodEnd,
             });
           } else {
@@ -426,7 +451,7 @@ export const FanHubUsers: React.FC = () => {
             if (data.status && !existing.subscriptionStatus) {
               existing.subscriptionStatus = data.status;
             }
-            if (data.cancelAtPeriodEnd === true) {
+            if (parseCancelAtPeriodEndFromDoc(data as Record<string, unknown>)) {
               existing.cancelAtPeriodEnd = true;
             }
             if (legacyPeriodEnd) {
@@ -477,16 +502,70 @@ export const FanHubUsers: React.FC = () => {
       // Same fan can appear twice after migration: e.g. `fans/{stormijUid}` from members vs `orders` keyed by
       // EchoFlux Auth uid (resolved from email in backfill). Merge rows that share the same email.
       type MapRow = (typeof userMap extends Map<string, infer R> ? R : never);
+
+      const mergeRowsOntoCanonical = (map: Map<string, MapRow>, canonical: string, otherIds: string[]) => {
+        const base = map.get(canonical);
+        if (!base) return;
+        for (const oid of otherIds) {
+          if (oid === canonical) continue;
+          const o = map.get(oid);
+          if (!o) continue;
+          base.tips += o.tips;
+          base.treats += o.treats;
+          base.unlocks += o.unlocks;
+          base.total += o.total;
+          base.mtdTips += o.mtdTips;
+          base.mtdTreats += o.mtdTreats;
+          base.mtdUnlocks += o.mtdUnlocks;
+          if (!base.email && o.email) base.email = o.email;
+          if (!base.displayName && o.displayName) base.displayName = o.displayName;
+          if (!base.username && o.username) base.username = o.username;
+          if (!base.storedRole && o.storedRole) base.storedRole = o.storedRole;
+          if (!base.subscriptionStatus && o.subscriptionStatus) base.subscriptionStatus = o.subscriptionStatus;
+          if (!base.subscribedAt && o.subscribedAt) base.subscribedAt = o.subscribedAt;
+          if (o.lastActive && (!base.lastActive || o.lastActive > base.lastActive)) base.lastActive = o.lastActive;
+          if (o.firstOrder && (!base.firstOrder || o.firstOrder < base.firstOrder)) base.firstOrder = o.firstOrder;
+          if (o.cancelAtPeriodEnd) base.cancelAtPeriodEnd = true;
+          if (o.subscriptionCurrentPeriodEnd) {
+            const cur = base.subscriptionCurrentPeriodEnd;
+            const next = o.subscriptionCurrentPeriodEnd;
+            if (!cur || next.getTime() > cur.getTime()) base.subscriptionCurrentPeriodEnd = next;
+          }
+          if (o.profileSignupAt) {
+            const cur = base.profileSignupAt;
+            const next = o.profileSignupAt;
+            if (!cur || next.getTime() < cur.getTime()) base.profileSignupAt = next;
+          }
+          if (!base.avatarUrl && o.avatarUrl) base.avatarUrl = o.avatarUrl;
+          map.delete(oid);
+        }
+        base.id = canonical;
+      };
+
       const mergeFanRowsByEmail = (map: Map<string, MapRow>) => {
         const emailToIds = new Map<string, string[]>();
         for (const [id, row] of map) {
+          const emails = new Set<string>();
           const em = typeof row.email === "string" ? row.email.trim().toLowerCase() : "";
-          if (!em) continue;
-          const list = emailToIds.get(em) || [];
-          list.push(id);
-          emailToIds.set(em, list);
+          if (em) emails.add(em);
+          const embedded = parseCompoundFanDocumentId(id).emailFromId;
+          if (embedded) emails.add(embedded);
+          for (const e of emails) {
+            const list = emailToIds.get(e) || [];
+            if (!list.includes(id)) {
+              list.push(id);
+              emailToIds.set(e, list);
+            }
+          }
         }
         const pickCanonical = (ids: string[]): string => {
+          const authKey = authUidFromFanDocId(ids[0]);
+          const sameAuth = ids.every((x) => authUidFromFanDocId(x) === authKey);
+          if (sameAuth && ids.includes(authKey)) return authKey;
+          for (const id of ids) {
+            const r = map.get(id);
+            if (r?.subscriptionStatus) return id;
+          }
           let best = ids[0];
           let bestScore = -1;
           for (const id of ids) {
@@ -505,45 +584,52 @@ export const FanHubUsers: React.FC = () => {
         for (const ids of emailToIds.values()) {
           if (ids.length <= 1) continue;
           const canonical = pickCanonical(ids);
-          const base = map.get(canonical);
-          if (!base) continue;
-          for (const oid of ids) {
-            if (oid === canonical) continue;
-            const o = map.get(oid);
-            if (!o) continue;
-            base.tips += o.tips;
-            base.treats += o.treats;
-            base.unlocks += o.unlocks;
-            base.total += o.total;
-            base.mtdTips += o.mtdTips;
-            base.mtdTreats += o.mtdTreats;
-            base.mtdUnlocks += o.mtdUnlocks;
-            if (!base.email && o.email) base.email = o.email;
-            if (!base.displayName && o.displayName) base.displayName = o.displayName;
-            if (!base.username && o.username) base.username = o.username;
-            if (!base.storedRole && o.storedRole) base.storedRole = o.storedRole;
-            if (!base.subscriptionStatus && o.subscriptionStatus) base.subscriptionStatus = o.subscriptionStatus;
-            if (!base.subscribedAt && o.subscribedAt) base.subscribedAt = o.subscribedAt;
-            if (o.lastActive && (!base.lastActive || o.lastActive > base.lastActive)) base.lastActive = o.lastActive;
-            if (o.firstOrder && (!base.firstOrder || o.firstOrder < base.firstOrder)) base.firstOrder = o.firstOrder;
-            if (o.cancelAtPeriodEnd) base.cancelAtPeriodEnd = true;
-            if (o.subscriptionCurrentPeriodEnd) {
-              const cur = base.subscriptionCurrentPeriodEnd;
-              const next = o.subscriptionCurrentPeriodEnd;
-              if (!cur || next.getTime() > cur.getTime()) base.subscriptionCurrentPeriodEnd = next;
-            }
-            if (o.profileSignupAt) {
-              const cur = base.profileSignupAt;
-              const next = o.profileSignupAt;
-              if (!cur || next.getTime() < cur.getTime()) base.profileSignupAt = next;
-            }
-            if (!base.avatarUrl && o.avatarUrl) base.avatarUrl = o.avatarUrl;
-            map.delete(oid);
-          }
-          base.id = canonical;
+          mergeRowsOntoCanonical(map, canonical, ids);
         }
       };
+
+      const mergeFanRowsByAuthUid = (map: Map<string, MapRow>) => {
+        const authToIds = new Map<string, string[]>();
+        for (const id of map.keys()) {
+          const auth = authUidFromFanDocId(id);
+          if (!auth || auth.includes("@") || auth.length < 15) continue;
+          const list = authToIds.get(auth) || [];
+          if (!list.includes(id)) {
+            list.push(id);
+            authToIds.set(auth, list);
+          }
+        }
+        const pickCanonicalAuth = (ids: string[]): string => {
+          const authKey = authUidFromFanDocId(ids[0]);
+          if (!ids.every((x) => authUidFromFanDocId(x) === authKey)) return ids[0];
+          if (ids.includes(authKey)) return authKey;
+          for (const id of ids) {
+            const r = map.get(id);
+            if (r?.subscriptionStatus) return id;
+          }
+          let best = ids[0];
+          let bestScore = -1;
+          for (const id of ids) {
+            const r = map.get(id);
+            if (!r) continue;
+            const score = r.treats + r.tips + r.unlocks;
+            if (score > bestScore) {
+              bestScore = score;
+              best = id;
+            }
+          }
+          if (bestScore > 0) return best;
+          return ids.find((id) => !id.includes("@")) ?? ids[0];
+        };
+        for (const ids of authToIds.values()) {
+          if (ids.length <= 1) continue;
+          const canonical = pickCanonicalAuth(ids);
+          mergeRowsOntoCanonical(map, canonical, ids);
+        }
+      };
+
       mergeFanRowsByEmail(userMap);
+      mergeFanRowsByAuthUid(userMap);
 
       for (const row of userMap.values()) {
         const pd = purchaseHintDate(row.id, row.email);
@@ -558,11 +644,19 @@ export const FanHubUsers: React.FC = () => {
         await Promise.all(
           chunk.map(async (fanId) => {
             try {
-              const uSnap = await getDoc(doc(db, "users", fanId));
-              if (!uSnap.exists()) return;
-              const u = uSnap.data() as Record<string, unknown>;
               const entry = userMap.get(fanId);
               if (!entry) return;
+              const authUid = authUidFromFanDocId(fanId);
+              const userDocIds = Array.from(new Set([fanId, authUid].filter((x) => x.length > 0)));
+              let u: Record<string, unknown> | null = null;
+              for (const uid of userDocIds) {
+                const uSnap = await getDoc(doc(db, "users", uid));
+                if (uSnap.exists()) {
+                  u = uSnap.data() as Record<string, unknown>;
+                  break;
+                }
+              }
+              if (!u) return;
               const uu = safeUsernameForHandle(
                 typeof u.username === "string" ? u.username : undefined
               );
@@ -623,9 +717,10 @@ export const FanHubUsers: React.FC = () => {
           role = "treat_buyer";
         }
 
+        const cancelAtEnd = data.cancelAtPeriodEnd === true;
         let remainingAccess = formatRemainingAccessForFanRow({
           subscriptionStatus: data.subscriptionStatus,
-          cancelAtPeriodEnd: data.cancelAtPeriodEnd === true,
+          cancelAtPeriodEnd: cancelAtEnd,
           accessEnd: data.subscriptionCurrentPeriodEnd ?? null,
         });
         if (
@@ -638,11 +733,24 @@ export const FanHubUsers: React.FC = () => {
         }
 
         const stPlan = (data.subscriptionStatus || "").toLowerCase();
+        /** Badge: treat as scheduled cancel if flag is set OR remaining-access copy implies it (handles stale client reads). */
+        const cancelScheduled =
+          cancelAtEnd ||
+          ((stPlan === "active" || stPlan === "trialing") &&
+            (/\bday left\b/i.test(remainingAccess) || /\buntil\b/i.test(remainingAccess)));
         let plan: string | null = null;
-        if (stPlan === "active" || stPlan === "trialing") plan = "Active";
-        else if (stPlan === "canceled" || stPlan === "cancelled") plan = "Cancelled";
-        else if (stPlan === "past_due") plan = "Past Due";
-        else if (data.total > 0) plan = "Purchaser";
+        /** Stripe leaves status active until period end when fan cancels — still show red Cancelled in Plan. */
+        if (cancelScheduled && (stPlan === "active" || stPlan === "trialing")) {
+          plan = "Cancelled";
+        } else if (stPlan === "active" || stPlan === "trialing") {
+          plan = "Active";
+        } else if (stPlan === "canceled" || stPlan === "cancelled") {
+          plan = "Cancelled";
+        } else if (stPlan === "past_due") {
+          plan = "Past Due";
+        } else if (data.total > 0) {
+          plan = "Purchaser";
+        }
 
         const mtdTips = data.mtdTips ?? 0;
         const mtdTreats = data.mtdTreats ?? 0;
@@ -659,6 +767,7 @@ export const FanHubUsers: React.FC = () => {
           data.firstOrder ??
           data.profileSignupAt ??
           null;
+        const authUid = authUidFromFanDocId(data.id);
         return {
           id: data.id,
           name,
@@ -679,17 +788,23 @@ export const FanHubUsers: React.FC = () => {
           mtdUnlocksCents: mtdUnlocks,
           lastActiveAt: data.lastActive,
           avatarUrl: data.avatarUrl,
+          authUid,
         };
       });
 
       // Sort: admins first, then active subscribers, treat buyers, tippers, then by signup date
       const roleRank = (r: UserRole) =>
         r === "admin" ? 0 : r === "member" ? 1 : r === "treat_buyer" ? 2 : r === "tipper" ? 3 : 4;
+      const paidSubscriptionTier = (u: FanUser): number => {
+        const st = (u.subscriptionStatus || "").toLowerCase();
+        return st === "active" || st === "trialing" ? 0 : 1;
+      };
       fanUsers.sort((a, b) => {
         if (a.role === "admin" && b.role !== "admin") return -1;
         if (a.role !== "admin" && b.role === "admin") return 1;
-        if (a.plan === "Active" && b.plan !== "Active") return -1;
-        if (a.plan !== "Active" && b.plan === "Active") return 1;
+        const ta = paidSubscriptionTier(a);
+        const tb = paidSubscriptionTier(b);
+        if (ta !== tb) return ta - tb;
         const rr = roleRank(a.role) - roleRank(b.role);
         if (rr !== 0) return rr;
         const tb = b.signupDate?.getTime() ?? 0;
@@ -1030,6 +1145,11 @@ export const FanHubUsers: React.FC = () => {
               )}
             </div>
             <span className="text-xs text-gray-500 dark:text-gray-400">{fanUser.email}</span>
+            {fanUser.authUid && fanUser.authUid !== fanUser.id && (
+              <div className="text-[10px] text-gray-400 dark:text-gray-500 font-mono mt-0.5" title="Firebase Auth uid">
+                {fanUser.authUid}
+              </div>
+            )}
           </div>
         </div>
       </td>

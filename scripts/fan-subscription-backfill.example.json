@@ -1,0 +1,41 @@
+{
+  "members": [
+    {
+      "authUid": "D8dpN5XXVtTjNRva4SNfHkyFuWm2",
+      "email": "bfowler1104@gmail.com",
+      "subscriptionStatus": "active",
+      "cancelAtPeriodEnd": true,
+      "subscriptionCurrentPeriodEnd": "2026-04-14T05:12:00.000Z",
+      "subscribedAt": "2026-03-14T12:00:00.000Z"
+    },
+    {
+      "authUid": "cEkzfKvj4STrQBQkbENpPROSYIA3",
+      "email": "firelementary@gmail.com",
+      "subscriptionStatus": "active",
+      "cancelAtPeriodEnd": true,
+      "subscriptionCurrentPeriodEnd": "2026-04-19T05:29:00.000Z",
+      "subscribedAt": "2026-03-19T12:00:00.000Z"
+    },
+    {
+      "authUid": "4C0mktzFPLOFjLwjYzpoc53DWTi2",
+      "email": "ddclare@gmail.com",
+      "subscriptionStatus": "active",
+      "cancelAtPeriodEnd": false,
+      "subscribedAt": "2026-03-25T12:00:00.000Z"
+    },
+    {
+      "authUid": "c2JU3mNhZCb4zuf4PljyNpaPvon1",
+      "email": "cml7694@icloud.com",
+      "subscriptionStatus": "active",
+      "cancelAtPeriodEnd": false,
+      "subscribedAt": "2026-03-19T12:00:00.000Z"
+    },
+    {
+      "authUid": "VCIJOXM0B9YFTfNbzFXnkTJ7oIq1",
+      "email": "stonemanbill@yahoo.com",
+      "subscriptionStatus": "active",
+      "cancelAtPeriodEnd": false,
+      "subscribedAt": "2026-03-22T12:00:00.000Z"
+    }
+  ]
+}

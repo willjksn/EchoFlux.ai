@@ -50,6 +50,9 @@ service-account.jsonl
 # Local scratch (never commit)
 tmp/
 
+# Local fan subscription backfill config (copy from scripts/fan-subscription-backfill.example.json)
+scripts/fan-subscription-backfill.local.json
+
 # Playwright / E2E artifacts
 test-results/
 playwright-report/

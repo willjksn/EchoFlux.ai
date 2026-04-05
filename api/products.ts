@@ -141,7 +141,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const body = req.body as Record<string, unknown>;
     const rawBodyCreator = String(body.creatorId ?? "").trim();
     const fromBody = normalizeCreatorId(rawBodyCreator) || rawBodyCreator;
-    if (!fromBody || fromBody !== decoded.uid) {
+    const authUid = normalizeCreatorId(decoded.uid) || decoded.uid;
+    if (!fromBody || fromBody !== authUid) {
       return res.status(403).json({ error: "creatorId must match authenticated user" });
     }
     const type = (body.type as TreatProductType) || "custom";
@@ -261,7 +262,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (!snap.exists) return res.status(404).json({ error: "Product not found" });
       const data = snap.data() as Record<string, unknown>;
       const storedCreator = String(data.creatorId ?? "");
-      if (normalizeCreatorId(storedCreator) !== decoded.uid) {
+      const authUid = normalizeCreatorId(decoded.uid) || decoded.uid;
+      if (normalizeCreatorId(storedCreator) !== authUid) {
         return res.status(403).json({ error: "Forbidden" });
       }
       await ref.delete();

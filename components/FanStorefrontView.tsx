@@ -71,6 +71,7 @@ import { Toast } from "./Toast";
 import { readFanCheckoutFetchResult, FAN_TIP_CHECKOUT_SUCCESS_QS } from "../src/lib/fanCheckoutResponse";
 import { WitmeHeaderLogo } from "./WitmeHeaderLogo";
 import { formatFanStorefrontDocumentTitle, getFanFacingSiteTitle } from "../src/lib/fanFacingSiteTitle";
+import { normalizeCreatorId } from "../src/lib/creatorIdNormalize";
 
 /** Ensure member-store products have usable Firestore ids (avoids every row showing “Processing…” when id is missing or duplicated). */
 function normalizeMemberTreatProducts(raw: unknown): TreatProduct[] {
@@ -1737,9 +1738,17 @@ export const FanStorefrontView: React.FC = () => {
     if ((activeTab === "treats" || activeTab === "purchases") && creator?.creatorId) fetchTreats();
   }, [activeTab, creator?.creatorId, fetchTreats]);
 
+  /** True when the signed-in Firebase user is this page's creator (handles legacy compound creatorId). */
+  const isViewingOwnStorefront =
+    !!creator?.creatorId &&
+    !!auth.currentUser?.uid &&
+    normalizeCreatorId(auth.currentUser.uid) === normalizeCreatorId(creator.creatorId);
+
   const onPublicLanding =
     !previewMember &&
-    (!isLoggedIn || !(subscribed && (creator?.monetization?.freeAccessEnabled === true || membershipType === "paid")));
+    (isViewingOwnStorefront ||
+      !isLoggedIn ||
+      !(subscribed && (creator?.monetization?.freeAccessEnabled === true || membershipType === "paid")));
 
   /** Guest treat shop on landing: creator allows public store + viewer is not a subscribed member in hub mode (see docs/LOCAL_DEV.md). */
   const landingGuestTreatCommerceEnabled =
@@ -2690,8 +2699,6 @@ export const FanStorefrontView: React.FC = () => {
   const hasUnlockedPurchases = unlockedProductIds.length > 0;
   const needsPaidUpgrade = isLoggedIn && subscribed && creatorRequiresPaidMembership && !hasPaidMembership;
   const purchaseOnlyAccess = needsPaidUpgrade && hasUnlockedPurchases;
-  const isViewingOwnStorefront =
-    !!creator?.creatorId && !!auth.currentUser?.uid && auth.currentUser.uid === creator.creatorId;
   const forceCreatorPreviewLanding = forcePublicLanding && isViewingOwnStorefront;
   const hasMemberAreaAccess = hasAccessByCurrentMembership || purchaseOnlyAccess;
   const requiresPaidToAccess = creator?.monetization?.freeAccessEnabled !== true;
