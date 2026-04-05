@@ -183,11 +183,12 @@ export const FanLandingPage: React.FC<FanLandingPageProps> = (props) => {
   const [tipCustomAmount, setTipCustomAmount] = useState("");
   const [treatStoreOpen, setTreatStoreOpen] = useState(false);
 
+  /** Default light so creator-themed landing matches design; system dark mode (common on mobile) no longer forces dark. Fans can still toggle in the header. */
   const [isDarkMode, setIsDarkMode] = useState(() => {
     if (typeof window === "undefined") return false;
     const stored = localStorage.getItem(`fan-dark-mode-${creator.creatorId}`);
     if (stored !== null) return stored === "true";
-    return window.matchMedia("(prefers-color-scheme: dark)").matches;
+    return false;
   });
 
   const toggleDarkMode = useCallback(() => {
