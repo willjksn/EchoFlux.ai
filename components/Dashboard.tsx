@@ -808,6 +808,8 @@ export const Dashboard: React.FC = () => {
           const stripeMrrEligible = hasActiveStripeEchofluxSubscription({
             subscriptionStatus: userData.subscriptionStatus as string | undefined,
             stripeSubscriptionId: userData.stripeSubscriptionId as string | undefined,
+            stripeCustomerId: userData.stripeCustomerId as string | undefined,
+            subscriptionCurrentPeriodEnd: userData.subscriptionCurrentPeriodEnd as string | undefined,
           });
           if (plan === 'Pro' && stripeMrrEligible) proCount++;
           else if (plan === 'Elite' && stripeMrrEligible) eliteCount++;
