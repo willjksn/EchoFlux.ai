@@ -101,6 +101,25 @@ function verifyWebhookSignature(rawBody: Buffer, sig: string): Stripe.Event {
 
 const FAN_HUB_CHECKOUT_TYPES = new Set(['subscription', 'product', 'tip', 'post_unlock']);
 
+function normalizeFanHubCheckoutType(rawType: string | undefined): 'subscription' | 'product' | 'tip' | 'post_unlock' | null {
+  if (!rawType) return null;
+  if (rawType === 'treat') return 'product'; // Legacy Stormij payload alias.
+  if (rawType === 'subscription' || rawType === 'product' || rawType === 'tip' || rawType === 'post_unlock') {
+    return rawType;
+  }
+  return null;
+}
+
+function deriveGuestFanIdFromCheckoutSession(
+  session: Stripe.Checkout.Session,
+  stripeCustId: string | null,
+): string | null {
+  if (stripeCustId) return `guest_${stripeCustId}`;
+  const raw = (session.customer_details?.email || '').trim().toLowerCase();
+  if (!raw) return null;
+  return `guest_tip_${createHash('sha256').update(raw).digest('hex').slice(0, 32)}`;
+}
+
 /**
  * Fan Hub checkout (creator storefront): same Firestore updates for Connect checkouts and
  * platform-account checkouts (e.g. PLATFORM_OWNER_CREATOR_IDS / Stormij).
@@ -112,7 +131,8 @@ export async function processFanHubCheckoutSessionCompleted(
   session: Stripe.Checkout.Session,
 ): Promise<boolean> {
   const creatorId = session.metadata?.creatorId;
-  const type = session.metadata?.type;
+  const rawType = session.metadata?.type;
+  const type = normalizeFanHubCheckoutType(rawType);
   if (!creatorId || !type || !FAN_HUB_CHECKOUT_TYPES.has(type)) {
     return false;
   }
@@ -123,13 +143,16 @@ export async function processFanHubCheckoutSessionCompleted(
       : (session.customer as { id?: string } | null)?.id || null;
 
   const isGuestProductCheckout = type === 'product' && session.metadata?.guestCheckout === 'true';
-  let fanId = (session.metadata?.fanId || session.client_reference_id) as string;
+  let fanId = (session.metadata?.fanId || session.client_reference_id || '') as string;
   if (isGuestProductCheckout) {
     if (!stripeCustId) {
       console.warn('Fan hub guest product checkout missing Stripe customer', session.id);
       return false;
     }
     fanId = `guest_${stripeCustId}`;
+  } else if (type === 'tip' && (!fanId || fanId === 'guest_pending')) {
+    const guestDerived = deriveGuestFanIdFromCheckoutSession(session, stripeCustId);
+    if (guestDerived) fanId = guestDerived;
   } else if (!fanId || fanId === 'guest_pending') {
     return false;
   }
@@ -137,14 +160,8 @@ export async function processFanHubCheckoutSessionCompleted(
   // Landing-page tips without sign-in: metadata still has anon_*; key fans/orders by Stripe customer
   // (or stable email hash) so repeat tippers merge and show under Tippers / revenue like guest store buyers.
   if (type === 'tip' && typeof fanId === 'string' && fanId.startsWith('anon_')) {
-    if (stripeCustId) {
-      fanId = `guest_${stripeCustId}`;
-    } else {
-      const raw = (session.customer_details?.email || '').trim().toLowerCase();
-      if (raw) {
-        fanId = `guest_tip_${createHash('sha256').update(raw).digest('hex').slice(0, 32)}`;
-      }
-    }
+    const guestDerived = deriveGuestFanIdFromCheckoutSession(session, stripeCustId);
+    if (guestDerived) fanId = guestDerived;
   }
 
   const dupOrder = await db.collection('orders').where('stripeSessionId', '==', session.id).limit(1).get();
@@ -252,8 +269,8 @@ export async function processFanHubCheckoutSessionCompleted(
     return true;
   }
 
-  if (type === 'product' && session.metadata?.productId) {
-    const productId = session.metadata.productId as string;
+  if (type === 'product' && (session.metadata?.productId || session.metadata?.treatId)) {
+    const productId = (session.metadata.productId || session.metadata.treatId) as string;
     const paymentIntentId = typeof session.payment_intent === 'string' ? session.payment_intent : (session.payment_intent as Stripe.PaymentIntent)?.id;
     const amountTotal = session.amount_total ?? 0;
 
