@@ -807,9 +807,9 @@ export const FanHubUsers: React.FC = () => {
         if (ta !== tb) return ta - tb;
         const rr = roleRank(a.role) - roleRank(b.role);
         if (rr !== 0) return rr;
-        const tb = b.signupDate?.getTime() ?? 0;
-        const ta = a.signupDate?.getTime() ?? 0;
-        return tb - ta;
+        const signupB = b.signupDate?.getTime() ?? 0;
+        const signupA = a.signupDate?.getTime() ?? 0;
+        return signupB - signupA;
       });
 
       // Add demo users if no real users exist
