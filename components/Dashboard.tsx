@@ -811,8 +811,14 @@ export const Dashboard: React.FC = () => {
             stripeCustomerId: userData.stripeCustomerId as string | undefined,
             subscriptionCurrentPeriodEnd: userData.subscriptionCurrentPeriodEnd as string | undefined,
           });
-          if (plan === 'Pro' && stripeMrrEligible) proCount++;
-          else if (plan === 'Elite' && stripeMrrEligible) eliteCount++;
+          const stripeStatus = String(userData.subscriptionStatus || '').trim().toLowerCase();
+          const periodEndRaw = String(userData.subscriptionCurrentPeriodEnd || '').trim();
+          const periodEndMs = Date.parse(periodEndRaw);
+          const hasFuturePeriodEnd = Number.isFinite(periodEndMs) && periodEndMs > Date.now();
+          // Paying Users should be currently paid active subscriptions only (not trialing).
+          const isCurrentlyPaying = stripeMrrEligible && stripeStatus === 'active' && hasFuturePeriodEnd;
+          if (plan === 'Pro' && isCurrentlyPaying) proCount++;
+          else if (plan === 'Elite' && isCurrentlyPaying) eliteCount++;
           if (stripeMrrEligible) {
             const planMrrByPlan: Record<string, number> = {
               Caption: 9,
