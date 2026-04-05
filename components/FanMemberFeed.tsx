@@ -306,6 +306,8 @@ interface FanMemberFeedProps {
   fanId?: string;
   /** Post IDs this fan has paid to unlock (from getFanEntitlement). */
   unlockedFanPostIds?: string[];
+  /** Server-granted QA access: show all locked media as unlocked (see FAN_PAGE_ADMIN_MEMBER_* env). */
+  fanPageAdminBypass?: boolean;
   /** Optional member-header shortcut to open Saved tab. */
   onOpenSaved?: () => void;
   /** When false, hide the feed “Send tip” control (creator disabled Tips section). */
@@ -448,6 +450,7 @@ function FanMemberPostMedia({
   creatorId,
   fanId,
   unlockedFanPostIds,
+  fanPageAdminBypass = false,
   unlockingPostId = null,
   onUnlockPost,
   onUnlockNeedSignIn,
@@ -461,6 +464,7 @@ function FanMemberPostMedia({
   creatorId?: string;
   fanId?: string;
   unlockedFanPostIds?: Set<string>;
+  fanPageAdminBypass?: boolean;
   unlockingPostId?: string | null;
   onUnlockPost?: (postId: string) => void | Promise<void>;
   /** Shown when user taps Unlock but fanId is missing (e.g. auth still restoring). */
@@ -471,7 +475,7 @@ function FanMemberPostMedia({
   const n = urls.length;
   const isDemoPost = post.id.startsWith("demo-");
   const idSet = unlockedFanPostIds ?? EMPTY_FAN_POST_UNLOCK_SET;
-  const postUnlocked = idSet.has(post.id);
+  const postUnlocked = fanPageAdminBypass || idSet.has(post.id);
   const lockedCfg = !postUnlocked && post.lockedContent?.enabled ? post.lockedContent : undefined;
 
   const [mediaIndex, setMediaIndex] = useState(0);
@@ -881,6 +885,7 @@ function FanMemberPostDetailModal({
   onUnlockPost,
   onUnlockNeedSignIn,
   sjHeartEmojiCtx,
+  fanPageAdminBypass = false,
 }: {
   open: boolean;
   onClose: () => void;
@@ -906,6 +911,7 @@ function FanMemberPostDetailModal({
   /** e.g. "Back to Saved" on the Saved tab */
   backLabel?: string;
   unlockedFanPostIds?: Set<string>;
+  fanPageAdminBypass?: boolean;
   unlockingPostId?: string | null;
   onUnlockPost?: (postId: string) => void | Promise<void>;
   onUnlockNeedSignIn?: (message: string) => void;
@@ -995,6 +1001,7 @@ function FanMemberPostDetailModal({
                   creatorId={creatorId}
                   fanId={fanId}
                   unlockedFanPostIds={unlockedFanPostIds}
+                  fanPageAdminBypass={fanPageAdminBypass}
                   unlockingPostId={unlockingPostId}
                   onUnlockPost={onUnlockPost}
                   onUnlockNeedSignIn={onUnlockNeedSignIn}
@@ -1145,6 +1152,7 @@ export const FanMemberFeed: React.FC<FanMemberFeedProps> = ({
   feedSettings,
   fanId,
   unlockedFanPostIds: unlockedFanPostIdsProp = [],
+  fanPageAdminBypass = false,
   onOpenSaved,
   tipsEnabled = true,
   tipHeading = "Support this creator",
@@ -1477,6 +1485,7 @@ export const FanMemberFeed: React.FC<FanMemberFeedProps> = ({
                 creatorId={creatorId}
                 fanId={fanId}
                 unlockedFanPostIds={unlockedFanPostIdSet}
+                fanPageAdminBypass={fanPageAdminBypass}
                 unlockingPostId={unlockingPostId}
                 onUnlockPost={handleUnlockPost}
                 onUnlockNeedSignIn={(m) => showToast?.(m, "error")}
@@ -1784,6 +1793,7 @@ export const FanMemberFeed: React.FC<FanMemberFeedProps> = ({
         onUnlockPost={handleUnlockPost}
         onUnlockNeedSignIn={(m) => showToast?.(m, "error")}
         sjHeartEmojiCtx={sjHeartEmojiCtx}
+        fanPageAdminBypass={fanPageAdminBypass}
       />
     </div>
   );
@@ -1800,6 +1810,7 @@ interface FanMemberSavedProps {
   feedSettings?: FanFeedVisibilitySettings;
   fanId: string | undefined;
   unlockedFanPostIds?: string[];
+  fanPageAdminBypass?: boolean;
   /** Navigate back to the home feed from the Saved tab. */
   onBackToFeed: () => void;
 }
@@ -1814,6 +1825,7 @@ export const FanMemberSaved: React.FC<FanMemberSavedProps> = ({
   feedSettings,
   fanId,
   unlockedFanPostIds: unlockedFanPostIdsSaved = [],
+  fanPageAdminBypass = false,
   onBackToFeed,
 }) => {
   const { showToast: showToastSaved, user: userSaved } = useAppContext();
@@ -2019,6 +2031,7 @@ export const FanMemberSaved: React.FC<FanMemberSavedProps> = ({
                 creatorId={creatorId}
                 fanId={fanId}
                 unlockedFanPostIds={unlockedFanPostIdSetSaved}
+                fanPageAdminBypass={fanPageAdminBypass}
                 unlockingPostId={unlockingPostIdSaved}
                 onUnlockPost={handleUnlockPostSaved}
                 onUnlockNeedSignIn={(m) => showToastSaved?.(m, "error")}
@@ -2125,6 +2138,7 @@ export const FanMemberSaved: React.FC<FanMemberSavedProps> = ({
         onUnlockPost={handleUnlockPostSaved}
         onUnlockNeedSignIn={(m) => showToastSaved?.(m, "error")}
         sjHeartEmojiCtx={sjHeartEmojiCtxSaved}
+        fanPageAdminBypass={fanPageAdminBypass}
       />
     </div>
   );

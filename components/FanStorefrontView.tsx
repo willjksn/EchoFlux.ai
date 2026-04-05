@@ -684,6 +684,8 @@ export const FanStorefrontView: React.FC = () => {
   const [fanAuthUid, setFanAuthUid] = useState<string | undefined>(() => auth.currentUser?.uid);
   const [unlockedProductIds, setUnlockedProductIds] = useState<string[]>([]);
   const [unlockedFanPostIds, setUnlockedFanPostIds] = useState<string[]>([]);
+  /** Synthetic member access from server (env-listed admins on selected storefronts). */
+  const [fanPageAdminBypass, setFanPageAdminBypass] = useState(false);
   const [treatsProducts, setTreatsProducts] = useState<TreatProduct[]>([]);
   const [treatsLoading, setTreatsLoading] = useState(false);
   /** Visible treats on public landing when creator enables guest checkout */
@@ -1583,6 +1585,7 @@ export const FanStorefrontView: React.FC = () => {
       setMembershipType(null);
       setMemberUsernameRequired(false);
       setUnlockedFanPostIds([]);
+      setFanPageAdminBypass(false);
       setEntitlementLoading(false);
       return;
     }
@@ -1608,12 +1611,14 @@ export const FanStorefrontView: React.FC = () => {
             ? (data as { unlockedFanPostIds: string[] }).unlockedFanPostIds
             : []
         );
+        setFanPageAdminBypass(!!(data as { fanPageAdminBypass?: boolean }).fanPageAdminBypass);
       } catch {
         if (gen === entitlementFetchGen.current) {
           setSubscribed(false);
           setMembershipType(null);
           setMemberUsernameRequired(false);
           setUnlockedFanPostIds([]);
+          setFanPageAdminBypass(false);
         }
       } finally {
         if (gen === entitlementFetchGen.current) {
@@ -1646,6 +1651,7 @@ export const FanStorefrontView: React.FC = () => {
         ? (data as { unlockedFanPostIds: string[] }).unlockedFanPostIds
         : []
     );
+    setFanPageAdminBypass(!!(data as { fanPageAdminBypass?: boolean }).fanPageAdminBypass);
   }, [creator?.creatorId]);
 
   useEffect(() => {
@@ -1850,6 +1856,7 @@ export const FanStorefrontView: React.FC = () => {
                   ? (ent as { unlockedFanPostIds: string[] }).unlockedFanPostIds
                   : []
               );
+              setFanPageAdminBypass(!!(ent as { fanPageAdminBypass?: boolean }).fanPageAdminBypass);
             }
           } catch {
             /* ignore */
@@ -1998,6 +2005,7 @@ export const FanStorefrontView: React.FC = () => {
             ? (ent as { unlockedFanPostIds: string[] }).unlockedFanPostIds
             : []
         );
+        setFanPageAdminBypass(!!(ent as { fanPageAdminBypass?: boolean }).fanPageAdminBypass);
       } catch {
         /* keep prior state */
       }
@@ -3550,6 +3558,7 @@ export const FanStorefrontView: React.FC = () => {
                 feedSettings={creator.feedSettings}
                 fanId={fanAuthUid}
                 unlockedFanPostIds={unlockedFanPostIds}
+                fanPageAdminBypass={fanPageAdminBypass}
                 onOpenSaved={() => setActiveTabWithUrl("saved")}
                 tipsEnabled={creator.sections?.tip !== false}
                 tipHeading={tipMemberCopy.heading}
@@ -3567,6 +3576,7 @@ export const FanStorefrontView: React.FC = () => {
                 feedSettings={creator.feedSettings}
                 fanId={fanAuthUid}
                 unlockedFanPostIds={unlockedFanPostIds}
+                fanPageAdminBypass={fanPageAdminBypass}
                 onBackToFeed={() => setActiveTabWithUrl("feed")}
               />
             )}

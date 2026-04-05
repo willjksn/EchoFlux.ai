@@ -13,6 +13,7 @@ import type {
   PresetFontSize,
   LandingSectionListMarker,
   LandingSectionBodyMode,
+  TreatProduct,
 } from "../types";
 import { STOREFRONT_CONTENT_POLICY, DEFAULT_PRIVACY_POLICY, DEFAULT_TERMS_OF_SERVICE, FAN_HUB_THEME_PRESETS, HERO_LAYOUT_OPTIONS, HERO_MEDIA_SIZE_OPTIONS } from "../constants";
 import { getAvatarCropStyle } from "../src/lib/avatarCrop";
@@ -22,6 +23,7 @@ import {
   formatObjectPositionPercentPair,
 } from "../src/lib/objectPositionPan";
 import { StorefrontPreview, type StorefrontPreviewLiveLanding } from "./StorefrontPreview";
+import { resolveStoreCopy } from "../src/lib/storefrontStoreCopy";
 import { UserIcon, ImageIcon, GlobeIcon } from "./icons/UIIcons";
 import { EmojiButton } from "./EmojiPicker";
 import { canUseSjHeartEmoji } from "../src/lib/customEmoji";
@@ -590,6 +592,9 @@ export const MyPageBuilder: React.FC = () => {
   >("off");
   const [previewFocusPhotoSlot, setPreviewFocusPhotoSlot] = useState(0);
   const previewScrollRef = useRef<HTMLDivElement>(null);
+  const [builderGuestTreatModalOpen, setBuilderGuestTreatModalOpen] = useState(false);
+  const [builderLandingTreatsProducts, setBuilderLandingTreatsProducts] = useState<TreatProduct[]>([]);
+  const [builderLandingTreatsLoading, setBuilderLandingTreatsLoading] = useState(false);
 
   const includeSjHeartEmoji = useMemo(
     () => canUseSjHeartEmoji({ creatorHandle: draft.handle, viewerIsAdmin: user?.role === "Admin" }),
@@ -639,6 +644,72 @@ export const MyPageBuilder: React.FC = () => {
     const el = previewScrollRef.current;
     if (el) el.scrollTop = 0;
   }, [previewMode, draft.handle]);
+
+  useEffect(() => {
+    if (draft.publicTreatsOnLanding !== true || draft.sections?.treats === false) {
+      setBuilderGuestTreatModalOpen(false);
+    }
+  }, [draft.publicTreatsOnLanding, draft.sections?.treats]);
+
+  useEffect(() => {
+    if (!creatorId || previewMode !== "landing") {
+      setBuilderLandingTreatsProducts([]);
+      setBuilderLandingTreatsLoading(false);
+      return;
+    }
+    if (draft.publicTreatsOnLanding !== true || draft.sections?.treats === false) {
+      setBuilderLandingTreatsProducts([]);
+      setBuilderLandingTreatsLoading(false);
+      return;
+    }
+    let cancelled = false;
+    setBuilderLandingTreatsLoading(true);
+    (async () => {
+      try {
+        const res = await fetch(
+          `/api/products?creatorId=${encodeURIComponent(creatorId)}&context=landing`
+        );
+        if (!res.ok || cancelled) return;
+        const data = await res.json();
+        if (!cancelled) {
+          setBuilderLandingTreatsProducts(Array.isArray(data.products) ? data.products : []);
+        }
+      } catch {
+        if (!cancelled) setBuilderLandingTreatsProducts([]);
+      } finally {
+        if (!cancelled) setBuilderLandingTreatsLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [creatorId, previewMode, draft.publicTreatsOnLanding, draft.sections?.treats]);
+
+  useEffect(() => {
+    if (!builderGuestTreatModalOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setBuilderGuestTreatModalOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [builderGuestTreatModalOpen]);
+
+  useEffect(() => {
+    if (!builderGuestTreatModalOpen) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, [builderGuestTreatModalOpen]);
+
+  const openBuilderGuestTreatPreview = useCallback(() => {
+    if (!creatorId) {
+      showToast?.("Sign in and save your page — then you can preview landing treats here.", "info");
+      return;
+    }
+    setBuilderGuestTreatModalOpen(true);
+  }, [creatorId, showToast]);
 
   const onBuilderAvatarPanPointerDown = useCallback(
     (e: React.PointerEvent<HTMLDivElement>) => {
@@ -1401,10 +1472,9 @@ export const MyPageBuilder: React.FC = () => {
       tipsEnabled: draft.monetization?.tipsEnabled !== false,
       showGuestTreatsCard:
         draft.publicTreatsOnLanding === true && draft.sections?.treats !== false,
-      onOpenGuestTreats: () =>
-        toastPreview("Preview only — guest store opens on your public landing (Live)."),
-      landingTreatsLoading: false,
-      landingTreatProductCount: 0,
+      onOpenGuestTreats: openBuilderGuestTreatPreview,
+      landingTreatsLoading: builderLandingTreatsLoading,
+      landingTreatProductCount: builderLandingTreatsProducts.length,
       treatLinkAccountMessage: null,
     };
   }, [
@@ -1414,7 +1484,17 @@ export const MyPageBuilder: React.FC = () => {
     draft.monetization?.freeAccessEnabled,
     draft.monetization?.tipsEnabled,
     showToast,
+    openBuilderGuestTreatPreview,
+    builderLandingTreatsLoading,
+    builderLandingTreatsProducts.length,
   ]);
+
+  const builderGuestTreatStoreCopy = useMemo(
+    () => resolveStoreCopy(storefrontPreviewConfig.landingContent),
+    [storefrontPreviewConfig.landingContent]
+  );
+  const builderGuestTreatPrimary =
+    storefrontPreviewConfig.theme?.primary || DEFAULT_THEME.primary;
 
   if (loading) {
     return (
@@ -3382,6 +3462,74 @@ export const MyPageBuilder: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {builderGuestTreatModalOpen ? (
+        <div
+          className="fixed inset-0 z-[10050] flex items-end justify-center bg-black/55 px-2 pb-[calc(env(safe-area-inset-bottom,0px)+0.75rem)] pt-2"
+          role="presentation"
+          onClick={() => setBuilderGuestTreatModalOpen(false)}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="builder-guest-treat-modal-title"
+            className="w-full max-w-[min(520px,100%)] max-h-[min(calc(100vh-1.5rem),720px)] overflow-hidden flex flex-col rounded-t-2xl bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 shadow-[0_-8px_40px_rgba(0,0,0,0.25)]"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div
+              className="flex items-center justify-between gap-3 px-5 py-4 border-b border-gray-200 dark:border-gray-700"
+            >
+              <h2 id="builder-guest-treat-modal-title" className="text-base font-bold m-0" style={{ color: builderGuestTreatPrimary }}>
+                {builderGuestTreatStoreCopy.publicStoreModalTitle}
+              </h2>
+              <button
+                type="button"
+                onClick={() => setBuilderGuestTreatModalOpen(false)}
+                className="rounded-full px-3 py-1 text-sm font-medium border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800"
+              >
+                Close
+              </button>
+            </div>
+            <div className="overflow-y-auto px-5 py-4 pb-6">
+              <p className="text-xs text-gray-500 dark:text-gray-400 m-0 mb-3">
+                Same list fans see on your live landing (published treats with “Landing store” on). Use{" "}
+                <strong>Live</strong> in the preview toolbar to test checkout.
+              </p>
+              {builderLandingTreatsLoading ? (
+                <p className="text-sm m-0 text-gray-700 dark:text-gray-300">{builderGuestTreatStoreCopy.memberStoreLoadingMessage}</p>
+              ) : builderLandingTreatsProducts.length === 0 ? (
+                <p className="text-sm italic m-0 text-gray-500 dark:text-gray-400">{builderGuestTreatStoreCopy.publicStoreModalEmptyMessage}</p>
+              ) : (
+                <ul className="space-y-3 list-none m-0 p-0">
+                  {builderLandingTreatsProducts.map((p) => (
+                    <li
+                      key={p.id}
+                      className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 rounded-xl p-3 border bg-gray-50 dark:bg-gray-800/80"
+                      style={{ borderColor: `${builderGuestTreatPrimary}30` }}
+                    >
+                      <div>
+                        <p className="text-xs font-medium uppercase tracking-wide m-0" style={{ color: builderGuestTreatPrimary }}>
+                          {p.type.replace(/_/g, " ")}
+                        </p>
+                        <p className="font-semibold m-0 mt-0.5">{p.title}</p>
+                        {p.description ? (
+                          <p className="text-xs mt-1 mb-0 text-gray-600 dark:text-gray-400">{p.description}</p>
+                        ) : null}
+                        <p className="text-sm font-bold mt-1 mb-0" style={{ color: builderGuestTreatPrimary }}>
+                          ${(p.priceCents / 100).toFixed(2)}
+                        </p>
+                      </div>
+                      <span className="shrink-0 text-xs font-medium text-gray-500 dark:text-gray-400 sm:text-right">
+                        Guest checkout on live page
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {/* Legal Modal */}
       {legalModalOpen && (

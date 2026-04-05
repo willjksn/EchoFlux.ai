@@ -1,6 +1,7 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { getAdminDb } from "./_firebaseAdmin.js";
 import { verifyAuth } from "./verifyAuth.js";
+import { shouldGrantFanPageAdminMemberAccess } from "../src/lib/fanPageAdminBypass";
 
 /**
  * Check if the current user (fan) has an active subscription/entitlement to the given creator.
@@ -30,6 +31,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const db = getAdminDb();
     if (!db) {
       return res.status(500).json({ error: "Database unavailable" });
+    }
+
+    if (await shouldGrantFanPageAdminMemberAccess(db, fanId, creatorId)) {
+      return res.status(200).json({
+        subscribed: true,
+        membershipType: "paid" as const,
+        unlockedProductIds: [],
+        unlockedFanPostIds: [],
+        memberUsername: null,
+        memberUsernameRequired: false,
+        fanPageAdminBypass: true,
+      });
     }
 
     let subscribed = false;

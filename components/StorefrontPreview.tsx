@@ -1722,64 +1722,132 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
           {/* Same as public landing: show treat promo whenever Store is enabled (guest checkout only changes CTA). */}
           {sections.treats !== false && (
               <section className="py-3 storefront-preview-treats-section">
-                <div className="rounded-xl p-4 text-center" style={landingPromoCardShell()}>
-                  <p className="text-lg m-0 mb-1" aria-hidden>
-                    ✨
-                  </p>
-                  <LandingCardTitleAccent
-                    as="h3"
-                    align="center"
-                    primary={primary}
-                    titleStyle={{ color: landingPageText, fontSize: "0.875rem", fontWeight: 600, fontFamily: globalFont }}
-                  >
-                    {live?.showGuestTreatsCard ? storeCopy.publicStoreCardTitle : storeCopy.storeLandingHeadline}
-                  </LandingCardTitleAccent>
-                  <p
-                    className="text-xs leading-relaxed m-0 mb-3"
-                    style={{ color: live?.showGuestTreatsCard ? landingPageMuted : `${landingPageText}aa` }}
-                  >
-                    {live?.showGuestTreatsCard ? storeCopy.publicStoreCardDescription : storeCopy.storeLandingDescription}
-                  </p>
-                  <button
-                    type="button"
-                    className={`w-full py-2.5 rounded-xl text-sm font-semibold text-white ${
-                      live ? "" : "cursor-default pointer-events-none"
-                    }`}
+                {live?.showGuestTreatsCard ? (
+                  <div
+                    role="button"
+                    tabIndex={0}
+                    className="rounded-xl p-4 text-center w-full cursor-pointer transition-[opacity,transform] hover:opacity-[0.98] active:scale-[0.998] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
                     style={{
-                      background: `linear-gradient(135deg, ${primary} 0%, ${primary}dd 100%)`,
-                      boxShadow: `0 4px 14px ${primary}40`,
+                      ...landingPromoCardShell(),
+                      fontFamily: globalFont,
                     }}
-                    disabled={
-                      live
-                        ? live.showGuestTreatsCard
-                          ? live.landingTreatsLoading
-                          : false
-                        : true
-                    }
-                    aria-label={
-                      live
-                        ? live.showGuestTreatsCard
-                          ? "Open store"
-                          : "Sign up to access the store"
-                        : "Preview: store CTA"
-                    }
-                    onClick={
-                      live
-                        ? live.showGuestTreatsCard
-                          ? live.onOpenGuestTreats
-                          : () => live.onOpenSignup()
-                        : undefined
-                    }
+                    aria-label="Open treat shop — browse available treats"
+                    aria-busy={live.landingTreatsLoading || undefined}
+                    onClick={() => live.onOpenGuestTreats()}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        live.onOpenGuestTreats();
+                      }
+                    }}
                   >
-                    {live
-                      ? live.showGuestTreatsCard
-                        ? live.landingTreatsLoading
-                          ? storeCopy.memberStoreLoadingMessage
-                          : `${storeCopy.publicStoreOpenCtaLabel}${live.landingTreatProductCount ? ` (${live.landingTreatProductCount})` : ""}`
-                        : storeCopy.storeLandingCtaLabel
-                      : storeCopy.storeLandingCtaLabel}
-                  </button>
-                </div>
+                    <p className="text-lg m-0 mb-1" aria-hidden>
+                      ✨
+                    </p>
+                    <LandingCardTitleAccent
+                      as="h3"
+                      align="center"
+                      primary={primary}
+                      titleStyle={{ color: landingPageText, fontSize: "0.875rem", fontWeight: 600, fontFamily: globalFont }}
+                    >
+                      {storeCopy.publicStoreCardTitle}
+                    </LandingCardTitleAccent>
+                    <p
+                      className="text-xs leading-relaxed m-0 mb-3"
+                      style={{ color: landingPageMuted }}
+                    >
+                      {storeCopy.publicStoreCardDescription}
+                    </p>
+                    <div
+                      className="flex w-full justify-center items-center py-2.5 rounded-xl text-sm font-semibold text-white pointer-events-none"
+                      style={{
+                        background: `linear-gradient(135deg, ${primary} 0%, ${primary}dd 100%)`,
+                        boxShadow: `0 4px 14px ${primary}40`,
+                      }}
+                      aria-hidden
+                    >
+                      {live.landingTreatsLoading
+                        ? storeCopy.memberStoreLoadingMessage
+                        : `${storeCopy.publicStoreOpenCtaLabel}${live.landingTreatProductCount ? ` (${live.landingTreatProductCount})` : ""}`}
+                    </div>
+                  </div>
+                ) : live ? (
+                  <div
+                    role="button"
+                    tabIndex={0}
+                    className="rounded-xl p-4 text-center w-full cursor-pointer transition-[opacity,transform] hover:opacity-[0.98] active:scale-[0.998] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
+                    style={{
+                      ...landingPromoCardShell(),
+                      fontFamily: globalFont,
+                    }}
+                    aria-label="Sign up to access the store"
+                    onClick={() => live.onOpenSignup()}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        live.onOpenSignup();
+                      }
+                    }}
+                  >
+                    <p className="text-lg m-0 mb-1" aria-hidden>
+                      ✨
+                    </p>
+                    <LandingCardTitleAccent
+                      as="h3"
+                      align="center"
+                      primary={primary}
+                      titleStyle={{ color: landingPageText, fontSize: "0.875rem", fontWeight: 600, fontFamily: globalFont }}
+                    >
+                      {storeCopy.storeLandingHeadline}
+                    </LandingCardTitleAccent>
+                    <p
+                      className="text-xs leading-relaxed m-0 mb-3"
+                      style={{ color: `${landingPageText}aa` }}
+                    >
+                      {storeCopy.storeLandingDescription}
+                    </p>
+                    <div
+                      className="flex w-full justify-center items-center py-2.5 rounded-xl text-sm font-semibold text-white pointer-events-none"
+                      style={{
+                        background: `linear-gradient(135deg, ${primary} 0%, ${primary}dd 100%)`,
+                        boxShadow: `0 4px 14px ${primary}40`,
+                      }}
+                      aria-hidden
+                    >
+                      {storeCopy.storeLandingCtaLabel}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="rounded-xl p-4 text-center cursor-default pointer-events-none" style={landingPromoCardShell()}>
+                    <p className="text-lg m-0 mb-1" aria-hidden>
+                      ✨
+                    </p>
+                    <LandingCardTitleAccent
+                      as="h3"
+                      align="center"
+                      primary={primary}
+                      titleStyle={{ color: landingPageText, fontSize: "0.875rem", fontWeight: 600, fontFamily: globalFont }}
+                    >
+                      {storeCopy.storeLandingHeadline}
+                    </LandingCardTitleAccent>
+                    <p
+                      className="text-xs leading-relaxed m-0 mb-3"
+                      style={{ color: `${landingPageText}aa` }}
+                    >
+                      {storeCopy.storeLandingDescription}
+                    </p>
+                    <div
+                      className="w-full py-2.5 rounded-xl text-sm font-semibold text-white opacity-90"
+                      style={{
+                        background: `linear-gradient(135deg, ${primary} 0%, ${primary}dd 100%)`,
+                        boxShadow: `0 4px 14px ${primary}40`,
+                      }}
+                      aria-hidden
+                    >
+                      {storeCopy.storeLandingCtaLabel}
+                    </div>
+                  </div>
+                )}
               </section>
             )}
 
