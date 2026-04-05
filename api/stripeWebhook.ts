@@ -615,6 +615,122 @@ async function processFanHubSubscriptionDeleted(db: Firestore, subscription: Str
   return true;
 }
 
+/** Fan Hub recurring subscription invoice -> write revenue order for analytics. */
+async function processFanHubSubscriptionInvoicePaid(
+  db: Firestore,
+  stripe: Stripe,
+  invoice: Stripe.Invoice,
+): Promise<boolean> {
+  const subField = (invoice as Stripe.Invoice & { subscription?: string | Stripe.Subscription | null }).subscription;
+  const subId =
+    typeof subField === 'string'
+      ? subField
+      : subField && typeof subField === 'object' && 'id' in subField
+        ? (subField as { id: string }).id
+        : null;
+  if (!subId) return false;
+
+  let subscription: Stripe.Subscription;
+  try {
+    subscription = await stripe.subscriptions.retrieve(subId);
+  } catch {
+    return false;
+  }
+
+  const creatorId = subscription.metadata?.creatorId;
+  const fanId = subscription.metadata?.fanId;
+  if (!creatorId || !fanId) return false;
+
+  const billingReason = String(invoice.billing_reason || '').trim().toLowerCase();
+  // Initial checkout already writes a subscription order in checkout.session.completed.
+  if (billingReason === 'subscription_create') {
+    console.log(`Fan hub: invoice ${invoice.id} is initial subscription invoice; skip duplicate order`);
+    return true;
+  }
+
+  const dupOrder = await db.collection('orders').where('stripeInvoiceId', '==', invoice.id).limit(1).get();
+  if (!dupOrder.empty) {
+    console.log(`Fan hub: skip duplicate invoice order invoice=${invoice.id}`);
+    return true;
+  }
+
+  const amountPaid =
+    typeof invoice.amount_paid === 'number'
+      ? invoice.amount_paid
+      : typeof invoice.amount_due === 'number'
+        ? invoice.amount_due
+        : 0;
+  if (amountPaid <= 0) {
+    console.log(`Fan hub: invoice ${invoice.id} paid with non-positive amount; skip revenue order`);
+    return true;
+  }
+
+  const now = new Date().toISOString();
+  const paidAtSec = (invoice.status_transitions as { paid_at?: number } | undefined)?.paid_at;
+  const createdAt =
+    typeof paidAtSec === 'number' && Number.isFinite(paidAtSec) && paidAtSec > 0
+      ? new Date(paidAtSec * 1000).toISOString()
+      : typeof invoice.created === 'number' && Number.isFinite(invoice.created)
+        ? new Date(invoice.created * 1000).toISOString()
+        : now;
+  const invoiceWithPaymentIntent = invoice as Stripe.Invoice & {
+    payment_intent?: string | { id?: string } | null;
+  };
+  const paymentIntentId =
+    typeof invoiceWithPaymentIntent.payment_intent === 'string'
+      ? invoiceWithPaymentIntent.payment_intent
+      : invoiceWithPaymentIntent.payment_intent?.id || null;
+
+  await db.collection('orders').doc(`inv_${invoice.id}`).set({
+    creatorId,
+    fanId,
+    productId: null,
+    type: 'subscription',
+    stripeInvoiceId: invoice.id,
+    stripeSubscriptionId: subscription.id,
+    stripePaymentIntentId: paymentIntentId,
+    amountCents: amountPaid,
+    status: 'paid',
+    fanEmail: invoice.customer_email || null,
+    fanName: null,
+    scheduleStatus: 'pending',
+    createdAt,
+    updatedAt: now,
+  });
+
+  const fanRef = db.collection('creators').doc(creatorId).collection('fans').doc(fanId);
+  const fanSnap = await fanRef.get();
+  if (fanSnap.exists) {
+    const fanData = fanSnap.data() as { totalSpentCents?: number } | undefined;
+    await fanRef.set(
+      {
+        subscriptionStatus: 'active',
+        lastPaymentAt: createdAt,
+        totalSpentCents: (fanData?.totalSpentCents ?? 0) + amountPaid,
+        updatedAt: now,
+      },
+      { merge: true },
+    );
+  }
+
+  const statsRef = db.collection('creatorStats').doc(creatorId);
+  const statsSnap = await statsRef.get();
+  const stats = statsSnap.data() as { totalRevenueCents?: number; totalOrders?: number } | undefined;
+  await statsRef.set(
+    {
+      totalRevenueCents: (stats?.totalRevenueCents ?? 0) + amountPaid,
+      totalOrders: (stats?.totalOrders ?? 0) + 1,
+      updatedAt: now,
+    },
+    { merge: true },
+  );
+
+  console.log(
+    `Fan hub: subscription invoice paid creator=${creatorId} fan=${fanId} invoice=${invoice.id} amount=${amountPaid}`,
+  );
+  return true;
+}
+
 /** Connect + same handlers: fan storefront events (checkout on connected account includes event.account). */
 async function handleConnectEvent(db: Firestore, _stripe: Stripe, event: Stripe.Event): Promise<void> {
   if (event.type === 'checkout.session.completed') {
@@ -633,6 +749,11 @@ async function handleConnectEvent(db: Firestore, _stripe: Stripe, event: Stripe.
 
   if (event.type === 'customer.subscription.deleted') {
     await processFanHubSubscriptionDeleted(db, event.data.object as Stripe.Subscription);
+    return;
+  }
+
+  if (event.type === 'invoice.payment_succeeded') {
+    await processFanHubSubscriptionInvoicePaid(db, stripe, event.data.object as Stripe.Invoice);
     return;
   }
 
@@ -976,8 +1097,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
       case 'invoice.payment_succeeded': {
         const invoice = event.data.object as Stripe.Invoice;
-        if (await isFanHubSubscriptionInvoice(stripe, invoice)) {
-          console.log('Fan hub: invoice.payment_succeeded — skip EchoFlux creator quota reset');
+        if (await processFanHubSubscriptionInvoicePaid(db, stripe, invoice)) {
           break;
         }
 
@@ -1038,7 +1158,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       case 'invoice.payment_failed': {
         const invoice = event.data.object as Stripe.Invoice;
         if (await isFanHubSubscriptionInvoice(stripe, invoice)) {
-          console.log('Fan hub: invoice.payment_failed — skip EchoFlux creator billing alerts');
+          console.log('Fan hub: invoice.payment_failed handled by fan subscription status events; skip creator billing alerts');
           break;
         }
 
