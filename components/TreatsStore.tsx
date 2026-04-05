@@ -49,6 +49,15 @@ function treatProductQuantityString(product: TreatProduct | null | undefined): s
   return String(q);
 }
 
+function toOptionalNonNegativeInt(v: unknown): number | undefined {
+  if (typeof v === "number" && Number.isFinite(v)) return Math.max(0, Math.floor(v));
+  if (typeof v === "string" && v.trim()) {
+    const n = Number(v);
+    if (Number.isFinite(n)) return Math.max(0, Math.floor(n));
+  }
+  return undefined;
+}
+
 /** Map Firestore product doc → TreatProduct (API + client fallback). */
 function firestoreDocToTreatProduct(d: QueryDocumentSnapshot): TreatProduct {
   const x = d.data();
@@ -63,6 +72,8 @@ function firestoreDocToTreatProduct(d: QueryDocumentSnapshot): TreatProduct {
       ? (updatedRaw as { toDate: () => Date }).toDate().toISOString()
       : String(updatedRaw ?? "");
   const rawC = String(x.creatorId ?? "");
+  const quantityLimit = toOptionalNonNegativeInt(x.quantityLimit);
+  const soldCount = toOptionalNonNegativeInt(x.soldCount);
   return {
     id: d.id,
     creatorId: normalizeCreatorId(rawC) || rawC,
@@ -77,8 +88,8 @@ function firestoreDocToTreatProduct(d: QueryDocumentSnapshot): TreatProduct {
     showOnLandingPage: x.showOnLandingPage !== false,
     showInMemberStore: x.showInMemberStore !== false,
     sortOrder: typeof x.sortOrder === "number" ? x.sortOrder : undefined,
-    quantityLimit: typeof x.quantityLimit === "number" ? x.quantityLimit : undefined,
-    soldCount: typeof x.soldCount === "number" ? x.soldCount : undefined,
+    quantityLimit,
+    soldCount,
     createdAt,
     updatedAt,
   };
@@ -843,14 +854,10 @@ export const TreatsStore: React.FC = () => {
               ) : (
                 <div className="treats-stormij-grid">
                   {fanStoreGridItems.map((p) => {
-                    const soldOut =
-                      typeof p.quantityLimit === "number" &&
-                      p.quantityLimit > 0 &&
-                      (p.soldCount ?? 0) >= p.quantityLimit;
-                    const qtyLeft =
-                      typeof p.quantityLimit === "number" && p.quantityLimit > 0
-                        ? p.quantityLimit - (p.soldCount ?? 0)
-                        : null;
+                    const limit = toOptionalNonNegativeInt(p.quantityLimit);
+                    const sold = toOptionalNonNegativeInt(p.soldCount) ?? 0;
+                    const soldOut = typeof limit === "number" && limit > 0 && sold >= limit;
+                    const qtyLeft = typeof limit === "number" && limit > 0 ? Math.max(0, limit - sold) : null;
                     return (
                       <article
                         key={p.id}

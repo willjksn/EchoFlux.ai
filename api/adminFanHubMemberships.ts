@@ -18,6 +18,14 @@ type MembershipRow = {
 
 const ACTIVE_STATUSES = new Set(["active", "trialing", "free", "past_due"]);
 
+function hasPlatformAdminAccess(userData: Record<string, unknown> | undefined): boolean {
+  if (!userData) return false;
+  const role = typeof userData.role === "string" ? userData.role.trim().toLowerCase() : "";
+  if (role === "admin" || role === "superadmin" || role === "owner") return true;
+  if (userData.isAdmin === true || userData.isSuperAdmin === true || userData.isOwner === true) return true;
+  return false;
+}
+
 function toIso(value: unknown): string | null {
   if (!value) return null;
   if (typeof value === "string") {
@@ -52,8 +60,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (!db) return res.status(500).json({ error: "Database unavailable" });
 
   const userSnap = await db.collection("users").doc(authUser.uid).get();
-  const role = (userSnap.data() as { role?: string } | undefined)?.role;
-  if (role !== "Admin") return res.status(403).json({ error: "Admin access required" });
+  const userData = userSnap.data() as Record<string, unknown> | undefined;
+  if (!hasPlatformAdminAccess(userData)) return res.status(403).json({ error: "Admin access required" });
 
   const activeOnly = String(req.query.activeOnly || "1") !== "0";
 

@@ -30,10 +30,19 @@ function firestoreFieldToIsoString(v: unknown): string {
   return Number.isNaN(d.getTime()) ? "" : d.toISOString();
 }
 
+function toOptionalNonNegativeInt(v: unknown): number | undefined {
+  if (typeof v === "number" && Number.isFinite(v)) return Math.max(0, Math.floor(v));
+  if (typeof v === "string" && v.trim()) {
+    const n = Number(v);
+    if (Number.isFinite(n)) return Math.max(0, Math.floor(n));
+  }
+  return undefined;
+}
+
 function toProduct(doc: FirebaseFirestore.DocumentSnapshot): TreatProduct {
   const d = doc.data() as Record<string, unknown>;
-  const q = d.quantityLimit;
-  const s = d.soldCount;
+  const q = toOptionalNonNegativeInt(d.quantityLimit);
+  const s = toOptionalNonNegativeInt(d.soldCount);
   const rawCreator = String(d.creatorId ?? "");
   const createdAt = firestoreFieldToIsoString(d.createdAt) || new Date(0).toISOString();
   const updatedAt = firestoreFieldToIsoString(d.updatedAt) || createdAt;
@@ -51,8 +60,8 @@ function toProduct(doc: FirebaseFirestore.DocumentSnapshot): TreatProduct {
     showOnLandingPage: d.showOnLandingPage !== false,
     showInMemberStore: d.showInMemberStore !== false,
     sortOrder: d.sortOrder as number | undefined,
-    quantityLimit: typeof q === "number" ? q : undefined,
-    soldCount: typeof s === "number" ? s : undefined,
+    quantityLimit: q,
+    soldCount: s,
     createdAt,
     updatedAt,
   };

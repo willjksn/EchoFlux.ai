@@ -188,7 +188,7 @@ function csvEscapeCell(value: string | number): string {
 /** Creator-facing export labels (not internal order types). */
 function orderRowExportType(typeRaw: string): string {
   if (typeRaw === "tip") return "Tip";
-  if (typeRaw === "unlock" || typeRaw === "unlock_media") return "Content unlock";
+  if (typeRaw === "unlock" || typeRaw === "unlock_media" || typeRaw === "post_unlock") return "Content unlock";
   if (typeRaw === "subscription") return "Subscription";
   return "Store";
 }
@@ -455,6 +455,7 @@ export const FanHubAnalytics: React.FC = () => {
     topComments: null,
   });
   const [showLast12, setShowLast12] = useState(true);
+  const creatorId = auth.currentUser?.uid ?? user?.id ?? "";
 
   const handleExportTransactionsCsv = useCallback(() => {
     if (rangeOrders.length === 0) {
@@ -488,7 +489,7 @@ export const FanHubAnalytics: React.FC = () => {
   }, [rangeOrders, dateRange, showToast]);
 
   const loadAnalytics = useCallback(async () => {
-    if (!user?.id) return;
+    if (!creatorId) return;
     setLoading(true);
 
     try {
@@ -497,7 +498,10 @@ export const FanHubAnalytics: React.FC = () => {
       const startDate = getDateRangeStart(dateRange);
 
       // Fetch orders for revenue calculation
-      const ordersRes = await fetch("/api/creatorOrders?limit=1000", { headers });
+      const ordersRes = await fetch(
+        `/api/creatorOrders?limit=1000&creatorId=${encodeURIComponent(creatorId)}`,
+        { headers }
+      );
       let orders: any[] = [];
       if (ordersRes.ok) {
         const data = await ordersRes.json();
@@ -524,7 +528,7 @@ export const FanHubAnalytics: React.FC = () => {
         
         if (type === "tip") {
           tipsCents += amount;
-        } else if (type === "unlock" || type === "unlock_media") {
+        } else if (type === "unlock" || type === "unlock_media" || type === "post_unlock") {
           unlocksCents += amount;
         } else if (type === "subscription") {
           subscriptionsCents += amount;
@@ -557,7 +561,7 @@ export const FanHubAnalytics: React.FC = () => {
           const amount = order.amountCents || 0;
           const type = order.type || order.productType || "";
           if (type === "tip") prevTips += amount;
-          else if (type === "unlock" || type === "unlock_media") prevUnlocks += amount;
+          else if (type === "unlock" || type === "unlock_media" || type === "post_unlock") prevUnlocks += amount;
           else if (type === "subscription") prevSubs += amount;
           else prevTreats += amount;
         });
@@ -578,7 +582,7 @@ export const FanHubAnalytics: React.FC = () => {
         .slice(0, 20)
         .map((o: any) => ({
           id: o.id,
-          type: (o.type === "tip" ? "tip" : o.type === "unlock" || o.type === "unlock_media" ? "unlock" : o.type === "subscription" ? "subscription" : "treat") as Transaction["type"],
+          type: (o.type === "tip" ? "tip" : o.type === "unlock" || o.type === "unlock_media" || o.type === "post_unlock" ? "unlock" : o.type === "subscription" ? "subscription" : "treat") as Transaction["type"],
           amountCents: o.amountCents || 0,
           fanName: o.fanName || null,
           fanEmail: o.fanEmail || o.fanId || "Unknown",
@@ -620,7 +624,7 @@ export const FanHubAnalytics: React.FC = () => {
       // Same member list as Fan Hub → Fans (`onlyfans_fan_preferences`), plus order-only fanIds
       const prefMeta = new Map<string, { createdAt: Date | null; updatedAt: Date | null }>();
       try {
-        const prefSnap = await getDocs(collection(db, "users", user.id, "onlyfans_fan_preferences"));
+        const prefSnap = await getDocs(collection(db, "users", creatorId, "onlyfans_fan_preferences"));
         prefSnap.forEach((d) => {
           const data = d.data() as Record<string, unknown>;
           prefMeta.set(d.id, {
@@ -709,7 +713,7 @@ export const FanHubAnalytics: React.FC = () => {
       setMonthlyRows(buildFebThroughCurrentMonthlyRows(orders, prefMeta, fanSpending));
 
       try {
-        const eg = await loadEngagementStats(user.id);
+        const eg = await loadEngagementStats(creatorId);
         setEngagement(eg);
       } catch (engErr) {
         console.warn("FanHubAnalytics: engagement load failed", engErr);
@@ -727,7 +731,7 @@ export const FanHubAnalytics: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [user?.id, dateRange, showToast]);
+  }, [creatorId, dateRange, showToast]);
 
   useEffect(() => {
     loadAnalytics();
@@ -766,7 +770,7 @@ export const FanHubAnalytics: React.FC = () => {
     </div>
   );
 
-  if (!user?.id) {
+  if (!creatorId) {
     return (
       <div className="p-8 text-center">
         <p className="text-gray-500 dark:text-gray-400">Sign in to view analytics.</p>

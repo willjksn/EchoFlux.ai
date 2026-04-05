@@ -7899,6 +7899,12 @@ button.treat-card:hover:not(:disabled) .treat-card-cta {
   opacity: 0.98;
   font-variant: normal;
   text-transform: none;
+  display: block;
+  max-width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  word-break: normal;
 }
 .stormij-theme .fh-dm-bubble__head--secondary {
   font-size: 0.65rem;
@@ -7915,6 +7921,10 @@ button.treat-card:hover:not(:disabled) .treat-card-cta {
   max-width: 100%;
   border-radius: 0.5rem;
   overflow: hidden;
+}
+.stormij-theme .fh-dm-attachment-link {
+  display: block;
+  cursor: zoom-in;
 }
 .stormij-theme .fh-dm-attachment img,
 .stormij-theme .fh-dm-attachment video {

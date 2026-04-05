@@ -171,6 +171,7 @@ function getAvatarColor(name: string): string {
 
 export const FanHubUsers: React.FC = () => {
   const { user, showToast } = useAppContext();
+  const creatorId = auth.currentUser?.uid ?? user?.id ?? "";
   const [users, setUsers] = useState<FanUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
@@ -204,7 +205,7 @@ export const FanHubUsers: React.FC = () => {
   const DEMO_USERS: FanUser[] = [];
 
   const loadUsers = useCallback(async () => {
-    if (!user?.id) return;
+    if (!creatorId) return;
     setLoading(true);
 
     try {
@@ -212,7 +213,10 @@ export const FanHubUsers: React.FC = () => {
       const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
 
       // Fetch orders for spend calculation
-      const ordersRes = await fetch("/api/creatorOrders?limit=1000", { headers });
+      const ordersRes = await fetch(
+        `/api/creatorOrders?limit=1000&creatorId=${encodeURIComponent(creatorId)}`,
+        { headers }
+      );
       let orders: any[] = [];
       let earliestPurchaseAtByFanId: Record<string, string> = {};
       let earliestPurchaseAtByFanEmail: Record<string, string> = {};
@@ -278,7 +282,7 @@ export const FanHubUsers: React.FC = () => {
       // Note: Do not use orderBy("createdAt") here — Firestore omits docs missing that field, so migrated
       // Stormij fans (or older webhook rows) can disappear from the list. Sort client-side instead.
       try {
-        const fansRef = collection(db, "creators", user.id, "fans");
+        const fansRef = collection(db, "creators", creatorId, "fans");
         const fansSnap = await getDocs(fansRef);
         const fanDocs = [...fansSnap.docs].sort((a, b) => {
           const da = a.data();
@@ -419,7 +423,7 @@ export const FanHubUsers: React.FC = () => {
 
       // Also check creatorSubscribers for any legacy data
       try {
-        const legacySubRef = collection(db, "creatorSubscribers", user.id, "subscribers");
+        const legacySubRef = collection(db, "creatorSubscribers", creatorId, "subscribers");
         const legacySubSnap = await getDocs(legacySubRef);
         legacySubSnap.docs.forEach((doc) => {
           const data = doc.data();
@@ -468,7 +472,7 @@ export const FanHubUsers: React.FC = () => {
 
       // Also fetch manually added users from fanUsers collection
       try {
-        const manualUsersRef = collection(db, "creators", user.id, "fanUsers");
+        const manualUsersRef = collection(db, "creators", creatorId, "fanUsers");
         const manualUsersSnap = await getDocs(manualUsersRef);
         manualUsersSnap.docs.forEach((doc) => {
           const data = doc.data();
@@ -824,7 +828,7 @@ export const FanHubUsers: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [user?.id, showToast]);
+  }, [creatorId, showToast]);
 
   useEffect(() => {
     loadUsers();
@@ -840,7 +844,7 @@ export const FanHubUsers: React.FC = () => {
   }, [activeMenu]);
 
   const handleAddUser = async () => {
-    if (!user?.id || !newUserEmail.trim()) return;
+    if (!creatorId || !newUserEmail.trim()) return;
     if (newUserPassword && newUserPassword.length < 6) {
       showToast?.("Password must be at least 6 characters", "error");
       return;
@@ -854,9 +858,9 @@ export const FanHubUsers: React.FC = () => {
       
       // Create fan in the main fans collection (same as Stripe webhook does)
       const fanId = email; // Use email as ID for manually added fans
-      await setDoc(doc(db, "creators", user.id, "fans", fanId), {
+      await setDoc(doc(db, "creators", creatorId, "fans", fanId), {
         id: fanId,
-        creatorId: user.id,
+        creatorId,
         email,
         displayName,
         subscriptionStatus:
@@ -891,7 +895,7 @@ export const FanHubUsers: React.FC = () => {
   };
 
   const handleDeleteUser = async (fanUser: FanUser) => {
-    if (!user?.id) return;
+    if (!creatorId) return;
     if (
       !confirm(
         `Remove ${fanUser.name}? This deletes their fan card, DM thread (including video messages), live video chat history with you, and member access for this page.`
@@ -956,7 +960,7 @@ export const FanHubUsers: React.FC = () => {
   };
 
   const handleCreatorCancelFanSubscription = async () => {
-    if (!selectedUser || !user?.id) return;
+    if (!selectedUser || !creatorId) return;
     if (!showStripeSubscriptionCancelInManageModal(selectedUser)) {
       showToast?.("No billable Stripe subscription detected for this row.", "error");
       return;
@@ -1004,10 +1008,10 @@ export const FanHubUsers: React.FC = () => {
   };
 
   const handleGrantTreat = async () => {
-    if (!user?.id || !selectedUser || !grantTreatType) return;
+    if (!creatorId || !selectedUser || !grantTreatType) return;
     try {
       // Add treat grant to Firestore
-      await addDoc(collection(db, "creators", user.id, "treatGrants"), {
+      await addDoc(collection(db, "creators", creatorId, "treatGrants"), {
         fanEmail: selectedUser.email,
         fanName: selectedUser.name,
         treatType: grantTreatType,
@@ -1056,13 +1060,13 @@ export const FanHubUsers: React.FC = () => {
   };
 
   const handleUpdateUserRole = async (newRole: UserRole) => {
-    if (!user?.id || !selectedUser) return;
+    if (!creatorId || !selectedUser) return;
 
     try {
       const now = new Date().toISOString();
       
       // Update in fans collection (primary)
-      const fanRef = doc(db, "creators", user.id, "fans", selectedUser.id);
+      const fanRef = doc(db, "creators", creatorId, "fans", selectedUser.id);
       await updateDoc(fanRef, {
         role: newRole,
         updatedAt: now,
@@ -1070,7 +1074,7 @@ export const FanHubUsers: React.FC = () => {
         // If doesn't exist, create it
         await setDoc(fanRef, {
           id: selectedUser.id,
-          creatorId: user.id,
+          creatorId,
           email: selectedUser.email,
           displayName: selectedUser.name,
           role: newRole,
@@ -1112,7 +1116,7 @@ export const FanHubUsers: React.FC = () => {
     unlocks: users.reduce((sum, u) => sum + u.mtdUnlocksCents, 0),
   };
 
-  if (!user?.id) {
+  if (!creatorId) {
     return (
       <div className="p-8 text-center">
         <p className="text-gray-500 dark:text-gray-400">Sign in to manage users.</p>

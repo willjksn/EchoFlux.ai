@@ -870,7 +870,7 @@ export const FanHubMessages: React.FC = () => {
     <div className="max-w-7xl mx-auto p-4 sm:p-6 stormij-theme fh-messages-hub">
       <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-6">Messages</h1>
       <div className="flex gap-4 sm:gap-6 flex-col lg:flex-row">
-        <div className="w-full lg:w-80 flex-shrink-0 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 overflow-hidden lg:max-h-[min(85vh,720px)] lg:flex lg:flex-col">
+        <div className="w-full lg:w-96 flex-shrink-0 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 overflow-hidden lg:max-h-[min(90vh,900px)] lg:flex lg:flex-col">
           <div className="fh-dm-sidebar-header">
             <h2>Chat</h2>
             <button
@@ -1081,7 +1081,7 @@ export const FanHubMessages: React.FC = () => {
             </ul>
           )}
         </div>
-        <div className="flex-1 min-w-0 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 overflow-hidden flex flex-col min-h-[min(70vh,560px)] lg:max-h-[min(85vh,720px)]">
+        <div className="flex-1 min-w-0 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 overflow-hidden flex flex-col min-h-[min(78vh,700px)] lg:max-h-[min(90vh,900px)]">
           {!selectedThread ? (
             <div className="flex-1 flex items-center justify-center text-gray-500 dark:text-gray-400 text-sm">
               Select a conversation
@@ -1197,12 +1197,28 @@ export const FanHubMessages: React.FC = () => {
                               <div className="fh-dm-bubble__body">
                                 {m.attachmentUrl && m.attachmentType === "image" ? (
                                   <div className="fh-dm-attachment">
-                                    <img src={m.attachmentUrl} alt="" loading="lazy" />
+                                    <a
+                                      href={m.attachmentUrl}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="fh-dm-attachment-link"
+                                      aria-label="Open image in new tab"
+                                    >
+                                      <img src={m.attachmentUrl} alt="" loading="lazy" />
+                                    </a>
                                   </div>
                                 ) : null}
                                 {m.attachmentUrl && m.attachmentType === "video" ? (
                                   <div className="fh-dm-attachment">
-                                    <video src={m.attachmentUrl} controls playsInline />
+                                    <a
+                                      href={m.attachmentUrl}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="fh-dm-attachment-link"
+                                      aria-label="Open video in new tab"
+                                    >
+                                      <video src={m.attachmentUrl} controls playsInline />
+                                    </a>
                                   </div>
                                 ) : null}
                                 {m.attachmentUrl &&

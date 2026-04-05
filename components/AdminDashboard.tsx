@@ -19,6 +19,7 @@ import { collection, query, orderBy, onSnapshot, setDoc, doc, getDoc, deleteFiel
 import { useAppContext } from './AppContext';
 import { defaultSettings } from '../constants';
 import { getModelUsageAnalytics, type ModelUsageStats } from '../src/services/modelUsageService';
+import { hasActiveStripeEchofluxSubscription } from '../src/lib/echofluxStripeMrr';
 
 // Fallback sample stats so the admin overview is visible even if the analytics
 // API is unreachable locally. These reflect the deployment numbers the user described.
@@ -802,7 +803,10 @@ export const AdminDashboard: React.FC = () => {
 
         return {
             totalUsers: users.length,
-            simulatedMRR: users.reduce((acc, user) => acc + (planPrices[getPlanKey(user.plan)] || 0), 0),
+            simulatedMRR: users.reduce((acc, user) => {
+                if (!hasActiveStripeEchofluxSubscription(user)) return acc;
+                return acc + (planPrices[getPlanKey(user.plan)] || 0);
+            }, 0),
             newUsersCount: users.filter(user => new Date(user.signupDate).getTime() > thirtyDaysAgo.getTime()).length,
             totalImageGenerations: users.reduce((acc, user) => acc + Number(user.monthlyImageGenerationsUsed ?? 0), 0),
             totalVideoGenerations: users.reduce((acc, user) => acc + Number(user.monthlyVideoGenerationsUsed ?? 0), 0),
@@ -1034,7 +1038,7 @@ export const AdminDashboard: React.FC = () => {
                     <p className="text-2xl md:text-3xl font-bold">
                         ${simulatedMRR.toLocaleString()}
                     </p>
-                    <p className="text-xs opacity-75 mt-1">Monthly recurring revenue</p>
+                    <p className="text-xs opacity-75 mt-1">Stripe active/trialing subs only (excludes manual & invite grants)</p>
                 </div>
                 <div className="bg-gradient-to-br from-green-500 to-emerald-600 p-4 md:p-6 rounded-xl shadow-md text-white">
                     <div className="flex items-center gap-3 mb-2">
@@ -1085,7 +1089,7 @@ export const AdminDashboard: React.FC = () => {
                 <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
                     <div>
                         <h3 className="text-lg font-bold text-gray-900 dark:text-white">Total Echoflux Revenue</h3>
-                        <p className="text-sm text-gray-500 dark:opacity-70 mt-1">Subscription MRR + Fan Hub Commission</p>
+                        <p className="text-sm text-gray-500 dark:opacity-70 mt-1">Stripe subscription MRR + Fan Hub commission</p>
                     </div>
                     <div className="text-right">
                         <p className="text-3xl md:text-4xl font-bold text-primary-600 dark:text-white">

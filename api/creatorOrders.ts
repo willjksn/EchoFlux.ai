@@ -20,6 +20,14 @@ export type CreatorOrder = {
   scheduledTime?: string | null;
 };
 
+function hasPlatformAdminAccess(userData: Record<string, unknown> | undefined): boolean {
+  if (!userData) return false;
+  const role = typeof userData.role === "string" ? userData.role.trim().toLowerCase() : "";
+  if (role === "admin" || role === "superadmin" || role === "owner") return true;
+  if (userData.isAdmin === true || userData.isSuperAdmin === true || userData.isOwner === true) return true;
+  return false;
+}
+
 function createdAtToMs(createdAt: unknown): number {
   if (createdAt == null) return 0;
   if (typeof (createdAt as { toDate?: () => Date }).toDate === "function") {
@@ -71,7 +79,8 @@ function mapDocToOrder(docSnap: QueryDocumentSnapshot): CreatorOrder {
 }
 
 /**
- * GET: List orders for the authenticated creator (creatorId = uid).
+ * GET: List orders for the authenticated creator (creatorId = uid by default).
+ * Optional query param: creatorId (admin-only cross-creator read).
  * Query: limit (default 100), status (optional filter).
  *
  * Uses orderBy(createdAt) when the composite index exists; otherwise falls back to
@@ -87,12 +96,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(401).json({ error: "Unauthorized" });
   }
 
-  const creatorId = decoded.uid;
   const limitNum = Math.min(parseInt(String(req.query.limit || "100"), 10) || 100, 1000);
 
   try {
     const db = getAdminDb();
     if (!db) return res.status(500).json({ error: "Database unavailable" });
+    let creatorIdToQuery = decoded.uid;
+    const requestedCreatorId = String(req.query.creatorId || "").trim();
+    if (requestedCreatorId && requestedCreatorId !== decoded.uid) {
+      const callerSnap = await db.collection("users").doc(decoded.uid).get();
+      const caller = (callerSnap.data() as Record<string, unknown> | undefined) ?? undefined;
+      if (!hasPlatformAdminAccess(caller)) {
+        return res.status(403).json({ error: "Forbidden: not authorized for this creatorId" });
+      }
+      creatorIdToQuery = requestedCreatorId;
+    }
 
     const cap = Math.min(500, Math.max(limitNum, limitNum * 2));
     let docs: QueryDocumentSnapshot[] = [];
@@ -100,7 +118,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     try {
       const snap = await db
         .collection("orders")
-        .where("creatorId", "==", creatorId)
+        .where("creatorId", "==", creatorIdToQuery)
         .orderBy("createdAt", "desc")
         .limit(limitNum)
         .get();
@@ -110,7 +128,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         "creatorOrders: indexed query failed, using fallback (deploy firestore index creatorId+createdAt if possible):",
         primaryErr instanceof Error ? primaryErr.message : primaryErr
       );
-      const snap = await db.collection("orders").where("creatorId", "==", creatorId).limit(cap).get();
+      const snap = await db.collection("orders").where("creatorId", "==", creatorIdToQuery).limit(cap).get();
       docs = snap.docs.slice();
       docs.sort((a, b) => {
         const ma = createdAtToMs(a.data().createdAt);
@@ -128,7 +146,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const purchaseCap = 4000;
       const pSnap = await db
         .collection("purchases")
-        .where("creatorId", "==", creatorId)
+        .where("creatorId", "==", creatorIdToQuery)
         .limit(purchaseCap)
         .get();
       const bump = (map: Record<string, string>, key: string, ms: number) => {

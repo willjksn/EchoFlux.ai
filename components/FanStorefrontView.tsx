@@ -560,6 +560,7 @@ function buildMemberCheckoutSuccessSearch(currentSearch: string) {
 }
 
 const TIP_PRESET_AMOUNTS = [5, 10, 25, 50, 100, 250];
+const DM_LIVE_REFRESH_MS = 3000;
 
 const DmPhotoIcon = () => (
   <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
@@ -2595,10 +2596,11 @@ export const FanStorefrontView: React.FC = () => {
     }
   }, [creator?.handle, fanDeleteConfirmInput, fanDeletePassword, showToast, closeFanDeleteModal]);
 
-  const fetchDmThreadAndMessages = useCallback(async () => {
+  const fetchDmThreadAndMessages = useCallback(async (opts?: { silent?: boolean }) => {
     if (!creator?.creatorId || !auth.currentUser || activeTab !== "messages") return;
+    const silent = opts?.silent === true;
     const gen = ++dmThreadFetchGen.current;
-    setDmLoading(true);
+    if (!silent) setDmLoading(true);
     try {
       const token = await auth.currentUser.getIdToken(true);
       const cid = creator.creatorId;
@@ -2641,7 +2643,7 @@ export const FanStorefrontView: React.FC = () => {
       }
     } finally {
       if (gen === dmThreadFetchGen.current) {
-        setDmLoading(false);
+        if (!silent) setDmLoading(false);
       }
     }
   }, [creator?.creatorId, activeTab]);
@@ -2654,6 +2656,23 @@ export const FanStorefrontView: React.FC = () => {
 
   useEffect(() => {
     if (activeTab === "messages" && creator?.creatorId && isLoggedIn) fetchDmThreadAndMessages();
+  }, [activeTab, creator?.creatorId, isLoggedIn, fetchDmThreadAndMessages]);
+
+  useEffect(() => {
+    if (activeTab !== "messages" || !creator?.creatorId || !isLoggedIn) return;
+    const tick = () => {
+      if (typeof document !== "undefined" && document.visibilityState !== "visible") return;
+      void fetchDmThreadAndMessages({ silent: true });
+    };
+    const onFocus = () => {
+      tick();
+    };
+    const id = window.setInterval(tick, DM_LIVE_REFRESH_MS);
+    window.addEventListener("focus", onFocus);
+    return () => {
+      window.clearInterval(id);
+      window.removeEventListener("focus", onFocus);
+    };
   }, [activeTab, creator?.creatorId, isLoggedIn, fetchDmThreadAndMessages]);
 
   useEffect(() => {
@@ -3715,6 +3734,7 @@ export const FanStorefrontView: React.FC = () => {
             activeTab === "profile" ? "fan-member-content--settings" : ""
           } ${activeTab === "feed" ? "fan-member-content--feed" : ""}${
             activeTab === "saved" ? " fan-member-content--feed-column" : ""
+          }${activeTab === "treats" || activeTab === "purchases" ? " fan-member-content--store" : ""
           }`}
         >
             {activeTab === "feed" && !needsPaidUpgrade && canViewFeed && (
@@ -3924,12 +3944,28 @@ export const FanStorefrontView: React.FC = () => {
                                       <div className="fh-dm-bubble__body">
                                         {m.attachmentUrl && m.attachmentType === "image" ? (
                                           <div className="fh-dm-attachment">
-                                            <img src={m.attachmentUrl} alt="" loading="lazy" />
+                                            <a
+                                              href={m.attachmentUrl}
+                                              target="_blank"
+                                              rel="noopener noreferrer"
+                                              className="fh-dm-attachment-link"
+                                              aria-label="Open image in new tab"
+                                            >
+                                              <img src={m.attachmentUrl} alt="" loading="lazy" />
+                                            </a>
                                           </div>
                                         ) : null}
                                         {m.attachmentUrl && m.attachmentType === "video" ? (
                                           <div className="fh-dm-attachment">
-                                            <video src={m.attachmentUrl} controls playsInline />
+                                            <a
+                                              href={m.attachmentUrl}
+                                              target="_blank"
+                                              rel="noopener noreferrer"
+                                              className="fh-dm-attachment-link"
+                                              aria-label="Open video in new tab"
+                                            >
+                                              <video src={m.attachmentUrl} controls playsInline />
+                                            </a>
                                           </div>
                                         ) : null}
                                         {m.attachmentUrl &&

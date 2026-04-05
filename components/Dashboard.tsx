@@ -13,6 +13,7 @@ import { FeedbackSurveyModal, type FeedbackMilestone } from './FeedbackSurveyMod
 import { CustomFeedbackFormModal } from './CustomFeedbackFormModal';
 import { isInviteOnlyMode } from '../src/utils/inviteOnly';
 import { ECHOFLUX_ELITE_MONTHLY_USD, ECHOFLUX_PRO_MONTHLY_USD, OFFLINE_MODE } from '../constants';
+import { hasActiveStripeEchofluxSubscription } from '../src/lib/echofluxStripeMrr';
 
 const platformFilterIcons: { [key in Platform]: React.ReactNode } = {
   Instagram: <InstagramIcon />,
@@ -797,10 +798,14 @@ export const Dashboard: React.FC = () => {
           // Skip admins
           if (userData.role === 'Admin') return;
           
-          // Count plans (only Pro/Elite for funnel)
+          // Count Pro/Elite only when Stripe shows an active paid sub (MRR-aligned; excludes admin/invite plan-only rows)
           const plan = userData.plan || null;
-          if (plan === 'Pro') proCount++;
-          else if (plan === 'Elite') eliteCount++;
+          const stripeMrrEligible = hasActiveStripeEchofluxSubscription({
+            subscriptionStatus: userData.subscriptionStatus as string | undefined,
+            stripeSubscriptionId: userData.stripeSubscriptionId as string | undefined,
+          });
+          if (plan === 'Pro' && stripeMrrEligible) proCount++;
+          else if (plan === 'Elite' && stripeMrrEligible) eliteCount++;
           totalUsersCount++;
           
           // Calculate usage
@@ -3026,7 +3031,7 @@ export const Dashboard: React.FC = () => {
             <p className="text-3xl font-bold text-blue-600 dark:text-blue-300">
               {subscriptionMrrUsd != null ? `$${subscriptionMrrUsd.toLocaleString()}` : '—'}
             </p>
-            <p className="text-xs text-gray-500 dark:opacity-60 mt-1">Pro + Elite plans</p>
+            <p className="text-xs text-gray-500 dark:opacity-60 mt-1">Pro + Elite with active Stripe billing</p>
           </div>
           <div>
             <p className="text-sm text-gray-500 dark:opacity-70 mb-1">Fan Hub Commission</p>
@@ -3045,7 +3050,7 @@ export const Dashboard: React.FC = () => {
                   })}`
                 : '—'}
             </p>
-            <p className="text-xs text-gray-500 dark:opacity-60 mt-1">MRR + Fan Hub commission</p>
+            <p className="text-xs text-gray-500 dark:opacity-60 mt-1">Stripe MRR + Fan Hub commission</p>
           </div>
         </div>
       </div>
@@ -3065,13 +3070,13 @@ export const Dashboard: React.FC = () => {
           </p>
         </div>
         <div className="p-3 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
-          <p className="text-xs text-gray-500 dark:text-gray-400">Pro Users</p>
+          <p className="text-xs text-gray-500 dark:text-gray-400">Pro (Stripe active)</p>
           <p className="text-xl font-bold text-primary-600 dark:text-primary-400">
             {userEngagementData?.conversionFunnel?.pro ?? '—'}
           </p>
         </div>
         <div className="p-3 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
-          <p className="text-xs text-gray-500 dark:text-gray-400">Elite Users</p>
+          <p className="text-xs text-gray-500 dark:text-gray-400">Elite (Stripe active)</p>
           <p className="text-xl font-bold text-purple-600 dark:text-purple-400">
             {userEngagementData?.conversionFunnel?.elite ?? '—'}
           </p>
@@ -3137,7 +3142,7 @@ export const Dashboard: React.FC = () => {
 
               {/* Plan Breakdown */}
               <div>
-                <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Plan Breakdown</h4>
+                <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Plan breakdown (Stripe active / trialing)</h4>
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
                     <span className="text-sm text-gray-600 dark:text-gray-400">Pro (${ECHOFLUX_PRO_MONTHLY_USD}/mo)</span>
@@ -3174,9 +3179,9 @@ export const Dashboard: React.FC = () => {
               <div className="p-4 bg-gradient-to-r from-primary-50 to-purple-50 dark:from-primary-900/20 dark:to-purple-900/20 rounded-lg border border-primary-200 dark:border-primary-700">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm font-medium text-gray-700 dark:text-gray-300">Monthly Subscription Revenue</p>
+                    <p className="text-sm font-medium text-gray-700 dark:text-gray-300">Monthly subscription revenue (Stripe)</p>
                     <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                      {userEngagementData.conversionFunnel.pro} Pro × ${ECHOFLUX_PRO_MONTHLY_USD} + {userEngagementData.conversionFunnel.elite} Elite × ${ECHOFLUX_ELITE_MONTHLY_USD}
+                      {userEngagementData.conversionFunnel.pro} paying Pro × ${ECHOFLUX_PRO_MONTHLY_USD} + {userEngagementData.conversionFunnel.elite} paying Elite × ${ECHOFLUX_ELITE_MONTHLY_USD}
                     </p>
                   </div>
                   <p className="text-2xl font-bold text-primary-600 dark:text-primary-400">

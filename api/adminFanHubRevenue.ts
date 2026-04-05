@@ -3,6 +3,14 @@ import type { QueryDocumentSnapshot } from "firebase-admin/firestore";
 import { getAdminDb } from "./_firebaseAdmin.js";
 import { verifyAuth } from "./verifyAuth.js";
 
+function hasPlatformAdminAccess(userData: Record<string, unknown> | undefined): boolean {
+  if (!userData) return false;
+  const role = typeof userData.role === "string" ? userData.role.trim().toLowerCase() : "";
+  if (role === "admin" || role === "superadmin" || role === "owner") return true;
+  if (userData.isAdmin === true || userData.isSuperAdmin === true || userData.isOwner === true) return true;
+  return false;
+}
+
 function createdAtToMs(createdAt: unknown): number {
   if (createdAt == null) return 0;
   if (typeof (createdAt as { toDate?: () => Date }).toDate === "function") {
@@ -41,8 +49,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (!db) return res.status(500).json({ error: "Database unavailable" });
 
   const userSnap = await db.collection("users").doc(authUser.uid).get();
-  const role = (userSnap.data() as { role?: string } | undefined)?.role;
-  if (role !== "Admin") return res.status(403).json({ error: "Admin access required" });
+  const userData = userSnap.data() as Record<string, unknown> | undefined;
+  if (!hasPlatformAdminAccess(userData)) return res.status(403).json({ error: "Admin access required" });
 
   const limitParam = parseInt(String(req.query.limit || "5000"), 10);
   const limit = Number.isFinite(limitParam) ? Math.min(Math.max(limitParam, 100), 10000) : 5000;

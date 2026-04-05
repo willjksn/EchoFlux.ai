@@ -1091,6 +1091,13 @@
   padding: 1.25rem;
 }
 
+/* Store / purchases tab: same proportional "bigger" treatment as messages (wider + taller feel). */
+.fan-member-content--store {
+  max-width: 720px;
+  min-height: min(78vh, 700px);
+  padding: 1.5rem;
+}
+
 .fan-member-content--feed .fan-feed-posts,
 .fan-member-content--feed-column .fan-feed-posts {
   gap: 1rem;

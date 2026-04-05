@@ -629,30 +629,6 @@ export const WitmePageManager: React.FC = () => {
                   </button>
                 </div>
 
-                <div className="mb-5 rounded-xl border-2 border-amber-400/80 bg-gradient-to-br from-amber-50 to-orange-50/80 p-4 shadow-sm dark:border-amber-500/50 dark:from-amber-950/50 dark:to-orange-950/30">
-                  <p className="text-xs font-bold uppercase tracking-wider text-amber-900 dark:text-amber-200">Homepage Featured editor</p>
-                  <p className="mt-2 text-sm text-amber-950 dark:text-amber-50">
-                    Use the checkboxes on each row below: <strong>Live page link</strong>, then <strong>Featured on homepage</strong>. One featured → large spotlight; two or more → compact grid.
-                    Drag the media frame or use <strong>focal sliders</strong>. <strong>Featured image fit</strong> applies to multi-featured cards; the large single spotlight always shows the full media.
-                  </p>
-                  <div className="mt-3 rounded-lg bg-white/70 px-3 py-2 text-xs dark:bg-black/20">
-                    {homepageFeaturedRows.length === 0 ? (
-                      <span className="font-medium text-amber-900 dark:text-amber-100">
-                        No homepage featured rows yet — turn on &quot;Featured on homepage&quot; on a live row below.
-                      </span>
-                    ) : (
-                      <span className="text-amber-950 dark:text-amber-50">
-                        <span className="font-semibold">Featured now ({homepageFeaturedRows.length}):</span>{' '}
-                        {homepageFeaturedRows
-                          .map((c) => c.name.trim() || c.handle.trim() || c.pageSlug.trim() || 'Unnamed')
-                          .join(' · ')}
-                      </span>
-                    )}
-                  </div>
-                  <p className="mt-2 text-[11px] text-amber-900/80 dark:text-amber-200/90">
-                    Uploads: Firebase <code className="rounded bg-black/10 px-1 dark:bg-white/10">witme_showcase/</code>
-                  </p>
-                </div>
                 <div className="mb-4 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2.5 text-xs text-gray-600 dark:border-gray-700 dark:bg-gray-800/50 dark:text-gray-300">
                   <span className="font-semibold text-gray-800 dark:text-gray-200">Focal / drag frame</span>
                   <label className="flex flex-wrap items-center gap-2">
