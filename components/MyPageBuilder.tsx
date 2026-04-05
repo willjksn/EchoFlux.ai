@@ -27,6 +27,7 @@ import { resolveStoreCopy } from "../src/lib/storefrontStoreCopy";
 import { UserIcon, ImageIcon, GlobeIcon } from "./icons/UIIcons";
 import { EmojiButton } from "./EmojiPicker";
 import { canUseSjHeartEmoji } from "../src/lib/customEmoji";
+import { creatorIdFirestoreQueryVariants, normalizeCreatorId } from "../src/lib/creatorIdNormalize";
 
 const DEFAULT_SECTIONS: NonNullable<CreatorStorefrontSettings["sections"]> = {
   feed: true,
@@ -115,6 +116,65 @@ const DEFAULT_LEGAL: StorefrontLegal = {
 };
 const FAN_HUB_PREVIEW_THEME_STORAGE_KEY = "echoflux:fanhub-preview-theme";
 const FAN_HUB_PREVIEW_THEME_EVENT = "echoflux:fanhub-preview-theme-changed";
+
+async function loadLandingTreatProductsViaFirestore(creatorId: string): Promise<TreatProduct[]> {
+  const variants = creatorIdFirestoreQueryVariants(creatorId);
+  const canReadOwnerScope =
+    !!auth.currentUser?.uid &&
+    normalizeCreatorId(auth.currentUser.uid) === normalizeCreatorId(creatorId);
+  const out: TreatProduct[] = [];
+  const seen = new Set<string>();
+  for (const cid of variants) {
+    let snap;
+    try {
+      snap = canReadOwnerScope
+        ? await getDocs(query(collection(db, "products"), where("creatorId", "==", cid)))
+        : await getDocs(
+            query(
+              collection(db, "products"),
+              where("creatorId", "==", cid),
+              where("visible", "==", true),
+              where("archived", "==", false)
+            )
+          );
+    } catch {
+      continue;
+    }
+    for (const d of snap.docs) {
+      if (seen.has(d.id)) continue;
+      seen.add(d.id);
+      const x = d.data() as Record<string, unknown>;
+      if (x.archived === true || x.visible === false || x.showOnLandingPage === false) continue;
+      out.push({
+        id: d.id,
+        creatorId: normalizeCreatorId(String(x.creatorId ?? "")) || String(x.creatorId ?? ""),
+        type: ((x.type as TreatProduct["type"]) || "custom") as TreatProduct["type"],
+        title: String(x.title ?? ""),
+        description: typeof x.description === "string" ? x.description : undefined,
+        priceCents: Number(x.priceCents) || 0,
+        mediaUrl: typeof x.mediaUrl === "string" ? x.mediaUrl : undefined,
+        imageUrl: typeof x.imageUrl === "string" ? x.imageUrl : undefined,
+        archived: x.archived === true,
+        visible: x.visible !== false,
+        showOnLandingPage: x.showOnLandingPage !== false,
+        showInMemberStore: x.showInMemberStore !== false,
+        sortOrder: typeof x.sortOrder === "number" ? x.sortOrder : undefined,
+        quantityLimit: typeof x.quantityLimit === "number" ? x.quantityLimit : undefined,
+        soldCount: typeof x.soldCount === "number" ? x.soldCount : undefined,
+        createdAt: String(x.createdAt ?? ""),
+        updatedAt: String(x.updatedAt ?? ""),
+      });
+    }
+  }
+  out.sort((a, b) => {
+    const orderDiff = (a.sortOrder ?? 0) - (b.sortOrder ?? 0);
+    if (orderDiff !== 0) return orderDiff;
+    const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+    const bTime = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+    return bTime - aTime;
+  });
+  return out;
+}
 
 function clampPercent(n: number, min: number, max: number) {
   return Math.max(min, Math.min(max, n));
@@ -669,13 +729,23 @@ export const MyPageBuilder: React.FC = () => {
         const res = await fetch(
           `/api/products?creatorId=${encodeURIComponent(creatorId)}&context=landing`
         );
-        if (!res.ok || cancelled) return;
-        const data = await res.json();
-        if (!cancelled) {
-          setBuilderLandingTreatsProducts(Array.isArray(data.products) ? data.products : []);
+        if (res.ok) {
+          if (cancelled) return;
+          const data = await res.json();
+          if (!cancelled) {
+            setBuilderLandingTreatsProducts(Array.isArray(data.products) ? data.products : []);
+          }
+          return;
         }
+        const fallback = await loadLandingTreatProductsViaFirestore(creatorId);
+        if (!cancelled) setBuilderLandingTreatsProducts(fallback);
       } catch {
-        if (!cancelled) setBuilderLandingTreatsProducts([]);
+        try {
+          const fallback = await loadLandingTreatProductsViaFirestore(creatorId);
+          if (!cancelled) setBuilderLandingTreatsProducts(fallback);
+        } catch {
+          if (!cancelled) setBuilderLandingTreatsProducts([]);
+        }
       } finally {
         if (!cancelled) setBuilderLandingTreatsLoading(false);
       }

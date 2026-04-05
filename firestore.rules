@@ -318,7 +318,8 @@ service cloud.firestore {
      *  - Server API (Admin SDK) also writes; rules mirror same invariants for client fallback (local dev)
      *  ------------------------------------------------------- */
     match /products/{productId} {
-      allow read: if resource.data.visible == true && resource.data.archived == false
+      // Match app/API semantics: missing fields default to visible + not archived.
+      allow read: if (resource.data.visible != false && resource.data.archived != true)
         || (isAuthenticated() && resource.data.creatorId == request.auth.uid);
 
       allow create: if isAuthenticated()

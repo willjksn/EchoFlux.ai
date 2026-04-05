@@ -516,8 +516,8 @@ export const TreatsStore: React.FC = () => {
         return;
       }
 
-      if (res.status === 404 && (await createProductViaFirestore(payload))) {
-        finishOk("Product added (saved directly — /api not running locally; deploy or use vercel dev).");
+      if ((res.status >= 500 || res.status === 404) && (await createProductViaFirestore(payload))) {
+        finishOk("Product added (saved directly — API unavailable).");
         return;
       }
 
@@ -585,7 +585,7 @@ export const TreatsStore: React.FC = () => {
         setEditing(null);
         return;
       }
-      if (res.status === 404 && db) {
+      if ((res.status >= 500 || res.status === 404) && db) {
         const patch = firestoreSafePatch({ ...updates, updatedAt: new Date().toISOString() });
         await updateDoc(doc(db, "products", productId), patch);
         if (useGlobalSaving) showToast?.("Updated (direct database)", "success");
@@ -629,7 +629,7 @@ export const TreatsStore: React.FC = () => {
         void fetchProducts({ quiet: true });
         return;
       }
-      if (res.status === 404 && db) {
+      if ((res.status >= 500 || res.status === 404) && db) {
         await deleteDoc(doc(db, "products", productId));
         showToast?.("Product deleted (direct database)", "success");
         setEditing(null);

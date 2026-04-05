@@ -71,7 +71,7 @@ import { Toast } from "./Toast";
 import { readFanCheckoutFetchResult, FAN_TIP_CHECKOUT_SUCCESS_QS } from "../src/lib/fanCheckoutResponse";
 import { WitmeHeaderLogo } from "./WitmeHeaderLogo";
 import { formatFanStorefrontDocumentTitle, getFanFacingSiteTitle } from "../src/lib/fanFacingSiteTitle";
-import { normalizeCreatorId } from "../src/lib/creatorIdNormalize";
+import { creatorIdFirestoreQueryVariants, normalizeCreatorId } from "../src/lib/creatorIdNormalize";
 
 /** Ensure member-store products have usable Firestore ids (avoids every row showing “Processing…” when id is missing or duplicated). */
 function normalizeMemberTreatProducts(raw: unknown): TreatProduct[] {
@@ -91,6 +91,80 @@ function normalizeMemberTreatProducts(raw: unknown): TreatProduct[] {
     seen.add(sid);
     out.push({ ...p, id: sid } as TreatProduct);
   }
+  return out;
+}
+
+async function loadTreatProductsViaFirestore(
+  creatorId: string,
+  context: "landing" | "member"
+): Promise<TreatProduct[]> {
+  const variants = creatorIdFirestoreQueryVariants(creatorId);
+  const canReadOwnerScope =
+    !!auth.currentUser?.uid &&
+    normalizeCreatorId(auth.currentUser.uid) === normalizeCreatorId(creatorId);
+  const out: TreatProduct[] = [];
+  const seen = new Set<string>();
+  for (const cid of variants) {
+    let snap;
+    try {
+      /**
+       * For public/guest storefront reads, Firestore rules require visibility/archive predicates to be
+       * part of the query. Creator-owner reads can use creatorId-only query for manage/member parity.
+       */
+      snap = canReadOwnerScope
+        ? await getDocs(query(collection(db, "products"), where("creatorId", "==", cid)))
+        : await getDocs(
+            query(
+              collection(db, "products"),
+              where("creatorId", "==", cid),
+              where("visible", "==", true),
+              where("archived", "==", false)
+            )
+          );
+    } catch (e) {
+      console.warn("Landing/member Firestore treats fallback query failed", {
+        creatorIdVariant: cid,
+        context,
+        canReadOwnerScope,
+        error: e,
+      });
+      continue;
+    }
+    for (const d of snap.docs) {
+      if (seen.has(d.id)) continue;
+      seen.add(d.id);
+      const x = d.data() as Record<string, unknown>;
+      if (x.archived === true || x.visible === false) continue;
+      if (context === "landing" && x.showOnLandingPage === false) continue;
+      if (context === "member" && x.showInMemberStore === false) continue;
+      out.push({
+        id: d.id,
+        creatorId: normalizeCreatorId(String(x.creatorId ?? "")) || String(x.creatorId ?? ""),
+        type: ((x.type as TreatProduct["type"]) || "custom") as TreatProduct["type"],
+        title: String(x.title ?? ""),
+        description: typeof x.description === "string" ? x.description : undefined,
+        priceCents: Number(x.priceCents) || 0,
+        mediaUrl: typeof x.mediaUrl === "string" ? x.mediaUrl : undefined,
+        imageUrl: typeof x.imageUrl === "string" ? x.imageUrl : undefined,
+        archived: x.archived === true,
+        visible: x.visible !== false,
+        showOnLandingPage: x.showOnLandingPage !== false,
+        showInMemberStore: x.showInMemberStore !== false,
+        sortOrder: typeof x.sortOrder === "number" ? x.sortOrder : undefined,
+        quantityLimit: typeof x.quantityLimit === "number" ? x.quantityLimit : undefined,
+        soldCount: typeof x.soldCount === "number" ? x.soldCount : undefined,
+        createdAt: String(x.createdAt ?? ""),
+        updatedAt: String(x.updatedAt ?? ""),
+      });
+    }
+  }
+  out.sort((a, b) => {
+    const orderDiff = (a.sortOrder ?? 0) - (b.sortOrder ?? 0);
+    if (orderDiff !== 0) return orderDiff;
+    const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+    const bTime = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+    return bTime - aTime;
+  });
   return out;
 }
 
@@ -1730,11 +1804,20 @@ export const FanStorefrontView: React.FC = () => {
       const res = await fetch(
         `/api/products?creatorId=${encodeURIComponent(creator.creatorId)}&context=member`
       );
-      if (!res.ok) return;
-      const data = await res.json();
-      setTreatsProducts(normalizeMemberTreatProducts(data.products));
+      if (res.ok) {
+        const data = await res.json();
+        setTreatsProducts(normalizeMemberTreatProducts(data.products));
+        return;
+      }
+      const fallback = await loadTreatProductsViaFirestore(creator.creatorId, "member");
+      setTreatsProducts(normalizeMemberTreatProducts(fallback));
     } catch {
-      setTreatsProducts([]);
+      try {
+        const fallback = await loadTreatProductsViaFirestore(creator.creatorId, "member");
+        setTreatsProducts(normalizeMemberTreatProducts(fallback));
+      } catch {
+        setTreatsProducts([]);
+      }
     } finally {
       setTreatsLoading(false);
     }
@@ -1780,13 +1863,25 @@ export const FanStorefrontView: React.FC = () => {
         const res = await fetch(
           `/api/products?creatorId=${encodeURIComponent(creator.creatorId)}&context=landing`
         );
-        if (!res.ok || cancelled) return;
-        const data = await res.json();
+        if (res.ok) {
+          if (cancelled) return;
+          const data = await res.json();
+          if (!cancelled) {
+            setLandingTreatsProducts(Array.isArray(data.products) ? data.products : []);
+          }
+          return;
+        }
+        const fallback = await loadTreatProductsViaFirestore(creator.creatorId, "landing");
         if (!cancelled) {
-          setLandingTreatsProducts(Array.isArray(data.products) ? data.products : []);
+          setLandingTreatsProducts(normalizeMemberTreatProducts(fallback));
         }
       } catch {
-        if (!cancelled) setLandingTreatsProducts([]);
+        try {
+          const fallback = await loadTreatProductsViaFirestore(creator.creatorId, "landing");
+          if (!cancelled) setLandingTreatsProducts(normalizeMemberTreatProducts(fallback));
+        } catch {
+          if (!cancelled) setLandingTreatsProducts([]);
+        }
       } finally {
         if (!cancelled) setLandingTreatsLoading(false);
       }
@@ -2700,13 +2795,23 @@ export const FanStorefrontView: React.FC = () => {
 
   // Membership gating values must be computed before any early return to keep hook order stable.
   const creatorRequiresPaidMembership = creator?.monetization?.freeAccessEnabled !== true;
-  const hasPaidMembership = subscribed && membershipType === "paid";
-  const paidPageUnsubscribed = creatorRequiresPaidMembership && membershipType !== "paid";
-  const hasAccessByCurrentMembership =
-    subscribed && (creator?.monetization?.freeAccessEnabled === true || hasPaidMembership);
+  const hasPaidMembershipBase = subscribed && membershipType === "paid";
+  const paidPageUnsubscribedBase = creatorRequiresPaidMembership && membershipType !== "paid";
+  const hasAccessByCurrentMembershipBase =
+    subscribed && (creator?.monetization?.freeAccessEnabled === true || hasPaidMembershipBase);
   const hasUnlockedPurchases = unlockedProductIds.length > 0;
-  const needsPaidUpgrade = isLoggedIn && subscribed && creatorRequiresPaidMembership && !hasPaidMembership;
-  const purchaseOnlyAccess = needsPaidUpgrade && hasUnlockedPurchases;
+  const needsPaidUpgradeBase =
+    isLoggedIn && subscribed && creatorRequiresPaidMembership && !hasPaidMembershipBase;
+  const purchaseOnlyAccessBase = needsPaidUpgradeBase && hasUnlockedPurchases;
+
+  /** Staff/QA bypass from getFanEntitlement: always use full member hub (not purchase-only / paywall nav). */
+  const hasPaidMembership = fanPageAdminBypass ? true : hasPaidMembershipBase;
+  const paidPageUnsubscribed = fanPageAdminBypass ? false : paidPageUnsubscribedBase;
+  const needsPaidUpgrade = fanPageAdminBypass ? false : needsPaidUpgradeBase;
+  const purchaseOnlyAccess = fanPageAdminBypass ? false : purchaseOnlyAccessBase;
+  const hasAccessByCurrentMembership = fanPageAdminBypass
+    ? true
+    : hasAccessByCurrentMembershipBase || purchaseOnlyAccess;
   const forceCreatorPreviewLanding = forcePublicLanding && isViewingOwnStorefront;
   const hasMemberAreaAccess = hasAccessByCurrentMembership || purchaseOnlyAccess;
   const requiresPaidToAccess = creator?.monetization?.freeAccessEnabled !== true;
@@ -2761,7 +2866,7 @@ export const FanStorefrontView: React.FC = () => {
   }, [showLanding, isDarkMode]);
 
   useEffect(() => {
-    if (!needsPaidUpgrade || previewMember || isViewingOwnStorefront) return;
+    if (!needsPaidUpgrade || previewMember || isViewingOwnStorefront || fanPageAdminBypass) return;
     if ((purchaseOnlyAccess || paidPageUnsubscribed) && !["tip", "purchases", "profile"].includes(activeTab)) {
       setActiveTab("purchases");
       if (creator?.handle?.trim()) {
@@ -2778,6 +2883,7 @@ export const FanStorefrontView: React.FC = () => {
     needsPaidUpgrade,
     previewMember,
     isViewingOwnStorefront,
+    fanPageAdminBypass,
     purchaseOnlyAccess,
     paidPageUnsubscribed,
     activeTab,
@@ -2969,11 +3075,13 @@ export const FanStorefrontView: React.FC = () => {
     if (Number.isNaN(date.getTime())) return "Unknown";
     return date.toLocaleDateString(undefined, { month: "long", year: "numeric" });
   })();
-  const membershipSummary = subscribed
-    ? membershipType === "paid"
-      ? `Paid${typeof creator.monetization?.monthlyPrice === "number" ? ` • $${(creator.monetization.monthlyPrice / 100).toFixed(2)}/mo` : ""}`
-      : "Free"
-    : "Not active";
+  const membershipSummary = fanPageAdminBypass
+    ? "Staff access"
+    : subscribed
+      ? membershipType === "paid"
+        ? `Paid${typeof creator.monetization?.monthlyPrice === "number" ? ` • $${(creator.monetization.monthlyPrice / 100).toFixed(2)}/mo` : ""}`
+        : "Free"
+      : "Not active";
   const memberHubWelcomeLine = (() => {
     const community =
       (creator.landingContent?.perksTitle || "").trim() ||
@@ -4160,19 +4268,21 @@ export const FanStorefrontView: React.FC = () => {
                     }}
                   >
                     <p className="fan-member-about-text">
-                      {subscribed
-                        ? membershipType === "paid"
-                          ? `Paid membership is active${typeof creator.monetization?.monthlyPrice === "number"
-                              ? ` ($${(creator.monetization.monthlyPrice / 100).toFixed(2)}/mo)`
-                              : "."}`
-                          : creator.monetization?.freeAccessEnabled
-                            ? "Free membership is active."
-                            : "You joined when this page was free. This page is now paid — subscribe to keep access."
-                        : "No active membership."}
+                      {fanPageAdminBypass
+                        ? "Staff access: full member hub for support and QA (not a fan subscription)."
+                        : subscribed
+                          ? membershipType === "paid"
+                            ? `Paid membership is active${typeof creator.monetization?.monthlyPrice === "number"
+                                ? ` ($${(creator.monetization.monthlyPrice / 100).toFixed(2)}/mo)`
+                                : "."}`
+                            : creator.monetization?.freeAccessEnabled
+                              ? "Free membership is active."
+                              : "You joined when this page was free. This page is now paid — subscribe to keep access."
+                          : "No active membership."}
                     </p>
                   </div>
                   <div className="flex flex-wrap gap-2 mt-3">
-                    {!subscribed ? (
+                    {!fanPageAdminBypass && !subscribed ? (
                       <button
                         type="button"
                         onClick={creator.monetization?.freeAccessEnabled ? handleJoinFree : handleSubscribe}
@@ -4193,7 +4303,10 @@ export const FanStorefrontView: React.FC = () => {
                             : "Subscribe"}
                       </button>
                     ) : null}
-                    {subscribed && membershipType !== "paid" && creator.monetization?.freeAccessEnabled !== true ? (
+                    {!fanPageAdminBypass &&
+                    subscribed &&
+                    membershipType !== "paid" &&
+                    creator.monetization?.freeAccessEnabled !== true ? (
                       <button
                         type="button"
                         onClick={handleSubscribe}
@@ -4208,7 +4321,7 @@ export const FanStorefrontView: React.FC = () => {
                         {subscribing ? "Opening checkout..." : "Subscribe"}
                       </button>
                     ) : null}
-                    {subscribed && membershipType === "paid" ? (
+                    {!fanPageAdminBypass && subscribed && membershipType === "paid" ? (
                       <button
                         type="button"
                         onClick={handleCancelMembership}
