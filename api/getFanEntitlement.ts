@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { getAdminDb } from "./_firebaseAdmin.js";
 import { verifyAuth } from "./verifyAuth.js";
-import { shouldGrantFanPageAdminMemberAccess } from "../src/lib/fanPageAdminBypass";
+import { shouldGrantFanPageAdminMemberAccess } from "../src/lib/fanPageAdminBypass.js";
 
 /**
  * Check if the current user (fan) has an active subscription/entitlement to the given creator.

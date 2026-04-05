@@ -2,7 +2,7 @@ import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { getAdminDb } from "./_firebaseAdmin.js";
 import { verifyAuth } from "./verifyAuth.js";
 import type { TreatProduct, TreatProductType } from "../types";
-import { creatorIdFirestoreQueryVariants, normalizeCreatorId } from "../src/lib/creatorIdNormalize";
+import { creatorIdFirestoreQueryVariants, normalizeCreatorId } from "../src/lib/creatorIdNormalize.js";
 
 const COLLECTION = "products";
 
