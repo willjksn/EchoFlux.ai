@@ -38,8 +38,8 @@ export type RefreshResult =
   | { refreshed: false; reason: string }
   | { refreshed: false; reason: "reconnect_required"; details: string };
 
-/** Firestore doc ref with update() */
-type DocRef = { update: (data: object) => Promise<void> };
+/** Firestore doc ref with update(); Admin SDK returns WriteResult, not void. */
+type DocRef = { update: (data: object) => Promise<unknown> };
 
 /**
  * Refresh one user's X token if expired or expiring within 1 hour.
