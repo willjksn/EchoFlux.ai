@@ -1773,15 +1773,30 @@ export const FanStorefrontView: React.FC = () => {
     (async () => {
       try {
         const token = await auth.currentUser!.getIdToken(true);
-        const res = await fetch("/api/syncFanCheckoutSession", {
-          method: "POST",
-          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-          body: JSON.stringify({ sessionId: sid, creatorId: creator.creatorId }),
-        });
-        const data = await res.json().catch(() => ({}));
-        if (cancelled) return;
-        if (!res.ok) {
+        let synced = false;
+        for (let attempt = 0; attempt < 4; attempt++) {
+          const res = await fetch("/api/syncFanCheckoutSession", {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+            body: JSON.stringify({ sessionId: sid, creatorId: creator.creatorId }),
+          });
+          const data = await res.json().catch(() => ({}));
+          if (cancelled) return;
+          if (res.ok) {
+            synced = true;
+            break;
+          }
           console.warn("syncFanCheckoutSession", res.status, data);
+          // Stripe can briefly return "not complete yet" right after redirect.
+          if (res.status === 409 && attempt < 3) {
+            await new Promise((resolve) => setTimeout(resolve, 1200 * (attempt + 1)));
+            continue;
+          }
+          break;
+        }
+        if (!synced) {
+          // Keep URL params so a refresh can retry sync.
+          return;
         }
         await refetchMemberEntitlement();
         const url = new URL(window.location.href);
@@ -1812,13 +1827,32 @@ export const FanStorefrontView: React.FC = () => {
     let cancelled = false;
     (async () => {
       try {
-        // No auth required: this ensures landing-page tips appear in creator/admin analytics
-        // even when webhook delivery is delayed.
-        await fetch("/api/syncFanCheckoutSessionPublic", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ sessionId: sid, creatorId: creator.creatorId }),
-        }).catch(() => undefined);
+        let synced = false;
+        for (let attempt = 0; attempt < 4; attempt++) {
+          // No auth required: this ensures landing-page tips appear in creator/admin analytics
+          // even when webhook delivery is delayed.
+          const res = await fetch("/api/syncFanCheckoutSessionPublic", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ sessionId: sid, creatorId: creator.creatorId }),
+          }).catch(() => null);
+          if (cancelled) return;
+          if (res?.ok) {
+            synced = true;
+            break;
+          }
+          if (!res) break;
+          // Stripe can briefly return "not complete yet" right after redirect.
+          if (res.status === 409 && attempt < 3) {
+            await new Promise((resolve) => setTimeout(resolve, 1200 * (attempt + 1)));
+            continue;
+          }
+          break;
+        }
+        if (!synced) {
+          // Keep URL params so a refresh can retry sync.
+          return;
+        }
       } finally {
         if (cancelled) return;
         const url = new URL(window.location.href);
