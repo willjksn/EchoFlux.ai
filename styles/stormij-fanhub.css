@@ -7453,7 +7453,8 @@ button.treat-card:hover:not(:disabled) .treat-card-cta {
   color: #9ca3af;
 }
 .stormij-theme .fh-dm-bubble__body {
-  word-break: break-word;
+  overflow-wrap: break-word;
+  word-break: normal;
   white-space: pre-wrap;
 }
 .stormij-theme .fh-dm-bubble__foot {

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef, Fragment, useMemo } from "react";
 import { useAppContext } from "./AppContext";
 import { auth, db } from "../firebaseConfig";
-import { doc, getDoc } from "firebase/firestore";
+import { collection, doc, getDoc, onSnapshot, orderBy, query } from "firebase/firestore";
 import type { FanDmThread, FanDmMessage } from "../types";
 import VideoCallRoom from "./VideoCallRoom";
 import { useAutosizeTextarea } from "../src/hooks/useAutosizeTextarea";
@@ -390,6 +390,70 @@ export const FanHubMessages: React.FC = () => {
       cancelled = true;
     };
   }, [selectedThread?.id, creatorId, fetchMessagesForThread]);
+
+  // True realtime updates for active thread (efficient read stream).
+  useEffect(() => {
+    if (!selectedThread || !creatorId) return;
+    const parseCreated = (rawCreated: unknown): string => {
+      if (rawCreated && typeof (rawCreated as { toDate?: () => Date }).toDate === "function") {
+        return (rawCreated as { toDate: () => Date }).toDate().toISOString();
+      }
+      if (typeof rawCreated === "string" || typeof rawCreated === "number") {
+        const d = new Date(rawCreated);
+        return Number.isFinite(d.getTime()) ? d.toISOString() : "";
+      }
+      return "";
+    };
+
+    const q = query(
+      collection(db, "fanDmThreads", selectedThread.id, "messages"),
+      orderBy("createdAt", "asc")
+    );
+
+    const unsub = onSnapshot(
+      q,
+      (snap) => {
+        const liveMessages = snap.docs.map((d) => {
+          const data = d.data() as {
+            senderId?: string;
+            content?: string;
+            createdAt?: unknown;
+            read?: boolean;
+            attachmentUrl?: string;
+            attachmentType?: "image" | "video" | "audio";
+            reported?: boolean;
+            reportId?: string;
+          };
+          const attachmentUrl =
+            typeof data.attachmentUrl === "string" ? data.attachmentUrl.trim() : undefined;
+          const attachmentType =
+            data.attachmentType === "image" ||
+            data.attachmentType === "video" ||
+            data.attachmentType === "audio"
+              ? data.attachmentType
+              : undefined;
+          return {
+            id: d.id,
+            threadId: selectedThread.id,
+            senderId: String(data.senderId || ""),
+            content: String(data.content || ""),
+            createdAt: parseCreated(data.createdAt),
+            read: data.read === true,
+            ...(attachmentUrl ? { attachmentUrl, attachmentType } : {}),
+            reported: data.reported === true,
+            reportId: typeof data.reportId === "string" ? data.reportId : undefined,
+          } as FanDmMessage;
+        });
+        setMessages(liveMessages);
+        setMessagesError(null);
+      },
+      (err) => {
+        console.warn("FanHubMessages realtime subscription failed:", err);
+      }
+    );
+
+    return () => unsub();
+  }, [selectedThread?.id, creatorId]);
 
   useEffect(() => {
     setPendingAttachmentUrl(null);

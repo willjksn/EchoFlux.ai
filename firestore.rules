@@ -337,6 +337,22 @@ service cloud.firestore {
      *  ------------------------------------------------------- 
      *  Deny all other collections to prevent unauthorized access
      */
+    match /fanDmThreads/{threadId} {
+      allow read: if isAuthenticated() &&
+        (resource.data.creatorId == request.auth.uid || resource.data.fanId == request.auth.uid || isAdmin());
+      allow create, update, delete: if false;
+
+      match /messages/{messageId} {
+        allow read: if isAuthenticated() &&
+          (
+            get(/databases/$(database)/documents/fanDmThreads/$(threadId)).data.creatorId == request.auth.uid ||
+            get(/databases/$(database)/documents/fanDmThreads/$(threadId)).data.fanId == request.auth.uid ||
+            isAdmin()
+          );
+        allow create, update, delete: if false;
+      }
+    }
+
     match /{document=**} {
       allow read, write: if false;
     }
