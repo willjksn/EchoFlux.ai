@@ -194,7 +194,7 @@ export const AdminDashboard: React.FC = () => {
     const [editingUser, setEditingUser] = useState<User | null>(null);
     const [grantingRewardToUser, setGrantingRewardToUser] = useState<User | null>(null);
     const [searchTerm, setSearchTerm] = useState('');
-    const [userOriginFilter, setUserOriginFilter] = useState<'all' | 'fan_hub' | 'echoflux'>('all');
+    const [userOriginFilter, setUserOriginFilter] = useState<'all' | 'fan_hub' | 'echoflux'>('echoflux');
     const [isLoading, setIsLoading] = useState(true);
     const [accessError, setAccessError] = useState<string | null>(null);
     const [modelUsageStats, setModelUsageStats] = useState<ModelUsageStats | null>(null);
@@ -233,6 +233,10 @@ export const AdminDashboard: React.FC = () => {
     const [fanHubMembershipsByFanId, setFanHubMembershipsByFanId] = useState<Record<string, FanMembershipLink[]>>({});
     const [fanHubMemberProfilesByFanId, setFanHubMemberProfilesByFanId] = useState<Record<string, FanHubMemberProfile>>({});
     const [fanHubMemberViewMode, setFanHubMemberViewMode] = useState<'grouped' | 'deduped'>('grouped');
+    const [collapsedFanHubCreators, setCollapsedFanHubCreators] = useState<Record<string, boolean>>({});
+    const [showFanHubMembersSection, setShowFanHubMembersSection] = useState(true);
+    const [fanHubRevenueDays, setFanHubRevenueDays] = useState<number>(30);
+    const [showAllFanHubTransactions, setShowAllFanHubTransactions] = useState(false);
 
     // Video Chat Usage Stats
     const [videoUsageStats, setVideoUsageStats] = useState<{
@@ -736,6 +740,47 @@ export const AdminDashboard: React.FC = () => {
         out.sort((a, b) => a.displayName.localeCompare(b.displayName));
         return out;
     }, [fanHubMembershipsByFanId, fanHubMemberProfilesByFanId, users, hasFanHubMembership, searchTerm, userOriginFilter]);
+
+    const filteredFanHubTransactions = useMemo(() => {
+        if (!fanHubRevenue.recentTransactions.length) return [];
+        const cutoffMs = Date.now() - fanHubRevenueDays * 24 * 60 * 60 * 1000;
+        return fanHubRevenue.recentTransactions.filter((tx) => tx.timestamp.getTime() >= cutoffMs);
+    }, [fanHubRevenue.recentTransactions, fanHubRevenueDays]);
+
+    const fanHubFilteredTotals = useMemo(() => {
+        let tips = 0;
+        let unlocks = 0;
+        let treats = 0;
+        let subscriptions = 0;
+
+        filteredFanHubTransactions.forEach((tx) => {
+            const type = String(tx.type || '').toLowerCase();
+            if (type === 'tip') {
+                tips += tx.amount;
+                return;
+            }
+            if (type === 'unlock' || type === 'post_unlock') {
+                unlocks += tx.amount;
+                return;
+            }
+            if (type === 'subscription') {
+                subscriptions += tx.amount;
+                return;
+            }
+            treats += tx.amount;
+        });
+
+        return { tips, unlocks, treats, subscriptions };
+    }, [filteredFanHubTransactions]);
+
+    const visibleFanHubTransactions = useMemo(
+        () => (showAllFanHubTransactions ? filteredFanHubTransactions : filteredFanHubTransactions.slice(0, 5)),
+        [filteredFanHubTransactions, showAllFanHubTransactions]
+    );
+
+    useEffect(() => {
+        setShowAllFanHubTransactions(false);
+    }, [fanHubRevenueDays]);
     
     // Calculate totals for ALL users (not just filtered/visible)
     const monthlyTotals = useMemo(() => {
@@ -1175,10 +1220,23 @@ export const AdminDashboard: React.FC = () => {
 
             {/* Fan Hub Revenue Breakdown */}
             <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-md">
-                <div className="flex items-center justify-between mb-6">
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
                     <div>
                         <h3 className="text-xl font-bold text-gray-900 dark:text-white">Fan Hub Revenue Breakdown</h3>
-                        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Revenue by transaction type (Echoflux earns {(fanHubRevenue.commissionRate * 100).toFixed(0)}%)</p>
+                        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                            Revenue by transaction type (last {fanHubRevenueDays} days, Echoflux earns {(fanHubRevenue.commissionRate * 100).toFixed(0)}%)
+                        </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <select
+                            value={fanHubRevenueDays}
+                            onChange={(e) => setFanHubRevenueDays(Number(e.target.value))}
+                            className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
+                        >
+                            <option value={7}>Last 7 days</option>
+                            <option value={30}>Last 30 days</option>
+                            <option value={90}>Last 90 days</option>
+                        </select>
                     </div>
                 </div>
                 
@@ -1196,9 +1254,9 @@ export const AdminDashboard: React.FC = () => {
                                 <DollarSignIcon className="w-4 h-4 text-yellow-600 dark:text-yellow-400" />
                                 <p className="text-xs font-medium text-yellow-700 dark:text-yellow-300">Tips</p>
                             </div>
-                            <p className="text-xl font-bold text-yellow-900 dark:text-yellow-100">${fanHubRevenue.tips.toFixed(2)}</p>
+                            <p className="text-xl font-bold text-yellow-900 dark:text-yellow-100">${fanHubFilteredTotals.tips.toFixed(2)}</p>
                             <p className="text-xs text-yellow-600 dark:text-yellow-400 mt-1">
-                                Commission: ${(fanHubRevenue.tips * fanHubRevenue.commissionRate).toFixed(2)}
+                                Commission: ${(fanHubFilteredTotals.tips * fanHubRevenue.commissionRate).toFixed(2)}
                             </p>
                         </div>
                         <div className="p-4 bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-900/20 dark:to-purple-800/20 rounded-lg border border-purple-200 dark:border-purple-700">
@@ -1206,9 +1264,9 @@ export const AdminDashboard: React.FC = () => {
                                 <LockIcon className="w-4 h-4 text-purple-600 dark:text-purple-400" />
                                 <p className="text-xs font-medium text-purple-700 dark:text-purple-300">Content Unlocks</p>
                             </div>
-                            <p className="text-xl font-bold text-purple-900 dark:text-purple-100">${fanHubRevenue.unlocks.toFixed(2)}</p>
+                            <p className="text-xl font-bold text-purple-900 dark:text-purple-100">${fanHubFilteredTotals.unlocks.toFixed(2)}</p>
                             <p className="text-xs text-purple-600 dark:text-purple-400 mt-1">
-                                Commission: ${(fanHubRevenue.unlocks * fanHubRevenue.commissionRate).toFixed(2)}
+                                Commission: ${(fanHubFilteredTotals.unlocks * fanHubRevenue.commissionRate).toFixed(2)}
                             </p>
                         </div>
                         <div className="p-4 bg-gradient-to-br from-pink-50 to-pink-100 dark:from-pink-900/20 dark:to-pink-800/20 rounded-lg border border-pink-200 dark:border-pink-700">
@@ -1216,9 +1274,9 @@ export const AdminDashboard: React.FC = () => {
                                 <HeartIcon className="w-4 h-4 text-pink-600 dark:text-pink-400" />
                                 <p className="text-xs font-medium text-pink-700 dark:text-pink-300">Fan store</p>
                             </div>
-                            <p className="text-xl font-bold text-pink-900 dark:text-pink-100">${fanHubRevenue.treats.toFixed(2)}</p>
+                            <p className="text-xl font-bold text-pink-900 dark:text-pink-100">${fanHubFilteredTotals.treats.toFixed(2)}</p>
                             <p className="text-xs text-pink-600 dark:text-pink-400 mt-1">
-                                Commission: ${(fanHubRevenue.treats * fanHubRevenue.commissionRate).toFixed(2)}
+                                Commission: ${(fanHubFilteredTotals.treats * fanHubRevenue.commissionRate).toFixed(2)}
                             </p>
                         </div>
                         <div className="p-4 bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/20 dark:to-blue-800/20 rounded-lg border border-blue-200 dark:border-blue-700">
@@ -1226,9 +1284,9 @@ export const AdminDashboard: React.FC = () => {
                                 <StarIcon className="w-4 h-4 text-blue-600 dark:text-blue-400" />
                                 <p className="text-xs font-medium text-blue-700 dark:text-blue-300">Subscriptions</p>
                             </div>
-                            <p className="text-xl font-bold text-blue-900 dark:text-blue-100">${fanHubRevenue.subscriptions.toFixed(2)}</p>
+                            <p className="text-xl font-bold text-blue-900 dark:text-blue-100">${fanHubFilteredTotals.subscriptions.toFixed(2)}</p>
                             <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">
-                                Commission: ${(fanHubRevenue.subscriptions * fanHubRevenue.commissionRate).toFixed(2)}
+                                Commission: ${(fanHubFilteredTotals.subscriptions * fanHubRevenue.commissionRate).toFixed(2)}
                             </p>
                         </div>
                     </div>
@@ -1293,10 +1351,28 @@ export const AdminDashboard: React.FC = () => {
 
             {/* Recent Transactions */}
             <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-md">
-                <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-4">Recent Fan Hub Transactions</h3>
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+                    <div>
+                        <h3 className="text-xl font-bold text-gray-900 dark:text-white">Recent Fan Hub Transactions</h3>
+                        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                            Top 5 shown by default. Expand to see all for the selected period.
+                        </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <select
+                            value={fanHubRevenueDays}
+                            onChange={(e) => setFanHubRevenueDays(Number(e.target.value))}
+                            className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
+                        >
+                            <option value={7}>Last 7 days</option>
+                            <option value={30}>Last 30 days</option>
+                            <option value={90}>Last 90 days</option>
+                        </select>
+                    </div>
+                </div>
                 {isLoadingFanHubRevenue ? (
                     <div className="text-center py-8 text-gray-500">Loading...</div>
-                ) : fanHubRevenue.recentTransactions.length > 0 ? (
+                ) : filteredFanHubTransactions.length > 0 ? (
                     <div className="overflow-x-auto">
                         <table className="w-full text-left">
                             <thead className="bg-gray-50 dark:bg-gray-700/50">
@@ -1309,7 +1385,7 @@ export const AdminDashboard: React.FC = () => {
                                 </tr>
                             </thead>
                             <tbody>
-                                {fanHubRevenue.recentTransactions.map(tx => (
+                                {visibleFanHubTransactions.map(tx => (
                                     <tr key={tx.id} className="border-b border-gray-100 dark:border-gray-700">
                                         <td className="p-3 text-sm text-gray-900 dark:text-white">{tx.creatorName}</td>
                                         <td className="p-3">
@@ -1329,12 +1405,25 @@ export const AdminDashboard: React.FC = () => {
                                 ))}
                             </tbody>
                         </table>
+                        {filteredFanHubTransactions.length > 5 && (
+                            <div className="mt-4 flex justify-end">
+                                <button
+                                    type="button"
+                                    onClick={() => setShowAllFanHubTransactions((prev) => !prev)}
+                                    className="px-3 py-2 text-xs font-semibold border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600"
+                                >
+                                    {showAllFanHubTransactions
+                                        ? 'Hide extra transactions'
+                                        : `Show all ${filteredFanHubTransactions.length} transactions`}
+                                </button>
+                            </div>
+                        )}
                     </div>
                 ) : (
                     <div className="text-center py-8 text-gray-500 dark:text-gray-400">
                         <DollarSignIcon className="w-8 h-8 mx-auto mb-2 opacity-50" />
-                        <p className="text-sm">No transactions yet</p>
-                        <p className="text-xs mt-1">Transactions will appear when fans make purchases</p>
+                        <p className="text-sm">No transactions in the selected period</p>
+                        <p className="text-xs mt-1">Try a wider date range to view older transactions</p>
                     </div>
                 )}
             </div>
@@ -1875,6 +1964,88 @@ export const AdminDashboard: React.FC = () => {
                                             </>
                                         )}
                                         
+                                        {/* EchoFlux Users Section */}
+                                        {echofluxUsers.length > 0 && (
+                                            <>
+                                                <tr>
+                                                    <td colSpan={8} className="p-2 border-t-2 border-gray-300 dark:border-gray-600">
+                                                        <div className="text-xs text-gray-500 dark:text-gray-400 font-semibold tracking-wide text-center">
+                                                            ECHOFLUX USERS
+                                                        </div>
+                                                    </td>
+                                                </tr>
+
+                                                {echofluxUsers.map((user) => {
+                                                    const isWilJackson = user.email === 'wil_jackson@icloud.com';
+                                                    
+                                                    return (
+                                                        <React.Fragment key={user.id}>
+                                                            <tr className="border-b border-gray-200 dark:border-gray-700">
+                                                                <td className="p-3">
+                                                                    <div className="flex items-center space-x-3">
+                                                                        <img src={user.avatar} alt={user.name} className="w-10 h-10 rounded-full"/>
+                                                                        <div>
+                                                                            <p className="font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                                                                                {user.name}
+                                                                                {getUserOriginBadge(user)}
+                                                                            </p>
+                                                                            <p className="text-sm text-gray-500 dark:text-gray-400">{user.email}</p>
+                                                                        </div>
+                                                                    </div>
+                                                                </td>
+                                                                <td className="p-3">
+                                                                    <span className={`px-3 py-1 text-xs font-semibold rounded-full ${planColorMap[getPlanKey(user.plan)]}`}>
+                                                                        {user.plan}
+                                                                    </span>
+                                                                </td>
+                                                                <td className="p-3 text-sm text-gray-600 dark:text-gray-300">
+                                                                    {new Date(user.signupDate).toLocaleDateString()}
+                                                                </td>
+                                                                <td className="p-3 text-sm text-gray-600 dark:text-gray-300">
+                                                                    {formatStorage(userStorageMap[user.id] ?? user.storageUsed ?? 0, getStorageLimit(user.plan))}
+                                                                </td>
+                                                                <td className="p-3 font-mono text-gray-600 dark:text-gray-300">
+                                                                    {(() => {
+                                                                        const used = user.monthlyCaptionGenerationsUsed ?? 0;
+                                                                        let limit = 0;
+                                                                        if (user.plan === 'Free') limit = 10;
+                                                                        else if (user.plan === 'Pro') limit = 500;
+                                                                        else if (user.plan === 'Elite') limit = 1500;
+                                                                        else if (user.plan === 'Agency') limit = 10000;
+                                                                        return limit > 0 ? `${used}/${limit}` : `${used}`;
+                                                                    })()}
+                                                                </td>
+                                                                <td className="p-3 font-mono text-gray-600 dark:text-gray-300">{getUsageString(user.plan, user.monthlyImageGenerationsUsed, 'image')}</td>
+                                                                <td className="p-3 font-mono text-gray-600 dark:text-gray-300">{getUsageString(user.plan, user.monthlyVideoGenerationsUsed, 'video')}</td>
+                                                                <td className="p-3">
+                                                                    <div className="flex gap-2">
+                                                                        <button onClick={() => setEditingUser(user)} className="px-3 py-1 text-sm font-medium text-primary-600 dark:text-primary-400 hover:bg-primary-50 dark:hover:bg-primary-900/30 rounded-md">
+                                                                            Manage
+                                                                        </button>
+                                                                        <button onClick={() => setGrantingRewardToUser(user)} className="px-3 py-1 text-sm font-medium text-purple-600 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-900/30 rounded-md">
+                                                                            Grant Reward
+                                                                        </button>
+                                                                        <button 
+                                                                            onClick={() => handleDeleteUser(user)} 
+                                                                            className="px-3 py-1 text-sm font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-md flex items-center gap-1"
+                                                                            title="Delete User"
+                                                                        >
+                                                                            <TrashIcon className="w-4 h-4" />
+                                                                            Delete
+                                                                        </button>
+                                                                    </div>
+                                                                </td>
+                                                            </tr>
+                                                            {/* Totals row after wil_jackson@icloud.com if they're a regular user */}
+                                                            {isWilJackson && (
+                                                                <TotalsRow />
+                                                            )}
+                                                        </React.Fragment>
+                                                    );
+                                                })}
+                                            </>
+                                        )}
+
                                         {/* Fan Hub Members Section (grouped by subscribed creator) */}
                                         {(fanHubUsers.length > 0 || membershipOnlyFanRows.length > 0) && (
                                             <>
@@ -1884,34 +2055,43 @@ export const AdminDashboard: React.FC = () => {
                                                             <div className="text-xs font-semibold text-cyan-800 dark:text-cyan-200 tracking-wide">
                                                                 FAN HUB MEMBERS
                                                             </div>
-                                                            <div className="inline-flex rounded-md border border-cyan-300 dark:border-cyan-700 overflow-hidden">
+                                                            <div className="flex items-center gap-2">
                                                                 <button
                                                                     type="button"
-                                                                    onClick={() => setFanHubMemberViewMode('grouped')}
-                                                                    className={`px-2.5 py-1 text-[11px] font-semibold ${
-                                                                        fanHubMemberViewMode === 'grouped'
-                                                                            ? 'bg-cyan-700 text-white dark:bg-cyan-500'
-                                                                            : 'bg-cyan-50 text-cyan-800 dark:bg-cyan-900/20 dark:text-cyan-200'
-                                                                    }`}
+                                                                    onClick={() => setShowFanHubMembersSection((prev) => !prev)}
+                                                                    className="px-2.5 py-1 text-[11px] font-semibold rounded-md border border-cyan-300 dark:border-cyan-700 bg-cyan-50 text-cyan-800 dark:bg-cyan-900/20 dark:text-cyan-200 hover:bg-cyan-100 dark:hover:bg-cyan-900/30"
                                                                 >
-                                                                    Grouped by creator
+                                                                    {showFanHubMembersSection ? 'Hide members' : 'Show members'}
                                                                 </button>
-                                                                <button
-                                                                    type="button"
-                                                                    onClick={() => setFanHubMemberViewMode('deduped')}
-                                                                    className={`px-2.5 py-1 text-[11px] font-semibold ${
-                                                                        fanHubMemberViewMode === 'deduped'
-                                                                            ? 'bg-cyan-700 text-white dark:bg-cyan-500'
-                                                                            : 'bg-cyan-50 text-cyan-800 dark:bg-cyan-900/20 dark:text-cyan-200'
-                                                                    }`}
-                                                                >
-                                                                    Deduped by fan
-                                                                </button>
+                                                                <div className="inline-flex rounded-md border border-cyan-300 dark:border-cyan-700 overflow-hidden">
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => setFanHubMemberViewMode('grouped')}
+                                                                        className={`px-2.5 py-1 text-[11px] font-semibold ${
+                                                                            fanHubMemberViewMode === 'grouped'
+                                                                                ? 'bg-cyan-700 text-white dark:bg-cyan-500'
+                                                                                : 'bg-cyan-50 text-cyan-800 dark:bg-cyan-900/20 dark:text-cyan-200'
+                                                                        }`}
+                                                                    >
+                                                                        Grouped by creator
+                                                                    </button>
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => setFanHubMemberViewMode('deduped')}
+                                                                        className={`px-2.5 py-1 text-[11px] font-semibold ${
+                                                                            fanHubMemberViewMode === 'deduped'
+                                                                                ? 'bg-cyan-700 text-white dark:bg-cyan-500'
+                                                                                : 'bg-cyan-50 text-cyan-800 dark:bg-cyan-900/20 dark:text-cyan-200'
+                                                                        }`}
+                                                                    >
+                                                                        Deduped by fan
+                                                                    </button>
+                                                                </div>
                                                             </div>
                                                         </div>
                                                     </td>
                                                 </tr>
-                                                {(() => {
+                                                {showFanHubMembersSection ? (() => {
                                                     const grouped = new Map<string, { creatorName: string; rows: Array<{ user: User; membership: FanMembershipLink; membershipCount: number }> }>();
                                                     const unassigned: Array<User> = [];
                                                     const dedupedRows: Array<{
@@ -1959,87 +2139,103 @@ export const AdminDashboard: React.FC = () => {
                                                                         <React.Fragment key={`fanhub-section-${section.creatorId}`}>
                                                                             <tr className="bg-cyan-100/70 dark:bg-cyan-900/30">
                                                                                 <td colSpan={8} className="p-2 border-t border-cyan-300 dark:border-cyan-800">
-                                                                                    <div className="text-xs font-semibold text-cyan-800 dark:text-cyan-200 tracking-wide">
-                                                                                        {section.creatorName} ({section.rows.length})
+                                                                                    <div className="flex items-center justify-between gap-2">
+                                                                                        <div className="text-xs font-semibold text-cyan-800 dark:text-cyan-200 tracking-wide">
+                                                                                            {section.creatorName} ({section.rows.length})
+                                                                                        </div>
+                                                                                        <button
+                                                                                            type="button"
+                                                                                            onClick={() =>
+                                                                                                setCollapsedFanHubCreators((prev) => ({
+                                                                                                    ...prev,
+                                                                                                    [section.creatorId]: !prev[section.creatorId],
+                                                                                                }))
+                                                                                            }
+                                                                                            className="px-2 py-1 text-[11px] font-semibold rounded-md border border-cyan-300 dark:border-cyan-700 text-cyan-800 dark:text-cyan-200 hover:bg-cyan-50 dark:hover:bg-cyan-900/30"
+                                                                                        >
+                                                                                            {collapsedFanHubCreators[section.creatorId] ? 'Show members' : 'Hide members'}
+                                                                                        </button>
                                                                                     </div>
                                                                                 </td>
                                                                             </tr>
-                                                                            <tr>
-                                                                                <td colSpan={8} className="p-0 border-b border-cyan-200 dark:border-cyan-900/40">
-                                                                                    <div className="overflow-x-auto">
-                                                                                        <table className="w-full text-left min-w-[860px] bg-cyan-50/20 dark:bg-cyan-900/10">
-                                                                                            <thead className="bg-cyan-50 dark:bg-cyan-900/20">
-                                                                                                <tr>
-                                                                                                    <th className="p-3 text-xs font-semibold text-cyan-800 dark:text-cyan-200">Member</th>
-                                                                                                    <th className="p-3 text-xs font-semibold text-cyan-800 dark:text-cyan-200">Subscription Price</th>
-                                                                                                    <th className="p-3 text-xs font-semibold text-cyan-800 dark:text-cyan-200">Purchases</th>
-                                                                                                    <th className="p-3 text-xs font-semibold text-cyan-800 dark:text-cyan-200">Tips</th>
-                                                                                                    <th className="p-3 text-xs font-semibold text-cyan-800 dark:text-cyan-200">Status</th>
-                                                                                                    <th className="p-3 text-xs font-semibold text-cyan-800 dark:text-cyan-200">Actions</th>
-                                                                                                </tr>
-                                                                                            </thead>
-                                                                                            <tbody>
-                                                                                                {section.rows.map(({ user, membership, membershipCount }) => (
-                                                                                                    <tr key={`fanhub-${section.creatorId}-${user.id}`} className="border-t border-cyan-100 dark:border-cyan-900/30">
-                                                                                                        <td className="p-3">
-                                                                                                            <div className="flex items-center space-x-3">
-                                                                                                                <img src={user.avatar} alt={user.name} className="w-10 h-10 rounded-full"/>
-                                                                                                                <div>
-                                                                                                                    <p className="font-bold text-gray-900 dark:text-white flex items-center gap-2">
-                                                                                                                        {user.name}
-                                                                                                                        {getUserOriginBadge(user)}
-                                                                                                                    </p>
-                                                                                                                    <p className="text-sm text-gray-500 dark:text-gray-400">{user.email}</p>
-                                                                                                                    {membershipCount > 1 && (
-                                                                                                                        <p className="text-[11px] text-cyan-700 dark:text-cyan-300 font-medium">
-                                                                                                                            Also subscribed to {membershipCount - 1} other creator{membershipCount > 2 ? 's' : ''}
-                                                                                                                        </p>
-                                                                                                                    )}
-                                                                                                                </div>
-                                                                                                            </div>
-                                                                                                        </td>
-                                                                                                        <td className="p-3 text-sm font-semibold text-gray-800 dark:text-gray-200">
-                                                                                                            {membership.membershipType === 'free' ? 'Free' : formatUsdFromCents(membership.subscriptionPriceCents)}
-                                                                                                        </td>
-                                                                                                        <td className="p-3 text-sm text-gray-700 dark:text-gray-300">
-                                                                                                            {membership.purchaseCount} · {formatUsdFromCents(membership.purchasesCents)}
-                                                                                                        </td>
-                                                                                                        <td className="p-3 text-sm text-gray-700 dark:text-gray-300">
-                                                                                                            {membership.tipCount} · {formatUsdFromCents(membership.tipsCents)}
-                                                                                                        </td>
-                                                                                                        <td className="p-3">
-                                                                                                            <span className={`px-2 py-1 text-xs font-semibold rounded-full ${
-                                                                                                                membership.status === 'free'
-                                                                                                                    ? 'bg-cyan-100 text-cyan-700 dark:bg-cyan-900/40 dark:text-cyan-200'
-                                                                                                                    : membership.status === 'active' || membership.status === 'trialing'
-                                                                                                                        ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-200'
-                                                                                                                        : 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-200'
-                                                                                                            }`}>
-                                                                                                                {membership.status || 'unknown'}
-                                                                                                            </span>
-                                                                                                        </td>
-                                                                                                        <td className="p-3">
-                                                                                                            <div className="flex gap-2">
-                                                                                                                <button onClick={() => setEditingUser(user)} className="px-3 py-1 text-sm font-medium text-cyan-700 dark:text-cyan-300 hover:bg-cyan-50 dark:hover:bg-cyan-900/30 rounded-md">
-                                                                                                                    Manage
-                                                                                                                </button>
-                                                                                                                <button
-                                                                                                                    onClick={() => handleDeleteUser(user)}
-                                                                                                                    className="px-3 py-1 text-sm font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-md flex items-center gap-1"
-                                                                                                                    title="Delete User"
-                                                                                                                >
-                                                                                                                    <TrashIcon className="w-4 h-4" />
-                                                                                                                    Delete
-                                                                                                                </button>
-                                                                                                            </div>
-                                                                                                        </td>
+                                                                            {!collapsedFanHubCreators[section.creatorId] && (
+                                                                                <tr>
+                                                                                    <td colSpan={8} className="p-0 border-b border-cyan-200 dark:border-cyan-900/40">
+                                                                                        <div className="overflow-x-auto">
+                                                                                            <table className="w-full text-left min-w-[860px] bg-cyan-50/20 dark:bg-cyan-900/10">
+                                                                                                <thead className="bg-cyan-50 dark:bg-cyan-900/20">
+                                                                                                    <tr>
+                                                                                                        <th className="p-3 text-xs font-semibold text-cyan-800 dark:text-cyan-200">Member</th>
+                                                                                                        <th className="p-3 text-xs font-semibold text-cyan-800 dark:text-cyan-200">Subscription Price</th>
+                                                                                                        <th className="p-3 text-xs font-semibold text-cyan-800 dark:text-cyan-200">Purchases</th>
+                                                                                                        <th className="p-3 text-xs font-semibold text-cyan-800 dark:text-cyan-200">Tips</th>
+                                                                                                        <th className="p-3 text-xs font-semibold text-cyan-800 dark:text-cyan-200">Status</th>
+                                                                                                        <th className="p-3 text-xs font-semibold text-cyan-800 dark:text-cyan-200">Actions</th>
                                                                                                     </tr>
-                                                                                                ))}
-                                                                                            </tbody>
-                                                                                        </table>
-                                                                                    </div>
-                                                                                </td>
-                                                                            </tr>
+                                                                                                </thead>
+                                                                                                <tbody>
+                                                                                                    {section.rows.map(({ user, membership, membershipCount }) => (
+                                                                                                        <tr key={`fanhub-${section.creatorId}-${user.id}`} className="border-t border-cyan-100 dark:border-cyan-900/30">
+                                                                                                            <td className="p-3">
+                                                                                                                <div className="flex items-center space-x-3">
+                                                                                                                    <img src={user.avatar} alt={user.name} className="w-10 h-10 rounded-full"/>
+                                                                                                                    <div>
+                                                                                                                        <p className="font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                                                                                                                            {user.name}
+                                                                                                                            {getUserOriginBadge(user)}
+                                                                                                                        </p>
+                                                                                                                        <p className="text-sm text-gray-500 dark:text-gray-400">{user.email}</p>
+                                                                                                                        {membershipCount > 1 && (
+                                                                                                                            <p className="text-[11px] text-cyan-700 dark:text-cyan-300 font-medium">
+                                                                                                                                Also subscribed to {membershipCount - 1} other creator{membershipCount > 2 ? 's' : ''}
+                                                                                                                            </p>
+                                                                                                                        )}
+                                                                                                                    </div>
+                                                                                                                </div>
+                                                                                                            </td>
+                                                                                                            <td className="p-3 text-sm font-semibold text-gray-800 dark:text-gray-200">
+                                                                                                                {membership.membershipType === 'free' ? 'Free' : formatUsdFromCents(membership.subscriptionPriceCents)}
+                                                                                                            </td>
+                                                                                                            <td className="p-3 text-sm text-gray-700 dark:text-gray-300">
+                                                                                                                {membership.purchaseCount} · {formatUsdFromCents(membership.purchasesCents)}
+                                                                                                            </td>
+                                                                                                            <td className="p-3 text-sm text-gray-700 dark:text-gray-300">
+                                                                                                                {membership.tipCount} · {formatUsdFromCents(membership.tipsCents)}
+                                                                                                            </td>
+                                                                                                            <td className="p-3">
+                                                                                                                <span className={`px-2 py-1 text-xs font-semibold rounded-full ${
+                                                                                                                    membership.status === 'free'
+                                                                                                                        ? 'bg-cyan-100 text-cyan-700 dark:bg-cyan-900/40 dark:text-cyan-200'
+                                                                                                                        : membership.status === 'active' || membership.status === 'trialing'
+                                                                                                                            ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-200'
+                                                                                                                            : 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-200'
+                                                                                                                }`}>
+                                                                                                                    {membership.status || 'unknown'}
+                                                                                                                </span>
+                                                                                                            </td>
+                                                                                                            <td className="p-3">
+                                                                                                                <div className="flex gap-2">
+                                                                                                                    <button onClick={() => setEditingUser(user)} className="px-3 py-1 text-sm font-medium text-cyan-700 dark:text-cyan-300 hover:bg-cyan-50 dark:hover:bg-cyan-900/30 rounded-md">
+                                                                                                                        Manage
+                                                                                                                    </button>
+                                                                                                                    <button
+                                                                                                                        onClick={() => handleDeleteUser(user)}
+                                                                                                                        className="px-3 py-1 text-sm font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-md flex items-center gap-1"
+                                                                                                                        title="Delete User"
+                                                                                                                    >
+                                                                                                                        <TrashIcon className="w-4 h-4" />
+                                                                                                                        Delete
+                                                                                                                    </button>
+                                                                                                                </div>
+                                                                                                            </td>
+                                                                                                        </tr>
+                                                                                                    ))}
+                                                                                                </tbody>
+                                                                                            </table>
+                                                                                        </div>
+                                                                                    </td>
+                                                                                </tr>
+                                                                            )}
                                                                         </React.Fragment>
                                                                     ))}
                                                                 </>
@@ -2207,88 +2403,16 @@ export const AdminDashboard: React.FC = () => {
                                                             )}
                                                         </>
                                                     );
-                                                })()}
-                                                {echofluxUsers.length > 0 && (
-                                                    <tr>
-                                                        <td colSpan={8} className="p-2 border-t-2 border-gray-300 dark:border-gray-600">
-                                                            <div className="text-xs text-gray-500 dark:text-gray-400 font-semibold tracking-wide text-center">
-                                                                ECHOFLUX USERS
-                                                            </div>
+                                                })() : (
+                                                    <tr className="bg-cyan-50/20 dark:bg-cyan-900/10">
+                                                        <td colSpan={8} className="p-3 text-xs text-cyan-800 dark:text-cyan-200 border-b border-cyan-200 dark:border-cyan-900/40">
+                                                            Fan Hub members are hidden. Click "Show members" to expand.
                                                         </td>
                                                     </tr>
                                                 )}
                                             </>
                                         )}
 
-                                        {/* EchoFlux Users Section */}
-                                        {echofluxUsers.map((user) => {
-                                            const isWilJackson = user.email === 'wil_jackson@icloud.com';
-                                            
-                                            return (
-                                                <React.Fragment key={user.id}>
-                                                    <tr className="border-b border-gray-200 dark:border-gray-700">
-                                                        <td className="p-3">
-                                                            <div className="flex items-center space-x-3">
-                                                                <img src={user.avatar} alt={user.name} className="w-10 h-10 rounded-full"/>
-                                                                <div>
-                                                                    <p className="font-bold text-gray-900 dark:text-white flex items-center gap-2">
-                                                                        {user.name}
-                                                                        {getUserOriginBadge(user)}
-                                                                    </p>
-                                                                    <p className="text-sm text-gray-500 dark:text-gray-400">{user.email}</p>
-                                                                </div>
-                                                            </div>
-                                                        </td>
-                                                        <td className="p-3">
-                                                            <span className={`px-3 py-1 text-xs font-semibold rounded-full ${planColorMap[getPlanKey(user.plan)]}`}>
-                                                                {user.plan}
-                                                            </span>
-                                                        </td>
-                                                        <td className="p-3 text-sm text-gray-600 dark:text-gray-300">
-                                                            {new Date(user.signupDate).toLocaleDateString()}
-                                                        </td>
-                                                        <td className="p-3 text-sm text-gray-600 dark:text-gray-300">
-                                                            {formatStorage(userStorageMap[user.id] ?? user.storageUsed ?? 0, getStorageLimit(user.plan))}
-                                                        </td>
-                                                        <td className="p-3 font-mono text-gray-600 dark:text-gray-300">
-                                                            {(() => {
-                                                                const used = user.monthlyCaptionGenerationsUsed ?? 0;
-                                                                let limit = 0;
-                                                                if (user.plan === 'Free') limit = 10;
-                                                                else if (user.plan === 'Pro') limit = 500;
-                                                                else if (user.plan === 'Elite') limit = 1500;
-                                                                else if (user.plan === 'Agency') limit = 10000;
-                                                                return limit > 0 ? `${used}/${limit}` : `${used}`;
-                                                            })()}
-                                                        </td>
-                                                        <td className="p-3 font-mono text-gray-600 dark:text-gray-300">{getUsageString(user.plan, user.monthlyImageGenerationsUsed, 'image')}</td>
-                                                        <td className="p-3 font-mono text-gray-600 dark:text-gray-300">{getUsageString(user.plan, user.monthlyVideoGenerationsUsed, 'video')}</td>
-                                                        <td className="p-3">
-                                                            <div className="flex gap-2">
-                                                                <button onClick={() => setEditingUser(user)} className="px-3 py-1 text-sm font-medium text-primary-600 dark:text-primary-400 hover:bg-primary-50 dark:hover:bg-primary-900/30 rounded-md">
-                                                                    Manage
-                                                                </button>
-                                                                <button onClick={() => setGrantingRewardToUser(user)} className="px-3 py-1 text-sm font-medium text-purple-600 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-900/30 rounded-md">
-                                                                    Grant Reward
-                                                                </button>
-                                                                <button 
-                                                                    onClick={() => handleDeleteUser(user)} 
-                                                                    className="px-3 py-1 text-sm font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-md flex items-center gap-1"
-                                                                    title="Delete User"
-                                                                >
-                                                                    <TrashIcon className="w-4 h-4" />
-                                                                    Delete
-                                                                </button>
-                                                            </div>
-                                                        </td>
-                                                    </tr>
-                                                    {/* Totals row after wil_jackson@icloud.com if they're a regular user */}
-                                                    {isWilJackson && (
-                                                        <TotalsRow />
-                                                    )}
-                                                </React.Fragment>
-                                            );
-                                        })}
                                     </>
                                 );
                             })()}
