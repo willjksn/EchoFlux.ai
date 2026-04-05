@@ -74,6 +74,13 @@ import { formatFanStorefrontDocumentTitle, getFanFacingSiteTitle } from "../src/
 import { creatorIdFirestoreQueryVariants, normalizeCreatorId } from "../src/lib/creatorIdNormalize";
 
 /** Ensure member-store products have usable Firestore ids (avoids every row showing “Processing…” when id is missing or duplicated). */
+function toOptionalNonNegativeInt(v: unknown): number | undefined {
+  if (v == null || v === "") return undefined;
+  const n = typeof v === "number" ? v : Number(v);
+  if (!Number.isFinite(n)) return undefined;
+  return Math.max(0, Math.floor(n));
+}
+
 function normalizeMemberTreatProducts(raw: unknown): TreatProduct[] {
   if (!Array.isArray(raw)) return [];
   const out: TreatProduct[] = [];
@@ -89,7 +96,14 @@ function normalizeMemberTreatProducts(raw: unknown): TreatProduct[] {
           : "";
     if (!sid || seen.has(sid)) continue;
     seen.add(sid);
-    out.push({ ...p, id: sid } as TreatProduct);
+    const quantityLimit = toOptionalNonNegativeInt((p as { quantityLimit?: unknown }).quantityLimit);
+    const soldCount = toOptionalNonNegativeInt((p as { soldCount?: unknown }).soldCount);
+    out.push({
+      ...(p as TreatProduct),
+      id: sid,
+      quantityLimit,
+      soldCount,
+    });
   }
   return out;
 }
@@ -151,8 +165,8 @@ async function loadTreatProductsViaFirestore(
         showOnLandingPage: x.showOnLandingPage !== false,
         showInMemberStore: x.showInMemberStore !== false,
         sortOrder: typeof x.sortOrder === "number" ? x.sortOrder : undefined,
-        quantityLimit: typeof x.quantityLimit === "number" ? x.quantityLimit : undefined,
-        soldCount: typeof x.soldCount === "number" ? x.soldCount : undefined,
+        quantityLimit: toOptionalNonNegativeInt(x.quantityLimit),
+        soldCount: toOptionalNonNegativeInt(x.soldCount),
         createdAt: String(x.createdAt ?? ""),
         updatedAt: String(x.updatedAt ?? ""),
       });
