@@ -4058,29 +4058,28 @@ export const FanStorefrontView: React.FC = () => {
                                           <span className="italic opacity-70">(empty message)</span>
                                         ) : null}
                                       </div>
-                                      {isFan && timeStr ? (
-                                        <div className="fh-dm-bubble__foot fh-dm-bubble__foot--me">
+                                      {timeStr ? (
+                                        <div className={`fh-dm-bubble__foot ${isFan ? "fh-dm-bubble__foot--me" : ""}`}>
                                           {timeStr}
-                                          {m.read ? (
-                                            <span className="fh-dm-bubble__receipt" title="Creator has seen this">
-                                              {" "}
-                                              — Read
-                                            </span>
-                                          ) : (
-                                            <span
-                                              className="fh-dm-bubble__receipt fh-dm-bubble__receipt--unread"
-                                              title="Not read yet"
-                                            >
-                                              {" "}
-                                              — Unread
-                                            </span>
-                                          )}
+                                          {isFan ? (
+                                            m.read ? (
+                                              <span className="fh-dm-bubble__receipt" title="Creator has seen this">
+                                                {" "}
+                                                — Read
+                                              </span>
+                                            ) : (
+                                              <span
+                                                className="fh-dm-bubble__receipt fh-dm-bubble__receipt--unread"
+                                                title="Not read yet"
+                                              >
+                                                {" "}
+                                                — Unread
+                                              </span>
+                                            )
+                                          ) : null}
                                         </div>
                                       ) : null}
                                     </div>
-                                    {!isFan && timeStr ? (
-                                      <div className="fh-dm-meta-below">{timeStr}</div>
-                                    ) : null}
                                   </div>
                                 </div>
                               </div>

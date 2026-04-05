@@ -1319,29 +1319,28 @@ export const FanHubMessages: React.FC = () => {
                                   <span className="italic opacity-70">(empty message)</span>
                                 ) : null}
                               </div>
-                              {isMe && timeStr ? (
-                                <div className="fh-dm-bubble__foot fh-dm-bubble__foot--me">
+                              {timeStr ? (
+                                <div className={`fh-dm-bubble__foot ${isMe ? "fh-dm-bubble__foot--me" : ""}`}>
                                   {timeStr}
-                                  {m.read ? (
-                                    <span className="fh-dm-bubble__receipt" title="Fan has seen this message">
-                                      {" "}
-                                      — Read
-                                    </span>
-                                  ) : (
-                                    <span
-                                      className="fh-dm-bubble__receipt fh-dm-bubble__receipt--unread"
-                                      title="Fan has not opened this thread since you sent this"
-                                    >
-                                      {" "}
-                                      — Unread
-                                    </span>
-                                  )}
+                                  {isMe ? (
+                                    m.read ? (
+                                      <span className="fh-dm-bubble__receipt" title="Fan has seen this message">
+                                        {" "}
+                                        — Read
+                                      </span>
+                                    ) : (
+                                      <span
+                                        className="fh-dm-bubble__receipt fh-dm-bubble__receipt--unread"
+                                        title="Fan has not opened this thread since you sent this"
+                                      >
+                                        {" "}
+                                        — Unread
+                                      </span>
+                                    )
+                                  ) : null}
                                 </div>
                               ) : null}
                             </div>
-                            {!isMe && timeStr ? (
-                              <div className="fh-dm-meta-below">{timeStr}</div>
-                            ) : null}
                           </div>
                         </div>
                       </Fragment>
