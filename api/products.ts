@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { getAdminDb } from "./_firebaseAdmin.js";
 import { verifyAuth } from "./verifyAuth.js";
-import type { TreatProduct, TreatProductType } from "../../types";
+import type { TreatProduct, TreatProductType } from "../types";
 import { creatorIdFirestoreQueryVariants, normalizeCreatorId } from "../src/lib/creatorIdNormalize";
 
 const COLLECTION = "products";
@@ -40,7 +40,7 @@ function toProduct(doc: FirebaseFirestore.DocumentSnapshot): TreatProduct {
   return {
     id: doc.id,
     creatorId: normalizeCreatorId(rawCreator) || rawCreator,
-    type: d.type as TreatProductType,
+    type: ((d.type as TreatProductType) || "custom") as TreatProductType,
     title: d.title as string,
     description: d.description as string | undefined,
     priceCents: (d.priceCents as number) ?? 0,

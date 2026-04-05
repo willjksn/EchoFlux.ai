@@ -26,6 +26,8 @@ The GitHub Actions workflow runs `npm run build`, installs Chromium, then `playw
 | Variable | Purpose |
 |----------|---------|
 | `E2E_PUBLIC_HANDLE` | Optional. If set, the storefront smoke test requests `/{handle}` (must exist in your deployed/staging data). |
+| `E2E_API_BASE` | Optional. Live site URL (e.g. `https://your-app.vercel.app`, no trailing slash). With `E2E_TREATS_CREATOR_ID`, runs the deployed **Treats products API** check in `e2e/smoke.spec.ts` (preview alone has no `/api`). |
+| `E2E_TREATS_CREATOR_ID` | Optional. Creator Firebase Auth uid for `GET /api/products?creatorId=…&context=landing`. |
 | `E2E_LOGIN_EMAIL` | Optional. With `E2E_LOGIN_PASSWORD`, runs `e2e/creator-login.spec.ts`: email/password sign-in from the landing page (Firebase). Use a **dedicated test account**; set via shell or CI secrets — do not commit. |
 | `E2E_LOGIN_PASSWORD` | Optional. Password for `E2E_LOGIN_EMAIL`. |
 

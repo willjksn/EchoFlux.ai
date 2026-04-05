@@ -34,7 +34,15 @@ async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
     return;
   }
 
-  const db = getAdminDb();
+  let db: ReturnType<typeof getAdminDb>;
+  try {
+    db = getAdminDb();
+  } catch (e) {
+    console.error("adminGetBillingEvents: getAdminDb failed", e);
+    res.status(503).json({ success: false, error: "Database unavailable", failed: [], renewals: [] });
+    return;
+  }
+
   const adminSnap = await db.collection("users").doc(authUser.uid).get();
   if (!adminSnap.exists || (adminSnap.data() as { role?: string } | undefined)?.role !== "Admin") {
     res.status(403).json({ error: "Forbidden" });
@@ -44,8 +52,10 @@ async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
   const dayAgo = now - 24 * 60 * 60 * 1000;
   const weekAhead = now + 7 * 24 * 60 * 60 * 1000;
 
+  let failed: { id: string; [k: string]: unknown }[] = [];
+  let renewals: { id: string; [k: string]: unknown }[] = [];
+
   try {
-    // Failed payments last 24h
     const failedSnap = await db
       .collection("billing_events")
       .where("type", "==", "invoice.payment_failed")
@@ -53,10 +63,12 @@ async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
       .orderBy("createdAt", "desc")
       .limit(50)
       .get();
+    failed = failedSnap.docs.map((doc) => ({ id: doc.id, ...(doc.data() as Record<string, unknown>) }));
+  } catch (err: unknown) {
+    console.error("adminGetBillingEvents: failed payments query", err);
+  }
 
-    const failed = failedSnap.docs.map((doc) => ({ id: doc.id, ...(doc.data() as any) }));
-
-    // Renewals next 7d (use dueAt if present)
+  try {
     const renewalsSnap = await db
       .collection("billing_events")
       .where("dueAt", ">=", new Date().toISOString())
@@ -64,14 +76,12 @@ async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
       .orderBy("dueAt", "asc")
       .limit(50)
       .get();
-
-    const renewals = renewalsSnap.docs.map((doc) => ({ id: doc.id, ...(doc.data() as any) }));
-
-    res.status(200).json({ success: true, failed, renewals });
-  } catch (err: any) {
-    console.error("adminGetBillingEvents error:", err);
-    res.status(500).json({ success: false, error: "Failed to load billing events", failed: [], renewals: [] });
+    renewals = renewalsSnap.docs.map((doc) => ({ id: doc.id, ...(doc.data() as Record<string, unknown>) }));
+  } catch (err: unknown) {
+    console.error("adminGetBillingEvents: renewals query", err);
   }
+
+  res.status(200).json({ success: true, failed, renewals });
 }
 
 export default withErrorHandling(handler);
