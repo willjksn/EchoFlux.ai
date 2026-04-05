@@ -16,6 +16,12 @@ type MembershipRow = {
   updatedAt: string | null;
 };
 
+type FanProfile = {
+  displayName: string | null;
+  email: string | null;
+  username: string | null;
+};
+
 const ACTIVE_STATUSES = new Set(["active", "trialing", "free", "past_due"]);
 
 function hasPlatformAdminAccess(userData: Record<string, unknown> | undefined): boolean {
@@ -50,6 +56,13 @@ function getCreatorIdFromPath(path: string): string | null {
   return parts[creatorsIdx + 1] || null;
 }
 
+function normalizeUsername(raw: unknown): string | null {
+  if (typeof raw !== "string") return null;
+  const clean = raw.replace(/^@/, "").trim().toLowerCase();
+  if (!clean) return null;
+  return clean;
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== "GET") return res.status(405).json({ error: "Method not allowed" });
 
@@ -69,12 +82,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const fanSnap = await db.collectionGroup("fans").get();
     const creatorIds = new Set<string>();
     const byFan: Record<string, MembershipRow[]> = {};
+    const fanProfilesByFanId: Record<string, FanProfile> = {};
 
     for (const docSnap of fanSnap.docs) {
       const data = docSnap.data() as {
         id?: string;
         creatorId?: string;
         subscriptionStatus?: string;
+        displayName?: string;
+        email?: string;
+        username?: string;
+        memberUsername?: string;
+        handle?: string;
         totalSpentCents?: number;
         purchaseCount?: number;
         tipCount?: number;
@@ -88,6 +107,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const status = typeof data.subscriptionStatus === "string" ? data.subscriptionStatus : "";
       if (!fanId || !creatorId) continue;
       if (activeOnly && !ACTIVE_STATUSES.has(status)) continue;
+
+      if (!fanProfilesByFanId[fanId]) {
+        const rawDisplayName =
+          typeof data.displayName === "string" && data.displayName.trim() ? data.displayName.trim() : "";
+        const rawEmail =
+          typeof data.email === "string" && data.email.trim() ? data.email.trim().toLowerCase() : "";
+        const rawUsername =
+          (typeof data.username === "string" && data.username.trim()) ||
+          (typeof data.memberUsername === "string" && data.memberUsername.trim()) ||
+          (typeof data.handle === "string" && data.handle.trim()) ||
+          "";
+        fanProfilesByFanId[fanId] = {
+          displayName: rawDisplayName || null,
+          email: rawEmail || null,
+          username: rawUsername ? rawUsername.replace(/^@/, "").trim().toLowerCase() : null,
+        };
+      }
 
       const totalSpentCents = typeof data.totalSpentCents === "number" && Number.isFinite(data.totalSpentCents)
         ? Math.max(0, Math.round(data.totalSpentCents))
@@ -128,17 +164,72 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           const handle = typeof d?.handle === "string" && d.handle.trim() ? d.handle.trim() : null;
           const name =
             (typeof d?.displayName === "string" && d.displayName.trim()) ||
-            (handle ? `@${handle.replace(/^@/, "")}` : creatorId);
+            (handle ? `@${handle.replace(/^@/, "")}` : "Unknown Creator");
           const monthlyPrice =
             (typeof d?.monetization?.monthlyPrice === "number" && Number.isFinite(d.monetization.monthlyPrice))
               ? d.monetization.monthlyPrice
               : (typeof d?.monthlyPrice === "number" && Number.isFinite(d.monthlyPrice) ? d.monthlyPrice : 0);
           creatorNameById[creatorId] = { name, handle, monthlyPriceCents: Math.max(0, Math.round(monthlyPrice * 100)) };
         } catch {
-          creatorNameById[creatorId] = { name: creatorId, handle: null, monthlyPriceCents: 0 };
+          creatorNameById[creatorId] = { name: "Unknown Creator", handle: null, monthlyPriceCents: 0 };
         }
       })
     );
+
+    // Enrich missing fan profiles from users/{fanId} so Admin UI can show usernames/names instead of IDs.
+    const fanIdsToResolve = Object.keys(byFan).filter((fanId) => {
+      const p = fanProfilesByFanId[fanId];
+      return !p || (!p.displayName && !p.email && !p.username);
+    });
+    const chunkSize = 40;
+    for (let i = 0; i < fanIdsToResolve.length; i += chunkSize) {
+      const chunk = fanIdsToResolve.slice(i, i + chunkSize);
+      await Promise.all(
+        chunk.map(async (fanId) => {
+          try {
+            const userSnap = await db.collection("users").doc(fanId).get();
+            if (!userSnap.exists) {
+              if (fanId.includes("@")) {
+                const email = fanId.trim().toLowerCase();
+                fanProfilesByFanId[fanId] = {
+                  displayName: fanProfilesByFanId[fanId]?.displayName || email.split("@")[0] || null,
+                  email: fanProfilesByFanId[fanId]?.email || email,
+                  username: fanProfilesByFanId[fanId]?.username || null,
+                };
+              }
+              return;
+            }
+            const u = userSnap.data() as {
+              displayName?: unknown;
+              name?: unknown;
+              email?: unknown;
+              username?: unknown;
+              handle?: unknown;
+            };
+            const displayName =
+              (typeof u.displayName === "string" && u.displayName.trim()) ||
+              (typeof u.name === "string" && u.name.trim()) ||
+              null;
+            const email =
+              (typeof u.email === "string" && u.email.trim().toLowerCase()) ||
+              fanProfilesByFanId[fanId]?.email ||
+              (fanId.includes("@") ? fanId.trim().toLowerCase() : null);
+            const username =
+              normalizeUsername(u.username) ||
+              normalizeUsername(u.handle) ||
+              fanProfilesByFanId[fanId]?.username ||
+              null;
+            fanProfilesByFanId[fanId] = {
+              displayName,
+              email,
+              username,
+            };
+          } catch {
+            /* ignore profile enrichment failures */
+          }
+        })
+      );
+    }
 
     for (const fanId of Object.keys(byFan)) {
       byFan[fanId] = byFan[fanId]
@@ -155,6 +246,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       success: true,
       activeOnly,
       membershipsByFan: byFan,
+      fanProfilesByFanId,
       fanCount: Object.keys(byFan).length,
       generatedAt: new Date().toISOString(),
     });

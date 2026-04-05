@@ -1,5 +1,5 @@
 
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { User, Activity } from '../types';
 import { UserManagementModal } from './UserManagementModal';
 import { AddUserModal } from './AddUserModal';
@@ -173,6 +173,20 @@ type FanMembershipLink = {
     updatedAt: string | null;
 };
 
+type FanHubMemberProfile = {
+    displayName: string | null;
+    email: string | null;
+    username: string | null;
+};
+
+type MembershipOnlyFanRow = {
+    fanKey: string;
+    displayName: string;
+    email: string | null;
+    username: string | null;
+    memberships: FanMembershipLink[];
+};
+
 export const AdminDashboard: React.FC = () => {
     const { user: currentUser, showToast, setActivePage } = useAppContext();
     const [users, setUsers] = useState<User[]>([]);
@@ -217,6 +231,7 @@ export const AdminDashboard: React.FC = () => {
     });
     const [isLoadingFanHubRevenue, setIsLoadingFanHubRevenue] = useState(true);
     const [fanHubMembershipsByFanId, setFanHubMembershipsByFanId] = useState<Record<string, FanMembershipLink[]>>({});
+    const [fanHubMemberProfilesByFanId, setFanHubMemberProfilesByFanId] = useState<Record<string, FanHubMemberProfile>>({});
     const [fanHubMemberViewMode, setFanHubMemberViewMode] = useState<'grouped' | 'deduped'>('grouped');
 
     // Video Chat Usage Stats
@@ -418,6 +433,7 @@ export const AdminDashboard: React.FC = () => {
                 }
                 const data = await res.json() as { membershipsByFan?: Record<string, FanMembershipLink[]> };
                 setFanHubMembershipsByFanId(data.membershipsByFan || {});
+                setFanHubMemberProfilesByFanId((data as { fanProfilesByFanId?: Record<string, FanHubMemberProfile> }).fanProfilesByFanId || {});
             } catch (error) {
                 console.warn('Failed to fetch Fan Hub memberships:', error);
             }
@@ -643,6 +659,21 @@ export const AdminDashboard: React.FC = () => {
             calculateStorageForUsers();
         }
     }, [users, currentUser]);
+
+    const getFanHubMembershipsForUser = useCallback((user: User): FanMembershipLink[] => {
+        const byId = fanHubMembershipsByFanId[user.id];
+        if (Array.isArray(byId) && byId.length > 0) return byId;
+        const emailKey = typeof user.email === 'string' ? user.email.trim().toLowerCase() : '';
+        if (emailKey) {
+            const byEmail = fanHubMembershipsByFanId[emailKey];
+            if (Array.isArray(byEmail) && byEmail.length > 0) return byEmail;
+        }
+        return [];
+    }, [fanHubMembershipsByFanId]);
+
+    const hasFanHubMembership = useCallback((user: User): boolean => {
+        return getFanHubMembershipsForUser(user).length > 0;
+    }, [getFanHubMembershipsForUser]);
     
     const filteredUsers = useMemo(() => {
         const filtered = users.filter(user => {
@@ -651,9 +682,9 @@ export const AdminDashboard: React.FC = () => {
                 user.email.toLowerCase().includes(searchTerm.toLowerCase());
             if (!matchesSearch) return false;
             if (userOriginFilter === 'all') return true;
-            if (userOriginFilter === 'fan_hub') return user.accountOrigin === 'fan_hub';
-            // Treat undefined as legacy EchoFlux account for filtering.
-            return user.accountOrigin !== 'fan_hub';
+            if (userOriginFilter === 'fan_hub') return hasFanHubMembership(user);
+            // EchoFlux filter means no active Fan Hub membership link.
+            return !hasFanHubMembership(user);
         });
         
         // Separate admins from regular users
@@ -667,7 +698,44 @@ export const AdminDashboard: React.FC = () => {
         
         // Return admins first, then regular users
         return [...adminUsers, ...regularUsers];
-    }, [users, searchTerm, userOriginFilter]);
+    }, [users, searchTerm, userOriginFilter, hasFanHubMembership]);
+
+    const membershipOnlyFanRows = useMemo<MembershipOnlyFanRow[]>(() => {
+        if (userOriginFilter === 'echoflux') return [];
+        const matchedKeys = new Set<string>();
+        users.forEach((u) => {
+            if (u.role === 'Admin') return;
+            if (!hasFanHubMembership(u)) return;
+            matchedKeys.add(u.id);
+            const em = typeof u.email === 'string' ? u.email.trim().toLowerCase() : '';
+            if (em) matchedKeys.add(em);
+        });
+
+        const search = searchTerm.trim().toLowerCase();
+        const out: MembershipOnlyFanRow[] = [];
+        for (const [fanKey, membershipsRaw] of Object.entries(fanHubMembershipsByFanId)) {
+            const memberships = Array.isArray(membershipsRaw) ? membershipsRaw : [];
+            if (memberships.length === 0) continue;
+            if (matchedKeys.has(fanKey)) continue;
+            const profile = fanHubMemberProfilesByFanId[fanKey];
+            const email = profile?.email || (fanKey.includes('@') ? fanKey.toLowerCase() : null);
+            const usernameRaw = profile?.username ? profile.username.replace(/^@/, '').trim().toLowerCase() : '';
+            const username = usernameRaw ? `@${usernameRaw}` : null;
+            const displayName =
+                (profile?.displayName && profile.displayName.trim()) ||
+                (username && username.trim()) ||
+                (email ? email.split('@')[0] : '') ||
+                'Fan Member';
+            if (search) {
+                const creatorBlob = memberships.map((m) => (m.creatorName || '')).join(' ').toLowerCase();
+                const hay = `${fanKey.toLowerCase()} ${displayName.toLowerCase()} ${email || ''} ${(username || '').toLowerCase()} ${creatorBlob}`;
+                if (!hay.includes(search)) continue;
+            }
+            out.push({ fanKey, displayName, email, username, memberships });
+        }
+        out.sort((a, b) => a.displayName.localeCompare(b.displayName));
+        return out;
+    }, [fanHubMembershipsByFanId, fanHubMemberProfilesByFanId, users, hasFanHubMembership, searchTerm, userOriginFilter]);
     
     // Calculate totals for ALL users (not just filtered/visible)
     const monthlyTotals = useMemo(() => {
@@ -1674,8 +1742,8 @@ export const AdminDashboard: React.FC = () => {
                                 // Separate admins, Fan Hub members, and regular EchoFlux users
                                 const adminUsers = visibleUsers.filter(user => user.role === 'Admin');
                                 const nonAdminUsers = visibleUsers.filter(user => user.role !== 'Admin');
-                                const fanHubUsers = nonAdminUsers.filter(user => user.accountOrigin === 'fan_hub');
-                                const echofluxUsers = nonAdminUsers.filter(user => user.accountOrigin !== 'fan_hub');
+                                const fanHubUsers = nonAdminUsers.filter(user => hasFanHubMembership(user));
+                                const echofluxUsers = nonAdminUsers.filter(user => !hasFanHubMembership(user));
                                 
                                 // Find wil_jackson@icloud.com in current page
                                 const wilJacksonUser = visibleUsers.find(user => user.email === 'wil_jackson@icloud.com');
@@ -1808,7 +1876,7 @@ export const AdminDashboard: React.FC = () => {
                                         )}
                                         
                                         {/* Fan Hub Members Section (grouped by subscribed creator) */}
-                                        {fanHubUsers.length > 0 && (
+                                        {(fanHubUsers.length > 0 || membershipOnlyFanRows.length > 0) && (
                                             <>
                                                 <tr className="bg-cyan-50/60 dark:bg-cyan-900/20">
                                                     <td colSpan={8} className="p-3 border-t-2 border-cyan-300 dark:border-cyan-700">
@@ -1856,7 +1924,7 @@ export const AdminDashboard: React.FC = () => {
                                                     }> = [];
 
                                                     fanHubUsers.forEach((user) => {
-                                                        const memberships = fanHubMembershipsByFanId[user.id] || [];
+                                                        const memberships = getFanHubMembershipsForUser(user);
                                                         if (memberships.length === 0) {
                                                             unassigned.push(user);
                                                             return;
@@ -1864,14 +1932,15 @@ export const AdminDashboard: React.FC = () => {
                                                         dedupedRows.push({
                                                             user,
                                                             memberships,
-                                                            purchaseCount: memberships.reduce((acc, m) => acc + (m.purchaseCount || 0), 0),
-                                                            purchasesCents: memberships.reduce((acc, m) => acc + (m.purchasesCents || 0), 0),
-                                                            tipCount: memberships.reduce((acc, m) => acc + (m.tipCount || 0), 0),
-                                                            tipsCents: memberships.reduce((acc, m) => acc + (m.tipsCents || 0), 0),
+                                                            purchaseCount: memberships.reduce((acc: number, m: FanMembershipLink) => acc + (m.purchaseCount || 0), 0),
+                                                            purchasesCents: memberships.reduce((acc: number, m: FanMembershipLink) => acc + (m.purchasesCents || 0), 0),
+                                                            tipCount: memberships.reduce((acc: number, m: FanMembershipLink) => acc + (m.tipCount || 0), 0),
+                                                            tipsCents: memberships.reduce((acc: number, m: FanMembershipLink) => acc + (m.tipsCents || 0), 0),
                                                         });
-                                                        memberships.forEach((membership) => {
+                                                        memberships.forEach((membership: FanMembershipLink) => {
                                                             const creatorId = membership.creatorId || 'unknown_creator';
-                                                            const group = grouped.get(creatorId) || { creatorName: membership.creatorName || 'Unknown Creator', rows: [] };
+                                                            const group: { creatorName: string; rows: Array<{ user: User; membership: FanMembershipLink; membershipCount: number }> } =
+                                                                grouped.get(creatorId) || { creatorName: membership.creatorName || 'Unknown Creator', rows: [] };
                                                             group.rows.push({ user, membership, membershipCount: memberships.length });
                                                             grouped.set(creatorId, group);
                                                         });
@@ -2085,6 +2154,52 @@ export const AdminDashboard: React.FC = () => {
                                                                                         Delete
                                                                                     </button>
                                                                                 </div>
+                                                                            </td>
+                                                                        </tr>
+                                                                    ))}
+                                                                </>
+                                                            )}
+                                                            {membershipOnlyFanRows.length > 0 && (
+                                                                <>
+                                                                    <tr className="bg-cyan-100/40 dark:bg-cyan-900/20">
+                                                                        <td colSpan={8} className="p-2 border-t border-cyan-300 dark:border-cyan-800">
+                                                                            <div className="text-xs font-semibold text-cyan-800 dark:text-cyan-200 tracking-wide">
+                                                                                FAN HUB SUBSCRIBERS (membership records without EchoFlux user profile)
+                                                                            </div>
+                                                                        </td>
+                                                                    </tr>
+                                                                    {membershipOnlyFanRows.map((row) => (
+                                                                        <tr key={`fanhub-membership-only-${row.fanKey}`} className="border-b border-gray-200 dark:border-gray-700 bg-cyan-50/20 dark:bg-cyan-900/10">
+                                                                            <td className="p-3">
+                                                                                <div className="flex items-center space-x-3">
+                                                                                    <div className="w-10 h-10 rounded-full bg-cyan-200 dark:bg-cyan-800 text-cyan-900 dark:text-cyan-100 flex items-center justify-center font-bold text-sm">
+                                                                                        {row.displayName.slice(0, 1).toUpperCase()}
+                                                                                    </div>
+                                                                                    <div>
+                                                                                        <p className="font-bold text-gray-900 dark:text-white">
+                                                                                            {row.displayName}
+                                                                                            {row.username ? (
+                                                                                                <span className="ml-2 text-xs font-semibold text-cyan-700 dark:text-cyan-300">{row.username}</span>
+                                                                                            ) : null}
+                                                                                        </p>
+                                                                                        <p className="text-sm text-gray-500 dark:text-gray-400">{row.email || 'Fan Hub member profile'}</p>
+                                                                                    </div>
+                                                                                </div>
+                                                                            </td>
+                                                                            <td className="p-3">
+                                                                                <span className="px-3 py-1 text-xs font-semibold rounded-full bg-cyan-100 text-cyan-700 dark:bg-cyan-900/40 dark:text-cyan-200">
+                                                                                    Member
+                                                                                </span>
+                                                                            </td>
+                                                                            <td className="p-3 text-sm text-gray-600 dark:text-gray-300">
+                                                                                —
+                                                                            </td>
+                                                                            <td className="p-3 text-sm text-gray-600 dark:text-gray-300">—</td>
+                                                                            <td className="p-3 text-sm text-gray-600 dark:text-gray-300">—</td>
+                                                                            <td className="p-3 text-sm text-gray-600 dark:text-gray-300">—</td>
+                                                                            <td className="p-3 text-sm text-gray-600 dark:text-gray-300">—</td>
+                                                                            <td className="p-3 text-sm text-gray-600 dark:text-gray-300">
+                                                                                {[...new Set(row.memberships.map((m) => (m.creatorName || '').trim() || 'Unknown Creator'))].join(', ')}
                                                                             </td>
                                                                         </tr>
                                                                     ))}

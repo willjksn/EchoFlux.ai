@@ -711,13 +711,23 @@ export const FanHubUsers: React.FC = () => {
         );
         const memberUsername = data.username || null;
 
-        // Role: prefer explicit fans doc (Stormij / Add User), else infer tipper / guest store buyer
+        // Role: prefer explicit fans doc (Stormij / Add User), else infer tipper / guest store buyer.
+        // But any real membership status must always render under Members.
         let role: UserRole = (data.storedRole as UserRole) || "member";
+        const subStatusNormalized = String(data.subscriptionStatus || "").trim().toLowerCase();
+        const hasMembershipStatus =
+          subStatusNormalized === "active" ||
+          subStatusNormalized === "trialing" ||
+          subStatusNormalized === "past_due" ||
+          subStatusNormalized === "free";
+        if (hasMembershipStatus) {
+          role = "member";
+        }
         const onlyTips =
           data.tips > 0 && data.treats === 0 && data.unlocks === 0;
-        if (!data.storedRole && !data.subscriptionStatus && onlyTips) {
+        if (!hasMembershipStatus && !data.storedRole && !data.subscriptionStatus && onlyTips) {
           role = "tipper";
-        } else if (!data.storedRole && String(data.id).startsWith("guest_")) {
+        } else if (!hasMembershipStatus && !data.storedRole && String(data.id).startsWith("guest_")) {
           role = "treat_buyer";
         }
 
