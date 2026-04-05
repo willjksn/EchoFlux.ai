@@ -47,12 +47,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     let subscribed = false;
     let membershipType: 'paid' | 'free' | null = null;
+    let limitedMemberAccess = false;
 
     // First check the primary fans collection (includes both paid and free members)
     const fanRef = db.collection("creators").doc(creatorId).collection("fans").doc(fanId);
     const fanSnap = await fanRef.get();
     if (fanSnap.exists) {
-      const fanData = fanSnap.data() as { subscriptionStatus?: string } | undefined;
+      const fanData = fanSnap.data() as {
+        subscriptionStatus?: string;
+        totalSpentCents?: number;
+        totalTipsCents?: number;
+        purchaseCount?: number;
+        tipCount?: number;
+      } | undefined;
       const status = fanData?.subscriptionStatus;
       if (status === "active" || status === "trialing") {
         subscribed = true;
@@ -61,6 +68,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         subscribed = true;
         membershipType = 'free';
       }
+      const hasSpend =
+        (typeof fanData?.totalSpentCents === "number" && fanData.totalSpentCents > 0) ||
+        (typeof fanData?.totalTipsCents === "number" && fanData.totalTipsCents > 0) ||
+        (typeof fanData?.purchaseCount === "number" && fanData.purchaseCount > 0) ||
+        (typeof fanData?.tipCount === "number" && fanData.tipCount > 0);
+      if (hasSpend) limitedMemberAccess = true;
     }
 
     // Also check legacy creatorSubscribers collection if not already subscribed
@@ -98,10 +111,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       } | undefined;
       unlockedProductIds = Array.isArray(grantData?.unlockedProductIds) ? grantData.unlockedProductIds : [];
       unlockedFanPostIds = Array.isArray(grantData?.unlockedFanPostIds) ? grantData.unlockedFanPostIds : [];
-      // Also check entitlements grant for subscription status
-      if (!subscribed && grantData?.subscription) {
-        subscribed = true;
-        membershipType = grantData.membershipType === 'free' ? 'free' : 'paid';
+      if (unlockedProductIds.length > 0 || unlockedFanPostIds.length > 0) {
+        limitedMemberAccess = true;
       }
     }
 
@@ -124,6 +135,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       membershipType,
       unlockedProductIds,
       unlockedFanPostIds,
+      limitedMemberAccess,
       memberUsername,
       memberUsernameRequired,
     });

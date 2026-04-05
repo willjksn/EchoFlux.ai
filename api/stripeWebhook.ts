@@ -120,6 +120,27 @@ function deriveGuestFanIdFromCheckoutSession(
   return `guest_tip_${createHash('sha256').update(raw).digest('hex').slice(0, 32)}`;
 }
 
+function fallbackGuestFanIdFromSession(session: Stripe.Checkout.Session): string {
+  return `guest_session_${session.id}`;
+}
+
+function getCheckoutSessionEmail(session: Stripe.Checkout.Session): string | null {
+  const email =
+    session.customer_details?.email ||
+    session.customer_email ||
+    session.metadata?.fanEmail ||
+    null;
+  return typeof email === 'string' && email.trim() ? email.trim().toLowerCase() : null;
+}
+
+function getCheckoutSessionName(session: Stripe.Checkout.Session): string | null {
+  const name =
+    session.customer_details?.name ||
+    session.metadata?.fanName ||
+    null;
+  return typeof name === 'string' && name.trim() ? name.trim() : null;
+}
+
 /**
  * Fan Hub checkout (creator storefront): same Firestore updates for Connect checkouts and
  * platform-account checkouts (e.g. PLATFORM_OWNER_CREATOR_IDS / Stormij).
@@ -145,14 +166,10 @@ export async function processFanHubCheckoutSessionCompleted(
   const isGuestProductCheckout = type === 'product' && session.metadata?.guestCheckout === 'true';
   let fanId = (session.metadata?.fanId || session.client_reference_id || '') as string;
   if (isGuestProductCheckout) {
-    if (!stripeCustId) {
-      console.warn('Fan hub guest product checkout missing Stripe customer', session.id);
-      return false;
-    }
-    fanId = `guest_${stripeCustId}`;
+    fanId = stripeCustId ? `guest_${stripeCustId}` : fallbackGuestFanIdFromSession(session);
   } else if (type === 'tip' && (!fanId || fanId === 'guest_pending')) {
     const guestDerived = deriveGuestFanIdFromCheckoutSession(session, stripeCustId);
-    if (guestDerived) fanId = guestDerived;
+    fanId = guestDerived || fallbackGuestFanIdFromSession(session);
   } else if (!fanId || fanId === 'guest_pending') {
     return false;
   }
@@ -161,7 +178,7 @@ export async function processFanHubCheckoutSessionCompleted(
   // (or stable email hash) so repeat tippers merge and show under Tippers / revenue like guest store buyers.
   if (type === 'tip' && typeof fanId === 'string' && fanId.startsWith('anon_')) {
     const guestDerived = deriveGuestFanIdFromCheckoutSession(session, stripeCustId);
-    if (guestDerived) fanId = guestDerived;
+    fanId = guestDerived || fallbackGuestFanIdFromSession(session);
   }
 
   const dupOrder = await db.collection('orders').where('stripeSessionId', '==', session.id).limit(1).get();
@@ -192,8 +209,8 @@ export async function processFanHubCheckoutSessionCompleted(
       stripeSubscriptionId: session.subscription,
       amountCents: amountTotal,
       status: 'paid',
-      fanEmail: session.customer_details?.email || session.metadata?.fanEmail || null,
-      fanName: session.customer_details?.name || session.metadata?.fanName || null,
+      fanEmail: getCheckoutSessionEmail(session),
+      fanName: getCheckoutSessionName(session),
       scheduleStatus: 'pending',
       createdAt: now,
     });
@@ -205,8 +222,8 @@ export async function processFanHubCheckoutSessionCompleted(
     const totalOrders = (stats?.totalOrders ?? 0) + 1;
     await statsRef.set({ totalRevenueCents: totalRevenue, totalOrders, updatedAt: now }, { merge: true });
 
-    const fanEmail = session.customer_details?.email || session.metadata?.fanEmail || null;
-    const fanName = session.customer_details?.name || session.metadata?.fanName || null;
+    const fanEmail = getCheckoutSessionEmail(session);
+    const fanName = getCheckoutSessionName(session);
     const fanRef = db.collection('creators').doc(creatorId).collection('fans').doc(fanId);
     const fanSnap = await fanRef.get();
     let memberUsername: string | null = null;
@@ -274,8 +291,8 @@ export async function processFanHubCheckoutSessionCompleted(
     const paymentIntentId = typeof session.payment_intent === 'string' ? session.payment_intent : (session.payment_intent as Stripe.PaymentIntent)?.id;
     const amountTotal = session.amount_total ?? 0;
 
-    const fanEmail = session.customer_details?.email || session.metadata?.fanEmail || null;
-    const fanName = session.customer_details?.name || session.metadata?.fanName || null;
+    const fanEmail = getCheckoutSessionEmail(session);
+    const fanName = getCheckoutSessionName(session);
     const isGuestFan = fanId.startsWith('guest_');
 
     const productTitle =
@@ -377,8 +394,8 @@ export async function processFanHubCheckoutSessionCompleted(
       stripePaymentIntentId: paymentIntentId || null,
       amountCents: amountTotal,
       status: 'paid',
-      fanEmail: session.customer_details?.email || session.metadata?.fanEmail || null,
-      fanName: session.customer_details?.name || session.metadata?.fanName || null,
+      fanEmail: getCheckoutSessionEmail(session),
+      fanName: getCheckoutSessionName(session),
       scheduleStatus: 'pending',
       createdAt: now,
     });
@@ -391,8 +408,8 @@ export async function processFanHubCheckoutSessionCompleted(
       await grantRef.set({ unlockedFanPostIds: [...unlockedPosts, unlockPostId], updatedAt: now }, { merge: true });
     }
 
-    const fanEmail = session.customer_details?.email || session.metadata?.fanEmail || null;
-    const fanName = session.customer_details?.name || session.metadata?.fanName || null;
+    const fanEmail = getCheckoutSessionEmail(session);
+    const fanName = getCheckoutSessionName(session);
     const fanRef = db.collection('creators').doc(creatorId).collection('fans').doc(fanId);
     const fanSnap = await fanRef.get();
     if (!fanSnap.exists) {
@@ -449,15 +466,15 @@ export async function processFanHubCheckoutSessionCompleted(
       stripePaymentIntentId: paymentIntentId || null,
       amountCents: amountTotal,
       tipHandle,
-      fanEmail: session.customer_details?.email || null,
-      fanName: session.customer_details?.name || null,
+      fanEmail: getCheckoutSessionEmail(session),
+      fanName: getCheckoutSessionName(session),
       status: 'paid',
       scheduleStatus: 'pending',
       createdAt: now,
     });
 
-    const fanEmail = session.customer_details?.email || null;
-    const fanName = session.customer_details?.name || tipHandle;
+    const fanEmail = getCheckoutSessionEmail(session);
+    const fanName = getCheckoutSessionName(session) || tipHandle;
     const metaFanId = (session.metadata?.fanId || '') as string;
     const isAnonymous = metaFanId.startsWith('anon_');
 
