@@ -8,7 +8,11 @@ type MembershipRow = {
   creatorHandle: string | null;
   membershipType: "free" | "paid";
   status: string;
+  cancelAtPeriodEnd: boolean;
+  subscriptionCurrentPeriodEnd: string | null;
+  subscribedAt: string | null;
   subscriptionPriceCents: number;
+  totalSpentCents: number;
   purchaseCount: number;
   purchasesCents: number;
   tipCount: number;
@@ -132,6 +136,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         ? Math.max(0, Math.round(data.totalTipsCents))
         : 0;
       const purchasesCents = Math.max(0, totalSpentCents - totalTipsCents);
+      const subscriptionCurrentPeriodEnd =
+        toIso((data as { subscriptionCurrentPeriodEnd?: unknown }).subscriptionCurrentPeriodEnd) ??
+        toIso((data as { currentPeriodEnd?: unknown }).currentPeriodEnd);
+      const subscribedAt = toIso((data as { subscribedAt?: unknown }).subscribedAt);
+      const cancelAtPeriodEnd =
+        (data as { cancelAtPeriodEnd?: unknown }).cancelAtPeriodEnd === true ||
+        (data as { cancel_at_period_end?: unknown }).cancel_at_period_end === true;
 
       creatorIds.add(creatorId);
       if (!byFan[fanId]) byFan[fanId] = [];
@@ -141,7 +152,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         creatorHandle: null,
         membershipType: status === "free" ? "free" : "paid",
         status,
+        cancelAtPeriodEnd,
+        subscriptionCurrentPeriodEnd,
+        subscribedAt,
         subscriptionPriceCents: 0,
+        totalSpentCents,
         purchaseCount: typeof data.purchaseCount === "number" && Number.isFinite(data.purchaseCount) ? Math.max(0, Math.round(data.purchaseCount)) : 0,
         purchasesCents,
         tipCount: typeof data.tipCount === "number" && Number.isFinite(data.tipCount) ? Math.max(0, Math.round(data.tipCount)) : 0,
