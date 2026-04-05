@@ -712,6 +712,8 @@ export const Dashboard: React.FC = () => {
   // Admin-only: User engagement & health metrics
   const [userEngagementData, setUserEngagementData] = useState<{
     conversionFunnel: { pro: number; elite: number; total: number };
+    /** Stripe-active/trialing MRR across all paid EchoFlux plans. */
+    stripeActiveMrrUsd: number;
     churnRisk: number; // Users who signed up >30 days ago but have low/no activity
     featureAdoption: { captions: number; images: number; videos: number; anyFeature: number; adImages: number; adVideos: number };
     mostActiveUsers: Array<{ id: string; name: string; email: string; totalUsage: number; plan: string }>;
@@ -784,6 +786,7 @@ export const Dashboard: React.FC = () => {
         let proCount = 0;
         let eliteCount = 0;
         let totalUsersCount = 0;
+        let stripeActiveMrrUsd = 0;
         let churnRiskCount = 0;
         let captionsUsers = 0;
         let imagesUsers = 0;
@@ -795,7 +798,9 @@ export const Dashboard: React.FC = () => {
           const userData = docSnap.data();
           const userId = docSnap.id;
           
-          // Skip admins
+          // Keep total users aligned with AdminDashboard (includes admins), but
+          // exclude admins from creator/funnel usage metrics below.
+          totalUsersCount++;
           if (userData.role === 'Admin') return;
           
           // Count Pro/Elite only when Stripe shows an active paid sub (MRR-aligned; excludes admin/invite plan-only rows)
@@ -806,7 +811,18 @@ export const Dashboard: React.FC = () => {
           });
           if (plan === 'Pro' && stripeMrrEligible) proCount++;
           else if (plan === 'Elite' && stripeMrrEligible) eliteCount++;
-          totalUsersCount++;
+          if (stripeMrrEligible) {
+            const planMrrByPlan: Record<string, number> = {
+              Caption: 9,
+              Pro: 29,
+              Elite: 59,
+              Agency: 599,
+              Growth: 249,
+              Starter: 99,
+              OnlyFansStudio: 79,
+            };
+            stripeActiveMrrUsd += planMrrByPlan[plan] || 0;
+          }
           
           // Calculate usage
           const captions = Number(userData.monthlyCaptionGenerationsUsed || 0);
@@ -855,6 +871,7 @@ export const Dashboard: React.FC = () => {
               elite: eliteCount,
               total: totalUsers
             },
+            stripeActiveMrrUsd,
             churnRisk: churnRiskCount,
             featureAdoption: {
               captions: captionsUsers,
@@ -2992,8 +3009,7 @@ export const Dashboard: React.FC = () => {
 
   const renderAdminDashboardView = () => {
     const subscriptionMrrUsd = userEngagementData
-      ? userEngagementData.conversionFunnel.pro * ECHOFLUX_PRO_MONTHLY_USD +
-        userEngagementData.conversionFunnel.elite * ECHOFLUX_ELITE_MONTHLY_USD
+      ? userEngagementData.stripeActiveMrrUsd
       : null;
     const fanHubCommForTotal = isLoadingAdminFanHubCommission ? 0 : adminFanHubCommissionUsd;
     const totalRevenueCombinedUsd =
@@ -3031,7 +3047,7 @@ export const Dashboard: React.FC = () => {
             <p className="text-3xl font-bold text-blue-600 dark:text-blue-300">
               {subscriptionMrrUsd != null ? `$${subscriptionMrrUsd.toLocaleString()}` : '—'}
             </p>
-            <p className="text-xs text-gray-500 dark:opacity-60 mt-1">Pro + Elite with active Stripe billing</p>
+            <p className="text-xs text-gray-500 dark:opacity-60 mt-1">Stripe active/trialing subs only</p>
           </div>
           <div>
             <p className="text-sm text-gray-500 dark:opacity-70 mb-1">Fan Hub Commission</p>
