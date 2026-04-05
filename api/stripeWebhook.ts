@@ -808,77 +808,87 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         }
 
         if (session.mode === 'subscription' && session.subscription) {
-          const subscription = await stripe.subscriptions.retrieve(session.subscription as string);
-          const userId = session.metadata?.userId || session.client_reference_id;
-          const planName = session.metadata?.planName || 'Free';
-          const billingCycle = session.metadata?.billingCycle || 'monthly';
+          try {
+            const subscription = await stripe.subscriptions.retrieve(session.subscription as string);
+            const userId = session.metadata?.userId || session.client_reference_id;
+            const planName = session.metadata?.planName || 'Free';
+            const billingCycle = session.metadata?.billingCycle || 'monthly';
 
-          if (userId) {
-            const userRef = db.collection('users').doc(userId);
-            const now = new Date().toISOString();
+            if (userId) {
+              const userRef = db.collection('users').doc(userId);
+              const now = new Date().toISOString();
 
-            // Read existing plan for cohort tracking
-            let fromPlan: string | null = null;
-            try {
-              const existing = await userRef.get();
-              fromPlan = (existing.data() as any)?.plan || null;
-            } catch {}
+              // Read existing plan for cohort tracking
+              let fromPlan: string | null = null;
+              try {
+                const existing = await userRef.get();
+                fromPlan = (existing.data() as any)?.plan || null;
+              } catch {}
 
-            // Capture trial end date if subscription is in trial
-            const trialEndDate = subscription.trial_end 
-              ? new Date(subscription.trial_end * 1000).toISOString() 
-              : null;
-            const cpe = (subscription as { current_period_end?: number }).current_period_end;
-            const subscriptionCurrentPeriodEnd =
-              typeof cpe === 'number' && Number.isFinite(cpe)
-                ? new Date(cpe * 1000).toISOString()
+              // Capture trial end date if subscription is in trial
+              const trialEndDate = subscription.trial_end
+                ? new Date(subscription.trial_end * 1000).toISOString()
                 : null;
+              const cpe = (subscription as { current_period_end?: number }).current_period_end;
+              const subscriptionCurrentPeriodEnd =
+                typeof cpe === 'number' && Number.isFinite(cpe)
+                  ? new Date(cpe * 1000).toISOString()
+                  : null;
 
-            await userRef.set({
-              plan: planName,
-              userType: 'Creator', // Ensure userType is set for onboarding flow
-              stripeCustomerId: subscription.customer as string,
-              stripeSubscriptionId: subscription.id,
-              subscriptionStatus: subscription.status,
-              subscriptionStartDate: now,
-              billingCycle,
-              cancelAtPeriodEnd: false,
-              subscriptionEndDate: null,
-              subscriptionCurrentPeriodEnd,
-              trialEndDate, // Store trial end date for notifications
-              monthlyCaptionGenerationsUsed: 0,
-              monthlyImageGenerationsUsed: 0,
-              monthlyVideoGenerationsUsed: 0,
-            }, { merge: true });
+              await userRef.set({
+                plan: planName,
+                userType: 'Creator', // Ensure userType is set for onboarding flow
+                stripeCustomerId: subscription.customer as string,
+                stripeSubscriptionId: subscription.id,
+                subscriptionStatus: subscription.status,
+                subscriptionStartDate: now,
+                billingCycle,
+                cancelAtPeriodEnd: false,
+                subscriptionEndDate: null,
+                subscriptionCurrentPeriodEnd,
+                trialEndDate, // Store trial end date for notifications
+                monthlyCaptionGenerationsUsed: 0,
+                monthlyImageGenerationsUsed: 0,
+                monthlyVideoGenerationsUsed: 0,
+              }, { merge: true });
 
-            // Record plan change event (promo cohort tracking)
-            if (fromPlan !== planName) {
-              try {
-                await recordPlanChangeEvent({
-                  userId,
-                  fromPlan,
-                  toPlan: planName,
-                  changedAtIso: now,
-                  source: 'stripe_webhook',
-                  stripeSessionId: session.id || null,
-                  stripeSubscriptionId: subscription.id || null,
-                });
-              } catch (err) {
-                console.warn('Failed to record plan change event from webhook:', err);
+              // Record plan change event (promo cohort tracking)
+              if (fromPlan !== planName) {
+                try {
+                  await recordPlanChangeEvent({
+                    userId,
+                    fromPlan,
+                    toPlan: planName,
+                    changedAtIso: now,
+                    source: 'stripe_webhook',
+                    stripeSessionId: session.id || null,
+                    stripeSubscriptionId: subscription.id || null,
+                  });
+                } catch (err) {
+                  console.warn('Failed to record plan change event from webhook:', err);
+                }
               }
-            }
 
-            // Grant referral reward if applicable (Elite plan conversions)
-            const referralCode = session.metadata?.referralCode || subscription.metadata?.referralCode;
-            if (referralCode && planName === 'Elite') {
-              try {
-                await grantReferralRewardOnConversion(userId, planName, referralCode);
-              } catch (err) {
-                console.warn('Failed to grant referral reward from webhook:', err);
+              // Grant referral reward if applicable (Elite plan conversions)
+              const referralCode = session.metadata?.referralCode || subscription.metadata?.referralCode;
+              if (referralCode && planName === 'Elite') {
+                try {
+                  await grantReferralRewardOnConversion(userId, planName, referralCode);
+                } catch (err) {
+                  console.warn('Failed to grant referral reward from webhook:', err);
+                }
               }
-            }
 
-            console.log(`Subscription created for user ${userId}: ${planName}`);
+              console.log(`Subscription created for user ${userId}: ${planName}`);
+            }
+          } catch (retrieveErr: unknown) {
+            // Subscription lives on another Stripe account (e.g. legacy Stormijxo) but webhook is verified with that account's secret — retrieve uses STRIPE_SECRET_KEY_* (EchoFlux) and fails.
+            console.warn(
+              'stripeWebhook: checkout.session.completed — subscriptions.retrieve failed; skipping EchoFlux creator billing (foreign subscription or missing access).',
+              session.id,
+              session.subscription,
+              retrieveErr instanceof Error ? retrieveErr.message : retrieveErr,
+            );
           }
         }
         break;
