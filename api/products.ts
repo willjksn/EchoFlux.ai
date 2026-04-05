@@ -86,18 +86,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const variants = creatorIdFirestoreQueryVariants(creatorIdParam);
       const seenDocIds = new Set<string>();
       let products: TreatProduct[] = [];
+      const skipArchived = !isCreator || !includeArchived;
       for (const cid of variants) {
         try {
-          let query = db.collection(COLLECTION).where("creatorId", "==", cid);
-          if (!includeArchived || !isCreator) {
-            query = query.where("archived", "==", false) as FirebaseFirestore.Query;
-          }
+          // Single-field query only: compound (creatorId + archived) often lacks a Firestore index and
+          // fails for anonymous landing requests; filter archived in memory instead.
+          const query = db.collection(COLLECTION).where("creatorId", "==", cid);
           const snap = await query.limit(500).get();
           for (const doc of snap.docs) {
             if (seenDocIds.has(doc.id)) continue;
             seenDocIds.add(doc.id);
             try {
-              products.push(toProduct(doc));
+              const p = toProduct(doc);
+              if (skipArchived && p.archived) continue;
+              products.push(p);
             } catch (docErr) {
               console.warn("products GET: skip corrupt product doc", doc.id, docErr);
             }
@@ -213,7 +215,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (!snap.exists) return res.status(404).json({ error: "Product not found" });
       const data = snap.data() as Record<string, unknown>;
       const storedCreator = String(data.creatorId ?? "");
-      if (normalizeCreatorId(storedCreator) !== decoded.uid) {
+      const authUid = normalizeCreatorId(decoded.uid) || decoded.uid;
+      if (normalizeCreatorId(storedCreator) !== authUid) {
         return res.status(403).json({ error: "Forbidden" });
       }
 
