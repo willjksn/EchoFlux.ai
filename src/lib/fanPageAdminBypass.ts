@@ -1,5 +1,5 @@
 import type { Firestore } from "firebase-admin/firestore";
-import { normalizeCreatorId } from "./creatorIdNormalize";
+import { normalizeCreatorId } from "./creatorIdNormalize.js";
 
 function parseCommaList(raw: string | undefined): string[] {
   if (!raw?.trim()) return [];
