@@ -115,7 +115,8 @@ async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
     return;
   }
   const existingComments: Comment[] = Array.isArray(postData.comments) ? postData.comments : [];
-  const postBody = postData.body ?? postData.caption ?? "";
+  const postBodyRaw = postData.body ?? postData.caption;
+  const postBody = typeof postBodyRaw === "string" ? postBodyRaw : undefined;
 
   const fanUserSnap = await db.collection("users").doc(tokenUser.uid).get();
   const fanUser = fanUserSnap.data() || {};
@@ -158,7 +159,12 @@ async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
       db.collection("orders").where("creatorId", "==", creatorIdStr).where("fanId", "==", tokenUser.uid).limit(1).get(),
       db.collection("creatorEntitlements").doc(creatorIdStr).collection("grants").doc(tokenUser.uid).get(),
     ]);
-    isTipperOrBuyer = !ordersSnap.empty || (grantSnap.exists() && (grantSnap.data()?.subscription === true || (Array.isArray((grantSnap.data() as any)?.unlockedProductIds) && (grantSnap.data() as any).unlockedProductIds.length > 0)));
+    isTipperOrBuyer =
+      !ordersSnap.empty ||
+      (grantSnap.exists &&
+        (grantSnap.data()?.subscription === true ||
+          (Array.isArray((grantSnap.data() as any)?.unlockedProductIds) &&
+            (grantSnap.data() as any).unlockedProductIds.length > 0)));
   } catch (_) {
     // ignore
   }
@@ -185,7 +191,7 @@ async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
   await Promise.all(existingRefs.map((ref) => ref.update({ comments: nextComments })));
   const rootPostRef = db.collection("posts").doc(postIdStr);
   const rootSnap = await rootPostRef.get();
-  if (rootSnap.exists()) {
+  if (rootSnap.exists) {
     await rootPostRef.update({ comments: nextComments });
   }
 
