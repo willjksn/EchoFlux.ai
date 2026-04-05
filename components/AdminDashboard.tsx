@@ -13,6 +13,7 @@ import { AdminFeedbackFormBuilder } from './AdminFeedbackFormBuilder';
 import { AdminITSupportPanel } from './AdminITSupportPanel';
 import { InviteCodeManager } from './InviteCodeManager';
 import { WaitlistManager } from './WaitlistManager';
+import { EmailCenterPage } from './EmailCenterPage';
 import { TeamIcon, DollarSignIcon, UserPlusIcon, ArrowUpCircleIcon, ImageIcon, VideoIcon, LockIcon, TrendingIcon, TrashIcon, HeartIcon, StarIcon, ChatIcon, GlobeIcon } from './icons/UIIcons';
 import { db, auth } from '../firebaseConfig';
 import { collection, query, orderBy, onSnapshot, setDoc, doc, getDoc, deleteField, getDocs } from 'firebase/firestore';
@@ -1115,8 +1116,12 @@ export const AdminDashboard: React.FC = () => {
                             IT Support
                         </button>
                         <button
-                            onClick={() => setActivePage('emailCenter')}
-                            className="px-4 py-2 rounded-md transition-colors bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600"
+                            onClick={() => setToolsTab('email')}
+                            className={`px-4 py-2 rounded-md transition-colors ${
+                                toolsTab === 'email'
+                                    ? 'bg-primary-600 text-white'
+                                    : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
+                            }`}
                         >
                             Email Center
                         </button>
@@ -1138,6 +1143,7 @@ export const AdminDashboard: React.FC = () => {
                     {toolsTab === 'feedbackForms' && <AdminFeedbackFormBuilder />}
                     {toolsTab === 'reviews' && <AdminReviewsPanel />}
                     {toolsTab === 'itSupport' && <AdminITSupportPanel />}
+                    {toolsTab === 'email' && <EmailCenterPage />}
                 </div>
             )}
             {activeTab === 'overview' && (
