@@ -214,8 +214,8 @@ export const FanHubPurchases: React.FC = () => {
       status: "scheduled" | "delivered",
       reminderTime: string,
       delivery?: { type?: "video" | "image" | "audio" | "text"; url?: string | null; text?: string | null }
-    ) => {
-      if (p.isDemo || !db || !user?.id) return;
+    ): Promise<boolean> => {
+      if (p.isDemo || !db || !user?.id) return true;
       try {
         const treatTypeMap: Record<string, "video_call" | "chat_session" | "voice_note" | "custom_video" | "other"> = {
           live_video_5m: "video_call",
@@ -274,8 +274,10 @@ export const FanHubPurchases: React.FC = () => {
         } else {
           await addDoc(eventsRef, { ...payload, createdAt: new Date().toISOString() });
         }
+        return true;
       } catch (err) {
         console.error("Failed to sync treat calendar event:", err);
+        return false;
       }
     },
     [user?.id]
@@ -336,13 +338,16 @@ export const FanHubPurchases: React.FC = () => {
       )
     );
 
-    await upsertTreatCalendarEvent(p, scheduledAt, "scheduled", timeHHmm);
+    const calendarSynced = await upsertTreatCalendarEvent(p, scheduledAt, "scheduled", timeHHmm);
 
     setEditingId(null);
     setScheduleDate("");
     setScheduleTime("12:00");
     setSavingId(null);
-    showToast?.("Scheduled! It will appear on your calendar.", "success");
+    showToast?.(
+      calendarSynced ? "Scheduled and synced to calendar." : "Schedule saved, but calendar sync failed.",
+      calendarSynced ? "success" : "error"
+    );
   };
 
   const markCompleted = async (p: Purchase) => {
@@ -586,12 +591,15 @@ export const FanHubPurchases: React.FC = () => {
             : x
         )
       );
-      await upsertTreatCalendarEvent(p, deliveredNow, "delivered", deliveredSchedule.time, {
+      const calendarSynced = await upsertTreatCalendarEvent(p, deliveredNow, "delivered", deliveredSchedule.time, {
         type: nextType,
         url: nextType === "text" ? null : nextUrl,
         text: nextType === "text" ? nextText : null,
       });
-      showToast?.("Delivery saved.", "success");
+      showToast?.(
+        calendarSynced ? "Delivered and synced to calendar." : "Delivery saved, but calendar sync failed.",
+        calendarSynced ? "success" : "error"
+      );
       cancelDeliveryEditor();
     } catch (e) {
       showToast?.(e instanceof Error ? e.message : "Could not save delivery.", "error");
