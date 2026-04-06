@@ -1,9 +1,20 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useAppContext } from "./AppContext";
 import { auth, db, storage } from "../firebaseConfig";
-import { collection, addDoc, serverTimestamp, Timestamp } from "firebase/firestore";
+import { collection, addDoc, serverTimestamp, Timestamp, getDocs, query, orderBy, limit } from "firebase/firestore";
 import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
 import { formatFanDisplayLabel } from "../src/lib/fanHubDisplay";
+import {
+  AUDIO_RECORDER_TIMESLICE_MS,
+  VIDEO_RECORDER_TIMESLICE_MS,
+  createAudioMediaRecorder,
+  createVideoMediaRecorder,
+  effectiveBlobType,
+  fileExtensionForAudioMime,
+  fileExtensionForVideoMime,
+  normalizeVoiceRecordingFileType,
+  stopMediaRecorderSafe,
+} from "../src/lib/browserMediaRecording";
 
 type ScheduleStatus = "pending" | "scheduled" | "completed" | "cancelled";
 
@@ -19,11 +30,18 @@ type Purchase = {
   scheduledDate: string | null;
   scheduledTime: string | null;
   deliveryStatus: "pending" | "delivered";
-  deliveryType: "video" | "audio" | "text" | null;
+  deliveryType: "video" | "image" | "audio" | "text" | null;
   deliveryText: string | null;
   deliveryUrl: string | null;
   deliveredAt: Date | null;
   isDemo?: boolean;
+};
+
+type VaultItem = {
+  url: string;
+  name: string;
+  type: "image" | "video" | "audio";
+  uploadedAt?: string;
 };
 
 function formatDateShort(date: Date): string {
@@ -69,10 +87,21 @@ export const FanHubPurchases: React.FC = () => {
   const [savingId, setSavingId] = useState<string | null>(null);
   const [filterStatus, setFilterStatus] = useState<"all" | "pending" | "scheduled" | "completed">("all");
   const [deliveryEditingId, setDeliveryEditingId] = useState<string | null>(null);
-  const [deliveryTypeDraft, setDeliveryTypeDraft] = useState<"video" | "audio" | "text">("text");
+  const [deliveryTypeDraft, setDeliveryTypeDraft] = useState<"video" | "image" | "audio" | "text">("text");
   const [deliveryTextDraft, setDeliveryTextDraft] = useState("");
   const [deliveryUrlDraft, setDeliveryUrlDraft] = useState("");
   const [deliveryUploading, setDeliveryUploading] = useState(false);
+  const [deliveryVaultOpen, setDeliveryVaultOpen] = useState(false);
+  const [deliveryVaultLoading, setDeliveryVaultLoading] = useState(false);
+  const [deliveryVaultItems, setDeliveryVaultItems] = useState<VaultItem[]>([]);
+  const [deliveryRecordingVoice, setDeliveryRecordingVoice] = useState(false);
+  const [deliveryRecordingVideo, setDeliveryRecordingVideo] = useState(false);
+  const [deliveryVideoStream, setDeliveryVideoStream] = useState<MediaStream | null>(null);
+  const deliveryAudioRecorderRef = useRef<MediaRecorder | null>(null);
+  const deliveryVideoRecorderRef = useRef<MediaRecorder | null>(null);
+  const deliveryAudioChunksRef = useRef<Blob[]>([]);
+  const deliveryVideoChunksRef = useRef<Blob[]>([]);
+  const deliveryVideoPreviewRef = useRef<HTMLVideoElement | null>(null);
 
   const fetchPurchases = useCallback(async () => {
     if (!user?.id) return;
@@ -98,7 +127,10 @@ export const FanHubPurchases: React.FC = () => {
           scheduledTime: o.scheduledTime || null,
           deliveryStatus: o.deliveryStatus === "delivered" ? "delivered" : "pending",
           deliveryType:
-            o.deliveryType === "video" || o.deliveryType === "audio" || o.deliveryType === "text"
+            o.deliveryType === "video" ||
+            o.deliveryType === "image" ||
+            o.deliveryType === "audio" ||
+            o.deliveryType === "text"
               ? o.deliveryType
               : null,
           deliveryText: typeof o.deliveryText === "string" ? o.deliveryText : null,
@@ -119,6 +151,36 @@ export const FanHubPurchases: React.FC = () => {
       setLoading(false);
     }
   }, [user?.id, showToast]);
+
+  const loadDeliveryVault = useCallback(async () => {
+    if (!user?.id) return;
+    setDeliveryVaultLoading(true);
+    try {
+      const q = query(
+        collection(db, "users", user.id, "media_library"),
+        orderBy("uploadedAt", "desc"),
+        limit(120)
+      );
+      const snap = await getDocs(q);
+      const items: VaultItem[] = [];
+      for (const d of snap.docs) {
+        const raw = d.data() as Record<string, unknown>;
+        if (typeof raw.url !== "string" || !raw.url.trim()) continue;
+        const t = raw.type === "video" || raw.type === "audio" ? raw.type : "image";
+        items.push({
+          url: raw.url,
+          name: typeof raw.name === "string" && raw.name.trim() ? raw.name : d.id,
+          type: t,
+          uploadedAt: typeof raw.uploadedAt === "string" ? raw.uploadedAt : undefined,
+        });
+      }
+      setDeliveryVaultItems(items);
+    } catch (e) {
+      showToast?.(e instanceof Error ? e.message : "Could not load Vault items.", "error");
+    } finally {
+      setDeliveryVaultLoading(false);
+    }
+  }, [showToast, user?.id]);
 
   useEffect(() => {
     fetchPurchases();
@@ -296,22 +358,41 @@ export const FanHubPurchases: React.FC = () => {
   };
 
   const cancelDeliveryEditor = () => {
+    stopMediaRecorderSafe(deliveryAudioRecorderRef.current);
+    stopMediaRecorderSafe(deliveryVideoRecorderRef.current);
+    deliveryVideoStream?.getTracks().forEach((t) => t.stop());
+    deliveryAudioRecorderRef.current = null;
+    deliveryVideoRecorderRef.current = null;
+    deliveryAudioChunksRef.current = [];
+    deliveryVideoChunksRef.current = [];
+    setDeliveryVideoStream(null);
+    setDeliveryRecordingVoice(false);
+    setDeliveryRecordingVideo(false);
     setDeliveryEditingId(null);
     setDeliveryTypeDraft("text");
     setDeliveryTextDraft("");
     setDeliveryUrlDraft("");
     setDeliveryUploading(false);
+    setDeliveryVaultOpen(false);
+    setDeliveryVaultItems([]);
+    setDeliveryVaultLoading(false);
   };
 
   const handleUploadDeliveryMedia = async (p: Purchase, file: File) => {
     if (!auth.currentUser?.uid) return;
     setDeliveryUploading(true);
     try {
-      const ext = (file.name.split(".").pop() || (file.type.includes("audio") ? "m4a" : "mp4")).toLowerCase();
+      const ext = (file.name.split(".").pop() || (file.type.includes("audio") ? "m4a" : file.type.includes("image") ? "jpg" : "mp4")).toLowerCase();
       const path = `creators/${auth.currentUser.uid}/orderDeliveries/${p.id}/${Date.now()}.${ext}`;
       const storageRef = ref(storage, path);
       await uploadBytes(storageRef, file, {
-        contentType: file.type || (deliveryTypeDraft === "audio" ? "audio/mpeg" : "video/mp4"),
+        contentType:
+          file.type ||
+          (deliveryTypeDraft === "audio"
+            ? "audio/mpeg"
+            : deliveryTypeDraft === "image"
+              ? "image/jpeg"
+              : "video/mp4"),
       });
       const url = await getDownloadURL(storageRef);
       setDeliveryUrlDraft(url);
@@ -323,11 +404,107 @@ export const FanHubPurchases: React.FC = () => {
     }
   };
 
+  const startDeliveryVoiceRecording = async (p: Purchase) => {
+    if (!auth.currentUser?.uid || deliveryRecordingVoice || deliveryUploading) return;
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const rec = createAudioMediaRecorder(stream);
+      deliveryAudioRecorderRef.current = rec;
+      deliveryAudioChunksRef.current = [];
+      const requestedMime = rec.mimeType || undefined;
+      rec.ondataavailable = (ev) => {
+        if (ev.data.size > 0) deliveryAudioChunksRef.current.push(ev.data);
+      };
+      rec.onstop = async () => {
+        stream.getTracks().forEach((t) => t.stop());
+        setDeliveryRecordingVoice(false);
+        const chunks = deliveryAudioChunksRef.current;
+        deliveryAudioChunksRef.current = [];
+        if (!chunks.length) return;
+        const blobType = normalizeVoiceRecordingFileType(effectiveBlobType(rec, requestedMime));
+        const blob = new Blob(chunks, { type: blobType });
+        if (blob.size < 256) return;
+        const ext = fileExtensionForAudioMime(blobType);
+        const file = new File([blob], `voice-${Date.now()}.${ext}`, { type: blobType });
+        setDeliveryTypeDraft("audio");
+        await handleUploadDeliveryMedia(p, file);
+      };
+      rec.start(AUDIO_RECORDER_TIMESLICE_MS);
+      setDeliveryRecordingVoice(true);
+    } catch {
+      showToast?.("Could not start voice recording. Check microphone permissions.", "error");
+    }
+  };
+
+  const stopDeliveryVoiceRecording = () => {
+    stopMediaRecorderSafe(deliveryAudioRecorderRef.current);
+    deliveryAudioRecorderRef.current = null;
+  };
+
+  const startDeliveryVideoRecording = async (p: Purchase) => {
+    if (!auth.currentUser?.uid || deliveryRecordingVideo || deliveryUploading) return;
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" }, audio: true });
+      setDeliveryVideoStream(stream);
+      const rec = createVideoMediaRecorder(stream);
+      deliveryVideoRecorderRef.current = rec;
+      deliveryVideoChunksRef.current = [];
+      const requestedMime = rec.mimeType || undefined;
+      rec.ondataavailable = (ev) => {
+        if (ev.data.size > 0) deliveryVideoChunksRef.current.push(ev.data);
+      };
+      rec.onstop = async () => {
+        stream.getTracks().forEach((t) => t.stop());
+        setDeliveryVideoStream(null);
+        setDeliveryRecordingVideo(false);
+        const chunks = deliveryVideoChunksRef.current;
+        deliveryVideoChunksRef.current = [];
+        if (!chunks.length) return;
+        const blobType = effectiveBlobType(rec, requestedMime);
+        const blob = new Blob(chunks, { type: blobType });
+        if (blob.size < 512) return;
+        const ext = fileExtensionForVideoMime(blobType);
+        const file = new File([blob], `delivery-video-${Date.now()}.${ext}`, { type: blobType });
+        setDeliveryTypeDraft("video");
+        await handleUploadDeliveryMedia(p, file);
+      };
+      rec.start(VIDEO_RECORDER_TIMESLICE_MS);
+      setDeliveryRecordingVideo(true);
+    } catch {
+      showToast?.("Could not start camera recording. Check camera/mic permissions.", "error");
+    }
+  };
+
+  const stopDeliveryVideoRecording = () => {
+    stopMediaRecorderSafe(deliveryVideoRecorderRef.current);
+    deliveryVideoRecorderRef.current = null;
+  };
+
+  useEffect(() => {
+    const el = deliveryVideoPreviewRef.current;
+    if (!el) return;
+    if (deliveryVideoStream) {
+      el.srcObject = deliveryVideoStream;
+      el.muted = true;
+      void el.play().catch(() => {});
+      return;
+    }
+    el.srcObject = null;
+  }, [deliveryVideoStream, deliveryRecordingVideo]);
+
+  useEffect(() => {
+    return () => {
+      stopMediaRecorderSafe(deliveryAudioRecorderRef.current);
+      stopMediaRecorderSafe(deliveryVideoRecorderRef.current);
+      deliveryVideoStream?.getTracks().forEach((t) => t.stop());
+    };
+  }, [deliveryVideoStream]);
+
   const saveDelivery = async (p: Purchase) => {
     const nextType = deliveryTypeDraft;
     const nextText = deliveryTextDraft.trim();
     const nextUrl = deliveryUrlDraft.trim();
-    if ((nextType === "video" || nextType === "audio") && !nextUrl) {
+    if ((nextType === "video" || nextType === "image" || nextType === "audio") && !nextUrl) {
       showToast?.("Please provide a delivery URL or upload a file.", "error");
       return;
     }
@@ -613,20 +790,27 @@ export const FanHubPurchases: React.FC = () => {
                         <span>Delivery Type</span>
                         <select
                           value={deliveryTypeDraft}
-                          onChange={(e) => setDeliveryTypeDraft(e.target.value as "video" | "audio" | "text")}
+                          onChange={(e) => setDeliveryTypeDraft(e.target.value as "video" | "image" | "audio" | "text")}
                           className="purchases-schedule-input"
                         >
                           <option value="text">Text reply</option>
                           <option value="video">Video reply</option>
+                          <option value="image">Image</option>
                           <option value="audio">Voice note</option>
                         </select>
                       </label>
-                      {(deliveryTypeDraft === "video" || deliveryTypeDraft === "audio") && (
+                      {(deliveryTypeDraft === "video" || deliveryTypeDraft === "image" || deliveryTypeDraft === "audio") && (
                         <label className="purchases-btn purchases-btn-secondary" style={{ cursor: deliveryUploading ? "wait" : "pointer" }}>
                           {deliveryUploading ? "Uploading…" : "Upload media"}
                           <input
                             type="file"
-                            accept={deliveryTypeDraft === "audio" ? "audio/*" : "video/*"}
+                            accept={
+                              deliveryTypeDraft === "audio"
+                                ? "audio/*"
+                                : deliveryTypeDraft === "image"
+                                  ? "image/*"
+                                  : "video/*"
+                            }
                             hidden
                             disabled={deliveryUploading}
                             onChange={(e) => {
@@ -637,7 +821,94 @@ export const FanHubPurchases: React.FC = () => {
                           />
                         </label>
                       )}
+                      {(deliveryTypeDraft === "video" || deliveryTypeDraft === "image" || deliveryTypeDraft === "audio") && (
+                        <button
+                          type="button"
+                          className="purchases-btn purchases-btn-secondary"
+                          disabled={deliveryUploading || deliveryVaultLoading}
+                          onClick={() => {
+                            const next = !deliveryVaultOpen;
+                            setDeliveryVaultOpen(next);
+                            if (next && deliveryVaultItems.length === 0) {
+                              void loadDeliveryVault();
+                            }
+                          }}
+                        >
+                          {deliveryVaultOpen ? "Hide Vault" : deliveryVaultLoading ? "Loading Vault…" : "From Vault"}
+                        </button>
+                      )}
+                      {(deliveryTypeDraft === "audio" || deliveryTypeDraft === "video") && (
+                        <button
+                          type="button"
+                          className="purchases-btn purchases-btn-secondary"
+                          disabled={deliveryUploading}
+                          onClick={() => {
+                            if (deliveryTypeDraft === "audio") {
+                              if (deliveryRecordingVoice) stopDeliveryVoiceRecording();
+                              else void startDeliveryVoiceRecording(p);
+                            } else {
+                              if (deliveryRecordingVideo) stopDeliveryVideoRecording();
+                              else void startDeliveryVideoRecording(p);
+                            }
+                          }}
+                        >
+                          {deliveryTypeDraft === "audio"
+                            ? deliveryRecordingVoice
+                              ? "Stop recording voice"
+                              : "Record voice"
+                            : deliveryRecordingVideo
+                              ? "Stop recording video"
+                              : "Record video (camera)"}
+                        </button>
+                      )}
                     </div>
+                    {deliveryVaultOpen ? (
+                      <div
+                        className="purchases-schedule-input"
+                        style={{ marginTop: "0.5rem", maxHeight: 240, overflowY: "auto", padding: "0.5rem" }}
+                      >
+                        {deliveryVaultLoading ? (
+                          <p className="m-0 text-sm opacity-75">Loading vault...</p>
+                        ) : (
+                          <div style={{ display: "grid", gap: "0.5rem", gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))" }}>
+                            {deliveryVaultItems
+                              .filter((item) =>
+                                deliveryTypeDraft === "image"
+                                  ? item.type === "image"
+                                  : deliveryTypeDraft === "audio"
+                                    ? item.type === "audio"
+                                    : item.type === "video"
+                              )
+                              .map((item) => (
+                                <button
+                                  key={`${item.url}-${item.name}`}
+                                  type="button"
+                                  className="purchases-btn purchases-btn-secondary"
+                                  style={{ display: "block", textAlign: "left", minHeight: 90 }}
+                                  onClick={() => {
+                                    setDeliveryUrlDraft(item.url);
+                                    setDeliveryVaultOpen(false);
+                                    showToast?.("Selected from Vault.", "success");
+                                  }}
+                                >
+                                  <div style={{ fontSize: 12, opacity: 0.8, marginBottom: 4 }}>{item.type}</div>
+                                  <div style={{ fontSize: 12, lineHeight: 1.3, wordBreak: "break-word" }}>{item.name}</div>
+                                </button>
+                              ))}
+                          </div>
+                        )}
+                      </div>
+                    ) : null}
+                    {deliveryRecordingVideo ? (
+                      <video
+                        ref={deliveryVideoPreviewRef}
+                        autoPlay
+                        muted
+                        playsInline
+                        className="purchases-schedule-input"
+                        style={{ width: "100%", marginTop: "0.5rem", borderRadius: 10 }}
+                      />
+                    ) : null}
                     {deliveryTypeDraft === "text" ? (
                       <textarea
                         value={deliveryTextDraft}

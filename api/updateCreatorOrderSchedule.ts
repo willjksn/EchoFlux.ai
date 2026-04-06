@@ -8,7 +8,7 @@ type Body = {
   scheduledDate?: string | null;
   scheduledTime?: string | null;
   deliveryStatus?: "pending" | "delivered";
-  deliveryType?: "video" | "audio" | "text" | "link" | null;
+  deliveryType?: "video" | "image" | "audio" | "text" | "link" | null;
   deliveryText?: string | null;
   deliveryUrl?: string | null;
 };
@@ -42,7 +42,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     typeof body.deliveryStatus === "string" && allowedDeliveryStatuses.has(body.deliveryStatus)
       ? body.deliveryStatus
       : undefined;
-  const allowedDeliveryTypes = new Set(["video", "audio", "text", "link"]);
+  const allowedDeliveryTypes = new Set(["video", "image", "audio", "text", "link"]);
   const deliveryType =
     typeof body.deliveryType === "string" && allowedDeliveryTypes.has(body.deliveryType)
       ? body.deliveryType

@@ -14,7 +14,7 @@ type FanPurchase = {
   status: string;
   createdAt: string;
   deliveryStatus?: "pending" | "delivered";
-  deliveryType?: "video" | "audio" | "text" | "link" | null;
+  deliveryType?: "video" | "image" | "audio" | "text" | "link" | null;
   deliveryText?: string | null;
   deliveryUrl?: string | null;
   deliveredAt?: string | null;
@@ -58,7 +58,11 @@ function mapDocToPurchase(id: string, d: Record<string, unknown>): FanPurchase {
     createdAt: createdMs > 0 ? new Date(createdMs).toISOString() : new Date(0).toISOString(),
     deliveryStatus: d.deliveryStatus === "delivered" ? "delivered" : "pending",
     deliveryType:
-      d.deliveryType === "video" || d.deliveryType === "audio" || d.deliveryType === "text" || d.deliveryType === "link"
+      d.deliveryType === "video" ||
+      d.deliveryType === "image" ||
+      d.deliveryType === "audio" ||
+      d.deliveryType === "text" ||
+      d.deliveryType === "link"
         ? d.deliveryType
         : null,
     deliveryText: typeof d.deliveryText === "string" ? d.deliveryText : null,

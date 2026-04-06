@@ -19,7 +19,7 @@ export type CreatorOrder = {
   scheduledDate?: string | null;
   scheduledTime?: string | null;
   deliveryStatus?: "pending" | "delivered";
-  deliveryType?: "video" | "audio" | "text" | "link" | null;
+  deliveryType?: "video" | "image" | "audio" | "text" | "link" | null;
   deliveryText?: string | null;
   deliveryUrl?: string | null;
   deliveredAt?: string | null;
@@ -99,6 +99,7 @@ function mapDocToOrder(docSnap: QueryDocumentSnapshot): CreatorOrder {
     deliveryStatus: d.deliveryStatus === "delivered" ? "delivered" : "pending",
     deliveryType:
       d.deliveryType === "video" ||
+      d.deliveryType === "image" ||
       d.deliveryType === "audio" ||
       d.deliveryType === "text" ||
       d.deliveryType === "link"

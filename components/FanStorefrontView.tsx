@@ -335,7 +335,7 @@ type FanDeliveryPurchase = {
   status: string;
   createdAt: string;
   deliveryStatus?: "pending" | "delivered";
-  deliveryType?: "video" | "audio" | "text" | "link" | null;
+  deliveryType?: "video" | "image" | "audio" | "text" | "link" | null;
   deliveryText?: string | null;
   deliveryUrl?: string | null;
   deliveredAt?: string | null;
@@ -1998,7 +1998,10 @@ export const FanStorefrontView: React.FC = () => {
             createdAt: toIsoFromUnknownDate(raw.createdAt),
             deliveryStatus: raw.deliveryStatus === "delivered" ? "delivered" : "pending",
             deliveryType:
-              raw.deliveryType === "video" || raw.deliveryType === "audio" || raw.deliveryType === "text"
+              raw.deliveryType === "video" ||
+              raw.deliveryType === "image" ||
+              raw.deliveryType === "audio" ||
+              raw.deliveryType === "text"
                 ? raw.deliveryType
                 : null,
             deliveryText: typeof raw.deliveryText === "string" ? raw.deliveryText : null,
@@ -2032,7 +2035,10 @@ export const FanStorefrontView: React.FC = () => {
               createdAt: toIsoFromUnknownDate(raw.createdAt),
               deliveryStatus: raw.deliveryStatus === "delivered" ? "delivered" : "pending",
               deliveryType:
-                raw.deliveryType === "video" || raw.deliveryType === "audio" || raw.deliveryType === "text"
+                raw.deliveryType === "video" ||
+                raw.deliveryType === "image" ||
+                raw.deliveryType === "audio" ||
+                raw.deliveryType === "text"
                   ? raw.deliveryType
                   : null,
               deliveryText: typeof raw.deliveryText === "string" ? raw.deliveryText : null,
@@ -4109,6 +4115,14 @@ export const FanStorefrontView: React.FC = () => {
                                   disablePictureInPicture
                                   playsInline
                                   preload="metadata"
+                                  style={{ width: "100%", marginTop: "0.6rem", borderRadius: 10 }}
+                                />
+                              ) : null}
+                              {o.deliveryType === "image" && o.deliveryUrl ? (
+                                <img
+                                  src={o.deliveryUrl}
+                                  alt="Delivered purchase media"
+                                  loading="lazy"
                                   style={{ width: "100%", marginTop: "0.6rem", borderRadius: 10 }}
                                 />
                               ) : null}
