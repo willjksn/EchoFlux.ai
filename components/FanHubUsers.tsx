@@ -38,7 +38,6 @@ interface FanUser {
   mtdUnlocksCents: number;
   lastActiveAt: Date | null;
   lastLoginAt: Date | null;
-  hasAuthAccount: boolean | null;
   avatarUrl?: string;
   /** Firebase Auth uid (from plain fan doc id or parsed from `uid-email@…` ids) */
   authUid?: string;
@@ -90,8 +89,8 @@ function formatDate(date: Date | null): string {
   return date.toLocaleDateString("en-US", { month: "numeric", day: "numeric", year: "numeric" });
 }
 
-const CUTOVER_AT_ET = new Date("2026-04-04T22:00:00-04:00");
 const FIREBASE_UID_RE = /^[A-Za-z0-9]{20,36}$/;
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 function formatDateTime(date: Date | null): string {
   if (!date || !Number.isFinite(date.getTime())) return "—";
@@ -102,42 +101,6 @@ function formatDateTime(date: Date | null): string {
     hour: "numeric",
     minute: "2-digit",
   });
-}
-
-function loginSinceCutoverBadge(lastLoginAt: Date | null, hasAuthAccount: boolean | null): { text: string; className: string } {
-  if (hasAuthAccount === null) {
-    return {
-      text: "Auth status pending",
-      className:
-        "px-2 py-1 text-xs font-medium rounded-full bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-300",
-    };
-  }
-  if (hasAuthAccount === false) {
-    return {
-      text: "No auth account",
-      className:
-        "px-2 py-1 text-xs font-medium rounded-full bg-red-100 text-red-800 dark:bg-red-900/35 dark:text-red-300",
-    };
-  }
-  if (!lastLoginAt) {
-    return {
-      text: "No login yet",
-      className:
-        "px-2 py-1 text-xs font-medium rounded-full bg-amber-100 text-amber-900 dark:bg-amber-900/30 dark:text-amber-200",
-    };
-  }
-  if (lastLoginAt.getTime() >= CUTOVER_AT_ET.getTime()) {
-    return {
-      text: "Logged in since cutover",
-      className:
-        "px-2 py-1 text-xs font-medium rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-900/35 dark:text-emerald-300",
-    };
-  }
-  return {
-    text: "No login since cutover",
-    className:
-      "px-2 py-1 text-xs font-medium rounded-full bg-orange-100 text-orange-900 dark:bg-orange-900/30 dark:text-orange-200",
-  };
 }
 
 /** Firestore / imports sometimes store cancel-at-period-end as string or snake_case. */
@@ -854,7 +817,6 @@ export const FanHubUsers: React.FC = () => {
           mtdUnlocksCents: mtdUnlocks,
           lastActiveAt: data.lastActive,
           lastLoginAt: null,
-          hasAuthAccount: null,
           avatarUrl: data.avatarUrl,
           authUid,
         };
@@ -867,7 +829,14 @@ export const FanHubUsers: React.FC = () => {
             .filter((uid) => FIREBASE_UID_RE.test(uid))
         )
       );
-      if (loginLookupIds.length > 0) {
+      const loginLookupEmails = Array.from(
+        new Set(
+          fanUsers
+            .map((u) => String(u.email || "").trim().toLowerCase())
+            .filter((email) => EMAIL_RE.test(email))
+        )
+      );
+      if (loginLookupIds.length > 0 || loginLookupEmails.length > 0) {
         try {
           const token = auth.currentUser ? await auth.currentUser.getIdToken() : null;
           const loginRes = await fetch("/api/creatorFanLastLogins", {
@@ -876,25 +845,29 @@ export const FanHubUsers: React.FC = () => {
               "Content-Type": "application/json",
               ...(token ? { Authorization: `Bearer ${token}` } : {}),
             },
-            body: JSON.stringify({ authUids: loginLookupIds }),
+            body: JSON.stringify({ authUids: loginLookupIds, emails: loginLookupEmails }),
           });
           if (loginRes.ok) {
             const payload = (await loginRes.json().catch(() => ({}))) as {
               byUid?: Record<string, { lastSignInTime: string | null; exists: boolean }>;
+              byEmail?: Record<string, { lastSignInTime: string | null; exists: boolean }>;
             };
             const byUid = payload.byUid || {};
+            const byEmail = payload.byEmail || {};
             fanUsers.forEach((u) => {
               const uid = String(u.authUid || "").trim();
-              if (!uid) return;
-              const row = byUid[uid];
-              if (!row) return;
-              u.hasAuthAccount = row.exists === true;
-              if (row.lastSignInTime) {
-                const d = new Date(row.lastSignInTime);
-                u.lastLoginAt = Number.isFinite(d.getTime()) ? d : null;
-              } else {
-                u.lastLoginAt = null;
-              }
+              const email = String(u.email || "").trim().toLowerCase();
+              const uidRow = uid ? byUid[uid] : undefined;
+              const emailRow = email ? byEmail[email] : undefined;
+              const rawTimes = [uidRow?.lastSignInTime, emailRow?.lastSignInTime].filter(
+                (v): v is string => typeof v === "string" && v.trim().length > 0
+              );
+              if (rawTimes.length === 0) return;
+              const parsed = rawTimes
+                .map((t) => new Date(t))
+                .filter((d) => Number.isFinite(d.getTime()))
+                .sort((a, b) => b.getTime() - a.getTime());
+              if (parsed.length > 0) u.lastLoginAt = parsed[0];
             });
           }
         } catch {
@@ -1233,7 +1206,6 @@ export const FanHubUsers: React.FC = () => {
   const UserRow: React.FC<{ fanUser: FanUser; showActions?: boolean }> = ({ fanUser, showActions = true }) => {
     const planBadgeClass = fanUser.plan ? planStatusBadgeClass(fanUser.plan) : null;
     const accessBadgeClass = planStatusBadgeClass(fanUser.remainingAccess);
-    const loginBadge = loginSinceCutoverBadge(fanUser.lastLoginAt, fanUser.hasAuthAccount);
     return (
     <tr className="hover:bg-gray-50 dark:hover:bg-gray-800/40 transition-colors">
       <td className="px-4 py-3">
@@ -1300,10 +1272,7 @@ export const FanHubUsers: React.FC = () => {
         {formatCents(fanUser.lifetimeUnlocksCents)}
       </td>
       <td className="px-4 py-3 text-sm text-gray-700 dark:text-gray-300">
-        <div className="flex flex-col gap-1">
-          <span>{formatDateTime(fanUser.lastLoginAt)}</span>
-          <span className={loginBadge.className}>{loginBadge.text}</span>
-        </div>
+        {formatDateTime(fanUser.lastLoginAt)}
       </td>
       <td className="px-4 py-3">
         {showActions && (
@@ -1442,7 +1411,7 @@ export const FanHubUsers: React.FC = () => {
                   </th>
                   <th
                     className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider"
-                    title="Firebase Auth last sign-in time. Cutover baseline: 4/4/2026 10:00 PM ET."
+                    title="Firebase Auth last sign-in time."
                   >
                     Last Login
                   </th>

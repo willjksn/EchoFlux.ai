@@ -4,10 +4,13 @@ import { getAdminApp, getAdminDb } from "./_firebaseAdmin.js";
 
 type Body = {
   authUids?: string[];
+  emails?: string[];
 };
 
 const UID_RE = /^[A-Za-z0-9]{20,36}$/;
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const MAX_UIDS = 300;
+const MAX_EMAILS = 300;
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== "POST") {
@@ -28,6 +31,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const body = (req.body || {}) as Body;
   const requested = Array.isArray(body.authUids) ? body.authUids : [];
+  const requestedEmails = Array.isArray(body.emails) ? body.emails : [];
   const authUids = Array.from(
     new Set(
       requested
@@ -36,13 +40,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         .slice(0, MAX_UIDS)
     )
   );
+  const emails = Array.from(
+    new Set(
+      requestedEmails
+        .map((v) => String(v || "").trim().toLowerCase())
+        .filter((v) => EMAIL_RE.test(v))
+        .slice(0, MAX_EMAILS)
+    )
+  );
 
-  if (authUids.length === 0) {
-    return res.status(200).json({ byUid: {} });
+  if (authUids.length === 0 && emails.length === 0) {
+    return res.status(200).json({ byUid: {}, byEmail: {} });
   }
 
   const adminAuth = getAdminApp().auth();
   const byUid: Record<string, { lastSignInTime: string | null; exists: boolean }> = {};
+  const byEmail: Record<string, { lastSignInTime: string | null; exists: boolean }> = {};
 
   await Promise.all(
     authUids.map(async (uid) => {
@@ -59,6 +72,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     })
   );
 
-  return res.status(200).json({ byUid });
+  await Promise.all(
+    emails.map(async (email) => {
+      try {
+        const user = await adminAuth.getUserByEmail(email);
+        const lastSignInTime =
+          typeof user.metadata?.lastSignInTime === "string" && user.metadata.lastSignInTime.trim()
+            ? user.metadata.lastSignInTime
+            : null;
+        byEmail[email] = { lastSignInTime, exists: true };
+      } catch {
+        byEmail[email] = { lastSignInTime: null, exists: false };
+      }
+    })
+  );
+
+  return res.status(200).json({ byUid, byEmail });
 }
 
