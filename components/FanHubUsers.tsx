@@ -37,6 +37,8 @@ interface FanUser {
   mtdTipsCents: number;
   mtdUnlocksCents: number;
   lastActiveAt: Date | null;
+  lastLoginAt: Date | null;
+  hasAuthAccount: boolean;
   avatarUrl?: string;
   /** Firebase Auth uid (from plain fan doc id or parsed from `uid-email@…` ids) */
   authUid?: string;
@@ -86,6 +88,48 @@ function formatCents(cents: number): string {
 function formatDate(date: Date | null): string {
   if (!date || !Number.isFinite(date.getTime())) return "—";
   return date.toLocaleDateString("en-US", { month: "numeric", day: "numeric", year: "numeric" });
+}
+
+const CUTOVER_AT_ET = new Date("2026-04-04T22:00:00-04:00");
+
+function formatDateTime(date: Date | null): string {
+  if (!date || !Number.isFinite(date.getTime())) return "—";
+  return date.toLocaleString("en-US", {
+    month: "numeric",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
+function loginSinceCutoverBadge(lastLoginAt: Date | null, hasAuthAccount: boolean): { text: string; className: string } {
+  if (!hasAuthAccount) {
+    return {
+      text: "No auth account",
+      className:
+        "px-2 py-1 text-xs font-medium rounded-full bg-red-100 text-red-800 dark:bg-red-900/35 dark:text-red-300",
+    };
+  }
+  if (!lastLoginAt) {
+    return {
+      text: "No login yet",
+      className:
+        "px-2 py-1 text-xs font-medium rounded-full bg-amber-100 text-amber-900 dark:bg-amber-900/30 dark:text-amber-200",
+    };
+  }
+  if (lastLoginAt.getTime() >= CUTOVER_AT_ET.getTime()) {
+    return {
+      text: "Logged in since cutover",
+      className:
+        "px-2 py-1 text-xs font-medium rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-900/35 dark:text-emerald-300",
+    };
+  }
+  return {
+    text: "No login since cutover",
+    className:
+      "px-2 py-1 text-xs font-medium rounded-full bg-orange-100 text-orange-900 dark:bg-orange-900/30 dark:text-orange-200",
+  };
 }
 
 /** Firestore / imports sometimes store cancel-at-period-end as string or snake_case. */
@@ -801,10 +845,54 @@ export const FanHubUsers: React.FC = () => {
           mtdTipsCents: mtdTips,
           mtdUnlocksCents: mtdUnlocks,
           lastActiveAt: data.lastActive,
+          lastLoginAt: null,
+          hasAuthAccount: false,
           avatarUrl: data.avatarUrl,
           authUid,
         };
       });
+
+      const loginLookupIds = Array.from(
+        new Set(
+          fanUsers
+            .map((u) => String(u.authUid || "").trim())
+            .filter((uid) => uid.length >= 20)
+        )
+      );
+      if (loginLookupIds.length > 0) {
+        try {
+          const token = auth.currentUser ? await auth.currentUser.getIdToken() : null;
+          const loginRes = await fetch("/api/creatorFanLastLogins", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              ...(token ? { Authorization: `Bearer ${token}` } : {}),
+            },
+            body: JSON.stringify({ authUids: loginLookupIds }),
+          });
+          if (loginRes.ok) {
+            const payload = (await loginRes.json().catch(() => ({}))) as {
+              byUid?: Record<string, { lastSignInTime: string | null; exists: boolean }>;
+            };
+            const byUid = payload.byUid || {};
+            fanUsers.forEach((u) => {
+              const uid = String(u.authUid || "").trim();
+              if (!uid) return;
+              const row = byUid[uid];
+              if (!row) return;
+              u.hasAuthAccount = row.exists === true;
+              if (row.lastSignInTime) {
+                const d = new Date(row.lastSignInTime);
+                u.lastLoginAt = Number.isFinite(d.getTime()) ? d : null;
+              } else {
+                u.lastLoginAt = null;
+              }
+            });
+          }
+        } catch {
+          // best-effort enrichment; keep table usable even if API unavailable
+        }
+      }
 
       // Sort: admins first, then active subscribers, treat buyers, tippers, then by signup date
       const roleRank = (r: UserRole) =>
@@ -1137,6 +1225,7 @@ export const FanHubUsers: React.FC = () => {
   const UserRow: React.FC<{ fanUser: FanUser; showActions?: boolean }> = ({ fanUser, showActions = true }) => {
     const planBadgeClass = fanUser.plan ? planStatusBadgeClass(fanUser.plan) : null;
     const accessBadgeClass = planStatusBadgeClass(fanUser.remainingAccess);
+    const loginBadge = loginSinceCutoverBadge(fanUser.lastLoginAt, fanUser.hasAuthAccount);
     return (
     <tr className="hover:bg-gray-50 dark:hover:bg-gray-800/40 transition-colors">
       <td className="px-4 py-3">
@@ -1202,6 +1291,12 @@ export const FanHubUsers: React.FC = () => {
       <td className="px-4 py-3 text-sm text-gray-700 dark:text-gray-300">
         {formatCents(fanUser.lifetimeUnlocksCents)}
       </td>
+      <td className="px-4 py-3 text-sm text-gray-700 dark:text-gray-300">
+        <div className="flex flex-col gap-1">
+          <span>{formatDateTime(fanUser.lastLoginAt)}</span>
+          <span className={loginBadge.className}>{loginBadge.text}</span>
+        </div>
+      </td>
       <td className="px-4 py-3">
         {showActions && (
           <div className="flex items-center gap-2">
@@ -1258,7 +1353,7 @@ export const FanHubUsers: React.FC = () => {
 
   const SectionHeader: React.FC<{ title: string; count: number }> = ({ title, count }) => (
     <tr className="bg-gray-50 dark:bg-gray-800/50">
-      <td colSpan={9} className="px-4 py-2">
+      <td colSpan={10} className="px-4 py-2">
         <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
           {title} ({count})
         </span>
@@ -1337,6 +1432,12 @@ export const FanHubUsers: React.FC = () => {
                   <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                     Unlocks
                   </th>
+                  <th
+                    className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider"
+                    title="Firebase Auth last sign-in time. Cutover baseline: 4/4/2026 10:00 PM ET."
+                  >
+                    Last Login
+                  </th>
                   <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                     Actions
                   </th>
@@ -1388,6 +1489,7 @@ export const FanHubUsers: React.FC = () => {
                     {formatCents(monthlyTotals.unlocks)}
                   </td>
                   <td className="px-4 py-3 text-gray-400">—</td>
+                  <td className="px-4 py-3 text-gray-400">—</td>
                 </tr>
 
                 {/* Admins Section */}
@@ -1418,7 +1520,7 @@ export const FanHubUsers: React.FC = () => {
                   ))
                 ) : (
                   <tr>
-                    <td colSpan={9} className="px-4 py-4 text-sm text-gray-500 dark:text-gray-400 italic">
+                    <td colSpan={10} className="px-4 py-4 text-sm text-gray-500 dark:text-gray-400 italic">
                       No store buyers yet. They appear when someone buys from your store on the landing page before subscribing.
                     </td>
                   </tr>
@@ -1432,7 +1534,7 @@ export const FanHubUsers: React.FC = () => {
                   ))
                 ) : (
                   <tr>
-                    <td colSpan={9} className="px-4 py-4 text-sm text-gray-500 dark:text-gray-400 italic">
+                    <td colSpan={10} className="px-4 py-4 text-sm text-gray-500 dark:text-gray-400 italic">
                       No tippers yet.
                     </td>
                   </tr>
@@ -1441,7 +1543,7 @@ export const FanHubUsers: React.FC = () => {
                 {/* Empty State */}
                 {filteredUsers.length === 0 && !loading && (
                   <tr>
-                    <td colSpan={9} className="px-4 py-12 text-center text-gray-500 dark:text-gray-400">
+                    <td colSpan={10} className="px-4 py-12 text-center text-gray-500 dark:text-gray-400">
                       {searchQuery ? "No users match your search." : "No users yet. Add users or they'll appear here when they make purchases."}
                     </td>
                   </tr>
