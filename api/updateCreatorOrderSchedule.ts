@@ -1,6 +1,8 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { getAdminDb } from "./_firebaseAdmin.js";
 import { verifyAuth } from "./verifyAuth.js";
+import { normalizeCreatorId } from "../src/lib/creatorIdNormalize.js";
+import { sendFanNotification } from "./_fanNotifications.js";
 
 type Body = {
   orderId?: string;
@@ -59,8 +61,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (!snap.exists) {
       return res.status(404).json({ error: "Order not found" });
     }
-    const data = snap.data() as { creatorId?: string } | undefined;
-    if (data?.creatorId !== decoded.uid) {
+    const data = snap.data() as { creatorId?: string; fanId?: string; productTitle?: string; productId?: string } | undefined;
+    const storedCreatorId = normalizeCreatorId(typeof data?.creatorId === "string" ? data.creatorId : "");
+    const callerCreatorId = normalizeCreatorId(decoded.uid);
+    if (!storedCreatorId || storedCreatorId !== callerCreatorId) {
       return res.status(403).json({ error: "Forbidden" });
     }
 
@@ -96,6 +100,36 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     await ref.set(patch, { merge: true });
+
+    // Notify fan when creator marks this purchase as delivered.
+    if (deliveryStatus === "delivered") {
+      const fanId = typeof data?.fanId === "string" ? data.fanId.trim() : "";
+      if (fanId) {
+        const title = "Your purchase is ready";
+        const itemName =
+          typeof data?.productTitle === "string" && data.productTitle.trim()
+            ? data.productTitle.trim()
+            : typeof data?.productId === "string" && data.productId.trim()
+              ? data.productId.trim()
+              : "your item";
+        const bodyText = `Your creator delivered ${itemName}. Open Purchases to view it.`;
+        try {
+          await sendFanNotification({
+            fanId,
+            type: "purchase_confirmed",
+            title,
+            body: bodyText,
+            data: {
+              orderId,
+              creatorId: storedCreatorId,
+              destination: "purchases",
+            },
+          });
+        } catch (notifyErr) {
+          console.error("updateCreatorOrderSchedule: fan notification failed", notifyErr);
+        }
+      }
+    }
     return res.status(200).json({ ok: true });
   } catch (e: unknown) {
     console.error("updateCreatorOrderSchedule error:", e);
