@@ -91,6 +91,7 @@ function formatDate(date: Date | null): string {
 
 const FIREBASE_UID_RE = /^[A-Za-z0-9]{20,36}$/;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const CUTOVER_AT_ET = new Date("2026-04-04T22:00:00-04:00");
 
 function formatDateTime(date: Date | null): string {
   if (!date || !Number.isFinite(date.getTime())) return "—";
@@ -214,6 +215,8 @@ export const FanHubUsers: React.FC = () => {
   const [grantVideoMinutes, setGrantVideoMinutes] = useState(0);
   const [isGrantingMinutes, setIsGrantingMinutes] = useState(false);
   const [cancelSubLoading, setCancelSubLoading] = useState(false);
+  const [sendingReset, setSendingReset] = useState(false);
+  const [sendingBulkReset, setSendingBulkReset] = useState(false);
 
   // Empty placeholder - users will be loaded from database
   // Demo users are not shown to new creators
@@ -1032,10 +1035,91 @@ export const FanHubUsers: React.FC = () => {
     setNewPassword("");
   };
 
+  const sendResetEmailForFan = useCallback(
+    async (fanUser: FanUser, opts?: { silent?: boolean }): Promise<boolean> => {
+      const token = auth.currentUser ? await auth.currentUser.getIdToken() : null;
+      if (!token) {
+        if (!opts?.silent) showToast?.("Please sign in again", "error");
+        return false;
+      }
+      try {
+        const res = await fetch("/api/creatorSendPasswordReset", {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            fanId: fanUser.id,
+            email: fanUser.email,
+            authUid: fanUser.authUid || null,
+          }),
+        });
+        const data = (await res.json().catch(() => ({}))) as {
+          error?: string;
+          emailSent?: boolean;
+          email?: string;
+        };
+        if (!res.ok) {
+          throw new Error(data.error || `Request failed (${res.status})`);
+        }
+        if (!opts?.silent) {
+          if (data.emailSent) {
+            showToast?.(`Password reset email sent to ${data.email || fanUser.email}`, "success");
+          } else {
+            showToast?.(`Reset link generated for ${data.email || fanUser.email}, but email delivery is not configured`, "error");
+          }
+        }
+        return true;
+      } catch (error) {
+        if (!opts?.silent) {
+          showToast?.(error instanceof Error ? error.message : "Failed to send password reset", "error");
+        }
+        return false;
+      }
+    },
+    [showToast]
+  );
+
   const handleSendPasswordReset = async () => {
     if (!selectedUser) return;
-    // In a real implementation, this would call Firebase Auth to send reset email
-    showToast?.(`Password reset email sent to ${selectedUser.email}`, "success");
+    setSendingReset(true);
+    try {
+      await sendResetEmailForFan(selectedUser);
+    } finally {
+      setSendingReset(false);
+    }
+  };
+
+  const handleSendResetsToInactiveSinceCutover = async () => {
+    const targets = members.filter((m) => !m.lastLoginAt || m.lastLoginAt.getTime() < CUTOVER_AT_ET.getTime());
+    if (targets.length === 0) {
+      showToast?.("Everyone has logged in since cutover. No reset emails needed.", "success");
+      return;
+    }
+    if (
+      !window.confirm(
+        `Send password reset emails to ${targets.length} member${targets.length === 1 ? "" : "s"} who have not logged in since 4/4/2026 10:00 PM ET?`
+      )
+    ) {
+      return;
+    }
+
+    setSendingBulkReset(true);
+    let sent = 0;
+    let failed = 0;
+    for (const fan of targets) {
+      const ok = await sendResetEmailForFan(fan, { silent: true });
+      if (ok) sent += 1;
+      else failed += 1;
+    }
+    setSendingBulkReset(false);
+
+    if (failed === 0) {
+      showToast?.(`Sent ${sent} password reset email${sent === 1 ? "" : "s"} for inactive members.`, "success");
+    } else {
+      showToast?.(`Sent ${sent}; ${failed} failed. Open members and retry failed users individually.`, "error");
+    }
   };
 
   const handleCreatorCancelFanSubscription = async () => {
@@ -1344,6 +1428,15 @@ export const FanHubUsers: React.FC = () => {
       <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
         <h1 className="text-2xl font-bold text-gray-900 dark:text-white">User Management</h1>
         <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={handleSendResetsToInactiveSinceCutover}
+            disabled={sendingBulkReset}
+            className="px-4 py-2 rounded-lg text-sm font-medium border border-amber-300 dark:border-amber-700 text-amber-900 dark:text-amber-200 bg-amber-50 dark:bg-amber-900/20 hover:bg-amber-100 dark:hover:bg-amber-900/30 disabled:opacity-50 disabled:cursor-not-allowed"
+            title="Send reset links to members with no login since 4/4/2026 10:00 PM ET"
+          >
+            {sendingBulkReset ? "Sending resets..." : "Reset inactive since cutover"}
+          </button>
           <button
             type="button"
             onClick={() => setShowAddModal(true)}
@@ -1717,12 +1810,13 @@ export const FanHubUsers: React.FC = () => {
                 <button
                   type="button"
                   onClick={handleSendPasswordReset}
-                  className="w-full px-4 py-2.5 fh-btn rounded-lg text-sm font-medium"
+                  disabled={sendingReset}
+                  className="w-full px-4 py-2.5 fh-btn rounded-lg text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  Send password reset email
+                  {sendingReset ? "Sending..." : "Send password reset email"}
                 </button>
                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
-                  Sends an email to {selectedUser.email} with a link to set a new password.
+                  Sends an email to {selectedUser.email} with a secure password reset link through your email provider.
                 </p>
               </div>
 
