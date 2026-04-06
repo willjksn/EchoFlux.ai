@@ -207,6 +207,8 @@ export const FanLandingPage: React.FC<FanLandingPageProps> = (props) => {
   const privacyHref = privacyHrefProp ?? `/${creator.handle}/privacy`;
 
   const showLandingTreatEntry = landingGuestTreatCommerceEnabled && !!onGuestPurchaseTreat;
+  const showLandingTreatEntryCardOnly = publicTreatsOnLanding && sectionsTreatsEnabled;
+  const showLandingTreatModal = showLandingTreatEntry || showLandingTreatEntryCardOnly;
 
   const storeCopy = useMemo(() => resolveStoreCopy(creatorLandingContent), [creatorLandingContent]);
 
@@ -335,7 +337,7 @@ export const FanLandingPage: React.FC<FanLandingPageProps> = (props) => {
           tipLoading,
           tipError,
           tipsEnabled,
-          showGuestTreatsCard: showLandingTreatEntry,
+          showGuestTreatsCard: showLandingTreatEntry || showLandingTreatEntryCardOnly,
           onOpenGuestTreats: () => setTreatStoreOpen(true),
           landingTreatsLoading,
           landingTreatProductCount: landingTreatProducts.length,
@@ -344,7 +346,7 @@ export const FanLandingPage: React.FC<FanLandingPageProps> = (props) => {
         }}
       />
 
-      {treatStoreOpen && onGuestPurchaseTreat ? (
+      {treatStoreOpen && showLandingTreatModal ? (
         <div
           className="fan-landing-treat-modal-backdrop"
           style={{
@@ -450,15 +452,13 @@ export const FanLandingPage: React.FC<FanLandingPageProps> = (props) => {
                           ${(p.priceCents / 100).toFixed(2)}
                         </p>
                       </div>
-                      <button
-                        type="button"
-                        className="shrink-0 px-4 py-2.5 text-sm font-semibold text-white rounded-lg"
-                        style={{ background: `linear-gradient(135deg, ${primary} 0%, ${primary}dd 100%)` }}
-                        disabled={!!guestTreatPurchasingId}
-                        onClick={() => onGuestPurchaseTreat(p.id)}
-                      >
-                        {guestTreatPurchasingId === p.id ? "Redirecting…" : "Buy"}
-                      </button>
+                      <div className="shrink-0 px-3 py-2 text-xs font-semibold rounded-lg" style={{
+                        color: primary,
+                        border: `1px solid ${primary}33`,
+                        background: isDarkMode ? "rgba(255,255,255,0.03)" : `${primary}0f`,
+                      }}>
+                        Members only
+                      </div>
                     </li>
                   ))}
                 </ul>

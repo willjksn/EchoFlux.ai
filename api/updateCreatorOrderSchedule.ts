@@ -7,6 +7,10 @@ type Body = {
   scheduleStatus?: "pending" | "scheduled" | "completed" | "cancelled";
   scheduledDate?: string | null;
   scheduledTime?: string | null;
+  deliveryStatus?: "pending" | "delivered";
+  deliveryType?: "video" | "audio" | "text" | "link" | null;
+  deliveryText?: string | null;
+  deliveryUrl?: string | null;
 };
 
 /**
@@ -33,6 +37,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     typeof body.scheduleStatus === "string" && allowed.has(body.scheduleStatus)
       ? body.scheduleStatus
       : undefined;
+  const allowedDeliveryStatuses = new Set(["pending", "delivered"]);
+  const deliveryStatus =
+    typeof body.deliveryStatus === "string" && allowedDeliveryStatuses.has(body.deliveryStatus)
+      ? body.deliveryStatus
+      : undefined;
+  const allowedDeliveryTypes = new Set(["video", "audio", "text", "link"]);
+  const deliveryType =
+    typeof body.deliveryType === "string" && allowedDeliveryTypes.has(body.deliveryType)
+      ? body.deliveryType
+      : body.deliveryType === null
+        ? null
+        : undefined;
 
   try {
     const db = getAdminDb();
@@ -59,6 +75,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
     if (body.scheduledTime !== undefined) {
       patch.scheduledTime = body.scheduledTime && String(body.scheduledTime).trim() ? String(body.scheduledTime).trim() : null;
+    }
+    if (deliveryStatus !== undefined) {
+      patch.deliveryStatus = deliveryStatus;
+      if (deliveryStatus === "delivered") {
+        patch.deliveredAt = new Date().toISOString();
+        patch.deliveredBy = decoded.uid;
+      }
+    }
+    if (deliveryType !== undefined) {
+      patch.deliveryType = deliveryType;
+    }
+    if (body.deliveryText !== undefined) {
+      const t = typeof body.deliveryText === "string" ? body.deliveryText.trim() : "";
+      patch.deliveryText = t || null;
+    }
+    if (body.deliveryUrl !== undefined) {
+      const u = typeof body.deliveryUrl === "string" ? body.deliveryUrl.trim() : "";
+      patch.deliveryUrl = u || null;
     }
 
     await ref.set(patch, { merge: true });

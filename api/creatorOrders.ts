@@ -18,6 +18,12 @@ export type CreatorOrder = {
   scheduleStatus?: string;
   scheduledDate?: string | null;
   scheduledTime?: string | null;
+  deliveryStatus?: "pending" | "delivered";
+  deliveryType?: "video" | "audio" | "text" | "link" | null;
+  deliveryText?: string | null;
+  deliveryUrl?: string | null;
+  deliveredAt?: string | null;
+  deliveredBy?: string | null;
 };
 
 function hasPlatformAdminAccess(userData: Record<string, unknown> | undefined): boolean {
@@ -90,6 +96,18 @@ function mapDocToOrder(docSnap: QueryDocumentSnapshot): CreatorOrder {
     scheduleStatus: (d.scheduleStatus as string) || "pending",
     scheduledDate: (d.scheduledDate as string) ?? null,
     scheduledTime: (d.scheduledTime as string) ?? null,
+    deliveryStatus: d.deliveryStatus === "delivered" ? "delivered" : "pending",
+    deliveryType:
+      d.deliveryType === "video" ||
+      d.deliveryType === "audio" ||
+      d.deliveryType === "text" ||
+      d.deliveryType === "link"
+        ? d.deliveryType
+        : null,
+    deliveryText: typeof d.deliveryText === "string" ? d.deliveryText : null,
+    deliveryUrl: typeof d.deliveryUrl === "string" ? d.deliveryUrl : null,
+    deliveredAt: typeof d.deliveredAt === "string" ? d.deliveredAt : null,
+    deliveredBy: typeof d.deliveredBy === "string" ? d.deliveredBy : null,
   };
 }
 

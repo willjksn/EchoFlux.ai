@@ -1,0 +1,124 @@
+import type { VercelRequest, VercelResponse } from "@vercel/node";
+import { getAdminDb } from "./_firebaseAdmin.js";
+import { verifyAuth } from "./verifyAuth.js";
+
+type FanPurchase = {
+  id: string;
+  creatorId: string;
+  fanId: string;
+  fanEmail?: string;
+  type: string;
+  productId: string | null;
+  productTitle?: string;
+  amountCents: number;
+  status: string;
+  createdAt: string;
+  deliveryStatus?: "pending" | "delivered";
+  deliveryType?: "video" | "audio" | "text" | "link" | null;
+  deliveryText?: string | null;
+  deliveryUrl?: string | null;
+  deliveredAt?: string | null;
+};
+
+function createdAtToMs(createdAt: unknown): number {
+  if (createdAt == null) return 0;
+  if (typeof (createdAt as { toDate?: () => Date }).toDate === "function") {
+    return (createdAt as { toDate: () => Date }).toDate().getTime();
+  }
+  if (createdAt instanceof Date) return createdAt.getTime();
+  if (typeof createdAt === "string") {
+    const t = Date.parse(createdAt);
+    return Number.isNaN(t) ? 0 : t;
+  }
+  if (typeof createdAt === "number" && Number.isFinite(createdAt)) {
+    return createdAt < 1e12 ? createdAt * 1000 : createdAt;
+  }
+  return 0;
+}
+
+function mapDocToPurchase(id: string, d: Record<string, unknown>): FanPurchase {
+  const rawType = typeof d.type === "string" ? d.type.trim().toLowerCase() : "";
+  const normalizedType =
+    rawType === "product" || rawType === "post_unlock" || rawType === "unlock" || rawType === "treat"
+      ? rawType === "treat"
+        ? "product"
+        : rawType
+      : "product";
+  const createdMs = createdAtToMs(d.createdAt);
+  return {
+    id,
+    creatorId: String(d.creatorId || ""),
+    fanId: String(d.fanId || ""),
+    fanEmail: typeof d.fanEmail === "string" ? d.fanEmail.trim().toLowerCase() : undefined,
+    type: normalizedType,
+    productId: typeof d.productId === "string" ? d.productId : null,
+    productTitle: typeof d.productTitle === "string" ? d.productTitle : undefined,
+    amountCents: Number.isFinite(Number(d.amountCents)) ? Math.max(0, Math.round(Number(d.amountCents))) : 0,
+    status: typeof d.status === "string" ? d.status : "paid",
+    createdAt: createdMs > 0 ? new Date(createdMs).toISOString() : new Date(0).toISOString(),
+    deliveryStatus: d.deliveryStatus === "delivered" ? "delivered" : "pending",
+    deliveryType:
+      d.deliveryType === "video" || d.deliveryType === "audio" || d.deliveryType === "text" || d.deliveryType === "link"
+        ? d.deliveryType
+        : null,
+    deliveryText: typeof d.deliveryText === "string" ? d.deliveryText : null,
+    deliveryUrl: typeof d.deliveryUrl === "string" ? d.deliveryUrl : null,
+    deliveredAt: typeof d.deliveredAt === "string" ? d.deliveredAt : null,
+  };
+}
+
+export default async function handler(req: VercelRequest, res: VercelResponse) {
+  if (req.method !== "GET") return res.status(405).json({ error: "Method not allowed" });
+
+  const decoded = await verifyAuth(req);
+  if (!decoded?.uid) return res.status(401).json({ error: "Unauthorized" });
+
+  const creatorId = String(req.query.creatorId || "").trim();
+  if (!creatorId) return res.status(400).json({ error: "creatorId is required" });
+
+  const db = getAdminDb();
+  if (!db) return res.status(500).json({ error: "Database unavailable" });
+
+  try {
+    const authUid = decoded.uid;
+    const email = typeof decoded.email === "string" ? decoded.email.trim().toLowerCase() : "";
+    const limitNum = Math.min(Math.max(parseInt(String(req.query.limit || "200"), 10) || 200, 20), 1000);
+    const docsById = new Map<string, FanPurchase>();
+
+    const byFanIdSnap = await db
+      .collection("orders")
+      .where("creatorId", "==", creatorId)
+      .where("fanId", "==", authUid)
+      .limit(limitNum)
+      .get();
+    byFanIdSnap.docs.forEach((docSnap) => {
+      const mapped = mapDocToPurchase(docSnap.id, docSnap.data() as Record<string, unknown>);
+      docsById.set(docSnap.id, mapped);
+    });
+
+    if (email) {
+      const byEmailSnap = await db
+        .collection("orders")
+        .where("creatorId", "==", creatorId)
+        .where("fanEmail", "==", email)
+        .limit(limitNum)
+        .get();
+      byEmailSnap.docs.forEach((docSnap) => {
+        const mapped = mapDocToPurchase(docSnap.id, docSnap.data() as Record<string, unknown>);
+        docsById.set(docSnap.id, mapped);
+      });
+    }
+
+    const purchases = Array.from(docsById.values())
+      .filter((o) => o.status !== "refunded")
+      .filter((o) => o.type === "product" || o.type === "post_unlock" || o.type === "unlock")
+      .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt))
+      .slice(0, limitNum);
+
+    return res.status(200).json({ purchases });
+  } catch (e: unknown) {
+    console.error("fanPurchases error:", e);
+    return res.status(500).json({ error: "Failed to load purchases" });
+  }
+}
+

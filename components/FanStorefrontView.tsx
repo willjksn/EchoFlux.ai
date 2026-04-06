@@ -323,6 +323,41 @@ type SupportMessage = {
   createdAt?: string;
 };
 
+type FanDeliveryPurchase = {
+  id: string;
+  creatorId: string;
+  fanId: string;
+  fanEmail?: string;
+  type: string;
+  productId: string | null;
+  productTitle?: string;
+  amountCents: number;
+  status: string;
+  createdAt: string;
+  deliveryStatus?: "pending" | "delivered";
+  deliveryType?: "video" | "audio" | "text" | "link" | null;
+  deliveryText?: string | null;
+  deliveryUrl?: string | null;
+  deliveredAt?: string | null;
+};
+
+function toIsoFromUnknownDate(v: unknown): string {
+  if (v == null) return new Date(0).toISOString();
+  if (typeof (v as { toDate?: () => Date }).toDate === "function") {
+    return (v as { toDate: () => Date }).toDate().toISOString();
+  }
+  if (v instanceof Date) return v.toISOString();
+  if (typeof v === "number" && Number.isFinite(v)) {
+    const ms = v < 1e12 ? v * 1000 : v;
+    return new Date(ms).toISOString();
+  }
+  if (typeof v === "string") {
+    const ms = Date.parse(v);
+    if (!Number.isNaN(ms)) return new Date(ms).toISOString();
+  }
+  return new Date(0).toISOString();
+}
+
 /** Member hub URL segments (path-based tabs). Keep in sync with App.tsx storefront path checks. */
 const MEMBER_PATH_SLUGS = new Set([
   "home",
@@ -778,6 +813,8 @@ export const FanStorefrontView: React.FC = () => {
   const [fanPageAdminBypass, setFanPageAdminBypass] = useState(false);
   const [treatsProducts, setTreatsProducts] = useState<TreatProduct[]>([]);
   const [treatsLoading, setTreatsLoading] = useState(false);
+  const [fanPurchases, setFanPurchases] = useState<FanDeliveryPurchase[]>([]);
+  const [fanPurchasesLoading, setFanPurchasesLoading] = useState(false);
   /** Visible treats on public landing when creator enables guest checkout */
   const [landingTreatsProducts, setLandingTreatsProducts] = useState<TreatProduct[]>([]);
   const [landingTreatsLoading, setLandingTreatsLoading] = useState(false);
@@ -1920,6 +1957,112 @@ export const FanStorefrontView: React.FC = () => {
     if ((activeTab === "treats" || activeTab === "purchases") && creator?.creatorId) fetchTreats();
   }, [activeTab, creator?.creatorId, fetchTreats]);
 
+  const fetchFanPurchases = useCallback(async () => {
+    if (!creator?.creatorId || !isLoggedIn) return;
+    setFanPurchasesLoading(true);
+    try {
+      const token = auth.currentUser ? await auth.currentUser.getIdToken() : null;
+      const url = `/api/fanPurchases?creatorId=${encodeURIComponent(creator.creatorId)}&limit=200`;
+      const res = await fetch(url, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+      const data = await res.json().catch(() => ({} as { purchases?: FanDeliveryPurchase[]; error?: string }));
+      if (res.ok) {
+        setFanPurchases(Array.isArray(data.purchases) ? data.purchases : []);
+        return;
+      }
+
+      // Local/dev fallback when API route is unavailable in current runtime.
+      if ((res.status === 404 || res.status === 405) && auth.currentUser?.uid) {
+        const fanUid = auth.currentUser.uid;
+        const fanEmail = (auth.currentUser.email || "").trim().toLowerCase();
+        const byIdSnap = await getDocs(
+          query(
+            collection(db, "orders"),
+            where("creatorId", "==", creator.creatorId),
+            where("fanId", "==", fanUid),
+            limit(300)
+          )
+        );
+        const outById = new Map<string, FanDeliveryPurchase>();
+        for (const d of byIdSnap.docs) {
+          const raw = d.data() as Record<string, unknown>;
+          outById.set(d.id, {
+            id: d.id,
+            creatorId: String(raw.creatorId || ""),
+            fanId: String(raw.fanId || ""),
+            fanEmail: typeof raw.fanEmail === "string" ? raw.fanEmail : undefined,
+            type: typeof raw.type === "string" ? raw.type : "product",
+            productId: typeof raw.productId === "string" ? raw.productId : null,
+            productTitle: typeof raw.productTitle === "string" ? raw.productTitle : undefined,
+            amountCents: Number.isFinite(Number(raw.amountCents)) ? Math.max(0, Math.round(Number(raw.amountCents))) : 0,
+            status: typeof raw.status === "string" ? raw.status : "paid",
+            createdAt: toIsoFromUnknownDate(raw.createdAt),
+            deliveryStatus: raw.deliveryStatus === "delivered" ? "delivered" : "pending",
+            deliveryType:
+              raw.deliveryType === "video" || raw.deliveryType === "audio" || raw.deliveryType === "text"
+                ? raw.deliveryType
+                : null,
+            deliveryText: typeof raw.deliveryText === "string" ? raw.deliveryText : null,
+            deliveryUrl: typeof raw.deliveryUrl === "string" ? raw.deliveryUrl : null,
+            deliveredAt: typeof raw.deliveredAt === "string" ? raw.deliveredAt : null,
+          });
+        }
+        if (fanEmail) {
+          const byEmailSnap = await getDocs(
+            query(
+              collection(db, "orders"),
+              where("creatorId", "==", creator.creatorId),
+              where("fanEmail", "==", fanEmail),
+              limit(300)
+            )
+          );
+          for (const d of byEmailSnap.docs) {
+            const raw = d.data() as Record<string, unknown>;
+            outById.set(d.id, {
+              id: d.id,
+              creatorId: String(raw.creatorId || ""),
+              fanId: String(raw.fanId || ""),
+              fanEmail: typeof raw.fanEmail === "string" ? raw.fanEmail : undefined,
+              type: typeof raw.type === "string" ? raw.type : "product",
+              productId: typeof raw.productId === "string" ? raw.productId : null,
+              productTitle: typeof raw.productTitle === "string" ? raw.productTitle : undefined,
+              amountCents: Number.isFinite(Number(raw.amountCents))
+                ? Math.max(0, Math.round(Number(raw.amountCents)))
+                : 0,
+              status: typeof raw.status === "string" ? raw.status : "paid",
+              createdAt: toIsoFromUnknownDate(raw.createdAt),
+              deliveryStatus: raw.deliveryStatus === "delivered" ? "delivered" : "pending",
+              deliveryType:
+                raw.deliveryType === "video" || raw.deliveryType === "audio" || raw.deliveryType === "text"
+                  ? raw.deliveryType
+                  : null,
+              deliveryText: typeof raw.deliveryText === "string" ? raw.deliveryText : null,
+              deliveryUrl: typeof raw.deliveryUrl === "string" ? raw.deliveryUrl : null,
+              deliveredAt: typeof raw.deliveredAt === "string" ? raw.deliveredAt : null,
+            });
+          }
+        }
+        const fallbackRows = Array.from(outById.values())
+          .filter((o) => o.status !== "refunded")
+          .filter((o) => o.type === "product" || o.type === "unlock" || o.type === "post_unlock" || o.type === "treat")
+          .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
+        setFanPurchases(fallbackRows);
+        return;
+      }
+
+      showToast(data.error || "Could not load purchases.", "error");
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : "Could not load purchases.", "error");
+    } finally {
+      setFanPurchasesLoading(false);
+    }
+  }, [creator?.creatorId, isLoggedIn, showToast]);
+
+  useEffect(() => {
+    if (activeTab === "purchases" && isLoggedIn && creator?.creatorId) {
+      void fetchFanPurchases();
+    }
+  }, [activeTab, creator?.creatorId, fetchFanPurchases, isLoggedIn]);
+
   /** True when the signed-in Firebase user is this page's creator (handles legacy compound creatorId). */
   const isViewingOwnStorefront =
     !!creator?.creatorId &&
@@ -2929,6 +3072,20 @@ export const FanStorefrontView: React.FC = () => {
   const hasAccessByCurrentMembershipBase =
     subscribed && (creator?.monetization?.freeAccessEnabled === true || hasPaidMembershipBase);
   const hasUnlockedPurchases = unlockedProductIds.length > 0 || unlockedFanPostIds.length > 0;
+  const deliveredOrPurchasedProductIdSet = useMemo(() => {
+    const out = new Set<string>();
+    for (const o of fanPurchases) {
+      if (typeof o.productId === "string" && o.productId.trim()) out.add(o.productId.trim());
+    }
+    return out;
+  }, [fanPurchases]);
+  const legacyUnlockedTreatPurchases = useMemo(
+    () =>
+      treatsProducts.filter(
+        (p) => unlockedProductIds.includes(p.id) && !deliveredOrPurchasedProductIdSet.has(p.id)
+      ),
+    [deliveredOrPurchasedProductIdSet, treatsProducts, unlockedProductIds]
+  );
   const needsPaidUpgradeBase =
     isLoggedIn && subscribed && creatorRequiresPaidMembership && !hasPaidMembershipBase;
   const purchaseOnlyAccessBase =
@@ -3431,9 +3588,7 @@ export const FanStorefrontView: React.FC = () => {
           landingTreatProducts={landingTreatsProducts}
           landingTreatsLoading={landingTreatsLoading}
           landingGuestTreatCommerceEnabled={landingGuestTreatCommerceEnabled}
-          onGuestPurchaseTreat={
-            landingGuestTreatCommerceEnabled ? handleGuestTreatPurchase : undefined
-          }
+          onGuestPurchaseTreat={undefined}
           guestTreatPurchasingId={guestTreatPurchasingId}
           treatLinkAccountMessage={treatLinkMessage}
           termsHref={storefrontTermsPath}
@@ -3447,8 +3602,8 @@ export const FanStorefrontView: React.FC = () => {
             onSuccess={() => {
               setIsLoggedIn(true);
               setFanAuthOpen(false);
-              const nextTab: FanStorefrontMemberTab =
-                creator.monetization?.freeAccessEnabled === true ? "feed" : "profile";
+              // Always land fans on Home/Feed after auth; entitlement effects can still gate to purchases if needed.
+              const nextTab: FanStorefrontMemberTab = "feed";
               setActiveTab(nextTab);
               // Immediate visual feedback for free pages; entitlement fetch will reconcile exact status.
               if (creator.monetization?.freeAccessEnabled === true) {
@@ -3916,19 +4071,71 @@ export const FanStorefrontView: React.FC = () => {
                     Everything you bought lives here.
                   </p>
                 </div>
-                {treatsLoading ? (
-                  <p className="fan-member-loading">Loading your purchases...</p>
-                ) : unlockedProductIds.length === 0 ? (
+                {!isLoggedIn ? (
                   <div className="fan-profile-panel">
-                    <p className="fan-member-about-text">
-                      No purchases yet.
-                    </p>
+                    <p className="fan-member-about-text">Log in to view your purchases.</p>
                   </div>
+                ) : fanPurchasesLoading ? (
+                  <p className="fan-member-loading">Loading your purchases...</p>
+                ) : fanPurchases.length === 0 && unlockedProductIds.length === 0 ? (
+                  <div className="fan-profile-panel">
+                    <p className="fan-member-about-text">No purchases yet.</p>
+                  </div>
+                ) : treatsLoading ? (
+                  <p className="fan-member-loading">Loading your purchases...</p>
                 ) : (
                   <div className="fan-member-treats-grid">
-                    {treatsProducts
-                      .filter((p) => unlockedProductIds.includes(p.id))
-                      .map((p) => (
+                    {fanPurchases.map((o) => (
+                      <div key={`order-${o.id}`} className="fan-member-treat-card">
+                        <p className="fan-member-treat-type">{(o.type || "product").replace(/_/g, " ")}</p>
+                        <h3 className="fan-member-treat-title">{o.productTitle || "Purchase"}</h3>
+                        <p className="fan-member-treat-price">{formatPrice(o.amountCents)}</p>
+                        <div className="fan-member-treat-action" style={{ display: "block" }}>
+                          {o.deliveryStatus === "delivered" ? (
+                            <>
+                              <span className="fan-member-treat-owned">Delivered</span>
+                              {o.deliveryType === "text" && o.deliveryText ? (
+                                <div className="fan-profile-panel" style={{ marginTop: "0.6rem" }}>
+                                  <p className="fan-member-about-text" style={{ whiteSpace: "pre-wrap" }}>
+                                    {o.deliveryText}
+                                  </p>
+                                </div>
+                              ) : null}
+                              {o.deliveryType === "video" && o.deliveryUrl ? (
+                                <video
+                                  src={o.deliveryUrl}
+                                  controls
+                                  controlsList="nodownload noplaybackrate noremoteplayback"
+                                  disablePictureInPicture
+                                  playsInline
+                                  preload="metadata"
+                                  style={{ width: "100%", marginTop: "0.6rem", borderRadius: 10 }}
+                                />
+                              ) : null}
+                              {o.deliveryType === "audio" && o.deliveryUrl ? (
+                                <audio
+                                  src={o.deliveryUrl}
+                                  controls
+                                  controlsList="nodownload noplaybackrate noremoteplayback"
+                                  preload="metadata"
+                                  style={{ width: "100%", marginTop: "0.6rem" }}
+                                />
+                              ) : null}
+                              {o.deliveryType === "link" && o.deliveryUrl ? (
+                                <div className="fan-profile-panel" style={{ marginTop: "0.6rem" }}>
+                                  <p className="fan-member-about-text">
+                                    Delivered link is available from creator support.
+                                  </p>
+                                </div>
+                              ) : null}
+                            </>
+                          ) : (
+                            <span className="fan-member-treat-owned">Pending delivery</span>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                    {legacyUnlockedTreatPurchases.map((p) => (
                         <div key={p.id} className="fan-member-treat-card">
                           <p className="fan-member-treat-type">{p.type.replace(/_/g, " ")}</p>
                           <h3 className="fan-member-treat-title">{p.title}</h3>

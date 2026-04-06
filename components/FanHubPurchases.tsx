@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { useAppContext } from "./AppContext";
-import { auth, db } from "../firebaseConfig";
+import { auth, db, storage } from "../firebaseConfig";
 import { collection, addDoc, serverTimestamp, Timestamp } from "firebase/firestore";
+import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
 import { formatFanDisplayLabel } from "../src/lib/fanHubDisplay";
 
 type ScheduleStatus = "pending" | "scheduled" | "completed" | "cancelled";
@@ -17,6 +18,11 @@ type Purchase = {
   scheduleStatus: ScheduleStatus;
   scheduledDate: string | null;
   scheduledTime: string | null;
+  deliveryStatus: "pending" | "delivered";
+  deliveryType: "video" | "audio" | "text" | null;
+  deliveryText: string | null;
+  deliveryUrl: string | null;
+  deliveredAt: Date | null;
   isDemo?: boolean;
 };
 
@@ -62,6 +68,11 @@ export const FanHubPurchases: React.FC = () => {
   const [scheduleTime, setScheduleTime] = useState("12:00");
   const [savingId, setSavingId] = useState<string | null>(null);
   const [filterStatus, setFilterStatus] = useState<"all" | "pending" | "scheduled" | "completed">("all");
+  const [deliveryEditingId, setDeliveryEditingId] = useState<string | null>(null);
+  const [deliveryTypeDraft, setDeliveryTypeDraft] = useState<"video" | "audio" | "text">("text");
+  const [deliveryTextDraft, setDeliveryTextDraft] = useState("");
+  const [deliveryUrlDraft, setDeliveryUrlDraft] = useState("");
+  const [deliveryUploading, setDeliveryUploading] = useState(false);
 
   const fetchPurchases = useCallback(async () => {
     if (!user?.id) return;
@@ -85,6 +96,14 @@ export const FanHubPurchases: React.FC = () => {
           scheduleStatus: (o.scheduleStatus as ScheduleStatus) || "pending",
           scheduledDate: o.scheduledDate || null,
           scheduledTime: o.scheduledTime || null,
+          deliveryStatus: o.deliveryStatus === "delivered" ? "delivered" : "pending",
+          deliveryType:
+            o.deliveryType === "video" || o.deliveryType === "audio" || o.deliveryType === "text"
+              ? o.deliveryType
+              : null,
+          deliveryText: typeof o.deliveryText === "string" ? o.deliveryText : null,
+          deliveryUrl: typeof o.deliveryUrl === "string" ? o.deliveryUrl : null,
+          deliveredAt: o.deliveredAt ? new Date(o.deliveredAt) : null,
           isDemo: false,
         }));
         setPurchases(realPurchases);
@@ -269,6 +288,99 @@ export const FanHubPurchases: React.FC = () => {
     showToast?.("Marked as completed.", "success");
   };
 
+  const openDeliveryEditor = (p: Purchase) => {
+    setDeliveryEditingId(p.id);
+    setDeliveryTypeDraft(p.deliveryType || "text");
+    setDeliveryTextDraft(p.deliveryText || "");
+    setDeliveryUrlDraft(p.deliveryUrl || "");
+  };
+
+  const cancelDeliveryEditor = () => {
+    setDeliveryEditingId(null);
+    setDeliveryTypeDraft("text");
+    setDeliveryTextDraft("");
+    setDeliveryUrlDraft("");
+    setDeliveryUploading(false);
+  };
+
+  const handleUploadDeliveryMedia = async (p: Purchase, file: File) => {
+    if (!auth.currentUser?.uid) return;
+    setDeliveryUploading(true);
+    try {
+      const ext = (file.name.split(".").pop() || (file.type.includes("audio") ? "m4a" : "mp4")).toLowerCase();
+      const path = `creators/${auth.currentUser.uid}/orderDeliveries/${p.id}/${Date.now()}.${ext}`;
+      const storageRef = ref(storage, path);
+      await uploadBytes(storageRef, file, {
+        contentType: file.type || (deliveryTypeDraft === "audio" ? "audio/mpeg" : "video/mp4"),
+      });
+      const url = await getDownloadURL(storageRef);
+      setDeliveryUrlDraft(url);
+      showToast?.("Delivery media uploaded.", "success");
+    } catch (e) {
+      showToast?.(e instanceof Error ? e.message : "Could not upload delivery media.", "error");
+    } finally {
+      setDeliveryUploading(false);
+    }
+  };
+
+  const saveDelivery = async (p: Purchase) => {
+    const nextType = deliveryTypeDraft;
+    const nextText = deliveryTextDraft.trim();
+    const nextUrl = deliveryUrlDraft.trim();
+    if ((nextType === "video" || nextType === "audio") && !nextUrl) {
+      showToast?.("Please provide a delivery URL or upload a file.", "error");
+      return;
+    }
+    if (nextType === "text" && !nextText) {
+      showToast?.("Please add delivery text.", "error");
+      return;
+    }
+    setSavingId(p.id);
+    try {
+      const token = auth.currentUser ? await auth.currentUser.getIdToken() : null;
+      const res = await fetch("/api/updateCreatorOrderSchedule", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({
+          orderId: p.id,
+          deliveryStatus: "delivered",
+          deliveryType: nextType,
+          deliveryText: nextType === "text" ? nextText : null,
+          deliveryUrl: nextType === "text" ? null : nextUrl,
+          scheduleStatus: p.scheduleStatus === "completed" ? "completed" : p.scheduleStatus,
+        }),
+      });
+      const payload = await res.json().catch(() => ({} as { error?: string }));
+      if (!res.ok) {
+        showToast?.(payload.error || "Could not save delivery.", "error");
+        return;
+      }
+      setPurchases((prev) =>
+        prev.map((x) =>
+          x.id === p.id
+            ? {
+                ...x,
+                deliveryStatus: "delivered",
+                deliveryType: nextType,
+                deliveryText: nextType === "text" ? nextText : null,
+                deliveryUrl: nextType === "text" ? null : nextUrl,
+                deliveredAt: new Date(),
+              }
+            : x
+        )
+      );
+      showToast?.("Delivery saved.", "success");
+      cancelDeliveryEditor();
+    } catch (e) {
+      showToast?.(e instanceof Error ? e.message : "Could not save delivery.", "error");
+    } finally {
+      setSavingId(null);
+    }
+  };
+
   const filteredPurchases = purchases.filter((p) => {
     if (filterStatus === "all") return true;
     return p.scheduleStatus === filterStatus;
@@ -398,6 +510,11 @@ export const FanHubPurchases: React.FC = () => {
                         Completed
                       </span>
                     )}
+                    {p.deliveryStatus === "delivered" && (
+                      <span className="purchases-status-badge purchases-status-scheduled">
+                        Delivered
+                      </span>
+                    )}
                   </div>
                 </div>
 
@@ -433,6 +550,15 @@ export const FanHubPurchases: React.FC = () => {
                         </button>
                       )}
                     </>
+                  )}
+                  {!isEditing && (
+                    <button
+                      type="button"
+                      className="purchases-btn purchases-btn-primary"
+                      onClick={() => openDeliveryEditor(p)}
+                    >
+                      {p.deliveryStatus === "delivered" ? "Update Delivery" : "Deliver Purchase"}
+                    </button>
                   )}
                 </div>
 
@@ -476,6 +602,76 @@ export const FanHubPurchases: React.FC = () => {
                     </div>
                     <p className="purchases-schedule-hint">
                       This will add the booking to your <strong>Calendar</strong> and notify the fan.
+                    </p>
+                  </div>
+                )}
+
+                {deliveryEditingId === p.id && (
+                  <div className="purchases-schedule-form">
+                    <div className="purchases-schedule-row" style={{ flexWrap: "wrap", gap: "0.5rem" }}>
+                      <label className="purchases-schedule-label" style={{ minWidth: 180 }}>
+                        <span>Delivery Type</span>
+                        <select
+                          value={deliveryTypeDraft}
+                          onChange={(e) => setDeliveryTypeDraft(e.target.value as "video" | "audio" | "text")}
+                          className="purchases-schedule-input"
+                        >
+                          <option value="text">Text reply</option>
+                          <option value="video">Video reply</option>
+                          <option value="audio">Voice note</option>
+                        </select>
+                      </label>
+                      {(deliveryTypeDraft === "video" || deliveryTypeDraft === "audio") && (
+                        <label className="purchases-btn purchases-btn-secondary" style={{ cursor: deliveryUploading ? "wait" : "pointer" }}>
+                          {deliveryUploading ? "Uploading…" : "Upload media"}
+                          <input
+                            type="file"
+                            accept={deliveryTypeDraft === "audio" ? "audio/*" : "video/*"}
+                            hidden
+                            disabled={deliveryUploading}
+                            onChange={(e) => {
+                              const f = e.currentTarget.files?.[0];
+                              if (f) void handleUploadDeliveryMedia(p, f);
+                              e.currentTarget.value = "";
+                            }}
+                          />
+                        </label>
+                      )}
+                    </div>
+                    {deliveryTypeDraft === "text" ? (
+                      <textarea
+                        value={deliveryTextDraft}
+                        onChange={(e) => setDeliveryTextDraft(e.target.value)}
+                        placeholder="Write the delivery message or script..."
+                        className="purchases-schedule-input"
+                        rows={4}
+                        style={{ width: "100%", marginTop: "0.5rem" }}
+                      />
+                    ) : (
+                      <input
+                        type="url"
+                        value={deliveryUrlDraft}
+                        onChange={(e) => setDeliveryUrlDraft(e.target.value)}
+                        placeholder="Media URL (auto-filled when uploading)"
+                        className="purchases-schedule-input"
+                        style={{ width: "100%", marginTop: "0.5rem" }}
+                      />
+                    )}
+                    <div className="purchases-schedule-row" style={{ marginTop: "0.5rem" }}>
+                      <button
+                        type="button"
+                        className="purchases-btn purchases-btn-primary"
+                        disabled={savingId === p.id || deliveryUploading}
+                        onClick={() => void saveDelivery(p)}
+                      >
+                        {savingId === p.id ? "Saving…" : "Save Delivery"}
+                      </button>
+                      <button type="button" className="purchases-btn purchases-btn-secondary" onClick={cancelDeliveryEditor}>
+                        Cancel
+                      </button>
+                    </div>
+                    <p className="purchases-schedule-hint">
+                      Fans will see this in Purchases and can play/read in-app.
                     </p>
                   </div>
                 )}

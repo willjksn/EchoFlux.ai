@@ -641,7 +641,8 @@ function FanMemberPostMedia({
         lockedCurrent ? (
           <video
             key={`${post.id}-v-${idx}`}
-            src={currentUrl}
+            src={currentUrl.includes("#t=") ? currentUrl : `${currentUrl}#t=0.1`}
+            poster={currentUrl}
             controls={false}
             className={splitModal ? "feed-comments-modal-media feed-comments-modal-media-video" : "feed-card-media feed-card-media-video"}
             playsInline
@@ -656,7 +657,8 @@ function FanMemberPostMedia({
         ) : (
           <video
             key={`${post.id}-v-${idx}`}
-            src={currentUrl}
+            src={currentUrl.includes("#t=") ? currentUrl : `${currentUrl}#t=0.1`}
+            poster={currentUrl}
             controls
             className="feed-card-media feed-card-media-video"
             playsInline
@@ -1667,7 +1669,15 @@ export const FanMemberFeed: React.FC<FanMemberFeedProps> = ({
                   >
                     {firstUrl ? (
                       isVideo ? (
-                        <video src={firstUrl} muted playsInline preload="metadata" />
+                        <video
+                          src={firstUrl.includes("#t=") ? firstUrl : `${firstUrl}#t=0.1`}
+                          poster={firstUrl}
+                          muted
+                          autoPlay
+                          loop
+                          playsInline
+                          preload="metadata"
+                        />
                       ) : (
                         <img src={firstUrl} alt="" loading="lazy" />
                       )
