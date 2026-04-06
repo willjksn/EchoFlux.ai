@@ -829,7 +829,7 @@ export const OnlyFansStudio: React.FC<{ mode?: 'studio' | 'fanHub' }> = ({ mode 
             </div>
         );
         if (premiumTab.tab === 'users') return wrap(
-            <div className="max-w-7xl mx-auto">
+            <div className="max-w-[1600px] mx-auto w-full">
                 <ErrorBoundary>
                     <FanHubUsers />
                 </ErrorBoundary>
