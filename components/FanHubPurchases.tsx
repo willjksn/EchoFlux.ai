@@ -257,7 +257,6 @@ export const FanHubPurchases: React.FC = () => {
           userId: user.id,
           treatPurchaseId: p.id,
           treatType: calendarTreatType,
-          treatDurationMinutes: durationMinutes,
           treatStatus: status,
           fanId: p.email,
           fanName: p.fanName,
@@ -267,6 +266,9 @@ export const FanHubPurchases: React.FC = () => {
           deliveryText: delivery?.text || null,
           updatedAt: new Date().toISOString(),
         };
+        if (typeof durationMinutes === "number" && Number.isFinite(durationMinutes)) {
+          payload.treatDurationMinutes = durationMinutes;
+        }
         const eventsRef = collection(db, "users", user.id, "onlyfans_calendar_events");
         const existingSnap = await getDocs(query(eventsRef, where("treatPurchaseId", "==", p.id), limit(1)));
         if (!existingSnap.empty) {
