@@ -38,7 +38,7 @@ interface FanUser {
   mtdUnlocksCents: number;
   lastActiveAt: Date | null;
   lastLoginAt: Date | null;
-  hasAuthAccount: boolean;
+  hasAuthAccount: boolean | null;
   avatarUrl?: string;
   /** Firebase Auth uid (from plain fan doc id or parsed from `uid-email@…` ids) */
   authUid?: string;
@@ -91,6 +91,7 @@ function formatDate(date: Date | null): string {
 }
 
 const CUTOVER_AT_ET = new Date("2026-04-04T22:00:00-04:00");
+const FIREBASE_UID_RE = /^[A-Za-z0-9]{20,36}$/;
 
 function formatDateTime(date: Date | null): string {
   if (!date || !Number.isFinite(date.getTime())) return "—";
@@ -103,8 +104,15 @@ function formatDateTime(date: Date | null): string {
   });
 }
 
-function loginSinceCutoverBadge(lastLoginAt: Date | null, hasAuthAccount: boolean): { text: string; className: string } {
-  if (!hasAuthAccount) {
+function loginSinceCutoverBadge(lastLoginAt: Date | null, hasAuthAccount: boolean | null): { text: string; className: string } {
+  if (hasAuthAccount === null) {
+    return {
+      text: "Auth status pending",
+      className:
+        "px-2 py-1 text-xs font-medium rounded-full bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-300",
+    };
+  }
+  if (hasAuthAccount === false) {
     return {
       text: "No auth account",
       className:
@@ -846,7 +854,7 @@ export const FanHubUsers: React.FC = () => {
           mtdUnlocksCents: mtdUnlocks,
           lastActiveAt: data.lastActive,
           lastLoginAt: null,
-          hasAuthAccount: false,
+          hasAuthAccount: null,
           avatarUrl: data.avatarUrl,
           authUid,
         };
@@ -856,7 +864,7 @@ export const FanHubUsers: React.FC = () => {
         new Set(
           fanUsers
             .map((u) => String(u.authUid || "").trim())
-            .filter((uid) => uid.length >= 20)
+            .filter((uid) => FIREBASE_UID_RE.test(uid))
         )
       );
       if (loginLookupIds.length > 0) {
