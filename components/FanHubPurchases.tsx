@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useAppContext } from "./AppContext";
 import { auth, db, storage } from "../firebaseConfig";
-import { collection, addDoc, serverTimestamp, Timestamp, getDocs, query, orderBy, limit } from "firebase/firestore";
+import { collection, addDoc, getDocs, query, orderBy, limit, where, doc, setDoc } from "firebase/firestore";
 import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
 import { formatFanDisplayLabel } from "../src/lib/fanHubDisplay";
 import {
@@ -68,6 +68,15 @@ function formatTime12h(timeStr: string | null): string {
 
 function formatAmount(cents: number): string {
   return "$" + (cents / 100).toFixed(2);
+}
+
+function toLocalScheduleParts(date: Date): { date: string; time: string } {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  const hh = String(date.getHours()).padStart(2, "0");
+  const mm = String(date.getMinutes()).padStart(2, "0");
+  return { date: `${y}-${m}-${d}`, time: `${hh}:${mm}` };
 }
 
 // Empty - no demo data for new creators
@@ -198,6 +207,80 @@ export const FanHubPurchases: React.FC = () => {
     setScheduleTime("12:00");
   };
 
+  const upsertTreatCalendarEvent = useCallback(
+    async (
+      p: Purchase,
+      scheduledAt: Date,
+      status: "scheduled" | "delivered",
+      reminderTime: string,
+      delivery?: { type?: "video" | "image" | "audio" | "text"; url?: string | null; text?: string | null }
+    ) => {
+      if (p.isDemo || !db || !user?.id) return;
+      try {
+        const treatTypeMap: Record<string, "video_call" | "chat_session" | "voice_note" | "custom_video" | "other"> = {
+          live_video_5m: "video_call",
+          live_video_10m: "video_call",
+          live_video_15m: "video_call",
+          live_video_30m: "video_call",
+          live_video_45m: "video_call",
+          live_video_60m: "video_call",
+          live_chat_5m: "chat_session",
+          live_chat_15m: "chat_session",
+          live_chat_30m: "chat_session",
+          live_chat_45m: "chat_session",
+          live_chat_60m: "chat_session",
+          live_chat_1h: "chat_session",
+          chat_session: "chat_session",
+          voice_note_30s: "voice_note",
+          voice_note_60s: "voice_note",
+          custom_video_reply: "custom_video",
+          private_video_reply: "custom_video",
+        };
+        const durationMatch = p.treatType?.match(/(\d+)m$/);
+        const durationMinutes = durationMatch ? parseInt(durationMatch[1], 10) : undefined;
+        const calendarTreatType = treatTypeMap[p.treatType] || "other";
+        const titlePrefix =
+          status === "delivered"
+            ? "✅ Delivered"
+            : calendarTreatType === "video_call"
+              ? "📹 Video Call"
+              : calendarTreatType === "chat_session"
+                ? "💬 Chat Session"
+                : "🎁 Store";
+        const payload: Record<string, unknown> = {
+          title: `${titlePrefix}: ${p.fanName || p.email}`,
+          date: scheduledAt.toISOString(),
+          reminderType: "treat",
+          contentType: "custom",
+          description: `${p.productName} for ${p.fanName || p.email}`,
+          reminderTime,
+          userId: user.id,
+          treatPurchaseId: p.id,
+          treatType: calendarTreatType,
+          treatDurationMinutes: durationMinutes,
+          treatStatus: status,
+          fanId: p.email,
+          fanName: p.fanName,
+          fanEmail: p.email,
+          deliveryType: delivery?.type || null,
+          deliveryUrl: delivery?.url || null,
+          deliveryText: delivery?.text || null,
+          updatedAt: new Date().toISOString(),
+        };
+        const eventsRef = collection(db, "users", user.id, "onlyfans_calendar_events");
+        const existingSnap = await getDocs(query(eventsRef, where("treatPurchaseId", "==", p.id), limit(1)));
+        if (!existingSnap.empty) {
+          await setDoc(doc(db, "users", user.id, "onlyfans_calendar_events", existingSnap.docs[0].id), payload, { merge: true });
+        } else {
+          await addDoc(eventsRef, { ...payload, createdAt: new Date().toISOString() });
+        }
+      } catch (err) {
+        console.error("Failed to sync treat calendar event:", err);
+      }
+    },
+    [user?.id]
+  );
+
   const handleSchedule = async (p: Purchase) => {
     if (!scheduleDate.trim()) {
       showToast?.("Please pick a date.", "error");
@@ -253,61 +336,7 @@ export const FanHubPurchases: React.FC = () => {
       )
     );
 
-    // Add to calendar (if real data and db available)
-    if (!p.isDemo && db && user?.id) {
-      try {
-        // Determine treat type from treatType field
-        const treatTypeMap: Record<string, 'video_call' | 'chat_session' | 'voice_note' | 'custom_video' | 'other'> = {
-          'live_video_5m': 'video_call',
-          'live_video_10m': 'video_call',
-          'live_video_15m': 'video_call',
-          'live_video_30m': 'video_call',
-          'live_video_45m': 'video_call',
-          'live_video_60m': 'video_call',
-          'live_chat_5m': 'chat_session',
-          'live_chat_15m': 'chat_session',
-          'live_chat_30m': 'chat_session',
-          'live_chat_45m': 'chat_session',
-          'live_chat_60m': 'chat_session',
-          'live_chat_1h': 'chat_session',
-          'chat_session': 'chat_session',
-          'voice_note_30s': 'voice_note',
-          'voice_note_60s': 'voice_note',
-          'custom_video_reply': 'custom_video',
-          'private_video_reply': 'custom_video',
-        };
-        
-        // Parse duration from treat type (e.g., 'live_video_15m' -> 15)
-        const durationMatch = p.treatType?.match(/(\d+)m$/);
-        const durationMinutes = durationMatch ? parseInt(durationMatch[1], 10) : undefined;
-        
-        const calendarTreatType = treatTypeMap[p.treatType] || 'other';
-        const timeStr = timeHHmm;
-        
-        await addDoc(collection(db, "users", user.id, "onlyfans_calendar_events"), {
-          // Core event fields
-          title: `${calendarTreatType === 'video_call' ? '📹 Video Call' : calendarTreatType === 'chat_session' ? '💬 Chat Session' : '🎁 Store'}: ${p.fanName || p.email}`,
-          date: scheduledAt.toISOString(),
-          reminderType: "treat",
-          contentType: "custom",
-          description: `${p.productName} for ${p.fanName || p.email}`,
-          reminderTime: timeStr,
-          createdAt: new Date().toISOString(),
-          userId: user.id,
-          
-          // Treat-specific fields
-          treatPurchaseId: p.id,
-          treatType: calendarTreatType,
-          treatDurationMinutes: durationMinutes,
-          treatStatus: "scheduled",
-          fanId: p.email, // Using email as fan ID for now
-          fanName: p.fanName,
-          fanEmail: p.email,
-        });
-      } catch (err) {
-        console.error("Failed to add calendar event:", err);
-      }
-    }
+    await upsertTreatCalendarEvent(p, scheduledAt, "scheduled", timeHHmm);
 
     setEditingId(null);
     setScheduleDate("");
@@ -503,9 +532,9 @@ export const FanHubPurchases: React.FC = () => {
   const saveDelivery = async (p: Purchase) => {
     const nextType = deliveryTypeDraft;
     const nextText = deliveryTextDraft.trim();
-    const nextUrl = deliveryUrlDraft.trim();
+    const nextUrl = String(deliveryUrlDraft ?? "").trim();
     if ((nextType === "video" || nextType === "image" || nextType === "audio") && !nextUrl) {
-      showToast?.("Please provide a delivery URL or upload a file.", "error");
+      showToast?.("Upload, record, or select media from Vault before saving delivery.", "error");
       return;
     }
     if (nextType === "text" && !nextText) {
@@ -514,6 +543,9 @@ export const FanHubPurchases: React.FC = () => {
     }
     setSavingId(p.id);
     try {
+      const deliveredNow = new Date();
+      const deliveredSchedule = toLocalScheduleParts(deliveredNow);
+      const nextScheduleStatus: ScheduleStatus = p.scheduleStatus === "completed" ? "completed" : "scheduled";
       const token = auth.currentUser ? await auth.currentUser.getIdToken() : null;
       const res = await fetch("/api/updateCreatorOrderSchedule", {
         method: "POST",
@@ -527,7 +559,9 @@ export const FanHubPurchases: React.FC = () => {
           deliveryType: nextType,
           deliveryText: nextType === "text" ? nextText : null,
           deliveryUrl: nextType === "text" ? null : nextUrl,
-          scheduleStatus: p.scheduleStatus === "completed" ? "completed" : p.scheduleStatus,
+          scheduleStatus: nextScheduleStatus,
+          scheduledDate: deliveredSchedule.date,
+          scheduledTime: deliveredSchedule.time,
         }),
       });
       const payload = await res.json().catch(() => ({} as { error?: string }));
@@ -544,11 +578,19 @@ export const FanHubPurchases: React.FC = () => {
                 deliveryType: nextType,
                 deliveryText: nextType === "text" ? nextText : null,
                 deliveryUrl: nextType === "text" ? null : nextUrl,
-                deliveredAt: new Date(),
+                deliveredAt: deliveredNow,
+                scheduleStatus: nextScheduleStatus,
+                scheduledDate: deliveredSchedule.date,
+                scheduledTime: deliveredSchedule.time,
               }
             : x
         )
       );
+      await upsertTreatCalendarEvent(p, deliveredNow, "delivered", deliveredSchedule.time, {
+        type: nextType,
+        url: nextType === "text" ? null : nextUrl,
+        text: nextType === "text" ? nextText : null,
+      });
       showToast?.("Delivery saved.", "success");
       cancelDeliveryEditor();
     } catch (e) {
@@ -639,7 +681,8 @@ export const FanHubPurchases: React.FC = () => {
           </p>
         ) : (
           filteredPurchases.map((p) => {
-            const isPending = p.scheduleStatus === "pending";
+            const isDelivered = p.deliveryStatus === "delivered";
+            const isPending = p.scheduleStatus === "pending" && !isDelivered;
             const isScheduled = p.scheduleStatus === "scheduled";
             const isCompleted = p.scheduleStatus === "completed";
             const isEditing = editingId === p.id;
@@ -647,7 +690,7 @@ export const FanHubPurchases: React.FC = () => {
             return (
               <div
                 key={p.id}
-                className={`purchases-card ${isPending ? "purchases-card-pending" : ""} ${isCompleted ? "purchases-card-completed" : ""}`}
+                className={`purchases-card ${isPending ? "purchases-card-pending" : ""} ${isCompleted ? "purchases-card-completed" : ""} ${isDelivered ? "purchases-card-delivered" : ""}`}
               >
                 <div className="purchases-card-header">
                   <div className="purchases-card-info">
@@ -672,13 +715,15 @@ export const FanHubPurchases: React.FC = () => {
                         Needs scheduling
                       </span>
                     )}
-                    {isScheduled && p.scheduledDate && (
+                    {(isScheduled || isDelivered) && (p.scheduledDate || p.deliveredAt) && (
                       <div className="purchases-scheduled-info">
-                        <span className="purchases-status-badge purchases-status-scheduled">
-                          Scheduled
-                        </span>
+                        {!isDelivered ? (
+                          <span className="purchases-status-badge purchases-status-scheduled">Scheduled</span>
+                        ) : null}
                         <p className="purchases-scheduled-datetime">
-                          {formatScheduleDate(p.scheduledDate)} at {formatTime12h(p.scheduledTime)}
+                          {isDelivered ? "Delivered" : "Scheduled"}{" "}
+                          {formatScheduleDate(p.scheduledDate || (p.deliveredAt ? toLocalScheduleParts(p.deliveredAt).date : null))} at{" "}
+                          {formatTime12h(p.scheduledTime || (p.deliveredAt ? toLocalScheduleParts(p.deliveredAt).time : null))}
                         </p>
                       </div>
                     )}
@@ -687,8 +732,8 @@ export const FanHubPurchases: React.FC = () => {
                         Completed
                       </span>
                     )}
-                    {p.deliveryStatus === "delivered" && (
-                      <span className="purchases-status-badge purchases-status-scheduled">
+                    {isDelivered && (
+                      <span className="purchases-status-badge purchases-status-delivered">
                         Delivered
                       </span>
                     )}
@@ -919,14 +964,11 @@ export const FanHubPurchases: React.FC = () => {
                         style={{ width: "100%", marginTop: "0.5rem" }}
                       />
                     ) : (
-                      <input
-                        type="url"
-                        value={deliveryUrlDraft}
-                        onChange={(e) => setDeliveryUrlDraft(e.target.value)}
-                        placeholder="Media URL (auto-filled when uploading)"
-                        className="purchases-schedule-input"
-                        style={{ width: "100%", marginTop: "0.5rem" }}
-                      />
+                      <p className="purchases-schedule-hint" style={{ marginTop: "0.5rem" }}>
+                        {deliveryUrlDraft
+                          ? "Media attached and ready to deliver."
+                          : "No media attached yet. Use Upload, From Vault, or Record to attach media."}
+                      </p>
                     )}
                     <div className="purchases-schedule-row" style={{ marginTop: "0.5rem" }}>
                       <button
@@ -957,6 +999,7 @@ export const FanHubPurchases: React.FC = () => {
         <h3>How it connects to your Calendar</h3>
         <ul>
           <li><span className="purchases-dot purchases-dot-treat"></span> Scheduled store purchases appear on your calendar with a purple badge</li>
+          <li><span className="purchases-dot purchases-dot-delivered"></span> Delivered purchases appear with a green delivered badge on your calendar</li>
           <li><span className="purchases-dot purchases-dot-session"></span> Chat sessions are auto-added when scheduled</li>
           <li>Fans receive a notification when you schedule their purchase</li>
           <li>You can reschedule anytime from here or from the calendar</li>

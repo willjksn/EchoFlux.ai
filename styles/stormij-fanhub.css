@@ -6157,6 +6157,15 @@ button.treat-card:hover:not(:disabled) .treat-card-cta {
   opacity: 0.7;
 }
 
+.purchases-card-delivered {
+  border-color: rgba(16, 185, 129, 0.35);
+  box-shadow: 0 0 0 1px rgba(16, 185, 129, 0.08) inset;
+}
+
+.dark .purchases-card-delivered {
+  border-color: rgba(52, 211, 153, 0.45);
+}
+
 .purchases-card-header {
   display: flex;
   justify-content: space-between;
@@ -6265,6 +6274,16 @@ button.treat-card:hover:not(:disabled) .treat-card-cta {
 .dark .purchases-status-completed {
   background: rgba(16, 185, 129, 0.25);
   color: #34d399;
+}
+
+.purchases-status-delivered {
+  background: rgba(16, 185, 129, 0.18);
+  color: #047857;
+}
+
+.dark .purchases-status-delivered {
+  background: rgba(16, 185, 129, 0.3);
+  color: #6ee7b7;
 }
 
 .purchases-scheduled-info {
@@ -6486,6 +6505,10 @@ button.treat-card:hover:not(:disabled) .treat-card-cta {
 
 .purchases-dot-session {
   background: #c97082;
+}
+
+.purchases-dot-delivered {
+  background: #10b981;
 }
 
 /* Responsive */

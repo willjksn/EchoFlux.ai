@@ -54,6 +54,20 @@ export const Calendar: React.FC = () => {
     const [reminderType, setReminderType] = useState<'post' | 'shoot'>('post');
     const [reminderDate, setReminderDate] = useState('');
     const [reminderTime, setReminderTime] = useState('');
+    const [purchaseEvents, setPurchaseEvents] = useState<
+      Array<{
+        id: string;
+        title: string;
+        date: string;
+        treatPurchaseId?: string;
+        treatStatus?: "scheduled" | "delivered" | "confirmed" | "in_progress" | "completed" | "cancelled";
+        fanName?: string;
+        fanEmail?: string;
+        deliveryType?: "video" | "image" | "audio" | "text" | null;
+        deliveryUrl?: string | null;
+        deliveryText?: string | null;
+      }>
+    >([]);
 
     // Calendar is Pro+ (or Admin). Free plan should not access any calendar features.
     if (!hasCalendarAccess(user)) {
@@ -99,6 +113,70 @@ export const Calendar: React.FC = () => {
 
         return () => unsubscribe();
     }, [user]);
+
+    // Load Fan Hub purchase schedule/delivery events into main calendar.
+    useEffect(() => {
+        if (!user?.id) {
+            setPurchaseEvents([]);
+            return;
+        }
+        const eventsRef = collection(db, 'users', user.id, 'onlyfans_calendar_events');
+        const q = query(eventsRef, orderBy('date', 'asc'));
+        const unsubscribe = onSnapshot(
+            q,
+            (snapshot) => {
+                const next: Array<{
+                    id: string;
+                    title: string;
+                    date: string;
+                    treatPurchaseId?: string;
+                    treatStatus?: "scheduled" | "delivered" | "confirmed" | "in_progress" | "completed" | "cancelled";
+                    fanName?: string;
+                    fanEmail?: string;
+                    deliveryType?: "video" | "image" | "audio" | "text" | null;
+                    deliveryUrl?: string | null;
+                    deliveryText?: string | null;
+                }> = [];
+                snapshot.forEach((docSnap) => {
+                    const data = docSnap.data() as Record<string, unknown>;
+                    if (!data?.treatPurchaseId) return;
+                    const date = typeof data.date === 'string' ? data.date : '';
+                    if (!date) return;
+                    next.push({
+                        id: docSnap.id,
+                        title: typeof data.title === 'string' && data.title.trim() ? data.title : 'Store purchase',
+                        date,
+                        treatPurchaseId: typeof data.treatPurchaseId === 'string' ? data.treatPurchaseId : undefined,
+                        treatStatus:
+                            data.treatStatus === 'scheduled' ||
+                            data.treatStatus === 'delivered' ||
+                            data.treatStatus === 'confirmed' ||
+                            data.treatStatus === 'in_progress' ||
+                            data.treatStatus === 'completed' ||
+                            data.treatStatus === 'cancelled'
+                                ? data.treatStatus
+                                : undefined,
+                        fanName: typeof data.fanName === 'string' ? data.fanName : undefined,
+                        fanEmail: typeof data.fanEmail === 'string' ? data.fanEmail : undefined,
+                        deliveryType:
+                            data.deliveryType === 'video' ||
+                            data.deliveryType === 'image' ||
+                            data.deliveryType === 'audio' ||
+                            data.deliveryType === 'text'
+                                ? data.deliveryType
+                                : null,
+                        deliveryUrl: typeof data.deliveryUrl === 'string' ? data.deliveryUrl : null,
+                        deliveryText: typeof data.deliveryText === 'string' ? data.deliveryText : null,
+                    });
+                });
+                setPurchaseEvents(next);
+            },
+            (error) => {
+                console.error('Error loading purchase events:', error);
+            }
+        );
+        return () => unsubscribe();
+    }, [user?.id]);
 
     // Calendar should ONLY show posts with scheduledDate (Scheduled or Published status)
     // Derive events directly from Posts, not from separate calendar_events collection
@@ -362,9 +440,28 @@ export const Calendar: React.FC = () => {
             reminderDescription: reminder.description,
             thumbnail: undefined, // Reminders don't have thumbnails
         } as any));
+
+        const purchaseCalendarEvents: CalendarEvent[] = purchaseEvents.map((p) => ({
+            id: `purchase-${p.id}`,
+            title: p.title,
+            date: p.date,
+            type: p.deliveryType === 'video' ? 'Reel' : 'Post',
+            platform: 'My Page' as Platform,
+            status: 'Scheduled',
+            thumbnail: (p.deliveryType === 'video' || p.deliveryType === 'image') && p.deliveryUrl ? p.deliveryUrl : undefined,
+            reminderType: 'treat',
+            purchaseEvent: true,
+            purchaseId: p.treatPurchaseId,
+            purchaseStatus: p.treatStatus || 'scheduled',
+            fanName: p.fanName,
+            fanEmail: p.fanEmail,
+            deliveryType: p.deliveryType || null,
+            deliveryUrl: p.deliveryUrl || null,
+            deliveryText: p.deliveryText || null,
+        } as any));
         
         // Combine and sort by date
-        const allEvents = [...filteredPostEvents, ...reminderEvents].sort((a, b) => 
+        const allEvents = [...filteredPostEvents, ...reminderEvents, ...purchaseCalendarEvents].sort((a, b) => 
             new Date(a.date).getTime() - new Date(b.date).getTime()
         );
         
@@ -398,7 +495,7 @@ export const Calendar: React.FC = () => {
         }
         
         return allEvents;
-    }, [calendarEvents, posts, reminders, currentDate]);
+    }, [calendarEvents, posts, reminders, purchaseEvents, currentDate]);
 
     // Auto-select event from dashboard navigation
     useEffect(() => {
@@ -540,8 +637,9 @@ export const Calendar: React.FC = () => {
                         {dayEvents.map(evt => {
                             const timeString = new Date(evt.date).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true });
                             
-                            // Check if this is a reminder
-                            const isReminder = evt.id.startsWith('reminder-') || (evt as any).reminderType;
+                            // Check if this is a purchase event or regular reminder.
+                            const isPurchase = evt.id.startsWith('purchase-') || !!(evt as any).purchaseEvent;
+                            const isReminder = !isPurchase && (evt.id.startsWith('reminder-') || (evt as any).reminderType);
                             
                             const statusColors: Record<'Published' | 'Scheduled' | 'Draft' | 'In Review', {
                                 bg: string;
@@ -584,6 +682,22 @@ export const Calendar: React.FC = () => {
                                     dot: 'bg-orange-500 dark:bg-orange-400',
                                     text: 'text-orange-700 dark:text-orange-300'
                                 };
+                            } else if (isPurchase) {
+                                const purchaseStatus = String((evt as any).purchaseStatus || 'scheduled');
+                                const delivered = purchaseStatus === 'delivered' || purchaseStatus === 'completed';
+                                colors = delivered
+                                  ? {
+                                        bg: 'bg-gradient-to-r from-emerald-50 to-green-50 dark:from-emerald-900/30 dark:to-green-900/30',
+                                        border: 'border-l-4 border-emerald-500 dark:border-emerald-400',
+                                        dot: 'bg-emerald-500 dark:bg-emerald-400',
+                                        text: 'text-emerald-700 dark:text-emerald-300',
+                                    }
+                                  : {
+                                        bg: 'bg-gradient-to-r from-purple-50 to-fuchsia-50 dark:from-purple-900/30 dark:to-fuchsia-900/30',
+                                        border: 'border-l-4 border-purple-500 dark:border-purple-400',
+                                        dot: 'bg-purple-500 dark:bg-purple-400',
+                                        text: 'text-purple-700 dark:text-purple-300',
+                                    };
                             } else {
                                 colors = statusColors[evt.status] || statusColors.Draft;
                             }
@@ -634,6 +748,12 @@ export const Calendar: React.FC = () => {
                                     }
                                     return;
                                 }
+                                if (isPurchase) {
+                                    setIsEditing(false);
+                                    setIsRegenerating(false);
+                                    setSelectedEvent({ event: evt, post: null });
+                                    return;
+                                }
                                 
                                 // Handle post click - initialize view state (not editing yet)
                                 const eventDate = new Date(evt.date);
@@ -673,6 +793,15 @@ export const Calendar: React.FC = () => {
                             };
 
 
+                            const purchaseDeliveryUrl = typeof (evt as any).deliveryUrl === 'string' ? (evt as any).deliveryUrl : undefined;
+                            const purchaseDeliveryType = (evt as any).deliveryType as ('video' | 'image' | 'audio' | 'text' | undefined);
+                            const postMediaUrl = associatedPost?.mediaUrl || (Array.isArray(associatedPost?.mediaUrls) ? associatedPost?.mediaUrls[0] : undefined);
+                            const mediaPreviewUrl = isPurchase
+                                ? (purchaseDeliveryType === 'video' || purchaseDeliveryType === 'image' ? purchaseDeliveryUrl : undefined)
+                                : postMediaUrl || evt.thumbnail;
+                            const isVideoPreview = isPurchase
+                                ? purchaseDeliveryType === 'video'
+                                : associatedPost?.mediaType === 'video' || evt.type === 'Reel';
                             return (
                                 <div 
                                     key={evt.id} 
@@ -693,10 +822,10 @@ export const Calendar: React.FC = () => {
                                         </span>
                                         <div className={`w-2.5 h-2.5 sm:w-2 sm:h-2 rounded-full flex-shrink-0 shadow-sm ${colors.dot}`}></div>
                                     </div>
-                                    {!isReminder && (associatedPost?.mediaUrl || (Array.isArray(associatedPost?.mediaUrls) ? associatedPost?.mediaUrls[0] : undefined) || evt.thumbnail) && (
+                                    {!isReminder && mediaPreviewUrl && (
                                         <div className="mb-1 relative w-full h-10">
                                             {/* Video preview - show image if thumbnail/poster exists, otherwise show video element */}
-                                            {(associatedPost?.mediaType === 'video' || evt.type === 'Reel') ? (
+                                            {isVideoPreview ? (
                                                 ((associatedPost as any)?.thumbnailUrl || (associatedPost as any)?.posterUrl) ? (
                                                     <img
                                                         src={(associatedPost as any).thumbnailUrl || (associatedPost as any).posterUrl}
@@ -714,9 +843,9 @@ export const Calendar: React.FC = () => {
                                                         }}
                                                         loading="lazy"
                                                     />
-                                                ) : (associatedPost?.mediaUrl || (Array.isArray(associatedPost?.mediaUrls) ? associatedPost?.mediaUrls[0] : undefined) || evt?.thumbnail) ? (
+                                                ) : mediaPreviewUrl ? (
                                                     <video
-                                                        src={associatedPost?.mediaUrl || (Array.isArray(associatedPost?.mediaUrls) ? associatedPost?.mediaUrls[0] : undefined) || evt?.thumbnail}
+                                                        src={mediaPreviewUrl}
                                                         className="w-full h-10 rounded-md object-cover border border-gray-200 dark:border-gray-700"
                                                         muted
                                                         playsInline
@@ -744,7 +873,7 @@ export const Calendar: React.FC = () => {
                                                 ) : null
                                             ) : (
                                                 <img
-                                                    src={associatedPost?.mediaUrl || (Array.isArray(associatedPost?.mediaUrls) ? associatedPost?.mediaUrls[0] : undefined) || evt?.thumbnail}
+                                                    src={mediaPreviewUrl}
                                                     alt="Preview"
                                                     className="w-full h-10 rounded-md object-cover border border-gray-200 dark:border-gray-700"
                                                     onError={(e) => {
@@ -760,7 +889,7 @@ export const Calendar: React.FC = () => {
                                                 />
                                             )}
                                             {/* Video play icon overlay */}
-                                            {(associatedPost?.mediaType === 'video' || evt.type === 'Reel') && (
+                                            {isVideoPreview && (
                                                 <div className="absolute inset-0 flex items-center justify-center bg-black/20 rounded-md pointer-events-none">
                                                     <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
                                                         <path d="M6.3 2.841A1.5 1.5 0 004 4.11V15.89a1.5 1.5 0 002.3 1.269l9.344-5.89a1.5 1.5 0 000-2.538L6.3 2.84z" />
@@ -777,6 +906,10 @@ export const Calendar: React.FC = () => {
                                             <span className="text-sm sm:text-xs">
                                                 {(evt as any).reminderType === 'shoot' ? '🎬' : '📤'}
                                             </span>
+                                        ) : isPurchase ? (
+                                            <span className="text-sm sm:text-xs">
+                                                {(evt as any).deliveryType === 'video' ? '🎬' : (evt as any).deliveryType === 'audio' ? '🎧' : (evt as any).deliveryType === 'image' ? '🖼️' : '🎁'}
+                                            </span>
                                         ) : (
                                             <span className="w-5 h-5 sm:w-4 sm:h-4 flex-shrink-0 text-gray-600 dark:text-gray-300">{platformIcons[evt.platform]}</span>
                                         )}
@@ -790,7 +923,11 @@ export const Calendar: React.FC = () => {
                                             style={{ pointerEvents: 'none' }}
                                         >
                                             <span className="text-[10px] sm:text-[9px] font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">
-                                                {evt.type}
+                                                {isPurchase
+                                                    ? String((evt as any).purchaseStatus || 'scheduled') === 'delivered'
+                                                        ? 'DELIVERED PURCHASE'
+                                                        : 'SCHEDULED PURCHASE'
+                                                    : evt.type}
                                             </span>
                                         </div>
                                     )}
@@ -1250,6 +1387,9 @@ export const Calendar: React.FC = () => {
         }
     }, [selectedEvent]);
 
+    const selectedIsPurchase = !!selectedEvent && (selectedEvent.event.id.startsWith('purchase-') || !!(selectedEvent.event as any).purchaseEvent);
+    const selectedPurchaseStatus = selectedIsPurchase ? String((selectedEvent?.event as any)?.purchaseStatus || 'scheduled') : 'scheduled';
+
 
     return (
         <div className="p-6 bg-gray-50 dark:bg-gray-900 min-h-full">
@@ -1262,17 +1402,27 @@ export const Calendar: React.FC = () => {
                             <div className="flex items-center justify-between mb-4">
                                 <div className="flex items-center gap-3">
                                     <div className="p-2 bg-primary-100 dark:bg-primary-900/30 rounded-lg">
-                                        {platformIcons[selectedEvent.event.platform]}
+                                        {selectedIsPurchase ? (
+                                            <span className="text-lg">🎁</span>
+                                        ) : (
+                                            platformIcons[selectedEvent.event.platform]
+                                        )}
                                     </div>
                                     <div>
                                         <h3 className="text-xl font-bold text-gray-900 dark:text-white">
-                                            {selectedEvent.post?.status === 'Published' ? 'Published Post Preview' : 'Scheduled Post Preview'}
+                                            {selectedIsPurchase
+                                                ? (selectedPurchaseStatus === 'delivered' ? 'Delivered Purchase' : 'Scheduled Purchase')
+                                                : (selectedEvent.post?.status === 'Published' ? 'Published Post Preview' : 'Scheduled Post Preview')}
                                         </h3>
-                                        <p className="text-sm text-gray-500 dark:text-gray-400">{selectedEvent.event.platform} • {selectedEvent.event.type}</p>
+                                        <p className="text-sm text-gray-500 dark:text-gray-400">
+                                            {selectedIsPurchase
+                                                ? `Fan Hub • ${((selectedEvent.event as any).deliveryType || 'purchase').toString()}`
+                                                : `${selectedEvent.event.platform} • ${selectedEvent.event.type}`}
+                                        </p>
                                     </div>
                                 </div>
                                 <div className="flex items-center gap-2">
-                                    {!isEditing && (
+                                    {!isEditing && !selectedIsPurchase && (
                                         <>
                                             <button
                                                 onClick={() => {
@@ -1355,7 +1505,38 @@ export const Calendar: React.FC = () => {
                             </div>
 
                             {/* Date & Time - Published on vs Scheduled for */}
-                            {selectedEvent.post?.status === 'Published' ? (
+                            {selectedIsPurchase ? (
+                                <div className={`mb-4 p-4 rounded-lg border ${
+                                    selectedPurchaseStatus === 'delivered'
+                                        ? 'bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-800'
+                                        : 'bg-purple-50 dark:bg-purple-900/20 border-purple-200 dark:border-purple-800'
+                                }`}>
+                                    <div className="flex items-center gap-2">
+                                        <span className={`text-sm font-semibold ${
+                                            selectedPurchaseStatus === 'delivered'
+                                                ? 'text-emerald-700 dark:text-emerald-300'
+                                                : 'text-purple-700 dark:text-purple-300'
+                                        }`}>
+                                            {selectedPurchaseStatus === 'delivered' ? 'Delivered on:' : 'Scheduled for:'}
+                                        </span>
+                                        <span className={`text-sm ${
+                                            selectedPurchaseStatus === 'delivered'
+                                                ? 'text-emerald-600 dark:text-emerald-400'
+                                                : 'text-purple-600 dark:text-purple-400'
+                                        }`}>
+                                            {new Date(selectedEvent.event.date).toLocaleString([], {
+                                                weekday: 'long',
+                                                year: 'numeric',
+                                                month: 'long',
+                                                day: 'numeric',
+                                                hour: 'numeric',
+                                                minute: '2-digit',
+                                                hour12: true
+                                            })}
+                                        </span>
+                                    </div>
+                                </div>
+                            ) : selectedEvent.post?.status === 'Published' ? (
                                 <div className="mb-4 p-4 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
                                     <div className="flex items-center gap-2">
                                         <span className="text-sm font-semibold text-green-700 dark:text-green-300">Published on:</span>
@@ -1420,25 +1601,48 @@ export const Calendar: React.FC = () => {
                             )}
 
                             {/* Media Preview */}
-                            {(selectedEvent.post?.mediaUrl || selectedEvent.event.thumbnail) && (
+                            {(selectedEvent.post?.mediaUrl || selectedEvent.event.thumbnail || (selectedIsPurchase && (selectedEvent.event as any).deliveryUrl)) && (
                                 <div className="mb-4 rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700">
-                                    {(selectedEvent.post?.mediaType === 'video' || selectedEvent.event.type === 'Reel') ? (
-                                        <video src={selectedEvent.post?.mediaUrl || selectedEvent.event.thumbnail} controls className="w-full max-h-96 object-contain bg-gray-100 dark:bg-gray-900" />
+                                    {(selectedIsPurchase && (selectedEvent.event as any).deliveryType === 'audio') ? (
+                                        <audio
+                                            src={(selectedEvent.event as any).deliveryUrl}
+                                            controls
+                                            className="w-full"
+                                        />
+                                    ) : ((selectedIsPurchase && (selectedEvent.event as any).deliveryType === 'video') || selectedEvent.post?.mediaType === 'video' || selectedEvent.event.type === 'Reel') ? (
+                                        <video
+                                            src={(selectedIsPurchase ? (selectedEvent.event as any).deliveryUrl : undefined) || selectedEvent.post?.mediaUrl || selectedEvent.event.thumbnail}
+                                            controls
+                                            className="w-full max-h-96 object-contain bg-gray-100 dark:bg-gray-900"
+                                        />
                                     ) : (
-                                        <img src={selectedEvent.post?.mediaUrl || selectedEvent.event.thumbnail} alt="Post preview" className="w-full max-h-96 object-contain bg-gray-100 dark:bg-gray-900" />
+                                        <img
+                                            src={(selectedIsPurchase ? (selectedEvent.event as any).deliveryUrl : undefined) || selectedEvent.post?.mediaUrl || selectedEvent.event.thumbnail}
+                                            alt="Post preview"
+                                            className="w-full max-h-96 object-contain bg-gray-100 dark:bg-gray-900"
+                                        />
                                     )}
                                 </div>
                             )}
 
                             {/* Caption */}
-                            {selectedEvent.post?.content && (
+                            {(selectedEvent.post?.content || (selectedIsPurchase && (selectedEvent.event as any).deliveryText)) && (
                                 <div className="mb-4">
-                                    <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Caption:</h4>
+                                    <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                                        {selectedIsPurchase ? 'Delivery note:' : 'Caption:'}
+                                    </h4>
                                     <p className="text-gray-900 dark:text-white whitespace-pre-wrap bg-gray-50 dark:bg-gray-700/50 p-4 rounded-lg">
-                                        {selectedEvent.post.content}
+                                        {(selectedIsPurchase ? (selectedEvent.event as any).deliveryText : selectedEvent.post?.content) || ''}
                                     </p>
                                 </div>
                             )}
+                            {selectedIsPurchase ? (
+                                <div className="mb-4 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600">
+                                    <p className="text-sm text-gray-700 dark:text-gray-300">
+                                        Fan: {(selectedEvent.event as any).fanName || (selectedEvent.event as any).fanEmail || 'Member'}
+                                    </p>
+                                </div>
+                            ) : null}
 
                             {/* Hashtags */}
                             {selectedEvent.post?.content && extractHashtags(selectedEvent.post.content).length > 0 && (
@@ -1678,6 +1882,7 @@ export const Calendar: React.FC = () => {
                          <div className="flex items-center gap-1.5 sm:gap-2"><span className="w-3 h-3 rounded-full bg-orange-500 dark:bg-orange-400 shadow-sm"></span> <span className="text-gray-700 dark:text-gray-300 font-medium">Reminder</span></div>
                          <div className="flex items-center gap-1.5 sm:gap-2"><span className="w-3 h-3 rounded-full bg-red-500 dark:bg-red-400 shadow-sm"></span> <span className="text-gray-700 dark:text-gray-300 font-medium">Scheduled fan meeting</span></div>
                          <div className="flex items-center gap-1.5 sm:gap-2"><span className="w-3 h-3 rounded-full bg-purple-500 dark:bg-purple-400 shadow-sm"></span> <span className="text-gray-700 dark:text-gray-300 font-medium">Scheduled store purchase</span></div>
+                         <div className="flex items-center gap-1.5 sm:gap-2"><span className="w-3 h-3 rounded-full bg-emerald-500 dark:bg-emerald-400 shadow-sm"></span> <span className="text-gray-700 dark:text-gray-300 font-medium">Delivered purchase</span></div>
                     </div>
                     <button 
                         onClick={() => setIsCreatingReminder(true)}

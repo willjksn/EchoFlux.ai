@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { getAdminDb } from "./_firebaseAdmin.js";
 import { verifyAuth } from "./verifyAuth.js";
-import { normalizeCreatorId } from "../src/lib/creatorIdNormalize.js";
+import { creatorIdFirestoreQueryVariants, normalizeCreatorId } from "../src/lib/creatorIdNormalize.js";
 import { sendFanNotification } from "./_fanNotifications.js";
 
 type Body = {
@@ -14,6 +14,15 @@ type Body = {
   deliveryText?: string | null;
   deliveryUrl?: string | null;
 };
+
+function localScheduleParts(now: Date): { date: string; time: string } {
+  const y = now.getFullYear();
+  const m = String(now.getMonth() + 1).padStart(2, "0");
+  const d = String(now.getDate()).padStart(2, "0");
+  const hh = String(now.getHours()).padStart(2, "0");
+  const mm = String(now.getMinutes()).padStart(2, "0");
+  return { date: `${y}-${m}-${d}`, time: `${hh}:${mm}` };
+}
 
 /**
  * POST: Creator updates scheduling fields on a top-level orders/{orderId} doc they own.
@@ -61,10 +70,37 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (!snap.exists) {
       return res.status(404).json({ error: "Order not found" });
     }
-    const data = snap.data() as { creatorId?: string; fanId?: string; productTitle?: string; productId?: string } | undefined;
-    const storedCreatorId = normalizeCreatorId(typeof data?.creatorId === "string" ? data.creatorId : "");
+    const data = snap.data() as {
+      creatorId?: string;
+      fanId?: string;
+      productTitle?: string;
+      productId?: string;
+      scheduleStatus?: "pending" | "scheduled" | "completed" | "cancelled";
+      scheduledDate?: string | null;
+      scheduledTime?: string | null;
+    } | undefined;
+    const storedCreatorRaw = typeof data?.creatorId === "string" ? data.creatorId.trim() : "";
+    const storedCreatorId = normalizeCreatorId(storedCreatorRaw);
     const callerCreatorId = normalizeCreatorId(decoded.uid);
-    if (!storedCreatorId || storedCreatorId !== callerCreatorId) {
+
+    const storedCandidateIds = new Set<string>();
+    for (const v of creatorIdFirestoreQueryVariants(storedCreatorRaw)) storedCandidateIds.add(normalizeCreatorId(v));
+    // Legacy pollution seen in some docs: "<uid>-<email>".
+    if (storedCreatorRaw.includes("@")) {
+      const dash = storedCreatorRaw.lastIndexOf("-");
+      if (dash > 0) {
+        const maybeUid = normalizeCreatorId(storedCreatorRaw.slice(0, dash));
+        if (maybeUid) storedCandidateIds.add(maybeUid);
+      }
+    }
+    if (storedCreatorId) storedCandidateIds.add(storedCreatorId);
+
+    const callerCandidateIds = new Set<string>();
+    for (const v of creatorIdFirestoreQueryVariants(decoded.uid)) callerCandidateIds.add(normalizeCreatorId(v));
+    if (callerCreatorId) callerCandidateIds.add(callerCreatorId);
+
+    const ownsOrder = Array.from(callerCandidateIds).some((id) => id && storedCandidateIds.has(id));
+    if (!ownsOrder) {
       return res.status(403).json({ error: "Forbidden" });
     }
 
@@ -83,8 +119,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (deliveryStatus !== undefined) {
       patch.deliveryStatus = deliveryStatus;
       if (deliveryStatus === "delivered") {
-        patch.deliveredAt = new Date().toISOString();
+        const deliveredAt = new Date();
+        patch.deliveredAt = deliveredAt.toISOString();
         patch.deliveredBy = decoded.uid;
+        // Delivery should no longer appear as "needs scheduling".
+        // If not explicitly provided, auto-schedule to the delivery timestamp.
+        if (scheduleStatus === undefined && data?.scheduleStatus !== "completed") {
+          patch.scheduleStatus = "scheduled";
+        }
+        const localNow = localScheduleParts(deliveredAt);
+        if (body.scheduledDate === undefined) {
+          patch.scheduledDate = localNow.date;
+        }
+        if (body.scheduledTime === undefined) {
+          patch.scheduledTime = localNow.time;
+        }
       }
     }
     if (deliveryType !== undefined) {

@@ -25,7 +25,7 @@ export interface OnlyFansCalendarEvent {
     treatPurchaseId?: string; // Reference to the purchase
     treatType?: 'video_call' | 'chat_session' | 'voice_note' | 'custom_video' | 'other';
     treatDurationMinutes?: number; // Duration for video/chat sessions
-    treatStatus?: 'scheduled' | 'confirmed' | 'in_progress' | 'completed' | 'cancelled';
+    treatStatus?: 'scheduled' | 'confirmed' | 'in_progress' | 'completed' | 'cancelled' | 'delivered';
 }
 
 // Combined event type for display (posts or reminders)
@@ -44,7 +44,7 @@ interface CombinedEvent {
     // Treat-specific display fields
     treatType?: 'video_call' | 'chat_session' | 'voice_note' | 'custom_video' | 'other';
     treatDurationMinutes?: number;
-    treatStatus?: 'scheduled' | 'confirmed' | 'in_progress' | 'completed' | 'cancelled';
+    treatStatus?: 'scheduled' | 'confirmed' | 'in_progress' | 'completed' | 'cancelled' | 'delivered';
     fanName?: string;
     fanEmail?: string;
 }
@@ -931,6 +931,8 @@ export const OnlyFansCalendar: React.FC<OnlyFansCalendarProps> = ({ onNavigateTo
                                                                         <span className={`text-[9px] sm:text-[8px] px-1.5 py-0.5 rounded-full font-semibold flex-shrink-0 ${
                                                                             event.treatStatus === 'completed'
                                                                                 ? 'bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300'
+                                                                                : event.treatStatus === 'delivered'
+                                                                                ? 'bg-emerald-100 dark:bg-emerald-900/50 text-emerald-700 dark:text-emerald-300'
                                                                                 : event.treatStatus === 'confirmed'
                                                                                 ? 'bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300'
                                                                                 : event.treatStatus === 'in_progress'
@@ -939,7 +941,7 @@ export const OnlyFansCalendar: React.FC<OnlyFansCalendarProps> = ({ onNavigateTo
                                                                                 ? 'bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300'
                                                                                 : 'bg-purple-100 dark:bg-purple-900/50 text-purple-700 dark:text-purple-300'
                                                                         }`}>
-                                                                            {event.treatStatus === 'in_progress' ? 'Live' : event.treatStatus}
+                                                                            {event.treatStatus === 'in_progress' ? 'Live' : event.treatStatus === 'delivered' ? 'Delivered' : event.treatStatus}
                                                                         </span>
                                                                     )}
                                                                 </div>
@@ -1318,6 +1320,8 @@ export const OnlyFansCalendar: React.FC<OnlyFansCalendarProps> = ({ onNavigateTo
                                             <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
                                                 selectedEvent.treatStatus === 'completed'
                                                     ? 'bg-green-100 text-green-700'
+                                                    : selectedEvent.treatStatus === 'delivered'
+                                                        ? 'bg-emerald-100 text-emerald-700'
                                                     : selectedEvent.treatStatus === 'confirmed'
                                                         ? 'bg-blue-100 text-blue-700'
                                                         : selectedEvent.treatStatus === 'in_progress'
@@ -1326,7 +1330,11 @@ export const OnlyFansCalendar: React.FC<OnlyFansCalendarProps> = ({ onNavigateTo
                                                                 ? 'bg-red-100 text-red-700'
                                                                 : 'bg-purple-100 text-purple-700'
                                             }`}>
-                                                {selectedEvent.treatStatus === 'in_progress' ? 'In Progress' : selectedEvent.treatStatus}
+                                                {selectedEvent.treatStatus === 'in_progress'
+                                                  ? 'In Progress'
+                                                  : selectedEvent.treatStatus === 'delivered'
+                                                    ? 'Delivered'
+                                                    : selectedEvent.treatStatus}
                                             </span>
                                         </div>
                                     )}
