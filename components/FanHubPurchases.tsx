@@ -417,7 +417,8 @@ export const FanHubPurchases: React.FC = () => {
     setDeliveryUploading(true);
     try {
       const ext = (file.name.split(".").pop() || (file.type.includes("audio") ? "m4a" : file.type.includes("image") ? "jpg" : "mp4")).toLowerCase();
-      const path = `creators/${auth.currentUser.uid}/orderDeliveries/${p.id}/${Date.now()}.${ext}`;
+      // Storage rules allow owner writes under users/{uid}/...
+      const path = `users/${auth.currentUser.uid}/orderDeliveries/${p.id}/${Date.now()}.${ext}`;
       const storageRef = ref(storage, path);
       await uploadBytes(storageRef, file, {
         contentType:
@@ -432,6 +433,8 @@ export const FanHubPurchases: React.FC = () => {
       setDeliveryUrlDraft(url);
       showToast?.("Delivery media uploaded.", "success");
     } catch (e) {
+      // Avoid accidental save with stale URL after an upload failure.
+      setDeliveryUrlDraft("");
       showToast?.(e instanceof Error ? e.message : "Could not upload delivery media.", "error");
     } finally {
       setDeliveryUploading(false);
