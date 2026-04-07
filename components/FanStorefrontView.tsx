@@ -840,6 +840,7 @@ export const FanStorefrontView: React.FC = () => {
   const dmMessagesEndRef = useRef<HTMLDivElement | null>(null);
   const dmMessagesListRef = useRef<HTMLDivElement | null>(null);
   const dmAutoStickToBottomRef = useRef(true);
+  const dmComposerFocusedRef = useRef(false);
   const { ref: dmTextareaRef } = useAutosizeTextarea(dmInput);
   const dmFileInputRef = useRef<HTMLInputElement | null>(null);
   const profileAvatarInputRef = useRef<HTMLInputElement | null>(null);
@@ -905,6 +906,7 @@ export const FanStorefrontView: React.FC = () => {
   };
 
   const autoSubscribeRedirectingRef = useRef(false);
+  const entitlementHydratingRef = useRef(false);
   const [sessionAlerts, setSessionAlerts] = useState<HeaderSessionAlert[]>([]);
   const sessionAlertIdsRef = useRef<Set<string> | null>(null);
   const [reportProblemOpen, setReportProblemOpen] = useState(false);
@@ -1724,11 +1726,13 @@ export const FanStorefrontView: React.FC = () => {
       setLimitedMemberAccess(false);
       setFanPageAdminBypass(false);
       setEntitlementLoading(false);
+      entitlementHydratingRef.current = false;
       return;
     }
 
     const gen = ++entitlementFetchGen.current;
     setEntitlementLoading(true);
+    entitlementHydratingRef.current = true;
 
     (async () => {
       try {
@@ -1775,6 +1779,7 @@ export const FanStorefrontView: React.FC = () => {
       } finally {
         if (gen === entitlementFetchGen.current) {
           setEntitlementLoading(false);
+          entitlementHydratingRef.current = false;
         }
       }
     })();
@@ -1844,6 +1849,7 @@ export const FanStorefrontView: React.FC = () => {
     (async () => {
       try {
         const token = await auth.currentUser!.getIdToken(true);
+        let allowPublicFallbackSync = false;
         let synced = false;
         for (let attempt = 0; attempt < 4; attempt++) {
           const res = await fetch("/api/syncFanCheckoutSession", {
@@ -1863,7 +1869,33 @@ export const FanStorefrontView: React.FC = () => {
             await new Promise((resolve) => setTimeout(resolve, 1200 * (attempt + 1)));
             continue;
           }
+          // If auth-linked sync can't bind this session, still try public sync so tip/order analytics
+          // and fan card creation are not blocked by account-id mismatches.
+          const code = String((data as { code?: unknown }).code || "");
+          if (res.status === 403 || code === "SESSION_FAN_MISMATCH" || code === "SESSION_FAN_MISSING") {
+            allowPublicFallbackSync = true;
+          }
           break;
+        }
+        if (!synced && allowPublicFallbackSync) {
+          for (let attempt = 0; attempt < 4; attempt++) {
+            const pubRes = await fetch("/api/syncFanCheckoutSessionPublic", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ sessionId: sid, creatorId: creator.creatorId }),
+            }).catch(() => null);
+            if (cancelled) return;
+            if (pubRes?.ok) {
+              synced = true;
+              break;
+            }
+            if (!pubRes) break;
+            if (pubRes.status === 409 && attempt < 3) {
+              await new Promise((resolve) => setTimeout(resolve, 1200 * (attempt + 1)));
+              continue;
+            }
+            break;
+          }
         }
         if (!synced) {
           // Keep URL params so a refresh can retry sync.
@@ -2917,6 +2949,7 @@ export const FanStorefrontView: React.FC = () => {
     if (activeTab !== "messages" || dmLoading) return;
     const listEl = dmMessagesListRef.current;
     if (!dmAutoStickToBottomRef.current) return;
+    if (dmComposerFocusedRef.current) return;
     requestAnimationFrame(() => {
       dmMessagesEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
       if (listEl) {
@@ -3200,6 +3233,16 @@ export const FanStorefrontView: React.FC = () => {
 
   useEffect(() => {
     if (!needsPaidUpgrade || previewMember || isViewingOwnStorefront || fanPageAdminBypass) return;
+    // Wait for entitlement hydration before any auto-checkout decision.
+    if (entitlementLoading || entitlementHydratingRef.current) return;
+    // Never auto-redirect while processing a returned Checkout session.
+    if (typeof window !== "undefined") {
+      const pending = new URLSearchParams(window.location.search);
+      if (pending.get("session_id")) return;
+      if (pending.get("purchase_sync") === "1" || pending.get("post_unlock") === "1" || pending.get("tip") === "success") {
+        return;
+      }
+    }
     if ((purchaseOnlyAccess || paidPageUnsubscribed) && !["tip", "purchases", "profile"].includes(activeTab)) {
       setActiveTab("purchases");
       if (creator?.handle?.trim()) {
@@ -3214,6 +3257,7 @@ export const FanStorefrontView: React.FC = () => {
     void startSubscriptionCheckout({ auto: true });
   }, [
     needsPaidUpgrade,
+    entitlementLoading,
     previewMember,
     isViewingOwnStorefront,
     fanPageAdminBypass,
@@ -3646,9 +3690,7 @@ export const FanStorefrontView: React.FC = () => {
                 }
                 return;
               }
-
-              // Paid pages: after auth, go directly to Stripe checkout (do NOT enter member hub yet).
-              void startSubscriptionCheckout({ auto: true });
+              // Paid pages: let entitlement hydrate first; auto-checkout effect decides safely.
             }}
             initialView={fanAuthView}
             creatorId={creator.creatorId}
@@ -4415,6 +4457,12 @@ export const FanStorefrontView: React.FC = () => {
                         rows={1}
                         value={dmInput}
                         onChange={(e) => setDmInput(e.target.value)}
+                        onFocus={() => {
+                          dmComposerFocusedRef.current = true;
+                        }}
+                        onBlur={() => {
+                          dmComposerFocusedRef.current = false;
+                        }}
                         onKeyDown={(e) => {
                           if (e.key === "Enter" && !e.shiftKey) {
                             e.preventDefault();

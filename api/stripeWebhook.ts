@@ -141,6 +141,17 @@ function getCheckoutSessionName(session: Stripe.Checkout.Session): string | null
   return typeof name === 'string' && name.trim() ? name.trim() : null;
 }
 
+function stripeRefId(
+  value: unknown,
+): string | null {
+  if (typeof value === "string" && value.trim()) return value.trim();
+  if (value && typeof value === "object" && "id" in value) {
+    const id = (value as { id?: unknown }).id;
+    if (typeof id === "string" && id.trim()) return id.trim();
+  }
+  return null;
+}
+
 async function repairFanHubSubscriptionIdentityForSession(
   db: Firestore,
   session: Stripe.Checkout.Session,
@@ -303,10 +314,11 @@ export async function processFanHubCheckoutSessionCompleted(
     return true;
   }
 
-  if (type === 'subscription' && session.subscription) {
+  const sessionSubscriptionId = stripeRefId(session.subscription);
+  if (type === 'subscription' && sessionSubscriptionId) {
     const amountTotal = session.amount_total ?? 0;
     const subRef = db.collection('creatorSubscribers').doc(creatorId).collection('subscribers').doc(fanId);
-    await subRef.set({ status: 'active', stripeSubscriptionId: session.subscription, updatedAt: now }, { merge: true });
+    await subRef.set({ status: 'active', stripeSubscriptionId: sessionSubscriptionId, updatedAt: now }, { merge: true });
     const grantRef = db.collection('creatorEntitlements').doc(creatorId).collection('grants').doc(fanId);
     const grantSnap = await grantRef.get();
     const existing = grantSnap.data() as { unlockedProductIds?: string[] } | undefined;
@@ -320,7 +332,7 @@ export async function processFanHubCheckoutSessionCompleted(
       productId: null,
       type: 'subscription',
       stripeSessionId: session.id,
-      stripeSubscriptionId: session.subscription,
+      stripeSubscriptionId: sessionSubscriptionId,
       amountCents: amountTotal,
       status: 'paid',
       fanEmail: getCheckoutSessionEmail(session),
@@ -1078,7 +1090,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
         if (session.mode === 'subscription' && session.subscription) {
           try {
-            const subscription = await stripe.subscriptions.retrieve(session.subscription as string);
+            const subscriptionId = stripeRefId(session.subscription);
+            if (!subscriptionId) break;
+            const subscription = await stripe.subscriptions.retrieve(subscriptionId);
             const userId = session.metadata?.userId || session.client_reference_id;
             const planName = session.metadata?.planName || 'Free';
             const billingCycle = session.metadata?.billingCycle || 'monthly';
@@ -1155,7 +1169,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             console.warn(
               'stripeWebhook: checkout.session.completed — subscriptions.retrieve failed; skipping EchoFlux creator billing (foreign subscription or missing access).',
               session.id,
-              session.subscription,
+              stripeRefId(session.subscription),
               retrieveErr instanceof Error ? retrieveErr.message : retrieveErr,
             );
           }
@@ -1169,7 +1183,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           break;
         }
 
-        const customerId = subscription.customer as string;
+        const customerId = stripeRefId(subscription.customer);
+        if (!customerId) break;
 
         // Find user by Stripe customer ID
         const usersSnapshot = await db.collection('users')
@@ -1179,11 +1194,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
         if (!usersSnapshot.empty) {
           const userDoc = usersSnapshot.docs[0];
-          const priceId = subscription.items.data[0]?.price.id;
-          
+          const firstPrice = subscription.items?.data?.[0]?.price;
+          const recurringInterval = firstPrice?.recurring?.interval;
           // Determine plan from price ID (you may want to create a reverse mapping)
           const planName = subscription.metadata?.planName || 'Free';
-          const billingCycle = subscription.items.data[0]?.price.recurring?.interval === 'year' ? 'annual' : 'monthly';
+          const billingCycle = recurringInterval === 'year' ? 'annual' : 'monthly';
 
           const periodEnd = (subscription as { current_period_end?: number }).current_period_end;
           // Capture trial end date if subscription is in trial
@@ -1218,7 +1233,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           break;
         }
 
-        const customerId = subscription.customer as string;
+        const customerId = stripeRefId(subscription.customer);
+        if (!customerId) break;
 
         // Find user by Stripe customer ID
         const usersSnapshot = await db.collection('users')
@@ -1249,7 +1265,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           break;
         }
 
-        const customerId = invoice.customer as string;
+        const customerId = stripeRefId(invoice.customer);
+        if (!customerId) break;
 
         // Find user by Stripe customer ID
         const usersSnapshot = await db.collection('users')
@@ -1274,7 +1291,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
           // Check for referral code and grant reward if this is the first payment after trial
           // (This handles cases where referral wasn't processed during checkout.session.completed)
-          const subscriptionId = userData?.stripeSubscriptionId;
+          const subscriptionId =
+            typeof userData?.stripeSubscriptionId === "string" && userData.stripeSubscriptionId.trim()
+              ? userData.stripeSubscriptionId.trim()
+              : null;
           if (subscriptionId && planName === 'Elite') {
             try {
               const subscription = await stripe.subscriptions.retrieve(subscriptionId);
@@ -1310,7 +1330,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           break;
         }
 
-        const customerId = invoice.customer as string;
+        const customerId = stripeRefId(invoice.customer);
+        if (!customerId) break;
 
         // Find user by Stripe customer ID
         const usersSnapshot = await db.collection('users')

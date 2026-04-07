@@ -160,18 +160,32 @@ export const Dashboard: React.FC = () => {
         let monthlyRevCents = 0;
         const recentActivity: typeof fanHubStats.recentActivity = [];
 
+        const normalizeOrderType = (order: {
+          type?: string;
+          productType?: string;
+          tipHandle?: string | null;
+        }): 'tip' | 'unlock' | 'subscription' | 'purchase' => {
+          const raw = String(order.type ?? order.productType ?? '').trim().toLowerCase();
+          if (raw === 'tip') return 'tip';
+          if (raw === 'unlock' || raw === 'unlock_media' || raw === 'post_unlock') return 'unlock';
+          if (raw === 'subscription') return 'subscription';
+          if (typeof order.tipHandle === 'string' && order.tipHandle.trim()) return 'tip';
+          return 'purchase';
+        };
+
         orders.forEach((order) => {
           const orderDate = new Date(order.createdAt);
           if (Number.isNaN(orderDate.getTime())) return;
           const cents = typeof order.amountCents === 'number' ? order.amountCents : 0;
+          const normalizedType = normalizeOrderType(order as { type?: string; productType?: string; tipHandle?: string | null });
 
           if (orderDate >= weekAgo) weeklyRevCents += cents;
           if (orderDate >= monthAgo) monthlyRevCents += cents;
 
           if (recentActivity.length < 5) {
             let activityType: 'tip' | 'unlock' | 'purchase' = 'purchase';
-            if (order.type === 'tip') activityType = 'tip';
-            else if (order.type === 'unlock') activityType = 'unlock';
+            if (normalizedType === 'tip') activityType = 'tip';
+            else if (normalizedType === 'unlock') activityType = 'unlock';
 
             const label =
               (typeof order.fanName === 'string' && order.fanName.trim()) ||

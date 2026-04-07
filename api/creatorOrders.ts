@@ -91,6 +91,22 @@ function inferLegacyPurchaseType(d: Record<string, unknown>): "tip" | "product" 
   return "product";
 }
 
+function normalizeOrderType(d: Record<string, unknown>): "tip" | "subscription" | "unlock" | "post_unlock" | "product" {
+  const type = toLowerString(d.type);
+  const productType = toLowerString(d.productType);
+  const pick = type || productType;
+  if (pick === "tip") return "tip";
+  if (pick === "subscription") return "subscription";
+  if (pick === "unlock" || pick === "unlock_media") return "unlock";
+  if (pick === "post_unlock") return "post_unlock";
+  if (pick === "product" || pick === "treat") return "product";
+  if (typeof d.tipHandle === "string" && d.tipHandle.trim()) return "tip";
+  const productName = toLowerString(d.productName);
+  const productTitle = toLowerString(d.productTitle);
+  if (productName.includes("tip") || productTitle.includes("tip")) return "tip";
+  return "product";
+}
+
 /** Earliest timestamp on a migrated / legacy `purchases` doc (Stormij uses purchasedAt). */
 function purchaseActivityMs(d: Record<string, unknown>): number {
   const a = createdAtToMs(d.purchasedAt);
@@ -99,30 +115,30 @@ function purchaseActivityMs(d: Record<string, unknown>): number {
   return Math.max(a, b);
 }
 
+function toPositiveCents(raw: unknown): number {
+  if (typeof raw === "number" && Number.isFinite(raw)) {
+    return Math.max(0, Math.round(raw));
+  }
+  return 0;
+}
+
 function mapDocToOrder(docSnap: QueryDocumentSnapshot): CreatorOrder {
   const d = docSnap.data() as Record<string, unknown>;
-  const rawType = typeof d.type === "string" ? d.type.trim().toLowerCase() : "";
-  const normalizedType =
-    rawType === "tip" ||
-    rawType === "subscription" ||
-    rawType === "unlock" ||
-    rawType === "post_unlock" ||
-    rawType === "product"
-      ? rawType
-      : rawType === "treat"
-        ? "product"
-        : "";
-  const inferredType =
-    normalizedType ||
-    (typeof d.tipHandle === "string" && d.tipHandle.trim() ? "tip" : "") ||
-    "product";
+  const inferredType = normalizeOrderType(d);
+  const amountCents = (() => {
+    const direct = typeof d.amountCents === "number" && Number.isFinite(d.amountCents)
+      ? Math.max(0, Math.round(d.amountCents))
+      : 0;
+    if (direct > 0) return direct;
+    return toLegacyAmountCents(d.amount);
+  })();
   return {
     id: docSnap.id,
     creatorId: (d.creatorId as string) ?? "",
     fanId: (d.fanId as string) ?? "",
     productId: (d.productId as string) ?? null,
     type: inferredType,
-    amountCents: (d.amountCents as number) ?? 0,
+    amountCents,
     status: (d.status as string) ?? "paid",
     createdAt: createdAtToIso(d.createdAt),
     productTitle: (d.productTitle as string) ?? (d.productId as string) ?? undefined,
@@ -308,6 +324,83 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       console.warn(
         "creatorOrders: purchases aggregation skipped:",
         purchaseErr instanceof Error ? purchaseErr.message : purchaseErr
+      );
+    }
+
+    // Fallback ledger reconciliation:
+    // Some legacy tips updated creators/{creatorId}/fans totals without writing complete `orders` rows.
+    // Add synthetic tip rows for any missing per-fan tip delta so creator analytics stay accurate.
+    try {
+      const fanSnap = await db
+        .collection("creators")
+        .doc(creatorIdToQuery)
+        .collection("fans")
+        .limit(5000)
+        .get();
+
+      const tipByFanFromOrders = new Map<string, number>();
+      for (const row of orderRows) {
+        if (row.type !== "tip" || row.status === "refunded") continue;
+        const key = typeof row.fanId === "string" ? row.fanId.trim() : "";
+        if (!key) continue;
+        tipByFanFromOrders.set(key, (tipByFanFromOrders.get(key) || 0) + Math.max(0, Math.round(row.amountCents || 0)));
+      }
+
+      for (const fanDoc of fanSnap.docs) {
+        const raw = fanDoc.data() as Record<string, unknown>;
+        const fanId = (typeof raw.id === "string" && raw.id.trim()) || fanDoc.id;
+        if (!fanId) continue;
+
+        const fanTipsCents = toPositiveCents(raw.totalTipsCents);
+        if (fanTipsCents <= 0) continue;
+
+        const existingTipCents = tipByFanFromOrders.get(fanId) || 0;
+        const missingTipCents = fanTipsCents - existingTipCents;
+        if (missingTipCents <= 0) continue;
+
+        const lastTipMs = createdAtToMs(raw.lastTipAt) || createdAtToMs(raw.updatedAt);
+        const createdMs = lastTipMs > 0 ? lastTipMs : Date.now();
+        const syntheticId = `synthetic_tip_${fanDoc.id}`;
+        if (orderRows.some((o) => o.id === syntheticId)) continue;
+
+        const fanEmail =
+          typeof raw.email === "string" && raw.email.trim()
+            ? raw.email.trim().toLowerCase()
+            : undefined;
+        const fanName =
+          (typeof raw.displayName === "string" && raw.displayName.trim()) ||
+          (typeof raw.fanName === "string" && raw.fanName.trim()) ||
+          (typeof raw.tipHandle === "string" && raw.tipHandle.trim()) ||
+          null;
+
+        orderRows.push({
+          id: syntheticId,
+          creatorId: creatorIdToQuery,
+          fanId,
+          productId: null,
+          type: "tip",
+          amountCents: missingTipCents,
+          status: "paid",
+          createdAt: new Date(createdMs).toISOString(),
+          productTitle: "Legacy tip reconciliation",
+          fanName,
+          fanEmail,
+          scheduleStatus: "pending",
+          scheduledDate: null,
+          scheduledTime: null,
+          deliveryStatus: "pending",
+          deliveryType: null,
+          deliveryText: null,
+          deliveryUrl: null,
+          deliveredAt: null,
+          deliveredBy: null,
+          __createdAtMs: createdMs,
+        });
+      }
+    } catch (fanLedgerErr: unknown) {
+      console.warn(
+        "creatorOrders: fan ledger tip fallback skipped:",
+        fanLedgerErr instanceof Error ? fanLedgerErr.message : fanLedgerErr
       );
     }
 

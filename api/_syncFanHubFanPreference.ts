@@ -110,6 +110,7 @@ export async function upsertFanHubFanPreferenceFromMember(
   const usernameForLabel = userUsername || fanUsername;
   const displayNameForLabel =
     (typeof fanRow.displayName === "string" && fanRow.displayName.trim()) ||
+    (typeof fanRow.tipHandle === "string" && fanRow.tipHandle.trim()) ||
     (typeof u.displayName === "string" && u.displayName.trim()) ||
     null;
   const listName = fanHubListLabel(
