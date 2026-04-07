@@ -147,8 +147,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (hasSpend) limitedMemberAccess = true;
     }
 
-    // Also check legacy creatorSubscribers collection if not already subscribed
-    if (!subscribed) {
+    // Also check creatorSubscribers collection. Paid membership should override any stale free fan row.
+    if (!subscribed || membershipType !== "paid") {
       const subsCol = db.collection("creatorSubscribers").doc(creatorId).collection("subscribers");
       const subscriberRef = subsCol.doc(fanId);
       let subscriberSnap = await subscriberRef.get();
@@ -171,6 +171,41 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         }
       }
 
+      if (!subData && fanEmail) {
+        // Some legacy subscriber docs are keyed by old uid but still carry email/fanEmail fields.
+        const [byEmailFieldSnap, byFanEmailFieldSnap] = await Promise.all([
+          subsCol.where("email", "==", fanEmail).limit(6).get().catch(() => null),
+          subsCol.where("fanEmail", "==", fanEmail).limit(6).get().catch(() => null),
+        ]);
+        const candidateDocs = [
+          ...(byEmailFieldSnap?.docs || []),
+          ...(byFanEmailFieldSnap?.docs || []),
+        ];
+        if (candidateDocs.length > 0) {
+          const ranked = candidateDocs
+            .map((d) => ({ id: d.id, data: (d.data() || {}) as { status?: string } }))
+            .sort((a, b) => {
+              const rank = (s: unknown) => (isPaidLikeStatus(s) ? 0 : 1);
+              return rank(a.data.status) - rank(b.data.status);
+            });
+          subData = ranked[0].data;
+          if (isPaidLikeStatus(subData?.status)) {
+            await subscriberRef.set(
+              {
+                ...(subData || {}),
+                fanId,
+                email: fanEmail,
+                fanEmail,
+                updatedAt: nowIso,
+                migratedFromFanDocId: ranked[0].id,
+              },
+              { merge: true }
+            );
+            subscriberSnap = await subscriberRef.get();
+          }
+        }
+      }
+
       if (subData && isPaidLikeStatus(subData.status)) {
         subscribed = true;
         membershipType = 'paid';
@@ -184,32 +219,43 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       .collection("grants");
     const grantRef = grantsCol.doc(fanId);
     let grantSnap = await grantRef.get();
-    let grantData = grantSnap.exists
+    let grantData: {
+      unlockedProductIds?: string[];
+      unlockedFanPostIds?: string[];
+      subscription?: boolean;
+      membershipType?: string;
+    } | undefined = grantSnap.exists
       ? (grantSnap.data() as {
-        subscriptionStatus?: string;
-        unlockedProductIds?: string[];
-        unlockedFanPostIds?: string[];
-        subscription?: boolean;
-        membershipType?: string;
-      } | undefined;
+          unlockedProductIds?: string[];
+          unlockedFanPostIds?: string[];
+          subscription?: boolean;
+          membershipType?: string;
+        } | undefined)
       : undefined;
     if (!grantData) {
       const fallbackGrantIds = Array.from(
         new Set([fanEmail, legacyFanDocId, fanEmail ? `${fanId}-${fanEmail}` : ""].filter((x): x is string => !!x))
       );
       for (const legacyId of fallbackGrantIds) {
-        const s = await grantsCol.doc(legacyId).get();
-        if (!s.exists) continue;
-        grantData = s.data() as {
-          unlockedProductIds?: string[];
-          unlockedFanPostIds?: string[];
-          subscription?: boolean;
-          membershipType?: string;
-        } | undefined;
-        if (grantData) {
-          await grantRef.set({ ...(grantData || {}), updatedAt: nowIso, migratedFromFanDocId: legacyId }, { merge: true });
-          grantSnap = await grantRef.get();
-          break;
+        try {
+          const s = await grantsCol.doc(legacyId).get();
+          if (!s.exists) continue;
+          grantData = s.data() as {
+            unlockedProductIds?: string[];
+            unlockedFanPostIds?: string[];
+            subscription?: boolean;
+            membershipType?: string;
+          } | undefined;
+          if (grantData) {
+            await grantRef.set(
+              { ...(grantData || {}), updatedAt: nowIso, migratedFromFanDocId: legacyId },
+              { merge: true }
+            );
+            grantSnap = await grantRef.get();
+            break;
+          }
+        } catch {
+          // Keep entitlement endpoint resilient; skip malformed legacy grant docs.
         }
       }
     }
