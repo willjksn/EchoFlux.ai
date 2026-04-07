@@ -123,6 +123,7 @@ interface Fan {
         reminders?: Array<{ id: string; text: string; date: string }>;
         tags?: string[];
         email?: string;
+        customContentNotes?: Record<string, string>;
         engagementHistory?: Array<{
             sessionId: string;
             date: string;
@@ -133,6 +134,8 @@ interface Fan {
         }>;
     };
 }
+
+type CustomDeliveryType = 'video' | 'image' | 'audio' | 'text' | 'link' | 'other' | null;
 
 export const OnlyFansFans: React.FC = () => {
     const { user, showToast } = useAppContext();
@@ -165,7 +168,16 @@ export const OnlyFansFans: React.FC = () => {
         /** Calendar row vs Fan Hub Stripe product order */
         source: 'calendar' | 'order';
         amountCents?: number;
+        deliveryType?: CustomDeliveryType;
+        deliveryUrl?: string | null;
+        deliveryText?: string | null;
+        deliveredAt?: string | null;
     }>>([]);
+    const [customContentTypeFilter, setCustomContentTypeFilter] = useState<'all' | 'video' | 'image' | 'audio' | 'text'>('all');
+    const [contentPreview, setContentPreview] = useState<{ type: 'video' | 'image' | 'audio'; url: string } | null>(null);
+    const [expandedCustomContentId, setExpandedCustomContentId] = useState<string | null>(null);
+    const [customContentNoteDrafts, setCustomContentNoteDrafts] = useState<Record<string, string>>({});
+    const [savingCustomContentNoteId, setSavingCustomContentNoteId] = useState<string | null>(null);
     const [isLoadingCustomContent, setIsLoadingCustomContent] = useState(false);
     const [editingCustomContentId, setEditingCustomContentId] = useState<string | null>(null);
     const [editCustomTitle, setEditCustomTitle] = useState('');
@@ -195,6 +207,81 @@ export const OnlyFansFans: React.FC = () => {
     const [blockingFanId, setBlockingFanId] = useState<string | null>(null);
     const fanDetailsPanelRef = useRef<HTMLDivElement | null>(null);
 
+    useEffect(() => {
+        if (!contentPreview) return;
+        const prevOverflow = document.body.style.overflow;
+        document.body.style.overflow = 'hidden';
+        return () => {
+            document.body.style.overflow = prevOverflow;
+        };
+    }, [contentPreview]);
+
+    useEffect(() => {
+        setExpandedCustomContentId(null);
+        setCustomContentNoteDrafts({});
+    }, [selectedFan?.id]);
+
+    const getCustomContentNote = (itemId: string): string => {
+        const drafts = customContentNoteDrafts[itemId];
+        if (typeof drafts === 'string') return drafts;
+        const fromProfile = selectedFan?.preferences?.customContentNotes?.[itemId];
+        return typeof fromProfile === 'string' ? fromProfile : '';
+    };
+
+    const saveCustomContentNote = async (itemId: string) => {
+        if (!user?.id || !selectedFan) return;
+        setSavingCustomContentNoteId(itemId);
+        try {
+            const note = getCustomContentNote(itemId).trim();
+            const fanRef = doc(db, 'users', user.id, 'onlyfans_fan_preferences', selectedFan.id);
+            if (note) {
+                await setDoc(
+                    fanRef,
+                    {
+                        [`customContentNotes.${itemId}`]: note,
+                        updatedAt: Timestamp.now(),
+                    },
+                    { merge: true }
+                );
+            } else {
+                await updateDoc(fanRef, {
+                    [`customContentNotes.${itemId}`]: deleteField(),
+                    updatedAt: Timestamp.now(),
+                });
+            }
+            setSelectedFan({
+                ...selectedFan,
+                preferences: {
+                    ...selectedFan.preferences,
+                    customContentNotes: {
+                        ...(selectedFan.preferences.customContentNotes || {}),
+                        ...(note ? { [itemId]: note } : {}),
+                    },
+                },
+            });
+            if (!note) {
+                setSelectedFan((prev) => {
+                    if (!prev) return prev;
+                    const nextMap = { ...(prev.preferences.customContentNotes || {}) };
+                    delete nextMap[itemId];
+                    return {
+                        ...prev,
+                        preferences: {
+                            ...prev.preferences,
+                            customContentNotes: nextMap,
+                        },
+                    };
+                });
+            }
+            showToast?.('Custom content note saved', 'success');
+        } catch (error) {
+            console.error('Error saving custom content note:', error);
+            showToast?.('Failed to save note', 'error');
+        } finally {
+            setSavingCustomContentNoteId(null);
+        }
+    };
+
     const orderScheduleToCustomStatus = (
         s: string | undefined
     ): 'ordered' | 'in-progress' | 'delivered' | 'cancelled' => {
@@ -203,6 +290,27 @@ export const OnlyFansFans: React.FC = () => {
         if (x === 'scheduled') return 'in-progress';
         if (x === 'cancelled') return 'cancelled';
         return 'ordered';
+    };
+
+    const inferDeliveryType = (
+        item: {
+            deliveryType?: CustomDeliveryType;
+            deliveryUrl?: string | null;
+            deliveryText?: string | null;
+        }
+    ): 'video' | 'image' | 'audio' | 'text' | 'other' => {
+        const explicit = (item.deliveryType || '').toLowerCase();
+        if (explicit === 'video' || explicit === 'image' || explicit === 'audio' || explicit === 'text') {
+            return explicit;
+        }
+        const u = String(item.deliveryUrl || '').trim().toLowerCase();
+        if (u) {
+            if (/\.(mp4|mov|webm|m4v)(\?|$)/.test(u)) return 'video';
+            if (/\.(jpg|jpeg|png|webp|gif)(\?|$)/.test(u)) return 'image';
+            if (/\.(mp3|wav|m4a|aac|ogg)(\?|$)/.test(u)) return 'audio';
+        }
+        if (String(item.deliveryText || '').trim()) return 'text';
+        return 'other';
     };
 
     function fanOrderMatchesFan(
@@ -245,6 +353,17 @@ export const OnlyFansFans: React.FC = () => {
                     status:
                         (event.customStatus as 'ordered' | 'in-progress' | 'delivered' | 'cancelled') || 'ordered',
                     source: 'calendar' as const,
+                    deliveryType:
+                        event.deliveryType === 'video' ||
+                        event.deliveryType === 'image' ||
+                        event.deliveryType === 'audio' ||
+                        event.deliveryType === 'text' ||
+                        event.deliveryType === 'link'
+                            ? (event.deliveryType as CustomDeliveryType)
+                            : null,
+                    deliveryUrl: typeof event.deliveryUrl === 'string' ? event.deliveryUrl : null,
+                    deliveryText: typeof event.deliveryText === 'string' ? event.deliveryText : null,
+                    deliveredAt: typeof event.deliveredAt === 'string' ? event.deliveredAt : null,
                 }))
                 .filter((row) => {
                     const t = Date.parse(row.date);
@@ -271,6 +390,10 @@ export const OnlyFansFans: React.FC = () => {
                             scheduleStatus?: string;
                             scheduledDate?: string | null;
                             scheduledTime?: string | null;
+                            deliveryType?: 'video' | 'image' | 'audio' | 'text' | 'link' | null;
+                            deliveryUrl?: string | null;
+                            deliveryText?: string | null;
+                            deliveredAt?: string | null;
                         }>;
                     };
                     const orders = data.orders || [];
@@ -303,6 +426,10 @@ export const OnlyFansFans: React.FC = () => {
                                 status: orderScheduleToCustomStatus(o.scheduleStatus),
                                 source: 'order' as const,
                                 amountCents: o.amountCents,
+                                deliveryType: o.deliveryType || null,
+                                deliveryUrl: o.deliveryUrl || null,
+                                deliveryText: o.deliveryText || null,
+                                deliveredAt: o.deliveredAt || null,
                             };
                         });
                 }
@@ -953,6 +1080,9 @@ export const OnlyFansFans: React.FC = () => {
         ? selectedFanActivity
         : selectedFanActivity.filter(a => a.type === activityTypeFilter);
     const last5Activity = displayedActivity.slice(0, 5);
+    const filteredCustomContent = customContentTypeFilter === 'all'
+        ? customContent
+        : customContent.filter((item) => inferDeliveryType(item) === customContentTypeFilter);
 
     return (
         <div className="max-w-7xl mx-auto">
@@ -1385,16 +1515,29 @@ export const OnlyFansFans: React.FC = () => {
                                     Calendar requests and paid Fan Hub store items (e.g. video replies) for this fan.
                                 </p>
                             </div>
+                            <select
+                                value={customContentTypeFilter}
+                                onChange={(e) => setCustomContentTypeFilter(e.target.value as 'all' | 'video' | 'image' | 'audio' | 'text')}
+                                className="px-2 py-1 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-xs"
+                            >
+                                <option value="all">All types</option>
+                                <option value="video">Video</option>
+                                <option value="image">Image</option>
+                                <option value="audio">Voice/Audio</option>
+                                <option value="text">Text</option>
+                            </select>
                         </div>
                         {isLoadingCustomContent ? (
                             <div className="text-center py-4 text-gray-500 dark:text-gray-400">Loading...</div>
-                        ) : customContent.length === 0 ? (
+                        ) : filteredCustomContent.length === 0 ? (
                             <div className="text-center py-4 text-gray-500 dark:text-gray-400 text-sm">
-                                No calendar custom requests or Fan Hub store purchases for this fan yet.
+                                {customContent.length === 0
+                                    ? 'No calendar custom requests or Fan Hub store purchases for this fan yet.'
+                                    : 'No items match this delivery type filter.'}
                             </div>
                         ) : (
                             <div className="space-y-2">
-                                {customContent.map((item) => (
+                                {filteredCustomContent.map((item) => (
                                     <div key={item.id} className="p-3 bg-gray-50 dark:bg-gray-900/40 rounded-lg border border-gray-200 dark:border-gray-700">
                                         {editingCustomContentId === item.id && item.source === 'calendar' ? (
                                             <div className="space-y-2">
@@ -1484,9 +1627,136 @@ export const OnlyFansFans: React.FC = () => {
                                                                  item.status === 'delivered' ? 'Delivered' : 'Cancelled'}
                                                             </span>
                                                         </div>
-                                                        {item.description && (
-                                                            <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">{item.description}</p>
-                                                        )}
+                                                        {(() => {
+                                                            const isExpanded = expandedCustomContentId === item.id;
+                                                            const contentType = inferDeliveryType(item);
+                                                            const url = String(item.deliveryUrl || '').trim();
+                                                            const text = String(item.deliveryText || '').trim();
+                                                            const summaryBits: string[] = [];
+                                                            if (item.description) summaryBits.push(item.description);
+                                                            if (url || text) summaryBits.push(`Delivered ${contentType === 'other' ? 'attachment' : contentType}`);
+                                                            const summary = summaryBits.join(' · ');
+                                                            return (
+                                                                <>
+                                                                    {summary && (
+                                                                        <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
+                                                                            {isExpanded
+                                                                                ? summary
+                                                                                : summary.length > 120
+                                                                                    ? `${summary.slice(0, 120)}...`
+                                                                                    : summary}
+                                                                        </p>
+                                                                    )}
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => setExpandedCustomContentId(isExpanded ? null : item.id)}
+                                                                        className="mt-1 text-[11px] text-primary-600 dark:text-primary-400 hover:underline"
+                                                                    >
+                                                                        {isExpanded ? 'Collapse details' : 'Expand details'}
+                                                                    </button>
+                                                                    {isExpanded && (
+                                                                        <div className="mt-2 space-y-2">
+                                                                            {(url || text) && (
+                                                                                <div className="text-[11px] inline-flex items-center px-2 py-0.5 rounded bg-sky-100 dark:bg-sky-900/30 text-sky-700 dark:text-sky-300">
+                                                                                    Delivered content: {contentType === 'other' ? 'attachment' : contentType}
+                                                                                </div>
+                                                                            )}
+                                                                            {url && contentType === 'video' && (
+                                                                                <button
+                                                                                    type="button"
+                                                                                    onClick={() => setContentPreview({ type: 'video', url })}
+                                                                                    className="group block text-left"
+                                                                                    title="Open preview"
+                                                                                >
+                                                                                    <video
+                                                                                        src={url}
+                                                                                        muted
+                                                                                        className="w-44 h-28 rounded border border-gray-200 dark:border-gray-700 bg-black/70 object-cover"
+                                                                                        preload="metadata"
+                                                                                    />
+                                                                                    <span className="text-[11px] text-primary-600 dark:text-primary-400 group-hover:underline">
+                                                                                        Open preview
+                                                                                    </span>
+                                                                                </button>
+                                                                            )}
+                                                                            {url && contentType === 'image' && (
+                                                                                <button
+                                                                                    type="button"
+                                                                                    onClick={() => setContentPreview({ type: 'image', url })}
+                                                                                    className="group block text-left"
+                                                                                    title="Open preview"
+                                                                                >
+                                                                                    <img
+                                                                                        src={url}
+                                                                                        alt="Delivered content"
+                                                                                        className="w-36 h-24 rounded border border-gray-200 dark:border-gray-700 object-cover"
+                                                                                        loading="lazy"
+                                                                                    />
+                                                                                    <span className="text-[11px] text-primary-600 dark:text-primary-400 group-hover:underline">
+                                                                                        Open preview
+                                                                                    </span>
+                                                                                </button>
+                                                                            )}
+                                                                            {url && contentType === 'audio' && (
+                                                                                <button
+                                                                                    type="button"
+                                                                                    onClick={() => setContentPreview({ type: 'audio', url })}
+                                                                                    className="group inline-flex items-center px-2 py-1 rounded border border-gray-300 dark:border-gray-600 text-xs text-primary-700 dark:text-primary-300 hover:bg-gray-100 dark:hover:bg-gray-800"
+                                                                                    title="Open audio player"
+                                                                                >
+                                                                                    Open audio
+                                                                                </button>
+                                                                            )}
+                                                                            {url && contentType === 'other' && (
+                                                                                <a
+                                                                                    href={url}
+                                                                                    target="_blank"
+                                                                                    rel="noreferrer"
+                                                                                    className="text-xs text-primary-600 dark:text-primary-400 underline break-all"
+                                                                                >
+                                                                                    Open delivered attachment
+                                                                                </a>
+                                                                            )}
+                                                                            {text && (
+                                                                                <div className="text-xs text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded p-2 max-w-2xl whitespace-pre-wrap">
+                                                                                    {text}
+                                                                                </div>
+                                                                            )}
+                                                                            <div className="pt-1">
+                                                                                <label className="block text-[11px] font-medium text-gray-600 dark:text-gray-300 mb-1">
+                                                                                    Creator note
+                                                                                </label>
+                                                                                <textarea
+                                                                                    value={getCustomContentNote(item.id)}
+                                                                                    onChange={(e) =>
+                                                                                        setCustomContentNoteDrafts((prev) => ({
+                                                                                            ...prev,
+                                                                                            [item.id]: e.target.value,
+                                                                                        }))
+                                                                                    }
+                                                                                    placeholder="Add a private note for this delivery (e.g., style, angle, outfit, what to avoid next time)..."
+                                                                                    rows={2}
+                                                                                    className="w-full max-w-2xl px-2 py-1.5 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-xs text-gray-900 dark:text-white"
+                                                                                />
+                                                                                <div className="mt-1 flex items-center gap-2">
+                                                                                    <button
+                                                                                        type="button"
+                                                                                        onClick={() => void saveCustomContentNote(item.id)}
+                                                                                        disabled={savingCustomContentNoteId === item.id}
+                                                                                        className="px-2 py-1 text-[11px] rounded bg-primary-600 text-white hover:bg-primary-700 disabled:opacity-60 disabled:cursor-not-allowed"
+                                                                                    >
+                                                                                        {savingCustomContentNoteId === item.id ? 'Saving…' : 'Save note'}
+                                                                                    </button>
+                                                                                    <span className="text-[11px] text-gray-500 dark:text-gray-400">
+                                                                                        Private to you (not visible to fan)
+                                                                                    </span>
+                                                                                </div>
+                                                                            </div>
+                                                                        </div>
+                                                                    )}
+                                                                </>
+                                                            );
+                                                        })()}
                                                         <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">
                                                             {new Date(item.date).toLocaleDateString()}
                                                         </p>
@@ -2395,6 +2665,49 @@ export const OnlyFansFans: React.FC = () => {
                                 Schedule Session
                             </button>
                         </div>
+                    </div>
+                </div>
+            )}
+
+            {contentPreview && (
+                <div
+                    className="fixed inset-0 z-[90] flex items-center justify-center bg-black/70 p-4 overflow-hidden"
+                    onClick={() => setContentPreview(null)}
+                >
+                    <div
+                        className="bg-white dark:bg-gray-900 rounded-xl shadow-2xl w-full max-w-xl p-4"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <div className="flex items-center justify-between mb-3">
+                            <h3 className="text-sm font-semibold text-gray-900 dark:text-white">
+                                Delivered {contentPreview.type}
+                            </h3>
+                            <button
+                                type="button"
+                                onClick={() => setContentPreview(null)}
+                                className="text-gray-500 hover:text-gray-800 dark:text-gray-300 dark:hover:text-white"
+                            >
+                                Close
+                            </button>
+                        </div>
+                        {contentPreview.type === 'video' && (
+                            <video
+                                src={contentPreview.url}
+                                controls
+                                className="w-full max-h-[56vh] rounded bg-black object-contain"
+                                preload="metadata"
+                            />
+                        )}
+                        {contentPreview.type === 'image' && (
+                            <img
+                                src={contentPreview.url}
+                                alt="Delivered content"
+                                className="w-full rounded object-contain max-h-[56vh]"
+                            />
+                        )}
+                        {contentPreview.type === 'audio' && (
+                            <audio src={contentPreview.url} controls className="w-full" preload="metadata" />
+                        )}
                     </div>
                 </div>
             )}

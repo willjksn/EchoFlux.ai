@@ -2421,10 +2421,8 @@
   margin: 0 0 0.75rem;
   flex: 1;
   opacity: 0.95;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
+  white-space: normal;
+  overflow: visible;
 }
 
 .fan-member-treat-price {
