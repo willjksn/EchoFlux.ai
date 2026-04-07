@@ -61,6 +61,14 @@ function getCreatorIdFromPath(path: string): string | null {
   return parts[creatorsIdx + 1] || null;
 }
 
+function normalizeCreatorId(raw: unknown): string {
+  const id = typeof raw === "string" ? raw.trim() : "";
+  if (!id) return "";
+  const idx = id.indexOf("--collection=");
+  if (idx >= 0) return id.slice(0, idx).trim();
+  return id;
+}
+
 function normalizeUsername(raw: unknown): string | null {
   if (typeof raw !== "string") return null;
   const clean = raw.replace(/^@/, "").trim().toLowerCase();
@@ -91,6 +99,27 @@ function deriveCanonicalFanKey(rawDocId: string, rawDataId: unknown, rawEmail: u
   if (email) return { key: email, emailHint: email };
   const fallback = (typeof rawDataId === "string" && rawDataId.trim()) || rawDocId;
   return { key: String(fallback).trim(), emailHint: null };
+}
+
+function toPriceCents(raw: unknown): number {
+  const n = typeof raw === "number" && Number.isFinite(raw) ? raw : 0;
+  if (n <= 0) return 0;
+  // New storefront writes cents (e.g. 1999). Preserve those.
+  if (Number.isInteger(n) && n >= 100) return Math.round(n);
+  // Legacy docs may still store dollars (e.g. 9.99 or 10).
+  if (n < 100) return Math.round(n * 100);
+  // Fallback: treat as cents.
+  return Math.round(n);
+}
+
+function statusRank(status: string): number {
+  const s = String(status || "").toLowerCase().trim();
+  if (s === "active") return 5;
+  if (s === "trialing") return 4;
+  if (s === "past_due") return 3;
+  if (s === "free") return 2;
+  if (s === "canceled" || s === "cancelled" || s === "unpaid") return 1;
+  return 0;
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -133,8 +162,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
       const identity = deriveCanonicalFanKey(docSnap.id, data.id, data.email);
       const fanId = identity.key;
-      const creatorId =
+      const creatorIdRaw =
         (typeof data.creatorId === "string" && data.creatorId) || getCreatorIdFromPath(docSnap.ref.path);
+      const creatorId = normalizeCreatorId(creatorIdRaw);
       const status = typeof data.subscriptionStatus === "string" ? data.subscriptionStatus : "";
       if (!fanId || !creatorId) continue;
       if (activeOnly && !ACTIVE_STATUSES.has(status)) continue;
@@ -209,11 +239,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           const name =
             (typeof d?.displayName === "string" && d.displayName.trim()) ||
             (handle ? `@${handle.replace(/^@/, "")}` : "Unknown Creator");
-          const monthlyPrice =
+          const monthlyPriceRaw =
             (typeof d?.monetization?.monthlyPrice === "number" && Number.isFinite(d.monetization.monthlyPrice))
               ? d.monetization.monthlyPrice
               : (typeof d?.monthlyPrice === "number" && Number.isFinite(d.monthlyPrice) ? d.monthlyPrice : 0);
-          creatorNameById[creatorId] = { name, handle, monthlyPriceCents: Math.max(0, Math.round(monthlyPrice * 100)) };
+          creatorNameById[creatorId] = { name, handle, monthlyPriceCents: toPriceCents(monthlyPriceRaw) };
         } catch {
           creatorNameById[creatorId] = { name: "Unknown Creator", handle: null, monthlyPriceCents: 0 };
         }
@@ -276,13 +306,36 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     for (const fanId of Object.keys(byFan)) {
-      byFan[fanId] = byFan[fanId]
+      const rows = byFan[fanId]
         .map((row) => ({
           ...row,
-          creatorName: creatorNameById[row.creatorId]?.name || row.creatorId,
+          creatorId: normalizeCreatorId(row.creatorId),
+          creatorName: creatorNameById[normalizeCreatorId(row.creatorId)]?.name || row.creatorId,
           creatorHandle: creatorNameById[row.creatorId]?.handle || null,
-          subscriptionPriceCents: creatorNameById[row.creatorId]?.monthlyPriceCents ?? 0,
-        }))
+          subscriptionPriceCents: creatorNameById[normalizeCreatorId(row.creatorId)]?.monthlyPriceCents ?? 0,
+        }));
+      const dedupedByCreator = new Map<string, MembershipRow>();
+      for (const row of rows) {
+        const key = normalizeCreatorId(row.creatorId) || row.creatorName || "unknown_creator";
+        const existing = dedupedByCreator.get(key);
+        if (!existing) {
+          dedupedByCreator.set(key, row);
+          continue;
+        }
+        const chosen =
+          statusRank(row.status) > statusRank(existing.status) ? row : existing;
+        dedupedByCreator.set(key, {
+          ...chosen,
+          purchaseCount: Math.max(existing.purchaseCount || 0, row.purchaseCount || 0),
+          purchasesCents: Math.max(existing.purchasesCents || 0, row.purchasesCents || 0),
+          tipCount: Math.max(existing.tipCount || 0, row.tipCount || 0),
+          tipsCents: Math.max(existing.tipsCents || 0, row.tipsCents || 0),
+          totalSpentCents: Math.max(existing.totalSpentCents || 0, row.totalSpentCents || 0),
+          subscriptionPriceCents: Math.max(existing.subscriptionPriceCents || 0, row.subscriptionPriceCents || 0),
+          updatedAt: chosen.updatedAt || existing.updatedAt || row.updatedAt,
+        });
+      }
+      byFan[fanId] = Array.from(dedupedByCreator.values())
         .sort((a, b) => a.creatorName.localeCompare(b.creatorName));
     }
 
