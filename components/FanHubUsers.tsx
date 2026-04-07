@@ -842,37 +842,48 @@ export const FanHubUsers: React.FC = () => {
       if (loginLookupIds.length > 0 || loginLookupEmails.length > 0) {
         try {
           const token = auth.currentUser ? await auth.currentUser.getIdToken() : null;
-          const loginRes = await fetch("/api/creatorFanLastLogins", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              ...(token ? { Authorization: `Bearer ${token}` } : {}),
-            },
-            body: JSON.stringify({ authUids: loginLookupIds, emails: loginLookupEmails }),
-          });
-          if (loginRes.ok) {
+          const CHUNK = 250;
+          const byUid: Record<string, { lastSignInTime: string | null; exists: boolean }> = {};
+          const byEmail: Record<string, { lastSignInTime: string | null; exists: boolean }> = {};
+          const totalChunks = Math.max(
+            Math.ceil(loginLookupIds.length / CHUNK),
+            Math.ceil(loginLookupEmails.length / CHUNK)
+          );
+          for (let i = 0; i < totalChunks; i += 1) {
+            const authUids = loginLookupIds.slice(i * CHUNK, i * CHUNK + CHUNK);
+            const emails = loginLookupEmails.slice(i * CHUNK, i * CHUNK + CHUNK);
+            if (authUids.length === 0 && emails.length === 0) continue;
+            const loginRes = await fetch("/api/creatorFanLastLogins", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                ...(token ? { Authorization: `Bearer ${token}` } : {}),
+              },
+              body: JSON.stringify({ authUids, emails }),
+            });
+            if (!loginRes.ok) continue;
             const payload = (await loginRes.json().catch(() => ({}))) as {
               byUid?: Record<string, { lastSignInTime: string | null; exists: boolean }>;
               byEmail?: Record<string, { lastSignInTime: string | null; exists: boolean }>;
             };
-            const byUid = payload.byUid || {};
-            const byEmail = payload.byEmail || {};
-            fanUsers.forEach((u) => {
-              const uid = String(u.authUid || "").trim();
-              const email = String(u.email || "").trim().toLowerCase();
-              const uidRow = uid ? byUid[uid] : undefined;
-              const emailRow = email ? byEmail[email] : undefined;
-              const rawTimes = [uidRow?.lastSignInTime, emailRow?.lastSignInTime].filter(
-                (v): v is string => typeof v === "string" && v.trim().length > 0
-              );
-              if (rawTimes.length === 0) return;
-              const parsed = rawTimes
-                .map((t) => new Date(t))
-                .filter((d) => Number.isFinite(d.getTime()))
-                .sort((a, b) => b.getTime() - a.getTime());
-              if (parsed.length > 0) u.lastLoginAt = parsed[0];
-            });
+            Object.assign(byUid, payload.byUid || {});
+            Object.assign(byEmail, payload.byEmail || {});
           }
+          fanUsers.forEach((u) => {
+            const uid = String(u.authUid || "").trim();
+            const email = String(u.email || "").trim().toLowerCase();
+            const uidRow = uid ? byUid[uid] : undefined;
+            const emailRow = email ? byEmail[email] : undefined;
+            const rawTimes = [uidRow?.lastSignInTime, emailRow?.lastSignInTime].filter(
+              (v): v is string => typeof v === "string" && v.trim().length > 0
+            );
+            if (rawTimes.length === 0) return;
+            const parsed = rawTimes
+              .map((t) => new Date(t))
+              .filter((d) => Number.isFinite(d.getTime()))
+              .sort((a, b) => b.getTime() - a.getTime());
+            if (parsed.length > 0) u.lastLoginAt = parsed[0];
+          });
         } catch {
           // best-effort enrichment; keep table usable even if API unavailable
         }

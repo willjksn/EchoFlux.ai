@@ -106,6 +106,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         body.publicTreatsOnLanding !== undefined ? body.publicTreatsOnLanding : existingData?.publicTreatsOnLanding,
       updatedAt: new Date().toISOString(),
     };
+    const safePayload = omitUndefinedDeep(payload) as Record<string, unknown>;
 
     if (handleChanged) {
       await db.runTransaction(async (tx) => {

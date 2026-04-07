@@ -241,6 +241,7 @@ function getMembershipOnlyRemainingAccessLabel(memberships: FanMembershipLink[])
 export const AdminDashboard: React.FC = () => {
     const { user: currentUser, showToast, setActivePage } = useAppContext();
     const [users, setUsers] = useState<User[]>([]);
+    const [creatorIds, setCreatorIds] = useState<Set<string>>(new Set());
     const [activityFeed, setActivityFeed] = useState<Activity[]>([]);
     const [editingUser, setEditingUser] = useState<User | null>(null);
     const [grantingRewardToUser, setGrantingRewardToUser] = useState<User | null>(null);
@@ -693,6 +694,22 @@ export const AdminDashboard: React.FC = () => {
         return () => unsubscribe();
     }, [currentUser]);
 
+    useEffect(() => {
+        const loadCreatorIds = async () => {
+            if (currentUser?.role !== 'Admin') return;
+            try {
+                const creatorsSnap = await getDocs(collection(db, 'creators'));
+                const ids = new Set<string>();
+                creatorsSnap.forEach((d) => ids.add(d.id));
+                setCreatorIds(ids);
+            } catch (error) {
+                console.warn('AdminDashboard: failed to load creators index for user filtering:', error);
+                setCreatorIds(new Set());
+            }
+        };
+        void loadCreatorIds();
+    }, [currentUser?.role]);
+
     // Calculate actual storage used from media library files
     useEffect(() => {
         const calculateStorageForUsers = async () => {
@@ -762,7 +779,9 @@ export const AdminDashboard: React.FC = () => {
     }, [fanHubMembershipsByFanId]);
 
     const hasFanHubMembership = useCallback((user: User): boolean => {
-        return getFanHubMembershipsForUser(user).length > 0;
+        if (getFanHubMembershipsForUser(user).length > 0) return true;
+        if (user.accountOrigin === 'fan_hub') return true;
+        return false;
     }, [getFanHubMembershipsForUser]);
     
     const filteredUsers = useMemo(() => {
@@ -773,8 +792,12 @@ export const AdminDashboard: React.FC = () => {
             if (!matchesSearch) return false;
             if (userOriginFilter === 'all') return true;
             if (userOriginFilter === 'fan_hub') return hasFanHubMembership(user);
-            // EchoFlux filter means no active Fan Hub membership link.
-            return !hasFanHubMembership(user);
+            // EchoFlux filter should show creator-workspace users only (not fan-only members).
+            const isWorkspaceUser =
+                user.role === 'Admin' ||
+                creatorIds.has(user.id) ||
+                hasActiveStripeEchofluxSubscription(user);
+            return isWorkspaceUser && !hasFanHubMembership(user);
         });
         
         // Separate admins from regular users
@@ -788,7 +811,7 @@ export const AdminDashboard: React.FC = () => {
         
         // Return admins first, then regular users
         return [...adminUsers, ...regularUsers];
-    }, [users, searchTerm, userOriginFilter, hasFanHubMembership]);
+    }, [users, searchTerm, userOriginFilter, hasFanHubMembership, creatorIds]);
 
     const membershipOnlyFanRows = useMemo<MembershipOnlyFanRow[]>(() => {
         if (userOriginFilter === 'echoflux') return [];
