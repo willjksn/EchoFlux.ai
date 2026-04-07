@@ -23,6 +23,7 @@ import { getModelUsageAnalytics, type ModelUsageStats } from '../src/services/mo
 import { hasActiveStripeEchofluxSubscription } from '../src/lib/echofluxStripeMrr';
 import { parseDateLike, formatRemainingAccessForFanRow } from '../src/lib/memberAccessEnd';
 import { authUidFromFanDocId, parseCompoundFanDocumentId } from '../src/lib/compoundFanDocId';
+import { safeUsernameForHandle } from '../src/lib/fanHubDisplay';
 
 // Fallback sample stats so the admin overview is visible even if the analytics
 // API is unreachable locally. These reflect the deployment numbers the user described.
@@ -238,6 +239,34 @@ function getMembershipOnlyRemainingAccessLabel(memberships: FanMembershipLink[])
         cancelAtPeriodEnd: chosen.cancelAtPeriodEnd === true,
         accessEnd: parseDateLike(chosen.subscriptionCurrentPeriodEnd),
     });
+}
+
+function adminUserDisplayLabel(user: {
+    name?: string | null;
+    email?: string | null;
+    username?: string | null;
+    handle?: string | null;
+    memberUsername?: string | null;
+}): string {
+    const email = typeof user.email === 'string' ? user.email.trim().toLowerCase() : '';
+    const nameRaw = typeof user.name === 'string' ? user.name.trim() : '';
+    const nameLower = nameRaw.toLowerCase();
+    const nameLooksPlaceholder =
+        !nameRaw ||
+        nameLower === 'new user' ||
+        nameLower === 'member' ||
+        nameLower === 'user' ||
+        (email && nameLower === email);
+    if (!nameLooksPlaceholder) return nameRaw;
+
+    const username = safeUsernameForHandle(
+        user.username || user.handle || user.memberUsername
+    );
+    if (username) return username;
+
+    const emailLocal = email && email.includes('@') ? email.split('@')[0].trim() : '';
+    if (emailLocal) return emailLocal;
+    return nameRaw || 'User';
 }
 
 export const AdminDashboard: React.FC = () => {
@@ -1492,7 +1521,21 @@ export const AdminDashboard: React.FC = () => {
                                     <UserPlusIcon />
                                 </div>
                                 <div className="flex-1">
-                                    <p className="font-semibold text-gray-900 dark:text-white">{activity.user.name}</p>
+                                    {(() => {
+                                        const matchedUser = users.find((u) => u.id === activity.id);
+                                        const label = adminUserDisplayLabel({
+                                            name: matchedUser?.name ?? activity.user.name,
+                                            email: matchedUser?.email ?? null,
+                                            username: (matchedUser as unknown as { username?: string | null })?.username ?? null,
+                                            handle: (matchedUser as unknown as { handle?: string | null })?.handle ?? null,
+                                            memberUsername: (matchedUser as unknown as { memberUsername?: string | null })?.memberUsername ?? null,
+                                        });
+                                        return (
+                                    <p className="font-semibold text-gray-900 dark:text-white">
+                                        {label}
+                                    </p>
+                                        );
+                                    })()}
                                     <p className="text-xs text-gray-500 dark:text-gray-400">{activity.timestamp}</p>
                                 </div>
                             </li>

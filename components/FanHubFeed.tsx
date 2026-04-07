@@ -452,6 +452,9 @@ function FeedCard({
   creatorThemePrimary,
   hideTipButtons,
   sjHeartEmojiCtx,
+  openCommentsRequested,
+  onOpenCommentsRequestConsumed,
+  onCommentsOpenChange,
 }: {
   post: FeedPost;
   creatorName: string;
@@ -473,6 +476,9 @@ function FeedCard({
   /** Global creator visibility setting applied to all posts for fans. */
   hideTipButtons?: boolean;
   sjHeartEmojiCtx: SjHeartEmojiAccessContext;
+  openCommentsRequested?: boolean;
+  onOpenCommentsRequestConsumed?: () => void;
+  onCommentsOpenChange?: (isOpen: boolean) => void;
 }) {
   const countBadgeStyle = useMemo(
     () => feedCardCountThemedStyle(creatorThemePrimary),
@@ -541,6 +547,7 @@ function FeedCard({
   const [modalCommentSaving, setModalCommentSaving] = useState(false);
   const commentInputRef = useRef<HTMLInputElement | null>(null);
   const prevCommentsOpenRef = useRef(false);
+  const hasOpenedCommentsRef = useRef(false);
   const visibleComments = useMemo(() => post.comments.filter((c) => !c.hidden), [post.comments]);
   const isLiked = !!currentUserId && (post.likedBy ?? []).includes(currentUserId);
   const isSaved = savedPostIds.includes(post.id);
@@ -562,6 +569,27 @@ function FeedCard({
       document.body.style.overflow = prevOverflow;
     };
   }, [commentsOpen]);
+
+  useEffect(() => {
+    if (!openCommentsRequested) return;
+    setCommentsOpen(true);
+    onOpenCommentsRequestConsumed?.();
+  }, [openCommentsRequested, onOpenCommentsRequestConsumed]);
+
+  useEffect(() => {
+    if (commentsOpen) {
+      hasOpenedCommentsRef.current = true;
+      onCommentsOpenChange?.(true);
+      return;
+    }
+    // Ignore initial "closed" state on mount; only notify close after modal has opened.
+    if (!hasOpenedCommentsRef.current) return;
+    onCommentsOpenChange?.(false);
+  }, [commentsOpen, onCommentsOpenChange]);
+
+  useEffect(() => {
+    hasOpenedCommentsRef.current = false;
+  }, [post.id]);
 
   /** When the modal opens, start on the same slide as the in-feed carousel (independent index while open). */
   useEffect(() => {
@@ -1358,6 +1386,8 @@ export const FanHubFeed: React.FC<{
   const [loading, setLoading] = useState(true);
   const [savedPostIds, setSavedPostIds] = useState<string[]>([]);
   const [viewMode, setViewMode] = useState<"feed" | "grid">("feed");
+  const [openPostIdFromGrid, setOpenPostIdFromGrid] = useState<string | null>(null);
+  const [returnToGridAfterPostId, setReturnToGridAfterPostId] = useState<string | null>(null);
   const [deletingPostId, setDeletingPostId] = useState<string | null>(null);
   const [feedSettings, setFeedSettings] = useState<FeedVisibilitySettings>({
     hideLikeCounts: false,
@@ -1903,6 +1933,16 @@ export const FanHubFeed: React.FC<{
                 creatorThemePrimary={creatorStorefront.themePrimary}
                 hideTipButtons={feedSettings.hideTipButton}
                 sjHeartEmojiCtx={sjHeartEmojiCtx}
+                openCommentsRequested={openPostIdFromGrid === post.id}
+                onOpenCommentsRequestConsumed={() =>
+                  setOpenPostIdFromGrid((prev) => (prev === post.id ? null : prev))
+                }
+                onCommentsOpenChange={(isOpen) => {
+                  if (!isOpen && returnToGridAfterPostId === post.id) {
+                    setViewMode("grid");
+                    setReturnToGridAfterPostId(null);
+                  }
+                }}
               />
             ))}
           </div>
@@ -1922,19 +1962,27 @@ export const FanHubFeed: React.FC<{
                   key={post.id}
                   type="button"
                   className="feed-grid-item"
-                  onClick={() => setViewMode("feed")}
+                  onClick={() => {
+                    setReturnToGridAfterPostId(post.id);
+                    setOpenPostIdFromGrid(post.id);
+                    setViewMode("feed");
+                  }}
+                  aria-label="Open post"
                 >
                   {firstUrl ? (
                     isVideo ? (
-                      <video
-                        src={firstUrl.includes("#t=") ? firstUrl : `${firstUrl}#t=0.1`}
-                        poster={firstUrl}
-                        muted
-                        playsInline
-                        autoPlay
-                        loop
-                        preload="metadata"
-                      />
+                      <>
+                        <video
+                          src={firstUrl.includes("#t=") ? firstUrl : `${firstUrl}#t=0.1`}
+                          poster={firstUrl}
+                          muted
+                          playsInline
+                          preload="metadata"
+                        />
+                        <span className="feed-grid-video-overlay" aria-hidden>
+                          <PlayIcon />
+                        </span>
+                      </>
                     ) : (
                       <img src={firstUrl} alt="" loading="lazy" />
                     )
