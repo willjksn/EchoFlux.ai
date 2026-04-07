@@ -91,7 +91,6 @@ function formatDate(date: Date | null): string {
 
 const FIREBASE_UID_RE = /^[A-Za-z0-9]{20,36}$/;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const CUTOVER_AT_ET = new Date("2026-04-04T22:00:00-04:00");
 
 function formatDateTime(date: Date | null): string {
   if (!date || !Number.isFinite(date.getTime())) return "—";
@@ -216,7 +215,6 @@ export const FanHubUsers: React.FC = () => {
   const [isGrantingMinutes, setIsGrantingMinutes] = useState(false);
   const [cancelSubLoading, setCancelSubLoading] = useState(false);
   const [sendingReset, setSendingReset] = useState(false);
-  const [sendingBulkReset, setSendingBulkReset] = useState(false);
 
   // Empty placeholder - users will be loaded from database
   // Demo users are not shown to new creators
@@ -1102,37 +1100,6 @@ export const FanHubUsers: React.FC = () => {
     }
   };
 
-  const handleSendResetsToInactiveSinceCutover = async () => {
-    const targets = members.filter((m) => !m.lastLoginAt || m.lastLoginAt.getTime() < CUTOVER_AT_ET.getTime());
-    if (targets.length === 0) {
-      showToast?.("Everyone has logged in since cutover. No reset emails needed.", "success");
-      return;
-    }
-    if (
-      !window.confirm(
-        `Send password reset emails to ${targets.length} member${targets.length === 1 ? "" : "s"} who have not logged in since 4/4/2026 10:00 PM ET?`
-      )
-    ) {
-      return;
-    }
-
-    setSendingBulkReset(true);
-    let sent = 0;
-    let failed = 0;
-    for (const fan of targets) {
-      const ok = await sendResetEmailForFan(fan, { silent: true });
-      if (ok) sent += 1;
-      else failed += 1;
-    }
-    setSendingBulkReset(false);
-
-    if (failed === 0) {
-      showToast?.(`Sent ${sent} password reset email${sent === 1 ? "" : "s"} for inactive members.`, "success");
-    } else {
-      showToast?.(`Sent ${sent}; ${failed} failed. Open members and retry failed users individually.`, "error");
-    }
-  };
-
   const handleCreatorCancelFanSubscription = async () => {
     if (!selectedUser || !creatorId) return;
     if (!showStripeSubscriptionCancelInManageModal(selectedUser)) {
@@ -1439,15 +1406,6 @@ export const FanHubUsers: React.FC = () => {
       <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
         <h1 className="text-2xl font-bold text-gray-900 dark:text-white">User Management</h1>
         <div className="flex items-center gap-3">
-          <button
-            type="button"
-            onClick={handleSendResetsToInactiveSinceCutover}
-            disabled={sendingBulkReset}
-            className="px-4 py-2 rounded-lg text-sm font-medium border border-amber-300 dark:border-amber-700 text-amber-900 dark:text-amber-200 bg-amber-50 dark:bg-amber-900/20 hover:bg-amber-100 dark:hover:bg-amber-900/30 disabled:opacity-50 disabled:cursor-not-allowed"
-            title="Send reset links to members with no login since 4/4/2026 10:00 PM ET"
-          >
-            {sendingBulkReset ? "Sending resets..." : "Reset inactive since cutover"}
-          </button>
           <button
             type="button"
             onClick={() => setShowAddModal(true)}
