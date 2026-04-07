@@ -12,6 +12,7 @@ import {
   fanHubListLabel,
   safeUsernameForHandle,
 } from '../src/lib/fanHubDisplay';
+import { authUidFromFanDocId, parseCompoundFanDocumentId } from '../src/lib/compoundFanDocId';
 
 function usernameFromFanDoc(fd: Record<string, unknown>): string | null {
   const keys = ['username', 'memberUsername', 'handle', 'instagram_handle', 'instagramHandle'] as const;
@@ -414,69 +415,110 @@ export const OnlyFansSextingSession: React.FC = () => {
   useEffect(() => {
     if (!adminUid) return;
     setFansLoading(true);
-    getDocs(collection(db, 'users', adminUid, 'onlyfans_fan_preferences'))
-      .then(async (snap) => {
-        const docs = snap.docs;
-        const CHUNK = 25;
-        const list: FanOption[] = [];
-        for (let i = 0; i < docs.length; i += CHUNK) {
-          const chunk = docs.slice(i, i + CHUNK);
-          const part = await Promise.all(
-            chunk.map(async (d) => {
-              const data = d.data();
-              const fanId = d.id;
-              let username: string | undefined;
-              let displayName: string | null =
-                typeof data.displayName === 'string' && data.displayName.trim()
-                  ? data.displayName.trim()
-                  : null;
-              let email: string | null = typeof data.email === 'string' ? data.email : null;
-              const prefName = typeof data.name === 'string' ? data.name : null;
+    Promise.all([
+      getDocs(collection(db, 'users', adminUid, 'onlyfans_fan_preferences')).catch(() => null),
+      getDocs(collection(db, 'creators', adminUid, 'fans')).catch(() => null),
+    ])
+      .then(async ([prefsSnap, fansSnap]) => {
+        const UID_RE = /^[A-Za-z0-9]{20,36}$/;
+        type Row = {
+          key: string;
+          originalIds: Set<string>;
+          displayName: string | null;
+          email: string | null;
+          username: string | undefined;
+          prefName: string | null;
+        };
+        const rowMap = new Map<string, Row>();
 
+        const canonicalKeyForId = (rawId: string): string => {
+          const authUid = authUidFromFanDocId(rawId);
+          if (UID_RE.test(authUid)) return authUid;
+          return rawId;
+        };
+        const upsert = (rawId: string, patch: Partial<Omit<Row, 'key' | 'originalIds'>>) => {
+          const key = canonicalKeyForId(rawId);
+          const existing = rowMap.get(key) || {
+            key,
+            originalIds: new Set<string>(),
+            displayName: null,
+            email: null,
+            username: undefined,
+            prefName: null,
+          };
+          existing.originalIds.add(rawId);
+          if (patch.displayName && !existing.displayName) existing.displayName = patch.displayName;
+          if (patch.email && !existing.email) existing.email = patch.email.toLowerCase();
+          if (patch.username && !existing.username) existing.username = patch.username;
+          if (patch.prefName && !existing.prefName) existing.prefName = patch.prefName;
+          rowMap.set(key, existing);
+        };
+
+        prefsSnap?.docs.forEach((d) => {
+          const data = d.data() as Record<string, unknown>;
+          upsert(d.id, {
+            displayName:
+              typeof data.displayName === 'string' && data.displayName.trim() ? data.displayName.trim() : null,
+            email: typeof data.email === 'string' && data.email.trim() ? data.email.trim() : null,
+            prefName: typeof data.name === 'string' && data.name.trim() ? data.name.trim() : null,
+          });
+        });
+
+        fansSnap?.docs.forEach((d) => {
+          const data = d.data() as Record<string, unknown>;
+          const fromFan = usernameFromFanDoc(data);
+          const compound = parseCompoundFanDocumentId(d.id);
+          upsert(d.id, {
+            username: fromFan || undefined,
+            displayName:
+              typeof data.displayName === 'string' && data.displayName.trim() ? data.displayName.trim() : null,
+            email:
+              (typeof data.email === 'string' && data.email.trim() ? data.email.trim() : null) ||
+              compound.emailFromId ||
+              null,
+          });
+        });
+
+        const rows = Array.from(rowMap.values());
+        const CHUNK = 25;
+        for (let i = 0; i < rows.length; i += CHUNK) {
+          const chunk = rows.slice(i, i + CHUNK);
+          await Promise.all(
+            chunk.map(async (row) => {
+              if (!UID_RE.test(row.key)) return;
               try {
-                const [uSnap, fSnap] = await Promise.all([
-                  getDoc(doc(db, 'users', fanId)),
-                  getDoc(doc(db, 'creators', adminUid, 'fans', fanId)),
-                ]);
-                if (fSnap.exists()) {
-                  const fd = fSnap.data() as Record<string, unknown>;
-                  const fromFan = usernameFromFanDoc(fd);
-                  if (fromFan) username = fromFan;
-                  if (!displayName && typeof fd.displayName === 'string' && fd.displayName.trim()) {
-                    displayName = fd.displayName.trim();
-                  }
-                  if (!email && typeof fd.email === 'string' && fd.email) email = fd.email;
+                const uSnap = await getDoc(doc(db, 'users', row.key));
+                if (!uSnap.exists()) return;
+                const ud = uSnap.data() as Record<string, unknown>;
+                const uu =
+                  typeof ud.username === 'string' && ud.username.trim()
+                    ? safeUsernameForHandle(ud.username) ?? undefined
+                    : undefined;
+                if (uu && !row.username) row.username = uu;
+                if (!row.displayName && typeof ud.displayName === 'string' && ud.displayName.trim()) {
+                  row.displayName = ud.displayName.trim();
                 }
-                if (uSnap.exists()) {
-                  const ud = uSnap.data() as Record<string, unknown>;
-                  const uu =
-                    typeof ud.username === 'string' && ud.username.trim()
-                      ? safeUsernameForHandle(ud.username) ?? undefined
-                      : undefined;
-                  if (uu) username = uu;
-                  if (!displayName && typeof ud.displayName === 'string' && ud.displayName.trim()) {
-                    displayName = ud.displayName.trim();
-                  }
-                  if (!email && typeof ud.email === 'string' && ud.email) email = ud.email;
+                if (!row.email && typeof ud.email === 'string' && ud.email.trim()) {
+                  row.email = ud.email.trim().toLowerCase();
                 }
               } catch {
                 /* ignore */
               }
-
-              const listLabel = fanHubListLabel(username ?? null, displayName, email, prefName);
-
-              return {
-                uid: fanId,
-                displayName: displayName ?? undefined,
-                username,
-                email: email ?? '',
-                memberId: fanId,
-                listLabel,
-              };
             })
           );
-          list.push(...part);
         }
+
+        const list: FanOption[] = rows
+          .map((row) => ({
+            uid: row.key,
+            displayName: row.displayName ?? undefined,
+            username: row.username,
+            email: row.email ?? '',
+            memberId: row.key,
+            listLabel: fanHubListLabel(row.username ?? null, row.displayName, row.email, row.prefName),
+          }))
+          .sort((a, b) => a.listLabel.localeCompare(b.listLabel));
+
         setFans(list);
       })
       .catch(() => setFans([]))

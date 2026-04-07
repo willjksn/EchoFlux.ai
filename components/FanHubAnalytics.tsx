@@ -409,12 +409,16 @@ function EngagementMediaThumb({ url, isVideo }: { url: string | null; isVideo: b
     );
   }
   if (isVideo) {
+    const videoSrc = url.includes("#t=") ? url : `${url}#t=0.1`;
     return (
       <video
-        src={url}
+        src={videoSrc}
+        poster={url}
         className="w-full h-full object-cover bg-black"
         muted
         playsInline
+        autoPlay
+        loop
         preload="metadata"
         aria-hidden
       />

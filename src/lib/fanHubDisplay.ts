@@ -41,6 +41,8 @@ function safeDisplayNameForHandle(
 ): string | null {
   const d = displayName?.trim();
   if (!d) return null;
+  const normalized = d.toLowerCase();
+  if (normalized === "member" || normalized === "new user" || normalized === "user") return null;
   const em = email?.trim();
   if (em && eqIgnoreCase(d, em)) return null;
   if (d.includes("@")) {
@@ -54,7 +56,9 @@ function safeDisplayNameForHandle(
 /** Stored name (e.g. fan card) — skip generic placeholder and email duplicates. */
 function safeNameField(name: string | null | undefined, email: string | null | undefined): string | null {
   const n = name?.trim();
-  if (!n || n.toLowerCase() === "member") return null;
+  if (!n) return null;
+  const normalized = n.toLowerCase();
+  if (normalized === "member" || normalized === "new user" || normalized === "user") return null;
   const em = email?.trim();
   if (em && eqIgnoreCase(n, em)) return null;
   if (n.includes("@")) {

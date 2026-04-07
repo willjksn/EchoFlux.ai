@@ -166,6 +166,7 @@ const ClockIcon = () => (
 export const FanHubPosts: React.FC = () => {
   const { user, showToast } = useAppContext();
   const [showComposer, setShowComposer] = useState(false);
+  const [editingPostId, setEditingPostId] = useState<string | null>(null);
   
   // Media state
   const [media, setMedia] = useState<MediaItem[]>([]);
@@ -992,14 +993,20 @@ DO NOT include hashtags.`;
         (postData as Record<string, unknown>).overlayItalic = overlayItalic;
       }
       
-      // Save to Firestore
-      await addDoc(collection(db, "creators", creatorId, "fanPosts"), postData);
+      // Save to Firestore (update existing when editing, otherwise create new)
+      if (editingPostId) {
+        await setDoc(doc(db, "creators", creatorId, "fanPosts", editingPostId), postData, { merge: true });
+      } else {
+        await addDoc(collection(db, "creators", creatorId, "fanPosts"), postData);
+      }
       
       const message = status === "draft" 
         ? "Draft saved" 
         : status === "scheduled" 
           ? `Scheduled for ${postDate.toLocaleDateString()} at ${calendarTime}`
-          : "Post published!";
+          : editingPostId
+            ? "Post updated"
+            : "Post published!";
       showToast?.(message, "success");
       
       // Reset form
@@ -1074,7 +1081,87 @@ DO NOT include hashtags.`;
     setShowTipButton(true);
     setScheduleDate("");
     setScheduleTime("");
+    setEditingPostId(null);
   };
+
+  const openComposerForEdit = useCallback((post: FeedPost) => {
+    stopMediaRecorderSafe(mediaRecorderRef.current);
+    stopMediaRecorderSafe(videoMediaRecorderRef.current);
+    setVoiceMeterStream((prev) => {
+      prev?.getTracks().forEach((t) => t.stop());
+      return null;
+    });
+    setVideoLiveStream((prev) => {
+      prev?.getTracks().forEach((t) => t.stop());
+      return null;
+    });
+    setIsRecording(false);
+    setIsRecordingVideo(false);
+    setRecordingCountdown(null);
+
+    const urls = Array.isArray(post.mediaUrls) ? post.mediaUrls : [];
+    const types = Array.isArray(post.mediaTypes) ? post.mediaTypes : [];
+    const mediaFromPost: MediaItem[] = urls
+      .filter((u): u is string => typeof u === "string" && u.trim().length > 0)
+      .map((url, index) => ({
+        url,
+        type: types[index] === "video" ? "video" : "image",
+        fromVault: true,
+      }));
+    const audioFromPost: MediaItem[] = (Array.isArray(post.audioUrls) ? post.audioUrls : [])
+      .filter((u): u is string => typeof u === "string" && u.trim().length > 0)
+      .map((url) => ({
+        url,
+        type: "audio",
+        fromVault: true,
+      }));
+
+    setMedia([...mediaFromPost, ...audioFromPost]);
+    setCaption(post.body || "");
+    setHideLikeCounts(!!post.hideLikeCounts);
+    setHideComments(!!post.hideComments);
+    setHideLikes(!!post.hideLikes);
+    setShowTipButton(post.showTipButton !== false);
+    setLockEnabled(!!post.lockedContent?.enabled);
+    setLockPrice(
+      typeof post.lockedContent?.priceCents === "number" && Number.isFinite(post.lockedContent.priceCents)
+        ? (post.lockedContent.priceCents / 100).toFixed(2)
+        : ""
+    );
+    setLockPreviewMediaIndex(
+      typeof post.lockedContent?.previewMediaIndex === "number" && Number.isFinite(post.lockedContent.previewMediaIndex)
+        ? Math.max(0, post.lockedContent.previewMediaIndex)
+        : 0
+    );
+    setPollEnabled(!!post.poll);
+    setPollQuestion(post.poll?.question || "");
+    setPollOptions(
+      Array.isArray(post.poll?.options) && post.poll.options.length >= 2
+        ? post.poll.options
+        : ["", ""]
+    );
+    setTipGoalEnabled(!!post.tipGoal);
+    setTipGoalDescription(post.tipGoal?.description || "");
+    setTipGoalAmount(
+      typeof post.tipGoal?.targetCents === "number" && Number.isFinite(post.tipGoal.targetCents)
+        ? (post.tipGoal.targetCents / 100).toFixed(2)
+        : ""
+    );
+    const overlayTextValue = typeof post.overlayText === "string" ? post.overlayText : "";
+    setOverlayEnabled(overlayTextValue.trim().length > 0);
+    setOverlayText(overlayTextValue);
+    setOverlayStyle((post.captionStyle as CaptionStyle) || "static");
+    setOverlayColor(typeof post.overlayTextColor === "string" ? post.overlayTextColor : "#ffffff");
+    setOverlaySize(
+      typeof post.overlayTextSize === "number" && Number.isFinite(post.overlayTextSize)
+        ? post.overlayTextSize
+        : 18
+    );
+    setOverlayHighlight(!!post.overlayHighlight);
+    setOverlayItalic(!!post.overlayItalic);
+    setEditingPostId(post.id);
+    setShowComposer(true);
+  }, []);
 
   if (!user) {
     return (
@@ -1112,7 +1199,7 @@ DO NOT include hashtags.`;
             {/* Header */}
             <div className="flex items-center justify-between p-5 border-b border-pink-100 dark:border-gray-700">
               <div>
-                <h3 className="text-xl font-bold text-gray-900 dark:text-white">Create Post</h3>
+                <h3 className="text-xl font-bold text-gray-900 dark:text-white">{editingPostId ? "Edit Post" : "Create Post"}</h3>
                 <p className="text-sm text-gray-500 dark:text-gray-400">Share with your fans</p>
               </div>
               <button
@@ -1935,7 +2022,7 @@ DO NOT include hashtags.`;
       )}
 
       {/* Feed Admin View */}
-      <FanHubFeed isAdminMode />
+      <FanHubFeed isAdminMode onEditPostRequest={openComposerForEdit} />
     </div>
   );
 };

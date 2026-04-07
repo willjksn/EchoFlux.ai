@@ -464,7 +464,7 @@ function FeedCard({
   onCommentsUpdated?: (postId: string, comments: FeedPost["comments"]) => void;
   onSavedUpdated?: (savedIds: string[]) => void;
   isAdminMode?: boolean;
-  onEditPost?: (postId: string) => void;
+  onEditPost?: (post: FeedPost) => void;
   onDeletePost?: (postId: string) => void;
   onToggleVisibility?: (postId: string, currentStatus: string) => void;
   onTogglePin?: (postId: string, currentlyPinned: boolean) => void;
@@ -879,7 +879,7 @@ function FeedCard({
                   className="feed-card-admin-menu-item"
                   onClick={() => {
                     setAdminMenuOpen(false);
-                    onEditPost?.(post.id);
+                    onEditPost?.(post);
                   }}
                 >
                   <EditIcon />
@@ -1349,7 +1349,10 @@ function FeedCard({
   );
 }
 
-export const FanHubFeed: React.FC<{ isAdminMode?: boolean }> = ({ isAdminMode = false }) => {
+export const FanHubFeed: React.FC<{
+  isAdminMode?: boolean;
+  onEditPostRequest?: (post: FeedPost) => void;
+}> = ({ isAdminMode = false, onEditPostRequest }) => {
   const { user, setActivePage, showToast, openPaymentModal } = useAppContext();
   const [posts, setPosts] = useState<FeedPost[]>([]);
   const [loading, setLoading] = useState(true);
@@ -1567,12 +1570,19 @@ export const FanHubFeed: React.FC<{ isAdminMode?: boolean }> = ({ isAdminMode = 
     setSavedPostIds(savedIds);
   }, []);
 
-  const handleEditPost = useCallback((postId: string) => {
-    // Navigate to compose page with edit mode
-    // Store the post ID to edit in sessionStorage for the compose page to pick up
-    sessionStorage.setItem("editPostId", postId);
-    setActivePage?.("compose");
-  }, [setActivePage]);
+  const handleEditPost = useCallback(
+    (post: FeedPost) => {
+      // Prefer in-place editor when host component provides one.
+      if (onEditPostRequest) {
+        onEditPostRequest(post);
+        return;
+      }
+      // Fallback for older shells: route to global compose page.
+      sessionStorage.setItem("editPostId", post.id);
+      setActivePage?.("compose");
+    },
+    [onEditPostRequest, setActivePage]
+  );
 
   const handleDeletePost = useCallback(async (postId: string) => {
     if (!db || !creatorId || deletingPostId) return;
