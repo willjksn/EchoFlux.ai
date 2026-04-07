@@ -22,6 +22,7 @@ import { defaultSettings } from '../constants';
 import { getModelUsageAnalytics, type ModelUsageStats } from '../src/services/modelUsageService';
 import { hasActiveStripeEchofluxSubscription } from '../src/lib/echofluxStripeMrr';
 import { parseDateLike, formatRemainingAccessForFanRow } from '../src/lib/memberAccessEnd';
+import { authUidFromFanDocId, parseCompoundFanDocumentId } from '../src/lib/compoundFanDocId';
 
 // Fallback sample stats so the admin overview is visible even if the analytics
 // API is unreachable locally. These reflect the deployment numbers the user described.
@@ -160,6 +161,7 @@ const planPrices: Record<PlanKey, number> = {
     'Starter': 99,
     'OnlyFansStudio': 79,
 };
+const FIREBASE_UID_RE = /^[A-Za-z0-9]{20,36}$/;
 
 type FanMembershipLink = {
     creatorId: string;
@@ -783,6 +785,14 @@ export const AdminDashboard: React.FC = () => {
         if (user.accountOrigin === 'fan_hub') return true;
         return false;
     }, [getFanHubMembershipsForUser]);
+
+    const isEchofluxWorkspaceUser = useCallback((user: User): boolean => {
+        return (
+            user.role === 'Admin' ||
+            creatorIds.has(user.id) ||
+            hasActiveStripeEchofluxSubscription(user)
+        );
+    }, [creatorIds]);
     
     const filteredUsers = useMemo(() => {
         const filtered = users.filter(user => {
@@ -793,11 +803,7 @@ export const AdminDashboard: React.FC = () => {
             if (userOriginFilter === 'all') return true;
             if (userOriginFilter === 'fan_hub') return hasFanHubMembership(user);
             // EchoFlux filter should show creator-workspace users only (not fan-only members).
-            const isWorkspaceUser =
-                user.role === 'Admin' ||
-                creatorIds.has(user.id) ||
-                hasActiveStripeEchofluxSubscription(user);
-            return isWorkspaceUser && !hasFanHubMembership(user);
+            return isEchofluxWorkspaceUser(user) && !hasFanHubMembership(user);
         });
         
         // Separate admins from regular users
@@ -811,7 +817,7 @@ export const AdminDashboard: React.FC = () => {
         
         // Return admins first, then regular users
         return [...adminUsers, ...regularUsers];
-    }, [users, searchTerm, userOriginFilter, hasFanHubMembership, creatorIds]);
+    }, [users, searchTerm, userOriginFilter, hasFanHubMembership, isEchofluxWorkspaceUser]);
 
     const membershipOnlyFanRows = useMemo<MembershipOnlyFanRow[]>(() => {
         if (userOriginFilter === 'echoflux') return [];
@@ -819,13 +825,18 @@ export const AdminDashboard: React.FC = () => {
             fanHubSubscriberFilter === 'all' ? fanHubMembershipsAllByFanId : fanHubMembershipsByFanId;
         const profileSource =
             fanHubSubscriberFilter === 'all' ? fanHubMemberProfilesAllByFanId : fanHubMemberProfilesByFanId;
-        const matchedKeys = new Set<string>();
+        const matchedUidKeys = new Set<string>();
+        const matchedEmailKeys = new Set<string>();
+        const matchedRawKeys = new Set<string>();
         users.forEach((u) => {
             if (u.role === 'Admin') return;
             if (!hasFanHubMembership(u)) return;
-            matchedKeys.add(u.id);
+            const rawId = String(u.id || '').trim();
+            if (rawId) matchedRawKeys.add(rawId.toLowerCase());
+            const uidFromId = authUidFromFanDocId(rawId);
+            if (FIREBASE_UID_RE.test(uidFromId)) matchedUidKeys.add(uidFromId);
             const em = typeof u.email === 'string' ? u.email.trim().toLowerCase() : '';
-            if (em) matchedKeys.add(em);
+            if (em) matchedEmailKeys.add(em);
         });
 
         const search = searchTerm.trim().toLowerCase();
@@ -833,8 +844,23 @@ export const AdminDashboard: React.FC = () => {
         for (const [fanKey, membershipsRaw] of Object.entries(membershipSource)) {
             const memberships = Array.isArray(membershipsRaw) ? membershipsRaw : [];
             if (memberships.length === 0) continue;
-            if (matchedKeys.has(fanKey)) continue;
+            const rawFanKey = fanKey.trim();
+            const rawFanKeyLower = rawFanKey.toLowerCase();
+            const parsed = parseCompoundFanDocumentId(rawFanKey);
+            const canonicalUid = authUidFromFanDocId(rawFanKey);
             const profile = profileSource[fanKey];
+            const emailFromProfile =
+                typeof profile?.email === 'string' && profile.email.trim()
+                    ? profile.email.trim().toLowerCase()
+                    : null;
+            const emailCandidates = new Set<string>();
+            if (rawFanKey.includes('@')) emailCandidates.add(rawFanKeyLower);
+            if (parsed.emailFromId) emailCandidates.add(parsed.emailFromId.toLowerCase());
+            if (emailFromProfile) emailCandidates.add(emailFromProfile);
+            const hasUidMatch = FIREBASE_UID_RE.test(canonicalUid) && matchedUidKeys.has(canonicalUid);
+            const hasRawMatch = matchedRawKeys.has(rawFanKeyLower);
+            const hasEmailMatch = Array.from(emailCandidates).some((email) => matchedEmailKeys.has(email));
+            if (hasUidMatch || hasRawMatch || hasEmailMatch) continue;
             const email = profile?.email || (fanKey.includes('@') ? fanKey.toLowerCase() : null);
             const usernameRaw = profile?.username ? profile.username.replace(/^@/, '').trim().toLowerCase() : '';
             const username = usernameRaw ? `@${usernameRaw}` : null;
@@ -1959,8 +1985,14 @@ export const AdminDashboard: React.FC = () => {
                                 // Separate admins, Fan Hub members, and regular EchoFlux users
                                 const adminUsers = visibleUsers.filter(user => user.role === 'Admin');
                                 const nonAdminUsers = visibleUsers.filter(user => user.role !== 'Admin');
-                                const fanHubUsers = nonAdminUsers.filter(user => hasFanHubMembership(user));
-                                const echofluxUsers = nonAdminUsers.filter(user => !hasFanHubMembership(user));
+                                // Keep sectioning logic aligned with the strict filter logic above.
+                                // Non-workspace users should never appear under the EchoFlux section.
+                                const fanHubUsers = nonAdminUsers.filter(
+                                    (user) => hasFanHubMembership(user) || !isEchofluxWorkspaceUser(user)
+                                );
+                                const echofluxUsers = nonAdminUsers.filter(
+                                    (user) => isEchofluxWorkspaceUser(user) && !hasFanHubMembership(user)
+                                );
                                 
                                 // Find wil_jackson@icloud.com in current page
                                 const wilJacksonUser = visibleUsers.find(user => user.email === 'wil_jackson@icloud.com');

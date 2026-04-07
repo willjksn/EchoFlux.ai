@@ -2286,6 +2286,9 @@ export const FanStorefrontView: React.FC = () => {
         body: JSON.stringify({
           creatorId: creator.creatorId,
           type: "subscription",
+          ...(typeof creator.monetization?.monthlyPrice === "number"
+            ? { subscriptionPriceCents: Math.max(100, Math.round(creator.monetization.monthlyPrice)) }
+            : {}),
           ...(successUrl ? { successUrl } : {}),
           ...(cancelUrl ? { cancelUrl } : {}),
         }),
@@ -3608,21 +3611,24 @@ export const FanStorefrontView: React.FC = () => {
             onSuccess={() => {
               setIsLoggedIn(true);
               setFanAuthOpen(false);
-              // Always land fans on Home/Feed after auth; entitlement effects can still gate to purchases if needed.
-              const nextTab: FanStorefrontMemberTab = "feed";
-              setActiveTab(nextTab);
-              // Immediate visual feedback for free pages; entitlement fetch will reconcile exact status.
+              // Free pages: auth can immediately join and enter member hub.
               if (creator.monetization?.freeAccessEnabled === true) {
+                const nextTab: FanStorefrontMemberTab = "feed";
+                setActiveTab(nextTab);
                 setSubscribed(true);
                 setMembershipType("free");
+                if (typeof window !== "undefined" && creator.handle?.trim()) {
+                  applyFanStorefrontMemberUrl(nextTab, {
+                    showLanding: false,
+                    creatorHandle: creator.handle,
+                    stripSearchKeys: ["landing", "login", "signup"],
+                  });
+                }
+                return;
               }
-              if (typeof window !== "undefined" && creator.handle?.trim()) {
-                applyFanStorefrontMemberUrl(nextTab, {
-                  showLanding: false,
-                  creatorHandle: creator.handle,
-                  stripSearchKeys: ["landing", "login", "signup"],
-                });
-              }
+
+              // Paid pages: after auth, go directly to Stripe checkout (do NOT enter member hub yet).
+              void startSubscriptionCheckout({ auto: true });
             }}
             initialView={fanAuthView}
             creatorId={creator.creatorId}

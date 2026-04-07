@@ -27,6 +27,7 @@ type FanProfile = {
 };
 
 const ACTIVE_STATUSES = new Set(["active", "trialing", "free", "past_due"]);
+const FIREBASE_UID_RE = /^[A-Za-z0-9]{20,36}$/;
 
 function hasPlatformAdminAccess(userData: Record<string, unknown> | undefined): boolean {
   if (!userData) return false;
@@ -67,6 +68,31 @@ function normalizeUsername(raw: unknown): string | null {
   return clean;
 }
 
+function parseCompoundFanId(raw: unknown): { authUid: string | null; emailFromId: string | null } {
+  const id = typeof raw === "string" ? raw.trim() : "";
+  if (!id) return { authUid: null, emailFromId: null };
+  const m = id.match(/^([A-Za-z0-9]{20,36})-(.+@.+)$/);
+  if (m) {
+    return { authUid: m[1], emailFromId: m[2].trim().toLowerCase() };
+  }
+  if (FIREBASE_UID_RE.test(id)) return { authUid: id, emailFromId: null };
+  if (id.includes("@")) return { authUid: null, emailFromId: id.toLowerCase() };
+  return { authUid: null, emailFromId: null };
+}
+
+function deriveCanonicalFanKey(rawDocId: string, rawDataId: unknown, rawEmail: unknown): { key: string; emailHint: string | null } {
+  const docParsed = parseCompoundFanId(rawDocId);
+  const dataParsed = parseCompoundFanId(rawDataId);
+  const directEmail =
+    typeof rawEmail === "string" && rawEmail.trim() ? rawEmail.trim().toLowerCase() : null;
+  const authUid = docParsed.authUid || dataParsed.authUid;
+  if (authUid) return { key: authUid, emailHint: directEmail || docParsed.emailFromId || dataParsed.emailFromId || null };
+  const email = directEmail || docParsed.emailFromId || dataParsed.emailFromId;
+  if (email) return { key: email, emailHint: email };
+  const fallback = (typeof rawDataId === "string" && rawDataId.trim()) || rawDocId;
+  return { key: String(fallback).trim(), emailHint: null };
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== "GET") return res.status(405).json({ error: "Method not allowed" });
 
@@ -105,7 +131,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         updatedAt?: unknown;
       };
 
-      const fanId = typeof data.id === "string" && data.id.trim() ? data.id.trim() : docSnap.id;
+      const identity = deriveCanonicalFanKey(docSnap.id, data.id, data.email);
+      const fanId = identity.key;
       const creatorId =
         (typeof data.creatorId === "string" && data.creatorId) || getCreatorIdFromPath(docSnap.ref.path);
       const status = typeof data.subscriptionStatus === "string" ? data.subscriptionStatus : "";
@@ -116,7 +143,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const rawDisplayName =
           typeof data.displayName === "string" && data.displayName.trim() ? data.displayName.trim() : "";
         const rawEmail =
-          typeof data.email === "string" && data.email.trim() ? data.email.trim().toLowerCase() : "";
+          typeof data.email === "string" && data.email.trim()
+            ? data.email.trim().toLowerCase()
+            : (identity.emailHint || "");
         const rawUsername =
           (typeof data.username === "string" && data.username.trim()) ||
           (typeof data.memberUsername === "string" && data.memberUsername.trim()) ||
