@@ -247,6 +247,12 @@ const MediaVideoIcon = () => (
   </svg>
 );
 
+const PlayIcon = () => (
+  <svg className="feed-card-play-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+    <path d="M8 5v14l11-7z" />
+  </svg>
+);
+
 const CarouselChevronLeft = () => (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
     <path d="M15 18l-6-6 6-6" />
@@ -1669,15 +1675,18 @@ export const FanMemberFeed: React.FC<FanMemberFeedProps> = ({
                   >
                     {firstUrl ? (
                       isVideo ? (
-                        <video
-                          src={firstUrl.includes("#t=") ? firstUrl : `${firstUrl}#t=0.1`}
-                          poster={firstUrl}
-                          muted
-                          autoPlay
-                          loop
-                          playsInline
-                          preload="metadata"
-                        />
+                        <>
+                          <video
+                            src={firstUrl.includes("#t=") ? firstUrl : `${firstUrl}#t=0.1`}
+                            poster={firstUrl}
+                            muted
+                            playsInline
+                            preload="metadata"
+                          />
+                          <span className="feed-grid-video-overlay" aria-hidden>
+                            <PlayIcon />
+                          </span>
+                        </>
                       ) : (
                         <img src={firstUrl} alt="" loading="lazy" />
                       )

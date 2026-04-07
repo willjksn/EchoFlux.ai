@@ -4,6 +4,7 @@ import { verifyAuth } from "./verifyAuth.js";
 import { sendEmail } from "./_mailer.js";
 
 type Body = {
+  creatorId?: string;
   fanId?: string;
   email?: string;
   authUid?: string;
@@ -42,14 +43,27 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(401).json({ error: "Unauthorized" });
   }
 
-  const creatorId = decoded.uid;
   const db = getAdminDb();
+  const body = (req.body || {}) as Body;
+  const requestedCreatorId = typeof body.creatorId === "string" ? body.creatorId.trim() : "";
+  const creatorId = requestedCreatorId || decoded.uid;
+
   const creatorSnap = await db.collection("creators").doc(creatorId).get();
   if (!creatorSnap.exists) {
-    return res.status(403).json({ error: "Creator account required" });
+    return res.status(404).json({ error: "Creator account not found" });
   }
 
-  const body = (req.body || {}) as Body;
+  if (decoded.uid !== creatorId) {
+    const callerSnap = await db.collection("users").doc(decoded.uid).get();
+    const caller = (callerSnap.data() || {}) as Record<string, unknown>;
+    const role = typeof caller.role === "string" ? caller.role.trim().toLowerCase() : "";
+    const isPlatformAdmin =
+      role === "admin" || role === "owner" || role === "superadmin" || caller.isAdmin === true || caller.isOwner === true;
+    if (!isPlatformAdmin) {
+      return res.status(403).json({ error: "Only the creator or platform admin can send fan password resets" });
+    }
+  }
+
   const fanId = typeof body.fanId === "string" ? body.fanId.trim() : "";
   const requestedEmail = typeof body.email === "string" ? body.email.trim().toLowerCase() : "";
   const requestedAuthUid = typeof body.authUid === "string" ? body.authUid.trim() : "";

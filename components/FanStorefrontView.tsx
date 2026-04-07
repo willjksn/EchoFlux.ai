@@ -793,6 +793,7 @@ export const FanStorefrontView: React.FC = () => {
   const [cancelMembershipLoading, setCancelMembershipLoading] = useState(false);
   const [cancelMembershipMessage, setCancelMembershipMessage] = useState<string | null>(null);
   const [membershipType, setMembershipType] = useState<"free" | "paid" | null>(null);
+  const [billedSubscriptionPriceCents, setBilledSubscriptionPriceCents] = useState<number | null>(null);
   const [limitedMemberAccess, setLimitedMemberAccess] = useState(false);
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const [entitlementLoading, setEntitlementLoading] = useState(false);
@@ -1747,6 +1748,11 @@ export const FanStorefrontView: React.FC = () => {
             : [];
         setSubscribed(!!(data as { subscribed?: boolean }).subscribed);
         setMembershipType(((data as { membershipType?: "free" | "paid" | null }).membershipType ?? null) as "free" | "paid" | null);
+        setBilledSubscriptionPriceCents(
+          typeof (data as { billedSubscriptionPriceCents?: unknown }).billedSubscriptionPriceCents === "number"
+            ? Math.max(0, Math.round((data as { billedSubscriptionPriceCents: number }).billedSubscriptionPriceCents))
+            : null
+        );
         setMemberUsernameRequired(!!(data as { memberUsernameRequired?: boolean }).memberUsernameRequired);
         setUnlockedProductIds(nextUnlockedProducts);
         setUnlockedFanPostIds(nextUnlockedPosts);
@@ -1760,6 +1766,7 @@ export const FanStorefrontView: React.FC = () => {
         if (gen === entitlementFetchGen.current) {
           setSubscribed(false);
           setMembershipType(null);
+          setBilledSubscriptionPriceCents(null);
           setMemberUsernameRequired(false);
           setUnlockedFanPostIds([]);
           setLimitedMemberAccess(false);
@@ -1791,6 +1798,11 @@ export const FanStorefrontView: React.FC = () => {
     setSubscribed(!!(data as { subscribed?: boolean }).subscribed);
     setMembershipType(
       ((data as { membershipType?: "free" | "paid" | null }).membershipType ?? null) as "free" | "paid" | null
+    );
+    setBilledSubscriptionPriceCents(
+      typeof (data as { billedSubscriptionPriceCents?: unknown }).billedSubscriptionPriceCents === "number"
+        ? Math.max(0, Math.round((data as { billedSubscriptionPriceCents: number }).billedSubscriptionPriceCents))
+        : null
     );
     setMemberUsernameRequired(!!(data as { memberUsernameRequired?: boolean }).memberUsernameRequired);
     setUnlockedProductIds(nextUnlockedProducts);
@@ -2711,7 +2723,11 @@ export const FanStorefrontView: React.FC = () => {
         await updatePassword(auth.currentUser, next);
         showToast("Password updated.", "success");
       } else {
-        await sendPasswordResetEmail(auth, email);
+        const actionCodeSettings = {
+          url: `${window.location.origin}/reset-password?email=${encodeURIComponent(email)}`,
+          handleCodeInApp: false,
+        };
+        await sendPasswordResetEmail(auth, email, actionCodeSettings);
         showToast("Password reset email sent. Open your email to finish changing password.", "success");
       }
       setPasswordCurrent("");
@@ -3396,7 +3412,11 @@ export const FanStorefrontView: React.FC = () => {
     ? "Staff access"
     : subscribed
       ? membershipType === "paid"
-        ? `Paid${typeof creator.monetization?.monthlyPrice === "number" ? ` • $${(creator.monetization.monthlyPrice / 100).toFixed(2)}/mo` : ""}`
+        ? `Paid${typeof billedSubscriptionPriceCents === "number"
+            ? ` • $${(billedSubscriptionPriceCents / 100).toFixed(2)}/mo`
+            : typeof creator.monetization?.monthlyPrice === "number"
+              ? ` • $${(creator.monetization.monthlyPrice / 100).toFixed(2)}/mo`
+              : ""}`
         : "Free"
       : "Not active";
   const memberHubWelcomeLine = (() => {
@@ -3657,6 +3677,8 @@ export const FanStorefrontView: React.FC = () => {
       style={{ 
         fontFamily: globalFont,
         backgroundColor: bg,
+        minHeight: "100dvh",
+        paddingBottom: "env(safe-area-inset-bottom, 0px)",
         "--fan-primary": primary,
         "--fan-accent": primary,
         "--fan-accent-soft": `color-mix(in srgb, ${primary} 14%, transparent)`,
@@ -4672,8 +4694,10 @@ export const FanStorefrontView: React.FC = () => {
                         ? "Staff access: full member hub for support and QA (not a fan subscription)."
                         : subscribed
                           ? membershipType === "paid"
-                            ? `Paid membership is active${typeof creator.monetization?.monthlyPrice === "number"
-                                ? ` ($${(creator.monetization.monthlyPrice / 100).toFixed(2)}/mo)`
+                            ? `Paid membership is active${typeof billedSubscriptionPriceCents === "number"
+                                ? ` ($${(billedSubscriptionPriceCents / 100).toFixed(2)}/mo)`
+                                : typeof creator.monetization?.monthlyPrice === "number"
+                                  ? ` ($${(creator.monetization.monthlyPrice / 100).toFixed(2)}/mo)`
                                 : "."}`
                             : creator.monetization?.freeAccessEnabled
                               ? "Free membership is active."

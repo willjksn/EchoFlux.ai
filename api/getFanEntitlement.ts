@@ -17,6 +17,22 @@ function isFreeLikeStatus(status: unknown): boolean {
   return s === "free";
 }
 
+function createdAtToMs(createdAt: unknown): number {
+  if (createdAt == null) return 0;
+  if (typeof (createdAt as { toDate?: () => Date }).toDate === "function") {
+    return (createdAt as { toDate: () => Date }).toDate().getTime();
+  }
+  if (createdAt instanceof Date) return createdAt.getTime();
+  if (typeof createdAt === "string") {
+    const t = Date.parse(createdAt);
+    return Number.isNaN(t) ? 0 : t;
+  }
+  if (typeof createdAt === "number" && Number.isFinite(createdAt)) {
+    return createdAt < 1e12 ? createdAt * 1000 : createdAt;
+  }
+  return 0;
+}
+
 /**
  * Check if the current user (fan) has an active subscription/entitlement to the given creator.
  * Used by fan storefront: if subscribed, show Feed + Store + Messages; otherwise show landing.
@@ -291,6 +307,68 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       memberUsernameRequired = true;
     }
 
+    let billedSubscriptionPriceCents: number | null = null;
+    if (membershipType === "paid") {
+      const orderCandidates: Array<{ amountCents: number; createdAtMs: number }> = [];
+      const collectOrderCandidates = (
+        docs: Array<{ data: () => Record<string, unknown> }>
+      ) => {
+        for (const d of docs) {
+          const row = d.data() as Record<string, unknown>;
+          const status = typeof row.status === "string" ? row.status.trim().toLowerCase() : "";
+          if (status === "refunded") continue;
+          const amount =
+            typeof row.amountCents === "number" && Number.isFinite(row.amountCents)
+              ? Math.max(0, Math.round(row.amountCents))
+              : 0;
+          if (amount <= 0) continue;
+          const createdAtMs = createdAtToMs(row.createdAt);
+          orderCandidates.push({ amountCents: amount, createdAtMs });
+        }
+      };
+
+      const runOrderLookup = async (field: "fanId" | "fanEmail", value: string) => {
+        if (!value) return;
+        try {
+          const indexed = await db
+            .collection("orders")
+            .where("creatorId", "==", creatorId)
+            .where("type", "==", "subscription")
+            .where(field, "==", value)
+            .orderBy("createdAt", "desc")
+            .limit(12)
+            .get();
+          collectOrderCandidates(indexed.docs);
+          return;
+        } catch {
+          const fallback = await db
+            .collection("orders")
+            .where("creatorId", "==", creatorId)
+            .where("type", "==", "subscription")
+            .where(field, "==", value)
+            .limit(80)
+            .get()
+            .catch(() => null);
+          if (fallback) collectOrderCandidates(fallback.docs);
+        }
+      };
+
+      const fanIdCandidates = Array.from(
+        new Set([fanId, legacyFanDocId, fanEmail ? `${fanId}-${fanEmail}` : ""].filter((v): v is string => !!v))
+      );
+      for (const candidate of fanIdCandidates) {
+        await runOrderLookup("fanId", candidate);
+      }
+      if (fanEmail) {
+        await runOrderLookup("fanEmail", fanEmail);
+      }
+
+      if (orderCandidates.length > 0) {
+        orderCandidates.sort((a, b) => b.createdAtMs - a.createdAtMs);
+        billedSubscriptionPriceCents = orderCandidates[0].amountCents;
+      }
+    }
+
     return res.status(200).json({
       subscribed,
       membershipType,
@@ -299,6 +377,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       limitedMemberAccess,
       memberUsername,
       memberUsernameRequired,
+      billedSubscriptionPriceCents,
     });
   } catch (error: unknown) {
     console.error("getFanEntitlement error:", error);

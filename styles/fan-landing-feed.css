@@ -2941,8 +2941,14 @@
 
 /* Responsive */
 @media (max-width: 480px) {
+  .stormij-theme .storefront-member-header {
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+
   .fan-member-content {
-    padding: 1rem;
+    padding: 0.9rem 0.8rem calc(env(safe-area-inset-bottom, 0px) + 0.9rem);
   }
 
   .fan-member-about--settings {

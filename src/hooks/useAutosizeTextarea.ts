@@ -16,10 +16,18 @@ export function useAutosizeTextarea(value: string, options: Options = {}) {
   const resize = useCallback(() => {
     const el = ref.current;
     if (!el) return;
-    el.style.height = "0px";
+    // Important for mobile keyboards: avoid collapsing to 0px on every keystroke,
+    // which can cause viewport jump/scroll jitter on iOS/Android browsers.
+    el.style.height = "auto";
     const next = Math.min(Math.max(el.scrollHeight, minHeight), maxHeight);
-    el.style.height = `${next}px`;
-    el.style.overflowY = el.scrollHeight > maxHeight ? "auto" : "hidden";
+    const nextHeight = `${next}px`;
+    if (el.style.height !== nextHeight) {
+      el.style.height = nextHeight;
+    }
+    const nextOverflow = el.scrollHeight > maxHeight ? "auto" : "hidden";
+    if (el.style.overflowY !== nextOverflow) {
+      el.style.overflowY = nextOverflow;
+    }
   }, [maxHeight, minHeight]);
 
   useLayoutEffect(() => {

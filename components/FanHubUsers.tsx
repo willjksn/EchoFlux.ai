@@ -841,8 +841,8 @@ export const FanHubUsers: React.FC = () => {
         try {
           const token = auth.currentUser ? await auth.currentUser.getIdToken() : null;
           const CHUNK = 250;
-          const byUid: Record<string, { lastSignInTime: string | null; exists: boolean }> = {};
-          const byEmail: Record<string, { lastSignInTime: string | null; exists: boolean }> = {};
+          const byUid: Record<string, { lastSignInTime: string | null; exists: boolean; displayName: string | null }> = {};
+          const byEmail: Record<string, { lastSignInTime: string | null; exists: boolean; displayName: string | null }> = {};
           const totalChunks = Math.max(
             Math.ceil(loginLookupIds.length / CHUNK),
             Math.ceil(loginLookupEmails.length / CHUNK)
@@ -861,8 +861,8 @@ export const FanHubUsers: React.FC = () => {
             });
             if (!loginRes.ok) continue;
             const payload = (await loginRes.json().catch(() => ({}))) as {
-              byUid?: Record<string, { lastSignInTime: string | null; exists: boolean }>;
-              byEmail?: Record<string, { lastSignInTime: string | null; exists: boolean }>;
+              byUid?: Record<string, { lastSignInTime: string | null; exists: boolean; displayName: string | null }>;
+              byEmail?: Record<string, { lastSignInTime: string | null; exists: boolean; displayName: string | null }>;
             };
             Object.assign(byUid, payload.byUid || {});
             Object.assign(byEmail, payload.byEmail || {});
@@ -872,6 +872,16 @@ export const FanHubUsers: React.FC = () => {
             const email = String(u.email || "").trim().toLowerCase();
             const uidRow = uid ? byUid[uid] : undefined;
             const emailRow = email ? byEmail[email] : undefined;
+            const authDisplay =
+              (typeof uidRow?.displayName === "string" && uidRow.displayName.trim()) ||
+              (typeof emailRow?.displayName === "string" && emailRow.displayName.trim()) ||
+              "";
+            if (authDisplay) {
+              u.name = formatFanDisplayLabel(
+                { username: u.memberUsername || undefined, displayName: authDisplay, email: u.email || undefined },
+                { fallback: u.name || "Member" }
+              );
+            }
             const rawTimes = [uidRow?.lastSignInTime, emailRow?.lastSignInTime].filter(
               (v): v is string => typeof v === "string" && v.trim().length > 0
             );
@@ -1059,6 +1069,7 @@ export const FanHubUsers: React.FC = () => {
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
+            creatorId,
             fanId: fanUser.id,
             email: fanUser.email,
             authUid: fanUser.authUid || null,

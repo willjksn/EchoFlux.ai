@@ -437,7 +437,11 @@ export const FanAuthModal: React.FC<FanAuthModalProps> = ({
       return;
     }
     try {
-      await sendPasswordResetEmail(auth, em);
+      const actionCodeSettings = {
+        url: `${window.location.origin}/reset-password?email=${encodeURIComponent(em)}`,
+        handleCodeInApp: false,
+      };
+      await sendPasswordResetEmail(auth, em, actionCodeSettings);
       showToast?.("Check your email for a reset link.", "success");
       setForgotOpen(false);
     } catch (ex: unknown) {

@@ -60,6 +60,26 @@ function toLowerString(v: unknown): string {
   return typeof v === "string" ? v.trim().toLowerCase() : "";
 }
 
+function toLegacyAmountCents(raw: unknown): number {
+  if (typeof raw === "number" && Number.isFinite(raw)) {
+    const n = raw;
+    if (n <= 0) return 0;
+    if (Number.isInteger(n) && n >= 100) return Math.round(n);
+    if (n < 100) return Math.round(n * 100);
+    return Math.round(n);
+  }
+  if (typeof raw === "string") {
+    const cleaned = raw.replace(/[^0-9.\-]/g, "").trim();
+    if (!cleaned) return 0;
+    const parsed = Number.parseFloat(cleaned);
+    if (!Number.isFinite(parsed) || parsed <= 0) return 0;
+    if (cleaned.includes(".")) return Math.round(parsed * 100);
+    if (parsed < 100) return Math.round(parsed * 100);
+    return Math.round(parsed);
+  }
+  return 0;
+}
+
 function inferLegacyPurchaseType(d: Record<string, unknown>): "tip" | "product" {
   const type = toLowerString(d.type);
   if (type === "tip") return "tip";
@@ -222,10 +242,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         // Back-compat: older migrations wrote tip/store sales into top-level `purchases` only.
         // Include those rows in creator analytics so revenue totals stay accurate.
         const inferredType = inferLegacyPurchaseType(raw);
-        const amountCents =
-          typeof raw.amountCents === "number" && Number.isFinite(raw.amountCents)
-            ? Math.max(0, Math.round(raw.amountCents))
-            : 0;
+        const amountCents = (() => {
+          const direct =
+            typeof raw.amountCents === "number" && Number.isFinite(raw.amountCents)
+              ? Math.max(0, Math.round(raw.amountCents))
+              : 0;
+          if (direct > 0) return direct;
+          return toLegacyAmountCents(raw.amount);
+        })();
         if (amountCents <= 0) continue;
 
         const fanId =

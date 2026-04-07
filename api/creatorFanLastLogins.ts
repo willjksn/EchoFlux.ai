@@ -54,8 +54,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   const adminAuth = getAdminApp().auth();
-  const byUid: Record<string, { lastSignInTime: string | null; exists: boolean }> = {};
-  const byEmail: Record<string, { lastSignInTime: string | null; exists: boolean }> = {};
+  const byUid: Record<string, { lastSignInTime: string | null; exists: boolean; displayName: string | null }> = {};
+  const byEmail: Record<string, { lastSignInTime: string | null; exists: boolean; displayName: string | null }> = {};
 
   await Promise.all(
     authUids.map(async (uid) => {
@@ -65,9 +65,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           typeof user.metadata?.lastSignInTime === "string" && user.metadata.lastSignInTime.trim()
             ? user.metadata.lastSignInTime
             : null;
-        byUid[uid] = { lastSignInTime, exists: true };
+        const displayName = typeof user.displayName === "string" && user.displayName.trim() ? user.displayName.trim() : null;
+        byUid[uid] = { lastSignInTime, exists: true, displayName };
       } catch {
-        byUid[uid] = { lastSignInTime: null, exists: false };
+        byUid[uid] = { lastSignInTime: null, exists: false, displayName: null };
       }
     })
   );
@@ -80,9 +81,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           typeof user.metadata?.lastSignInTime === "string" && user.metadata.lastSignInTime.trim()
             ? user.metadata.lastSignInTime
             : null;
-        byEmail[email] = { lastSignInTime, exists: true };
+        const displayName = typeof user.displayName === "string" && user.displayName.trim() ? user.displayName.trim() : null;
+        byEmail[email] = { lastSignInTime, exists: true, displayName };
       } catch {
-        byEmail[email] = { lastSignInTime: null, exists: false };
+        byEmail[email] = { lastSignInTime: null, exists: false, displayName: null };
       }
     })
   );
