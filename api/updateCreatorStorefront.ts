@@ -106,10 +106,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         body.publicTreatsOnLanding !== undefined ? body.publicTreatsOnLanding : existingData?.publicTreatsOnLanding,
       updatedAt: new Date().toISOString(),
     };
-    const safePayload = omitUndefinedDeep(payload) as Record<string, unknown>;
-
     if (handleChanged) {
       await db.runTransaction(async (tx) => {
+        const txPayload = omitUndefinedDeep(payload) as Record<string, unknown>;
         if (oldHandle && HANDLE_REGEX.test(oldHandle)) {
           const oldHandleRef = db.collection("creatorHandles").doc(oldHandle);
           const oldSnap = await tx.get(oldHandleRef);
@@ -134,12 +133,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           }
           tx.set(newHandleRef, { creatorId });
         }
-        tx.set(creatorRef, safePayload, { merge: true });
+        tx.set(creatorRef, txPayload, { merge: true });
       });
     } else if (handle && HANDLE_REGEX.test(handle)) {
       // Keep creatorHandles mapping in sync even when handle text didn't change.
       // This repairs legacy mismatches (e.g. storefront resolves to a placeholder creatorId).
       await db.runTransaction(async (tx) => {
+        const txPayload = omitUndefinedDeep(payload) as Record<string, unknown>;
         const reservedUsernameRef = db.collection("usernames").doc(handle);
         const reservedUsernameSnap = await tx.get(reservedUsernameRef);
         if (reservedUsernameSnap.exists) {
@@ -155,13 +155,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         if (canRepairMapping) {
           tx.set(handleRef, { creatorId });
         }
-        tx.set(creatorRef, safePayload, { merge: true });
+        tx.set(creatorRef, txPayload, { merge: true });
       });
     } else {
+      const safePayload = omitUndefinedDeep(payload) as Record<string, unknown>;
       await creatorRef.set(safePayload, { merge: true });
     }
 
-    return res.status(200).json({ success: true, handle: safePayload.handle });
+    const responsePayload = omitUndefinedDeep(payload) as Record<string, unknown>;
+    return res.status(200).json({ success: true, handle: responsePayload.handle });
   } catch (e: unknown) {
     console.error("updateCreatorStorefront error:", e);
     const msg = e instanceof Error ? e.message : "Update failed";
