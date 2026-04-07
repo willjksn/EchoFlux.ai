@@ -187,11 +187,22 @@ function csvEscapeCell(value: string | number): string {
   return s;
 }
 
+function normalizeAnalyticsOrderType(order: Record<string, unknown>): "tip" | "unlock" | "subscription" | "treat" {
+  const raw = String(order.type ?? order.productType ?? "").trim().toLowerCase();
+  if (raw === "tip") return "tip";
+  if (raw === "unlock" || raw === "unlock_media" || raw === "post_unlock") return "unlock";
+  if (raw === "subscription") return "subscription";
+  // Legacy/backfill safety: some tip rows are typed inconsistently but still carry tipHandle.
+  if (typeof order.tipHandle === "string" && order.tipHandle.trim()) return "tip";
+  return "treat";
+}
+
 /** Creator-facing export labels (not internal order types). */
 function orderRowExportType(typeRaw: string): string {
-  if (typeRaw === "tip") return "Tip";
-  if (typeRaw === "unlock" || typeRaw === "unlock_media" || typeRaw === "post_unlock") return "Content unlock";
-  if (typeRaw === "subscription") return "Subscription";
+  const normalized = String(typeRaw || "").trim().toLowerCase();
+  if (normalized === "tip") return "Tip";
+  if (normalized === "unlock" || normalized === "unlock_media" || normalized === "post_unlock") return "Content unlock";
+  if (normalized === "subscription") return "Subscription";
   return "Store";
 }
 
@@ -240,7 +251,7 @@ function buildFebThroughCurrentMonthlyRows(
       const orderDate = new Date(o.createdAt ?? 0);
       if (Number.isNaN(orderDate.getTime()) || orderDate < start || orderDate > end) continue;
       const amount = o.amountCents || 0;
-      const typ = o.type || o.productType || "";
+      const typ = normalizeAnalyticsOrderType(o as Record<string, unknown>);
       if (typ === "tip") tipsCents += amount;
       else if (typ === "subscription") subscriptionsCents += amount;
       else storeCents += amount;
@@ -419,9 +430,8 @@ function EngagementMediaThumb({ url, isVideo }: { url: string | null; isVideo: b
         className="w-full h-full object-cover bg-black"
         muted
         playsInline
-        autoPlay
-        loop
         preload="metadata"
+        controls={false}
         aria-hidden
       />
     );
@@ -474,7 +484,8 @@ export const FanHubAnalytics: React.FC = () => {
       const rec = o as Record<string, unknown>;
       const date =
         typeof rec.createdAt === "string" ? String(rec.createdAt).slice(0, 10) : "";
-      const type = orderRowExportType(String(rec.type || rec.productType || ""));
+      const normalized = normalizeAnalyticsOrderType(rec);
+      const type = orderRowExportType(normalized === "unlock" ? "post_unlock" : normalized);
       const amt = ((Number(rec.amountCents) || 0) / 100).toFixed(2);
       const fanName = String(rec.fanName ?? "");
       const fanEmail = String(rec.fanEmail ?? rec.fanId ?? "");
@@ -532,14 +543,14 @@ export const FanHubAnalytics: React.FC = () => {
 
       filteredOrders.forEach((order: any) => {
         const amount = order.amountCents || 0;
-        const type = order.type || order.productType || "";
+        const type = normalizeAnalyticsOrderType(order as Record<string, unknown>);
         const fanId = typeof order.fanId === "string" ? order.fanId : "";
         const isGuest = fanId.startsWith("guest_") || fanId.startsWith("guest_tip_") || fanId.startsWith("guest_session_") || fanId.startsWith("anon_");
         
         if (type === "tip") {
           tipsCents += amount;
           if (isGuest) guestTipsCents += amount;
-        } else if (type === "unlock" || type === "unlock_media" || type === "post_unlock") {
+        } else if (type === "unlock") {
           unlocksCents += amount;
         } else if (type === "subscription") {
           subscriptionsCents += amount;
@@ -571,9 +582,9 @@ export const FanHubAnalytics: React.FC = () => {
         let prevTips = 0, prevUnlocks = 0, prevTreats = 0, prevSubs = 0;
         prevOrders.forEach((order: any) => {
           const amount = order.amountCents || 0;
-          const type = order.type || order.productType || "";
+          const type = normalizeAnalyticsOrderType(order as Record<string, unknown>);
           if (type === "tip") prevTips += amount;
-          else if (type === "unlock" || type === "unlock_media" || type === "post_unlock") prevUnlocks += amount;
+          else if (type === "unlock") prevUnlocks += amount;
           else if (type === "subscription") prevSubs += amount;
           else prevTreats += amount;
         });
@@ -593,16 +604,18 @@ export const FanHubAnalytics: React.FC = () => {
       // Build recent transactions list
       const transactions: Transaction[] = filteredOrders
         .slice(0, 20)
-        .map((o: any) => ({
+        .map((o: any) => {
+          const normalizedType = normalizeAnalyticsOrderType(o as Record<string, unknown>);
+          return ({
           id: o.id,
-          type: (o.type === "tip" ? "tip" : o.type === "unlock" || o.type === "unlock_media" || o.type === "post_unlock" ? "unlock" : o.type === "subscription" ? "subscription" : "treat") as Transaction["type"],
+          type: normalizedType as Transaction["type"],
           isGuest: typeof o.fanId === "string" && (o.fanId.startsWith("guest_") || o.fanId.startsWith("guest_tip_") || o.fanId.startsWith("guest_session_") || o.fanId.startsWith("anon_")),
           amountCents: o.amountCents || 0,
           fanName: o.fanName || null,
           fanEmail: o.fanEmail || o.fanId || "Unknown",
           createdAt: new Date(o.createdAt),
           productName: o.productTitle || o.productId,
-        }));
+        })});
       setRecentTransactions(transactions);
 
       // Calculate fan metrics from orders (purchasing cohort)
