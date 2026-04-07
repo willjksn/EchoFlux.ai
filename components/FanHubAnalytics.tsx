@@ -17,6 +17,7 @@ type DateRange = "7d" | "30d" | "90d" | "all";
 interface RevenueMetrics {
   totalRevenueCents: number;
   tipsCents: number;
+  guestTipsCents: number;
   unlocksCents: number;
   treatsCents: number;
   subscriptionsCents: number;
@@ -45,6 +46,7 @@ interface TopFan {
 interface Transaction {
   id: string;
   type: "tip" | "unlock" | "treat" | "subscription";
+  isGuest?: boolean;
   amountCents: number;
   fanName: string | null;
   fanEmail: string;
@@ -434,6 +436,7 @@ export const FanHubAnalytics: React.FC = () => {
   const [revenue, setRevenue] = useState<RevenueMetrics>({
     totalRevenueCents: 0,
     tipsCents: 0,
+    guestTipsCents: 0,
     unlocksCents: 0,
     treatsCents: 0,
     subscriptionsCents: 0,
@@ -522,6 +525,7 @@ export const FanHubAnalytics: React.FC = () => {
 
       // Calculate revenue by type
       let tipsCents = 0;
+      let guestTipsCents = 0;
       let unlocksCents = 0;
       let treatsCents = 0;
       let subscriptionsCents = 0;
@@ -529,9 +533,12 @@ export const FanHubAnalytics: React.FC = () => {
       filteredOrders.forEach((order: any) => {
         const amount = order.amountCents || 0;
         const type = order.type || order.productType || "";
+        const fanId = typeof order.fanId === "string" ? order.fanId : "";
+        const isGuest = fanId.startsWith("guest_") || fanId.startsWith("guest_tip_") || fanId.startsWith("guest_session_") || fanId.startsWith("anon_");
         
         if (type === "tip") {
           tipsCents += amount;
+          if (isGuest) guestTipsCents += amount;
         } else if (type === "unlock" || type === "unlock_media" || type === "post_unlock") {
           unlocksCents += amount;
         } else if (type === "subscription") {
@@ -546,6 +553,7 @@ export const FanHubAnalytics: React.FC = () => {
       setRevenue({
         totalRevenueCents,
         tipsCents,
+        guestTipsCents,
         unlocksCents,
         treatsCents,
         subscriptionsCents,
@@ -573,6 +581,7 @@ export const FanHubAnalytics: React.FC = () => {
         setPreviousRevenue({
           totalRevenueCents: prevTips + prevUnlocks + prevTreats + prevSubs,
           tipsCents: prevTips,
+          guestTipsCents: 0,
           unlocksCents: prevUnlocks,
           treatsCents: prevTreats,
           subscriptionsCents: prevSubs,
@@ -587,6 +596,7 @@ export const FanHubAnalytics: React.FC = () => {
         .map((o: any) => ({
           id: o.id,
           type: (o.type === "tip" ? "tip" : o.type === "unlock" || o.type === "unlock_media" || o.type === "post_unlock" ? "unlock" : o.type === "subscription" ? "subscription" : "treat") as Transaction["type"],
+          isGuest: typeof o.fanId === "string" && (o.fanId.startsWith("guest_") || o.fanId.startsWith("guest_tip_") || o.fanId.startsWith("guest_session_") || o.fanId.startsWith("anon_")),
           amountCents: o.amountCents || 0,
           fanName: o.fanName || null,
           fanEmail: o.fanEmail || o.fanId || "Unknown",
@@ -841,7 +851,7 @@ export const FanHubAnalytics: React.FC = () => {
           <DollarIcon />
           Revenue Overview
         </h2>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-4">
           <StatCard
             title="Total Revenue"
             value={formatCents(revenue.totalRevenueCents)}
@@ -854,6 +864,13 @@ export const FanHubAnalytics: React.FC = () => {
             value={formatCents(revenue.tipsCents)}
             icon={<HeartIcon />}
             change={getChangePercentage(revenue.tipsCents, previousRevenue?.tipsCents)}
+            accentColor="indigo"
+          />
+          <StatCard
+            title="Guest Tips"
+            value={formatCents(revenue.guestTipsCents)}
+            icon={<HeartIcon />}
+            subtitle="Tips from non-members/guest checkout"
             accentColor="indigo"
           />
           <StatCard

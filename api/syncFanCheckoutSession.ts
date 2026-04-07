@@ -27,6 +27,10 @@ function isCreatorPlatformOwner(
   return false;
 }
 
+function normalizedEmail(raw: unknown): string {
+  return typeof raw === "string" ? raw.trim().toLowerCase() : "";
+}
+
 /**
  * POST: After returning from Stripe Checkout, apply the same Firestore updates as
  * `checkout.session.completed` when webhooks are slow or missing.
@@ -139,7 +143,35 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     const metaFanId = (session.metadata?.fanId || session.client_reference_id || "").trim();
-    if (!metaFanId || metaFanId !== decoded.uid) {
+    const sessionEmail =
+      normalizedEmail(session.customer_details?.email) ||
+      normalizedEmail(session.customer_email) ||
+      normalizedEmail(session.metadata?.fanEmail);
+    const decodedEmail = normalizedEmail(decoded.email);
+    const sameCheckoutEmail = !!sessionEmail && !!decodedEmail && sessionEmail === decodedEmail;
+    const fanIdMatches = !!metaFanId && metaFanId === decoded.uid;
+    if (!metaFanId) {
+      return res.status(403).json({
+        error: "This purchase is not linked to your signed-in account.",
+        code: "SESSION_FAN_MISSING",
+      });
+    }
+    // Migration-safe path: allow sync when session email matches authenticated email,
+    // then bind the checkout to the current UID so entitlement can be granted correctly.
+    const effectiveSession =
+      fanIdMatches || !sameCheckoutEmail
+        ? session
+        : ({
+            ...session,
+            client_reference_id: decoded.uid,
+            metadata: {
+              ...(session.metadata || {}),
+              fanId: decoded.uid,
+              fanEmail: sessionEmail || decodedEmail || "",
+              originalFanId: metaFanId,
+            },
+          } as typeof session);
+    if (!fanIdMatches && !sameCheckoutEmail) {
       return res.status(403).json({
         error: "This purchase is not linked to your signed-in account.",
         code: "SESSION_FAN_MISMATCH",
@@ -151,7 +183,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(200).json({ success: true, alreadySynced: true });
     }
 
-    const applied = await processFanHubCheckoutSessionCompleted(db, session);
+    const applied = await processFanHubCheckoutSessionCompleted(db, effectiveSession);
     if (!applied) {
       return res.status(400).json({
         error: "Could not apply this checkout (unsupported type or missing session data).",

@@ -56,6 +56,21 @@ function createdAtToIso(createdAt: unknown): string {
   return new Date(0).toISOString();
 }
 
+function toLowerString(v: unknown): string {
+  return typeof v === "string" ? v.trim().toLowerCase() : "";
+}
+
+function inferLegacyPurchaseType(d: Record<string, unknown>): "tip" | "product" {
+  const type = toLowerString(d.type);
+  if (type === "tip") return "tip";
+  const productType = toLowerString(d.productType);
+  if (productType === "tip") return "tip";
+  if (typeof d.tipHandle === "string" && d.tipHandle.trim()) return "tip";
+  const productName = toLowerString(d.productName);
+  if (productName.includes("tip")) return "tip";
+  return "product";
+}
+
 /** Earliest timestamp on a migrated / legacy `purchases` doc (Stormij uses purchasedAt). */
 function purchaseActivityMs(d: Record<string, unknown>): number {
   const a = createdAtToMs(d.purchasedAt);
@@ -172,7 +187,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       docs = docs.slice(0, limitNum);
     }
 
-    const orders: CreatorOrder[] = docs.map((docSnap) => mapDocToOrder(docSnap));
+    const orderRows: Array<CreatorOrder & { __createdAtMs: number }> = docs.map((docSnap) => {
+      const row = mapDocToOrder(docSnap);
+      return {
+        ...row,
+        __createdAtMs: createdAtToMs(row.createdAt),
+      };
+    });
 
     const earliestPurchaseAtByFanId: Record<string, string> = {};
     const earliestPurchaseAtByFanEmail: Record<string, string> = {};
@@ -197,6 +218,67 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         if (fid) bump(earliestPurchaseAtByFanId, fid, ms);
         const em = typeof raw.email === "string" ? raw.email.trim().toLowerCase() : "";
         if (em) bump(earliestPurchaseAtByFanEmail, em, ms);
+
+        // Back-compat: older migrations wrote tip/store sales into top-level `purchases` only.
+        // Include those rows in creator analytics so revenue totals stay accurate.
+        const inferredType = inferLegacyPurchaseType(raw);
+        const amountCents =
+          typeof raw.amountCents === "number" && Number.isFinite(raw.amountCents)
+            ? Math.max(0, Math.round(raw.amountCents))
+            : 0;
+        if (amountCents <= 0) continue;
+
+        const fanId =
+          (typeof raw.fanId === "string" && raw.fanId.trim()) ||
+          (typeof raw.email === "string" && raw.email.trim()) ||
+          "unknown";
+        const fanEmail =
+          typeof raw.email === "string" && raw.email.trim()
+            ? raw.email.trim().toLowerCase()
+            : undefined;
+        const createdAtIso = new Date(ms).toISOString();
+        const legacyId = `legacy_purchase_${p.id}`;
+        const exists = orderRows.some((o) => o.id === legacyId);
+        if (!exists) {
+          orderRows.push({
+            id: legacyId,
+            creatorId: creatorIdToQuery,
+            fanId,
+            productId: typeof raw.treatId === "string" ? raw.treatId : null,
+            type: inferredType,
+            amountCents,
+            status: "paid",
+            createdAt: createdAtIso,
+            productTitle:
+              (typeof raw.productName === "string" && raw.productName.trim()) ||
+              (typeof raw.treatId === "string" ? raw.treatId : undefined),
+            fanName:
+              (typeof raw.fanName === "string" && raw.fanName.trim()) ||
+              (typeof raw.tipHandle === "string" && raw.tipHandle.trim()) ||
+              null,
+            fanEmail,
+            scheduleStatus:
+              typeof raw.scheduleStatus === "string" && raw.scheduleStatus.trim()
+                ? raw.scheduleStatus
+                : "pending",
+            scheduledDate: typeof raw.scheduledDate === "string" ? raw.scheduledDate : null,
+            scheduledTime: typeof raw.scheduledTime === "string" ? raw.scheduledTime : null,
+            deliveryStatus: raw.deliveryStatus === "delivered" ? "delivered" : "pending",
+            deliveryType:
+              raw.deliveryType === "video" ||
+              raw.deliveryType === "image" ||
+              raw.deliveryType === "audio" ||
+              raw.deliveryType === "text" ||
+              raw.deliveryType === "link"
+                ? raw.deliveryType
+                : null,
+            deliveryText: typeof raw.deliveryText === "string" ? raw.deliveryText : null,
+            deliveryUrl: typeof raw.deliveryUrl === "string" ? raw.deliveryUrl : null,
+            deliveredAt: typeof raw.deliveredAt === "string" ? raw.deliveredAt : null,
+            deliveredBy: typeof raw.deliveredBy === "string" ? raw.deliveredBy : null,
+            __createdAtMs: ms,
+          });
+        }
       }
     } catch (purchaseErr: unknown) {
       console.warn(
@@ -205,6 +287,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       );
     }
 
+    orderRows.sort((a, b) => b.__createdAtMs - a.__createdAtMs);
+    const orders: CreatorOrder[] = orderRows.slice(0, limitNum).map(({ __createdAtMs, ...rest }) => rest);
     return res.status(200).json({ orders, earliestPurchaseAtByFanId, earliestPurchaseAtByFanEmail });
   } catch (e: unknown) {
     console.error("creatorOrders error:", e);

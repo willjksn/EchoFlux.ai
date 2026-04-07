@@ -683,12 +683,12 @@ export const FanHubUsers: React.FC = () => {
               if (uu && !entry.username) {
                 entry.username = uu;
               }
-              if (!entry.displayName) {
-                const dn = typeof u.displayName === "string" ? u.displayName.trim() : "";
-                const nm = typeof u.name === "string" ? u.name.trim() : "";
-                if (dn) entry.displayName = dn;
-                else if (nm) entry.displayName = nm;
-              }
+              // Prefer canonical EchoFlux profile naming (`users/{uid}`) over older
+              // fan row displayName values so Fan Hub matches Admin/User Management.
+              const dn = typeof u.displayName === "string" ? u.displayName.trim() : "";
+              const nm = typeof u.name === "string" ? u.name.trim() : "";
+              if (dn) entry.displayName = dn;
+              else if (nm) entry.displayName = nm;
               // Stormij sometimes stored admin/role only on `users/{uid}`, not on `fans/{uid}`
               if (!entry.storedRole) {
                 const fromUser = parseFanMemberRoleFromFirestore(u);
@@ -989,7 +989,7 @@ export const FanHubUsers: React.FC = () => {
     if (!creatorId) return;
     if (
       !confirm(
-        `Remove ${fanUser.name}? This deletes their fan card, DM thread (including video messages), live video chat history with you, and member access for this page.`
+        `Delete ${fanUser.name}? This permanently deletes their Fan Hub account data for this creator, their EchoFlux user profile, and their Firebase Authentication login.`
       )
     ) {
       return;

@@ -168,6 +168,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(403).json({ error: "You cannot purchase from this creator" });
     }
 
+    const fanEmail = typeof decoded?.email === "string" ? decoded.email.trim().toLowerCase() : "";
     const creatorSnap = await db.collection("creators").doc(creatorId).get();
     const creatorData = creatorSnap.data() as {
       stripeConnectAccountId?: string;
@@ -282,6 +283,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         metadata: {
           creatorId,
           fanId,
+          ...(fanEmail ? { fanEmail } : {}),
           type: "subscription",
           isPlatformOwner: isPlatformOwner ? "true" : "false",
         },
@@ -289,6 +291,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           metadata: {
             creatorId,
             fanId,
+            ...(fanEmail ? { fanEmail } : {}),
             type: "subscription",
           },
           // Only add application_fee_percent for regular creators (not platform owners)

@@ -164,6 +164,24 @@ const planPrices: Record<PlanKey, number> = {
 };
 const FIREBASE_UID_RE = /^[A-Za-z0-9]{20,36}$/;
 
+function normalizeAdminCreatorGroupKey(raw: string | null | undefined): string {
+    const id = String(raw || "").trim();
+    if (!id) return "";
+    const idx = id.indexOf("--collection=");
+    if (idx >= 0) return id.slice(0, idx).trim();
+    return id;
+}
+
+function fanMembershipStatusRank(status: string | null | undefined): number {
+    const s = String(status || "").toLowerCase().trim();
+    if (s === "active") return 5;
+    if (s === "trialing") return 4;
+    if (s === "past_due") return 3;
+    if (s === "free") return 2;
+    if (s === "canceled" || s === "cancelled" || s === "unpaid") return 1;
+    return 0;
+}
+
 type FanMembershipLink = {
     creatorId: string;
     creatorName: string;
@@ -2307,11 +2325,46 @@ export const AdminDashboard: React.FC = () => {
                                                     }> = [];
 
                                                     fanHubUsers.forEach((user) => {
-                                                        const memberships = getFanHubMembershipsForUser(user);
-                                                        if (memberships.length === 0) {
+                                                        const membershipsRaw = getFanHubMembershipsForUser(user);
+                                                        if (membershipsRaw.length === 0) {
                                                             unassigned.push(user);
                                                             return;
                                                         }
+                                                        // Normalize + dedupe memberships by creator so one creator section renders once.
+                                                        const dedupedMembershipsByCreator = new Map<string, FanMembershipLink>();
+                                                        membershipsRaw.forEach((membership) => {
+                                                            const normalizedCreatorId = normalizeAdminCreatorGroupKey(membership.creatorId);
+                                                            const key =
+                                                                normalizedCreatorId ||
+                                                                (membership.creatorHandle ? `handle:${membership.creatorHandle}` : "") ||
+                                                                `name:${(membership.creatorName || "").trim().toLowerCase()}`;
+                                                            const existing = dedupedMembershipsByCreator.get(key);
+                                                            if (!existing) {
+                                                                dedupedMembershipsByCreator.set(key, {
+                                                                    ...membership,
+                                                                    creatorId: normalizedCreatorId || membership.creatorId,
+                                                                });
+                                                                return;
+                                                            }
+                                                            const chosen =
+                                                                fanMembershipStatusRank(membership.status) > fanMembershipStatusRank(existing.status)
+                                                                    ? membership
+                                                                    : existing;
+                                                            dedupedMembershipsByCreator.set(key, {
+                                                                ...chosen,
+                                                                creatorId: normalizedCreatorId || chosen.creatorId,
+                                                                purchaseCount: Math.max(existing.purchaseCount || 0, membership.purchaseCount || 0),
+                                                                purchasesCents: Math.max(existing.purchasesCents || 0, membership.purchasesCents || 0),
+                                                                tipCount: Math.max(existing.tipCount || 0, membership.tipCount || 0),
+                                                                tipsCents: Math.max(existing.tipsCents || 0, membership.tipsCents || 0),
+                                                                totalSpentCents: Math.max(existing.totalSpentCents || 0, membership.totalSpentCents || 0),
+                                                                subscriptionPriceCents: Math.max(
+                                                                    existing.subscriptionPriceCents || 0,
+                                                                    membership.subscriptionPriceCents || 0
+                                                                ),
+                                                            });
+                                                        });
+                                                        const memberships = Array.from(dedupedMembershipsByCreator.values());
                                                         dedupedRows.push({
                                                             user,
                                                             memberships,
@@ -2321,7 +2374,7 @@ export const AdminDashboard: React.FC = () => {
                                                             tipsCents: memberships.reduce((acc: number, m: FanMembershipLink) => acc + (m.tipsCents || 0), 0),
                                                         });
                                                         memberships.forEach((membership: FanMembershipLink) => {
-                                                            const creatorId = membership.creatorId || 'unknown_creator';
+                                                            const creatorId = normalizeAdminCreatorGroupKey(membership.creatorId) || 'unknown_creator';
                                                             const group: { creatorName: string; rows: Array<{ user: User; membership: FanMembershipLink; membershipCount: number }> } =
                                                                 grouped.get(creatorId) || { creatorName: membership.creatorName || 'Unknown Creator', rows: [] };
                                                             group.rows.push({ user, membership, membershipCount: memberships.length });

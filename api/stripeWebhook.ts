@@ -141,6 +141,101 @@ function getCheckoutSessionName(session: Stripe.Checkout.Session): string | null
   return typeof name === 'string' && name.trim() ? name.trim() : null;
 }
 
+async function repairFanHubSubscriptionIdentityForSession(
+  db: Firestore,
+  session: Stripe.Checkout.Session,
+  creatorId: string,
+  fromFanId: string,
+  toFanId: string,
+  nowIso: string,
+): Promise<void> {
+  if (!fromFanId || !toFanId || fromFanId === toFanId) return;
+  const fanEmail = getCheckoutSessionEmail(session);
+  const fanName = getCheckoutSessionName(session);
+  const subId =
+    typeof session.subscription === 'string'
+      ? session.subscription
+      : ((session.subscription as { id?: string } | null)?.id || null);
+
+  // Keep the canonical order keyed to the currently authenticated UID.
+  await db.collection('orders').doc(session.id).set(
+    {
+      fanId: toFanId,
+      ...(fanEmail ? { fanEmail } : {}),
+      ...(fanName ? { fanName } : {}),
+      updatedAt: nowIso,
+      repairedFromFanId: fromFanId,
+    },
+    { merge: true },
+  );
+
+  const subs = db.collection('creatorSubscribers').doc(creatorId).collection('subscribers');
+  const grants = db.collection('creatorEntitlements').doc(creatorId).collection('grants');
+  const fans = db.collection('creators').doc(creatorId).collection('fans');
+
+  const [oldSubSnap, newSubSnap, oldGrantSnap, newGrantSnap, oldFanSnap, newFanSnap] = await Promise.all([
+    subs.doc(fromFanId).get().catch(() => null),
+    subs.doc(toFanId).get().catch(() => null),
+    grants.doc(fromFanId).get().catch(() => null),
+    grants.doc(toFanId).get().catch(() => null),
+    fans.doc(fromFanId).get().catch(() => null),
+    fans.doc(toFanId).get().catch(() => null),
+  ]);
+
+  const oldSub = (oldSubSnap?.data() || {}) as Record<string, unknown>;
+  const newSub = (newSubSnap?.data() || {}) as Record<string, unknown>;
+  await subs.doc(toFanId).set(
+    {
+      ...oldSub,
+      ...newSub,
+      status: 'active',
+      ...(subId ? { stripeSubscriptionId: subId } : {}),
+      fanId: toFanId,
+      ...(fanEmail ? { email: fanEmail, fanEmail } : {}),
+      updatedAt: nowIso,
+      migratedFromFanId: fromFanId,
+    },
+    { merge: true },
+  );
+
+  const oldGrant = (oldGrantSnap?.data() || {}) as { unlockedProductIds?: string[]; unlockedFanPostIds?: string[] };
+  const newGrant = (newGrantSnap?.data() || {}) as { unlockedProductIds?: string[]; unlockedFanPostIds?: string[] };
+  const unlockedProductIds = Array.from(
+    new Set([...(newGrant.unlockedProductIds || []), ...(oldGrant.unlockedProductIds || [])]),
+  );
+  const unlockedFanPostIds = Array.from(
+    new Set([...(newGrant.unlockedFanPostIds || []), ...(oldGrant.unlockedFanPostIds || [])]),
+  );
+  await grants.doc(toFanId).set(
+    {
+      subscription: true,
+      unlockedProductIds,
+      ...(unlockedFanPostIds.length ? { unlockedFanPostIds } : {}),
+      updatedAt: nowIso,
+      migratedFromFanId: fromFanId,
+    },
+    { merge: true },
+  );
+
+  const oldFan = (oldFanSnap?.data() || {}) as Record<string, unknown>;
+  const newFan = (newFanSnap?.data() || {}) as Record<string, unknown>;
+  await fans.doc(toFanId).set(
+    {
+      ...oldFan,
+      ...newFan,
+      id: toFanId,
+      creatorId,
+      subscriptionStatus: 'active',
+      ...(subId ? { stripeSubscriptionId: subId } : {}),
+      ...(fanEmail ? { email: fanEmail } : {}),
+      ...(fanName ? { displayName: fanName } : {}),
+      updatedAt: nowIso,
+      migratedFromFanId: fromFanId,
+    },
+    { merge: true },
+  );
+}
+
 /**
  * Fan Hub checkout (creator storefront): same Firestore updates for Connect checkouts and
  * platform-account checkouts (e.g. PLATFORM_OWNER_CREATOR_IDS / Stormij).
@@ -181,13 +276,32 @@ export async function processFanHubCheckoutSessionCompleted(
     fanId = guestDerived || fallbackGuestFanIdFromSession(session);
   }
 
+  const now = new Date().toISOString();
   const dupOrder = await db.collection('orders').where('stripeSessionId', '==', session.id).limit(1).get();
   if (!dupOrder.empty) {
+    // If this session already exists but points at a different fan id, repair to the
+    // current canonical UID (common after auth-account merges/migrations).
+    if (type === 'subscription') {
+      const existing = dupOrder.docs[0].data() as { fanId?: string } | undefined;
+      const existingFanId = typeof existing?.fanId === 'string' ? existing.fanId : '';
+      if (existingFanId && existingFanId !== fanId) {
+        try {
+          await repairFanHubSubscriptionIdentityForSession(
+            db,
+            session,
+            creatorId,
+            existingFanId,
+            fanId,
+            now,
+          );
+        } catch (e) {
+          console.warn('Fan hub duplicate session identity repair failed', session.id, e);
+        }
+      }
+    }
     console.log(`Fan hub: skip duplicate checkout.session.completed session=${session.id}`);
     return true;
   }
-
-  const now = new Date().toISOString();
 
   if (type === 'subscription' && session.subscription) {
     const amountTotal = session.amount_total ?? 0;
