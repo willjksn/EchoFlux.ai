@@ -29,53 +29,136 @@ export function pickFeaturedShowcaseCreators(showcase: WitmeShowcaseCreator[]): 
 
 export type WitmeLegalLink = { label: string; url: string };
 
+/** Stacked / offset frames so the hero shows real creator imagery beside “Different worlds” copy. */
+function WitmeHeroVisualCollage({
+  creators,
+  enableTracking = true,
+}: {
+  creators: WitmeShowcaseCreator[];
+  enableTracking?: boolean;
+}) {
+  const items = creators.filter((c) => c.imageUrl.trim()).slice(0, 3);
+  if (items.length === 0) return null;
+
+  const wrapFrame = (creator: WitmeShowcaseCreator, idx: number, className: string, imgLoading: "eager" | "lazy") => {
+    const path = witmeCreatorPagePath(creator.pageSlug);
+    const href = creator.linkLive && path ? witmePublicHref(path) : null;
+    const alt = `${creator.name || "Creator"} on WitMe`;
+    const inner = (
+      <div className="aspect-[3/4] overflow-hidden rounded-2xl border border-white/25 bg-black/35 shadow-2xl shadow-black/50 ring-1 ring-white/10">
+        <ShowcaseMedia
+          url={creator.imageUrl}
+          mediaKind={creator.mediaKind}
+          alt={alt}
+          className="h-full w-full"
+          objectPosition={creator.mediaObjectPosition}
+          objectFit="cover"
+          layout="fill"
+          imgLoading={imgLoading}
+        />
+      </div>
+    );
+    const tracked =
+      href != null ? (
+        <a
+          href={href}
+          className="block transition hover:opacity-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/60 focus-visible:ring-offset-2 focus-visible:ring-offset-[#26324a] rounded-2xl"
+          onClick={() => {
+            if (enableTracking) trackWitmeEvent("cta_hero_visual_creator", { handle: creator.handle, slot: idx });
+          }}
+        >
+          {inner}
+        </a>
+      ) : (
+        inner
+      );
+    return (
+      <div key={`${creator.pageSlug}-${idx}`} className={className}>
+        {tracked}
+      </div>
+    );
+  };
+
+  if (items.length === 1) {
+    return (
+      <div className="mt-10 flex justify-center sm:mt-12 lg:mt-0 lg:justify-end">
+        <div className="w-full max-w-[14rem] sm:max-w-[16rem]">{wrapFrame(items[0], 0, "", "eager")}</div>
+      </div>
+    );
+  }
+
+  if (items.length === 2) {
+    return (
+      <div className="mt-10 flex justify-center gap-4 sm:mt-12 lg:mt-0 lg:justify-end lg:pt-4">
+        <div className="w-[42%] max-w-[9.5rem] translate-y-6 rotate-[-4deg] sm:max-w-[11rem]">{wrapFrame(items[0], 0, "", "eager")}</div>
+        <div className="w-[42%] max-w-[9.5rem] -translate-y-2 rotate-[3deg] sm:max-w-[11rem]">{wrapFrame(items[1], 1, "", "lazy")}</div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-10 flex justify-center sm:mt-12 lg:mt-0 lg:justify-end lg:pt-2">
+      <div className="relative h-[min(22rem,52vw)] w-full max-w-[19rem] sm:h-[26rem] sm:max-w-[21rem] lg:h-[28rem] lg:max-w-[24rem]">
+        {wrapFrame(items[0], 0, "absolute right-0 top-0 z-30 w-[58%] rotate-[2deg]", "eager")}
+        {wrapFrame(items[1], 1, "absolute left-0 top-[18%] z-20 w-[55%] -rotate-[2deg]", "lazy")}
+        {wrapFrame(items[2], 2, "absolute bottom-0 right-[8%] z-10 w-[50%] rotate-[1deg]", "lazy")}
+      </div>
+    </div>
+  );
+}
+
 /** Hero — witme wordmark + positioning + CTAs (spec copy). */
 export const WitmeHeroSection: React.FC<{
   firstCreatorPath: string;
   /** EchoFlux / creator studio base URL (fans explore witme; creators open this). */
   creatorStudioUrl: string;
+  /** Showcase rows with media — shown as a collage to the right of headline (desktop). */
+  visualCreators?: WitmeShowcaseCreator[];
   enableTracking?: boolean;
-}> = ({ firstCreatorPath, creatorStudioUrl, enableTracking = true }) => {
+}> = ({ firstCreatorPath, creatorStudioUrl, visualCreators = [], enableTracking = true }) => {
   const exploreHref = witmePublicHref(firstCreatorPath);
   const studioBase = creatorStudioUrl.replace(/\/$/, "");
 
   return (
     <section className={`${sectionClass} pt-12 pb-16 sm:pt-20 sm:pb-20`} aria-labelledby="witme-hero-heading">
-      <div className="max-w-3xl">
-        <img src="/witme-wordmark.svg" alt="witme" className="h-12 w-auto sm:h-16" loading="eager" />
-        <p className="mt-3 text-xs text-gray-400 sm:text-sm">
-          Powered by{" "}
-          <a
-            href={studioBase}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="font-medium text-gray-300 underline decoration-white/20 underline-offset-2 transition hover:text-white hover:decoration-white/40"
-            onClick={() => {
-              if (enableTracking) trackWitmeEvent("powered_by_echoflux_click", { location: "hero" });
-            }}
-          >
-            EchoFlux
-          </a>
-        </p>
-        <p className="mt-8 text-xs font-semibold uppercase tracking-[0.2em] text-sky-200/90">Early access platform</p>
-        <h1 id="witme-hero-heading" className="mt-4 text-3xl font-semibold tracking-tight text-white sm:text-5xl sm:leading-[1.08]">
-          Different creators. Different worlds. One place.
-        </h1>
-        <p className="mt-6 text-base leading-relaxed text-gray-300 sm:text-lg sm:leading-relaxed">
-          WitMe is a growing platform where creators build their own pages — their own experience, their own rules. No
-          forced format. No one-size-fits-all feed. Just direct access, however they choose to create it.
-        </p>
-        <div className="mt-10">
-          <a
-            href={exploreHref}
-            className="inline-flex items-center justify-center rounded-full bg-gradient-to-r from-indigo-200 to-white px-8 py-3.5 text-sm font-semibold text-gray-900 transition hover:from-white hover:to-indigo-100"
-            onClick={() => {
-              if (enableTracking) trackWitmeEvent("cta_explore_first_creator", { location: "hero" });
-            }}
-          >
-            Explore the first creator
-          </a>
+      <div className="grid grid-cols-1 items-center gap-0 lg:grid-cols-[minmax(0,1fr)_minmax(16rem,26rem)] lg:gap-12 xl:gap-16">
+        <div className="max-w-3xl lg:max-w-none">
+          <img src="/witme-wordmark.svg" alt="witme" className="h-12 w-auto sm:h-16" loading="eager" />
+          <p className="mt-3 text-xs text-gray-400 sm:text-sm">
+            Powered by{" "}
+            <a
+              href={studioBase}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-medium text-gray-300 underline decoration-white/20 underline-offset-2 transition hover:text-white hover:decoration-white/40"
+              onClick={() => {
+                if (enableTracking) trackWitmeEvent("powered_by_echoflux_click", { location: "hero" });
+              }}
+            >
+              EchoFlux
+            </a>
+          </p>
+          <p className="mt-8 text-xs font-semibold uppercase tracking-[0.2em] text-sky-200/90">Early access platform</p>
+          <h1 id="witme-hero-heading" className="mt-4 text-3xl font-semibold tracking-tight text-white sm:text-5xl sm:leading-[1.08]">
+            Different creators. Different worlds. One place.
+          </h1>
+          <p className="mt-6 text-base leading-relaxed text-gray-300 sm:text-lg sm:leading-relaxed">
+            WitMe is a growing platform where creators build their own pages — their own experience, their own rules. No
+            forced format. No one-size-fits-all feed. Just direct access, however they choose to create it.
+          </p>
+          <div className="mt-10">
+            <a
+              href={exploreHref}
+              className="inline-flex items-center justify-center rounded-full bg-gradient-to-r from-indigo-200 to-white px-8 py-3.5 text-sm font-semibold text-gray-900 transition hover:from-white hover:to-indigo-100"
+              onClick={() => {
+                if (enableTracking) trackWitmeEvent("cta_explore_first_creator", { location: "hero" });
+              }}
+            >
+              Explore the first creator
+            </a>
+          </div>
         </div>
+        <WitmeHeroVisualCollage creators={visualCreators} enableTracking={enableTracking} />
       </div>
     </section>
   );
@@ -100,26 +183,90 @@ const EXPERIENCE_TYPES: { title: string; body: string }[] = [
   },
 ];
 
-export const WitmeExperienceTypesSection: React.FC = () => (
+function WitmeExperienceVisualStrip({
+  creators,
+  enableTracking = true,
+}: {
+  creators: WitmeShowcaseCreator[];
+  enableTracking?: boolean;
+}) {
+  const items = creators.filter((c) => c.imageUrl.trim()).slice(0, 4);
+  if (items.length === 0) return null;
+
+  return (
+    <div className="grid grid-cols-2 gap-3 sm:gap-4" aria-label="Creator pages preview">
+      {items.map((creator, idx) => {
+        const path = witmeCreatorPagePath(creator.pageSlug);
+        const href = creator.linkLive && path ? witmePublicHref(path) : null;
+        const alt = `${creator.name || "Creator"} — preview`;
+        const tile = (
+          <div className="aspect-[4/5] overflow-hidden rounded-xl border border-white/20 bg-black/30 shadow-lg shadow-black/30">
+            <ShowcaseMedia
+              url={creator.imageUrl}
+              mediaKind={creator.mediaKind}
+              alt={alt}
+              className="h-full w-full"
+              objectPosition={creator.mediaObjectPosition}
+              objectFit="cover"
+              layout="fill"
+              imgLoading={idx === 0 ? "eager" : "lazy"}
+            />
+          </div>
+        );
+        return (
+          <div key={`${creator.pageSlug}-exp-${idx}`}>
+            {href ? (
+              <a
+                href={href}
+                className="block transition hover:opacity-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/50 rounded-xl"
+                onClick={() => {
+                  if (enableTracking) trackWitmeEvent("cta_experience_strip_creator", { handle: creator.handle });
+                }}
+              >
+                {tile}
+              </a>
+            ) : (
+              tile
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+export const WitmeExperienceTypesSection: React.FC<{
+  visualCreators?: WitmeShowcaseCreator[];
+  enableTracking?: boolean;
+}> = ({ visualCreators = [], enableTracking = true }) => (
   <section className={`${sectionClass} pb-16 sm:pb-20`} aria-labelledby="witme-experience-heading">
-    <h2 id="witme-experience-heading" className="text-2xl font-semibold text-white sm:text-3xl">
-      What you&apos;ll find here
-    </h2>
-    <p className="mt-3 max-w-2xl text-sm text-gray-300 sm:text-base">
-      Types of experiences WitMe is built for — each creator shapes their own version.
-    </p>
-    <ul className="mt-10 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:gap-6">
-      {EXPERIENCE_TYPES.map((item) => (
-        <li key={item.title}>
-          <article className={`${cardSurface} h-full transition hover:border-white/25 hover:bg-white/[0.09]`}>
-            <div className="mb-4 h-px w-8 bg-gradient-to-r from-sky-300/80 to-transparent" aria-hidden />
-            <h3 className="text-lg font-semibold text-white">{item.title}</h3>
-            <p className="mt-2 text-sm leading-relaxed text-gray-300">{item.body}</p>
-          </article>
-        </li>
-      ))}
-    </ul>
-    <p className="mt-10 text-center text-sm font-medium text-gray-200 sm:text-base">Every page is different. That&apos;s the point.</p>
+    <div className="grid grid-cols-1 gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,17rem)] lg:items-start lg:gap-x-10 lg:gap-y-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,19rem)]">
+      <div className="lg:col-start-1 lg:row-start-1">
+        <h2 id="witme-experience-heading" className="text-2xl font-semibold text-white sm:text-3xl">
+          What you&apos;ll find here
+        </h2>
+        <p className="mt-3 max-w-2xl text-sm text-gray-300 sm:text-base">
+          Types of experiences WitMe is built for — each creator shapes their own version.
+        </p>
+      </div>
+      <div className="lg:col-start-2 lg:row-start-1 lg:row-span-3 lg:self-start lg:sticky lg:top-28">
+        <WitmeExperienceVisualStrip creators={visualCreators} enableTracking={enableTracking} />
+      </div>
+      <ul className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:col-start-1 lg:row-start-2 lg:mt-0 lg:gap-6">
+        {EXPERIENCE_TYPES.map((item) => (
+          <li key={item.title}>
+            <article className={`${cardSurface} h-full transition hover:border-white/25 hover:bg-white/[0.09]`}>
+              <div className="mb-4 h-px w-8 bg-gradient-to-r from-sky-300/80 to-transparent" aria-hidden />
+              <h3 className="text-lg font-semibold text-white">{item.title}</h3>
+              <p className="mt-2 text-sm leading-relaxed text-gray-300">{item.body}</p>
+            </article>
+          </li>
+        ))}
+      </ul>
+      <p className="text-center text-sm font-medium text-gray-200 sm:text-base lg:col-start-1 lg:row-start-3 lg:text-left">
+        Every page is different. That&apos;s the point.
+      </p>
+    </div>
   </section>
 );
 

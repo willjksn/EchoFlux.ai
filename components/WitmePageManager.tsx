@@ -27,6 +27,14 @@ type WitmeLegalLink = {
   url: string;
 };
 
+type WitmeMediaListKey = 'showcaseCreators' | 'homeHeroVisuals' | 'homeExperienceVisuals';
+
+function collectWitmeLandingMediaUrls(cfg: WitmeLandingConfig): string[] {
+  return [...cfg.showcaseCreators, ...cfg.homeHeroVisuals, ...cfg.homeExperienceVisuals]
+    .map((c) => c.imageUrl.trim())
+    .filter(Boolean);
+}
+
 type WitmeAnalyticsResponse = {
   totals: {
     events: number;
@@ -93,6 +101,8 @@ const DEFAULT_CONFIG: WitmeLandingConfig = {
     { label: 'Support', url: 'mailto:contact@echoflux.ai' },
   ],
   showcaseCreators: DEFAULT_SHOWCASE_CREATORS.map((c) => ({ ...c })),
+  homeHeroVisuals: [],
+  homeExperienceVisuals: [],
 };
 
 const normalizeLandingCopy = (config: WitmeLandingConfig): WitmeLandingConfig => {
@@ -133,23 +143,49 @@ const formatAnalyticsDateMdy = (dateStr: string): string => {
   return `${d.getMonth() + 1}-${d.getDate()}-${d.getFullYear()}`;
 };
 
-const mergeWitmeLandingFromApi = (raw: WitmeLandingConfig): WitmeLandingConfig =>
-  normalizeLandingCopy({
+const mergeWitmeLandingFromApi = (raw: WitmeLandingConfig): WitmeLandingConfig => {
+  const mapRow = (c: WitmeShowcaseCreator): WitmeShowcaseCreator => ({
+    ...c,
+    mediaKind: c.mediaKind === 'video' ? 'video' : 'image',
+    mediaObjectPosition:
+      typeof c.mediaObjectPosition === 'string' && c.mediaObjectPosition.trim() !== ''
+        ? c.mediaObjectPosition.trim()
+        : '50% 50%',
+    isFeatured: c.isFeatured === true,
+    featuredMediaFit: c.featuredMediaFit === 'contain' ? 'contain' : 'cover',
+  });
+  const mapHomeVisualRow = (c: WitmeShowcaseCreator): WitmeShowcaseCreator => ({ ...mapRow(c), isFeatured: false });
+
+  return normalizeLandingCopy({
     ...DEFAULT_CONFIG,
     ...raw,
     showcaseCreators: Array.isArray(raw.showcaseCreators)
-      ? raw.showcaseCreators.map((c) => ({
-          ...c,
-          mediaKind: c.mediaKind === 'video' ? 'video' : 'image',
-          mediaObjectPosition:
-            typeof c.mediaObjectPosition === 'string' && c.mediaObjectPosition.trim() !== ''
-              ? c.mediaObjectPosition.trim()
-              : '50% 50%',
-          isFeatured: c.isFeatured === true,
-          featuredMediaFit: c.featuredMediaFit === 'contain' ? 'contain' : 'cover',
-        }))
+      ? raw.showcaseCreators.map(mapRow)
       : DEFAULT_CONFIG.showcaseCreators,
+    homeHeroVisuals: Array.isArray(raw.homeHeroVisuals) ? raw.homeHeroVisuals.map(mapHomeVisualRow) : [],
+    homeExperienceVisuals: Array.isArray(raw.homeExperienceVisuals)
+      ? raw.homeExperienceVisuals.map(mapHomeVisualRow)
+      : [],
   });
+};
+
+function countFilledHomeVisualSlots(cfg: WitmeLandingConfig): { hero: number; exp: number } {
+  return {
+    hero: (cfg.homeHeroVisuals ?? []).filter((c) => c.imageUrl.trim()).length,
+    exp: (cfg.homeExperienceVisuals ?? []).filter((c) => c.imageUrl.trim()).length,
+  };
+}
+
+/** Clone for API POST: plain JSON, always send home* arrays so slots are not omitted. */
+function normalizeWitmeConfigForApi(c: WitmeLandingConfig): WitmeLandingConfig {
+  const o = JSON.parse(JSON.stringify(c)) as WitmeLandingConfig;
+  return {
+    ...o,
+    showcaseCreators: Array.isArray(o.showcaseCreators) ? o.showcaseCreators : [],
+    homeHeroVisuals: Array.isArray(o.homeHeroVisuals) ? o.homeHeroVisuals : [],
+    homeExperienceVisuals: Array.isArray(o.homeExperienceVisuals) ? o.homeExperienceVisuals : [],
+  };
+}
 
 const showcaseFrameMediaStyle = (
   objectPosition: string | undefined,
@@ -305,6 +341,176 @@ async function deleteOwnedWitmeShowcaseMedia(imageUrl: string | undefined, owner
   }
 }
 
+type HomeVisualListKey = 'homeHeroVisuals' | 'homeExperienceVisuals';
+
+const WitmeHomeVisualSlotRow: React.FC<{
+  listKey: HomeVisualListKey;
+  idx: number;
+  row: WitmeShowcaseCreator;
+  fileInputRef: React.RefObject<HTMLInputElement | null>;
+  uploadTargetRef: React.MutableRefObject<{ key: WitmeMediaListKey; idx: number } | null>;
+  isUploading: boolean;
+  onPatch: (patch: Partial<WitmeShowcaseCreator>) => void;
+  onRemove: () => void;
+}> = ({ listKey, idx, row, fileInputRef, uploadTargetRef, isUploading, onPatch, onRemove }) => {
+  const [posX, posY] = parseObjectPositionPercentPair(row.mediaObjectPosition);
+  const focalPreviewStyle: React.CSSProperties = {
+    objectFit: 'cover',
+    objectPosition:
+      row.mediaObjectPosition != null && String(row.mediaObjectPosition).trim() !== ''
+        ? String(row.mediaObjectPosition).trim()
+        : '50% 50%',
+  };
+  const previewAspect = listKey === 'homeHeroVisuals' ? ('3 / 4' as const) : ('4 / 5' as const);
+  return (
+    <div className="rounded-lg border border-gray-200 p-3 dark:border-gray-700">
+      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+        <span className="text-xs font-semibold text-gray-700 dark:text-gray-200">Slot {idx + 1}</span>
+        <button
+          type="button"
+          onClick={onRemove}
+          className="inline-flex items-center gap-1 rounded-md border border-red-200 px-2 py-1 text-xs text-red-600 hover:bg-red-50 dark:border-red-900/40 dark:text-red-300 dark:hover:bg-red-900/20"
+        >
+          <TrashIcon className="h-3.5 w-3.5" />
+          Remove
+        </button>
+      </div>
+      <div className="grid gap-2 md:grid-cols-2">
+        <label className="flex cursor-pointer items-center gap-2 text-xs text-gray-700 dark:text-gray-300 md:col-span-2">
+          <input
+            type="checkbox"
+            checked={row.linkLive}
+            onChange={(e) => {
+              const linkLive = e.target.checked;
+              onPatch({ linkLive, ...(linkLive ? {} : { isFeatured: false }) });
+            }}
+            className="rounded border-gray-300 dark:border-gray-600"
+          />
+          Live page link (optional — makes this tile clickable on witme)
+        </label>
+        <input
+          value={row.name}
+          onChange={(e) => onPatch({ name: e.target.value })}
+          placeholder="Label / alt text"
+          className="rounded-md border border-gray-300 px-2 py-2 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-white"
+        />
+        <input
+          value={row.handle}
+          onChange={(e) => onPatch({ handle: e.target.value })}
+          placeholder="Handle (optional)"
+          className="rounded-md border border-gray-300 px-2 py-2 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-white"
+        />
+        <input
+          value={row.pageSlug}
+          onChange={(e) => onPatch({ pageSlug: e.target.value })}
+          placeholder="URL slug (e.g. creatorhandle)"
+          className="rounded-md border border-gray-300 px-2 py-2 text-sm md:col-span-2 dark:border-gray-700 dark:bg-gray-800 dark:text-white"
+        />
+        <div className="flex flex-wrap items-center gap-2 md:col-span-2">
+          <button
+            type="button"
+            disabled={isUploading}
+            onClick={() => {
+              uploadTargetRef.current = { key: listKey, idx };
+              fileInputRef.current?.click();
+            }}
+            className="inline-flex items-center gap-1 rounded-md border border-gray-300 px-3 py-2 text-xs font-medium disabled:opacity-50 dark:border-gray-700 dark:text-gray-200"
+          >
+            <UploadIcon className="h-4 w-4" />
+            {isUploading ? 'Uploading…' : 'Upload image / video'}
+          </button>
+          <select
+            value={row.mediaKind}
+            onChange={(e) => onPatch({ mediaKind: e.target.value === 'video' ? 'video' : 'image' })}
+            className="rounded-md border border-gray-300 px-2 py-2 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-white"
+          >
+            <option value="image">Still image</option>
+            <option value="video">Looping video</option>
+          </select>
+        </div>
+        <div className="md:col-span-2">
+          <label className="mb-0.5 block text-xs font-medium text-gray-600 dark:text-gray-400">Media URL</label>
+          <input
+            value={row.imageUrl}
+            onChange={(e) => onPatch({ imageUrl: e.target.value })}
+            placeholder="https://…"
+            className="w-full rounded-md border border-gray-300 px-2 py-2 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-white"
+          />
+        </div>
+        {row.imageUrl.trim() ? (
+          <>
+            <div className="md:col-span-2">
+              <p className="mb-1.5 text-xs font-medium text-gray-700 dark:text-gray-300">Focal preview</p>
+              <p className="mb-2 text-[11px] leading-snug text-gray-500 dark:text-gray-400">
+                Same <span className="font-medium text-gray-600 dark:text-gray-300">cover</span> crop as witme (
+                {listKey === 'homeHeroVisuals' ? 'hero collage' : 'strip'} frame). Move the sliders below to reposition.
+              </p>
+              <div
+                className="relative w-full max-w-[7.5rem] overflow-hidden rounded-lg border border-gray-200 bg-gray-100 shadow-inner dark:border-gray-600 dark:bg-gray-950 sm:max-w-[8.5rem]"
+                style={{ aspectRatio: previewAspect }}
+              >
+                {row.mediaKind === 'video' ? (
+                  <video
+                    key={row.imageUrl}
+                    src={row.imageUrl}
+                    className="h-full w-full pointer-events-none select-none"
+                    style={focalPreviewStyle}
+                    muted
+                    loop
+                    playsInline
+                    autoPlay
+                    preload="metadata"
+                    aria-label="Focal preview"
+                  />
+                ) : (
+                  <img
+                    src={row.imageUrl}
+                    alt=""
+                    className="h-full w-full select-none"
+                    style={focalPreviewStyle}
+                  />
+                )}
+              </div>
+            </div>
+            <div className="grid max-w-xl gap-3 md:col-span-2 sm:grid-cols-2">
+              <label className="block text-xs text-gray-600 dark:text-gray-400">
+                <span className="mb-1 block font-medium text-gray-700 dark:text-gray-300">Focal horizontal</span>
+                <input
+                  type="range"
+                  min={0}
+                  max={100}
+                  step={0.5}
+                  value={posX}
+                  onChange={(e) => {
+                    const x = parseFloat(e.target.value);
+                    onPatch({ mediaObjectPosition: formatObjectPositionPercentPair(x, posY) });
+                  }}
+                  className="w-full accent-primary-600"
+                />
+              </label>
+              <label className="block text-xs text-gray-600 dark:text-gray-400">
+                <span className="mb-1 block font-medium text-gray-700 dark:text-gray-300">Focal vertical</span>
+                <input
+                  type="range"
+                  min={0}
+                  max={100}
+                  step={0.5}
+                  value={posY}
+                  onChange={(e) => {
+                    const y = parseFloat(e.target.value);
+                    onPatch({ mediaObjectPosition: formatObjectPositionPercentPair(posX, y) });
+                  }}
+                  className="w-full accent-primary-600"
+                />
+              </label>
+            </div>
+          </>
+        ) : null}
+      </div>
+    </div>
+  );
+};
+
 export const WitmePageManager: React.FC = () => {
   const { user, showToast } = useAppContext();
   /** Default to Control Panel so featured creators, crop, and sliders are visible (Live View is preview-only). */
@@ -326,7 +532,7 @@ export const WitmePageManager: React.FC = () => {
   );
 
   const showcaseFileInputRef = useRef<HTMLInputElement>(null);
-  const showcasePickIdxRef = useRef<number | null>(null);
+  const witmeUploadTargetRef = useRef<{ key: WitmeMediaListKey; idx: number } | null>(null);
   const showcasePanRef = useRef<{
     idx: number;
     startClientX: number;
@@ -334,12 +540,13 @@ export const WitmePageManager: React.FC = () => {
     startOx: number;
     startOy: number;
   } | null>(null);
-  const [showcaseUploadingIdx, setShowcaseUploadingIdx] = useState<number | null>(null);
+  const [witmeUploading, setWitmeUploading] = useState<{ key: WitmeMediaListKey; idx: number } | null>(null);
   /** Discover uses contain (full image in card). Cover preview optional for featured-style crops. Zoom is editor-only (not saved). */
   const [showcaseFocalFrameFit, setShowcaseFocalFrameFit] = useState<'contain' | 'cover'>('contain');
   const [showcaseFrameZoom, setShowcaseFrameZoom] = useState<Record<number, number>>({});
   /** Showcase `imageUrl` list from last successful load/save (for safe Storage cleanup after save). */
   const lastSavedShowcaseImageUrlsRef = useRef<string[]>([]);
+  const witmeConfigLoadAbortRef = useRef<AbortController | null>(null);
 
   const onShowcaseFramePointerMove = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
     const pan = showcasePanRef.current;
@@ -377,8 +584,8 @@ export const WitmePageManager: React.FC = () => {
     showcasePanRef.current = null;
   }, []);
 
-  const uploadShowcaseMedia = useCallback(
-    async (idx: number, file: File) => {
+  const uploadWitmeListMedia = useCallback(
+    async (listKey: WitmeMediaListKey, idx: number, file: File) => {
       if (!auth.currentUser) {
         showToast('You must be signed in', 'error');
         return;
@@ -402,7 +609,7 @@ export const WitmePageManager: React.FC = () => {
           .toLowerCase() || (isVideo ? 'mp4' : 'jpg');
       const uid = auth.currentUser.uid;
       const storagePath = `witme_showcase/${uid}/${Date.now()}_${Math.random().toString(36).slice(2, 10)}.${safeExt}`;
-      setShowcaseUploadingIdx(idx);
+      setWitmeUploading({ key: listKey, idx });
       try {
         const storageRef = ref(storage, storagePath);
         await uploadBytes(storageRef, file, {
@@ -410,14 +617,18 @@ export const WitmePageManager: React.FC = () => {
         });
         const downloadUrl = await getDownloadURL(storageRef);
         setDraft((prev) => {
-          const next = [...prev.showcaseCreators];
-          next[idx] = {
-            ...next[idx],
+          const prevList = prev[listKey] ?? [];
+          const list = [...prevList];
+          if (!list[idx]) {
+            list[idx] = emptyShowcaseRow();
+          }
+          list[idx] = {
+            ...list[idx],
             imageUrl: downloadUrl,
             mediaKind: isVideo ? 'video' : 'image',
             mediaObjectPosition: '50% 50%',
           };
-          return { ...prev, showcaseCreators: next };
+          return { ...prev, [listKey]: list };
         });
         showToast(
           isVideo ? 'Video uploaded — click Save draft to persist.' : 'Image uploaded — click Save draft to persist.',
@@ -435,20 +646,23 @@ export const WitmePageManager: React.FC = () => {
           showToast(msg || 'Upload failed', 'error');
         }
       } finally {
-        setShowcaseUploadingIdx(null);
+        setWitmeUploading(null);
       }
     },
     [showToast]
   );
 
   const onShowcaseFilePicked = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const idx = showcasePickIdxRef.current;
-    showcasePickIdxRef.current = null;
+    const target = witmeUploadTargetRef.current;
+    witmeUploadTargetRef.current = null;
     const file = e.target.files?.[0];
     e.target.value = '';
-    if (idx === null || !file) return;
-    void uploadShowcaseMedia(idx, file);
+    if (!target || !file) return;
+    void uploadWitmeListMedia(target.key, target.idx, file);
   };
+
+  const isWitmeSlotUploading = (key: WitmeMediaListKey, idx: number) =>
+    witmeUploading?.key === key && witmeUploading?.idx === idx;
 
   const getToken = async (): Promise<string | null> => {
     try {
@@ -459,12 +673,16 @@ export const WitmePageManager: React.FC = () => {
   };
 
   const loadConfig = async () => {
+    witmeConfigLoadAbortRef.current?.abort();
+    const ac = new AbortController();
+    witmeConfigLoadAbortRef.current = ac;
     setLoading(true);
     try {
       const token = await getToken();
       if (!token) throw new Error('You must be signed in');
       const res = await fetch('/api/adminWitmeLandingConfig', {
         headers: { Authorization: `Bearer ${token}` },
+        signal: ac.signal,
       });
       if (!res.ok) throw new Error('Failed to load Witme config');
       const data = await res.json();
@@ -473,16 +691,15 @@ export const WitmePageManager: React.FC = () => {
 
       const mergedDraft = mergeWitmeLandingFromApi(draftRaw);
       setDraft(mergedDraft);
-      lastSavedShowcaseImageUrlsRef.current = mergedDraft.showcaseCreators
-        .map((c) => c.imageUrl.trim())
-        .filter(Boolean);
+      lastSavedShowcaseImageUrlsRef.current = collectWitmeLandingMediaUrls(mergedDraft);
       setPublished(mergeWitmeLandingFromApi(publishedRaw));
       setUpdatedAt(data.updatedAt || null);
       setPublishedAt(data.publishedAt || null);
     } catch (error: any) {
+      if (error?.name === 'AbortError') return;
       showToast(error?.message || 'Failed to load Witme page config', 'error');
     } finally {
-      setLoading(false);
+      if (witmeConfigLoadAbortRef.current === ac) setLoading(false);
     }
   };
 
@@ -508,6 +725,7 @@ export const WitmePageManager: React.FC = () => {
     if (user?.role === 'Admin') {
       loadConfig();
     }
+    return () => witmeConfigLoadAbortRef.current?.abort();
   }, [user?.role]);
 
   useEffect(() => {
@@ -521,19 +739,20 @@ export const WitmePageManager: React.FC = () => {
     try {
       const token = await getToken();
       if (!token) throw new Error('You must be signed in');
+      const beforeSlots = countFilledHomeVisualSlots(draft);
       const res = await fetch('/api/adminWitmeLandingConfig', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ action: 'saveDraft', config: draft }),
+        body: JSON.stringify({ action: 'saveDraft', config: normalizeWitmeConfigForApi(draft) }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error((data as { error?: string }).error || 'Failed to save draft');
       if ((data as { draft?: WitmeLandingConfig }).draft) {
         const merged = mergeWitmeLandingFromApi((data as { draft: WitmeLandingConfig }).draft);
-        const nextUrls = merged.showcaseCreators.map((c) => c.imageUrl.trim()).filter(Boolean);
+        const nextUrls = collectWitmeLandingMediaUrls(merged);
         const prevUrls = lastSavedShowcaseImageUrlsRef.current;
         const uid = auth.currentUser?.uid;
         for (const url of showcaseStorageUrlsToMaybeDelete(prevUrls, nextUrls)) {
@@ -541,6 +760,15 @@ export const WitmePageManager: React.FC = () => {
         }
         lastSavedShowcaseImageUrlsRef.current = nextUrls;
         setDraft(merged);
+        const afterSlots = countFilledHomeVisualSlots(merged);
+        if (afterSlots.hero < beforeSlots.hero || afterSlots.exp < beforeSlots.exp) {
+          showToast(
+            'Some hero or strip tiles were dropped: each slot needs a full https:// image or video URL. Check Media URL on each slot.',
+            'error'
+          );
+        } else {
+          showToast('Witme draft saved', 'success');
+        }
       }
       if ((data as { published?: WitmeLandingConfig }).published) {
         setPublished(mergeWitmeLandingFromApi((data as { published: WitmeLandingConfig }).published));
@@ -548,7 +776,6 @@ export const WitmePageManager: React.FC = () => {
       if ((data as { updatedAt?: string }).updatedAt) {
         setUpdatedAt((data as { updatedAt: string }).updatedAt);
       }
-      showToast('Witme draft saved', 'success');
     } catch (error: any) {
       showToast(error?.message || 'Failed to save draft', 'error');
     } finally {
@@ -561,19 +788,20 @@ export const WitmePageManager: React.FC = () => {
     try {
       const token = await getToken();
       if (!token) throw new Error('You must be signed in');
+      const beforeSlots = countFilledHomeVisualSlots(draft);
       const res = await fetch('/api/adminWitmeLandingConfig', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ action: 'publish', config: draft }),
+        body: JSON.stringify({ action: 'publish', config: normalizeWitmeConfigForApi(draft) }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error((data as { error?: string }).error || 'Failed to publish');
       if ((data as { draft?: WitmeLandingConfig }).draft) {
         const merged = mergeWitmeLandingFromApi((data as { draft: WitmeLandingConfig }).draft);
-        const nextUrls = merged.showcaseCreators.map((c) => c.imageUrl.trim()).filter(Boolean);
+        const nextUrls = collectWitmeLandingMediaUrls(merged);
         const prevUrls = lastSavedShowcaseImageUrlsRef.current;
         const uid = auth.currentUser?.uid;
         for (const url of showcaseStorageUrlsToMaybeDelete(prevUrls, nextUrls)) {
@@ -581,6 +809,15 @@ export const WitmePageManager: React.FC = () => {
         }
         lastSavedShowcaseImageUrlsRef.current = nextUrls;
         setDraft(merged);
+        const afterSlots = countFilledHomeVisualSlots(merged);
+        if (afterSlots.hero < beforeSlots.hero || afterSlots.exp < beforeSlots.exp) {
+          showToast(
+            'Published, but some hero or strip tiles were dropped: each slot needs a full https:// media URL.',
+            'error'
+          );
+        } else {
+          showToast('Witme page published', 'success');
+        }
       }
       if ((data as { published?: WitmeLandingConfig }).published) {
         setPublished(mergeWitmeLandingFromApi((data as { published: WitmeLandingConfig }).published));
@@ -589,7 +826,6 @@ export const WitmePageManager: React.FC = () => {
       if ((data as { publishedAt?: string }).publishedAt) {
         setPublishedAt((data as { publishedAt: string }).publishedAt);
       }
-      showToast('Witme page published', 'success');
     } catch (error: any) {
       showToast(error?.message || 'Failed to publish', 'error');
     } finally {
@@ -692,9 +928,112 @@ export const WitmePageManager: React.FC = () => {
                 <p className="mt-2 text-sm text-slate-700 dark:text-slate-300">
                   Marketing copy and section layout (hero, &quot;What you&apos;ll find&quot;, etc.) live in code and ship with the app.{' '}
                   <strong className="text-slate-900 dark:text-white">Here you edit only</strong> what still comes from the CMS:{' '}
+                  <strong>Hero collage + &quot;What you&apos;ll find&quot; media</strong> (optional — independent from Featured),{' '}
                   <strong>Discover + Featured creators</strong> (rows below), <strong>media crop / focal point</strong>, and{' '}
                   <strong>footer legal links</strong>. Use <strong>Live View</strong> to preview your draft before publishing.
                 </p>
+              </div>
+
+              <div className="rounded-xl border border-gray-200 bg-white p-4 dark:border-gray-800 dark:bg-gray-900">
+                <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <h2 className="text-base font-bold text-gray-900 dark:text-white">Hero collage media</h2>
+                    <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                      Up to 3 tiles beside &quot;Different creators. Different worlds.&quot; Use different files than Featured if you want. Remove all slots to fall back to Discover/Featured media.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    disabled={draft.homeHeroVisuals.length >= 3}
+                    onClick={() =>
+                      setDraft((prev) => ({
+                        ...prev,
+                        homeHeroVisuals: [...prev.homeHeroVisuals, emptyShowcaseRow()],
+                      }))
+                    }
+                    className="inline-flex items-center gap-1 rounded-md border border-gray-300 px-3 py-1.5 text-xs font-medium disabled:opacity-50 dark:border-gray-700"
+                  >
+                    <PlusIcon className="h-4 w-4" />
+                    Add hero slot
+                  </button>
+                </div>
+                <div className="space-y-3">
+                  {draft.homeHeroVisuals.map((row, idx) => (
+                    <WitmeHomeVisualSlotRow
+                      key={`home-hero-${idx}`}
+                      listKey="homeHeroVisuals"
+                      idx={idx}
+                      row={row}
+                      fileInputRef={showcaseFileInputRef}
+                      uploadTargetRef={witmeUploadTargetRef}
+                      isUploading={isWitmeSlotUploading('homeHeroVisuals', idx)}
+                      onPatch={(patch) =>
+                        setDraft((prev) => {
+                          const list = [...prev.homeHeroVisuals];
+                          list[idx] = { ...list[idx], ...patch };
+                          return { ...prev, homeHeroVisuals: list };
+                        })
+                      }
+                      onRemove={() =>
+                        setDraft((prev) => ({
+                          ...prev,
+                          homeHeroVisuals: prev.homeHeroVisuals.filter((_, i) => i !== idx),
+                        }))
+                      }
+                    />
+                  ))}
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-gray-200 bg-white p-4 dark:border-gray-800 dark:bg-gray-900">
+                <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <h2 className="text-base font-bold text-gray-900 dark:text-white">&quot;What you&apos;ll find&quot; strip media</h2>
+                    <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                      Up to 4 tiles in the right column next to the experience cards. Independent from Featured. Remove all slots to fall back to Discover/Featured.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    disabled={draft.homeExperienceVisuals.length >= 4}
+                    onClick={() =>
+                      setDraft((prev) => ({
+                        ...prev,
+                        homeExperienceVisuals: [...prev.homeExperienceVisuals, emptyShowcaseRow()],
+                      }))
+                    }
+                    className="inline-flex items-center gap-1 rounded-md border border-gray-300 px-3 py-1.5 text-xs font-medium disabled:opacity-50 dark:border-gray-700"
+                  >
+                    <PlusIcon className="h-4 w-4" />
+                    Add strip slot
+                  </button>
+                </div>
+                <div className="space-y-3">
+                  {draft.homeExperienceVisuals.map((row, idx) => (
+                    <WitmeHomeVisualSlotRow
+                      key={`home-exp-${idx}`}
+                      listKey="homeExperienceVisuals"
+                      idx={idx}
+                      row={row}
+                      fileInputRef={showcaseFileInputRef}
+                      uploadTargetRef={witmeUploadTargetRef}
+                      isUploading={isWitmeSlotUploading('homeExperienceVisuals', idx)}
+                      onPatch={(patch) =>
+                        setDraft((prev) => {
+                          const list = [...prev.homeExperienceVisuals];
+                          list[idx] = { ...list[idx], ...patch };
+                          return { ...prev, homeExperienceVisuals: list };
+                        })
+                      }
+                      onRemove={() =>
+                        setDraft((prev) => ({
+                          ...prev,
+                          homeExperienceVisuals: prev.homeExperienceVisuals.filter((_, i) => i !== idx),
+                        }))
+                      }
+                    />
+                  ))}
+                </div>
               </div>
 
               <div className="rounded-xl border-2 border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-900">
@@ -882,15 +1221,15 @@ export const WitmePageManager: React.FC = () => {
                         <div className="flex flex-wrap items-center gap-2 md:col-span-2">
                           <button
                             type="button"
-                            disabled={showcaseUploadingIdx === idx}
+                            disabled={isWitmeSlotUploading('showcaseCreators', idx)}
                             onClick={() => {
-                              showcasePickIdxRef.current = idx;
+                              witmeUploadTargetRef.current = { key: 'showcaseCreators', idx };
                               showcaseFileInputRef.current?.click();
                             }}
                             className="inline-flex items-center gap-1 rounded-md border border-gray-300 px-3 py-2 text-xs font-medium disabled:opacity-50 dark:border-gray-700 dark:text-gray-200"
                           >
                             <UploadIcon className="h-4 w-4" />
-                            {showcaseUploadingIdx === idx ? 'Uploading…' : 'Upload image / video'}
+                            {isWitmeSlotUploading('showcaseCreators', idx) ? 'Uploading…' : 'Upload image / video'}
                           </button>
                           <select
                             value={row.mediaKind}
@@ -1227,24 +1566,31 @@ export const WitmePageManager: React.FC = () => {
                 </div>
               </div>
 
-              <div className="flex flex-wrap items-center gap-3">
-                <button
-                  onClick={saveDraft}
-                  disabled={saving || publishing}
-                  className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 disabled:opacity-50 dark:border-gray-700 dark:text-gray-200"
-                >
-                  {saving ? 'Saving...' : 'Save Draft'}
-                </button>
-                <button
-                  onClick={publishDraft}
-                  disabled={saving || publishing}
-                  className="rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-50 hover:bg-primary-700"
-                >
-                  {publishing ? 'Publishing...' : 'Publish Live'}
-                </button>
-                <div className="text-xs text-gray-500 dark:text-gray-400">
-                  {updatedAt ? `Draft updated: ${new Date(updatedAt).toLocaleString()}` : 'No edits yet'}
+              <div className="space-y-2">
+                <div className="flex flex-wrap items-center gap-3">
+                  <button
+                    onClick={saveDraft}
+                    disabled={saving || publishing}
+                    className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 disabled:opacity-50 dark:border-gray-700 dark:text-gray-200"
+                  >
+                    {saving ? 'Saving...' : 'Save Draft'}
+                  </button>
+                  <button
+                    onClick={publishDraft}
+                    disabled={saving || publishing}
+                    className="rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-50 hover:bg-primary-700"
+                  >
+                    {publishing ? 'Publishing...' : 'Publish Live'}
+                  </button>
+                  <div className="text-xs text-gray-500 dark:text-gray-400">
+                    {updatedAt ? `Draft updated: ${new Date(updatedAt).toLocaleString()}` : 'No edits yet'}
+                  </div>
                 </div>
+                <p className="max-w-3xl text-xs leading-relaxed text-gray-500 dark:text-gray-400">
+                  <span className="font-medium text-gray-700 dark:text-gray-300">Publish Live</span> saves what you see in this form to witme.io right now—you do{' '}
+                  <span className="font-medium text-gray-700 dark:text-gray-300">not</span> need to click Save Draft first. Save Draft only stores a draft in the admin DB; the public site keeps the last published version until you publish again. Hero/strip slots must have a valid{' '}
+                  <span className="font-medium text-gray-700 dark:text-gray-300">https://</span> media URL or the server drops them when saving.
+                </p>
               </div>
 
             </>

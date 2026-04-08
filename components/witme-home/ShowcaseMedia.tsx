@@ -23,7 +23,9 @@ export const ShowcaseMedia: React.FC<{
   objectFit?: "cover" | "contain";
   /** Intrinsic: scales with media aspect ratio (no fixed crop box / side bars). Fill: absolute cover layer. */
   layout?: "fill" | "intrinsic";
-}> = ({ url, mediaKind, alt, className, objectPosition, objectFit = "cover", layout = "fill" }) => {
+  /** Passed to `<img>` when `mediaKind` is image (e.g. eager for above-the-fold hero). */
+  imgLoading?: "eager" | "lazy";
+}> = ({ url, mediaKind, alt, className, objectPosition, objectFit = "cover", layout = "fill", imgLoading = "lazy" }) => {
   const u = url.trim();
   const fitStyle = showcaseObjectStyle(objectPosition, objectFit);
   const intrinsicClass =
@@ -84,5 +86,5 @@ export const ShowcaseMedia: React.FC<{
       />
     );
   }
-  return <img src={u} alt={alt} className={mergedClass} style={{ ...fitStyle, ...intrinsicStyle }} loading="lazy" />;
+  return <img src={u} alt={alt} className={mergedClass} style={{ ...fitStyle, ...intrinsicStyle }} loading={imgLoading} />;
 };

@@ -56,6 +56,10 @@ export interface WitmeLandingConfig {
   liveMoments: string[];
   legalLinks: LegalLink[];
   showcaseCreators: WitmeShowcaseCreator[];
+  /** When non-empty, hero collage uses these (max 3) instead of Discover/Featured media. */
+  homeHeroVisuals: WitmeShowcaseCreator[];
+  /** When non-empty, “What you’ll find” strip uses these (max 4) instead of Discover/Featured. */
+  homeExperienceVisuals: WitmeShowcaseCreator[];
 }
 
 const fanActions: ActionItem[] = [
@@ -106,6 +110,8 @@ const defaultWitmeConfig: WitmeLandingConfig = {
   liveMoments,
   legalLinks: defaultLegalLinks,
   showcaseCreators: DEFAULT_SHOWCASE_CREATORS,
+  homeHeroVisuals: [],
+  homeExperienceVisuals: [],
 };
 
 const normalizeLandingFeatureCards = (cards: ActionItem[]): ActionItem[] =>
@@ -166,23 +172,30 @@ const useWitmeLandingConfig = (enabled = true): WitmeLandingConfig => {
         if (cancelled || !data?.config) return;
         setConfig((prev) => {
           const nextBase = { ...prev, ...data.config } as WitmeLandingConfig;
+          const mapShowcase = (c: WitmeShowcaseCreator) => ({
+            ...c,
+            mediaKind: c.mediaKind === "video" ? "video" : "image",
+            mediaObjectPosition:
+              typeof c.mediaObjectPosition === "string" && c.mediaObjectPosition.trim() !== ""
+                ? c.mediaObjectPosition.trim()
+                : "50% 50%",
+            isFeatured: c.isFeatured === true,
+            featuredMediaFit: c.featuredMediaFit === "contain" ? "contain" : "cover",
+          });
           const merged: WitmeLandingConfig = {
             ...nextBase,
             featureCards: Array.isArray(data.config.featureCards)
               ? normalizeLandingFeatureCards(data.config.featureCards as ActionItem[])
               : nextBase.featureCards,
             showcaseCreators: Array.isArray(data.config.showcaseCreators)
-              ? data.config.showcaseCreators.map((c: WitmeShowcaseCreator) => ({
-                  ...c,
-                  mediaKind: c.mediaKind === "video" ? "video" : "image",
-                  mediaObjectPosition:
-                    typeof c.mediaObjectPosition === "string" && c.mediaObjectPosition.trim() !== ""
-                      ? c.mediaObjectPosition.trim()
-                      : "50% 50%",
-                  isFeatured: c.isFeatured === true,
-                  featuredMediaFit: c.featuredMediaFit === "contain" ? "contain" : "cover",
-                }))
+              ? data.config.showcaseCreators.map((c: WitmeShowcaseCreator) => mapShowcase(c))
               : nextBase.showcaseCreators,
+            homeHeroVisuals: Array.isArray(data.config.homeHeroVisuals)
+              ? data.config.homeHeroVisuals.map((c: WitmeShowcaseCreator) => mapShowcase(c))
+              : nextBase.homeHeroVisuals,
+            homeExperienceVisuals: Array.isArray(data.config.homeExperienceVisuals)
+              ? data.config.homeExperienceVisuals.map((c: WitmeShowcaseCreator) => mapShowcase(c))
+              : nextBase.homeExperienceVisuals,
           };
           return normalizeLandingCopy(merged);
         });
@@ -210,10 +223,15 @@ export const WitmeHomepage: React.FC<WitmeHomepageProps> = ({
   const remoteConfig = useWitmeLandingConfig(!disableRemoteConfig);
   const landingConfig = useMemo(() => {
     const raw = previewConfig || remoteConfig;
-    return normalizeLandingCopy({
+    const base = normalizeLandingCopy({
       ...raw,
       featureCards: normalizeLandingFeatureCards(raw.featureCards),
     });
+    return {
+      ...base,
+      homeHeroVisuals: base.homeHeroVisuals ?? [],
+      homeExperienceVisuals: base.homeExperienceVisuals ?? [],
+    };
   }, [previewConfig, remoteConfig]);
 
   useWitmeSeo({
@@ -233,6 +251,30 @@ export const WitmeHomepage: React.FC<WitmeHomepageProps> = ({
     const list = pickFeaturedShowcaseCreators(landingConfig.showcaseCreators);
     return list.length > 0 ? list : [WITME_DEFAULT_FEATURED_CREATOR];
   }, [landingConfig.showcaseCreators]);
+
+  /** When hero / experience CMS lists are empty, derive visuals from Discover + Featured (legacy behavior). */
+  const derivedLandingVisuals = useMemo(() => {
+    const withMedia = landingConfig.showcaseCreators.filter((c) => c.imageUrl.trim());
+    const sorted = [...withMedia].sort((a, b) => {
+      if (a.isFeatured !== b.isFeatured) return a.isFeatured ? -1 : 1;
+      if (a.linkLive !== b.linkLive) return a.linkLive ? -1 : 1;
+      return 0;
+    });
+    return sorted.length > 0 ? sorted : [WITME_DEFAULT_FEATURED_CREATOR];
+  }, [landingConfig.showcaseCreators]);
+
+  const heroVisualCreators = useMemo(() => {
+    const dedicated = landingConfig.homeHeroVisuals.filter((c) => c.imageUrl.trim()).slice(0, 3);
+    if (dedicated.length > 0) return dedicated;
+    return derivedLandingVisuals.slice(0, 3);
+  }, [landingConfig.homeHeroVisuals, derivedLandingVisuals]);
+
+  const experienceVisualCreators = useMemo(() => {
+    const dedicated = landingConfig.homeExperienceVisuals.filter((c) => c.imageUrl.trim()).slice(0, 4);
+    if (dedicated.length > 0) return dedicated;
+    return derivedLandingVisuals.slice(0, 4);
+  }, [landingConfig.homeExperienceVisuals, derivedLandingVisuals]);
+
   const creatorStudioUrl = echofluxUrl.replace(/\/$/, "");
 
   return (
@@ -240,9 +282,13 @@ export const WitmeHomepage: React.FC<WitmeHomepageProps> = ({
       <WitmeHeroSection
         firstCreatorPath={firstCreatorPath}
         creatorStudioUrl={creatorStudioUrl}
+        visualCreators={heroVisualCreators}
         enableTracking={!disableTracking}
       />
-      <WitmeExperienceTypesSection />
+      <WitmeExperienceTypesSection
+        visualCreators={experienceVisualCreators}
+        enableTracking={!disableTracking}
+      />
       <WitmeWhySection />
       <WitmeEarlySection />
       <WitmeFeaturedCreatorsSection creators={featuredCreators} enableTracking={!disableTracking} />

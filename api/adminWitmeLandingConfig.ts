@@ -1,7 +1,12 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { getAdminDb } from "./_firebaseAdmin.js";
 import { verifyAuth } from "./verifyAuth.js";
-import { DEFAULT_SHOWCASE_CREATORS, sanitizeShowcaseCreators, type WitmeShowcaseCreator } from "./_witmeShowcase.js";
+import {
+  DEFAULT_SHOWCASE_CREATORS,
+  sanitizeHomeVisualCreators,
+  sanitizeShowcaseCreators,
+  type WitmeShowcaseCreator,
+} from "./_witmeShowcase.js";
 
 type FeatureCard = {
   title: string;
@@ -24,6 +29,10 @@ type WitmeLandingConfig = {
   liveMoments: string[];
   legalLinks: LegalLink[];
   showcaseCreators: WitmeShowcaseCreator[];
+  /** Up to 3 — hero collage on witme.io; empty = derive from Discover/Featured. */
+  homeHeroVisuals: WitmeShowcaseCreator[];
+  /** Up to 4 — “What you’ll find” right column; empty = derive from Discover/Featured. */
+  homeExperienceVisuals: WitmeShowcaseCreator[];
 };
 
 const DEFAULT_CONFIG: WitmeLandingConfig = {
@@ -71,6 +80,8 @@ const DEFAULT_CONFIG: WitmeLandingConfig = {
     { label: "Support", url: "mailto:contact@echoflux.ai" },
   ],
   showcaseCreators: DEFAULT_SHOWCASE_CREATORS,
+  homeHeroVisuals: [],
+  homeExperienceVisuals: [],
 };
 
 function sanitizeString(value: unknown, max = 300): string {
@@ -82,6 +93,8 @@ function sanitizeConfig(input: unknown): WitmeLandingConfig {
   const src = (input && typeof input === "object" ? input : {}) as Record<string, unknown>;
   const hasShowcaseKey = Object.prototype.hasOwnProperty.call(src, "showcaseCreators");
   const showcaseCreators = sanitizeShowcaseCreators(src.showcaseCreators, hasShowcaseKey);
+  const homeHeroVisuals = sanitizeHomeVisualCreators(src.homeHeroVisuals, 3);
+  const homeExperienceVisuals = sanitizeHomeVisualCreators(src.homeExperienceVisuals, 4);
 
   const cardsRaw = Array.isArray(src.featureCards) ? src.featureCards : [];
   const featureCards: FeatureCard[] = cardsRaw
@@ -127,6 +140,8 @@ function sanitizeConfig(input: unknown): WitmeLandingConfig {
     liveMoments: liveMoments.length > 0 ? liveMoments : DEFAULT_CONFIG.liveMoments,
     legalLinks: legalLinks.length > 0 ? legalLinks : DEFAULT_CONFIG.legalLinks,
     showcaseCreators,
+    homeHeroVisuals,
+    homeExperienceVisuals,
   };
 }
 
@@ -187,7 +202,25 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
   }
 
   const action = typeof rawBody.action === "string" ? rawBody.action : "saveDraft";
-  const incomingConfig = sanitizeConfig(rawBody.config ?? DEFAULT_CONFIG);
+  const rawConfig = rawBody.config;
+  if (rawConfig === undefined || rawConfig === null) {
+    res.status(400).json({ error: "Missing config in request body" });
+    return;
+  }
+  let configInput: unknown = rawConfig;
+  if (typeof rawConfig === "string") {
+    try {
+      configInput = JSON.parse(rawConfig) as unknown;
+    } catch {
+      res.status(400).json({ error: "Invalid config: expected JSON object or JSON string" });
+      return;
+    }
+  }
+  if (typeof configInput !== "object" || configInput === null || Array.isArray(configInput)) {
+    res.status(400).json({ error: "Invalid config: must be a JSON object" });
+    return;
+  }
+  const incomingConfig = sanitizeConfig(configInput);
   const now = new Date().toISOString();
   const ref = db.collection("siteConfig").doc("witmeLanding");
   const existing = await ref.get();

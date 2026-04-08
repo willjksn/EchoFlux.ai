@@ -63,6 +63,42 @@ function slugFromHandleDisplay(handle: unknown): string {
   return normalizePageSlug(handle);
 }
 
+/** Map one Firestore/API object to a showcase row (may be filtered downstream). */
+function parseWitmeShowcaseRow(r: Record<string, unknown>): WitmeShowcaseCreator {
+  const name = sanitizeString(r.name, 80);
+  const handle = sanitizeString(r.handle, 80);
+  let pageSlug = normalizePageSlug(r.pageSlug);
+  if (!pageSlug) pageSlug = slugFromHandleDisplay(handle);
+  const imageUrl = sanitizeShowcaseImageUrl(r.imageUrl, 4096);
+  const mediaKind: "image" | "video" = r.mediaKind === "video" ? "video" : "image";
+  const mediaObjectPosition = sanitizeMediaObjectPosition(r.mediaObjectPosition);
+  const descriptor = sanitizeString(r.descriptor, 220);
+  const spotlight = sanitizeString(r.spotlight, 220);
+  const tags = (Array.isArray(r.tags) ? r.tags : [])
+    .map((t) => sanitizeString(t, 40))
+    .filter(Boolean)
+    .slice(0, 8);
+  let linkLive = r.linkLive === true;
+  if (linkLive && !pageSlug) linkLive = false;
+  const isFeatured = r.isFeatured === true;
+  const fitRaw = sanitizeString(r.featuredMediaFit, 12).toLowerCase();
+  const featuredMediaFit: "cover" | "contain" = fitRaw === "contain" ? "contain" : "cover";
+  return {
+    name,
+    handle,
+    pageSlug,
+    imageUrl,
+    mediaKind,
+    mediaObjectPosition,
+    descriptor,
+    tags,
+    spotlight,
+    linkLive,
+    isFeatured,
+    featuredMediaFit,
+  };
+}
+
 function sanitizeMediaObjectPosition(value: unknown): string {
   const s = sanitizeString(value, 48).trim();
   if (!s) return "50% 50%";
@@ -80,44 +116,25 @@ function sanitizeMediaObjectPosition(value: unknown): string {
 export function sanitizeShowcaseCreators(input: unknown, hasShowcaseKey: boolean): WitmeShowcaseCreator[] {
   const raw = Array.isArray(input) ? input : [];
   const rows: WitmeShowcaseCreator[] = raw
-    .map((row) => {
-      const r = (row && typeof row === "object" ? row : {}) as Record<string, unknown>;
-      const name = sanitizeString(r.name, 80);
-      const handle = sanitizeString(r.handle, 80);
-      let pageSlug = normalizePageSlug(r.pageSlug);
-      if (!pageSlug) pageSlug = slugFromHandleDisplay(handle);
-      const imageUrl = sanitizeShowcaseImageUrl(r.imageUrl, 4096);
-      const mediaKind: "image" | "video" = r.mediaKind === "video" ? "video" : "image";
-      const mediaObjectPosition = sanitizeMediaObjectPosition(r.mediaObjectPosition);
-      const descriptor = sanitizeString(r.descriptor, 220);
-      const spotlight = sanitizeString(r.spotlight, 220);
-      const tags = (Array.isArray(r.tags) ? r.tags : [])
-        .map((t) => sanitizeString(t, 40))
-        .filter(Boolean)
-        .slice(0, 8);
-      let linkLive = r.linkLive === true;
-      if (linkLive && !pageSlug) linkLive = false;
-      const isFeatured = r.isFeatured === true;
-      const fitRaw = sanitizeString(r.featuredMediaFit, 12).toLowerCase();
-      const featuredMediaFit: "cover" | "contain" = fitRaw === "contain" ? "contain" : "cover";
-      return {
-        name,
-        handle,
-        pageSlug,
-        imageUrl,
-        mediaKind,
-        mediaObjectPosition,
-        descriptor,
-        tags,
-        spotlight,
-        linkLive,
-        isFeatured,
-        featuredMediaFit,
-      };
-    })
+    .map((row) => parseWitmeShowcaseRow((row && typeof row === "object" ? row : {}) as Record<string, unknown>))
     .filter((c) => c.name && c.imageUrl)
     .slice(0, 24);
 
   if (!hasShowcaseKey && rows.length === 0) return [...DEFAULT_SHOWCASE_CREATORS];
   return rows;
+}
+
+/** Homepage hero collage / “What you’ll find” strip — independent media from Discover/Featured; only https media required. */
+export function sanitizeHomeVisualCreators(input: unknown, max: number): WitmeShowcaseCreator[] {
+  const raw = Array.isArray(input) ? input : [];
+  return raw
+    .map((row) => parseWitmeShowcaseRow((row && typeof row === "object" ? row : {}) as Record<string, unknown>))
+    .map((c) => ({
+      ...c,
+      name: c.name.trim() ? c.name : "Creator",
+      isFeatured: false,
+      featuredMediaFit: "cover" as const,
+    }))
+    .filter((c) => c.imageUrl)
+    .slice(0, max);
 }

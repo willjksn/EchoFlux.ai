@@ -1,6 +1,11 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { getAdminDb } from "./_firebaseAdmin.js";
-import { DEFAULT_SHOWCASE_CREATORS, sanitizeShowcaseCreators, type WitmeShowcaseCreator } from "./_witmeShowcase.js";
+import {
+  DEFAULT_SHOWCASE_CREATORS,
+  sanitizeHomeVisualCreators,
+  sanitizeShowcaseCreators,
+  type WitmeShowcaseCreator,
+} from "./_witmeShowcase.js";
 
 type FeatureCard = {
   title: string;
@@ -23,6 +28,8 @@ type WitmeLandingConfig = {
   liveMoments: string[];
   legalLinks: LegalLink[];
   showcaseCreators: WitmeShowcaseCreator[];
+  homeHeroVisuals: WitmeShowcaseCreator[];
+  homeExperienceVisuals: WitmeShowcaseCreator[];
 };
 
 const DEFAULT_CONFIG: WitmeLandingConfig = {
@@ -70,6 +77,8 @@ const DEFAULT_CONFIG: WitmeLandingConfig = {
     { label: "Support", url: "mailto:contact@echoflux.ai" },
   ],
   showcaseCreators: DEFAULT_SHOWCASE_CREATORS,
+  homeHeroVisuals: [],
+  homeExperienceVisuals: [],
 };
 
 function sanitizeString(value: unknown, max = 300): string {
@@ -81,6 +90,8 @@ function sanitizeConfig(input: unknown): WitmeLandingConfig {
   const src = (input && typeof input === "object" ? input : {}) as Record<string, unknown>;
   const hasShowcaseKey = Object.prototype.hasOwnProperty.call(src, "showcaseCreators");
   const showcaseCreators = sanitizeShowcaseCreators(src.showcaseCreators, hasShowcaseKey);
+  const homeHeroVisuals = sanitizeHomeVisualCreators(src.homeHeroVisuals, 3);
+  const homeExperienceVisuals = sanitizeHomeVisualCreators(src.homeExperienceVisuals, 4);
 
   const cardsRaw = Array.isArray(src.featureCards) ? src.featureCards : [];
   const featureCards: FeatureCard[] = cardsRaw
@@ -126,6 +137,8 @@ function sanitizeConfig(input: unknown): WitmeLandingConfig {
     liveMoments: liveMoments.length > 0 ? liveMoments : DEFAULT_CONFIG.liveMoments,
     legalLinks: legalLinks.length > 0 ? legalLinks : DEFAULT_CONFIG.legalLinks,
     showcaseCreators,
+    homeHeroVisuals,
+    homeExperienceVisuals,
   };
 }
 
