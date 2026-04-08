@@ -2790,6 +2790,13 @@ export const FanStorefrontView: React.FC = () => {
     return `${mins}:${String(secs).padStart(2, "0")}`;
   };
 
+  const dmPremiumSessionLive = useMemo(
+    () =>
+      dmLiveSession != null &&
+      (dmLiveSession.status === "active" || dmLiveSession.status === "paused"),
+    [dmLiveSession]
+  );
+
   const handleCancelMembership = async () => {
     if (!creator?.creatorId || !auth.currentUser) return;
     if (!window.confirm("Cancel your membership? You'll keep access until the end of your current billing period.")) return;
@@ -4772,39 +4779,26 @@ export const FanStorefrontView: React.FC = () => {
                 ) : fanBanned ? (
                   <p className="fan-member-banned">You cannot message this creator.</p>
                 ) : (
-                  <>
-                    <p className="fan-member-messages-title">
-                      {dmLiveSession && (dmLiveSession.status === "active" || dmLiveSession.status === "paused")
-                        ? `Live Session Room with ${displayName}`
-                        : `Conversation with ${displayName}`}
-                    </p>
-                    {dmLiveSession && (dmLiveSession.status === "active" || dmLiveSession.status === "paused") ? (
-                      <div
-                        className="fan-profile-panel"
-                        style={{
-                          marginBottom: "0.75rem",
-                          borderColor: "color-mix(in srgb, #059669 38%, transparent)",
-                          backgroundColor: "color-mix(in srgb, #059669 8%, white)",
-                        }}
-                      >
-                        <p className="fan-member-about-text m-0" style={{ fontWeight: 700 }}>
-                          Paid chat session live
-                        </p>
-                        <p className="fan-member-about-text m-0 mt-1">
-                          {dmLiveSession.chatType || "Custom"} • {formatRemaining(dmLiveSession.remainingSeconds)} remaining
-                        </p>
-                        <p className="fan-member-about-text m-0 mt-1" style={{ opacity: 0.8 }}>
-                          Premium session mode is active.
+                  <div
+                    className={dmPremiumSessionLive ? "fan-member-premium-session-shell" : undefined}
+                    role={dmPremiumSessionLive ? "region" : undefined}
+                    aria-label={dmPremiumSessionLive ? "Premium live chat session" : undefined}
+                  >
+                    {dmPremiumSessionLive && dmLiveSession ? (
+                      <div className="fan-member-premium-session-shell__hero">
+                        <span className="fan-member-premium-session-shell__badge">Premium live session</span>
+                        <h2 className="fan-member-premium-session-shell__title">Session with {displayName}</h2>
+                        <p className="fan-member-premium-session-shell__meta">
+                          {dmLiveSession.chatType || "Custom"} · {formatRemaining(dmLiveSession.remainingSeconds)} left ·
+                          separate from everyday DMs
                         </p>
                       </div>
-                    ) : null}
+                    ) : (
+                      <p className="fan-member-messages-title">Conversation with {displayName}</p>
+                    )}
                     <div
                       ref={dmMessagesListRef}
-                      className={`fan-member-messages-list ${
-                        dmLiveSession && (dmLiveSession.status === "active" || dmLiveSession.status === "paused")
-                          ? "fh-dm-session-room"
-                          : ""
-                      }`}
+                      className={`fan-member-messages-list ${dmPremiumSessionLive ? "fh-dm-session-room" : ""}`}
                       onScroll={(e) => {
                         dmAutoStickToBottomRef.current = dmIsNearBottom(e.currentTarget);
                       }}
@@ -5034,7 +5028,7 @@ export const FanStorefrontView: React.FC = () => {
                       </button>
                       </div>
                     </div>
-                  </>
+                  </div>
                 )}
               </div>
             )}

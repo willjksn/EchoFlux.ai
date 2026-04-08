@@ -80,8 +80,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           await sendFanNotification({
             fanId,
             type: "session_starting",
-            title: "Chat session started",
-            body: "Your creator started a live chat session with you.",
+            title: "Premium live chat session",
+            body: "Your creator started a timed premium session. Open Messages on their page to join the live session room.",
             data: {
               threadId,
               creatorId,

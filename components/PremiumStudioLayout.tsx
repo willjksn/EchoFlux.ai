@@ -9,6 +9,7 @@ import {
   useUnreadNewMessageNotificationCount,
   clearNewMessageNotificationBadge,
 } from './useUnreadNewMessageNotifications';
+import { useCreatorLiveChatSessionsCount } from './useCreatorLiveChatSessionsCount';
 
 const FAN_HUB_PREVIEW_THEME_STORAGE_KEY = 'echoflux:fanhub-preview-theme';
 const FAN_HUB_PREVIEW_THEME_EVENT = 'echoflux:fanhub-preview-theme-changed';
@@ -88,6 +89,7 @@ export const PremiumStudioLayout: React.FC<PremiumStudioLayoutProps> = ({ childr
   );
 
   const unreadMessagesTabCount = useUnreadNewMessageNotificationCount(isFanHub ? null : false);
+  const liveChatSessionsCount = useCreatorLiveChatSessionsCount(Boolean(isFanHub));
 
   const handleFanHubNotificationNavigate = useCallback(
     (p: { type: string; data: Record<string, string> }) => {
@@ -283,6 +285,16 @@ export const PremiumStudioLayout: React.FC<PremiumStudioLayoutProps> = ({ childr
                     aria-label={`${unreadMessagesTabCount} unread messages`}
                   >
                     {unreadMessagesTabCount > 9 ? '9+' : unreadMessagesTabCount}
+                  </span>
+                ) : null}
+                {isFanHub && id === 'sessions' && liveChatSessionsCount > 0 ? (
+                  <span
+                    className="min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-bold leading-none inline-flex items-center justify-center text-white ring-2 ring-amber-400/90"
+                    style={{ backgroundColor: effectiveFanTheme.primary }}
+                    aria-label={`${liveChatSessionsCount} live chat session${liveChatSessionsCount === 1 ? '' : 's'}`}
+                    title="Live premium chat session running — open Chat Session"
+                  >
+                    {liveChatSessionsCount > 9 ? '9+' : liveChatSessionsCount}
                   </span>
                 ) : null}
               </span>

@@ -53,22 +53,80 @@ async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
   });
   if (!ok) return;
 
-    const {
-    sessionContext,
-    fanContext,
-    personalityContext,
-    conversationHistory,
-    lastFanMessage,
-    emojiEnabled,
-    emojiIntensity,
-  } = req.body || {};
+  const rawBody = (req.body || {}) as Record<string, unknown>;
+  const sessionContext =
+    rawBody.sessionContext && typeof rawBody.sessionContext === "object" && !Array.isArray(rawBody.sessionContext)
+      ? (rawBody.sessionContext as Record<string, unknown>)
+      : {};
+  let fanContext = typeof rawBody.fanContext === "string" ? rawBody.fanContext : "";
+  let personalityContext = typeof rawBody.personalityContext === "string" ? rawBody.personalityContext : "";
+  let conversationHistory = typeof rawBody.conversationHistory === "string" ? rawBody.conversationHistory : "";
+  let lastFanMessage = typeof rawBody.lastFanMessage === "string" ? rawBody.lastFanMessage : "";
+  const emojiEnabled = rawBody.emojiEnabled;
+  const emojiIntensityRaw = rawBody.emojiIntensity;
+  const emojiIntensity =
+    typeof emojiIntensityRaw === "number" && Number.isFinite(emojiIntensityRaw) ? emojiIntensityRaw : 5;
+  const numSuggestionsRequested =
+    typeof rawBody.numSuggestions === "number" && Number.isFinite(rawBody.numSuggestions) && rawBody.numSuggestions > 0
+      ? Math.min(20, Math.floor(rawBody.numSuggestions))
+      : undefined;
+
+  /** Premium Studio chat session sends `recentMessages` ({ role, content }) — map into prompt fields. */
+  const recentMessages = rawBody.recentMessages;
+  if (Array.isArray(recentMessages) && recentMessages.length > 0) {
+    const lines: string[] = [];
+    for (const m of recentMessages) {
+      const row = m && typeof m === "object" ? (m as Record<string, unknown>) : {};
+      const role = row.role === "assistant" ? "Creator" : "Fan";
+      const content = typeof row.content === "string" ? row.content : "";
+      lines.push(`${role}: ${content}`);
+    }
+    conversationHistory = lines.join("\n");
+    const lastUser = [...recentMessages]
+      .reverse()
+      .find((m) => (m && typeof m === "object" ? (m as Record<string, unknown>).role : null) === "user") as
+      | Record<string, unknown>
+      | undefined;
+    if (lastUser && typeof lastUser.content === "string" && lastUser.content.trim()) {
+      lastFanMessage = lastUser.content.trim();
+    }
+  }
+  if (typeof rawBody.creatorPersona === "string" && rawBody.creatorPersona.trim()) {
+    personalityContext = rawBody.creatorPersona.trim();
+  }
+
+  const normalizeStudioTone = (t: string): string => {
+    const s = t.trim().toLowerCase();
+    if (s === "tease" || s === "teasing") return "Teasing";
+    if (s === "playful") return "Playful";
+    if (s === "intimate") return "Intimate";
+    if (s === "sweet") return "Sweet";
+    if (s === "bold") return "Bold";
+    if (s === "soft") return "Soft";
+    const raw = t.trim();
+    if (!raw) return "Teasing";
+    return raw.charAt(0).toUpperCase() + raw.slice(1).toLowerCase();
+  };
 
   try {
     const model = await getModelForTask("sexting_session", user.uid);
 
-    const roleplayType = sessionContext?.roleplayType || "Girlfriend Experience";
-    const tone = sessionContext?.tone || "Teasing";
-    const fanName = sessionContext?.fanName || "Fan";
+    const roleplayType =
+      typeof sessionContext.roleplayType === "string" && sessionContext.roleplayType.trim()
+        ? sessionContext.roleplayType.trim()
+        : "Girlfriend Experience";
+    let tone =
+      typeof sessionContext.tone === "string" && sessionContext.tone.trim()
+        ? sessionContext.tone.trim()
+        : "Teasing";
+    if (typeof rawBody.tone === "string" && rawBody.tone.trim()) {
+      tone = normalizeStudioTone(rawBody.tone);
+    }
+    let fanName =
+      typeof sessionContext.fanName === "string" && sessionContext.fanName.trim() ? sessionContext.fanName.trim() : "Fan";
+    if (typeof rawBody.fanName === "string" && rawBody.fanName.trim()) {
+      fanName = rawBody.fanName.trim();
+    }
     let explicitnessLevel = 7;
     let toneSettings: { formality?: number; humor?: number; empathy?: number; spiciness?: number; profanity?: number; emojiLevel?: number } = {};
     try {
@@ -215,10 +273,19 @@ Guidelines:
       throw new Error("Model returned no suggestions");
     }
 
-    res.status(200).json({
+    if (numSuggestionsRequested) {
+      suggestions = suggestions.slice(0, numSuggestionsRequested);
+    }
+
+    const payload: { success: true; suggestions: string[]; suggestion?: string } = {
       success: true,
       suggestions,
-    });
+    };
+    if (suggestions.length === 1) {
+      payload.suggestion = suggestions[0];
+    }
+
+    res.status(200).json(payload);
   } catch (error: any) {
     console.error("[generateSextingSuggestion] error:", error);
     res.status(200).json({

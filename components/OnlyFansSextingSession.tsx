@@ -378,7 +378,9 @@ export const OnlyFansSextingSession: React.FC = () => {
   const imageInputRef = useRef<HTMLInputElement>(null);
   const videoInputRef = useRef<HTMLInputElement>(null);
   const lastFetchedMessageCountRef = useRef(0);
-  const lastChatBotRepliedCountRef = useRef(0);
+  /** Which fan DM message id we last auto-replied to (avoid double-send; length-based ref broke on fetch lag). */
+  const lastChatBotRepliedFanMessageIdRef = useRef<string | null>(null);
+  const chatBotInFlightRef = useRef(false);
 
   const selectedFan = fans.find((f) => f.uid === selectedUid);
   const recentMessages = messagesToContext(messages, adminUid);
@@ -647,6 +649,8 @@ export const OnlyFansSextingSession: React.FC = () => {
     setSessionPaused(false);
     setActiveThreadId(null);
     setActiveChatSessionId(null);
+    lastChatBotRepliedFanMessageIdRef.current = null;
+    chatBotInFlightRef.current = false;
     showToast?.('Session ended — time is up!', 'success');
   }, [sessionStarted, timeRemainingSeconds, showToast, endActiveSessionOnServer]);
 
@@ -712,6 +716,8 @@ export const OnlyFansSextingSession: React.FC = () => {
     setActiveChatSessionId(null);
     setMessages([]);
     setAutoSuggestions([]);
+    lastChatBotRepliedFanMessageIdRef.current = null;
+    chatBotInFlightRef.current = false;
     showToast?.('Session ended', 'success');
   }, [showToast, endActiveSessionOnServer]);
 
@@ -779,7 +785,7 @@ export const OnlyFansSextingSession: React.FC = () => {
       });
 
       const data = await response.json().catch(() => ({}));
-      if (response.ok && data.suggestions?.length) {
+      if (response.ok && data.success !== false && Array.isArray(data.suggestions) && data.suggestions.length) {
         setAutoSuggestions(data.suggestions.map((s: string) => normalizeChatText(s)).filter(Boolean));
       }
     } catch {
@@ -789,17 +795,29 @@ export const OnlyFansSextingSession: React.FC = () => {
     }
   }, [sessionStarted, recentMessages, tone, selectedFan, useCreatorPersonality, creatorPersonality, contentSpiciness, getToken]);
 
-  // Chatbot auto-reply (Elite only)
+  // Chatbot auto-reply (Elite only) — API expects legacy fields OR `recentMessages` (mapped server-side).
   useEffect(() => {
-    if (!canUseChatBot || !chatBotEnabled || !sessionStarted || sessionPaused || recentMessages.length === 0 || chatBotReplying) return;
-    const last = recentMessages[recentMessages.length - 1];
-    if (last.role !== 'user') return;
-    if (recentMessages.length <= lastChatBotRepliedCountRef.current) return;
-    lastChatBotRepliedCountRef.current = recentMessages.length;
+    if (!canUseChatBot || !chatBotEnabled || !sessionStarted || sessionPaused) return;
+    if (!activeThreadId || !selectedUid || chatBotInFlightRef.current) return;
 
+    const lastFanMsg = [...messages]
+      .reverse()
+      .find((m) => m.senderId === selectedUid && normalizeChatText(m.text));
+    if (!lastFanMsg) return;
+    if (lastChatBotRepliedFanMessageIdRef.current === lastFanMsg.id) return;
+
+    const recentForApi = messagesToContext(messages, adminUid);
+    if (recentForApi.length === 0) return;
+    const lastCtx = recentForApi[recentForApi.length - 1];
+    if (lastCtx.role !== 'user') return;
+
+    chatBotInFlightRef.current = true;
     setChatBotReplying(true);
     const toneId = tone.toLowerCase();
-    const toneParam = toneId === 'teasing' ? 'tease' : toneId === 'playful' || toneId === 'intimate' || toneId === 'sweet' ? toneId : 'playful';
+    const toneParam =
+      toneId === 'teasing' ? 'tease' : toneId === 'playful' || toneId === 'intimate' || toneId === 'sweet' ? toneId : 'playful';
+
+    const fanMsgId = lastFanMsg.id;
 
     getToken()
       .then((token) => {
@@ -811,41 +829,70 @@ export const OnlyFansSextingSession: React.FC = () => {
             Authorization: `Bearer ${token}`,
           },
           body: JSON.stringify({
-            recentMessages,
+            recentMessages: recentForApi,
             fanName: formatFanPlainMoniker(selectedFan ?? {}) || undefined,
             creatorPersona: useCreatorPersonality ? creatorPersonality : undefined,
             tone: toneParam,
             numSuggestions: 1,
             spiciness: contentSpiciness,
           }),
-        }).then((r) => r.json());
+        }).then(async (r) => {
+          const data = await r.json().catch(() => ({}));
+          return { ok: r.ok, data };
+        });
       })
-      .then((data) => {
-        if (data?.suggestion?.trim() && activeThreadId && selectedUid) {
-          const aiText = normalizeChatText(data.suggestion);
-          if (!aiText) return;
-          return getToken().then(async (token) => {
-            if (!token) return;
-            await fetch('/api/fanDmSend', {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                Authorization: `Bearer ${token}`,
-              },
-              body: JSON.stringify({
-                creatorId: adminUid,
-                fanId: selectedUid,
-                threadId: activeThreadId,
-                content: aiText,
-              }),
-            });
-            await fetchSessionMessages();
-          });
-        }
+      .then(async (result) => {
+        if (!result || !result.ok || result.data?.success === false) return;
+        const d = result.data as { suggestions?: string[]; suggestion?: string };
+        const raw =
+          Array.isArray(d.suggestions) && d.suggestions[0]?.trim()
+            ? d.suggestions[0]
+            : typeof d.suggestion === 'string'
+              ? d.suggestion
+              : '';
+        const aiText = normalizeChatText(raw);
+        if (!aiText || !activeThreadId || !selectedUid) return;
+        const token = await getToken();
+        if (!token) return;
+        const sendRes = await fetch('/api/fanDmSend', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            creatorId: adminUid,
+            fanId: selectedUid,
+            threadId: activeThreadId,
+            content: aiText,
+          }),
+        });
+        if (!sendRes.ok) return;
+        lastChatBotRepliedFanMessageIdRef.current = fanMsgId;
+        await fetchSessionMessages();
       })
       .catch(() => {})
-      .finally(() => setChatBotReplying(false));
-  }, [canUseChatBot, chatBotEnabled, sessionStarted, sessionPaused, recentMessages, tone, selectedFan, useCreatorPersonality, creatorPersonality, contentSpiciness, getToken, adminUid, chatBotReplying, activeThreadId, selectedUid, fetchSessionMessages]);
+      .finally(() => {
+        chatBotInFlightRef.current = false;
+        setChatBotReplying(false);
+      });
+  }, [
+    canUseChatBot,
+    chatBotEnabled,
+    sessionStarted,
+    sessionPaused,
+    messages,
+    selectedUid,
+    adminUid,
+    tone,
+    selectedFan,
+    useCreatorPersonality,
+    creatorPersonality,
+    contentSpiciness,
+    getToken,
+    activeThreadId,
+    fetchSessionMessages,
+  ]);
 
   useEffect(() => {
     if (!sessionStarted || !activeThreadId) return;
