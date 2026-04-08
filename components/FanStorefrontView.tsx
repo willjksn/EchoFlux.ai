@@ -834,6 +834,7 @@ export const FanStorefrontView: React.FC = () => {
   const [limitedMemberAccess, setLimitedMemberAccess] = useState(false);
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const [entitlementLoading, setEntitlementLoading] = useState(false);
+  const [entitlementBootstrapResolved, setEntitlementBootstrapResolved] = useState(false);
   /** Bumps when entitlement effect re-runs so stale async completions don't leave loading stuck. */
   const entitlementFetchGen = useRef(0);
   const [loading, setLoading] = useState(true);
@@ -1800,11 +1801,13 @@ export const FanStorefrontView: React.FC = () => {
       setLimitedMemberAccess(false);
       setFanPageAdminBypass(false);
       setEntitlementLoading(false);
+      setEntitlementBootstrapResolved(true);
       entitlementHydratingRef.current = false;
       return;
     }
 
     const gen = ++entitlementFetchGen.current;
+    setEntitlementBootstrapResolved(false);
     setEntitlementLoading(true);
     entitlementHydratingRef.current = true;
 
@@ -1853,6 +1856,7 @@ export const FanStorefrontView: React.FC = () => {
       } finally {
         if (gen === entitlementFetchGen.current) {
           setEntitlementLoading(false);
+          setEntitlementBootstrapResolved(true);
           entitlementHydratingRef.current = false;
         }
       }
@@ -3315,6 +3319,12 @@ export const FanStorefrontView: React.FC = () => {
     ? false
     : forceCreatorPreviewLanding || !isLoggedIn || (!requiresPaidToAccess && !hasMemberAreaAccess);
   const holdForAuthResolution = !authResolved && !previewMember && !forceCreatorPreviewLanding;
+  const holdForEntitlementBootstrap =
+    !previewMember &&
+    !forceCreatorPreviewLanding &&
+    isLoggedIn &&
+    creatorRequiresPaidMembership &&
+    !entitlementBootstrapResolved;
 
   /**
    * Member hub must not follow EchoFlux `html.dark` (UIContext). That class turns on `.dark .stormij-theme`
@@ -3418,14 +3428,16 @@ export const FanStorefrontView: React.FC = () => {
   useEffect(() => {
     if (typeof window === "undefined" || showLanding) return;
     const parsed = parseHandleFromPath();
+    const isCustomHost = isConfiguredCustomStorefrontHost(window.location.hostname);
     const fromPath = parsed.memberNavSlug ? memberPathSlugToTab(parsed.memberNavSlug) : null;
     const params = new URLSearchParams(window.location.search);
     const qTab = (params.get("tab") || "").trim().toLowerCase();
-    const fromQuery = qTab ? memberPathSlugToTab(qTab) : null;
+    // On custom domains, rely on path-based tabs only to avoid stale/global ?tab collisions.
+    const fromQuery = !isCustomHost && qTab ? memberPathSlugToTab(qTab) : null;
     const mapped = fromPath || fromQuery;
-    if (mapped) setActiveTab(mapped);
+    if (mapped && mapped !== activeTab) setActiveTab(mapped);
 
-    if (parsed.memberNavSlug && params.has("tab")) {
+    if ((parsed.memberNavSlug && params.has("tab")) || (isCustomHost && params.has("tab"))) {
       params.delete("tab");
       const qs = params.toString();
       window.history.replaceState(
@@ -3433,13 +3445,13 @@ export const FanStorefrontView: React.FC = () => {
         "",
         window.location.pathname + (qs ? `?${qs}` : "") + window.location.hash
       );
-    } else if (creator?.handle?.trim() && qTab && memberPathSlugToTab(qTab) && !parsed.memberNavSlug) {
+    } else if (!isCustomHost && creator?.handle?.trim() && qTab && memberPathSlugToTab(qTab) && !parsed.memberNavSlug) {
       applyFanStorefrontMemberUrl(memberPathSlugToTab(qTab)!, {
         showLanding: false,
         creatorHandle: creator.handle.trim(),
       });
     }
-  }, [showLanding, pathname, creator?.handle]);
+  }, [showLanding, pathname, creator?.handle, activeTab]);
 
   /** Must run before any early return (loading / error) so hook order is stable. */
   const profileDisplayName = useMemo(() => {
@@ -3807,7 +3819,7 @@ export const FanStorefrontView: React.FC = () => {
       ? "/"
       : `/${creator.handle}/${FAN_STOREFRONT_PUBLIC_LANDING_SLUG}`;
 
-  if (holdForAuthResolution) {
+  if (holdForAuthResolution || holdForEntitlementBootstrap) {
     return (
       <>
         <div className="stormij-theme stormij-theme--light storefront-landing-wrap min-h-screen flex items-center justify-center">
