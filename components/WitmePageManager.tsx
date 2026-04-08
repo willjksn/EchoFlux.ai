@@ -144,6 +144,14 @@ const formatAnalyticsDateMdy = (dateStr: string): string => {
   return `${d.getMonth() + 1}-${d.getDate()}-${d.getFullYear()}`;
 };
 
+/** Readable label for witme paths (raw "/" is home — avoids "Top paths" + "/" reading as one slash phrase). */
+const witmeAnalyticsPathLabel = (path: string): string => {
+  const p = path.trim() || '/';
+  if (p === '/') return 'Home';
+  if (p === '/discover') return 'Discover';
+  return p;
+};
+
 const mergeWitmeLandingFromApi = (raw: WitmeLandingConfig): WitmeLandingConfig => {
   const mapRow = (c: WitmeShowcaseCreator): WitmeShowcaseCreator => ({
     ...c,
@@ -1787,20 +1795,45 @@ export const WitmePageManager: React.FC = () => {
                 <div className="grid gap-4 md:grid-cols-2">
                   <WitmeAnalyticsListPanel>
                     <div className="px-4 py-3 border-b border-gray-100 dark:border-gray-800">
-                      <p className="text-[10px] sm:text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">
+                      <p
+                        id="witme-analytics-top-paths-heading"
+                        className="text-[10px] sm:text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400"
+                      >
                         Top paths
                       </p>
+                      <p className="mt-1 text-[11px] leading-snug text-gray-400 dark:text-gray-500">
+                        Page views by URL path. “/” is the witme home page.
+                      </p>
                     </div>
-                    <div className="divide-y divide-gray-100 dark:divide-gray-800 max-h-80 overflow-y-auto custom-scrollbar">
-                      {analytics.topPaths.map((row) => (
-                        <div
-                          key={row.path}
-                          className="flex items-center justify-between gap-3 px-4 py-2.5 text-sm text-gray-700 dark:text-gray-200"
-                        >
-                          <span className="truncate font-medium">{row.path}</span>
-                          <span className="font-semibold tabular-nums shrink-0 text-gray-900 dark:text-white">{row.count}</span>
-                        </div>
-                      ))}
+                    <div
+                      className="divide-y divide-gray-100 dark:divide-gray-800 max-h-80 overflow-y-auto custom-scrollbar"
+                      role="list"
+                      aria-labelledby="witme-analytics-top-paths-heading"
+                    >
+                      <div
+                        className="flex items-center justify-between gap-3 px-4 py-2 text-[10px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500"
+                        role="presentation"
+                      >
+                        <span>Path</span>
+                        <span className="tabular-nums">Views</span>
+                      </div>
+                      {analytics.topPaths.map((row) => {
+                        const label = witmeAnalyticsPathLabel(row.path);
+                        return (
+                          <div
+                            key={row.path}
+                            role="listitem"
+                            className="flex items-center justify-between gap-3 px-4 py-2.5 text-sm text-gray-700 dark:text-gray-200"
+                          >
+                            <span className="min-w-0 truncate font-medium" title={row.path}>
+                              {label}
+                            </span>
+                            <span className="font-semibold tabular-nums shrink-0 text-gray-900 dark:text-white">
+                              {row.count}
+                            </span>
+                          </div>
+                        );
+                      })}
                     </div>
                   </WitmeAnalyticsListPanel>
                   <WitmeAnalyticsListPanel>
@@ -1838,7 +1871,9 @@ export const WitmePageManager: React.FC = () => {
                           key={row.handle}
                           className="flex items-center justify-between gap-3 px-4 py-2.5 text-sm text-gray-700 dark:text-gray-200"
                         >
-                          <span className="truncate font-medium">@{row.handle}</span>
+                          <span className="truncate font-medium">
+                            {row.handle.startsWith('@') ? row.handle : `@${row.handle}`}
+                          </span>
                           <span className="font-semibold tabular-nums shrink-0 text-gray-900 dark:text-white">{row.clicks}</span>
                         </div>
                       ))}
