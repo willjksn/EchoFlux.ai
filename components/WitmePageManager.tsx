@@ -160,6 +160,10 @@ const mergeWitmeLandingFromApi = (raw: WitmeLandingConfig): WitmeLandingConfig =
       typeof c.mediaObjectPosition === 'string' && c.mediaObjectPosition.trim() !== ''
         ? c.mediaObjectPosition.trim()
         : '50% 50%',
+    mediaScale:
+      typeof c.mediaScale === 'number' && Number.isFinite(c.mediaScale)
+        ? Math.max(0.5, Math.min(2.5, c.mediaScale))
+        : 1,
     isFeatured: c.isFeatured === true,
     featuredMediaFit: c.featuredMediaFit === 'contain' ? 'contain' : 'cover',
   });
@@ -330,6 +334,7 @@ const emptyShowcaseRow = (): WitmeShowcaseCreator => ({
   imageUrl: '',
   mediaKind: 'image',
   mediaObjectPosition: '50% 50%',
+  mediaScale: 1,
   descriptor: '',
   tags: [],
   spotlight: '',
@@ -337,6 +342,12 @@ const emptyShowcaseRow = (): WitmeShowcaseCreator => ({
   isFeatured: false,
   featuredMediaFit: 'cover',
 });
+
+const WITME_HOME_MEDIA_SCALE_MIN = 0.5;
+const WITME_HOME_MEDIA_SCALE_MAX = 2.5;
+
+const clampHomeMediaScale = (n: number) =>
+  Math.max(WITME_HOME_MEDIA_SCALE_MIN, Math.min(WITME_HOME_MEDIA_SCALE_MAX, n));
 
 async function deleteOwnedWitmeShowcaseMedia(imageUrl: string | undefined, ownerUid: string | undefined): Promise<void> {
   const uid = ownerUid?.trim();
@@ -364,14 +375,89 @@ const WitmeHomeVisualSlotRow: React.FC<{
   onRemove: () => void;
 }> = ({ listKey, idx, row, fileInputRef, uploadTargetRef, isUploading, onPatch, onRemove }) => {
   const [posX, posY] = parseObjectPositionPercentPair(row.mediaObjectPosition);
+  const focalScale = row.mediaScale ?? 1;
   const focalPreviewStyle: React.CSSProperties = {
     objectFit: 'cover',
     objectPosition:
       row.mediaObjectPosition != null && String(row.mediaObjectPosition).trim() !== ''
         ? String(row.mediaObjectPosition).trim()
         : '50% 50%',
+    transform: `scale(${focalScale})`,
+    transformOrigin: `${posX}% ${posY}%`,
   };
   const previewAspect = listKey === 'homeHeroVisuals' ? ('5 / 7' as const) : ('4 / 5' as const);
+  const focalBoxRef = useRef<HTMLDivElement>(null);
+  const homeFocalPanRef = useRef<{
+    startClientX: number;
+    startClientY: number;
+    startOx: number;
+    startOy: number;
+  } | null>(null);
+  const onPatchRef = useRef(onPatch);
+  onPatchRef.current = onPatch;
+  const rowRef = useRef(row);
+  rowRef.current = row;
+
+  useEffect(() => {
+    const el = focalBoxRef.current;
+    if (!el || !row.imageUrl.trim()) return;
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      const cur = rowRef.current.mediaScale ?? 1;
+      const factor = e.deltaY < 0 ? 1.06 : 0.94;
+      const next = clampHomeMediaScale(Math.round(cur * factor * 1000) / 1000);
+      if (Math.abs(next - cur) < 1e-6) return;
+      onPatchRef.current({ mediaScale: next });
+    };
+    el.addEventListener('wheel', onWheel, { passive: false });
+    return () => el.removeEventListener('wheel', onWheel);
+  }, [row.imageUrl]);
+
+  const onHomeFocalPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (e.button !== 0) return;
+    homeFocalPanRef.current = {
+      startClientX: e.clientX,
+      startClientY: e.clientY,
+      startOx: posX,
+      startOy: posY,
+    };
+    try {
+      e.currentTarget.setPointerCapture(e.pointerId);
+    } catch {
+      /* ignore */
+    }
+  };
+
+  const onHomeFocalPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    const pan = homeFocalPanRef.current;
+    if (!pan) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    const w = Math.max(rect.width, 1);
+    const h = Math.max(rect.height, 1);
+    const dx = e.clientX - pan.startClientX;
+    const dy = e.clientY - pan.startClientY;
+    const sens = 0.85;
+    const nx = clampPan(pan.startOx - (dx / w) * 100 * sens, 0, 100);
+    const ny = clampPan(pan.startOy - (dy / h) * 100 * sens, 0, 100);
+    onPatch({ mediaObjectPosition: formatObjectPositionPercentPair(nx, ny) });
+    homeFocalPanRef.current = {
+      ...pan,
+      startClientX: e.clientX,
+      startClientY: e.clientY,
+      startOx: nx,
+      startOy: ny,
+    };
+  };
+
+  const onHomeFocalPointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
+    try {
+      e.currentTarget.releasePointerCapture(e.pointerId);
+    } catch {
+      /* ignore */
+    }
+    homeFocalPanRef.current = null;
+  };
+
   return (
     <div className="rounded-lg border border-gray-200 p-3 dark:border-gray-700">
       <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
@@ -453,10 +539,26 @@ const WitmeHomeVisualSlotRow: React.FC<{
               <p className="mb-1.5 text-xs font-medium text-gray-700 dark:text-gray-300">Focal preview</p>
               <p className="mb-2 text-[11px] leading-snug text-gray-500 dark:text-gray-400">
                 Same <span className="font-medium text-gray-600 dark:text-gray-300">cover</span> crop as witme (
-                {listKey === 'homeHeroVisuals' ? 'hero collage' : 'strip'} frame). Move the sliders below to reposition.
+                {listKey === 'homeHeroVisuals' ? 'hero collage' : 'strip'} frame). Drag to pan, scroll to zoom; sliders
+                fine-tune.
               </p>
+              <div className="mb-2 flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => onPatch({ mediaObjectPosition: '50% 50%', mediaScale: 1 })}
+                  className="rounded-md border border-gray-300 px-2 py-1 text-[11px] font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-800"
+                >
+                  Reset crop & zoom
+                </button>
+              </div>
               <div
-                className={`relative w-full overflow-hidden rounded-lg border border-gray-200 bg-gray-100 shadow-inner dark:border-gray-600 dark:bg-gray-950 ${
+                ref={focalBoxRef}
+                role="presentation"
+                onPointerDown={onHomeFocalPointerDown}
+                onPointerMove={onHomeFocalPointerMove}
+                onPointerUp={onHomeFocalPointerUp}
+                onPointerCancel={onHomeFocalPointerUp}
+                className={`relative w-full touch-none overflow-hidden rounded-lg border border-gray-200 bg-gray-100 shadow-inner dark:border-gray-600 dark:bg-gray-950 cursor-grab active:cursor-grabbing ${
                   listKey === 'homeHeroVisuals'
                     ? 'mt-2 max-w-[8.75rem] sm:max-w-[10rem]'
                     : 'mt-0 max-w-[7.5rem] sm:max-w-[8.5rem]'
@@ -480,13 +582,28 @@ const WitmeHomeVisualSlotRow: React.FC<{
                   <img
                     src={row.imageUrl}
                     alt=""
-                    className="h-full w-full select-none"
+                    className="h-full w-full pointer-events-none select-none"
                     style={focalPreviewStyle}
                   />
                 )}
               </div>
             </div>
-            <div className="grid max-w-xl gap-3 md:col-span-2 sm:grid-cols-2">
+            <div className="grid max-w-xl gap-3 md:col-span-2 sm:grid-cols-3">
+              <label className="block text-xs text-gray-600 dark:text-gray-400">
+                <span className="mb-1 block font-medium text-gray-700 dark:text-gray-300">Zoom</span>
+                <input
+                  type="range"
+                  min={50}
+                  max={250}
+                  step={1}
+                  value={Math.round(focalScale * 100)}
+                  onChange={(e) => {
+                    const pct = parseFloat(e.target.value);
+                    onPatch({ mediaScale: clampHomeMediaScale(pct / 100) });
+                  }}
+                  className="w-full accent-primary-600"
+                />
+              </label>
               <label className="block text-xs text-gray-600 dark:text-gray-400">
                 <span className="mb-1 block font-medium text-gray-700 dark:text-gray-300">Focal horizontal</span>
                 <input
@@ -641,6 +758,7 @@ export const WitmePageManager: React.FC = () => {
             imageUrl: downloadUrl,
             mediaKind: isVideo ? 'video' : 'image',
             mediaObjectPosition: '50% 50%',
+            mediaScale: 1,
           };
           return { ...prev, [listKey]: list };
         });

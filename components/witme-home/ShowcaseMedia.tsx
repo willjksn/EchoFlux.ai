@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from "react";
 import type { WitmeShowcaseCreator } from "../../src/lib/witmeShowcase";
+import { parseObjectPositionPercentPair } from "../../src/lib/objectPositionPan";
 
 const VIDEO_LOOP_FADE_MS = 380;
 
@@ -20,14 +21,32 @@ export const ShowcaseMedia: React.FC<{
   alt: string;
   className: string;
   objectPosition?: string;
+  /** Applied with transform scale; origin follows focal `objectPosition` (%). Default 1. */
+  mediaScale?: number;
   objectFit?: "cover" | "contain";
   /** Intrinsic: scales with media aspect ratio (no fixed crop box / side bars). Fill: absolute cover layer. */
   layout?: "fill" | "intrinsic";
   /** Passed to `<img>` when `mediaKind` is image (e.g. eager for above-the-fold hero). */
   imgLoading?: "eager" | "lazy";
-}> = ({ url, mediaKind, alt, className, objectPosition, objectFit = "cover", layout = "fill", imgLoading = "lazy" }) => {
+}> = ({
+  url,
+  mediaKind,
+  alt,
+  className,
+  objectPosition,
+  mediaScale = 1,
+  objectFit = "cover",
+  layout = "fill",
+  imgLoading = "lazy",
+}) => {
   const u = url.trim();
   const fitStyle = showcaseObjectStyle(objectPosition, objectFit);
+  const [ox, oy] = parseObjectPositionPercentPair(objectPosition);
+  const scale = typeof mediaScale === "number" && Number.isFinite(mediaScale) ? mediaScale : 1;
+  const mediaTransformStyle: React.CSSProperties = {
+    transform: `scale(${scale})`,
+    transformOrigin: `${ox}% ${oy}%`,
+  };
   const intrinsicClass =
     layout === "intrinsic"
       ? "block h-auto w-auto max-h-[min(70vh,36rem)] max-w-full mx-auto"
@@ -86,5 +105,13 @@ export const ShowcaseMedia: React.FC<{
       />
     );
   }
-  return <img src={u} alt={alt} className={mergedClass} style={{ ...fitStyle, ...intrinsicStyle }} loading={imgLoading} />;
+  return (
+    <img
+      src={u}
+      alt={alt}
+      className={mergedClass}
+      style={{ ...fitStyle, ...mediaTransformStyle, ...intrinsicStyle }}
+      loading={imgLoading}
+    />
+  );
 };

@@ -181,6 +181,10 @@ const useWitmeLandingConfig = (enabled = true): WitmeLandingConfig => {
               typeof c.mediaObjectPosition === "string" && c.mediaObjectPosition.trim() !== ""
                 ? c.mediaObjectPosition.trim()
                 : "50% 50%",
+            mediaScale:
+              typeof c.mediaScale === "number" && Number.isFinite(c.mediaScale)
+                ? Math.max(0.5, Math.min(2.5, c.mediaScale))
+                : 1,
             isFeatured: c.isFeatured === true,
             featuredMediaFit: c.featuredMediaFit === "contain" ? "contain" : "cover",
           });

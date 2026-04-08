@@ -12,6 +12,8 @@ export type WitmeShowcaseCreator = {
   mediaKind: "image" | "video";
   /** CSS object-position for cover crop (e.g. `50% 25%`). Drag-adjust in Witme admin. */
   mediaObjectPosition: string;
+  /** Zoom multiplier for hero / strip collage media (1 = default). Clamped server-side. */
+  mediaScale: number;
   descriptor: string;
   tags: string[];
   /** Short line for spotlight / admin tooling */
@@ -37,6 +39,7 @@ export const WITME_DEFAULT_FEATURED_CREATOR: WitmeShowcaseCreator = {
   imageUrl: "https://witme.io/witme-og.png",
   mediaKind: "image",
   mediaObjectPosition: "50% 50%",
+  mediaScale: 1,
   spotlight: "Live creator page on WitMe",
   linkLive: true,
   isFeatured: true,

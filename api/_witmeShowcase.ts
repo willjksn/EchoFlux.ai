@@ -5,6 +5,7 @@ export type WitmeShowcaseCreator = {
   imageUrl: string;
   mediaKind: "image" | "video";
   mediaObjectPosition: string;
+  mediaScale: number;
   descriptor: string;
   tags: string[];
   spotlight: string;
@@ -22,6 +23,7 @@ export const WITME_DEFAULT_FEATURED_CREATOR: WitmeShowcaseCreator = {
   imageUrl: "https://witme.io/witme-og.png",
   mediaKind: "image",
   mediaObjectPosition: "50% 50%",
+  mediaScale: 1,
   spotlight: "Live creator page on WitMe",
   linkLive: true,
   isFeatured: true,
@@ -72,6 +74,7 @@ function parseWitmeShowcaseRow(r: Record<string, unknown>): WitmeShowcaseCreator
   const imageUrl = sanitizeShowcaseImageUrl(r.imageUrl, 4096);
   const mediaKind: "image" | "video" = r.mediaKind === "video" ? "video" : "image";
   const mediaObjectPosition = sanitizeMediaObjectPosition(r.mediaObjectPosition);
+  const mediaScale = sanitizeMediaScale(r.mediaScale);
   const descriptor = sanitizeString(r.descriptor, 220);
   const spotlight = sanitizeString(r.spotlight, 220);
   const tags = (Array.isArray(r.tags) ? r.tags : [])
@@ -90,6 +93,7 @@ function parseWitmeShowcaseRow(r: Record<string, unknown>): WitmeShowcaseCreator
     imageUrl,
     mediaKind,
     mediaObjectPosition,
+    mediaScale,
     descriptor,
     tags,
     spotlight,
@@ -108,6 +112,12 @@ function sanitizeMediaObjectPosition(value: unknown): string {
     return s.replace(/\s+/g, " ").toLowerCase();
   }
   return "50% 50%";
+}
+
+function sanitizeMediaScale(value: unknown): number {
+  const n = typeof value === "number" ? value : typeof value === "string" ? parseFloat(value) : NaN;
+  if (!Number.isFinite(n)) return 1;
+  return Math.max(0.5, Math.min(2.5, n));
 }
 
 /**

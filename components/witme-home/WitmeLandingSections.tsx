@@ -52,6 +52,7 @@ function WitmeHeroVisualCollage({
           alt={alt}
           className="h-full w-full"
           objectPosition={creator.mediaObjectPosition}
+          mediaScale={creator.mediaScale ?? 1}
           objectFit="cover"
           layout="fill"
           imgLoading={imgLoading}
@@ -207,6 +208,7 @@ function WitmeExperienceVisualStrip({
               alt={alt}
               className="h-full w-full"
               objectPosition={creator.mediaObjectPosition}
+              mediaScale={creator.mediaScale ?? 1}
               objectFit="cover"
               layout="fill"
               imgLoading={idx === 0 ? "eager" : "lazy"}
