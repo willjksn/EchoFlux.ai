@@ -30,6 +30,8 @@ type WitmeLandingConfig = {
   showcaseCreators: WitmeShowcaseCreator[];
   homeHeroVisuals: WitmeShowcaseCreator[];
   homeExperienceVisuals: WitmeShowcaseCreator[];
+  /** When true, hide “What you’ll find” image strip (no Discover/Featured fallback). */
+  hideWhatYouFindStripMedia: boolean;
 };
 
 const DEFAULT_CONFIG: WitmeLandingConfig = {
@@ -79,6 +81,7 @@ const DEFAULT_CONFIG: WitmeLandingConfig = {
   showcaseCreators: DEFAULT_SHOWCASE_CREATORS,
   homeHeroVisuals: [],
   homeExperienceVisuals: [],
+  hideWhatYouFindStripMedia: false,
 };
 
 function sanitizeString(value: unknown, max = 300): string {
@@ -139,6 +142,7 @@ function sanitizeConfig(input: unknown): WitmeLandingConfig {
     showcaseCreators,
     homeHeroVisuals,
     homeExperienceVisuals,
+    hideWhatYouFindStripMedia: src.hideWhatYouFindStripMedia === true,
   };
 }
 

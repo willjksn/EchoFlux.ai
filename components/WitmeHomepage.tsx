@@ -60,6 +60,8 @@ export interface WitmeLandingConfig {
   homeHeroVisuals: WitmeShowcaseCreator[];
   /** When non-empty, “What you’ll find” strip uses these (max 4) instead of Discover/Featured. */
   homeExperienceVisuals: WitmeShowcaseCreator[];
+  /** When true, hide the right-column image strip on witme.io (no fallback to Discover/Featured). */
+  hideWhatYouFindStripMedia?: boolean;
 }
 
 const fanActions: ActionItem[] = [
@@ -196,6 +198,7 @@ const useWitmeLandingConfig = (enabled = true): WitmeLandingConfig => {
             homeExperienceVisuals: Array.isArray(data.config.homeExperienceVisuals)
               ? data.config.homeExperienceVisuals.map((c: WitmeShowcaseCreator) => mapShowcase(c))
               : nextBase.homeExperienceVisuals,
+            hideWhatYouFindStripMedia: data.config.hideWhatYouFindStripMedia === true,
           };
           return normalizeLandingCopy(merged);
         });
@@ -231,6 +234,7 @@ export const WitmeHomepage: React.FC<WitmeHomepageProps> = ({
       ...base,
       homeHeroVisuals: base.homeHeroVisuals ?? [],
       homeExperienceVisuals: base.homeExperienceVisuals ?? [],
+      hideWhatYouFindStripMedia: base.hideWhatYouFindStripMedia === true,
     };
   }, [previewConfig, remoteConfig]);
 
@@ -270,10 +274,11 @@ export const WitmeHomepage: React.FC<WitmeHomepageProps> = ({
   }, [landingConfig.homeHeroVisuals, derivedLandingVisuals]);
 
   const experienceVisualCreators = useMemo(() => {
+    if (landingConfig.hideWhatYouFindStripMedia) return [];
     const dedicated = landingConfig.homeExperienceVisuals.filter((c) => c.imageUrl.trim()).slice(0, 4);
     if (dedicated.length > 0) return dedicated;
     return derivedLandingVisuals.slice(0, 4);
-  }, [landingConfig.homeExperienceVisuals, derivedLandingVisuals]);
+  }, [landingConfig.hideWhatYouFindStripMedia, landingConfig.homeExperienceVisuals, derivedLandingVisuals]);
 
   const creatorStudioUrl = echofluxUrl.replace(/\/$/, "");
 

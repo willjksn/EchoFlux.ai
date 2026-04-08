@@ -45,7 +45,7 @@ function WitmeHeroVisualCollage({
     const href = creator.linkLive && path ? witmePublicHref(path) : null;
     const alt = `${creator.name || "Creator"} on WitMe`;
     const inner = (
-      <div className="aspect-[3/4] overflow-hidden rounded-2xl border border-white/25 bg-black/35 shadow-2xl shadow-black/50 ring-1 ring-white/10">
+      <div className="aspect-[5/7] overflow-hidden rounded-2xl border border-white/25 bg-black/35 shadow-2xl shadow-black/50 ring-1 ring-white/10">
         <ShowcaseMedia
           url={creator.imageUrl}
           mediaKind={creator.mediaKind}
@@ -97,11 +97,11 @@ function WitmeHeroVisualCollage({
   }
 
   return (
-    <div className="mt-10 flex justify-center sm:mt-12 lg:mt-0 lg:justify-end lg:pt-2">
-      <div className="relative h-[min(22rem,52vw)] w-full max-w-[19rem] sm:h-[26rem] sm:max-w-[21rem] lg:h-[28rem] lg:max-w-[24rem]">
+    <div className="mt-10 flex justify-center sm:mt-12 lg:mt-0 lg:justify-end lg:pt-5">
+      <div className="relative h-[min(24rem,56vw)] w-full max-w-[19rem] sm:h-[28rem] sm:max-w-[21rem] lg:h-[30rem] lg:max-w-[24rem]">
         {wrapFrame(items[0], 0, "absolute right-0 top-0 z-30 w-[58%] rotate-[2deg]", "eager")}
-        {wrapFrame(items[1], 1, "absolute left-0 top-[18%] z-20 w-[55%] -rotate-[2deg]", "lazy")}
-        {wrapFrame(items[2], 2, "absolute bottom-0 right-[8%] z-10 w-[50%] rotate-[1deg]", "lazy")}
+        {wrapFrame(items[1], 1, "absolute left-0 top-[16%] z-20 w-[55%] -rotate-[2deg]", "lazy")}
+        {wrapFrame(items[2], 2, "absolute bottom-[-0.35rem] right-[8%] z-10 w-[50%] rotate-[1deg]", "lazy")}
       </div>
     </div>
   );
@@ -238,37 +238,58 @@ function WitmeExperienceVisualStrip({
 export const WitmeExperienceTypesSection: React.FC<{
   visualCreators?: WitmeShowcaseCreator[];
   enableTracking?: boolean;
-}> = ({ visualCreators = [], enableTracking = true }) => (
-  <section className={`${sectionClass} pb-16 sm:pb-20`} aria-labelledby="witme-experience-heading">
-    <div className="grid grid-cols-1 gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,17rem)] lg:items-start lg:gap-x-10 lg:gap-y-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,19rem)]">
-      <div className="lg:col-start-1 lg:row-start-1">
-        <h2 id="witme-experience-heading" className="text-2xl font-semibold text-white sm:text-3xl">
-          What you&apos;ll find here
-        </h2>
-        <p className="mt-3 max-w-2xl text-sm text-gray-300 sm:text-base">
-          Types of experiences WitMe is built for — each creator shapes their own version.
+}> = ({ visualCreators = [], enableTracking = true }) => {
+  const hasStripMedia = visualCreators.some((c) => c.imageUrl.trim());
+  const gridClass = hasStripMedia
+    ? "grid grid-cols-1 gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,17rem)] lg:items-start lg:gap-x-10 lg:gap-y-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,19rem)]"
+    : "grid grid-cols-1 gap-8 lg:gap-y-6";
+
+  return (
+    <section className={`${sectionClass} pb-16 sm:pb-20`} aria-labelledby="witme-experience-heading">
+      <div className={gridClass}>
+        <div className={hasStripMedia ? "lg:col-start-1 lg:row-start-1" : undefined}>
+          <h2 id="witme-experience-heading" className="text-2xl font-semibold text-white sm:text-3xl">
+            What you&apos;ll find here
+          </h2>
+          <p className="mt-3 max-w-2xl text-sm text-gray-300 sm:text-base">
+            Types of experiences WitMe is built for — each creator shapes their own version.
+          </p>
+        </div>
+        {hasStripMedia ? (
+          <div className="lg:col-start-2 lg:row-start-1 lg:row-span-3 lg:self-start lg:sticky lg:top-28">
+            <WitmeExperienceVisualStrip creators={visualCreators} enableTracking={enableTracking} />
+          </div>
+        ) : null}
+        <ul
+          className={
+            hasStripMedia
+              ? "grid grid-cols-1 gap-4 sm:grid-cols-2 lg:col-start-1 lg:row-start-2 lg:mt-0 lg:gap-6"
+              : "grid grid-cols-1 gap-4 sm:grid-cols-2 lg:gap-6"
+          }
+        >
+          {EXPERIENCE_TYPES.map((item) => (
+            <li key={item.title}>
+              <article className={`${cardSurface} h-full transition hover:border-white/25 hover:bg-white/[0.09]`}>
+                <div className="mb-4 h-px w-8 bg-gradient-to-r from-sky-300/80 to-transparent" aria-hidden />
+                <h3 className="text-lg font-semibold text-white">{item.title}</h3>
+                <p className="mt-2 text-sm leading-relaxed text-gray-300">{item.body}</p>
+              </article>
+            </li>
+          ))}
+        </ul>
+        <p
+          className={
+            hasStripMedia
+              ? "text-center text-sm font-medium text-gray-200 sm:text-base lg:col-start-1 lg:row-start-3 lg:text-left"
+              : "text-center text-sm font-medium text-gray-200 sm:text-base lg:text-left"
+          }
+        >
+          Every page is different. That&apos;s the point.
         </p>
       </div>
-      <div className="lg:col-start-2 lg:row-start-1 lg:row-span-3 lg:self-start lg:sticky lg:top-28">
-        <WitmeExperienceVisualStrip creators={visualCreators} enableTracking={enableTracking} />
-      </div>
-      <ul className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:col-start-1 lg:row-start-2 lg:mt-0 lg:gap-6">
-        {EXPERIENCE_TYPES.map((item) => (
-          <li key={item.title}>
-            <article className={`${cardSurface} h-full transition hover:border-white/25 hover:bg-white/[0.09]`}>
-              <div className="mb-4 h-px w-8 bg-gradient-to-r from-sky-300/80 to-transparent" aria-hidden />
-              <h3 className="text-lg font-semibold text-white">{item.title}</h3>
-              <p className="mt-2 text-sm leading-relaxed text-gray-300">{item.body}</p>
-            </article>
-          </li>
-        ))}
-      </ul>
-      <p className="text-center text-sm font-medium text-gray-200 sm:text-base lg:col-start-1 lg:row-start-3 lg:text-left">
-        Every page is different. That&apos;s the point.
-      </p>
-    </div>
-  </section>
-);
+    </section>
+  );
+};
 
 const WHY_POINTS: { title: string; body: string }[] = [
   {

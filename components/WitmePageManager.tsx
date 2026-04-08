@@ -103,6 +103,7 @@ const DEFAULT_CONFIG: WitmeLandingConfig = {
   showcaseCreators: DEFAULT_SHOWCASE_CREATORS.map((c) => ({ ...c })),
   homeHeroVisuals: [],
   homeExperienceVisuals: [],
+  hideWhatYouFindStripMedia: false,
 };
 
 const normalizeLandingCopy = (config: WitmeLandingConfig): WitmeLandingConfig => {
@@ -184,6 +185,7 @@ function normalizeWitmeConfigForApi(c: WitmeLandingConfig): WitmeLandingConfig {
     showcaseCreators: Array.isArray(o.showcaseCreators) ? o.showcaseCreators : [],
     homeHeroVisuals: Array.isArray(o.homeHeroVisuals) ? o.homeHeroVisuals : [],
     homeExperienceVisuals: Array.isArray(o.homeExperienceVisuals) ? o.homeExperienceVisuals : [],
+    hideWhatYouFindStripMedia: o.hideWhatYouFindStripMedia === true,
   };
 }
 
@@ -361,7 +363,7 @@ const WitmeHomeVisualSlotRow: React.FC<{
         ? String(row.mediaObjectPosition).trim()
         : '50% 50%',
   };
-  const previewAspect = listKey === 'homeHeroVisuals' ? ('3 / 4' as const) : ('4 / 5' as const);
+  const previewAspect = listKey === 'homeHeroVisuals' ? ('5 / 7' as const) : ('4 / 5' as const);
   return (
     <div className="rounded-lg border border-gray-200 p-3 dark:border-gray-700">
       <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
@@ -439,14 +441,18 @@ const WitmeHomeVisualSlotRow: React.FC<{
         </div>
         {row.imageUrl.trim() ? (
           <>
-            <div className="md:col-span-2">
+            <div className={`md:col-span-2 ${listKey === 'homeHeroVisuals' ? 'mt-1' : ''}`}>
               <p className="mb-1.5 text-xs font-medium text-gray-700 dark:text-gray-300">Focal preview</p>
               <p className="mb-2 text-[11px] leading-snug text-gray-500 dark:text-gray-400">
                 Same <span className="font-medium text-gray-600 dark:text-gray-300">cover</span> crop as witme (
                 {listKey === 'homeHeroVisuals' ? 'hero collage' : 'strip'} frame). Move the sliders below to reposition.
               </p>
               <div
-                className="relative w-full max-w-[7.5rem] overflow-hidden rounded-lg border border-gray-200 bg-gray-100 shadow-inner dark:border-gray-600 dark:bg-gray-950 sm:max-w-[8.5rem]"
+                className={`relative w-full overflow-hidden rounded-lg border border-gray-200 bg-gray-100 shadow-inner dark:border-gray-600 dark:bg-gray-950 ${
+                  listKey === 'homeHeroVisuals'
+                    ? 'mt-2 max-w-[8.75rem] sm:max-w-[10rem]'
+                    : 'mt-0 max-w-[7.5rem] sm:max-w-[8.5rem]'
+                }`}
                 style={{ aspectRatio: previewAspect }}
               >
                 {row.mediaKind === 'video' ? (
@@ -987,11 +993,24 @@ export const WitmePageManager: React.FC = () => {
 
               <div className="rounded-xl border border-gray-200 bg-white p-4 dark:border-gray-800 dark:bg-gray-900">
                 <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-                  <div>
+                  <div className="min-w-0 flex-1">
                     <h2 className="text-base font-bold text-gray-900 dark:text-white">&quot;What you&apos;ll find&quot; strip media</h2>
                     <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
                       Up to 4 tiles in the right column next to the experience cards. Independent from Featured. Remove all slots to fall back to Discover/Featured.
                     </p>
+                    <label className="mt-2 flex cursor-pointer items-start gap-2 text-xs text-gray-600 dark:text-gray-300">
+                      <input
+                        type="checkbox"
+                        className="mt-0.5 h-4 w-4 shrink-0 rounded border-gray-300 text-blue-600 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800"
+                        checked={draft.hideWhatYouFindStripMedia === true}
+                        onChange={(e) =>
+                          setDraft((prev) => ({ ...prev, hideWhatYouFindStripMedia: e.target.checked }))
+                        }
+                      />
+                      <span>
+                        Hide image strip on witme.io (no Discover/Featured fallback). Slots stay saved for when you turn this off.
+                      </span>
+                    </label>
                   </div>
                   <button
                     type="button"

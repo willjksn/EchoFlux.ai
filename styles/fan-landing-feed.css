@@ -2511,7 +2511,8 @@ html.dark .fan-member-purchases-compact {
   list-style: none;
   cursor: pointer;
   display: grid;
-  grid-template-columns: minmax(64px, 0.75fr) minmax(0, 1.5fr) auto minmax(52px, auto);
+  /* Fixed-width column 1 + 3 so each row’s grid matches; “Purchase” and prices line up across rows. */
+  grid-template-columns: 8.75rem minmax(0, 1fr) 10.75rem minmax(3.25rem, auto);
   gap: 0.35rem 0.65rem;
   align-items: center;
   padding: 0.6rem 0.85rem;
@@ -2536,6 +2537,7 @@ html.dark .fan-member-purchases-compact {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  min-width: 0;
 }
 
 .fan-member-purchase-compact-title {
@@ -2552,6 +2554,9 @@ html.dark .fan-member-purchases-compact {
   color: color-mix(in srgb, var(--fan-primary, #6366f1) 75%, var(--fan-text, #1f2937));
   text-align: right;
   white-space: nowrap;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .fan-member-purchase-compact-price {
