@@ -9,6 +9,17 @@ import {
   isFanBlocked,
 } from "./_fanDmHelpers.js";
 import { sendFanNotification } from "./_fanNotifications.js";
+import type { Firestore } from "firebase-admin/firestore";
+
+async function hasActiveOrPausedChatSessionForThread(db: Firestore, threadId: string): Promise<boolean> {
+  const snap = await db.collection("chatSessions").where("threadId", "==", threadId).limit(40).get();
+  let live = false;
+  snap.forEach((d) => {
+    const st = (d.data() as { status?: string }).status;
+    if (st === "active" || st === "paused") live = true;
+  });
+  return live;
+}
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== "POST") {
@@ -170,8 +181,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const creatorMutedThisThread =
       recipientId === creatorIdFinal && threadAfter?.creatorInboxMuted === true;
 
+    const skipNotifyForLiveSession = await hasActiveOrPausedChatSessionForThread(db, threadId);
+
     try {
-      if (!creatorMutedThisThread) {
+      if (!creatorMutedThisThread && !skipNotifyForLiveSession) {
         await sendFanNotification({
           fanId: recipientId,
           type: "new_message",

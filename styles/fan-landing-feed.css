@@ -2604,58 +2604,55 @@ html.dark .fan-member-purchases-compact {
    FAN MEMBER MESSAGES STYLES (Light Stormij Style)
    ============================================ */
 
-/* Timed premium chat session — visually distinct from everyday DMs */
+/* Timed premium chat session — distinct but restrained (primary tint, no loud accent rings) */
 .fan-member-premium-session-shell {
-  border-radius: 16px;
-  padding: 1rem 1rem 1.15rem;
+  border-radius: 14px;
+  padding: 0.9rem 0.95rem 1rem;
   margin-bottom: 0.35rem;
   background: linear-gradient(
-    145deg,
-    color-mix(in srgb, var(--fan-primary, #6366f1) 18%, #0f172a) 0%,
-    color-mix(in srgb, var(--fan-primary, #6366f1) 10%, #1e1b4b) 100%
+    155deg,
+    color-mix(in srgb, var(--fan-primary, #6366f1) 14%, #0f172a) 0%,
+    color-mix(in srgb, var(--fan-primary, #6366f1) 8%, #111827) 100%
   );
-  box-shadow:
-    0 0 0 1px color-mix(in srgb, #fbbf24 50%, transparent),
-    0 14px 42px color-mix(in srgb, var(--fan-primary, #6366f1) 28%, transparent);
+  border: 1px solid color-mix(in srgb, var(--fan-primary, #6366f1) 35%, #334155);
+  box-shadow: 0 12px 36px color-mix(in srgb, #000000 35%, transparent);
 }
 
 .stormij-theme--light .fan-member-premium-session-shell {
   background: linear-gradient(
-    160deg,
-    color-mix(in srgb, var(--fan-primary, #6366f1) 8%, #ffffff) 0%,
-    #ffffff 55%,
-    color-mix(in srgb, #fbbf24 6%, #ffffff) 100%
+    180deg,
+    color-mix(in srgb, var(--fan-primary, #6366f1) 5%, #ffffff) 0%,
+    #ffffff 100%
   );
-  box-shadow:
-    0 0 0 2px color-mix(in srgb, #f59e0b 45%, var(--fan-primary, #6366f1)),
-    0 10px 36px color-mix(in srgb, var(--fan-primary, #6366f1) 14%, transparent);
+  border: 1px solid color-mix(in srgb, var(--fan-primary, #6366f1) 22%, #e2e8f0);
+  box-shadow: 0 8px 28px color-mix(in srgb, var(--fan-primary, #6366f1) 10%, transparent);
 }
 
 .fan-member-premium-session-shell__hero {
   margin-bottom: 0.85rem;
-  padding: 0.75rem 0.9rem 0.9rem;
-  border-radius: 12px;
-  background: color-mix(in srgb, #ffffff 8%, transparent);
-  border: 1px solid color-mix(in srgb, #fbbf24 40%, transparent);
+  padding: 0.7rem 0.85rem 0.85rem;
+  border-radius: 10px;
+  background: color-mix(in srgb, #ffffff 6%, transparent);
+  border: 1px solid color-mix(in srgb, var(--fan-primary, #6366f1) 28%, #475569);
 }
 
 .stormij-theme--light .fan-member-premium-session-shell__hero {
-  background: color-mix(in srgb, var(--fan-primary, #6366f1) 6%, #ffffff);
-  border-color: color-mix(in srgb, #f59e0b 35%, var(--fan-primary, #6366f1));
+  background: color-mix(in srgb, var(--fan-primary, #6366f1) 5%, #f8fafc);
+  border-color: color-mix(in srgb, var(--fan-primary, #6366f1) 18%, #e2e8f0);
 }
 
 .fan-member-premium-session-shell__badge {
   display: inline-block;
-  font-size: 0.62rem;
-  font-weight: 800;
-  letter-spacing: 0.12em;
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: #fbbf24;
+  color: color-mix(in srgb, var(--fan-primary, #6366f1) 85%, #e2e8f0);
   margin-bottom: 0.3rem;
 }
 
 .stormij-theme--light .fan-member-premium-session-shell__badge {
-  color: color-mix(in srgb, #b45309 40%, var(--fan-primary, #6366f1));
+  color: color-mix(in srgb, var(--fan-primary, #6366f1) 70%, #334155);
 }
 
 .fan-member-premium-session-shell__title {
@@ -2683,17 +2680,18 @@ html.dark .fan-member-purchases-compact {
 }
 
 .fan-member-messages-list.fh-dm-session-room {
-  border-width: 2px;
-  border-color: color-mix(in srgb, #f59e0b 38%, var(--fan-primary, #6366f1));
+  border-width: 1px;
+  border-color: color-mix(in srgb, var(--fan-primary, #6366f1) 32%, #475569);
   box-shadow:
-    inset 0 2px 14px color-mix(in srgb, var(--fan-primary, #6366f1) 10%, transparent),
-    0 8px 28px color-mix(in srgb, #000000 12%, transparent);
+    inset 0 1px 0 color-mix(in srgb, #ffffff 8%, transparent),
+    0 6px 22px color-mix(in srgb, #000000 14%, transparent);
 }
 
 .stormij-theme--light .fan-member-messages-list.fh-dm-session-room {
+  border-color: color-mix(in srgb, var(--fan-primary, #6366f1) 24%, #cbd5e1);
   box-shadow:
-    inset 0 2px 10px color-mix(in srgb, var(--fan-primary, #6366f1) 6%, transparent),
-    0 6px 24px color-mix(in srgb, var(--fan-primary, #6366f1) 12%, transparent);
+    inset 0 1px 0 color-mix(in srgb, #ffffff 70%, transparent),
+    0 4px 18px color-mix(in srgb, var(--fan-primary, #6366f1) 8%, transparent);
 }
 
 .fan-member-messages {

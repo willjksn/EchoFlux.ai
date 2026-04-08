@@ -57,6 +57,8 @@ export type FanHubNotificationBellProps = {
   compact?: boolean;
   /** Deep-link: messages thread, purchases, video session, etc. */
   onNavigate?: (payload: FanHubNotificationNavigatePayload) => void;
+  /** When true, render nothing (e.g. live premium chat session — DM pings suppressed). */
+  hidden?: boolean;
 };
 
 function notificationDataAsStrings(raw: unknown): Record<string, string> {
@@ -102,6 +104,7 @@ export const FanHubNotificationBell: React.FC<FanHubNotificationBellProps> = ({
   className = "",
   compact = false,
   onNavigate,
+  hidden = false,
 }) => {
   const [uid, setUid] = useState<string | null>(() => auth.currentUser?.uid ?? null);
   const [open, setOpen] = useState(false);
@@ -116,7 +119,7 @@ export const FanHubNotificationBell: React.FC<FanHubNotificationBellProps> = ({
   }, []);
 
   useEffect(() => {
-    if (!uid) {
+    if (!uid || hidden) {
       setRows([]);
       setListenError(null);
       return;
@@ -195,7 +198,7 @@ export const FanHubNotificationBell: React.FC<FanHubNotificationBellProps> = ({
     }
   };
 
-  if (!uid) return null;
+  if (!uid || hidden) return null;
 
   const bellStyle = {
     color: iconColor || "var(--fan-text, #6f4858)",

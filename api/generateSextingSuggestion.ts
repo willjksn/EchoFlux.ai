@@ -95,6 +95,9 @@ async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
     personalityContext = rawBody.creatorPersona.trim();
   }
 
+  const useCreatorPersonalityPrimary =
+    rawBody.useCreatorPersonality === true && personalityContext.trim().length > 0;
+
   const normalizeStudioTone = (t: string): string => {
     const s = t.trim().toLowerCase();
     if (s === "tease" || s === "teasing") return "Teasing";
@@ -144,6 +147,14 @@ async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
       console.warn("[generateSextingSuggestion] failed to load user settings:", error);
     }
 
+    const studioSpice = rawBody.spiciness;
+    if (typeof studioSpice === "number" && Number.isFinite(studioSpice)) {
+      const s = Math.round(studioSpice);
+      if (s >= 1 && s <= 10) {
+        explicitnessLevel = s;
+      }
+    }
+
     const toneLower = String(tone).toLowerCase();
     const wantsExplicitTone = toneLower === "explicit";
     const explicitnessContext = wantsExplicitTone
@@ -191,16 +202,24 @@ ${toneSettings.empathy !== undefined ? `- Warmth (${toneSettings.empathy}/100): 
 ${toneSettings.profanity !== undefined && toneSettings.profanity > 0 ? `- Profanity (${toneSettings.profanity}/100): ${toneSettings.profanity < 30 ? 'Mild swearing OK' : toneSettings.profanity < 50 ? 'Moderate swearing' : 'Frequent swearing'}` : '- Keep language clean unless context calls for it'}
 ` : '';
 
+    const voicePriorityBlock = useCreatorPersonalityPrimary
+      ? `
+VOICE PRIORITY: The creator turned ON "use my personality." The CREATOR PERSONALITY block below is PRIMARY for voice, attitude, and wording. The session tone "${tone}" is only a light hint if personality does not imply style — personality overrides tone.
+`
+      : `
+VOICE PRIORITY: Personality override is OFF. Match the chat/session type ("${roleplayType}") and tone ("${tone}") closely. Use explicitness ${explicitnessLevel}/10 as configured below.
+`;
+
     const prompt = `
 You are an explicit sexting co-pilot for premium creator platforms (OnlyFans / Fansly / Fanvue).
 Generate 4-6 short, message-ready suggestions the creator can send immediately.
 
 Session context:
-- Roleplay type: ${roleplayType}
-- Tone: ${tone}
+- Chat / session type: ${roleplayType}
+- Tone: ${tone}${useCreatorPersonalityPrimary ? " (secondary to personality when both conflict)" : " (primary)"}
 - Fan name: ${fanName}
-- Explicitness level: ${explicitnessLevel}/10 — ${explicitnessContext}
-${toneStyleGuidance}
+- Explicitness / heat level: ${explicitnessLevel}/10 — ${explicitnessContext}
+${voicePriorityBlock}${toneStyleGuidance}
 ${personalityContext ? `${personalityContext}
 
 CREATOR PERSONALITY (USE WHEN RELEVANT - CONSISTENT WITH COMPOSE AND PREMIUM CONTENT STUDIO):
@@ -239,7 +258,7 @@ ${fanName && fanName !== 'Fan' ? `- When mentioning ${fanName}, YOU are addressi
 - Use platform slang organically - it should feel natural, not like you're checking off a list
 
 Guidelines:
-- Follow the chosen tone. Only go extremely explicit when tone is Explicit and explicitness is 10.
+- ${useCreatorPersonalityPrimary ? `Follow CREATOR PERSONALITY first; use tone "${tone}" only where personality does not specify voice.` : `Follow tone "${tone}" and session type "${roleplayType}" together.`} Only go extremely explicit when tone is Explicit and explicitness is 10.
 - Be bold, playful, and explicitly adult (sexting) while respecting the chosen tone.
 - Keep replies concise (1-3 sentences each).
 - Vary style across suggestions (teasing, direct, playful).

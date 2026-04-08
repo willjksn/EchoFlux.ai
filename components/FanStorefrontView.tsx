@@ -1122,6 +1122,12 @@ export const FanStorefrontView: React.FC = () => {
   const [dmPreferredThreadId, setDmPreferredThreadId] = useState<string | null>(null);
   const [dmPreferredSessionId, setDmPreferredSessionId] = useState<string | null>(null);
   const [dmLiveSession, setDmLiveSession] = useState<DmLiveSession | null>(null);
+  const dmPremiumSessionLive = useMemo(
+    () =>
+      dmLiveSession != null &&
+      (dmLiveSession.status === "active" || dmLiveSession.status === "paused"),
+    [dmLiveSession]
+  );
   const dmMessagesEndRef = useRef<HTMLDivElement | null>(null);
   const dmMessagesListRef = useRef<HTMLDivElement | null>(null);
   const dmAutoStickToBottomRef = useRef(true);
@@ -1213,6 +1219,8 @@ export const FanStorefrontView: React.FC = () => {
   const unreadMessageTabCount = useUnreadNewMessageNotificationCount(
     isLoggedIn && creator ? creator.creatorId : false
   );
+  const memberSuppressDmNotifications = dmPremiumSessionLive && activeTab === "messages";
+  const memberMessagesTabBadgeCount = memberSuppressDmNotifications ? 0 : unreadMessageTabCount;
 
   const storefrontVisualScore = useCallback((data: Record<string, unknown> | null | undefined): number => {
     if (!data) return -1;
@@ -2790,13 +2798,6 @@ export const FanStorefrontView: React.FC = () => {
     return `${mins}:${String(secs).padStart(2, "0")}`;
   };
 
-  const dmPremiumSessionLive = useMemo(
-    () =>
-      dmLiveSession != null &&
-      (dmLiveSession.status === "active" || dmLiveSession.status === "paused"),
-    [dmLiveSession]
-  );
-
   const handleCancelMembership = async () => {
     if (!creator?.creatorId || !auth.currentUser) return;
     if (!window.confirm("Cancel your membership? You'll keep access until the end of your current billing period.")) return;
@@ -3356,15 +3357,18 @@ export const FanStorefrontView: React.FC = () => {
   useEffect(() => {
     if (activeTab !== "messages" || dmLoading) return;
     const listEl = dmMessagesListRef.current;
-    if (!dmAutoStickToBottomRef.current) return;
+    if (!listEl) return;
     if (dmComposerFocusedRef.current) return;
+    if (!dmIsNearBottom(listEl)) {
+      dmAutoStickToBottomRef.current = false;
+      return;
+    }
+    if (!dmAutoStickToBottomRef.current) return;
     requestAnimationFrame(() => {
       dmMessagesEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
-      if (listEl) {
-        listEl.scrollTop = listEl.scrollHeight;
-      }
+      listEl.scrollTop = listEl.scrollHeight;
     });
-  }, [activeTab, dmMessages, dmLoading]);
+  }, [activeTab, dmMessages, dmLoading, dmIsNearBottom]);
 
   useEffect(() => {
     if (activeTab === "messages") {
@@ -4417,13 +4421,13 @@ export const FanStorefrontView: React.FC = () => {
                   )}
                   <span className="inline-flex items-center gap-1">
                     {navLabels[key] || key}
-                    {key === "messages" && unreadMessageTabCount > 0 ? (
+                    {key === "messages" && memberMessagesTabBadgeCount > 0 ? (
                       <span
                         className="min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-bold leading-none inline-flex items-center justify-center text-white"
                         style={{ backgroundColor: primary }}
-                        aria-label={`${unreadMessageTabCount} unread messages`}
+                        aria-label={`${memberMessagesTabBadgeCount} unread messages`}
                       >
-                        {unreadMessageTabCount > 9 ? "9+" : unreadMessageTabCount}
+                        {memberMessagesTabBadgeCount > 9 ? "9+" : memberMessagesTabBadgeCount}
                       </span>
                     ) : null}
                   </span>
@@ -4438,6 +4442,7 @@ export const FanStorefrontView: React.FC = () => {
                 iconColor={theme?.text || "#6f4858"}
                 className="storefront-header-notify-bell"
                 onNavigate={handleFanHubNotificationNavigate}
+                hidden={memberSuppressDmNotifications}
               />
             )}
             {isLoggedIn && nextSessionAlert ? (

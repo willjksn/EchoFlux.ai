@@ -90,6 +90,9 @@ export const PremiumStudioLayout: React.FC<PremiumStudioLayoutProps> = ({ childr
 
   const unreadMessagesTabCount = useUnreadNewMessageNotificationCount(isFanHub ? null : false);
   const liveChatSessionsCount = useCreatorLiveChatSessionsCount(Boolean(isFanHub));
+  /** Live premium chat uses the same thread — suppress message tab noise + bell (server also skips new_message notify). */
+  const suppressFanHubDmNotifications = isFanHub && liveChatSessionsCount > 0;
+  const messagesTabBadgeCount = suppressFanHubDmNotifications ? 0 : unreadMessagesTabCount;
 
   const handleFanHubNotificationNavigate = useCallback(
     (p: { type: string; data: Record<string, string> }) => {
@@ -278,18 +281,18 @@ export const PremiumStudioLayout: React.FC<PremiumStudioLayoutProps> = ({ childr
             >
               <span className="inline-flex items-center gap-1.5">
                 {labels[id as keyof typeof labels]}
-                {isFanHub && id === 'messages' && unreadMessagesTabCount > 0 ? (
+                {isFanHub && id === 'messages' && messagesTabBadgeCount > 0 ? (
                   <span
                     className="min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-bold leading-none inline-flex items-center justify-center text-white"
                     style={{ backgroundColor: effectiveFanTheme.primary }}
-                    aria-label={`${unreadMessagesTabCount} unread messages`}
+                    aria-label={`${messagesTabBadgeCount} unread messages`}
                   >
-                    {unreadMessagesTabCount > 9 ? '9+' : unreadMessagesTabCount}
+                    {messagesTabBadgeCount > 9 ? '9+' : messagesTabBadgeCount}
                   </span>
                 ) : null}
                 {isFanHub && id === 'sessions' && liveChatSessionsCount > 0 ? (
                   <span
-                    className="min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-bold leading-none inline-flex items-center justify-center text-white ring-2 ring-amber-400/90"
+                    className="min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-bold leading-none inline-flex items-center justify-center text-white ring-1 ring-white/35"
                     style={{ backgroundColor: effectiveFanTheme.primary }}
                     aria-label={`${liveChatSessionsCount} live chat session${liveChatSessionsCount === 1 ? '' : 's'}`}
                     title="Live premium chat session running — open Chat Session"
@@ -307,6 +310,7 @@ export const PremiumStudioLayout: React.FC<PremiumStudioLayoutProps> = ({ childr
             iconColor={isDarkMode ? '#e2e8f0' : effectiveFanTheme.text}
             className="shrink-0"
             onNavigate={handleFanHubNotificationNavigate}
+            hidden={suppressFanHubDmNotifications}
           />
         ) : null}
       </div>

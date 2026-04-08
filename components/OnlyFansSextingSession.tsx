@@ -96,6 +96,40 @@ function messagesToContext(messages: Message[], adminUid: string): SextingContex
   }));
 }
 
+function toneUiToApiParam(toneLabel: string): string {
+  const toneId = toneLabel.toLowerCase();
+  if (toneId === 'teasing') return 'tease';
+  if (toneId === 'playful' || toneId === 'intimate' || toneId === 'sweet' || toneId === 'soft' || toneId === 'bold') {
+    return toneId;
+  }
+  return 'playful';
+}
+
+/** Shared body for /api/generateSextingSuggestion (manual suggestions + AI chat bot). */
+function buildStudioSextingRequestBody(
+  recentMessages: SextingContextMessage[],
+  opts: {
+    fanName?: string;
+    useCreatorPersonality: boolean;
+    creatorPersonality: string;
+    toneLabel: string;
+    customChatTypeValue: string;
+    contentSpiciness: number;
+    numSuggestions: number;
+  }
+): Record<string, unknown> {
+  return {
+    recentMessages,
+    fanName: opts.fanName,
+    creatorPersona: opts.useCreatorPersonality ? opts.creatorPersonality : undefined,
+    useCreatorPersonality: opts.useCreatorPersonality,
+    tone: toneUiToApiParam(opts.toneLabel),
+    chatType: opts.customChatTypeValue.trim() || 'Custom',
+    spiciness: opts.contentSpiciness,
+    numSuggestions: opts.numSuggestions,
+  };
+}
+
 function SparklesIcon() {
   return (
     <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -309,7 +343,7 @@ function AISuggestionsPanel({ suggestions, onUseSuggestion, onRequestSuggestions
         className="chat-session-suggest-reply-btn"
         onClick={onRequestSuggestions}
         disabled={disabled || loading}
-        title={disabled ? 'AI Chat Bot is on — turn it off to use suggestions' : undefined}
+        title="Get reply ideas (works with AI Chat Bot on or off)"
       >
         <SparklesIcon /> {loading ? 'Generating…' : 'Suggest reply'}
       </button>
@@ -765,23 +799,23 @@ export const OnlyFansSextingSession: React.FC = () => {
       const token = await getToken();
       if (!token) return;
 
-      const toneId = tone.toLowerCase();
-      const toneParam = toneId === 'teasing' ? 'tease' : toneId === 'playful' || toneId === 'intimate' || toneId === 'sweet' ? toneId : 'playful';
-
       const response = await fetch('/api/generateSextingSuggestion', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({
-          recentMessages,
-          fanName: formatFanPlainMoniker(selectedFan ?? {}) || undefined,
-          creatorPersona: useCreatorPersonality ? creatorPersonality : undefined,
-          tone: toneParam,
-          numSuggestions: 6,
-          spiciness: contentSpiciness,
-        }),
+        body: JSON.stringify(
+          buildStudioSextingRequestBody(recentMessages, {
+            fanName: formatFanPlainMoniker(selectedFan ?? {}) || undefined,
+            useCreatorPersonality,
+            creatorPersonality,
+            toneLabel: tone,
+            customChatTypeValue,
+            contentSpiciness,
+            numSuggestions: 6,
+          })
+        ),
       });
 
       const data = await response.json().catch(() => ({}));
@@ -793,7 +827,17 @@ export const OnlyFansSextingSession: React.FC = () => {
     } finally {
       setSuggestionsLoading(false);
     }
-  }, [sessionStarted, recentMessages, tone, selectedFan, useCreatorPersonality, creatorPersonality, contentSpiciness, getToken]);
+  }, [
+    sessionStarted,
+    recentMessages,
+    tone,
+    selectedFan,
+    useCreatorPersonality,
+    creatorPersonality,
+    contentSpiciness,
+    customChatTypeValue,
+    getToken,
+  ]);
 
   // Chatbot auto-reply (Elite only) — API expects legacy fields OR `recentMessages` (mapped server-side).
   useEffect(() => {
@@ -813,9 +857,6 @@ export const OnlyFansSextingSession: React.FC = () => {
 
     chatBotInFlightRef.current = true;
     setChatBotReplying(true);
-    const toneId = tone.toLowerCase();
-    const toneParam =
-      toneId === 'teasing' ? 'tease' : toneId === 'playful' || toneId === 'intimate' || toneId === 'sweet' ? toneId : 'playful';
 
     const fanMsgId = lastFanMsg.id;
 
@@ -828,14 +869,17 @@ export const OnlyFansSextingSession: React.FC = () => {
             'Content-Type': 'application/json',
             Authorization: `Bearer ${token}`,
           },
-          body: JSON.stringify({
-            recentMessages: recentForApi,
-            fanName: formatFanPlainMoniker(selectedFan ?? {}) || undefined,
-            creatorPersona: useCreatorPersonality ? creatorPersonality : undefined,
-            tone: toneParam,
-            numSuggestions: 1,
-            spiciness: contentSpiciness,
-          }),
+          body: JSON.stringify(
+            buildStudioSextingRequestBody(recentForApi, {
+              fanName: formatFanPlainMoniker(selectedFan ?? {}) || undefined,
+              useCreatorPersonality,
+              creatorPersonality,
+              toneLabel: tone,
+              customChatTypeValue,
+              contentSpiciness,
+              numSuggestions: 1,
+            })
+          ),
         }).then(async (r) => {
           const data = await r.json().catch(() => ({}));
           return { ok: r.ok, data };
@@ -889,6 +933,7 @@ export const OnlyFansSextingSession: React.FC = () => {
     useCreatorPersonality,
     creatorPersonality,
     contentSpiciness,
+    customChatTypeValue,
     getToken,
     activeThreadId,
     fetchSessionMessages,
@@ -1026,7 +1071,7 @@ export const OnlyFansSextingSession: React.FC = () => {
                 onUseSuggestion={handleUseSuggestion}
                 onRequestSuggestions={handleRequestSuggestions}
                 loading={suggestionsLoading}
-                disabled={chatBotEnabled}
+                disabled={false}
               />
                         </div>
                             </div>
