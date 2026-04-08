@@ -324,12 +324,14 @@ type SupportMessage = {
   createdAt?: string;
 };
 
+type FanDeliveryPurchaseType = "product" | "post_unlock" | "unlock" | "tip" | "subscription";
+
 type FanDeliveryPurchase = {
   id: string;
   creatorId: string;
   fanId: string;
   fanEmail?: string;
-  type: string;
+  type: FanDeliveryPurchaseType;
   productId: string | null;
   productTitle?: string;
   amountCents: number;
@@ -342,10 +344,21 @@ type FanDeliveryPurchase = {
   deliveredAt?: string | null;
 };
 
-function normalizeFanPurchaseType(raw: Record<string, unknown>): "product" | "post_unlock" | "unlock" | "tip" {
+type DmLiveSession = {
+  id: string;
+  status: string;
+  chatType: string;
+  durationMinutes: number;
+  startedAt: string | null;
+  endsAt: string | null;
+  remainingSeconds: number;
+};
+
+function normalizeFanPurchaseType(raw: Record<string, unknown>): FanDeliveryPurchaseType {
   const type = typeof raw.type === "string" ? raw.type.trim().toLowerCase() : "";
   const productType = typeof raw.productType === "string" ? raw.productType.trim().toLowerCase() : "";
   if (type === "tip" || productType === "tip") return "tip";
+  if (type === "subscription" || productType === "subscription") return "subscription";
   if (typeof raw.tipHandle === "string" && raw.tipHandle.trim()) return "tip";
   if (type === "post_unlock" || productType === "post_unlock") return "post_unlock";
   if (type === "unlock" || productType === "unlock") return "unlock";
@@ -863,6 +876,8 @@ export const FanStorefrontView: React.FC = () => {
   const [dmPendingAttachmentType, setDmPendingAttachmentType] = useState<DmAttachmentKind | null>(null);
   const [dmPendingAttachmentUploading, setDmPendingAttachmentUploading] = useState(false);
   const [dmPreferredThreadId, setDmPreferredThreadId] = useState<string | null>(null);
+  const [dmPreferredSessionId, setDmPreferredSessionId] = useState<string | null>(null);
+  const [dmLiveSession, setDmLiveSession] = useState<DmLiveSession | null>(null);
   const dmMessagesEndRef = useRef<HTMLDivElement | null>(null);
   const dmMessagesListRef = useRef<HTMLDivElement | null>(null);
   const dmAutoStickToBottomRef = useRef(true);
@@ -2100,7 +2115,10 @@ export const FanStorefrontView: React.FC = () => {
             amountCents: Number.isFinite(Number(raw.amountCents)) ? Math.max(0, Math.round(Number(raw.amountCents))) : 0,
             status: typeof raw.status === "string" ? raw.status : "paid",
             createdAt: toIsoFromUnknownDate(raw.createdAt),
-            deliveryStatus: normalizedType === "tip" ? undefined : (raw.deliveryStatus === "delivered" ? "delivered" : "pending"),
+            deliveryStatus:
+              normalizedType === "tip" || normalizedType === "subscription"
+                ? undefined
+                : (raw.deliveryStatus === "delivered" ? "delivered" : "pending"),
             deliveryType:
               raw.deliveryType === "video" ||
               raw.deliveryType === "image" ||
@@ -2138,7 +2156,10 @@ export const FanStorefrontView: React.FC = () => {
                 : 0,
               status: typeof raw.status === "string" ? raw.status : "paid",
               createdAt: toIsoFromUnknownDate(raw.createdAt),
-              deliveryStatus: normalizedType === "tip" ? undefined : (raw.deliveryStatus === "delivered" ? "delivered" : "pending"),
+              deliveryStatus:
+                normalizedType === "tip" || normalizedType === "subscription"
+                  ? undefined
+                  : (raw.deliveryStatus === "delivered" ? "delivered" : "pending"),
               deliveryType:
                 raw.deliveryType === "video" ||
                 raw.deliveryType === "image" ||
@@ -2154,7 +2175,14 @@ export const FanStorefrontView: React.FC = () => {
         }
         const fallbackRows = Array.from(outById.values())
           .filter((o) => o.status !== "refunded")
-          .filter((o) => o.type === "product" || o.type === "unlock" || o.type === "post_unlock" || o.type === "treat")
+          .filter(
+            (o) =>
+              o.type === "product" ||
+              o.type === "unlock" ||
+              o.type === "post_unlock" ||
+              o.type === "tip" ||
+              o.type === "subscription"
+          )
           .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
         setFanPurchases(fallbackRows);
         return;
@@ -2502,6 +2530,12 @@ export const FanStorefrontView: React.FC = () => {
   };
 
   const formatPrice = (cents: number) => "$" + (cents / 100).toFixed(2);
+  const formatRemaining = (seconds: number) => {
+    const safe = Math.max(0, Math.floor(seconds || 0));
+    const mins = Math.floor(safe / 60);
+    const secs = safe % 60;
+    return `${mins}:${String(secs).padStart(2, "0")}`;
+  };
 
   const handleCancelMembership = async () => {
     if (!creator?.creatorId || !auth.currentUser) return;
@@ -2976,6 +3010,8 @@ export const FanStorefrontView: React.FC = () => {
     setDmThread(null);
     setDmMessages([]);
     setDmLabels(null);
+    setDmLiveSession(null);
+    setDmPreferredSessionId(null);
   }, [creator?.creatorId]);
 
   useEffect(() => {
@@ -3003,6 +3039,45 @@ export const FanStorefrontView: React.FC = () => {
       window.removeEventListener("focus", onFocus);
     };
   }, [activeTab, creator?.creatorId, isLoggedIn, fetchDmThreadAndMessages]);
+
+  useEffect(() => {
+    if (activeTab !== "messages" || !creator?.creatorId || !isLoggedIn || !dmThread?.id || !auth.currentUser) {
+      setDmLiveSession(null);
+      return;
+    }
+    let cancelled = false;
+    const tick = async () => {
+      if (typeof document !== "undefined" && document.visibilityState !== "visible") return;
+      try {
+        const token = await auth.currentUser!.getIdToken(true);
+        const params = new URLSearchParams({
+          creatorId: creator.creatorId,
+          threadId: dmThread.id,
+        });
+        if (dmPreferredSessionId?.trim()) params.set("sessionId", dmPreferredSessionId.trim());
+        const res = await fetch(`/api/chatSession?${params.toString()}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const data = await res.json().catch(() => ({} as { session?: DmLiveSession | null }));
+        if (cancelled) return;
+        const next = (data as { session?: DmLiveSession | null }).session || null;
+        setDmLiveSession(next);
+        if (next && dmPreferredSessionId && next.id === dmPreferredSessionId) {
+          setDmPreferredSessionId(null);
+        }
+      } catch {
+        if (!cancelled) setDmLiveSession(null);
+      }
+    };
+    void tick();
+    const id = window.setInterval(() => {
+      void tick();
+    }, 5000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(id);
+    };
+  }, [activeTab, creator?.creatorId, isLoggedIn, dmThread?.id, dmPreferredSessionId, auth.currentUser]);
 
   useEffect(() => {
     if (activeTab !== "messages") {
@@ -3417,6 +3492,8 @@ export const FanStorefrontView: React.FC = () => {
       };
 
       if (p.type === "new_message") {
+        if (d.threadId?.trim()) setDmPreferredThreadId(d.threadId.trim());
+        if (d.sessionId?.trim()) setDmPreferredSessionId(d.sessionId.trim());
         goTab("messages");
         return;
       }
@@ -3436,11 +3513,13 @@ export const FanStorefrontView: React.FC = () => {
       }
       if (p.type === "session_starting" || p.type === "session_reminder") {
         if (d.threadId?.trim()) setDmPreferredThreadId(d.threadId.trim());
+        if (d.sessionId?.trim()) setDmPreferredSessionId(d.sessionId.trim());
         goTab("messages");
         return;
       }
       if (d.threadId?.trim()) {
         setDmPreferredThreadId(d.threadId.trim());
+        if (d.sessionId?.trim()) setDmPreferredSessionId(d.sessionId.trim());
         goTab("messages");
       }
     },
@@ -4274,7 +4353,11 @@ export const FanStorefrontView: React.FC = () => {
                         <h3 className="fan-member-treat-title">{o.productTitle || "Purchase"}</h3>
                         <p className="fan-member-treat-price">{formatPrice(o.amountCents)}</p>
                         <div className="fan-member-treat-action" style={{ display: "block" }}>
-                          {o.deliveryStatus === "delivered" ? (
+                          {o.type === "tip" ? (
+                            <span className="fan-member-treat-owned">Tip received</span>
+                          ) : o.type === "subscription" ? (
+                            <span className="fan-member-treat-owned">Membership active</span>
+                          ) : o.deliveryStatus === "delivered" ? (
                             <>
                               <span className="fan-member-treat-owned">Delivered</span>
                               {o.deliveryType === "text" && o.deliveryText ? (
@@ -4362,6 +4445,23 @@ export const FanStorefrontView: React.FC = () => {
                 ) : (
                   <>
                     <p className="fan-member-messages-title">Conversation with {displayName}</p>
+                    {dmLiveSession && (dmLiveSession.status === "active" || dmLiveSession.status === "paused") ? (
+                      <div
+                        className="fan-profile-panel"
+                        style={{
+                          marginBottom: "0.75rem",
+                          borderColor: "color-mix(in srgb, #059669 38%, transparent)",
+                          backgroundColor: "color-mix(in srgb, #059669 8%, white)",
+                        }}
+                      >
+                        <p className="fan-member-about-text m-0" style={{ fontWeight: 700 }}>
+                          Paid chat session live
+                        </p>
+                        <p className="fan-member-about-text m-0 mt-1">
+                          {dmLiveSession.chatType || "Custom"} • {formatRemaining(dmLiveSession.remainingSeconds)} remaining
+                        </p>
+                      </div>
+                    ) : null}
                     <div
                       ref={dmMessagesListRef}
                       className="fan-member-messages-list"

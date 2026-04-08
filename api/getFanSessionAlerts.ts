@@ -36,6 +36,14 @@ function withinWindow(startsAtIso: string | undefined, nowMs: number, minutesBef
   return nowMs >= startMs - minutesBefore * 60 * 1000;
 }
 
+function durationToMs(input: unknown): number {
+  const mins =
+    typeof input === "number" && Number.isFinite(input)
+      ? Math.max(1, Math.min(180, Math.round(input)))
+      : 15;
+  return mins * 60 * 1000;
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== "GET") {
     return res.status(405).json({ error: "Method not allowed" });
@@ -114,16 +122,33 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             (typeof d.fanEmail === "string" && d.fanEmail.trim().toLowerCase() === fanEmail)));
       if (!fanMatch) return;
 
-      const startsAt = tsToIso(d.scheduledStart) || tsToIso(d.scheduledFor);
-      const isActive = status === "active";
-      const show = isActive || withinWindow(startsAt, nowMs, 5);
-      if (!show) return;
+      const startsAt = tsToIso(d.startedAt) || tsToIso(d.scheduledStart) || tsToIso(d.scheduledFor) || tsToIso(d.createdAt);
+      const isActive = status === "active" || status === "paused";
+
+      // For chat sessions, only show when actively live.
+      if (!isActive) return;
+
+      const startMs = startsAt ? new Date(startsAt).getTime() : 0;
+      const endsAtMs = startMs > 0 ? startMs + durationToMs(d.durationMinutes) : 0;
+      const isExpired = endsAtMs > 0 && nowMs >= endsAtMs;
+      if (isExpired) {
+        // Auto-close stale "active" sessions so UI panels disappear without manual cleanup.
+        void doc.ref.set(
+          {
+            status: "ended",
+            endedAt: new Date(nowMs).toISOString(),
+            updatedAt: new Date(nowMs).toISOString(),
+          },
+          { merge: true }
+        );
+        return;
+      }
 
       alerts.push({
         id: doc.id,
         kind: "chat",
-        title: isActive ? "Chat session is live" : "Chat session starts soon",
-        ctaLabel: isActive ? "Open chat now" : "Open chat session",
+        title: "Chat session is live",
+        ctaLabel: "Open chat now",
         startsAt,
         status,
       });

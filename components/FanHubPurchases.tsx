@@ -78,6 +78,18 @@ function isTipPurchase(p: Purchase): boolean {
   return orderType === "tip" || treatType === "tip" || productName === "tip";
 }
 
+function isSubscriptionPurchase(p: Purchase): boolean {
+  const orderType = (p.orderType || "").trim().toLowerCase();
+  const treatType = (p.treatType || "").trim().toLowerCase();
+  const productName = (p.productName || "").trim().toLowerCase();
+  return (
+    orderType === "subscription" ||
+    treatType === "subscription" ||
+    productName.includes("subscription") ||
+    productName.includes("membership")
+  );
+}
+
 function toLocalScheduleParts(date: Date): { date: string; time: string } {
   const y = date.getFullYear();
   const m = String(date.getMonth() + 1).padStart(2, "0");
@@ -97,6 +109,8 @@ const DEMO_PURCHASES: Purchase[] = [];
 export const FanHubPurchases: React.FC = () => {
   const { user, showToast } = useAppContext();
   const [purchases, setPurchases] = useState<Purchase[]>(DEMO_PURCHASES);
+  const [hiddenPurchaseIds, setHiddenPurchaseIds] = useState<Set<string>>(new Set());
+  const [showHidden, setShowHidden] = useState(false);
   const [loading, setLoading] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [scheduleDate, setScheduleDate] = useState("");
@@ -119,6 +133,30 @@ export const FanHubPurchases: React.FC = () => {
   const deliveryAudioChunksRef = useRef<Blob[]>([]);
   const deliveryVideoChunksRef = useRef<Blob[]>([]);
   const deliveryVideoPreviewRef = useRef<HTMLVideoElement | null>(null);
+  const hiddenStorageKey = user?.id ? `fanhub_hidden_purchases_${user.id}` : null;
+
+  useEffect(() => {
+    if (!hiddenStorageKey || typeof window === "undefined") {
+      setHiddenPurchaseIds(new Set());
+      return;
+    }
+    try {
+      const raw = window.localStorage.getItem(hiddenStorageKey);
+      const parsed = raw ? (JSON.parse(raw) as string[]) : [];
+      setHiddenPurchaseIds(new Set(Array.isArray(parsed) ? parsed : []));
+    } catch {
+      setHiddenPurchaseIds(new Set());
+    }
+  }, [hiddenStorageKey]);
+
+  useEffect(() => {
+    if (!hiddenStorageKey || typeof window === "undefined") return;
+    try {
+      window.localStorage.setItem(hiddenStorageKey, JSON.stringify(Array.from(hiddenPurchaseIds)));
+    } catch {
+      // ignore storage failures
+    }
+  }, [hiddenStorageKey, hiddenPurchaseIds]);
 
   const fetchPurchases = useCallback(async () => {
     if (!user?.id) return;
@@ -133,7 +171,8 @@ export const FanHubPurchases: React.FC = () => {
         const list = Array.isArray(data.orders) ? data.orders : [];
         const realPurchases: Purchase[] = list.map((o: any) => {
           const orderType = typeof o.type === "string" ? o.type : "";
-          const isTipOrder = orderType.trim().toLowerCase() === "tip";
+          const normalizedType = orderType.trim().toLowerCase();
+          const isNonDeliverableOrder = normalizedType === "tip" || normalizedType === "subscription";
           return {
             id: o.id,
             email: o.fanEmail || o.fanId || "Unknown",
@@ -142,10 +181,10 @@ export const FanHubPurchases: React.FC = () => {
             treatType: o.productId || o.type,
             amountCents: o.amountCents || 0,
             createdAt: new Date(o.createdAt),
-            scheduleStatus: isTipOrder ? "completed" : ((o.scheduleStatus as ScheduleStatus) || "pending"),
+            scheduleStatus: isNonDeliverableOrder ? "completed" : ((o.scheduleStatus as ScheduleStatus) || "pending"),
             scheduledDate: o.scheduledDate || null,
             scheduledTime: o.scheduledTime || null,
-            deliveryStatus: isTipOrder ? "delivered" : (o.deliveryStatus === "delivered" ? "delivered" : "pending"),
+            deliveryStatus: isNonDeliverableOrder ? "delivered" : (o.deliveryStatus === "delivered" ? "delivered" : "pending"),
             deliveryType:
               o.deliveryType === "video" ||
               o.deliveryType === "image" ||
@@ -626,12 +665,56 @@ export const FanHubPurchases: React.FC = () => {
     }
   };
 
+  const hidePurchase = useCallback((purchaseId: string) => {
+    setHiddenPurchaseIds((prev) => {
+      const next = new Set(prev);
+      next.add(purchaseId);
+      return next;
+    });
+  }, []);
+
+  const unhidePurchase = useCallback((purchaseId: string) => {
+    setHiddenPurchaseIds((prev) => {
+      const next = new Set(prev);
+      next.delete(purchaseId);
+      return next;
+    });
+  }, []);
+
+  const hideNonActionablePurchases = useCallback(() => {
+    const targetIds = purchases
+      .filter((p) => {
+        const tipPurchase = isTipPurchase(p);
+        const subscriptionPurchase = isSubscriptionPurchase(p);
+        const nonDeliverablePurchase = tipPurchase || subscriptionPurchase;
+        return nonDeliverablePurchase || p.scheduleStatus === "completed" || p.deliveryStatus === "delivered";
+      })
+      .map((p) => p.id);
+    if (targetIds.length === 0) {
+      showToast?.("No completed purchases to hide.", "info");
+      return;
+    }
+    setHiddenPurchaseIds((prev) => {
+      const next = new Set(prev);
+      targetIds.forEach((id) => next.add(id));
+      return next;
+    });
+    showToast?.(`Hidden ${targetIds.length} purchase${targetIds.length === 1 ? "" : "s"}.`, "success");
+  }, [purchases, showToast]);
+
+  const unhideAllPurchases = useCallback(() => {
+    setHiddenPurchaseIds(new Set());
+    showToast?.("All hidden purchases are visible again.", "success");
+  }, [showToast]);
+
   const filteredPurchases = purchases.filter((p) => {
+    if (!showHidden && hiddenPurchaseIds.has(p.id)) return false;
     if (filterStatus === "all") return true;
     if (filterStatus === "tips") return isTipPurchase(p);
     return p.scheduleStatus === filterStatus;
   });
 
+  const hiddenCount = purchases.filter((p) => hiddenPurchaseIds.has(p.id)).length;
   const pendingCount = purchases.filter((p) => p.scheduleStatus === "pending").length;
   const scheduledCount = purchases.filter((p) => p.scheduleStatus === "scheduled").length;
   const tipsCount = purchases.filter((p) => isTipPurchase(p)).length;
@@ -655,6 +738,31 @@ export const FanHubPurchases: React.FC = () => {
           </p>
         </div>
         <div className="purchases-header-actions">
+          <button
+            type="button"
+            onClick={() => hideNonActionablePurchases()}
+            className="purchases-btn purchases-btn-secondary"
+          >
+            Hide completed
+          </button>
+          {hiddenCount > 0 && (
+            <>
+              <button
+                type="button"
+                onClick={() => setShowHidden((v) => !v)}
+                className="purchases-btn purchases-btn-secondary"
+              >
+                {showHidden ? `Hide hidden (${hiddenCount})` : `Show hidden (${hiddenCount})`}
+              </button>
+              <button
+                type="button"
+                onClick={() => unhideAllPurchases()}
+                className="purchases-btn purchases-btn-secondary"
+              >
+                Unhide all
+              </button>
+            </>
+          )}
           <button
             type="button"
             onClick={() => fetchPurchases()}
@@ -713,6 +821,8 @@ export const FanHubPurchases: React.FC = () => {
         ) : (
           filteredPurchases.map((p) => {
             const tipPurchase = isTipPurchase(p);
+            const subscriptionPurchase = isSubscriptionPurchase(p);
+            const nonDeliverablePurchase = tipPurchase || subscriptionPurchase;
             const isDelivered = p.deliveryStatus === "delivered";
             const isPending = p.scheduleStatus === "pending" && !isDelivered;
             const isScheduled = p.scheduleStatus === "scheduled";
@@ -752,7 +862,12 @@ export const FanHubPurchases: React.FC = () => {
                         Tip received
                       </span>
                     )}
-                    {!tipPurchase && (isScheduled || isDelivered) && (p.scheduledDate || p.deliveredAt) && (
+                    {subscriptionPurchase && (
+                      <span className="purchases-status-badge purchases-status-completed">
+                        Subscription payment
+                      </span>
+                    )}
+                    {!nonDeliverablePurchase && (isScheduled || isDelivered) && (p.scheduledDate || p.deliveredAt) && (
                       <div className="purchases-scheduled-info">
                         {!isDelivered ? (
                           <span className="purchases-status-badge purchases-status-scheduled">Scheduled</span>
@@ -764,12 +879,12 @@ export const FanHubPurchases: React.FC = () => {
                         </p>
                       </div>
                     )}
-                    {!tipPurchase && isCompleted && (
+                    {!nonDeliverablePurchase && isCompleted && (
                       <span className="purchases-status-badge purchases-status-completed">
                         Completed
                       </span>
                     )}
-                    {!tipPurchase && isDelivered && (
+                    {!nonDeliverablePurchase && isDelivered && (
                       <span className="purchases-status-badge purchases-status-delivered">
                         Delivered
                       </span>
@@ -779,7 +894,14 @@ export const FanHubPurchases: React.FC = () => {
 
                 {/* Actions */}
                 <div className="purchases-card-actions">
-                  {!tipPurchase && !isEditing && !isCompleted && (
+                  <button
+                    type="button"
+                    className="purchases-btn purchases-btn-secondary"
+                    onClick={() => (hiddenPurchaseIds.has(p.id) ? unhidePurchase(p.id) : hidePurchase(p.id))}
+                  >
+                    {hiddenPurchaseIds.has(p.id) ? "Unhide" : "Hide"}
+                  </button>
+                  {!nonDeliverablePurchase && !isEditing && !isCompleted && (
                     <>
                       {isScheduled && (
                         <>
@@ -810,7 +932,7 @@ export const FanHubPurchases: React.FC = () => {
                       )}
                     </>
                   )}
-                  {!tipPurchase && !isEditing && (
+                  {!nonDeliverablePurchase && !isEditing && (
                     <button
                       type="button"
                       className="purchases-btn purchases-btn-primary"

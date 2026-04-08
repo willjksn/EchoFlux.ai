@@ -362,6 +362,7 @@ export const OnlyFansSextingSession: React.FC = () => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [myMessageInput, setMyMessageInput] = useState('');
   const [sessionEndModalOpen, setSessionEndModalOpen] = useState(false);
+  const [activeChatSessionId, setActiveChatSessionId] = useState<string | null>(null);
 
   // AI
   const [chatBotEnabled, setChatBotEnabled] = useState(false);
@@ -574,15 +575,6 @@ export const OnlyFansSextingSession: React.FC = () => {
     };
   }, [sessionStarted, sessionPaused, timeRemainingSeconds]);
 
-  // Auto-end when timer hits 0
-  useEffect(() => {
-    if (!sessionStarted || timeRemainingSeconds !== 0) return;
-    setChatBotEnabled(false);
-    setSessionStarted(false);
-    setSessionPaused(false);
-    showToast?.('Session ended — time is up!', 'success');
-  }, [sessionStarted, timeRemainingSeconds, showToast]);
-
   // Auto-scroll messages
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -597,6 +589,39 @@ export const OnlyFansSextingSession: React.FC = () => {
   const getToken = useCallback(async () => {
     return auth.currentUser ? await auth.currentUser.getIdToken(true) : '';
   }, []);
+
+  const endActiveSessionOnServer = useCallback(async () => {
+    if (!activeChatSessionId) return;
+    try {
+      const token = await getToken();
+      if (!token) return;
+      const res = await fetch('/api/chatSession', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ action: 'end', sessionId: activeChatSessionId }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({} as { error?: string }));
+        throw new Error(data.error || 'Could not end chat session.');
+      }
+    } catch (e) {
+      showToast?.(e instanceof Error ? e.message : 'Could not end chat session.', 'error');
+    }
+  }, [activeChatSessionId, getToken, showToast]);
+
+  // Auto-end when timer hits 0
+  useEffect(() => {
+    if (!sessionStarted || timeRemainingSeconds !== 0) return;
+    void endActiveSessionOnServer();
+    setChatBotEnabled(false);
+    setSessionStarted(false);
+    setSessionPaused(false);
+    setActiveChatSessionId(null);
+    showToast?.('Session ended — time is up!', 'success');
+  }, [sessionStarted, timeRemainingSeconds, showToast, endActiveSessionOnServer]);
 
   const handleStartSession = useCallback(async () => {
     if (!selectedUid) return;
@@ -628,6 +653,9 @@ export const OnlyFansSextingSession: React.FC = () => {
       if (!res.ok) {
         throw new Error((data as { error?: string }).error || 'Could not start chat session.');
       }
+      setActiveChatSessionId(
+        typeof (data as { sessionId?: unknown }).sessionId === 'string' ? String((data as { sessionId: string }).sessionId) : null
+      );
     } catch (e) {
       showToast?.(e instanceof Error ? e.message : 'Could not start chat session.', 'error');
       return;
@@ -645,14 +673,16 @@ export const OnlyFansSextingSession: React.FC = () => {
   }, [selectedUid, durationPreset, customDurationInput, customDurationMinutes, sessionDurationMinutes, showToast, getToken, customChatTypeValue]);
 
   const handleEndSession = useCallback(() => {
+    void endActiveSessionOnServer();
     setSessionEndModalOpen(false);
     setChatBotEnabled(false);
     setSessionStarted(false);
     setSessionPaused(false);
+    setActiveChatSessionId(null);
     setMessages([]);
     setAutoSuggestions([]);
     showToast?.('Session ended', 'success');
-  }, [showToast]);
+  }, [showToast, endActiveSessionOnServer]);
 
   const handleSendMyMessage = useCallback(async () => {
     const text = myMessageInput.trim();
@@ -871,7 +901,7 @@ export const OnlyFansSextingSession: React.FC = () => {
                 </button>
                         </div>
 
-              <button type="button" className="chat-session-back-btn" onClick={() => setSessionStarted(false)}>
+              <button type="button" className="chat-session-back-btn" onClick={() => setSessionEndModalOpen(true)}>
                 ← Back to setup
                             </button>
                     </div>

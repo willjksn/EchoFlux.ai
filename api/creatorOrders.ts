@@ -125,6 +125,7 @@ function toPositiveCents(raw: unknown): number {
 function mapDocToOrder(docSnap: QueryDocumentSnapshot): CreatorOrder {
   const d = docSnap.data() as Record<string, unknown>;
   const inferredType = normalizeOrderType(d);
+  const isNonDeliverable = inferredType === "tip" || inferredType === "subscription";
   const amountCents = (() => {
     const direct = typeof d.amountCents === "number" && Number.isFinite(d.amountCents)
       ? Math.max(0, Math.round(d.amountCents))
@@ -144,10 +145,10 @@ function mapDocToOrder(docSnap: QueryDocumentSnapshot): CreatorOrder {
     productTitle: (d.productTitle as string) ?? (d.productId as string) ?? undefined,
     fanName: (d.fanName as string) ?? (d.tipHandle as string) ?? null,
     fanEmail: typeof d.fanEmail === "string" && d.fanEmail.trim() ? d.fanEmail.trim() : undefined,
-    scheduleStatus: (d.scheduleStatus as string) || "pending",
-    scheduledDate: (d.scheduledDate as string) ?? null,
-    scheduledTime: (d.scheduledTime as string) ?? null,
-    deliveryStatus: d.deliveryStatus === "delivered" ? "delivered" : "pending",
+    scheduleStatus: isNonDeliverable ? "completed" : ((d.scheduleStatus as string) || "pending"),
+    scheduledDate: isNonDeliverable ? null : ((d.scheduledDate as string) ?? null),
+    scheduledTime: isNonDeliverable ? null : ((d.scheduledTime as string) ?? null),
+    deliveryStatus: isNonDeliverable ? "delivered" : (d.deliveryStatus === "delivered" ? "delivered" : "pending"),
     deliveryType:
       d.deliveryType === "video" ||
       d.deliveryType === "image" ||
@@ -297,13 +298,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
               (typeof raw.tipHandle === "string" && raw.tipHandle.trim()) ||
               null,
             fanEmail,
-            scheduleStatus:
-              typeof raw.scheduleStatus === "string" && raw.scheduleStatus.trim()
-                ? raw.scheduleStatus
-                : "pending",
-            scheduledDate: typeof raw.scheduledDate === "string" ? raw.scheduledDate : null,
-            scheduledTime: typeof raw.scheduledTime === "string" ? raw.scheduledTime : null,
-            deliveryStatus: raw.deliveryStatus === "delivered" ? "delivered" : "pending",
+            scheduleStatus: inferredType === "tip" || inferredType === "subscription"
+              ? "completed"
+              : (typeof raw.scheduleStatus === "string" && raw.scheduleStatus.trim() ? raw.scheduleStatus : "pending"),
+            scheduledDate: inferredType === "tip" || inferredType === "subscription"
+              ? null
+              : (typeof raw.scheduledDate === "string" ? raw.scheduledDate : null),
+            scheduledTime: inferredType === "tip" || inferredType === "subscription"
+              ? null
+              : (typeof raw.scheduledTime === "string" ? raw.scheduledTime : null),
+            deliveryStatus: inferredType === "tip" || inferredType === "subscription"
+              ? "delivered"
+              : (raw.deliveryStatus === "delivered" ? "delivered" : "pending"),
             deliveryType:
               raw.deliveryType === "video" ||
               raw.deliveryType === "image" ||
@@ -385,10 +391,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           productTitle: "Legacy tip reconciliation",
           fanName,
           fanEmail,
-          scheduleStatus: "pending",
+          scheduleStatus: "completed",
           scheduledDate: null,
           scheduledTime: null,
-          deliveryStatus: "pending",
+          deliveryStatus: "delivered",
           deliveryType: null,
           deliveryText: null,
           deliveryUrl: null,

@@ -2,12 +2,14 @@ import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { getAdminDb } from "./_firebaseAdmin.js";
 import { verifyAuth } from "./verifyAuth.js";
 
+type FanPurchaseType = "product" | "post_unlock" | "unlock" | "tip" | "subscription";
+
 type FanPurchase = {
   id: string;
   creatorId: string;
   fanId: string;
   fanEmail?: string;
-  type: string;
+  type: FanPurchaseType;
   productId: string | null;
   productTitle?: string;
   amountCents: number;
@@ -20,10 +22,11 @@ type FanPurchase = {
   deliveredAt?: string | null;
 };
 
-function normalizePurchaseType(d: Record<string, unknown>): "product" | "post_unlock" | "unlock" | "tip" {
+function normalizePurchaseType(d: Record<string, unknown>): FanPurchaseType {
   const rawType = typeof d.type === "string" ? d.type.trim().toLowerCase() : "";
   const rawProductType = typeof d.productType === "string" ? d.productType.trim().toLowerCase() : "";
   if (rawType === "tip" || rawProductType === "tip") return "tip";
+  if (rawType === "subscription" || rawProductType === "subscription") return "subscription";
   if (typeof d.tipHandle === "string" && d.tipHandle.trim()) return "tip";
   if (rawType === "post_unlock" || rawProductType === "post_unlock") return "post_unlock";
   if (rawType === "unlock" || rawProductType === "unlock") return "unlock";
@@ -49,7 +52,8 @@ function createdAtToMs(createdAt: unknown): number {
 function mapDocToPurchase(id: string, d: Record<string, unknown>): FanPurchase {
   const normalizedType = normalizePurchaseType(d);
   const createdMs = createdAtToMs(d.createdAt);
-  const deliveryStatus = normalizedType === "tip" ? undefined : (d.deliveryStatus === "delivered" ? "delivered" : "pending");
+  const isNonDeliverable = normalizedType === "tip" || normalizedType === "subscription";
+  const deliveryStatus = isNonDeliverable ? undefined : (d.deliveryStatus === "delivered" ? "delivered" : "pending");
   return {
     id,
     creatorId: String(d.creatorId || ""),
@@ -120,7 +124,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const purchases = Array.from(docsById.values())
       .filter((o) => o.status !== "refunded")
-      .filter((o) => o.type === "product" || o.type === "post_unlock" || o.type === "unlock")
+      .filter((o) => o.type === "product" || o.type === "post_unlock" || o.type === "unlock" || o.type === "subscription" || o.type === "tip")
       .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt))
       .slice(0, limitNum);
 
