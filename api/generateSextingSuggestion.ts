@@ -177,20 +177,14 @@ async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
     // Parse fan context if it's the enhanced format
     let enhancedFanContext = '';
     if (fanContext) {
-        if (fanContext.includes('CRITICAL - PERSONALIZE FOR FAN:')) {
-            // Enhanced format - use as-is
-            enhancedFanContext = fanContext;
-        } else {
-            // Legacy format - convert to enhanced
-            enhancedFanContext = `
-CRITICAL - PERSONALIZE FOR FAN: ${fanName}
+      if (fanContext.includes("CRITICAL - PERSONALIZE FOR FAN:")) {
+        enhancedFanContext = fanContext;
+      } else {
+        enhancedFanContext = `
+Fan notes / context (do not echo verbatim; use only if it improves the reply):
 ${fanContext}
-
-REQUIREMENTS:
-- Use ${fanName}'s name naturally in suggestions (e.g., "Hey ${fanName}...", "${fanName}, I wanted to...", etc.)
-- Make suggestions feel personal and tailored specifically for ${fanName}
 `;
-        }
+      }
     }
 
     // Build tone style guidance
@@ -232,7 +226,7 @@ ${lastFanMessage ? `- Last fan message: "${lastFanMessage}"` : ""}
 Recent conversation (most recent last):
 ${conversationHistory || "No prior messages provided."}
 
-≡ƒÜ¿ CRITICAL - PERSPECTIVE & NATURAL WRITING ≡ƒÜ¿
+CRITICAL — PERSPECTIVE & NATURAL WRITING
 - Write suggestions FROM THE CONTENT CREATOR'S PERSPECTIVE (first person: "I", "my", "me")
 - The suggestions are what the CONTENT CREATOR is sending, NOT what fans/followers are saying
 - Write as if YOU (the content creator) are sending these messages yourself
@@ -240,10 +234,12 @@ ${conversationHistory || "No prior messages provided."}
 - DO NOT write as if fans are speaking to you
 - Use first-person language from the creator's point of view
 - The suggestions should be what the CREATOR is saying to fans, not what fans are saying to the creator
-${fanName && fanName !== 'Fan' ? `- When mentioning ${fanName}, YOU are addressing them directly - but make it NATURAL
-- Use ${fanName}'s name OCCASIONALLY and NATURALLY - not in every message, just when it feels right (like a real person would)
-- Write like a REAL PERSON, not AI - natural flow, varied sentence structure, authentic voice
-- DO NOT overuse their name - use it sparingly, like you would in real conversation` : ''}
+NAME USAGE (strict):
+- Do not sound like a template. Real creators rarely repeat someone's name in every bubble.
+- Across ALL suggestions combined: use the fan's actual name **at most once** (or not at all). Never start more than one suggestion with "Hey ${fanName}" / "${fanName},"
+- Prefer no name, or casual address ("babe", "love", "you") when it fits ${tone} — only use their real name if it truly fits the moment.
+- If their last message did not use your (the creator's) name, strongly prefer **zero** uses of their real name in these suggestions.
+${fanName && fanName !== "Fan" ? `- Fan's name is "${fanName}" — treat as optional seasoning, not a checklist item.` : ""}
 
 ≡ƒÄ» NATURAL CREATOR LANGUAGE & SLANG:
 - Use abbreviations and slang that creators ACTUALLY use on OnlyFans/Fansly/Fanvue naturally
@@ -251,18 +247,18 @@ ${fanName && fanName !== 'Fan' ? `- When mentioning ${fanName}, YOU are addressi
 - Use casual terms naturally: "babe", "love", "hun", "baby" when appropriate - but don't overuse
 - Write like a REAL CREATOR would text/message - casual, authentic, human, NOT formal or corporate
 - Mix full words and abbreviations naturally - don't force abbreviations, use them when they feel right
-- Example natural: "Hey babe! New PPV in your DMs ≡ƒÆò Unlock it to see the full set" (sounds human)
+- Example natural: "Hey babe! New PPV in your DMs — unlock it to see the full set" (sounds human)
 - Example forced: "Hello subscriber. Please unlock the Pay-Per-View content in your Direct Messages" (sounds AI)
 - Vary your language - sometimes use "sub", sometimes "subscriber", sometimes "fan" - natural variation
 - Sound like you're texting a friend, not writing a business email
 - Use platform slang organically - it should feel natural, not like you're checking off a list
 
 Guidelines:
-- ${useCreatorPersonalityPrimary ? `Follow CREATOR PERSONALITY first; use tone "${tone}" only where personality does not specify voice.` : `Follow tone "${tone}" and session type "${roleplayType}" together.`} Only go extremely explicit when tone is Explicit and explicitness is 10.
+- ${useCreatorPersonalityPrimary ? `Follow CREATOR PERSONALITY first; use tone "${tone}" only where personality does not specify voice.` : `Follow tone "${tone}" and session type "${roleplayType}" together.`} Studio tone sliders (formality, humor, warmth, etc.) apply on top of that baseline. Only go extremely explicit when tone is Explicit and explicitness is 10.
 - Be bold, playful, and explicitly adult (sexting) while respecting the chosen tone.
 - Keep replies concise (1-3 sentences each).
 - Vary style across suggestions (teasing, direct, playful).
-- Personalize with the fan's name when natural.
+- Do **not** lean on the fan's name for "personalization" — voice, heat, and word choice should carry it.
 - ${emojiGuidance}${emojiExamples}
 - Return ONLY strict JSON array of strings, no prose, like:
 ["Hey love, ...", "How about ..."]

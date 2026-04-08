@@ -11,8 +11,13 @@ import {
 import { sendFanNotification } from "./_fanNotifications.js";
 import type { Firestore } from "firebase-admin/firestore";
 
-async function hasActiveOrPausedChatSessionForThread(db: Firestore, threadId: string): Promise<boolean> {
-  const snap = await db.collection("chatSessions").where("threadId", "==", threadId).limit(40).get();
+async function hasActiveOrPausedChatSessionForThread(db: Firestore, creatorId: string, threadId: string): Promise<boolean> {
+  const snap = await db
+    .collection("chatSessions")
+    .where("creatorId", "==", creatorId)
+    .where("threadId", "==", threadId)
+    .limit(40)
+    .get();
   let live = false;
   snap.forEach((d) => {
     const st = (d.data() as { status?: string }).status;
@@ -181,7 +186,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const creatorMutedThisThread =
       recipientId === creatorIdFinal && threadAfter?.creatorInboxMuted === true;
 
-    const skipNotifyForLiveSession = await hasActiveOrPausedChatSessionForThread(db, threadId);
+    const skipNotifyForLiveSession = await hasActiveOrPausedChatSessionForThread(db, creatorIdFinal, threadId);
 
     try {
       if (!creatorMutedThisThread && !skipNotifyForLiveSession) {

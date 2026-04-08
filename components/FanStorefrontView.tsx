@@ -1219,7 +1219,13 @@ export const FanStorefrontView: React.FC = () => {
   const unreadMessageTabCount = useUnreadNewMessageNotificationCount(
     isLoggedIn && creator ? creator.creatorId : false
   );
-  const memberSuppressDmNotifications = dmPremiumSessionLive && activeTab === "messages";
+  /** Live premium chat: hide bell + tab badge even if session poll lags (use session alerts / deep-link session id). */
+  const fanLiveChatSessionForThisCreator = sessionAlerts.some((a) => a.kind === "chat");
+  const memberSuppressDmNotifications =
+    activeTab === "messages" &&
+    (dmPremiumSessionLive ||
+      fanLiveChatSessionForThisCreator ||
+      Boolean(dmPreferredSessionId?.trim()));
   const memberMessagesTabBadgeCount = memberSuppressDmNotifications ? 0 : unreadMessageTabCount;
 
   const storefrontVisualScore = useCallback((data: Record<string, unknown> | null | undefined): number => {
@@ -3365,7 +3371,7 @@ export const FanStorefrontView: React.FC = () => {
     }
     if (!dmAutoStickToBottomRef.current) return;
     requestAnimationFrame(() => {
-      dmMessagesEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+      // Only adjust scroll on the DM list — scrollIntoView can scroll ancestor/page and feel like a "jump".
       listEl.scrollTop = listEl.scrollHeight;
     });
   }, [activeTab, dmMessages, dmLoading, dmIsNearBottom]);
@@ -3421,7 +3427,10 @@ export const FanStorefrontView: React.FC = () => {
       setDmPendingAttachmentUrl(null);
       setDmPendingAttachmentType(null);
       dmAutoStickToBottomRef.current = true;
-      requestAnimationFrame(() => dmMessagesEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" }));
+      requestAnimationFrame(() => {
+        const listEl = dmMessagesListRef.current;
+        if (listEl) listEl.scrollTop = listEl.scrollHeight;
+      });
     } catch {
       setDmInput(prevInput);
     } finally {

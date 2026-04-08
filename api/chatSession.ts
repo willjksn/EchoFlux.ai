@@ -97,11 +97,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       } else {
         const qSnap = await db.collection("chatSessions").where("creatorId", "==", creatorId).where("threadId", "==", threadId).limit(80).get();
         if (!qSnap.empty) {
-          const sorted = qSnap.docs
-            .map((d) => ({ id: d.id, data: d.data() as ChatSessionDoc }))
-            .sort((a, b) => sessionSortMs(b.data) - sessionSortMs(a.data));
-          chosenId = sorted[0]?.id || "";
-          chosenData = sorted[0]?.data || null;
+          const rows = qSnap.docs.map((d) => ({ id: d.id, data: d.data() as ChatSessionDoc }));
+          const liveRows = rows.filter((r) => {
+            const st = typeof r.data.status === "string" ? r.data.status : "";
+            return st === "active" || st === "paused";
+          });
+          const pool = liveRows.length > 0 ? liveRows : rows;
+          pool.sort((a, b) => sessionSortMs(b.data) - sessionSortMs(a.data));
+          chosenId = pool[0]?.id || "";
+          chosenData = pool[0]?.data || null;
         }
       }
 
