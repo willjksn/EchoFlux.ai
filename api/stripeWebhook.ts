@@ -1,8 +1,8 @@
 import { createHash } from 'crypto';
 import { VercelRequest, VercelResponse } from '@vercel/node';
 import Stripe from 'stripe';
-import { getFirestore, type Firestore } from 'firebase-admin/firestore';
-import { initializeApp, getApps, cert } from 'firebase-admin/app';
+import type { Firestore } from 'firebase-admin/firestore';
+import { getAdminDb } from './_firebaseAdmin.js';
 import { recordPlanChangeEvent } from './_planChangeEvents.js';
 import { grantReferralRewardOnConversion } from './_grantReferralReward.js';
 import {
@@ -10,17 +10,6 @@ import {
   ensureFanDmThreadForMember,
 } from './_syncFanHubFanPreference.js';
 import { mergeGuestTreatPurchasesIntoUid } from './_mergeGuestFanPurchases.js';
-
-// Initialize Firebase Admin if not already initialized
-if (!getApps().length) {
-  initializeApp({
-    credential: cert({
-      projectId: process.env.FIREBASE_PROJECT_ID,
-      clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-      privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
-    }),
-  });
-}
 
 // Check STRIPE_USE_TEST_MODE toggle first, then select appropriate key
 // Set STRIPE_USE_TEST_MODE=true in Vercel to use test mode, false or unset for live mode
@@ -1022,7 +1011,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(400).json({ error: `Webhook Error: ${err.message}` });
   }
 
-  const db = getFirestore();
+  const db = getAdminDb();
   const isConnectEvent = !!event.account;
 
   try {
