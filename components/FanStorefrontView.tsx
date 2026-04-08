@@ -28,7 +28,7 @@ import { FanLandingPage } from "./FanLandingPage";
 import { FanAuthModal } from "./FanAuthModal";
 import { FanMemberFeed, FanMemberSaved } from "./FanMemberFeed";
 import { MemberUsernameGateModal } from "./MemberUsernameGateModal";
-import { DEFAULT_PRIVACY_POLICY, DEFAULT_TERMS_OF_SERVICE } from "../constants";
+import { DEFAULT_PRIVACY_POLICY, DEFAULT_TERMS_OF_SERVICE, KNOWN_APP_ROUTES } from "../constants";
 import { useAutosizeTextarea } from "../src/hooks/useAutosizeTextarea";
 import {
   useUnreadNewMessageNotificationCount,
@@ -441,6 +441,16 @@ function decodeHandleSegment(raw: string): string {
   }
 }
 
+/**
+ * On custom domains, paths like `/dashboard` can be injected by stale app navigation/history.
+ * Treat these as reserved app routes instead of creator handles.
+ */
+const CUSTOM_DOMAIN_RESERVED_APP_ROUTE_SEGMENTS = new Set(
+  (KNOWN_APP_ROUTES as readonly string[])
+    .map((p) => p.replace(/^\/+/, "").trim().toLowerCase())
+    .filter(Boolean)
+);
+
 function buildFanStorefrontMemberPath(tab: FanStorefrontMemberTab, creatorHandle: string): string {
   if (typeof window === "undefined") return `/${creatorHandle}`;
   const pathname = window.location.pathname.replace(/\/+$/, "") || "/";
@@ -520,6 +530,9 @@ function parseHandleFromPath(): {
     }
     if (parts.length === 1 && isMemberPathSlug(parts[0])) {
       return { handle: null, subpage: null, memberNavSlug: parts[0].toLowerCase(), publicLandingPath: false };
+    }
+    if (parts.length === 1 && CUSTOM_DOMAIN_RESERVED_APP_ROUTE_SEGMENTS.has(parts[0].toLowerCase())) {
+      return { handle: null, subpage: null, memberNavSlug: null, publicLandingPath: false };
     }
     if (parts.length === 1 && /^[a-z0-9_]+$/i.test(parts[0])) {
       return { handle: decodeHandleSegment(parts[0]), subpage: null, memberNavSlug: null, publicLandingPath: false };
@@ -1046,6 +1059,25 @@ export const FanStorefrontView: React.FC = () => {
   useEffect(() => {
     const parsed = parseHandleFromPath();
     setLegalSubpage(parsed.subpage);
+    if (typeof window !== "undefined" && isConfiguredCustomStorefrontHost(window.location.hostname)) {
+      const currentPath = window.location.pathname.replace(/\/+$/, "") || "/";
+      const parts = currentPath.slice(1).split("/").filter(Boolean);
+      const seg = parts.length === 1 ? parts[0].toLowerCase() : "";
+      const shouldNormalizeToRoot =
+        !!seg &&
+        !isMemberPathSlug(seg) &&
+        seg !== "terms" &&
+        seg !== "privacy" &&
+        seg !== FAN_STOREFRONT_PUBLIC_LANDING_SLUG &&
+        CUSTOM_DOMAIN_RESERVED_APP_ROUTE_SEGMENTS.has(seg);
+      if (shouldNormalizeToRoot) {
+        window.history.replaceState(
+          null,
+          "",
+          "/" + (window.location.search || "") + (window.location.hash || "")
+        );
+      }
+    }
     if (parsed.handle) {
       setHandle(parsed.handle);
       setHandleResolveComplete(true);
