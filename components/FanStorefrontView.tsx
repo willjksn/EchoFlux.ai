@@ -341,6 +341,16 @@ type FanDeliveryPurchase = {
   deliveredAt?: string | null;
 };
 
+function normalizeFanPurchaseType(raw: Record<string, unknown>): "product" | "post_unlock" | "unlock" | "tip" {
+  const type = typeof raw.type === "string" ? raw.type.trim().toLowerCase() : "";
+  const productType = typeof raw.productType === "string" ? raw.productType.trim().toLowerCase() : "";
+  if (type === "tip" || productType === "tip") return "tip";
+  if (typeof raw.tipHandle === "string" && raw.tipHandle.trim()) return "tip";
+  if (type === "post_unlock" || productType === "post_unlock") return "post_unlock";
+  if (type === "unlock" || productType === "unlock") return "unlock";
+  return "product";
+}
+
 function toIsoFromUnknownDate(v: unknown): string {
   if (v == null) return new Date(0).toISOString();
   if (typeof (v as { toDate?: () => Date }).toDate === "function") {
@@ -2037,18 +2047,19 @@ export const FanStorefrontView: React.FC = () => {
         const outById = new Map<string, FanDeliveryPurchase>();
         for (const d of byIdSnap.docs) {
           const raw = d.data() as Record<string, unknown>;
+          const normalizedType = normalizeFanPurchaseType(raw);
           outById.set(d.id, {
             id: d.id,
             creatorId: String(raw.creatorId || ""),
             fanId: String(raw.fanId || ""),
             fanEmail: typeof raw.fanEmail === "string" ? raw.fanEmail : undefined,
-            type: typeof raw.type === "string" ? raw.type : "product",
+            type: normalizedType,
             productId: typeof raw.productId === "string" ? raw.productId : null,
             productTitle: typeof raw.productTitle === "string" ? raw.productTitle : undefined,
             amountCents: Number.isFinite(Number(raw.amountCents)) ? Math.max(0, Math.round(Number(raw.amountCents))) : 0,
             status: typeof raw.status === "string" ? raw.status : "paid",
             createdAt: toIsoFromUnknownDate(raw.createdAt),
-            deliveryStatus: raw.deliveryStatus === "delivered" ? "delivered" : "pending",
+            deliveryStatus: normalizedType === "tip" ? undefined : (raw.deliveryStatus === "delivered" ? "delivered" : "pending"),
             deliveryType:
               raw.deliveryType === "video" ||
               raw.deliveryType === "image" ||
@@ -2072,12 +2083,13 @@ export const FanStorefrontView: React.FC = () => {
           );
           for (const d of byEmailSnap.docs) {
             const raw = d.data() as Record<string, unknown>;
+            const normalizedType = normalizeFanPurchaseType(raw);
             outById.set(d.id, {
               id: d.id,
               creatorId: String(raw.creatorId || ""),
               fanId: String(raw.fanId || ""),
               fanEmail: typeof raw.fanEmail === "string" ? raw.fanEmail : undefined,
-              type: typeof raw.type === "string" ? raw.type : "product",
+              type: normalizedType,
               productId: typeof raw.productId === "string" ? raw.productId : null,
               productTitle: typeof raw.productTitle === "string" ? raw.productTitle : undefined,
               amountCents: Number.isFinite(Number(raw.amountCents))
@@ -2085,7 +2097,7 @@ export const FanStorefrontView: React.FC = () => {
                 : 0,
               status: typeof raw.status === "string" ? raw.status : "paid",
               createdAt: toIsoFromUnknownDate(raw.createdAt),
-              deliveryStatus: raw.deliveryStatus === "delivered" ? "delivered" : "pending",
+              deliveryStatus: normalizedType === "tip" ? undefined : (raw.deliveryStatus === "delivered" ? "delivered" : "pending"),
               deliveryType:
                 raw.deliveryType === "video" ||
                 raw.deliveryType === "image" ||

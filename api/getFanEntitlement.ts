@@ -33,6 +33,20 @@ function createdAtToMs(createdAt: unknown): number {
   return 0;
 }
 
+function orderAmountCentsFromRow(row: Record<string, unknown>): number {
+  if (typeof row.amountCents === "number" && Number.isFinite(row.amountCents)) {
+    return Math.max(0, Math.round(row.amountCents));
+  }
+  if (typeof row.amount === "number" && Number.isFinite(row.amount)) {
+    const v = row.amount;
+    if (v <= 0) return 0;
+    // Legacy orders may store dollars in `amount`; newer rows often store cents.
+    if (v < 100) return Math.round(v * 100);
+    return Math.round(v);
+  }
+  return 0;
+}
+
 /**
  * Check if the current user (fan) has an active subscription/entitlement to the given creator.
  * Used by fan storefront: if subscribed, show Feed + Store + Messages; otherwise show landing.
@@ -317,10 +331,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           const row = d.data() as Record<string, unknown>;
           const status = typeof row.status === "string" ? row.status.trim().toLowerCase() : "";
           if (status === "refunded") continue;
-          const amount =
-            typeof row.amountCents === "number" && Number.isFinite(row.amountCents)
-              ? Math.max(0, Math.round(row.amountCents))
-              : 0;
+          const amount = orderAmountCentsFromRow(row);
           if (amount <= 0) continue;
           const createdAtMs = createdAtToMs(row.createdAt);
           orderCandidates.push({ amountCents: amount, createdAtMs });
@@ -366,6 +377,54 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (orderCandidates.length > 0) {
         orderCandidates.sort((a, b) => b.createdAtMs - a.createdAtMs);
         billedSubscriptionPriceCents = orderCandidates[0].amountCents;
+      } else {
+        // Fallback when subscription order rows are sparse/missing:
+        // derive from latest invoice-backed order for this fan+creator.
+        const invoiceCandidates: Array<{ amountCents: number; createdAtMs: number }> = [];
+        const collectInvoiceCandidates = (docs: Array<{ data: () => Record<string, unknown> }>) => {
+          for (const d of docs) {
+            const row = d.data() as Record<string, unknown>;
+            if (!row.stripeInvoiceId) continue;
+            const status = typeof row.status === "string" ? row.status.trim().toLowerCase() : "";
+            if (status === "refunded") continue;
+            const amount = orderAmountCentsFromRow(row);
+            if (amount <= 0) continue;
+            const createdAtMs = createdAtToMs(row.createdAt);
+            invoiceCandidates.push({ amountCents: amount, createdAtMs });
+          }
+        };
+        const runInvoiceLookup = async (field: "fanId" | "fanEmail", value: string) => {
+          if (!value) return;
+          try {
+            const indexed = await db
+              .collection("orders")
+              .where("creatorId", "==", creatorId)
+              .where("stripeInvoiceId", "!=", null)
+              .where(field, "==", value)
+              .orderBy("stripeInvoiceId")
+              .orderBy("createdAt", "desc")
+              .limit(20)
+              .get();
+            collectInvoiceCandidates(indexed.docs);
+          } catch {
+            const fallback = await db
+              .collection("orders")
+              .where("creatorId", "==", creatorId)
+              .where(field, "==", value)
+              .limit(150)
+              .get()
+              .catch(() => null);
+            if (fallback) collectInvoiceCandidates(fallback.docs);
+          }
+        };
+        for (const candidate of fanIdCandidates) {
+          await runInvoiceLookup("fanId", candidate);
+        }
+        if (fanEmail) await runInvoiceLookup("fanEmail", fanEmail);
+        if (invoiceCandidates.length > 0) {
+          invoiceCandidates.sort((a, b) => b.createdAtMs - a.createdAtMs);
+          billedSubscriptionPriceCents = invoiceCandidates[0].amountCents;
+        }
       }
     }
 

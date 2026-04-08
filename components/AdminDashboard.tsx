@@ -496,7 +496,7 @@ export const AdminDashboard: React.FC = () => {
                     .sort((a, b) => b.revenue - a.revenue)
                     .slice(0, 5);
 
-                const recentTransactions = (data.recentTransactions || []).slice(0, 10).map((t) => ({
+                const recentTransactions = (data.recentTransactions || []).map((t) => ({
                     id: t.id,
                     creatorName: resolveCreatorName(t.creatorId),
                     type: t.type,

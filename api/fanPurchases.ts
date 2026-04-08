@@ -20,6 +20,16 @@ type FanPurchase = {
   deliveredAt?: string | null;
 };
 
+function normalizePurchaseType(d: Record<string, unknown>): "product" | "post_unlock" | "unlock" | "tip" {
+  const rawType = typeof d.type === "string" ? d.type.trim().toLowerCase() : "";
+  const rawProductType = typeof d.productType === "string" ? d.productType.trim().toLowerCase() : "";
+  if (rawType === "tip" || rawProductType === "tip") return "tip";
+  if (typeof d.tipHandle === "string" && d.tipHandle.trim()) return "tip";
+  if (rawType === "post_unlock" || rawProductType === "post_unlock") return "post_unlock";
+  if (rawType === "unlock" || rawProductType === "unlock") return "unlock";
+  return "product";
+}
+
 function createdAtToMs(createdAt: unknown): number {
   if (createdAt == null) return 0;
   if (typeof (createdAt as { toDate?: () => Date }).toDate === "function") {
@@ -37,14 +47,9 @@ function createdAtToMs(createdAt: unknown): number {
 }
 
 function mapDocToPurchase(id: string, d: Record<string, unknown>): FanPurchase {
-  const rawType = typeof d.type === "string" ? d.type.trim().toLowerCase() : "";
-  const normalizedType =
-    rawType === "product" || rawType === "post_unlock" || rawType === "unlock" || rawType === "treat"
-      ? rawType === "treat"
-        ? "product"
-        : rawType
-      : "product";
+  const normalizedType = normalizePurchaseType(d);
   const createdMs = createdAtToMs(d.createdAt);
+  const deliveryStatus = normalizedType === "tip" ? undefined : (d.deliveryStatus === "delivered" ? "delivered" : "pending");
   return {
     id,
     creatorId: String(d.creatorId || ""),
@@ -56,7 +61,7 @@ function mapDocToPurchase(id: string, d: Record<string, unknown>): FanPurchase {
     amountCents: Number.isFinite(Number(d.amountCents)) ? Math.max(0, Math.round(Number(d.amountCents))) : 0,
     status: typeof d.status === "string" ? d.status : "paid",
     createdAt: createdMs > 0 ? new Date(createdMs).toISOString() : new Date(0).toISOString(),
-    deliveryStatus: d.deliveryStatus === "delivered" ? "delivered" : "pending",
+    deliveryStatus,
     deliveryType:
       d.deliveryType === "video" ||
       d.deliveryType === "image" ||
