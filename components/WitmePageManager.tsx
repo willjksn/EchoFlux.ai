@@ -177,6 +177,104 @@ const showcaseFeaturedPreviewStyle = (
 
 const pct = (value: number): string => `${(Number.isFinite(value) ? value : 0).toFixed(2)}%`;
 
+/** Fan Hub–style analytics chrome (accent + cards) for Witme admin traffic. */
+const WitmeAnalyticsActivityIcon = () => (
+  <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+    <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
+  </svg>
+);
+const WitmeAnalyticsEyeIcon = () => (
+  <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+    <circle cx="12" cy="12" r="3" />
+  </svg>
+);
+const WitmeAnalyticsUsersIcon = () => (
+  <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+    <circle cx="9" cy="7" r="4" />
+    <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+    <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+  </svg>
+);
+const WitmeAnalyticsHomeIcon = () => (
+  <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+    <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+    <polyline points="9 22 9 12 15 12 15 22" />
+  </svg>
+);
+const WitmeAnalyticsCompassIcon = () => (
+  <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+    <circle cx="12" cy="12" r="10" />
+    <polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76" />
+  </svg>
+);
+const WitmeAnalyticsUserSquareIcon = () => (
+  <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+    <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+    <circle cx="9" cy="7" r="4" />
+    <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
+    <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+  </svg>
+);
+const WitmeAnalyticsRefreshIcon = () => (
+  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+    <polyline points="23 4 23 10 17 10" />
+    <polyline points="1 20 1 14 7 14" />
+    <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+  </svg>
+);
+
+function WitmeAnalyticsStatCard({
+  title,
+  value,
+  icon,
+}: {
+  title: string;
+  value: string | number;
+  icon: React.ReactNode;
+}) {
+  return (
+    <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md p-5 border border-gray-100 dark:border-gray-700">
+      <div className="flex items-center justify-between mb-3">
+        <span className="text-sm font-medium text-gray-500 dark:text-gray-400">{title}</span>
+        <div
+          className="p-2 rounded-lg"
+          style={{
+            background: "color-mix(in srgb, var(--fan-primary, #6366f1) 16%, transparent)",
+            color: "var(--fan-primary, #6366f1)",
+          }}
+        >
+          {icon}
+        </div>
+      </div>
+      <p className="text-2xl font-bold text-gray-900 dark:text-white tabular-nums">{value}</p>
+    </div>
+  );
+}
+
+function WitmeAnalyticsSection({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <section className="rounded-2xl border p-5 sm:p-6 shadow-sm bg-gradient-to-b from-indigo-50/90 via-white to-white border-indigo-200/55 dark:from-indigo-950/30 dark:via-gray-900 dark:to-gray-950 dark:border-indigo-900/40">
+      <div className="flex items-center gap-2 mb-5">
+        <span className="w-1 h-5 rounded-full shrink-0" style={{ background: "var(--fan-primary, #6366f1)" }} aria-hidden />
+        <h2 className="text-xs sm:text-sm font-semibold tracking-[0.12em] uppercase text-gray-900 dark:text-gray-100">
+          {title}
+        </h2>
+      </div>
+      {children}
+    </section>
+  );
+}
+
+function WitmeAnalyticsListPanel({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="bg-white dark:bg-gray-900/40 rounded-xl border border-black/[0.06] dark:border-white/10 shadow-sm overflow-hidden">
+      {children}
+    </div>
+  );
+}
+
 const tagsToCsv = (tags: string[]): string => tags.join(', ');
 const csvToTags = (csv: string): string[] =>
   csv
@@ -1161,158 +1259,294 @@ export const WitmePageManager: React.FC = () => {
       )}
 
       {tab === 'analytics' && (
-        <div className="space-y-4 rounded-xl border border-gray-200 bg-white p-4 dark:border-gray-800 dark:bg-gray-900">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <h2 className="text-sm font-semibold text-gray-900 dark:text-white">Witme Traffic Analytics</h2>
-            <select
-              value={analyticsDays}
-              onChange={(e) => setAnalyticsDays(Number(e.target.value))}
-              className="rounded-md border border-gray-300 px-2 py-1 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-white"
-            >
-              <option value={7}>Last 7 days</option>
-              <option value={30}>Last 30 days</option>
-              <option value={90}>Last 90 days</option>
-            </select>
+        <div className="space-y-6">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Witme Traffic Analytics</h1>
+              <p className="text-gray-500 dark:text-gray-400 text-sm mt-1">
+                Home, discover, and creator engagement across witme.io
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <select
+                value={analyticsDays}
+                onChange={(e) => setAnalyticsDays(Number(e.target.value))}
+                className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm shadow-sm"
+              >
+                <option value={7}>Last 7 days</option>
+                <option value={30}>Last 30 days</option>
+                <option value={90}>Last 90 days</option>
+              </select>
+              <button
+                type="button"
+                onClick={() => loadAnalytics()}
+                disabled={analyticsLoading}
+                className="p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition disabled:opacity-50"
+                title="Refresh"
+              >
+                <WitmeAnalyticsRefreshIcon />
+              </button>
+            </div>
           </div>
 
           {analyticsLoading ? (
-            <p className="text-sm text-gray-500 dark:text-gray-300">Loading analytics...</p>
+            <div className="flex items-center justify-center py-16 rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900/60 shadow-sm">
+              <div className="text-center">
+                <div
+                  className="animate-spin rounded-full h-10 w-10 border-2 border-transparent mx-auto mb-4"
+                  style={{ borderBottomColor: 'var(--fan-primary, #6366f1)' }}
+                />
+                <p className="text-gray-500 dark:text-gray-400 text-sm">Loading analytics...</p>
+              </div>
+            </div>
           ) : analytics ? (
             <>
-              <div className="grid gap-3 md:grid-cols-3">
-                <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 dark:border-gray-700 dark:bg-gray-800">
-                  <p className="text-xs text-gray-500 dark:text-gray-400">Events</p>
-                  <p className="mt-1 text-xl font-semibold text-gray-900 dark:text-white">{analytics.totals.events}</p>
-                </div>
-                <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 dark:border-gray-700 dark:bg-gray-800">
-                  <p className="text-xs text-gray-500 dark:text-gray-400">Page Views</p>
-                  <p className="mt-1 text-xl font-semibold text-gray-900 dark:text-white">{analytics.totals.pageViews}</p>
-                </div>
-                <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 dark:border-gray-700 dark:bg-gray-800">
-                  <p className="text-xs text-gray-500 dark:text-gray-400">Unique Visitors</p>
-                  <p className="mt-1 text-xl font-semibold text-gray-900 dark:text-white">{analytics.totals.uniqueVisitors}</p>
-                </div>
-              </div>
-
-              <div className="grid gap-3 md:grid-cols-3">
-                <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 dark:border-gray-700 dark:bg-gray-800">
-                  <p className="text-xs text-gray-500 dark:text-gray-400">Home Views</p>
-                  <p className="mt-1 text-xl font-semibold text-gray-900 dark:text-white">{analytics.totals.homePageViews}</p>
-                </div>
-                <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 dark:border-gray-700 dark:bg-gray-800">
-                  <p className="text-xs text-gray-500 dark:text-gray-400">Discover Views</p>
-                  <p className="mt-1 text-xl font-semibold text-gray-900 dark:text-white">{analytics.totals.discoverPageViews}</p>
-                </div>
-                <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 dark:border-gray-700 dark:bg-gray-800">
-                  <p className="text-xs text-gray-500 dark:text-gray-400">Creator Page Views</p>
-                  <p className="mt-1 text-xl font-semibold text-gray-900 dark:text-white">{analytics.totals.creatorPageViews}</p>
-                </div>
-              </div>
-
-              <div className="grid gap-4 md:grid-cols-3">
-                <div className="rounded-lg border border-gray-200 p-3 dark:border-gray-700">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Funnel</p>
-                  <div className="mt-2 space-y-1 text-sm text-gray-700 dark:text-gray-200">
-                    <div className="flex justify-between"><span>Home views</span><span className="font-semibold">{analytics.funnel.homePageViews}</span></div>
-                    <div className="flex justify-between"><span>Explore clicks</span><span className="font-semibold">{analytics.funnel.exploreClicks}</span></div>
-                    <div className="flex justify-between"><span>Creator clicks</span><span className="font-semibold">{analytics.funnel.creatorCardClicks}</span></div>
-                  </div>
-                </div>
-                <div className="rounded-lg border border-gray-200 p-3 dark:border-gray-700">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Funnel CTR</p>
-                  <div className="mt-2 space-y-1 text-sm text-gray-700 dark:text-gray-200">
-                    <div className="flex justify-between"><span>Home → Explore</span><span className="font-semibold">{pct(analytics.funnel.exploreRateFromHomePct)}</span></div>
-                    <div className="flex justify-between"><span>Explore → Creator</span><span className="font-semibold">{pct(analytics.funnel.creatorClickRateFromExplorePct)}</span></div>
-                    <div className="flex justify-between"><span>Home → Creator</span><span className="font-semibold">{pct(analytics.funnel.creatorClickRateFromHomePct)}</span></div>
-                  </div>
-                </div>
-                <div className="rounded-lg border border-gray-200 p-3 dark:border-gray-700">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">CTA CTR</p>
-                  <div className="mt-2 space-y-1 text-sm text-gray-700 dark:text-gray-200">
-                    <div className="flex justify-between"><span>Explore clicks / views</span><span className="font-semibold">{pct(analytics.ctaCtr.exploreFromAllViewsPct)}</span></div>
-                    <div className="flex justify-between"><span>Creator clicks / views</span><span className="font-semibold">{pct(analytics.ctaCtr.creatorCardFromAllViewsPct)}</span></div>
-                    <div className="flex justify-between"><span>Legal clicks / views</span><span className="font-semibold">{pct(analytics.ctaCtr.legalLinksFromAllViewsPct)}</span></div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="grid gap-4 md:grid-cols-2">
-                <div>
-                  <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Top Paths</h3>
-                  <div className="space-y-1">
-                    {analytics.topPaths.map((row) => (
-                      <div key={row.path} className="flex items-center justify-between rounded-md border border-gray-200 px-3 py-2 text-sm dark:border-gray-700">
-                        <span className="text-gray-700 dark:text-gray-200">{row.path}</span>
-                        <span className="font-semibold text-gray-900 dark:text-white">{row.count}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-                <div>
-                  <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Top Referrers</h3>
-                  <div className="space-y-1">
-                    {analytics.topReferrers.map((row) => (
-                      <div key={row.host} className="flex items-center justify-between rounded-md border border-gray-200 px-3 py-2 text-sm dark:border-gray-700">
-                        <span className="text-gray-700 dark:text-gray-200">{row.host}</span>
-                        <span className="font-semibold text-gray-900 dark:text-white">{row.count}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-
-              <div className="grid gap-4 md:grid-cols-2">
-                <div>
-                  <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Top Creator Clicks</h3>
-                  <div className="space-y-1">
-                    {(analytics.topCreatorClicks || []).map((row) => (
-                      <div key={row.handle} className="flex items-center justify-between rounded-md border border-gray-200 px-3 py-2 text-sm dark:border-gray-700">
-                        <span className="text-gray-700 dark:text-gray-200">{row.handle}</span>
-                        <span className="font-semibold text-gray-900 dark:text-white">{row.clicks}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-                <div>
-                  <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Event Mix</h3>
-                  <div className="space-y-1">
-                    {Object.entries(analytics.byEvent || {})
-                      .sort((a, b) => b[1] - a[1])
-                      .map(([name, count]) => (
-                        <div key={name} className="flex items-center justify-between rounded-md border border-gray-200 px-3 py-2 text-sm dark:border-gray-700">
-                          <span className="text-gray-700 dark:text-gray-200">{name}</span>
-                          <span className="font-semibold text-gray-900 dark:text-white">{count}</span>
-                        </div>
-                      ))}
-                  </div>
+              <div>
+                <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+                  <span className="text-indigo-600 dark:text-indigo-400" aria-hidden>
+                    <WitmeAnalyticsActivityIcon />
+                  </span>
+                  Traffic overview
+                </h2>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <WitmeAnalyticsStatCard title="Events" value={analytics.totals.events} icon={<WitmeAnalyticsActivityIcon />} />
+                  <WitmeAnalyticsStatCard title="Page views" value={analytics.totals.pageViews} icon={<WitmeAnalyticsEyeIcon />} />
+                  <WitmeAnalyticsStatCard
+                    title="Unique visitors"
+                    value={analytics.totals.uniqueVisitors}
+                    icon={<WitmeAnalyticsUsersIcon />}
+                  />
                 </div>
               </div>
 
               <div>
-                <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Per-Day Page Views</h3>
-                <div className="space-y-2">
-                  {(() => {
-                    const max = Math.max(1, ...(analytics.dailySeries || []).map((d) => d.pageViews));
-                    return (analytics.dailySeries || []).map((row) => (
-                      <div key={row.date} className="grid grid-cols-[110px_1fr_70px] items-center gap-2 text-xs">
-                        <span className="text-gray-500 dark:text-gray-400">{formatAnalyticsDateMdy(row.date)}</span>
-                        <div className="h-2 rounded bg-gray-200 dark:bg-gray-700">
-                          <div
-                            className="h-2 rounded bg-primary-500"
-                            style={{ width: `${Math.max(4, (row.pageViews / max) * 100)}%` }}
-                          />
-                        </div>
-                        <span className="text-right font-semibold text-gray-700 dark:text-gray-200">
-                          {Number(row.pageViews || 0).toLocaleString()}
-                        </span>
-                      </div>
-                    ));
-                  })()}
+                <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+                  <span className="text-indigo-600 dark:text-indigo-400" aria-hidden>
+                    <WitmeAnalyticsHomeIcon />
+                  </span>
+                  Views by surface
+                </h2>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <WitmeAnalyticsStatCard title="Home views" value={analytics.totals.homePageViews} icon={<WitmeAnalyticsHomeIcon />} />
+                  <WitmeAnalyticsStatCard
+                    title="Discover views"
+                    value={analytics.totals.discoverPageViews}
+                    icon={<WitmeAnalyticsCompassIcon />}
+                  />
+                  <WitmeAnalyticsStatCard
+                    title="Creator page views"
+                    value={analytics.totals.creatorPageViews}
+                    icon={<WitmeAnalyticsUserSquareIcon />}
+                  />
                 </div>
               </div>
+
+              <WitmeAnalyticsSection title="Funnel & conversion">
+                <div className="grid gap-4 md:grid-cols-3">
+                  <WitmeAnalyticsListPanel>
+                    <div className="px-4 py-3 border-b border-gray-100 dark:border-gray-800">
+                      <p className="text-[10px] sm:text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">
+                        Funnel
+                      </p>
+                    </div>
+                    <div className="divide-y divide-gray-100 dark:divide-gray-800">
+                      <div className="flex justify-between gap-3 px-4 py-3 text-sm text-gray-700 dark:text-gray-200">
+                        <span>Home views</span>
+                        <span className="font-semibold tabular-nums text-gray-900 dark:text-white">
+                          {analytics.funnel.homePageViews}
+                        </span>
+                      </div>
+                      <div className="flex justify-between gap-3 px-4 py-3 text-sm text-gray-700 dark:text-gray-200">
+                        <span>Explore clicks</span>
+                        <span className="font-semibold tabular-nums text-gray-900 dark:text-white">
+                          {analytics.funnel.exploreClicks}
+                        </span>
+                      </div>
+                      <div className="flex justify-between gap-3 px-4 py-3 text-sm text-gray-700 dark:text-gray-200">
+                        <span>Creator card clicks</span>
+                        <span className="font-semibold tabular-nums text-gray-900 dark:text-white">
+                          {analytics.funnel.creatorCardClicks}
+                        </span>
+                      </div>
+                    </div>
+                  </WitmeAnalyticsListPanel>
+                  <WitmeAnalyticsListPanel>
+                    <div className="px-4 py-3 border-b border-gray-100 dark:border-gray-800">
+                      <p className="text-[10px] sm:text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">
+                        Funnel CTR
+                      </p>
+                    </div>
+                    <div className="divide-y divide-gray-100 dark:divide-gray-800">
+                      <div className="flex justify-between gap-3 px-4 py-3 text-sm text-gray-700 dark:text-gray-200">
+                        <span>Home → Explore</span>
+                        <span className="font-semibold tabular-nums text-gray-900 dark:text-white">
+                          {pct(analytics.funnel.exploreRateFromHomePct)}
+                        </span>
+                      </div>
+                      <div className="flex justify-between gap-3 px-4 py-3 text-sm text-gray-700 dark:text-gray-200">
+                        <span>Explore → Creator</span>
+                        <span className="font-semibold tabular-nums text-gray-900 dark:text-white">
+                          {pct(analytics.funnel.creatorClickRateFromExplorePct)}
+                        </span>
+                      </div>
+                      <div className="flex justify-between gap-3 px-4 py-3 text-sm text-gray-700 dark:text-gray-200">
+                        <span>Home → Creator</span>
+                        <span className="font-semibold tabular-nums text-gray-900 dark:text-white">
+                          {pct(analytics.funnel.creatorClickRateFromHomePct)}
+                        </span>
+                      </div>
+                    </div>
+                  </WitmeAnalyticsListPanel>
+                  <WitmeAnalyticsListPanel>
+                    <div className="px-4 py-3 border-b border-gray-100 dark:border-gray-800">
+                      <p className="text-[10px] sm:text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">
+                        CTA CTR
+                      </p>
+                    </div>
+                    <div className="divide-y divide-gray-100 dark:divide-gray-800">
+                      <div className="flex justify-between gap-3 px-4 py-3 text-sm text-gray-700 dark:text-gray-200">
+                        <span>Explore / all views</span>
+                        <span className="font-semibold tabular-nums text-gray-900 dark:text-white">
+                          {pct(analytics.ctaCtr.exploreFromAllViewsPct)}
+                        </span>
+                      </div>
+                      <div className="flex justify-between gap-3 px-4 py-3 text-sm text-gray-700 dark:text-gray-200">
+                        <span>Creator clicks / views</span>
+                        <span className="font-semibold tabular-nums text-gray-900 dark:text-white">
+                          {pct(analytics.ctaCtr.creatorCardFromAllViewsPct)}
+                        </span>
+                      </div>
+                      <div className="flex justify-between gap-3 px-4 py-3 text-sm text-gray-700 dark:text-gray-200">
+                        <span>Legal link clicks / views</span>
+                        <span className="font-semibold tabular-nums text-gray-900 dark:text-white">
+                          {pct(analytics.ctaCtr.legalLinksFromAllViewsPct)}
+                        </span>
+                      </div>
+                    </div>
+                  </WitmeAnalyticsListPanel>
+                </div>
+              </WitmeAnalyticsSection>
+
+              <WitmeAnalyticsSection title="Paths & referrers">
+                <div className="grid gap-4 md:grid-cols-2">
+                  <WitmeAnalyticsListPanel>
+                    <div className="px-4 py-3 border-b border-gray-100 dark:border-gray-800">
+                      <p className="text-[10px] sm:text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">
+                        Top paths
+                      </p>
+                    </div>
+                    <div className="divide-y divide-gray-100 dark:divide-gray-800 max-h-80 overflow-y-auto custom-scrollbar">
+                      {analytics.topPaths.map((row) => (
+                        <div
+                          key={row.path}
+                          className="flex items-center justify-between gap-3 px-4 py-2.5 text-sm text-gray-700 dark:text-gray-200"
+                        >
+                          <span className="truncate font-medium">{row.path}</span>
+                          <span className="font-semibold tabular-nums shrink-0 text-gray-900 dark:text-white">{row.count}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </WitmeAnalyticsListPanel>
+                  <WitmeAnalyticsListPanel>
+                    <div className="px-4 py-3 border-b border-gray-100 dark:border-gray-800">
+                      <p className="text-[10px] sm:text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">
+                        Top referrers
+                      </p>
+                    </div>
+                    <div className="divide-y divide-gray-100 dark:divide-gray-800 max-h-80 overflow-y-auto custom-scrollbar">
+                      {analytics.topReferrers.map((row) => (
+                        <div
+                          key={row.host}
+                          className="flex items-center justify-between gap-3 px-4 py-2.5 text-sm text-gray-700 dark:text-gray-200"
+                        >
+                          <span className="truncate font-medium">{row.host}</span>
+                          <span className="font-semibold tabular-nums shrink-0 text-gray-900 dark:text-white">{row.count}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </WitmeAnalyticsListPanel>
+                </div>
+              </WitmeAnalyticsSection>
+
+              <WitmeAnalyticsSection title="Creators & events">
+                <div className="grid gap-4 md:grid-cols-2">
+                  <WitmeAnalyticsListPanel>
+                    <div className="px-4 py-3 border-b border-gray-100 dark:border-gray-800">
+                      <p className="text-[10px] sm:text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">
+                        Top creator clicks
+                      </p>
+                    </div>
+                    <div className="divide-y divide-gray-100 dark:divide-gray-800 max-h-80 overflow-y-auto custom-scrollbar">
+                      {(analytics.topCreatorClicks || []).map((row) => (
+                        <div
+                          key={row.handle}
+                          className="flex items-center justify-between gap-3 px-4 py-2.5 text-sm text-gray-700 dark:text-gray-200"
+                        >
+                          <span className="truncate font-medium">@{row.handle}</span>
+                          <span className="font-semibold tabular-nums shrink-0 text-gray-900 dark:text-white">{row.clicks}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </WitmeAnalyticsListPanel>
+                  <WitmeAnalyticsListPanel>
+                    <div className="px-4 py-3 border-b border-gray-100 dark:border-gray-800">
+                      <p className="text-[10px] sm:text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">
+                        Event mix
+                      </p>
+                    </div>
+                    <div className="divide-y divide-gray-100 dark:divide-gray-800 max-h-80 overflow-y-auto custom-scrollbar">
+                      {Object.entries(analytics.byEvent || {})
+                        .sort((a, b) => b[1] - a[1])
+                        .map(([name, count]) => (
+                          <div
+                            key={name}
+                            className="flex items-center justify-between gap-3 px-4 py-2.5 text-sm text-gray-700 dark:text-gray-200"
+                          >
+                            <span className="truncate font-medium">{name}</span>
+                            <span className="font-semibold tabular-nums shrink-0 text-gray-900 dark:text-white">{count}</span>
+                          </div>
+                        ))}
+                    </div>
+                  </WitmeAnalyticsListPanel>
+                </div>
+              </WitmeAnalyticsSection>
+
+              <WitmeAnalyticsSection title="Daily page views">
+                <div className="bg-white dark:bg-gray-900/40 rounded-xl border border-black/[0.06] dark:border-white/10 shadow-sm p-4 sm:p-5">
+                  <div className="space-y-2.5">
+                    {(() => {
+                      const series = [...(analytics.dailySeries || [])].sort((a, b) =>
+                        b.date.localeCompare(a.date)
+                      );
+                      const max = Math.max(1, ...series.map((d) => d.pageViews));
+                      return series.map((row) => (
+                        <div key={row.date} className="grid grid-cols-[100px_1fr_72px] items-center gap-3 text-xs sm:text-sm">
+                          <span className="text-gray-500 dark:text-gray-400 tabular-nums shrink-0">
+                            {formatAnalyticsDateMdy(row.date)}
+                          </span>
+                          <div className="h-2.5 rounded-full bg-gray-200/90 dark:bg-gray-700/90 overflow-hidden min-w-0">
+                            <div
+                              className="h-full rounded-full transition-[width] duration-300"
+                              style={{
+                                width: `${Math.max(4, (row.pageViews / max) * 100)}%`,
+                                background: 'var(--fan-primary, #6366f1)',
+                              }}
+                            />
+                          </div>
+                          <span className="text-right font-semibold tabular-nums text-gray-800 dark:text-gray-100 shrink-0">
+                            {Number(row.pageViews || 0).toLocaleString()}
+                          </span>
+                        </div>
+                      ));
+                    })()}
+                  </div>
+                </div>
+              </WitmeAnalyticsSection>
             </>
           ) : (
-            <p className="text-sm text-gray-500 dark:text-gray-300">No analytics data yet.</p>
+            <div className="rounded-2xl border border-gray-200 dark:border-gray-700 bg-gray-50/80 dark:bg-gray-900/50 px-6 py-10 text-center">
+              <p className="text-gray-600 dark:text-gray-300 text-sm">No analytics data yet.</p>
+            </div>
           )}
         </div>
       )}

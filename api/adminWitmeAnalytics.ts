@@ -121,7 +121,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
         pageViews: counts.pageViews,
         creatorCardClicks: counts.creatorCardClicks,
       }))
-      .sort((a, b) => a.date.localeCompare(b.date));
+      .sort((a, b) => b.date.localeCompare(a.date));
 
     const topCreatorClicks = Object.entries(creatorClicksByHandle)
       .map(([handle, clicks]) => ({ handle: `@${handle}`, clicks }))

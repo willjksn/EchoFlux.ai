@@ -11,6 +11,8 @@ type FanPurchase = {
   fanEmail?: string;
   type: FanPurchaseType;
   productId: string | null;
+  /** Feed post id for `post_unlock` orders (Stripe checkout). */
+  postId?: string | null;
   productTitle?: string;
   amountCents: number;
   status: string;
@@ -54,6 +56,7 @@ function mapDocToPurchase(id: string, d: Record<string, unknown>): FanPurchase {
   const createdMs = createdAtToMs(d.createdAt);
   const isNonDeliverable = normalizedType === "tip" || normalizedType === "subscription";
   const deliveryStatus = isNonDeliverable ? undefined : (d.deliveryStatus === "delivered" ? "delivered" : "pending");
+  const postIdRaw = typeof d.postId === "string" ? d.postId.trim() : "";
   return {
     id,
     creatorId: String(d.creatorId || ""),
@@ -61,6 +64,7 @@ function mapDocToPurchase(id: string, d: Record<string, unknown>): FanPurchase {
     fanEmail: typeof d.fanEmail === "string" ? d.fanEmail.trim().toLowerCase() : undefined,
     type: normalizedType,
     productId: typeof d.productId === "string" ? d.productId : null,
+    postId: postIdRaw || null,
     productTitle: typeof d.productTitle === "string" ? d.productTitle : undefined,
     amountCents: Number.isFinite(Number(d.amountCents)) ? Math.max(0, Math.round(Number(d.amountCents))) : 0,
     status: typeof d.status === "string" ? d.status : "paid",

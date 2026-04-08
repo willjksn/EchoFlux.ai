@@ -26,7 +26,7 @@ import type {
 } from "../types";
 import { FanLandingPage } from "./FanLandingPage";
 import { FanAuthModal } from "./FanAuthModal";
-import { FanMemberFeed, FanMemberSaved } from "./FanMemberFeed";
+import { FanMemberFeed, FanMemberSaved, fetchFanMemberPostForPurchases } from "./FanMemberFeed";
 import { MemberUsernameGateModal } from "./MemberUsernameGateModal";
 import { DEFAULT_PRIVACY_POLICY, DEFAULT_TERMS_OF_SERVICE, KNOWN_APP_ROUTES } from "../constants";
 import { useAutosizeTextarea } from "../src/hooks/useAutosizeTextarea";
@@ -54,7 +54,7 @@ import {
 import { AudioLevelMeter } from "./AudioLevelMeter";
 import { RecordingDurationLabel } from "./RecordingDurationLabel";
 import { DmAudioPlayer } from "./DmAudioPlayer";
-import { inferIsAudioFromUrl } from "../src/lib/mediaUrlInfer";
+import { inferIsAudioFromUrl, inferIsVideoFromUrl } from "../src/lib/mediaUrlInfer";
 import { FanHubNotificationBell, type FanHubNotificationNavigatePayload } from "./FanHubNotificationBell";
 import { getAvatarCropStyle } from "../src/lib/avatarCrop";
 import { resolveStoreCopy } from "../src/lib/storefrontStoreCopy";
@@ -333,6 +333,8 @@ type FanDeliveryPurchase = {
   fanEmail?: string;
   type: FanDeliveryPurchaseType;
   productId: string | null;
+  /** Feed post id for paid feed unlocks (`post_unlock`). */
+  postId?: string | null;
   productTitle?: string;
   amountCents: number;
   status: string;
@@ -380,6 +382,104 @@ function toIsoFromUnknownDate(v: unknown): string {
     if (!Number.isNaN(ms)) return new Date(ms).toISOString();
   }
   return new Date(0).toISOString();
+}
+
+function FanPurchaseUnlockedPostBlock({
+  creatorId,
+  postId,
+  primary,
+  onOpenInFeed,
+}: {
+  creatorId: string;
+  postId: string;
+  primary: string;
+  onOpenInFeed: () => void;
+}) {
+  const [row, setRow] = useState<Awaited<ReturnType<typeof fetchFanMemberPostForPurchases>> | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setRow(null);
+    void fetchFanMemberPostForPurchases(creatorId, postId).then((r) => {
+      if (!cancelled) {
+        setRow(r);
+        setLoading(false);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [creatorId, postId]);
+
+  if (loading) {
+    return <p className="fan-member-loading" style={{ marginTop: "0.5rem" }}>Loading…</p>;
+  }
+  if (!row) {
+    return (
+      <p className="fan-member-about-text" style={{ marginTop: "0.5rem" }}>
+        This post isn&apos;t available. You can still open it from Home if it appears there.
+      </p>
+    );
+  }
+
+  return (
+    <>
+      {row.body ? (
+        <div className="fan-profile-panel" style={{ marginTop: "0.6rem" }}>
+          <p className="fan-member-about-text" style={{ whiteSpace: "pre-wrap" }}>
+            {row.body}
+          </p>
+        </div>
+      ) : null}
+      {row.mediaUrls.map((url, i) => {
+        const declared = row.mediaTypes[i] === "video" ? "video" : "image";
+        const isVideo = declared === "video" || inferIsVideoFromUrl(url);
+        if (isVideo) {
+          return (
+            <video
+              key={`${url}-${i}`}
+              src={url}
+              controls
+              controlsList="nodownload noplaybackrate noremoteplayback"
+              disablePictureInPicture
+              playsInline
+              preload="metadata"
+              style={{ width: "100%", marginTop: "0.6rem", borderRadius: 10 }}
+            />
+          );
+        }
+        return (
+          <img
+            key={`${url}-${i}`}
+            src={url}
+            alt=""
+            loading="lazy"
+            style={{ width: "100%", marginTop: "0.6rem", borderRadius: 10 }}
+          />
+        );
+      })}
+      {row.audioUrls.map((url) => (
+        <audio
+          key={url}
+          src={url}
+          controls
+          controlsList="nodownload noplaybackrate noremoteplayback"
+          preload="metadata"
+          style={{ width: "100%", marginTop: "0.6rem" }}
+        />
+      ))}
+      <button
+        type="button"
+        className="fan-member-treat-buy"
+        style={{ marginTop: "0.65rem", backgroundColor: primary }}
+        onClick={onOpenInFeed}
+      >
+        Open in Home
+      </button>
+    </>
+  );
 }
 
 /** Member hub URL segments (path-based tabs). Keep in sync with App.tsx storefront path checks. */
@@ -855,6 +955,34 @@ export const FanStorefrontView: React.FC = () => {
   const [treatsLoading, setTreatsLoading] = useState(false);
   const [fanPurchases, setFanPurchases] = useState<FanDeliveryPurchase[]>([]);
   const [fanPurchasesLoading, setFanPurchasesLoading] = useState(false);
+  const memberPurchasesHideStorageKey = useMemo(() => {
+    const uid = fanAuthUid;
+    const cid = creator?.creatorId;
+    if (!uid || !cid) return null;
+    return `fanMemberPurchasesHidden:${uid}:${cid}`;
+  }, [fanAuthUid, creator?.creatorId]);
+  const [memberPurchasesListHidden, setMemberPurchasesListHidden] = useState(false);
+  const setMemberPurchasesListHiddenPersisted = useCallback(
+    (hidden: boolean) => {
+      setMemberPurchasesListHidden(hidden);
+      if (!memberPurchasesHideStorageKey || typeof window === "undefined") return;
+      try {
+        if (hidden) localStorage.setItem(memberPurchasesHideStorageKey, "1");
+        else localStorage.removeItem(memberPurchasesHideStorageKey);
+      } catch {
+        /* ignore */
+      }
+    },
+    [memberPurchasesHideStorageKey]
+  );
+  useEffect(() => {
+    if (!memberPurchasesHideStorageKey || typeof window === "undefined") return;
+    try {
+      setMemberPurchasesListHidden(localStorage.getItem(memberPurchasesHideStorageKey) === "1");
+    } catch {
+      setMemberPurchasesListHidden(false);
+    }
+  }, [memberPurchasesHideStorageKey]);
   /** Visible treats on public landing when creator enables guest checkout */
   const [landingTreatsProducts, setLandingTreatsProducts] = useState<TreatProduct[]>([]);
   const [landingTreatsLoading, setLandingTreatsLoading] = useState(false);
@@ -1624,7 +1752,7 @@ export const FanStorefrontView: React.FC = () => {
     };
 
     void fetchAlerts();
-    const timer = window.setInterval(fetchAlerts, 30000);
+    const timer = window.setInterval(fetchAlerts, 5000);
     return () => {
       cancelled = true;
       window.clearInterval(timer);
@@ -2108,6 +2236,7 @@ export const FanStorefrontView: React.FC = () => {
         for (const d of byIdSnap.docs) {
           const raw = d.data() as Record<string, unknown>;
           const normalizedType = normalizeFanPurchaseType(raw);
+          const postIdFromOrder = typeof raw.postId === "string" ? raw.postId.trim() : "";
           outById.set(d.id, {
             id: d.id,
             creatorId: String(raw.creatorId || ""),
@@ -2115,6 +2244,7 @@ export const FanStorefrontView: React.FC = () => {
             fanEmail: typeof raw.fanEmail === "string" ? raw.fanEmail : undefined,
             type: normalizedType,
             productId: typeof raw.productId === "string" ? raw.productId : null,
+            postId: postIdFromOrder || null,
             productTitle: typeof raw.productTitle === "string" ? raw.productTitle : undefined,
             amountCents: Number.isFinite(Number(raw.amountCents)) ? Math.max(0, Math.round(Number(raw.amountCents))) : 0,
             status: typeof raw.status === "string" ? raw.status : "paid",
@@ -2127,7 +2257,8 @@ export const FanStorefrontView: React.FC = () => {
               raw.deliveryType === "video" ||
               raw.deliveryType === "image" ||
               raw.deliveryType === "audio" ||
-              raw.deliveryType === "text"
+              raw.deliveryType === "text" ||
+              raw.deliveryType === "link"
                 ? raw.deliveryType
                 : null,
             deliveryText: typeof raw.deliveryText === "string" ? raw.deliveryText : null,
@@ -2147,6 +2278,7 @@ export const FanStorefrontView: React.FC = () => {
           for (const d of byEmailSnap.docs) {
             const raw = d.data() as Record<string, unknown>;
             const normalizedType = normalizeFanPurchaseType(raw);
+            const postIdFromOrderEmail = typeof raw.postId === "string" ? raw.postId.trim() : "";
             outById.set(d.id, {
               id: d.id,
               creatorId: String(raw.creatorId || ""),
@@ -2154,6 +2286,7 @@ export const FanStorefrontView: React.FC = () => {
               fanEmail: typeof raw.fanEmail === "string" ? raw.fanEmail : undefined,
               type: normalizedType,
               productId: typeof raw.productId === "string" ? raw.productId : null,
+              postId: postIdFromOrderEmail || null,
               productTitle: typeof raw.productTitle === "string" ? raw.productTitle : undefined,
               amountCents: Number.isFinite(Number(raw.amountCents))
                 ? Math.max(0, Math.round(Number(raw.amountCents)))
@@ -2168,7 +2301,8 @@ export const FanStorefrontView: React.FC = () => {
                 raw.deliveryType === "video" ||
                 raw.deliveryType === "image" ||
                 raw.deliveryType === "audio" ||
-                raw.deliveryType === "text"
+                raw.deliveryType === "text" ||
+                raw.deliveryType === "link"
                   ? raw.deliveryType
                   : null,
               deliveryText: typeof raw.deliveryText === "string" ? raw.deliveryText : null,
@@ -3296,6 +3430,32 @@ export const FanStorefrontView: React.FC = () => {
       ),
     [deliveredOrPurchasedProductIdSet, treatsProducts, unlockedProductIds]
   );
+  const fanPurchasesDisplayRows = useMemo(() => {
+    const postIdsFromOrders = new Set<string>();
+    for (const o of fanPurchases) {
+      if (o.type === "post_unlock" && typeof o.postId === "string" && o.postId.trim()) {
+        postIdsFromOrders.add(o.postId.trim());
+      }
+    }
+    const cid = creator?.creatorId?.trim() || "";
+    const uid = fanAuthUid?.trim() || "";
+    const synthetic: FanDeliveryPurchase[] = unlockedFanPostIds
+      .map((id) => id.trim())
+      .filter((id) => id && !postIdsFromOrders.has(id))
+      .map((postId) => ({
+        id: `entitlement-unlock-${postId}`,
+        creatorId: cid,
+        fanId: uid,
+        type: "post_unlock",
+        productId: null,
+        postId,
+        productTitle: "Unlocked on feed",
+        amountCents: 0,
+        status: "paid",
+        createdAt: new Date(0).toISOString(),
+      }));
+    return [...fanPurchases, ...synthetic];
+  }, [fanPurchases, unlockedFanPostIds, creator?.creatorId, fanAuthUid]);
   const needsPaidUpgradeBase =
     isLoggedIn && subscribed && creatorRequiresPaidMembership && !hasPaidMembershipBase;
   const purchaseOnlyAccessBase =
@@ -3374,6 +3534,9 @@ export const FanStorefrontView: React.FC = () => {
 
   useEffect(() => {
     if (showLanding || previewMember || isViewingOwnStorefront || fanPageAdminBypass) return;
+    // Until getFanEntitlement finishes, subscribed/membership defaults make canViewFeed false for
+    // paid-only creators — do not redirect away from Home/feed or we stick on Purchases after refresh.
+    if (!entitlementBootstrapResolved) return;
     if (!canViewFeed && activeTab === "feed") {
       setActiveTab("purchases");
       if (creator?.handle?.trim()) {
@@ -3385,6 +3548,7 @@ export const FanStorefrontView: React.FC = () => {
     previewMember,
     isViewingOwnStorefront,
     fanPageAdminBypass,
+    entitlementBootstrapResolved,
     canViewFeed,
     activeTab,
     creator?.handle,
@@ -3524,18 +3688,24 @@ export const FanStorefrontView: React.FC = () => {
         return;
       }
       if (p.type === "session_starting" || p.type === "session_reminder") {
-        if (d.threadId?.trim()) setDmPreferredThreadId(d.threadId.trim());
+        if (d.threadId?.trim()) {
+          const threadId = d.threadId.trim();
+          setDmPreferredThreadId(threadId);
+          void fetchDmThreadAndMessages({ threadId });
+        }
         if (d.sessionId?.trim()) setDmPreferredSessionId(d.sessionId.trim());
         goTab("messages");
         return;
       }
       if (d.threadId?.trim()) {
-        setDmPreferredThreadId(d.threadId.trim());
+        const threadId = d.threadId.trim();
+        setDmPreferredThreadId(threadId);
+        void fetchDmThreadAndMessages({ threadId });
         if (d.sessionId?.trim()) setDmPreferredSessionId(d.sessionId.trim());
         goTab("messages");
       }
     },
-    [creator?.creatorId, creator?.handle, joinFanVideoSession, showLanding]
+    [creator?.creatorId, creator?.handle, joinFanVideoSession, showLanding, fetchDmThreadAndMessages]
   );
 
   if (loading) {
@@ -3667,7 +3837,11 @@ export const FanStorefrontView: React.FC = () => {
       keys.splice(insertAt, 0, "purchases");
     }
     if (purchaseOnlyAccess || paidPageUnsubscribed) {
-      return keys.filter((key) => key === "purchases" || key === "tip");
+      const out: string[] = [];
+      if (keys.includes("purchases")) out.push("purchases");
+      if (keys.includes("tip")) out.push("tip");
+      out.push("profile");
+      return out;
     }
     return keys;
   })();
@@ -3677,6 +3851,9 @@ export const FanStorefrontView: React.FC = () => {
     purchases: "Purchases",
     tip: "Tip",
     messages: "Messages",
+    profile: "Profile",
+    about: "About",
+    saved: "Saved",
   };
   const setActiveTabWithUrl = (nextTab: typeof activeTab) => {
     setActiveTab(nextTab);
@@ -4340,10 +4517,27 @@ export const FanStorefrontView: React.FC = () => {
             {activeTab === "purchases" && (
               <div className="fan-member-treats">
                 <div className="fan-member-store-header">
-                  <h2 className="fan-member-store-title">Your purchases</h2>
-                  <p className="fan-member-store-subtitle">
-                    Everything you bought lives here.
-                  </p>
+                  <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
+                    <div>
+                      <h2 className="fan-member-store-title">Your purchases</h2>
+                      <p className="fan-member-store-subtitle">
+                        Everything you bought lives here — including feed unlocks. You keep access even if your membership ends.
+                      </p>
+                    </div>
+                    {isLoggedIn &&
+                    !fanPurchasesLoading &&
+                    !memberPurchasesListHidden &&
+                    (fanPurchasesDisplayRows.length > 0 || legacyUnlockedTreatPurchases.length > 0) ? (
+                      <button
+                        type="button"
+                        className="storefront-nav-btn shrink-0 self-start"
+                        style={{ color: primary, borderColor: `${primary}55` }}
+                        onClick={() => setMemberPurchasesListHiddenPersisted(true)}
+                      >
+                        Hide purchases
+                      </button>
+                    ) : null}
+                  </div>
                 </div>
                 {!isLoggedIn ? (
                   <div className="fan-profile-panel">
@@ -4351,24 +4545,65 @@ export const FanStorefrontView: React.FC = () => {
                   </div>
                 ) : fanPurchasesLoading ? (
                   <p className="fan-member-loading">Loading your purchases...</p>
-                ) : fanPurchases.length === 0 && unlockedProductIds.length === 0 ? (
+                ) : fanPurchasesDisplayRows.length === 0 && legacyUnlockedTreatPurchases.length === 0 ? (
                   <div className="fan-profile-panel">
                     <p className="fan-member-about-text">No purchases yet.</p>
+                  </div>
+                ) : memberPurchasesListHidden ? (
+                  <div className="fan-profile-panel">
+                    <p className="fan-member-about-text">
+                      Your purchase list and prices are hidden. Anything you paid for is still yours — show this list whenever you want.
+                    </p>
+                    <button
+                      type="button"
+                      className="fan-member-treat-buy"
+                      style={{ marginTop: "0.75rem", backgroundColor: primary }}
+                      onClick={() => setMemberPurchasesListHiddenPersisted(false)}
+                    >
+                      Show purchases
+                    </button>
                   </div>
                 ) : treatsLoading ? (
                   <p className="fan-member-loading">Loading your purchases...</p>
                 ) : (
                   <div className="fan-member-treats-grid">
-                    {fanPurchases.map((o) => (
+                    {fanPurchasesDisplayRows.map((o) => (
                       <div key={`order-${o.id}`} className="fan-member-treat-card">
-                        <p className="fan-member-treat-type">{(o.type || "product").replace(/_/g, " ")}</p>
+                        <p className="fan-member-treat-type">
+                          {o.type === "post_unlock" ? "Feed unlock" : (o.type || "product").replace(/_/g, " ")}
+                        </p>
                         <h3 className="fan-member-treat-title">{o.productTitle || "Purchase"}</h3>
-                        <p className="fan-member-treat-price">{formatPrice(o.amountCents)}</p>
+                        {o.amountCents > 0 ? (
+                          <p className="fan-member-treat-price">{formatPrice(o.amountCents)}</p>
+                        ) : o.type === "tip" || o.type === "subscription" ? (
+                          <p className="fan-member-treat-price">{formatPrice(o.amountCents)}</p>
+                        ) : null}
                         <div className="fan-member-treat-action" style={{ display: "block" }}>
                           {o.type === "tip" ? (
-                            <span className="fan-member-treat-owned">Tip received</span>
+                            <span className="fan-member-treat-owned">Tip paid</span>
                           ) : o.type === "subscription" ? (
                             <span className="fan-member-treat-owned">Membership active</span>
+                          ) : o.type === "post_unlock" ? (
+                            <>
+                              <span className="fan-member-treat-owned">Unlocked</span>
+                              {o.postId && creator?.creatorId ? (
+                                <FanPurchaseUnlockedPostBlock
+                                  creatorId={creator.creatorId}
+                                  postId={o.postId}
+                                  primary={primary}
+                                  onOpenInFeed={() => setActiveTabWithUrl("feed")}
+                                />
+                              ) : (
+                                <button
+                                  type="button"
+                                  className="fan-member-treat-buy"
+                                  style={{ marginTop: "0.65rem", backgroundColor: primary }}
+                                  onClick={() => setActiveTabWithUrl("feed")}
+                                >
+                                  Open in Home
+                                </button>
+                              )}
+                            </>
                           ) : o.deliveryStatus === "delivered" ? (
                             <>
                               <span className="fan-member-treat-owned">Delivered</span>
@@ -4408,11 +4643,22 @@ export const FanStorefrontView: React.FC = () => {
                                 />
                               ) : null}
                               {o.deliveryType === "link" && o.deliveryUrl ? (
-                                <div className="fan-profile-panel" style={{ marginTop: "0.6rem" }}>
-                                  <p className="fan-member-about-text">
-                                    Delivered link is available from creator support.
-                                  </p>
-                                </div>
+                                <a
+                                  href={o.deliveryUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="fan-member-treat-buy"
+                                  style={{
+                                    marginTop: "0.6rem",
+                                    display: "inline-flex",
+                                    alignItems: "center",
+                                    justifyContent: "center",
+                                    textDecoration: "none",
+                                    backgroundColor: primary,
+                                  }}
+                                >
+                                  Open link
+                                </a>
                               ) : null}
                             </>
                           ) : (
@@ -4422,26 +4668,26 @@ export const FanStorefrontView: React.FC = () => {
                       </div>
                     ))}
                     {legacyUnlockedTreatPurchases.map((p) => (
-                        <div key={p.id} className="fan-member-treat-card">
-                          <p className="fan-member-treat-type">{p.type.replace(/_/g, " ")}</p>
-                          <h3 className="fan-member-treat-title">{p.title}</h3>
-                          {p.description ? (
-                            <p className="fan-member-treat-desc">{p.description}</p>
-                          ) : null}
-                          <p className="fan-member-treat-price">{formatPrice(p.priceCents)}</p>
-                          <div className="fan-member-treat-action">
-                            <span className="fan-member-treat-owned">Purchased</span>
-                            <button
-                              type="button"
-                              className="fan-member-treat-buy"
-                              style={{ backgroundColor: primary }}
-                              onClick={() => setActiveTabWithUrl("treats")}
-                            >
-                              Open in Store
-                            </button>
-                          </div>
+                      <div key={p.id} className="fan-member-treat-card">
+                        <p className="fan-member-treat-type">{p.type.replace(/_/g, " ")}</p>
+                        <h3 className="fan-member-treat-title">{p.title}</h3>
+                        {p.description ? (
+                          <p className="fan-member-treat-desc">{p.description}</p>
+                        ) : null}
+                        <p className="fan-member-treat-price">{formatPrice(p.priceCents)}</p>
+                        <div className="fan-member-treat-action">
+                          <span className="fan-member-treat-owned">Purchased</span>
+                          <button
+                            type="button"
+                            className="fan-member-treat-buy"
+                            style={{ backgroundColor: primary }}
+                            onClick={() => setActiveTabWithUrl("treats")}
+                          >
+                            Open in Store
+                          </button>
                         </div>
-                      ))}
+                      </div>
+                    ))}
                   </div>
                 )}
               </div>
@@ -4456,7 +4702,11 @@ export const FanStorefrontView: React.FC = () => {
                   <p className="fan-member-banned">You cannot message this creator.</p>
                 ) : (
                   <>
-                    <p className="fan-member-messages-title">Conversation with {displayName}</p>
+                    <p className="fan-member-messages-title">
+                      {dmLiveSession && (dmLiveSession.status === "active" || dmLiveSession.status === "paused")
+                        ? `Live Session Room with ${displayName}`
+                        : `Conversation with ${displayName}`}
+                    </p>
                     {dmLiveSession && (dmLiveSession.status === "active" || dmLiveSession.status === "paused") ? (
                       <div
                         className="fan-profile-panel"
@@ -4472,11 +4722,18 @@ export const FanStorefrontView: React.FC = () => {
                         <p className="fan-member-about-text m-0 mt-1">
                           {dmLiveSession.chatType || "Custom"} • {formatRemaining(dmLiveSession.remainingSeconds)} remaining
                         </p>
+                        <p className="fan-member-about-text m-0 mt-1" style={{ opacity: 0.8 }}>
+                          Premium session mode is active.
+                        </p>
                       </div>
                     ) : null}
                     <div
                       ref={dmMessagesListRef}
-                      className="fan-member-messages-list"
+                      className={`fan-member-messages-list ${
+                        dmLiveSession && (dmLiveSession.status === "active" || dmLiveSession.status === "paused")
+                          ? "fh-dm-session-room"
+                          : ""
+                      }`}
                       onScroll={(e) => {
                         dmAutoStickToBottomRef.current = dmIsNearBottom(e.currentTarget);
                       }}

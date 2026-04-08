@@ -837,6 +837,28 @@ async function fetchMemberPostById(creatorId: string, postId: string): Promise<P
   return null;
 }
 
+/** Published post payload for member “Purchases” rows (unlocked feed content). */
+export async function fetchFanMemberPostForPurchases(
+  creatorId: string,
+  postId: string
+): Promise<{
+  id: string;
+  body: string;
+  mediaUrls: string[];
+  mediaTypes: ("image" | "video")[];
+  audioUrls: string[];
+} | null> {
+  const p = await fetchMemberPostById(creatorId, postId);
+  if (!p) return null;
+  return {
+    id: p.id,
+    body: p.content,
+    mediaUrls: p.mediaUrls,
+    mediaTypes: p.mediaTypes,
+    audioUrls: p.audioUrls ?? [],
+  };
+}
+
 function useMemberPostDetail(creatorId: string | undefined, viewPostId: string | null) {
   const [detailPost, setDetailPost] = useState<Post | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);

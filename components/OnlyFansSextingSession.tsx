@@ -362,6 +362,7 @@ export const OnlyFansSextingSession: React.FC = () => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [myMessageInput, setMyMessageInput] = useState('');
   const [sessionEndModalOpen, setSessionEndModalOpen] = useState(false);
+  const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
   const [activeChatSessionId, setActiveChatSessionId] = useState<string | null>(null);
 
   // AI
@@ -590,6 +591,31 @@ export const OnlyFansSextingSession: React.FC = () => {
     return auth.currentUser ? await auth.currentUser.getIdToken(true) : '';
   }, []);
 
+  const fetchSessionMessages = useCallback(async () => {
+    if (!sessionStarted || !activeThreadId) return;
+    try {
+      const token = await getToken();
+      if (!token) return;
+      const res = await fetch(`/api/fanDmMessages?threadId=${encodeURIComponent(activeThreadId)}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json().catch(() => ({} as { messages?: Array<Record<string, unknown>> }));
+      if (!res.ok) return;
+      const rows = Array.isArray((data as { messages?: Array<Record<string, unknown>> }).messages)
+        ? (data as { messages: Array<Record<string, unknown>> }).messages
+        : [];
+      const mapped: Message[] = rows.map((m) => ({
+        id: typeof m.id === 'string' ? m.id : `msg-${Date.now()}`,
+        senderId: typeof m.senderId === 'string' ? m.senderId : '',
+        text: typeof m.content === 'string' ? m.content : '',
+        timestamp: new Date(typeof m.createdAt === 'string' ? m.createdAt : Date.now()),
+      }));
+      setMessages(mapped);
+    } catch {
+      // silent polling failure
+    }
+  }, [sessionStarted, activeThreadId, getToken]);
+
   const endActiveSessionOnServer = useCallback(async () => {
     if (!activeChatSessionId) return;
     try {
@@ -619,6 +645,7 @@ export const OnlyFansSextingSession: React.FC = () => {
     setChatBotEnabled(false);
     setSessionStarted(false);
     setSessionPaused(false);
+    setActiveThreadId(null);
     setActiveChatSessionId(null);
     showToast?.('Session ended — time is up!', 'success');
   }, [sessionStarted, timeRemainingSeconds, showToast, endActiveSessionOnServer]);
@@ -653,6 +680,9 @@ export const OnlyFansSextingSession: React.FC = () => {
       if (!res.ok) {
         throw new Error((data as { error?: string }).error || 'Could not start chat session.');
       }
+      setActiveThreadId(
+        typeof (data as { threadId?: unknown }).threadId === 'string' ? String((data as { threadId: string }).threadId) : null
+      );
       setActiveChatSessionId(
         typeof (data as { sessionId?: unknown }).sessionId === 'string' ? String((data as { sessionId: string }).sessionId) : null
       );
@@ -678,6 +708,7 @@ export const OnlyFansSextingSession: React.FC = () => {
     setChatBotEnabled(false);
     setSessionStarted(false);
     setSessionPaused(false);
+    setActiveThreadId(null);
     setActiveChatSessionId(null);
     setMessages([]);
     setAutoSuggestions([]);
@@ -686,19 +717,32 @@ export const OnlyFansSextingSession: React.FC = () => {
 
   const handleSendMyMessage = useCallback(async () => {
     const text = myMessageInput.trim();
-    if (!text || !sessionStarted) return;
-
-        const newMessage: Message = {
-            id: `msg-${Date.now()}`,
-      senderId: adminUid,
-      text,
-            timestamp: new Date(),
-    };
-
-    setMessages((prev) => [...prev, newMessage]);
-    setMyMessageInput('');
-    setAutoSuggestions([]);
-  }, [myMessageInput, sessionStarted, adminUid]);
+    if (!text || !sessionStarted || !activeThreadId || !selectedUid) return;
+    try {
+      const token = await getToken();
+      if (!token) return;
+      const res = await fetch('/api/fanDmSend', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          creatorId: adminUid,
+          fanId: selectedUid,
+          threadId: activeThreadId,
+          content: text,
+        }),
+      });
+      const data = await res.json().catch(() => ({} as { error?: string }));
+      if (!res.ok) throw new Error(data.error || 'Could not send message.');
+      setMyMessageInput('');
+      setAutoSuggestions([]);
+      await fetchSessionMessages();
+    } catch (e) {
+      showToast?.(e instanceof Error ? e.message : 'Could not send message.', 'error');
+    }
+  }, [myMessageInput, sessionStarted, activeThreadId, selectedUid, getToken, adminUid, fetchSessionMessages, showToast]);
 
   const handleUseSuggestion = useCallback((text: string) => {
     setMyMessageInput(text);
@@ -777,19 +821,40 @@ export const OnlyFansSextingSession: React.FC = () => {
         }).then((r) => r.json());
       })
       .then((data) => {
-        if (data?.suggestion?.trim()) {
-          const newMessage: Message = {
-            id: `msg-${Date.now()}`,
-            senderId: adminUid,
-            text: normalizeChatText(data.suggestion),
-            timestamp: new Date(),
-          };
-          setMessages((prev) => [...prev, newMessage]);
+        if (data?.suggestion?.trim() && activeThreadId && selectedUid) {
+          const aiText = normalizeChatText(data.suggestion);
+          if (!aiText) return;
+          return getToken().then(async (token) => {
+            if (!token) return;
+            await fetch('/api/fanDmSend', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${token}`,
+              },
+              body: JSON.stringify({
+                creatorId: adminUid,
+                fanId: selectedUid,
+                threadId: activeThreadId,
+                content: aiText,
+              }),
+            });
+            await fetchSessionMessages();
+          });
         }
       })
       .catch(() => {})
       .finally(() => setChatBotReplying(false));
-  }, [canUseChatBot, chatBotEnabled, sessionStarted, sessionPaused, recentMessages, tone, selectedFan, useCreatorPersonality, creatorPersonality, contentSpiciness, getToken, adminUid, chatBotReplying]);
+  }, [canUseChatBot, chatBotEnabled, sessionStarted, sessionPaused, recentMessages, tone, selectedFan, useCreatorPersonality, creatorPersonality, contentSpiciness, getToken, adminUid, chatBotReplying, activeThreadId, selectedUid, fetchSessionMessages]);
+
+  useEffect(() => {
+    if (!sessionStarted || !activeThreadId) return;
+    void fetchSessionMessages();
+    const id = window.setInterval(() => {
+      void fetchSessionMessages();
+    }, 2000);
+    return () => window.clearInterval(id);
+  }, [sessionStarted, activeThreadId, fetchSessionMessages]);
 
   // Active Session View
   if (sessionStarted) {
