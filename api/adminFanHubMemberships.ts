@@ -112,6 +112,28 @@ function toPriceCents(raw: unknown): number {
   return Math.round(n);
 }
 
+function orderAmountCents(rawAmountCents: unknown, rawAmount: unknown): number {
+  if (typeof rawAmountCents === "number" && Number.isFinite(rawAmountCents)) {
+    return Math.max(0, Math.round(rawAmountCents));
+  }
+  if (typeof rawAmount === "number" && Number.isFinite(rawAmount)) {
+    if (rawAmount <= 0) return 0;
+    // Legacy rows may store dollars in `amount`; newer rows store cents.
+    if (rawAmount < 100) return Math.round(rawAmount * 100);
+    return Math.round(rawAmount);
+  }
+  return 0;
+}
+
+function normalizeOrderType(rawType: unknown, rawProductType: unknown, tipHandle: unknown): "tip" | "purchase" {
+  const type = typeof rawType === "string" ? rawType.trim().toLowerCase() : "";
+  const productType = typeof rawProductType === "string" ? rawProductType.trim().toLowerCase() : "";
+  if (type === "tip") return "tip";
+  if (productType === "tip") return "tip";
+  if (typeof tipHandle === "string" && tipHandle.trim()) return "tip";
+  return "purchase";
+}
+
 function statusRank(status: string): number {
   const s = String(status || "").toLowerCase().trim();
   if (s === "active") return 5;
@@ -250,6 +272,58 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       })
     );
 
+    // Backfill spend/tip counters from `orders` so Admin table does not depend only on fan-row aggregates.
+    const orderStatsByCreatorFan: Record<
+      string,
+      { purchasesCents: number; purchaseCount: number; tipsCents: number; tipCount: number; totalSpentCents: number }
+    > = {};
+    try {
+      let orderDocs = await db.collection("orders").limit(10000).get();
+      try {
+        orderDocs = await db.collection("orders").orderBy("createdAt", "desc").limit(10000).get();
+      } catch {
+        // Fallback to unsorted read when createdAt index/orderBy isn't available.
+      }
+      orderDocs.docs.forEach((docSnap) => {
+        const d = docSnap.data() as Record<string, unknown>;
+        const creatorId = normalizeCreatorId(d.creatorId);
+        if (!creatorId) return;
+        const status = typeof d.status === "string" ? d.status.trim().toLowerCase() : "";
+        if (status === "refunded") return;
+
+        const fanIdentity = deriveCanonicalFanKey(
+          typeof d.fanId === "string" ? d.fanId : "",
+          typeof d.fanId === "string" ? d.fanId : "",
+          typeof d.fanEmail === "string" ? d.fanEmail : null
+        );
+        const fanKey = fanIdentity.key;
+        if (!fanKey) return;
+
+        const amountCents = orderAmountCents(d.amountCents, d.amount);
+        if (amountCents <= 0) return;
+        const type = normalizeOrderType(d.type, d.productType, d.tipHandle);
+        const key = `${creatorId}__${fanKey}`;
+        const prev = orderStatsByCreatorFan[key] || {
+          purchasesCents: 0,
+          purchaseCount: 0,
+          tipsCents: 0,
+          tipCount: 0,
+          totalSpentCents: 0,
+        };
+        if (type === "tip") {
+          prev.tipsCents += amountCents;
+          prev.tipCount += 1;
+        } else {
+          prev.purchasesCents += amountCents;
+          prev.purchaseCount += 1;
+        }
+        prev.totalSpentCents += amountCents;
+        orderStatsByCreatorFan[key] = prev;
+      });
+    } catch (ordersErr) {
+      console.warn("adminFanHubMemberships: orders backfill skipped:", ordersErr);
+    }
+
     // Enrich missing fan profiles from users/{fanId} so Admin UI can show usernames/names instead of IDs.
     const fanIdsToResolve = Object.keys(byFan).filter((fanId) => {
       const p = fanProfilesByFanId[fanId];
@@ -305,34 +379,66 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       );
     }
 
+    // Merge duplicate fan identities when one key is uid and another key is email for the same account.
+    const uidByEmail = new Map<string, string>();
+    for (const [fanId, profile] of Object.entries(fanProfilesByFanId)) {
+      if (!FIREBASE_UID_RE.test(fanId)) continue;
+      const email = (profile.email || "").trim().toLowerCase();
+      if (email) uidByEmail.set(email, fanId);
+    }
+    for (const [fanId, profile] of Object.entries(fanProfilesByFanId)) {
+      if (FIREBASE_UID_RE.test(fanId)) continue;
+      const email = (profile.email || "").trim().toLowerCase();
+      if (!email) continue;
+      const uidKey = uidByEmail.get(email);
+      if (!uidKey || uidKey === fanId) continue;
+      const sourceRows = byFan[fanId] || [];
+      if (!byFan[uidKey]) byFan[uidKey] = [];
+      byFan[uidKey].push(...sourceRows);
+      delete byFan[fanId];
+      delete fanProfilesByFanId[fanId];
+    }
+
     for (const fanId of Object.keys(byFan)) {
       const rows = byFan[fanId]
         .map((row) => ({
           ...row,
           creatorId: normalizeCreatorId(row.creatorId),
           creatorName: creatorNameById[normalizeCreatorId(row.creatorId)]?.name || row.creatorId,
-          creatorHandle: creatorNameById[row.creatorId]?.handle || null,
+          creatorHandle: creatorNameById[normalizeCreatorId(row.creatorId)]?.handle || null,
           subscriptionPriceCents: creatorNameById[normalizeCreatorId(row.creatorId)]?.monthlyPriceCents ?? 0,
         }));
       const dedupedByCreator = new Map<string, MembershipRow>();
       for (const row of rows) {
         const key = normalizeCreatorId(row.creatorId) || row.creatorName || "unknown_creator";
+        const orderKey = `${normalizeCreatorId(row.creatorId)}__${fanId}`;
+        const orderBackfill = orderStatsByCreatorFan[orderKey];
+        const rowWithBackfill: MembershipRow = orderBackfill
+          ? {
+              ...row,
+              purchasesCents: Math.max(row.purchasesCents || 0, orderBackfill.purchasesCents || 0),
+              purchaseCount: Math.max(row.purchaseCount || 0, orderBackfill.purchaseCount || 0),
+              tipsCents: Math.max(row.tipsCents || 0, orderBackfill.tipsCents || 0),
+              tipCount: Math.max(row.tipCount || 0, orderBackfill.tipCount || 0),
+              totalSpentCents: Math.max(row.totalSpentCents || 0, orderBackfill.totalSpentCents || 0),
+            }
+          : row;
         const existing = dedupedByCreator.get(key);
         if (!existing) {
-          dedupedByCreator.set(key, row);
+          dedupedByCreator.set(key, rowWithBackfill);
           continue;
         }
         const chosen =
-          statusRank(row.status) > statusRank(existing.status) ? row : existing;
+          statusRank(rowWithBackfill.status) > statusRank(existing.status) ? rowWithBackfill : existing;
         dedupedByCreator.set(key, {
           ...chosen,
-          purchaseCount: Math.max(existing.purchaseCount || 0, row.purchaseCount || 0),
-          purchasesCents: Math.max(existing.purchasesCents || 0, row.purchasesCents || 0),
-          tipCount: Math.max(existing.tipCount || 0, row.tipCount || 0),
-          tipsCents: Math.max(existing.tipsCents || 0, row.tipsCents || 0),
-          totalSpentCents: Math.max(existing.totalSpentCents || 0, row.totalSpentCents || 0),
-          subscriptionPriceCents: Math.max(existing.subscriptionPriceCents || 0, row.subscriptionPriceCents || 0),
-          updatedAt: chosen.updatedAt || existing.updatedAt || row.updatedAt,
+          purchaseCount: Math.max(existing.purchaseCount || 0, rowWithBackfill.purchaseCount || 0),
+          purchasesCents: Math.max(existing.purchasesCents || 0, rowWithBackfill.purchasesCents || 0),
+          tipCount: Math.max(existing.tipCount || 0, rowWithBackfill.tipCount || 0),
+          tipsCents: Math.max(existing.tipsCents || 0, rowWithBackfill.tipsCents || 0),
+          totalSpentCents: Math.max(existing.totalSpentCents || 0, rowWithBackfill.totalSpentCents || 0),
+          subscriptionPriceCents: Math.max(existing.subscriptionPriceCents || 0, rowWithBackfill.subscriptionPriceCents || 0),
+          updatedAt: chosen.updatedAt || existing.updatedAt || rowWithBackfill.updatedAt,
         });
       }
       byFan[fanId] = Array.from(dedupedByCreator.values())
