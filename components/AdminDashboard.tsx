@@ -204,6 +204,7 @@ type FanHubMemberProfile = {
     displayName: string | null;
     email: string | null;
     username: string | null;
+    photoURL?: string | null;
 };
 
 type MembershipOnlyFanRow = {
@@ -211,6 +212,7 @@ type MembershipOnlyFanRow = {
     displayName: string;
     email: string | null;
     username: string | null;
+    photoURL: string | null;
     memberships: FanMembershipLink[];
 };
 
@@ -911,6 +913,10 @@ export const AdminDashboard: React.FC = () => {
             const email = profile?.email || (fanKey.includes('@') ? fanKey.toLowerCase() : null);
             const usernameRaw = profile?.username ? profile.username.replace(/^@/, '').trim().toLowerCase() : '';
             const username = usernameRaw ? `@${usernameRaw}` : null;
+            const photoURL =
+                typeof profile?.photoURL === 'string' && profile.photoURL.trim()
+                    ? profile.photoURL.trim()
+                    : null;
             const displayName =
                 (profile?.displayName && profile.displayName.trim()) ||
                 (username && username.trim()) ||
@@ -921,7 +927,7 @@ export const AdminDashboard: React.FC = () => {
                 const hay = `${fanKey.toLowerCase()} ${displayName.toLowerCase()} ${email || ''} ${(username || '').toLowerCase()} ${creatorBlob}`;
                 if (!hay.includes(search)) continue;
             }
-            out.push({ fanKey, displayName, email, username, memberships });
+            out.push({ fanKey, displayName, email, username, photoURL, memberships });
         }
         out.sort((a, b) => a.displayName.localeCompare(b.displayName));
         return out;
@@ -2674,9 +2680,17 @@ export const AdminDashboard: React.FC = () => {
                                                                                                 <tr key={`fanhub-membership-only-${row.fanKey}`} className="border-t border-cyan-100 dark:border-cyan-900/30">
                                                                                                     <td className="p-3">
                                                                                                         <div className="flex items-center space-x-3">
-                                                                                                            <div className="w-10 h-10 rounded-full bg-cyan-200 dark:bg-cyan-800 text-cyan-900 dark:text-cyan-100 flex items-center justify-center font-bold text-sm">
-                                                                                                                {row.displayName.slice(0, 1).toUpperCase()}
-                                                                                                            </div>
+                                                                                                            {row.photoURL ? (
+                                                                                                                <img
+                                                                                                                    src={row.photoURL}
+                                                                                                                    alt={row.displayName}
+                                                                                                                    className="w-10 h-10 rounded-full object-cover"
+                                                                                                                />
+                                                                                                            ) : (
+                                                                                                                <div className="w-10 h-10 rounded-full bg-cyan-200 dark:bg-cyan-800 text-cyan-900 dark:text-cyan-100 flex items-center justify-center font-bold text-sm">
+                                                                                                                    {row.displayName.slice(0, 1).toUpperCase()}
+                                                                                                                </div>
+                                                                                                            )}
                                                                                                             <div>
                                                                                                                 <p className="font-bold text-gray-900 dark:text-white">
                                                                                                                     {row.displayName}

@@ -24,10 +24,13 @@ type FanProfile = {
   displayName: string | null;
   email: string | null;
   username: string | null;
+  photoURL: string | null;
 };
 
 const ACTIVE_STATUSES = new Set(["active", "trialing", "free", "past_due"]);
 const FIREBASE_UID_RE = /^[A-Za-z0-9]{20,36}$/;
+const UID_LABEL_SUFFIX = /(?:^|[-_\s])u(?:id|di)\s*:\s*([A-Za-z0-9]{20,36})$/i;
+const EMAIL_IN_ID = /([^\s]+@[^\s]+)$/i;
 
 function hasPlatformAdminAccess(userData: Record<string, unknown> | undefined): boolean {
   if (!userData) return false;
@@ -76,9 +79,23 @@ function normalizeUsername(raw: unknown): string | null {
   return clean;
 }
 
+function normalizeCreatorHandle(raw: unknown): string | null {
+  if (typeof raw !== "string") return null;
+  const clean = raw.replace(/^@/, "").trim().toLowerCase();
+  return clean || null;
+}
+
 function parseCompoundFanId(raw: unknown): { authUid: string | null; emailFromId: string | null } {
   const id = typeof raw === "string" ? raw.trim() : "";
   if (!id) return { authUid: null, emailFromId: null };
+  const labeled = id.match(UID_LABEL_SUFFIX);
+  if (labeled?.[1]) {
+    const emailMatch = id.match(EMAIL_IN_ID);
+    return {
+      authUid: labeled[1],
+      emailFromId: emailMatch?.[1] ? emailMatch[1].trim().toLowerCase() : null,
+    };
+  }
   const m = id.match(/^([A-Za-z0-9]{20,36})-(.+@.+)$/);
   if (m) {
     return { authUid: m[1], emailFromId: m[2].trim().toLowerCase() };
@@ -185,7 +202,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const identity = deriveCanonicalFanKey(docSnap.id, data.id, data.email);
       const fanId = identity.key;
       const creatorIdRaw =
-        (typeof data.creatorId === "string" && data.creatorId) || getCreatorIdFromPath(docSnap.ref.path);
+        getCreatorIdFromPath(docSnap.ref.path) || (typeof data.creatorId === "string" && data.creatorId);
       const creatorId = normalizeCreatorId(creatorIdRaw);
       const status = typeof data.subscriptionStatus === "string" ? data.subscriptionStatus : "";
       if (!fanId || !creatorId) continue;
@@ -207,6 +224,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           displayName: rawDisplayName || null,
           email: rawEmail || null,
           username: rawUsername ? rawUsername.replace(/^@/, "").trim().toLowerCase() : null,
+          photoURL:
+            (typeof (data as { photoURL?: unknown }).photoURL === "string" &&
+            (data as { photoURL?: string }).photoURL!.trim())
+              ? (data as { photoURL: string }).photoURL.trim()
+              : null,
         };
       }
 
@@ -247,10 +269,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     const creatorNameById: Record<string, { name: string; handle: string | null; monthlyPriceCents: number }> = {};
+    const canonicalCreatorIdByAlias: Record<string, string> = {};
     await Promise.all(
       Array.from(creatorIds).map(async (creatorId) => {
         try {
-          const creatorSnap = await db.collection("creators").doc(creatorId).get();
+          let canonicalCreatorId = creatorId;
+          let creatorSnap = await db.collection("creators").doc(creatorId).get();
+          if (!creatorSnap.exists) {
+            const handleAlias = normalizeCreatorHandle(creatorId);
+            if (handleAlias) {
+              const byHandle = await db.collection("creators").where("handle", "==", handleAlias).limit(1).get();
+              if (!byHandle.empty) {
+                creatorSnap = byHandle.docs[0];
+                canonicalCreatorId = creatorSnap.id;
+              }
+            }
+          }
           const d = creatorSnap.data() as {
             displayName?: string;
             handle?: string;
@@ -265,9 +299,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             (typeof d?.monetization?.monthlyPrice === "number" && Number.isFinite(d.monetization.monthlyPrice))
               ? d.monetization.monthlyPrice
               : (typeof d?.monthlyPrice === "number" && Number.isFinite(d.monthlyPrice) ? d.monthlyPrice : 0);
-          creatorNameById[creatorId] = { name, handle, monthlyPriceCents: toPriceCents(monthlyPriceRaw) };
+          const normalizedInfo = { name, handle, monthlyPriceCents: toPriceCents(monthlyPriceRaw) };
+          creatorNameById[creatorId] = normalizedInfo;
+          creatorNameById[canonicalCreatorId] = normalizedInfo;
+          canonicalCreatorIdByAlias[creatorId] = canonicalCreatorId;
         } catch {
           creatorNameById[creatorId] = { name: "Unknown Creator", handle: null, monthlyPriceCents: 0 };
+          canonicalCreatorIdByAlias[creatorId] = creatorId;
         }
       })
     );
@@ -343,6 +381,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                   displayName: fanProfilesByFanId[fanId]?.displayName || email.split("@")[0] || null,
                   email: fanProfilesByFanId[fanId]?.email || email,
                   username: fanProfilesByFanId[fanId]?.username || null,
+                  photoURL: fanProfilesByFanId[fanId]?.photoURL || null,
                 };
               }
               return;
@@ -367,10 +406,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
               normalizeUsername(u.handle) ||
               fanProfilesByFanId[fanId]?.username ||
               null;
+            const photoURL =
+              (typeof (u as { photoURL?: unknown }).photoURL === "string" &&
+              (u as { photoURL?: string }).photoURL!.trim())
+                ? (u as { photoURL: string }).photoURL.trim()
+                : (fanProfilesByFanId[fanId]?.photoURL || null);
             fanProfilesByFanId[fanId] = {
               displayName,
               email,
               username,
+              photoURL,
             };
           } catch {
             /* ignore profile enrichment failures */
@@ -400,13 +445,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     for (const fanId of Object.keys(byFan)) {
+      const canonicalFanRows = (byFan[fanId] || []).map((row) => {
+        const normalizedCreatorId = normalizeCreatorId(row.creatorId);
+        const canonicalCreatorId = canonicalCreatorIdByAlias[normalizedCreatorId] || normalizedCreatorId;
+        return { ...row, creatorId: canonicalCreatorId };
+      });
       const rows = byFan[fanId]
-        .map((row) => ({
+        .map((row, idx) => ({
           ...row,
-          creatorId: normalizeCreatorId(row.creatorId),
-          creatorName: creatorNameById[normalizeCreatorId(row.creatorId)]?.name || row.creatorId,
-          creatorHandle: creatorNameById[normalizeCreatorId(row.creatorId)]?.handle || null,
-          subscriptionPriceCents: creatorNameById[normalizeCreatorId(row.creatorId)]?.monthlyPriceCents ?? 0,
+          creatorId: canonicalFanRows[idx]?.creatorId || normalizeCreatorId(row.creatorId),
+          creatorName:
+            creatorNameById[canonicalFanRows[idx]?.creatorId || normalizeCreatorId(row.creatorId)]?.name || row.creatorId,
+          creatorHandle:
+            creatorNameById[canonicalFanRows[idx]?.creatorId || normalizeCreatorId(row.creatorId)]?.handle || null,
+          subscriptionPriceCents:
+            creatorNameById[canonicalFanRows[idx]?.creatorId || normalizeCreatorId(row.creatorId)]?.monthlyPriceCents ?? 0,
         }));
       const dedupedByCreator = new Map<string, MembershipRow>();
       for (const row of rows) {
