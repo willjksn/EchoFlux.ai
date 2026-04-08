@@ -2,6 +2,7 @@ import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { getAdminDb } from "./_firebaseAdmin.js";
 import { verifyAuth } from "./verifyAuth.js";
 import { FAN_DM_THREADS, getThreadId, isFanBlocked } from "./_fanDmHelpers.js";
+import { sendFanNotification } from "./_fanNotifications.js";
 
 /** Creator-only: create fanDmThreads row if missing so Messages UI can load the thread. */
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -45,6 +46,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         createdAt: now,
         updatedAt: now,
       });
+      try {
+        await sendFanNotification({
+          fanId,
+          type: "new_message",
+          title: "New message from creator",
+          body: "A creator started a conversation with you.",
+          data: {
+            threadId,
+            creatorId,
+            fanId,
+          },
+        });
+      } catch (notifyErr) {
+        console.error("fanDmEnsureThread notify error:", notifyErr);
+      }
     }
 
     return res.status(200).json({ threadId, creatorId, fanId });

@@ -1475,6 +1475,9 @@ export const FanStorefrontView: React.FC = () => {
   const joinFanVideoSession = useCallback(
     async (sessionId: string, notifyCreatorId: string) => {
       if (!notifyCreatorId.trim() || !auth.currentUser) return;
+      // Open a blank tab immediately to avoid popup blockers on async fetch/token work.
+      const pendingWin =
+        typeof window !== "undefined" ? window.open("about:blank", "_blank", "noopener,noreferrer") : null;
       try {
         const token = await auth.currentUser.getIdToken(true);
         const res = await fetch("/api/liveVideoChat?action=token", {
@@ -1488,8 +1491,13 @@ export const FanStorefrontView: React.FC = () => {
         const tokenParam = (data as { token?: string }).token;
         if (!roomUrl || !tokenParam) throw new Error("Video room is not ready yet.");
         const joinUrl = `${roomUrl}${roomUrl.includes("?") ? "&" : "?"}t=${encodeURIComponent(tokenParam)}`;
-        window.open(joinUrl, "_blank", "noopener,noreferrer");
+        if (pendingWin && !pendingWin.closed) {
+          pendingWin.location.href = joinUrl;
+        } else {
+          window.open(joinUrl, "_blank", "noopener,noreferrer");
+        }
       } catch (e) {
+        if (pendingWin && !pendingWin.closed) pendingWin.close();
         showToast?.(e instanceof Error ? e.message : "Could not open video session.", "error");
       }
     },

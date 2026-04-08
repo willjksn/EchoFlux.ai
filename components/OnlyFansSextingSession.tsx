@@ -26,7 +26,7 @@ function usernameFromFanDoc(fd: Record<string, unknown>): string | null {
 }
 
 type SessionStatus = 'setup' | 'active' | 'paused' | 'ended';
-type DurationPreset = '15' | '30' | '45' | '60' | 'custom';
+type DurationPreset = '3' | '5' | '10' | '15' | 'custom';
 
 interface Message {
     id: string;
@@ -53,7 +53,6 @@ interface SextingContextMessage {
   content: string;
 }
 
-const ROLEPLAY_TYPES = ['GFE', 'Dominant', 'Teacher', 'Boss', 'Fitness', 'Soft', 'Nurse', 'Celebrity'] as const;
 const TONES = ['Soft', 'Teasing', 'Playful', 'Bold'] as const;
 const SPICINESS_LABELS = ['Mild', 'Mild', 'Mild', 'Medium', 'Medium', 'Medium', 'Spicy', 'Spicy', 'Extra Spicy', 'Extra Spicy'] as const;
 
@@ -348,13 +347,13 @@ export const OnlyFansSextingSession: React.FC = () => {
   // Setup state
   const [useCreatorPersonality, setUseCreatorPersonality] = useState(false);
   const [creatorPersonality, setCreatorPersonality] = useState('');
-  const [roleplayType, setRoleplayType] = useState<string>('GFE');
   const [customChatTypeValue, setCustomChatTypeValue] = useState('');
   const [tone, setTone] = useState<string>('Teasing');
   const [contentSpiciness, setContentSpiciness] = useState(3);
-  const [durationPreset, setDurationPreset] = useState<DurationPreset>('30');
-  const [sessionDurationMinutes, setSessionDurationMinutes] = useState(30);
+  const [durationPreset, setDurationPreset] = useState<DurationPreset>('15');
+  const [sessionDurationMinutes, setSessionDurationMinutes] = useState(15);
   const [customDurationMinutes, setCustomDurationMinutes] = useState(20);
+  const [customDurationInput, setCustomDurationInput] = useState('20');
 
   // Session state
   const [sessionStarted, setSessionStarted] = useState(false);
@@ -418,8 +417,9 @@ export const OnlyFansSextingSession: React.FC = () => {
     Promise.all([
       getDocs(collection(db, 'users', adminUid, 'onlyfans_fan_preferences')).catch(() => null),
       getDocs(collection(db, 'creators', adminUid, 'fans')).catch(() => null),
+      getDocs(collection(db, 'creatorSubscribers', adminUid, 'subscribers')).catch(() => null),
     ])
-      .then(async ([prefsSnap, fansSnap]) => {
+      .then(async ([prefsSnap, fansSnap, subscribersSnap]) => {
         const UID_RE = /^[A-Za-z0-9]{20,36}$/;
         type Row = {
           key: string;
@@ -476,6 +476,18 @@ export const OnlyFansSextingSession: React.FC = () => {
               (typeof data.email === 'string' && data.email.trim() ? data.email.trim() : null) ||
               compound.emailFromId ||
               null,
+          });
+        });
+
+        subscribersSnap?.docs.forEach((d) => {
+          const data = d.data() as Record<string, unknown>;
+          upsert(d.id, {
+            displayName:
+              typeof data.fanName === 'string' && data.fanName.trim() ? data.fanName.trim() : null,
+            email:
+              typeof data.fanEmail === 'string' && data.fanEmail.trim()
+                ? data.fanEmail.trim()
+                : null,
           });
         });
 
@@ -588,7 +600,10 @@ export const OnlyFansSextingSession: React.FC = () => {
 
   const handleStartSession = useCallback(() => {
     if (!selectedUid) return;
-    const mins = durationPreset === 'custom' ? customDurationMinutes : sessionDurationMinutes;
+    const mins =
+      durationPreset === 'custom'
+        ? Math.max(1, Math.min(180, Number(customDurationInput) || customDurationMinutes || 1))
+        : sessionDurationMinutes;
     const totalSeconds = Math.max(1, mins) * 60;
     setTimeRemainingSeconds(totalSeconds);
     setSessionStarted(true);
@@ -598,7 +613,7 @@ export const OnlyFansSextingSession: React.FC = () => {
     lastChatBotRepliedCountRef.current = 0;
     setAutoSuggestions([]);
     showToast?.('Session started!', 'success');
-  }, [selectedUid, durationPreset, customDurationMinutes, sessionDurationMinutes, showToast]);
+  }, [selectedUid, durationPreset, customDurationInput, customDurationMinutes, sessionDurationMinutes, showToast]);
 
   const handleEndSession = useCallback(() => {
     setSessionEndModalOpen(false);
@@ -727,7 +742,7 @@ export const OnlyFansSextingSession: React.FC = () => {
             <div className="chat-session-active-header-left">
               <h2 className="chat-session-active-title">Active Session</h2>
               <p className="chat-session-active-subtitle">
-                {roleplayType === 'GFE' ? 'GFE (Girlfriend Experience)' : roleplayType === 'Custom' && customChatTypeValue.trim() ? customChatTypeValue.trim() : roleplayType} — {tone} — {sessionPaused ? 'paused' : 'active'}
+                {(customChatTypeValue.trim() || 'Custom')} — {tone} — {sessionPaused ? 'paused' : 'active'}
               </p>
                         </div>
             <div className="chat-session-active-header-actions">
@@ -883,7 +898,7 @@ export const OnlyFansSextingSession: React.FC = () => {
             <div className="chat-session-duration-wrap">
               <label className="chat-session-label">Session duration</label>
               <div className="chat-session-duration-row">
-                {(['15', '30', '45', '60'] as const).map((m) => (
+                {(['3', '5', '10', '15'] as const).map((m) => (
                                                 <button
                     key={m}
                     type="button"
@@ -893,7 +908,7 @@ export const OnlyFansSextingSession: React.FC = () => {
                       setSessionDurationMinutes(Number(m));
                     }}
                   >
-                    {m === '60' ? '1 hr' : `${m} min`}
+                    {`${m} min`}
                                                 </button>
                 ))}
                                                 <button
@@ -910,8 +925,13 @@ export const OnlyFansSextingSession: React.FC = () => {
                     type="number"
                     min={1}
                     max={180}
-                    value={customDurationMinutes}
-                    onChange={(e) => setCustomDurationMinutes(Math.max(1, Math.min(180, Number(e.target.value) || 1)))}
+                    value={customDurationInput}
+                    onChange={(e) => setCustomDurationInput(e.target.value)}
+                    onBlur={() => {
+                      const next = Math.max(1, Math.min(180, Number(customDurationInput) || customDurationMinutes || 1));
+                      setCustomDurationMinutes(next);
+                      setCustomDurationInput(String(next));
+                    }}
                     className="chat-session-input chat-session-duration-input"
                   />
                   <span className="chat-session-duration-unit">min</span>
@@ -929,39 +949,18 @@ export const OnlyFansSextingSession: React.FC = () => {
                     )}
                 </div>
 
-        {/* Chat Type */}
+        {/* Chat Type (custom only) */}
         <label className="chat-session-label">Chat Type</label>
-        <div className="chat-session-role-grid">
-          {ROLEPLAY_TYPES.map((r) => (
-                    <button
-              key={r}
-              type="button"
-              className={`chat-session-role-btn ${roleplayType === r ? 'active' : ''}`}
-              onClick={() => setRoleplayType(r)}
-            >
-              {r}
-                            </button>
-                        ))}
-                    <button
-            type="button"
-            className={`chat-session-role-btn chat-session-role-btn-custom ${roleplayType === 'Custom' ? 'active' : ''}`}
-                        onClick={() => setRoleplayType('Custom')}
-                    >
-                        Custom
-                    </button>
+        <div className="chat-session-custom-chat-type">
+          <input
+            type="text"
+            className="chat-session-input"
+            placeholder="Enter custom chat type..."
+            value={customChatTypeValue}
+            onChange={(e) => setCustomChatTypeValue(e.target.value)}
+            aria-label="Custom chat type"
+          />
         </div>
-                    {roleplayType === 'Custom' && (
-          <div className="chat-session-custom-chat-type">
-                        <input
-                            type="text"
-              className="chat-session-input"
-              placeholder="Enter custom chat type..."
-              value={customChatTypeValue}
-              onChange={(e) => setCustomChatTypeValue(e.target.value)}
-              aria-label="Custom chat type"
-            />
-                </div>
-        )}
 
                 {/* Tone */}
         <label className="chat-session-label">Tone</label>

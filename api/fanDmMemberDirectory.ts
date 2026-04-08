@@ -25,11 +25,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const db = getAdminDb();
     if (!db) return res.status(500).json({ error: "Database unavailable" });
 
-    const snap = await db.collection("creators").doc(creatorId).collection("fans").limit(400).get();
+    const [fansSnap, subscribersSnap] = await Promise.all([
+      db.collection("creators").doc(creatorId).collection("fans").limit(400).get(),
+      db
+        .collection("creatorSubscribers")
+        .doc(creatorId)
+        .collection("subscribers")
+        .where("status", "in", ["active", "trialing", "past_due"])
+        .limit(400)
+        .get(),
+    ]);
+
+    const memberIds = new Set<string>();
+    fansSnap.docs.forEach((d) => memberIds.add(d.id));
+    subscribersSnap.docs.forEach((d) => memberIds.add(d.id));
 
     const rows: MemberRow[] = await Promise.all(
-      snap.docs.map(async (d) => {
-        const fanId = d.id;
+      Array.from(memberIds).map(async (fanId) => {
         const label = await resolveFanPartyDisplayLabel(db, creatorId, fanId).catch(() => "Member");
         return { fanId, label };
       })
