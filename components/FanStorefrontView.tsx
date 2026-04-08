@@ -817,6 +817,7 @@ export const FanStorefrontView: React.FC = () => {
   const [tipCustomAmount, setTipCustomAmount] = useState("");
   const [tipLoading, setTipLoading] = useState(false);
   const [isLoggedIn, setIsLoggedIn] = useState(!!auth.currentUser);
+  const [authResolved, setAuthResolved] = useState(!!auth.currentUser);
   /** Keeps member feed/saved `fanId` in sync with auth (avoid stale undefined from render-only auth reads). */
   const [fanAuthUid, setFanAuthUid] = useState<string | undefined>(() => auth.currentUser?.uid);
   const [unlockedProductIds, setUnlockedProductIds] = useState<string[]>([]);
@@ -927,6 +928,7 @@ export const FanStorefrontView: React.FC = () => {
   const [supportMessages, setSupportMessages] = useState<SupportMessage[]>([]);
   const [supportReplyDraft, setSupportReplyDraft] = useState("");
   const [supportSending, setSupportSending] = useState(false);
+  const customDomainHandleCacheRef = useRef<{ host: string; handle: string | null } | null>(null);
 
   const urlParams = typeof window !== "undefined" ? new URLSearchParams(window.location.search) : null;
   const previewMember = urlParams?.get("preview") === "member";
@@ -1048,8 +1050,15 @@ export const FanStorefrontView: React.FC = () => {
       setHandleResolveComplete(true);
       return;
     }
-    if (!isConfiguredCustomStorefrontHost(window.location.hostname)) {
+    const host = window.location.hostname;
+    const isCustomHost = isConfiguredCustomStorefrontHost(host);
+    if (!isCustomHost) {
       setHandle(null);
+      setHandleResolveComplete(true);
+      return;
+    }
+    if (customDomainHandleCacheRef.current?.host === host) {
+      setHandle(customDomainHandleCacheRef.current.handle);
       setHandleResolveComplete(true);
       return;
     }
@@ -1058,18 +1067,23 @@ export const FanStorefrontView: React.FC = () => {
     (async () => {
       try {
         const res = await fetch(
-          `/api/resolveStorefrontDomain?host=${encodeURIComponent(window.location.hostname)}`
+          `/api/resolveStorefrontDomain?host=${encodeURIComponent(host)}`
         );
         const data = await res.json().catch(() => ({}));
         if (cancelled) return;
         if (res.ok && typeof (data as { handle?: string }).handle === "string") {
           const h = (data as { handle: string }).handle.trim().toLowerCase();
+          customDomainHandleCacheRef.current = { host, handle: h || null };
           setHandle(h || null);
         } else {
+          customDomainHandleCacheRef.current = { host, handle: null };
           setHandle(null);
         }
       } catch {
-        if (!cancelled) setHandle(null);
+        if (!cancelled) {
+          customDomainHandleCacheRef.current = { host, handle: null };
+          setHandle(null);
+        }
       } finally {
         if (!cancelled) setHandleResolveComplete(true);
       }
@@ -1478,6 +1492,7 @@ export const FanStorefrontView: React.FC = () => {
 
   useEffect(() => {
     const unsub = auth.onAuthStateChanged((u) => {
+      setAuthResolved(true);
       setIsLoggedIn(!!u);
       setFanAuthUid(u?.uid);
     });
@@ -3179,6 +3194,7 @@ export const FanStorefrontView: React.FC = () => {
   const showLanding = previewMember
     ? false
     : forceCreatorPreviewLanding || !isLoggedIn || (!requiresPaidToAccess && !hasMemberAreaAccess);
+  const holdForAuthResolution = !authResolved && !previewMember && !forceCreatorPreviewLanding;
 
   /**
    * Member hub must not follow EchoFlux `html.dark` (UIContext). That class turns on `.dark .stormij-theme`
@@ -3664,6 +3680,23 @@ export const FanStorefrontView: React.FC = () => {
     typeof window !== "undefined" && isConfiguredCustomStorefrontHost(window.location.hostname)
       ? "/"
       : `/${creator.handle}/${FAN_STOREFRONT_PUBLIC_LANDING_SLUG}`;
+
+  if (holdForAuthResolution) {
+    return (
+      <>
+        <div className="stormij-theme stormij-theme--light storefront-landing-wrap min-h-screen flex items-center justify-center">
+          <div className="text-center" style={{ color: "var(--text-muted)" }}>
+            <div
+              className="animate-spin rounded-full h-10 w-10 border-2 border-t-transparent mx-auto mb-3"
+              style={{ borderColor: primary, borderTopColor: "transparent" }}
+            />
+            <p>Loading...</p>
+          </div>
+        </div>
+        {toast && <Toast message={toast.message} type={toast.type} />}
+      </>
+    );
+  }
 
   if (showLanding) {
     return (

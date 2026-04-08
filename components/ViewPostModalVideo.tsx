@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
 
 /**
- * View-post modal video: autoplay + loop (muted by default) + scrubber + play/pause + mute.
+ * View-post modal video: click-to-play (muted by default) + scrubber + play/pause + mute.
  * Styles: `feed-comments-modal-video-*` in `styles/stormij-fanhub.css`.
  */
 export function ViewPostModalVideo({
@@ -17,7 +17,7 @@ export function ViewPostModalVideo({
   const videoRef = useRef<HTMLVideoElement>(null);
   const trackRef = useRef<HTMLDivElement>(null);
   const [muted, setMuted] = useState(true);
-  const [playing, setPlaying] = useState(true);
+  const [playing, setPlaying] = useState(false);
   const [duration, setDuration] = useState(0);
   const [current, setCurrent] = useState(0);
   const [dragging, setDragging] = useState(false);
@@ -84,8 +84,10 @@ export function ViewPostModalVideo({
   useEffect(() => {
     const v = videoRef.current;
     if (!v) return;
-    setPlaying(true);
-    void v.play().then(() => setPlaying(true)).catch(() => setPlaying(false));
+    v.pause();
+    v.currentTime = 0;
+    setCurrent(0);
+    setPlaying(false);
   }, [videoKey, cleanSrc]);
 
   return (
@@ -95,11 +97,9 @@ export function ViewPostModalVideo({
         key={videoKey}
         src={cleanSrc}
         className="feed-comments-modal-media feed-comments-modal-media-video feed-comments-modal-media-video--loop"
-        autoPlay
-        loop
         muted={muted}
         playsInline
-        preload="auto"
+        preload="metadata"
         onLoadedMetadata={onMeta}
         onDurationChange={onMeta}
         onPlay={() => setPlaying(true)}

@@ -1681,7 +1681,7 @@ export const FanMemberFeed: React.FC<FanMemberFeedProps> = ({
                             poster={firstUrl}
                             muted
                             playsInline
-                            preload="metadata"
+                            preload="none"
                           />
                           <span className="feed-grid-video-overlay" aria-hidden>
                             <PlayIcon />
