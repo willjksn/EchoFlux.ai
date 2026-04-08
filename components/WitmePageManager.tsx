@@ -83,7 +83,7 @@ const DEFAULT_CONFIG: WitmeLandingConfig = {
     { title: 'Claim creator offers', description: 'Access creator-specific offers, perks, and premium experiences.', icon: '✨' },
   ],
   trustItems: ['Creator pages on witme', 'Secure checkout', 'Creator-controlled access', 'Built for fan safety'],
-  liveMoments: ['stormijxo posted a new private drop', 'New posts went live on witme', 'Fans unlocked a new drop'],
+  liveMoments: ['A creator posted a new private drop', 'New posts went live on witme', 'Fans unlocked a new drop'],
   legalLinks: [
     { label: 'Terms', url: '/fan-terms-of-use.html' },
     { label: 'Privacy', url: '/fan-privacy-policy.html' },
@@ -177,7 +177,7 @@ const showcaseFeaturedPreviewStyle = (
 
 const pct = (value: number): string => `${(Number.isFinite(value) ? value : 0).toFixed(2)}%`;
 
-/** Fan Hub–style analytics chrome (accent + cards) for Witme admin traffic. */
+/** EchoFlux app chrome (primary blue, not creator --fan-primary) for Witme admin traffic. */
 const WitmeAnalyticsActivityIcon = () => (
   <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
     <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
@@ -238,13 +238,7 @@ function WitmeAnalyticsStatCard({
     <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md p-5 border border-gray-100 dark:border-gray-700">
       <div className="flex items-center justify-between mb-3">
         <span className="text-sm font-medium text-gray-500 dark:text-gray-400">{title}</span>
-        <div
-          className="p-2 rounded-lg"
-          style={{
-            background: "color-mix(in srgb, var(--fan-primary, #6366f1) 16%, transparent)",
-            color: "var(--fan-primary, #6366f1)",
-          }}
-        >
+        <div className="p-2 rounded-lg bg-primary-100 text-primary-600 dark:bg-primary-900/40 dark:text-primary-400">
           {icon}
         </div>
       </div>
@@ -255,9 +249,9 @@ function WitmeAnalyticsStatCard({
 
 function WitmeAnalyticsSection({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <section className="rounded-2xl border p-5 sm:p-6 shadow-sm bg-gradient-to-b from-indigo-50/90 via-white to-white border-indigo-200/55 dark:from-indigo-950/30 dark:via-gray-900 dark:to-gray-950 dark:border-indigo-900/40">
+    <section className="rounded-2xl border p-5 sm:p-6 shadow-sm bg-gradient-to-b from-primary-50/90 via-white to-white border-primary-200/55 dark:from-primary-900/25 dark:via-gray-900 dark:to-gray-950 dark:border-primary-900/35">
       <div className="flex items-center gap-2 mb-5">
-        <span className="w-1 h-5 rounded-full shrink-0" style={{ background: "var(--fan-primary, #6366f1)" }} aria-hidden />
+        <span className="w-1 h-5 rounded-full shrink-0 bg-primary-600 dark:bg-primary-500" aria-hidden />
         <h2 className="text-xs sm:text-sm font-semibold tracking-[0.12em] uppercase text-gray-900 dark:text-gray-100">
           {title}
         </h2>
@@ -870,7 +864,7 @@ export const WitmePageManager: React.FC = () => {
                               return { ...prev, showcaseCreators: next };
                             })
                           }
-                          placeholder="Handle (e.g. @stormijxo)"
+                          placeholder="Handle (e.g. @creatorhandle)"
                           className="rounded-md border border-gray-300 px-2 py-2 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-white"
                         />
                         <input
@@ -882,7 +876,7 @@ export const WitmePageManager: React.FC = () => {
                               return { ...prev, showcaseCreators: next };
                             })
                           }
-                          placeholder="URL slug (e.g. stormijxo) — optional; derived from handle if empty"
+                          placeholder="URL slug (e.g. creatorhandle) — optional; derived from handle if empty"
                           className="rounded-md border border-gray-300 px-2 py-2 text-sm md:col-span-2 dark:border-gray-700 dark:bg-gray-800 dark:text-white"
                         />
                         <div className="flex flex-wrap items-center gap-2 md:col-span-2">
@@ -1292,10 +1286,7 @@ export const WitmePageManager: React.FC = () => {
           {analyticsLoading ? (
             <div className="flex items-center justify-center py-16 rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900/60 shadow-sm">
               <div className="text-center">
-                <div
-                  className="animate-spin rounded-full h-10 w-10 border-2 border-transparent mx-auto mb-4"
-                  style={{ borderBottomColor: 'var(--fan-primary, #6366f1)' }}
-                />
+                <div className="animate-spin rounded-full h-10 w-10 border-2 border-transparent border-b-primary-600 mx-auto mb-4" />
                 <p className="text-gray-500 dark:text-gray-400 text-sm">Loading analytics...</p>
               </div>
             </div>
@@ -1303,7 +1294,7 @@ export const WitmePageManager: React.FC = () => {
             <>
               <div>
                 <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-                  <span className="text-indigo-600 dark:text-indigo-400" aria-hidden>
+                  <span className="text-primary-600 dark:text-primary-400" aria-hidden>
                     <WitmeAnalyticsActivityIcon />
                   </span>
                   Traffic overview
@@ -1321,7 +1312,7 @@ export const WitmePageManager: React.FC = () => {
 
               <div>
                 <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-                  <span className="text-indigo-600 dark:text-indigo-400" aria-hidden>
+                  <span className="text-primary-600 dark:text-primary-400" aria-hidden>
                     <WitmeAnalyticsHomeIcon />
                   </span>
                   Views by surface
@@ -1526,11 +1517,8 @@ export const WitmePageManager: React.FC = () => {
                           </span>
                           <div className="h-2.5 rounded-full bg-gray-200/90 dark:bg-gray-700/90 overflow-hidden min-w-0">
                             <div
-                              className="h-full rounded-full transition-[width] duration-300"
-                              style={{
-                                width: `${Math.max(4, (row.pageViews / max) * 100)}%`,
-                                background: 'var(--fan-primary, #6366f1)',
-                              }}
+                              className="h-full rounded-full bg-primary-500 transition-[width] duration-300 dark:bg-primary-400"
+                              style={{ width: `${Math.max(4, (row.pageViews / max) * 100)}%` }}
                             />
                           </div>
                           <span className="text-right font-semibold tabular-nums text-gray-800 dark:text-gray-100 shrink-0">
