@@ -2479,6 +2479,122 @@
   cursor: not-allowed;
 }
 
+/* Member purchases — compact row list (minimize) */
+.fan-member-purchases-compact {
+  display: flex;
+  flex-direction: column;
+  border-radius: 14px;
+  border: 1px solid color-mix(in srgb, var(--fan-primary, #6366f1) 22%, var(--fan-border, #e5e7eb));
+  overflow: hidden;
+  background: color-mix(in srgb, var(--fan-primary, #6366f1) 5%, var(--fan-bg, #ffffff));
+  box-shadow: 0 4px 20px color-mix(in srgb, var(--fan-primary, #6366f1) 10%, transparent);
+}
+
+.dark .fan-member-purchases-compact,
+html.dark .fan-member-purchases-compact {
+  background: color-mix(in srgb, var(--fan-primary, #6366f1) 10%, var(--fan-bg, #0f172a));
+}
+
+.fan-member-purchase-compact {
+  border-bottom: 1px solid color-mix(in srgb, var(--fan-text, #1f2937) 8%, transparent);
+}
+
+.fan-member-purchase-compact:last-child {
+  border-bottom: none;
+}
+
+.fan-member-purchase-compact[open] {
+  background: color-mix(in srgb, var(--fan-primary, #6366f1) 4%, transparent);
+}
+
+.fan-member-purchase-compact-summary {
+  list-style: none;
+  cursor: pointer;
+  display: grid;
+  grid-template-columns: minmax(64px, 0.75fr) minmax(0, 1.5fr) auto minmax(52px, auto);
+  gap: 0.35rem 0.65rem;
+  align-items: center;
+  padding: 0.6rem 0.85rem;
+  font-size: 0.8125rem;
+  color: var(--fan-text, #1f2937);
+}
+
+.fan-member-purchase-compact-summary::-webkit-details-marker {
+  display: none;
+}
+
+.fan-member-purchase-compact-summary::marker {
+  content: "";
+}
+
+.fan-member-purchase-compact-type {
+  font-size: 0.62rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: color-mix(in srgb, var(--fan-text, #1f2937) 52%, transparent);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.fan-member-purchase-compact-title {
+  font-weight: 600;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fan-member-purchase-compact-status {
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: color-mix(in srgb, var(--fan-primary, #6366f1) 75%, var(--fan-text, #1f2937));
+  text-align: right;
+  white-space: nowrap;
+}
+
+.fan-member-purchase-compact-price {
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  text-align: right;
+  white-space: nowrap;
+  font-size: 0.78rem;
+}
+
+.fan-member-purchase-compact-price--muted {
+  font-weight: 500;
+  opacity: 0.4;
+}
+
+.fan-member-purchase-compact-body {
+  padding: 0 0.85rem 0.85rem;
+  border-top: 1px solid color-mix(in srgb, var(--fan-text, #1f2937) 7%, transparent);
+}
+
+@media (max-width: 520px) {
+  .fan-member-purchase-compact-summary {
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: auto auto;
+  }
+
+  .fan-member-purchase-compact-type {
+    grid-column: 1 / -1;
+  }
+
+  .fan-member-purchase-compact-title {
+    grid-column: 1 / -1;
+  }
+
+  .fan-member-purchase-compact-status {
+    text-align: left;
+  }
+
+  .fan-member-purchase-compact-price {
+    text-align: right;
+  }
+}
+
 /* ============================================
    FAN MEMBER MESSAGES STYLES (Light Stormij Style)
    ============================================ */

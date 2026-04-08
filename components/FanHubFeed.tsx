@@ -24,6 +24,7 @@ import { db } from "../firebaseConfig";
 import type { LockedPostContent } from "../src/lib/lockedPostMedia";
 import { getAvatarCropStyle } from "../src/lib/avatarCrop";
 import { inferIsVideoFromUrl, normalizePostMediaTypes } from "../src/lib/mediaUrlInfer";
+import { getFeedGridCoverMedia } from "../src/lib/feedGridCover";
 import { ViewPostModalVideo } from "./ViewPostModalVideo";
 import { feedCommentAuthorLabel, feedCommentAuthorInitial } from "../src/lib/feedCommentLabel";
 import { renderTextWithCustomEmoji, type SjHeartEmojiAccessContext } from "../src/lib/customEmoji";
@@ -1954,9 +1955,7 @@ export const FanHubFeed: React.FC<{
           )}
           <div className="feed-grid">
             {!loading && posts.map((post) => {
-              const firstUrl = post.mediaUrls?.[0];
-              const isVideo =
-                post.mediaTypes?.[0] === "video" || (firstUrl ? inferIsVideoFromUrl(firstUrl) : false);
+              const { url: coverUrl, isVideo: coverIsVideo } = getFeedGridCoverMedia(post);
               return (
                 <button
                   key={post.id}
@@ -1969,22 +1968,47 @@ export const FanHubFeed: React.FC<{
                   }}
                   aria-label="Open post"
                 >
-                  {firstUrl ? (
-                    isVideo ? (
+                  {coverUrl ? (
+                    coverIsVideo ? (
                       <>
                         <video
-                          src={firstUrl.includes("#t=") ? firstUrl : `${firstUrl}#t=0.1`}
-                          poster={firstUrl}
+                          src={coverUrl.split("#")[0]}
                           muted
                           playsInline
                           preload="metadata"
+                          onLoadedMetadata={(e) => {
+                            try {
+                              const v = e.currentTarget;
+                              if (Number.isFinite(v.duration) && v.duration > 0) {
+                                v.currentTime = Math.min(0.08, v.duration * 0.02);
+                              } else {
+                                v.currentTime = 0.05;
+                              }
+                            } catch {
+                              /* seek may fail on some streams */
+                            }
+                          }}
+                          onLoadedData={(e) => {
+                            try {
+                              const v = e.currentTarget;
+                              if (v.readyState >= 2 && v.currentTime === 0) {
+                                if (Number.isFinite(v.duration) && v.duration > 0) {
+                                  v.currentTime = Math.min(0.08, v.duration * 0.02);
+                                } else {
+                                  v.currentTime = 0.05;
+                                }
+                              }
+                            } catch {
+                              /* noop */
+                            }
+                          }}
                         />
                         <span className="feed-grid-video-overlay" aria-hidden>
                           <PlayIcon />
                         </span>
                       </>
                     ) : (
-                      <img src={firstUrl} alt="" loading="lazy" />
+                      <img src={coverUrl} alt="" loading="lazy" />
                     )
                   ) : (
                     <div className="feed-grid-item-text">{post.body?.slice(0, 100)}</div>
