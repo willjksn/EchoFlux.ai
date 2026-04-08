@@ -1045,6 +1045,8 @@ export const FanStorefrontView: React.FC = () => {
   const [entitlementBootstrapResolved, setEntitlementBootstrapResolved] = useState(false);
   /** Bumps when entitlement effect re-runs so stale async completions don't leave loading stuck. */
   const entitlementFetchGen = useRef(0);
+  /** Paid-creator fan auth: pick Home vs Purchases after `getFanEntitlement` (expired / free tier → store). */
+  const fanAuthPendingHubNavRef = useRef(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"feed" | "treats" | "messages" | "tip" | "saved" | "about" | "profile" | "purchases">("feed");
@@ -3630,10 +3632,9 @@ export const FanStorefrontView: React.FC = () => {
   const forceCreatorPreviewLanding = forcePublicLanding && isViewingOwnStorefront;
   const hasMemberAreaAccess = hasAccessByCurrentMembership || purchaseOnlyAccess;
   const canViewFeed = fanPageAdminBypass || !creatorRequiresPaidMembership || hasPaidMembership;
-  const requiresPaidToAccess = creator?.monetization?.freeAccessEnabled !== true;
   const showLanding = previewMember
     ? false
-    : forceCreatorPreviewLanding || !isLoggedIn || (!requiresPaidToAccess && !hasMemberAreaAccess);
+    : forceCreatorPreviewLanding || !isLoggedIn || !hasMemberAreaAccess;
   const holdForAuthResolution = !authResolved && !previewMember && !forceCreatorPreviewLanding;
   const holdForEntitlementBootstrap =
     !previewMember &&
@@ -3687,6 +3688,72 @@ export const FanStorefrontView: React.FC = () => {
       window.clearTimeout(t);
     };
   }, [showLanding, isDarkMode]);
+
+  useEffect(() => {
+    if (!fanAuthPendingHubNavRef.current) return;
+    if (previewMember || isViewingOwnStorefront) {
+      fanAuthPendingHubNavRef.current = false;
+      return;
+    }
+    if (showLanding) {
+      fanAuthPendingHubNavRef.current = false;
+      return;
+    }
+    if (!entitlementBootstrapResolved || !creator?.handle?.trim()) return;
+
+    fanAuthPendingHubNavRef.current = false;
+    const h = creator.handle.trim();
+    const stripSearchKeys = ["landing", "login", "signup"] as const;
+
+    if (hasPaidMembership || !creatorRequiresPaidMembership) {
+      setActiveTab("feed");
+      applyFanStorefrontMemberUrl("feed", {
+        showLanding: false,
+        creatorHandle: h,
+        stripSearchKeys: [...stripSearchKeys],
+      });
+      return;
+    }
+
+    if (purchaseOnlyAccess || paidPageUnsubscribed) {
+      setActiveTab("purchases");
+      applyFanStorefrontMemberUrl("purchases", {
+        showLanding: false,
+        creatorHandle: h,
+        stripSearchKeys: [...stripSearchKeys],
+      });
+      return;
+    }
+
+    if (!canViewFeed) {
+      setActiveTab("purchases");
+      applyFanStorefrontMemberUrl("purchases", {
+        showLanding: false,
+        creatorHandle: h,
+        stripSearchKeys: [...stripSearchKeys],
+      });
+      return;
+    }
+
+    setActiveTab("feed");
+    applyFanStorefrontMemberUrl("feed", {
+      showLanding: false,
+      creatorHandle: h,
+      stripSearchKeys: [...stripSearchKeys],
+    });
+  }, [
+    entitlementBootstrapResolved,
+    showLanding,
+    previewMember,
+    isViewingOwnStorefront,
+    fanPageAdminBypass,
+    hasPaidMembership,
+    creatorRequiresPaidMembership,
+    purchaseOnlyAccess,
+    paidPageUnsubscribed,
+    canViewFeed,
+    creator?.handle,
+  ]);
 
   useEffect(() => {
     if (showLanding || previewMember || isViewingOwnStorefront || fanPageAdminBypass) return;
@@ -4201,12 +4268,9 @@ export const FanStorefrontView: React.FC = () => {
             onSuccess={() => {
               setIsLoggedIn(true);
               setFanAuthOpen(false);
-              // Free pages: auth can immediately join and enter member hub.
               if (creator.monetization?.freeAccessEnabled === true) {
                 const nextTab: FanStorefrontMemberTab = "feed";
                 setActiveTab(nextTab);
-                setSubscribed(true);
-                setMembershipType("free");
                 if (typeof window !== "undefined" && creator.handle?.trim()) {
                   applyFanStorefrontMemberUrl(nextTab, {
                     showLanding: false,
@@ -4214,9 +4278,23 @@ export const FanStorefrontView: React.FC = () => {
                     stripSearchKeys: ["landing", "login", "signup"],
                   });
                 }
+                setSubscribed(true);
+                setMembershipType("free");
                 return;
               }
-              // Paid pages: let entitlement hydrate first; auto-checkout effect decides safely.
+              // Paid creators: resolve Home vs Purchases after getFanEntitlement (expired / free tier → store + tip only).
+              fanAuthPendingHubNavRef.current = true;
+              if (typeof window !== "undefined" && creator.handle?.trim()) {
+                const parsed = parseHandleFromPath();
+                const fromPath = parsed.memberNavSlug ? memberPathSlugToTab(parsed.memberNavSlug) : null;
+                const nextTab: FanStorefrontMemberTab = fromPath ?? "feed";
+                setActiveTab(nextTab);
+                applyFanStorefrontMemberUrl(nextTab, {
+                  showLanding: false,
+                  creatorHandle: creator.handle,
+                  stripSearchKeys: ["landing", "login", "signup"],
+                });
+              }
             }}
             initialView={fanAuthView}
             creatorId={creator.creatorId}

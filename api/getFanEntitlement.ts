@@ -49,7 +49,8 @@ function orderAmountCentsFromRow(row: Record<string, unknown>): number {
 
 /**
  * Check if the current user (fan) has an active subscription/entitlement to the given creator.
- * Used by fan storefront: if subscribed, show Feed + Store + Messages; otherwise show landing.
+ * Used by fan storefront: active paid/free membership → full hub; expired paid with product/post unlocks →
+ * limited hub (purchases + tip + profile); otherwise landing until they subscribe or join free.
  *
  * Firestore: creatorSubscribers/{creatorId}/subscribers/{fanId} with { status: 'active', ... }
  * or equivalent. Until that is populated, returns { subscribed: false } when no doc exists.
@@ -169,12 +170,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         subscribed = true;
         membershipType = 'free';
       }
-      const hasSpend =
-        (typeof fanData?.totalSpentCents === "number" && fanData.totalSpentCents > 0) ||
-        (typeof fanData?.totalTipsCents === "number" && fanData.totalTipsCents > 0) ||
-        (typeof fanData?.purchaseCount === "number" && fanData.purchaseCount > 0) ||
-        (typeof fanData?.tipCount === "number" && fanData.tipCount > 0);
-      if (hasSpend) limitedMemberAccess = true;
+      // Purchase-only hub (expired paid, etc.): requires a la carte/post unlocks — tips alone do not grant it.
+      const hasProductPurchaseEvidence =
+        typeof fanData?.purchaseCount === "number" && fanData.purchaseCount > 0;
+      if (hasProductPurchaseEvidence) limitedMemberAccess = true;
     }
 
     // Also check creatorSubscribers collection. Paid membership should override any stale free fan row.
