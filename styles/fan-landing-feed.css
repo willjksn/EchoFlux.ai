@@ -2604,28 +2604,28 @@ html.dark .fan-member-purchases-compact {
    FAN MEMBER MESSAGES STYLES (Light Stormij Style)
    ============================================ */
 
-/* Timed premium chat session — distinct but restrained (primary tint, no loud accent rings) */
+/* Timed premium chat session — sky/slate ring (not creator primary; avoids orange/coral outlines) */
 .fan-member-premium-session-shell {
   border-radius: 14px;
   padding: 0.9rem 0.95rem 1rem;
   margin-bottom: 0.35rem;
   background: linear-gradient(
     155deg,
-    color-mix(in srgb, var(--fan-primary, #6366f1) 14%, #0f172a) 0%,
-    color-mix(in srgb, var(--fan-primary, #6366f1) 8%, #111827) 100%
+    color-mix(in srgb, #38bdf8 12%, #0f172a) 0%,
+    color-mix(in srgb, #0ea5e9 8%, #111827) 100%
   );
-  border: 1px solid color-mix(in srgb, var(--fan-primary, #6366f1) 35%, #334155);
+  border: 1px solid color-mix(in srgb, #38bdf8 38%, #334155);
   box-shadow: 0 12px 36px color-mix(in srgb, #000000 35%, transparent);
 }
 
 .stormij-theme--light .fan-member-premium-session-shell {
   background: linear-gradient(
     180deg,
-    color-mix(in srgb, var(--fan-primary, #6366f1) 5%, #ffffff) 0%,
+    color-mix(in srgb, #e0f2fe 55%, #ffffff) 0%,
     #ffffff 100%
   );
-  border: 1px solid color-mix(in srgb, var(--fan-primary, #6366f1) 22%, #e2e8f0);
-  box-shadow: 0 8px 28px color-mix(in srgb, var(--fan-primary, #6366f1) 10%, transparent);
+  border: 1px solid color-mix(in srgb, #0ea5e9 28%, #cbd5e1);
+  box-shadow: 0 8px 28px color-mix(in srgb, #0ea5e9 12%, transparent);
 }
 
 .fan-member-premium-session-shell__hero {
@@ -2633,12 +2633,12 @@ html.dark .fan-member-purchases-compact {
   padding: 0.7rem 0.85rem 0.85rem;
   border-radius: 10px;
   background: color-mix(in srgb, #ffffff 6%, transparent);
-  border: 1px solid color-mix(in srgb, var(--fan-primary, #6366f1) 28%, #475569);
+  border: 1px solid color-mix(in srgb, #38bdf8 30%, #475569);
 }
 
 .stormij-theme--light .fan-member-premium-session-shell__hero {
-  background: color-mix(in srgb, var(--fan-primary, #6366f1) 5%, #f8fafc);
-  border-color: color-mix(in srgb, var(--fan-primary, #6366f1) 18%, #e2e8f0);
+  background: color-mix(in srgb, #e0f2fe 40%, #f8fafc);
+  border-color: color-mix(in srgb, #0ea5e9 22%, #e2e8f0);
 }
 
 .fan-member-premium-session-shell__badge {
@@ -2647,12 +2647,12 @@ html.dark .fan-member-purchases-compact {
   font-weight: 700;
   letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: color-mix(in srgb, var(--fan-primary, #6366f1) 85%, #e2e8f0);
+  color: color-mix(in srgb, #7dd3fc 90%, #e2e8f0);
   margin-bottom: 0.3rem;
 }
 
 .stormij-theme--light .fan-member-premium-session-shell__badge {
-  color: color-mix(in srgb, var(--fan-primary, #6366f1) 70%, #334155);
+  color: color-mix(in srgb, #0284c7 75%, #334155);
 }
 
 .fan-member-premium-session-shell__title {
@@ -2665,7 +2665,7 @@ html.dark .fan-member-purchases-compact {
 }
 
 .stormij-theme--light .fan-member-premium-session-shell__title {
-  color: color-mix(in srgb, var(--fan-primary, #6366f1) 55%, #0f172a);
+  color: color-mix(in srgb, #0369a1 50%, #0f172a);
 }
 
 .fan-member-premium-session-shell__meta {
@@ -2681,17 +2681,29 @@ html.dark .fan-member-purchases-compact {
 
 .fan-member-messages-list.fh-dm-session-room {
   border-width: 1px;
-  border-color: color-mix(in srgb, var(--fan-primary, #6366f1) 32%, #475569);
+  border-color: color-mix(in srgb, #38bdf8 34%, #475569);
   box-shadow:
     inset 0 1px 0 color-mix(in srgb, #ffffff 8%, transparent),
     0 6px 22px color-mix(in srgb, #000000 14%, transparent);
 }
 
 .stormij-theme--light .fan-member-messages-list.fh-dm-session-room {
-  border-color: color-mix(in srgb, var(--fan-primary, #6366f1) 24%, #cbd5e1);
+  border-color: color-mix(in srgb, #0ea5e9 26%, #cbd5e1);
   box-shadow:
     inset 0 1px 0 color-mix(in srgb, #ffffff 70%, transparent),
-    0 4px 18px color-mix(in srgb, var(--fan-primary, #6366f1) 8%, transparent);
+    0 4px 18px color-mix(in srgb, #0ea5e9 10%, transparent);
+}
+
+/* Deter casual save-image / drag-download on feed media (not DRM; blocks context menu + drag) */
+.fan-member-content--feed .feed-card-media,
+.fan-member-content--feed-column .feed-card-media,
+.fan-hub-feed-chrome .feed-card-media,
+.feed-comments-modal-media:not(.feed-comments-modal-compose-avatar-img),
+.feed-grid-item img,
+.feed-grid-item video {
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-user-drag: none;
 }
 
 .fan-member-messages {

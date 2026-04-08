@@ -33,6 +33,16 @@ import {
   restoreFanFeedCarouselScrollSnaps,
 } from "../src/lib/fanFeedCarouselScrollRestore";
 
+const feedImageDownloadGuardProps = {
+  draggable: false as const,
+  onContextMenu: (e: React.MouseEvent<HTMLImageElement>) => e.preventDefault(),
+};
+
+const feedVideoDownloadGuardProps = {
+  controlsList: "nodownload noplaybackrate noremoteplayback" as const,
+  onContextMenu: (e: React.MouseEvent<HTMLVideoElement>) => e.preventDefault(),
+};
+
 const SAVED_BY_CREATOR_KEY = "savedPostIdsByCreator";
 const INLINE_COMMENT_PREVIEW_MAX = 120;
 const EMPTY_FAN_POST_UNLOCK_SET = new Set<string>();
@@ -670,6 +680,7 @@ function FanMemberPostMedia({
             className="feed-card-media feed-card-media-video"
             playsInline
             preload="metadata"
+            {...feedVideoDownloadGuardProps}
           />
         )
       ) : (
@@ -679,8 +690,7 @@ function FanMemberPostMedia({
           alt=""
           className={splitModal ? "feed-comments-modal-media" : "feed-card-media"}
           loading={idx === 0 ? "lazy" : "eager"}
-          draggable={lockedCurrent ? false : undefined}
-          onDragStart={lockedCurrent ? (e) => e.preventDefault() : undefined}
+          {...feedImageDownloadGuardProps}
         />
       )}
       {lockedCurrent && (
@@ -1734,7 +1744,7 @@ export const FanMemberFeed: React.FC<FanMemberFeedProps> = ({
                           </span>
                         </>
                       ) : (
-                        <img src={coverUrl} alt="" loading="lazy" />
+                        <img src={coverUrl} alt="" loading="lazy" {...feedImageDownloadGuardProps} />
                       )
                     ) : (
                       <div className="feed-grid-item-text">{post.content?.slice(0, 100) || "Post"}</div>

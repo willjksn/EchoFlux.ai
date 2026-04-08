@@ -33,6 +33,16 @@ import {
   restoreFanFeedCarouselScrollSnaps,
 } from "../src/lib/fanFeedCarouselScrollRestore";
 
+const feedImageDownloadGuardProps = {
+  draggable: false as const,
+  onContextMenu: (e: React.MouseEvent<HTMLImageElement>) => e.preventDefault(),
+};
+
+const feedVideoDownloadGuardProps = {
+  controlsList: "nodownload noplaybackrate noremoteplayback" as const,
+  onContextMenu: (e: React.MouseEvent<HTMLVideoElement>) => e.preventDefault(),
+};
+
 /** Themed multi-media count pill — tints border/background/shadow from creator storefront `theme.primary` */
 function normalizeThemePrimary(hex: string | undefined): string | undefined {
   if (!hex || typeof hex !== "string") return undefined;
@@ -962,6 +972,7 @@ function FeedCard({
               playsInline
               className="feed-card-media feed-card-media-video"
               preload="metadata"
+              {...feedVideoDownloadGuardProps}
               onPlay={() => setFeedVideoPlaying(true)}
               onPause={() => setFeedVideoPlaying(false)}
               onVolumeChange={(e) => setFeedVideoMuted(e.currentTarget.muted)}
@@ -998,6 +1009,7 @@ function FeedCard({
               alt=""
               className="feed-card-media"
               loading={slideIdx === 0 ? "lazy" : "eager"}
+              {...feedImageDownloadGuardProps}
             />
             {showCaptionOnMedia && (
               <FeedCardCaptionOverlay caption={post.body} style={captionStyle} size={post.overlayTextSize} sjHeartEmojiCtx={sjHeartEmojiCtx} />
@@ -1240,6 +1252,7 @@ function FeedCard({
                         alt=""
                         className="feed-comments-modal-media"
                         loading="eager"
+                        {...feedImageDownloadGuardProps}
                       />
                     )}
                     {showMediaCarousel ? (
@@ -1976,6 +1989,7 @@ export const FanHubFeed: React.FC<{
                           muted
                           playsInline
                           preload="metadata"
+                          {...feedVideoDownloadGuardProps}
                           onLoadedMetadata={(e) => {
                             try {
                               const v = e.currentTarget;
@@ -2008,7 +2022,7 @@ export const FanHubFeed: React.FC<{
                         </span>
                       </>
                     ) : (
-                      <img src={coverUrl} alt="" loading="lazy" />
+                      <img src={coverUrl} alt="" loading="lazy" {...feedImageDownloadGuardProps} />
                     )
                   ) : (
                     <div className="feed-grid-item-text">{post.body?.slice(0, 100)}</div>

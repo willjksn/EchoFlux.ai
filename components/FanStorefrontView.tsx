@@ -1,6 +1,18 @@
 import React, { useState, useEffect, useCallback, useRef, Fragment, useMemo } from "react";
 import { auth } from "../firebaseConfig";
-import { collection, doc, getDoc, getDocs, limit, onSnapshot, orderBy, query, setDoc, where } from "firebase/firestore";
+import {
+  collection,
+  deleteField,
+  doc,
+  getDoc,
+  getDocs,
+  limit,
+  onSnapshot,
+  orderBy,
+  query,
+  setDoc,
+  where,
+} from "firebase/firestore";
 import { storage } from "../firebaseConfig";
 import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
 import {
@@ -183,19 +195,6 @@ async function loadTreatProductsViaFirestore(
   return out;
 }
 
-/** Default bio set at fan signup; hide platform-branded defaults on creator hubs. */
-function isEchoFluxDefaultFanBio(bio: string): boolean {
-  const s = bio.trim().toLowerCase();
-  return (
-    s === "welcome to echoflux.ai!" ||
-    s === "welcome to echoflux.ai" ||
-    s === "welcome to engagesuite.ai!" ||
-    s === "welcome to engagesuite.ai" ||
-    s === "welcome to engagesuite!" ||
-    s === "welcome to engagesuite"
-  );
-}
-
 /** Parse `users/{uid}` for fan member profile tab (Firestore + Auth fallbacks). */
 function parseFanMemberProfileFromUserDoc(
   d: Record<string, unknown>,
@@ -204,7 +203,6 @@ function parseFanMemberProfileFromUserDoc(
 ): {
   firstName: string;
   lastName: string;
-  bio: string;
   photoURL: string;
   username: string;
 } {
@@ -218,11 +216,6 @@ function parseFanMemberProfileFromUserDoc(
   const lastName =
     (typeof d.lastName === "string" && d.lastName.trim()) ||
     (displayNameRaw.includes(" ") ? displayNameRaw.split(/\s+/).slice(1).join(" ") : "");
-  const bioRaw =
-    (typeof d.bio === "string" && d.bio.trim()) ||
-    (typeof d.memberBio === "string" && d.memberBio.trim()) ||
-    "";
-  const bio = isEchoFluxDefaultFanBio(bioRaw) ? "" : bioRaw;
   const photoURL =
     (typeof d.photoURL === "string" && d.photoURL.trim()) ||
     (typeof d.avatar === "string" && d.avatar.trim()) ||
@@ -232,7 +225,7 @@ function parseFanMemberProfileFromUserDoc(
     (typeof d.username === "string" && d.username.trim())
       ? normalizeMemberUsername(d.username)
       : "";
-  return { firstName, lastName, bio, photoURL, username };
+  return { firstName, lastName, photoURL, username };
 }
 
 export type StorefrontCreator = {
@@ -1146,15 +1139,13 @@ export const FanStorefrontView: React.FC = () => {
   const [profileDraft, setProfileDraft] = useState<{
     firstName: string;
     lastName: string;
-    bio: string;
     photoURL: string;
-  }>({ firstName: "", lastName: "", bio: "", photoURL: "" });
+  }>({ firstName: "", lastName: "", photoURL: "" });
   const [profileInitial, setProfileInitial] = useState<{
     firstName: string;
     lastName: string;
-    bio: string;
     photoURL: string;
-  }>({ firstName: "", lastName: "", bio: "", photoURL: "" });
+  }>({ firstName: "", lastName: "", photoURL: "" });
   const [profileSaving, setProfileSaving] = useState(false);
   const [usernameDraft, setUsernameDraft] = useState("");
   const [usernameInitial, setUsernameInitial] = useState("");
@@ -1181,7 +1172,6 @@ export const FanStorefrontView: React.FC = () => {
   const isProfileDirty =
     profileDraft.firstName.trim() !== profileInitial.firstName.trim() ||
     profileDraft.lastName.trim() !== profileInitial.lastName.trim() ||
-    profileDraft.bio.trim() !== profileInitial.bio.trim() ||
     (profileDraft.photoURL || "") !== (profileInitial.photoURL || "") ||
     normalizeMemberUsername(usernameDraft || "") !== normalizeMemberUsername(usernameInitial || "");
 
@@ -2865,13 +2855,11 @@ export const FanStorefrontView: React.FC = () => {
       setProfileDraft({
         firstName: dn ? dn.split(/\s+/)[0] : "",
         lastName: dn.includes(" ") ? dn.split(/\s+/).slice(1).join(" ") : "",
-        bio: "",
         photoURL: auth.currentUser?.photoURL || "",
       });
       setProfileInitial({
         firstName: dn ? dn.split(/\s+/)[0] : "",
         lastName: dn.includes(" ") ? dn.split(/\s+/).slice(1).join(" ") : "",
-        bio: "",
         photoURL: auth.currentUser?.photoURL || "",
       });
       setUsernameDraft("");
@@ -2894,13 +2882,11 @@ export const FanStorefrontView: React.FC = () => {
           setProfileDraft({
             firstName: parsed.firstName,
             lastName: parsed.lastName,
-            bio: parsed.bio,
             photoURL: parsed.photoURL,
           });
           setProfileInitial({
             firstName: parsed.firstName,
             lastName: parsed.lastName,
-            bio: parsed.bio,
             photoURL: parsed.photoURL,
           });
           setUsernameDraft(parsed.username);
@@ -3037,8 +3023,8 @@ export const FanStorefrontView: React.FC = () => {
           firstName,
           lastName,
           displayName,
-          bio: profileDraft.bio.trim(),
-          memberBio: profileDraft.bio.trim(),
+          bio: deleteField(),
+          memberBio: deleteField(),
           photoURL: profileDraft.photoURL || null,
           avatar: profileDraft.photoURL || null,
           updatedAt: new Date().toISOString(),
@@ -3061,7 +3047,6 @@ export const FanStorefrontView: React.FC = () => {
       setProfileInitial({
         firstName,
         lastName,
-        bio: profileDraft.bio.trim(),
         photoURL: profileDraft.photoURL || "",
       });
       showToast("Profile updated.", "success");
@@ -3313,8 +3298,13 @@ export const FanStorefrontView: React.FC = () => {
       return;
     }
     let cancelled = false;
-    const tick = async () => {
-      if (typeof document !== "undefined" && document.visibilityState !== "visible") return;
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
+
+    const isSessionLive = (s: DmLiveSession | null) =>
+      s != null && (s.status === "active" || s.status === "paused");
+
+    const tick = async (): Promise<boolean> => {
+      if (typeof document !== "undefined" && document.visibilityState !== "visible") return false;
       try {
         const token = await auth.currentUser!.getIdToken(true);
         const params = new URLSearchParams({
@@ -3326,23 +3316,54 @@ export const FanStorefrontView: React.FC = () => {
           headers: { Authorization: `Bearer ${token}` },
         });
         const data = await res.json().catch(() => ({} as { session?: DmLiveSession | null }));
-        if (cancelled) return;
+        if (cancelled) return false;
         const next = (data as { session?: DmLiveSession | null }).session || null;
-        setDmLiveSession(next);
-        if (next && dmPreferredSessionId && next.id === dmPreferredSessionId) {
+        const pref = dmPreferredSessionId?.trim();
+        if (next && pref && next.id === pref) {
           setDmPreferredSessionId(null);
         }
+        if (!isSessionLive(next)) {
+          setDmLiveSession(null);
+          return false;
+        }
+        setDmLiveSession(next);
+        return true;
       } catch {
         if (!cancelled) setDmLiveSession(null);
+        return false;
       }
     };
-    void tick();
-    const id = window.setInterval(() => {
-      void tick();
-    }, 5000);
+
+    const schedule = (delayMs: number) => {
+      timeoutId = window.setTimeout(() => {
+        if (cancelled) return;
+        void tick().then((live) => {
+          if (cancelled) return;
+          schedule(live ? 1000 : 5000);
+        });
+      }, delayMs);
+    };
+
+    void tick().then((live) => {
+      if (!cancelled) schedule(live ? 1000 : 5000);
+    });
+
+    const resync = () => {
+      if (typeof document !== "undefined" && document.visibilityState !== "visible") return;
+      if (timeoutId !== undefined) window.clearTimeout(timeoutId);
+      void tick().then((live) => {
+        if (cancelled) return;
+        schedule(live ? 1000 : 5000);
+      });
+    };
+    window.addEventListener("focus", resync);
+    document.addEventListener("visibilitychange", resync);
+
     return () => {
       cancelled = true;
-      window.clearInterval(id);
+      if (timeoutId !== undefined) window.clearTimeout(timeoutId);
+      window.removeEventListener("focus", resync);
+      document.removeEventListener("visibilitychange", resync);
     };
   }, [activeTab, creator?.creatorId, isLoggedIn, dmThread?.id, dmPreferredSessionId, auth.currentUser]);
 
@@ -3957,8 +3978,6 @@ export const FanStorefrontView: React.FC = () => {
     if (h) return `Welcome to @${h}'s member hub`;
     return "Welcome to this member hub";
   })();
-  const fanBioPreviewText =
-    profileDraft.bio?.trim() && !isEchoFluxDefaultFanBio(profileDraft.bio) ? profileDraft.bio.trim() : "";
   // Nav tabs: order from sectionsOrder, filtered by sections; hide Messages when chat disabled.
   const baseMemberTabKeys = (sectionsOrder || ["feed", "treats", "tip", "messages", "about"])
     .filter((key) => key !== "saved" && (sections as Record<string, boolean>)?.[key] !== false)
@@ -5226,19 +5245,6 @@ export const FanStorefrontView: React.FC = () => {
                           placeholder="Last name"
                         />
                       </div>
-                    </div>
-                    <div className="mt-3">
-                      <label className="block text-xs mb-1" style={{ color: profileFieldLabelColor }}>
-                        Bio (visible to creators)
-                      </label>
-                      <textarea
-                        rows={4}
-                        value={profileDraft.bio}
-                        onChange={(e) => setProfileDraft((p) => ({ ...p, bio: e.target.value }))}
-                        className="w-full px-3 py-2 rounded-lg border text-sm"
-                        style={{ borderColor: "color-mix(in srgb, var(--fan-primary, #6366f1) 18%, transparent)", backgroundColor: "white", color: "var(--fan-text, #1f2937)" }}
-                        placeholder="Tell creators a little about you..."
-                      />
                     </div>
                     <div className="flex flex-wrap gap-2 mt-3 items-center">
                       <button

@@ -99,10 +99,16 @@ function WitmeHeroVisualCollage({
 
   return (
     <div className="mt-10 flex justify-center sm:mt-12 lg:mt-0 lg:justify-end lg:pt-5">
-      <div className="relative h-[min(24rem,56vw)] w-full max-w-[19rem] sm:h-[28rem] sm:max-w-[21rem] lg:h-[30rem] lg:max-w-[24rem]">
+      {/* Mobile: 56vw was shorter than the stacked 5/7 tiles, so the third card clipped (often under overflow-x-hidden). sm+ unchanged. */}
+      <div className="relative h-[min(26rem,max(15.75rem,72vw))] w-full max-w-[19rem] overflow-visible sm:h-[28rem] sm:max-w-[21rem] lg:h-[30rem] lg:max-w-[24rem]">
         {wrapFrame(items[0], 0, "absolute right-0 top-0 z-30 w-[58%] rotate-[2deg]", "eager")}
         {wrapFrame(items[1], 1, "absolute left-0 top-[16%] z-20 w-[55%] -rotate-[2deg]", "lazy")}
-        {wrapFrame(items[2], 2, "absolute bottom-[-0.35rem] right-[8%] z-10 w-[50%] rotate-[1deg]", "lazy")}
+        {wrapFrame(
+          items[2],
+          2,
+          "absolute bottom-0 right-[8%] z-10 w-[50%] rotate-[1deg] sm:bottom-[-0.35rem]",
+          "lazy"
+        )}
       </div>
     </div>
   );

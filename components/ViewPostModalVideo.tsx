@@ -100,6 +100,7 @@ export function ViewPostModalVideo({
         muted={muted}
         playsInline
         preload="metadata"
+        onContextMenu={(e) => e.preventDefault()}
         onLoadedMetadata={onMeta}
         onDurationChange={onMeta}
         onPlay={() => setPlaying(true)}

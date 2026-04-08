@@ -1156,6 +1156,15 @@
   display: block;
 }
 
+.feed-card-media,
+.feed-comments-modal-media:not(.feed-comments-modal-compose-avatar-img),
+.feed-grid-item img,
+.feed-grid-item video {
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-user-drag: none;
+}
+
 .feed-card-play-overlay {
   position: absolute;
   inset: 0;
