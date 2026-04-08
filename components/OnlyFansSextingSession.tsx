@@ -598,12 +598,41 @@ export const OnlyFansSextingSession: React.FC = () => {
     return auth.currentUser ? await auth.currentUser.getIdToken(true) : '';
   }, []);
 
-  const handleStartSession = useCallback(() => {
+  const handleStartSession = useCallback(async () => {
     if (!selectedUid) return;
     const mins =
       durationPreset === 'custom'
         ? Math.max(1, Math.min(180, Number(customDurationInput) || customDurationMinutes || 1))
         : sessionDurationMinutes;
+    try {
+      const token = await getToken();
+      if (!token) {
+        showToast?.('Please sign in again before starting a session.', 'error');
+        return;
+      }
+      const res = await fetch('/api/fanDmEnsureThread', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          fanId: selectedUid,
+          startSession: true,
+          durationMinutes: mins,
+          chatType: customChatTypeValue.trim() || 'Custom',
+          notifyFan: true,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error((data as { error?: string }).error || 'Could not start chat session.');
+      }
+    } catch (e) {
+      showToast?.(e instanceof Error ? e.message : 'Could not start chat session.', 'error');
+      return;
+    }
+
     const totalSeconds = Math.max(1, mins) * 60;
     setTimeRemainingSeconds(totalSeconds);
     setSessionStarted(true);
@@ -613,7 +642,7 @@ export const OnlyFansSextingSession: React.FC = () => {
     lastChatBotRepliedCountRef.current = 0;
     setAutoSuggestions([]);
     showToast?.('Session started!', 'success');
-  }, [selectedUid, durationPreset, customDurationInput, customDurationMinutes, sessionDurationMinutes, showToast]);
+  }, [selectedUid, durationPreset, customDurationInput, customDurationMinutes, sessionDurationMinutes, showToast, getToken, customChatTypeValue]);
 
   const handleEndSession = useCallback(() => {
     setSessionEndModalOpen(false);

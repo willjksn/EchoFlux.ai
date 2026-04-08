@@ -68,6 +68,7 @@ import { usePathname } from "../src/hooks/usePathname";
 import { db } from "../firebaseConfig";
 import { ReportProblemModal } from "./ReportProblemModal";
 import { Toast } from "./Toast";
+import VideoCallRoom from "./VideoCallRoom";
 import { readFanCheckoutFetchResult, FAN_TIP_CHECKOUT_SUCCESS_QS } from "../src/lib/fanCheckoutResponse";
 import { WitmeHeaderLogo } from "./WitmeHeaderLogo";
 import { formatFanStorefrontDocumentTitle, getFanFacingSiteTitle } from "../src/lib/fanFacingSiteTitle";
@@ -919,6 +920,7 @@ export const FanStorefrontView: React.FC = () => {
   const entitlementHydratingRef = useRef(false);
   const [sessionAlerts, setSessionAlerts] = useState<HeaderSessionAlert[]>([]);
   const sessionAlertIdsRef = useRef<Set<string> | null>(null);
+  const [activeVideoSession, setActiveVideoSession] = useState<{ sessionId: string; creatorId: string } | null>(null);
   const [reportProblemOpen, setReportProblemOpen] = useState(false);
   const [supportThreads, setSupportThreads] = useState<SupportThread[]>([]);
   const [supportThreadId, setSupportThreadId] = useState<string | null>(null);
@@ -1485,9 +1487,6 @@ export const FanStorefrontView: React.FC = () => {
   const joinFanVideoSession = useCallback(
     async (sessionId: string, notifyCreatorId: string) => {
       if (!notifyCreatorId.trim() || !auth.currentUser) return;
-      // Open a blank tab immediately to avoid popup blockers on async fetch/token work.
-      const pendingWin =
-        typeof window !== "undefined" ? window.open("about:blank", "_blank", "noopener,noreferrer") : null;
       try {
         const token = await auth.currentUser.getIdToken(true);
         const res = await fetch("/api/liveVideoChat?action=token", {
@@ -1500,14 +1499,8 @@ export const FanStorefrontView: React.FC = () => {
         const roomUrl = (data as { roomUrl?: string }).roomUrl;
         const tokenParam = (data as { token?: string }).token;
         if (!roomUrl || !tokenParam) throw new Error("Video room is not ready yet.");
-        const joinUrl = `${roomUrl}${roomUrl.includes("?") ? "&" : "?"}t=${encodeURIComponent(tokenParam)}`;
-        if (pendingWin && !pendingWin.closed) {
-          pendingWin.location.href = joinUrl;
-        } else {
-          window.open(joinUrl, "_blank", "noopener,noreferrer");
-        }
+        setActiveVideoSession({ sessionId, creatorId: notifyCreatorId });
       } catch (e) {
-        if (pendingWin && !pendingWin.closed) pendingWin.close();
         showToast?.(e instanceof Error ? e.message : "Could not open video session.", "error");
       }
     },
@@ -3406,6 +3399,17 @@ export const FanStorefrontView: React.FC = () => {
         </div>
         {toast && <Toast message={toast.message} type={toast.type} />}
       </>
+    );
+  }
+
+  if (activeVideoSession) {
+    return (
+      <VideoCallRoom
+        sessionId={activeVideoSession.sessionId}
+        creatorId={activeVideoSession.creatorId}
+        onLeave={() => setActiveVideoSession(null)}
+        onSessionEnd={() => setActiveVideoSession(null)}
+      />
     );
   }
 

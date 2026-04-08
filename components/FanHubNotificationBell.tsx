@@ -8,6 +8,7 @@ import {
   query,
   updateDoc,
   doc,
+  deleteDoc,
   type Timestamp,
 } from "firebase/firestore";
 import { auth, db } from "../firebaseConfig";
@@ -185,6 +186,15 @@ export const FanHubNotificationBell: React.FC<FanHubNotificationBellProps> = ({
     await Promise.all(rows.filter((r) => !r.read).map((r) => markRead(r.id)));
   };
 
+  const clearAllNotifications = async () => {
+    if (!uid || rows.length === 0) return;
+    try {
+      await Promise.all(rows.map((r) => deleteDoc(doc(db, "users", uid, "notifications", r.id))));
+    } catch (e) {
+      console.error("clearAllNotifications", e);
+    }
+  };
+
   if (!uid) return null;
 
   const bellStyle = {
@@ -234,15 +244,26 @@ export const FanHubNotificationBell: React.FC<FanHubNotificationBellProps> = ({
         >
           <div className="flex items-center justify-between gap-2 px-3 py-2 border-b border-black/5 dark:border-slate-700">
             <span className="text-sm font-semibold text-gray-900 dark:text-white">Notifications</span>
-            {unread > 0 ? (
-              <button
-                type="button"
-                onClick={() => void markAllRead()}
-                className="text-xs font-medium text-pink-600 dark:text-pink-400 hover:underline"
-              >
-                Mark all read
-              </button>
-            ) : null}
+            <div className="flex items-center gap-3">
+              {unread > 0 ? (
+                <button
+                  type="button"
+                  onClick={() => void markAllRead()}
+                  className="text-xs font-medium text-pink-600 dark:text-pink-400 hover:underline"
+                >
+                  Mark all read
+                </button>
+              ) : null}
+              {rows.length > 0 ? (
+                <button
+                  type="button"
+                  onClick={() => void clearAllNotifications()}
+                  className="text-xs font-medium text-gray-500 dark:text-gray-300 hover:underline"
+                >
+                  Clear all
+                </button>
+              ) : null}
+            </div>
           </div>
           <div className="max-h-80 overflow-y-auto">
             {listenError ? (

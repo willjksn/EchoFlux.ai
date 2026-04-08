@@ -35,6 +35,7 @@ type Purchase = {
   deliveryUrl: string | null;
   deliveredAt: Date | null;
   isDemo?: boolean;
+  orderType?: string;
 };
 
 type VaultItem = {
@@ -70,6 +71,13 @@ function formatAmount(cents: number): string {
   return "$" + (cents / 100).toFixed(2);
 }
 
+function isTipPurchase(p: Purchase): boolean {
+  const orderType = (p.orderType || "").trim().toLowerCase();
+  const treatType = (p.treatType || "").trim().toLowerCase();
+  const productName = (p.productName || "").trim().toLowerCase();
+  return orderType === "tip" || treatType === "tip" || productName === "tip";
+}
+
 function toLocalScheduleParts(date: Date): { date: string; time: string } {
   const y = date.getFullYear();
   const m = String(date.getMonth() + 1).padStart(2, "0");
@@ -94,7 +102,7 @@ export const FanHubPurchases: React.FC = () => {
   const [scheduleDate, setScheduleDate] = useState("");
   const [scheduleTime, setScheduleTime] = useState("12:00");
   const [savingId, setSavingId] = useState<string | null>(null);
-  const [filterStatus, setFilterStatus] = useState<"all" | "pending" | "scheduled" | "completed">("all");
+  const [filterStatus, setFilterStatus] = useState<"all" | "pending" | "scheduled" | "completed" | "tips">("all");
   const [deliveryEditingId, setDeliveryEditingId] = useState<string | null>(null);
   const [deliveryTypeDraft, setDeliveryTypeDraft] = useState<"video" | "image" | "audio" | "text">("text");
   const [deliveryTextDraft, setDeliveryTextDraft] = useState("");
@@ -123,30 +131,35 @@ export const FanHubPurchases: React.FC = () => {
       if (res.ok) {
         const data = await res.json();
         const list = Array.isArray(data.orders) ? data.orders : [];
-        const realPurchases: Purchase[] = list.map((o: any) => ({
-          id: o.id,
-          email: o.fanEmail || o.fanId || "Unknown",
-          fanName: o.fanName || null,
-          productName: o.productTitle || o.type || "Purchase",
-          treatType: o.productId || o.type,
-          amountCents: o.amountCents || 0,
-          createdAt: new Date(o.createdAt),
-          scheduleStatus: (o.scheduleStatus as ScheduleStatus) || "pending",
-          scheduledDate: o.scheduledDate || null,
-          scheduledTime: o.scheduledTime || null,
-          deliveryStatus: o.deliveryStatus === "delivered" ? "delivered" : "pending",
-          deliveryType:
-            o.deliveryType === "video" ||
-            o.deliveryType === "image" ||
-            o.deliveryType === "audio" ||
-            o.deliveryType === "text"
-              ? o.deliveryType
-              : null,
-          deliveryText: typeof o.deliveryText === "string" ? o.deliveryText : null,
-          deliveryUrl: typeof o.deliveryUrl === "string" ? o.deliveryUrl : null,
-          deliveredAt: o.deliveredAt ? new Date(o.deliveredAt) : null,
-          isDemo: false,
-        }));
+        const realPurchases: Purchase[] = list.map((o: any) => {
+          const orderType = typeof o.type === "string" ? o.type : "";
+          const isTipOrder = orderType.trim().toLowerCase() === "tip";
+          return {
+            id: o.id,
+            email: o.fanEmail || o.fanId || "Unknown",
+            fanName: o.fanName || null,
+            productName: o.productTitle || o.type || "Purchase",
+            treatType: o.productId || o.type,
+            amountCents: o.amountCents || 0,
+            createdAt: new Date(o.createdAt),
+            scheduleStatus: isTipOrder ? "completed" : ((o.scheduleStatus as ScheduleStatus) || "pending"),
+            scheduledDate: o.scheduledDate || null,
+            scheduledTime: o.scheduledTime || null,
+            deliveryStatus: isTipOrder ? "delivered" : (o.deliveryStatus === "delivered" ? "delivered" : "pending"),
+            deliveryType:
+              o.deliveryType === "video" ||
+              o.deliveryType === "image" ||
+              o.deliveryType === "audio" ||
+              o.deliveryType === "text"
+                ? o.deliveryType
+                : null,
+            deliveryText: typeof o.deliveryText === "string" ? o.deliveryText : null,
+            deliveryUrl: typeof o.deliveryUrl === "string" ? o.deliveryUrl : null,
+            deliveredAt: o.deliveredAt ? new Date(o.deliveredAt) : null,
+            isDemo: false,
+            orderType,
+          };
+        });
         setPurchases(realPurchases);
       } else {
         const errBody = await res.text().catch(() => "");
@@ -615,11 +628,13 @@ export const FanHubPurchases: React.FC = () => {
 
   const filteredPurchases = purchases.filter((p) => {
     if (filterStatus === "all") return true;
+    if (filterStatus === "tips") return isTipPurchase(p);
     return p.scheduleStatus === filterStatus;
   });
 
   const pendingCount = purchases.filter((p) => p.scheduleStatus === "pending").length;
   const scheduledCount = purchases.filter((p) => p.scheduleStatus === "scheduled").length;
+  const tipsCount = purchases.filter((p) => isTipPurchase(p)).length;
 
   if (!user?.id) {
     return (
@@ -669,16 +684,19 @@ export const FanHubPurchases: React.FC = () => {
 
       {/* Filter Tabs */}
       <div className="purchases-filters">
-        {(["all", "pending", "scheduled", "completed"] as const).map((status) => (
+        {(["all", "pending", "scheduled", "completed", "tips"] as const).map((status) => (
           <button
             key={status}
             type="button"
             className={`purchases-filter-btn ${filterStatus === status ? "active" : ""}`}
             onClick={() => setFilterStatus(status)}
           >
-            {status === "all" ? "All" : status.charAt(0).toUpperCase() + status.slice(1)}
+            {status === "all" ? "All" : status === "tips" ? "Tips" : status.charAt(0).toUpperCase() + status.slice(1)}
             {status === "pending" && pendingCount > 0 && (
               <span className="purchases-filter-badge">{pendingCount}</span>
+            )}
+            {status === "tips" && tipsCount > 0 && (
+              <span className="purchases-filter-badge">{tipsCount}</span>
             )}
           </button>
         ))}
@@ -694,6 +712,7 @@ export const FanHubPurchases: React.FC = () => {
           </p>
         ) : (
           filteredPurchases.map((p) => {
+            const tipPurchase = isTipPurchase(p);
             const isDelivered = p.deliveryStatus === "delivered";
             const isPending = p.scheduleStatus === "pending" && !isDelivered;
             const isScheduled = p.scheduleStatus === "scheduled";
@@ -728,7 +747,12 @@ export const FanHubPurchases: React.FC = () => {
                         Needs scheduling
                       </span>
                     )}
-                    {(isScheduled || isDelivered) && (p.scheduledDate || p.deliveredAt) && (
+                    {tipPurchase && (
+                      <span className="purchases-status-badge purchases-status-completed">
+                        Tip received
+                      </span>
+                    )}
+                    {!tipPurchase && (isScheduled || isDelivered) && (p.scheduledDate || p.deliveredAt) && (
                       <div className="purchases-scheduled-info">
                         {!isDelivered ? (
                           <span className="purchases-status-badge purchases-status-scheduled">Scheduled</span>
@@ -740,12 +764,12 @@ export const FanHubPurchases: React.FC = () => {
                         </p>
                       </div>
                     )}
-                    {isCompleted && (
+                    {!tipPurchase && isCompleted && (
                       <span className="purchases-status-badge purchases-status-completed">
                         Completed
                       </span>
                     )}
-                    {isDelivered && (
+                    {!tipPurchase && isDelivered && (
                       <span className="purchases-status-badge purchases-status-delivered">
                         Delivered
                       </span>
@@ -755,7 +779,7 @@ export const FanHubPurchases: React.FC = () => {
 
                 {/* Actions */}
                 <div className="purchases-card-actions">
-                  {!isEditing && !isCompleted && (
+                  {!tipPurchase && !isEditing && !isCompleted && (
                     <>
                       {isScheduled && (
                         <>
@@ -786,7 +810,7 @@ export const FanHubPurchases: React.FC = () => {
                       )}
                     </>
                   )}
-                  {!isEditing && (
+                  {!tipPurchase && !isEditing && (
                     <button
                       type="button"
                       className="purchases-btn purchases-btn-primary"
