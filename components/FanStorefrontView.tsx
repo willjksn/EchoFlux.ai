@@ -849,6 +849,7 @@ export const FanStorefrontView: React.FC = () => {
   const [dmPendingAttachmentUrl, setDmPendingAttachmentUrl] = useState<string | null>(null);
   const [dmPendingAttachmentType, setDmPendingAttachmentType] = useState<DmAttachmentKind | null>(null);
   const [dmPendingAttachmentUploading, setDmPendingAttachmentUploading] = useState(false);
+  const [dmPreferredThreadId, setDmPreferredThreadId] = useState<string | null>(null);
   const dmMessagesEndRef = useRef<HTMLDivElement | null>(null);
   const dmMessagesListRef = useRef<HTMLDivElement | null>(null);
   const dmAutoStickToBottomRef = useRef(true);
@@ -2880,26 +2881,32 @@ export const FanStorefrontView: React.FC = () => {
     }
   }, [creator?.handle, fanDeleteConfirmInput, fanDeletePassword, showToast, closeFanDeleteModal]);
 
-  const fetchDmThreadAndMessages = useCallback(async (opts?: { silent?: boolean }) => {
+  const fetchDmThreadAndMessages = useCallback(async (opts?: { silent?: boolean; threadId?: string }) => {
     if (!creator?.creatorId || !auth.currentUser || activeTab !== "messages") return;
     const silent = opts?.silent === true;
-    const gen = ++dmThreadFetchGen.current;
+    const requestedThreadId = typeof opts?.threadId === "string" ? opts.threadId.trim() : "";
+    // Silent refreshes should not invalidate an in-flight foreground load token.
+    const gen = silent ? dmThreadFetchGen.current : ++dmThreadFetchGen.current;
     if (!silent) setDmLoading(true);
     try {
       const token = await auth.currentUser.getIdToken(true);
       const cid = creator.creatorId;
-      const [threadsRes, bannedRes] = await Promise.all([
-        fetch("/api/fanDmThreads?as=fan", { headers: { Authorization: `Bearer ${token}` } }),
-        fetch(`/api/checkFanBanned?creatorId=${encodeURIComponent(cid)}`, {
-          headers: { Authorization: `Bearer ${token}` },
-        }),
-      ]);
+      const bannedResPromise = fetch(`/api/checkFanBanned?creatorId=${encodeURIComponent(cid)}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const threadsResPromise = requestedThreadId
+        ? Promise.resolve(null)
+        : fetch("/api/fanDmThreads?as=fan", { headers: { Authorization: `Bearer ${token}` } });
+      const [threadsRes, bannedRes] = await Promise.all([threadsResPromise, bannedResPromise]);
       if (gen !== dmThreadFetchGen.current) return;
-      const threadsData = await threadsRes.json().catch(() => ({}));
+      const threadsData = threadsRes ? await threadsRes.json().catch(() => ({})) : {};
       const bannedData = await bannedRes.json().catch(() => ({}));
       setFanBanned(!!(bannedData as { banned?: boolean }).banned);
       const threads = (threadsData.threads as FanDmThread[]) || [];
-      const withCreator = threads.find((t) => t.creatorId === cid);
+      const byRequestedId = requestedThreadId ? threads.find((t) => t.id === requestedThreadId) : null;
+      const withCreator = byRequestedId || threads.find((t) => t.creatorId === cid) || (requestedThreadId
+        ? ({ id: requestedThreadId, creatorId: cid, fanId: auth.currentUser.uid } as FanDmThread)
+        : null);
       setDmThread(withCreator || null);
       if (withCreator) {
         const msgRes = await fetch(
@@ -2915,6 +2922,7 @@ export const FanStorefrontView: React.FC = () => {
             ? { fan: raw.fan, creator: raw.creator }
             : null
         );
+        if (requestedThreadId) setDmPreferredThreadId(null);
       } else {
         setDmMessages([]);
         setDmLabels(null);
@@ -2930,7 +2938,7 @@ export const FanStorefrontView: React.FC = () => {
         if (!silent) setDmLoading(false);
       }
     }
-  }, [creator?.creatorId, activeTab]);
+  }, [creator?.creatorId, activeTab, auth.currentUser?.uid]);
 
   useEffect(() => {
     setDmThread(null);
@@ -2941,6 +2949,11 @@ export const FanStorefrontView: React.FC = () => {
   useEffect(() => {
     if (activeTab === "messages" && creator?.creatorId && isLoggedIn) fetchDmThreadAndMessages();
   }, [activeTab, creator?.creatorId, isLoggedIn, fetchDmThreadAndMessages]);
+
+  useEffect(() => {
+    if (activeTab !== "messages" || !creator?.creatorId || !isLoggedIn || !dmPreferredThreadId) return;
+    void fetchDmThreadAndMessages({ threadId: dmPreferredThreadId });
+  }, [activeTab, creator?.creatorId, isLoggedIn, dmPreferredThreadId, fetchDmThreadAndMessages]);
 
   useEffect(() => {
     if (activeTab !== "messages" || !creator?.creatorId || !isLoggedIn) return;
@@ -3390,10 +3403,12 @@ export const FanStorefrontView: React.FC = () => {
         return;
       }
       if (p.type === "session_starting" || p.type === "session_reminder") {
+        if (d.threadId?.trim()) setDmPreferredThreadId(d.threadId.trim());
         goTab("messages");
         return;
       }
       if (d.threadId?.trim()) {
+        setDmPreferredThreadId(d.threadId.trim());
         goTab("messages");
       }
     },

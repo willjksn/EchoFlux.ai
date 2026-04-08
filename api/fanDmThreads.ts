@@ -52,13 +52,36 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const thread: ThreadDoc & { id: string } = { id: d.id, ...data };
         try {
           if (as === "fan") {
-            const creatorSnap = await db.collection("creators").doc(data.creatorId).get();
+            const [creatorSnap, creatorUserSnap] = await Promise.all([
+              db.collection("creators").doc(data.creatorId).get(),
+              db.collection("users").doc(data.creatorId).get(),
+            ]);
             if (creatorSnap.exists) {
-              const c = creatorSnap.data() as { displayName?: string; avatar?: string };
-              thread.otherPartyDisplayName = c?.displayName || "Creator";
-              thread.otherPartyAvatar = c?.avatar;
+              const c = creatorSnap.data() as { displayName?: string; avatar?: string; avatarUrl?: string; handle?: string };
+              const creatorUser = creatorUserSnap.exists
+                ? (creatorUserSnap.data() as { displayName?: string; username?: string; photoURL?: string; avatar?: string })
+                : null;
+              const fallbackHandle =
+                typeof c?.handle === "string" && c.handle.trim()
+                  ? `@${c.handle.replace(/^@/, "").trim().toLowerCase()}`
+                  : "";
+              thread.otherPartyDisplayName =
+                c?.displayName?.trim() ||
+                creatorUser?.displayName?.trim() ||
+                (creatorUser?.username ? `@${creatorUser.username.replace(/^@/, "").trim().toLowerCase()}` : "") ||
+                fallbackHandle ||
+                "Creator";
+              thread.otherPartyAvatar =
+                c?.avatar || c?.avatarUrl || creatorUser?.photoURL || creatorUser?.avatar;
             } else {
-              thread.otherPartyDisplayName = "Creator";
+              const creatorUser = creatorUserSnap.exists
+                ? (creatorUserSnap.data() as { displayName?: string; username?: string; photoURL?: string; avatar?: string })
+                : null;
+              thread.otherPartyDisplayName =
+                creatorUser?.displayName?.trim() ||
+                (creatorUser?.username ? `@${creatorUser.username.replace(/^@/, "").trim().toLowerCase()}` : "") ||
+                "Creator";
+              thread.otherPartyAvatar = creatorUser?.photoURL || creatorUser?.avatar;
             }
           } else {
             const [fanLabel, userSnap] = await Promise.all([

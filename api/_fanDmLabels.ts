@@ -28,12 +28,24 @@ export async function resolveFanPartyDisplayLabel(
 }
 
 export async function resolveCreatorPartyDisplayLabel(db: Firestore, creatorId: string): Promise<string> {
-  const snap = await db.collection("creators").doc(creatorId).get();
-  if (!snap.exists) return "Creator";
-  const c = snap.data() as { displayName?: string; handle?: string };
-  const dn = c.displayName?.trim();
-  if (dn) return dn;
-  const h = c.handle ? String(c.handle).replace(/^@/, "").trim().toLowerCase() : "";
-  if (h) return `@${h}`;
+  const [creatorSnap, userSnap] = await Promise.all([
+    db.collection("creators").doc(creatorId).get(),
+    db.collection("users").doc(creatorId).get(),
+  ]);
+  const c = creatorSnap.exists ? (creatorSnap.data() as { displayName?: string; handle?: string }) : null;
+  const u = userSnap.exists ? (userSnap.data() as { displayName?: string; username?: string; name?: string }) : null;
+
+  const creatorDisplay = c?.displayName?.trim();
+  if (creatorDisplay) return creatorDisplay;
+
+  const userDisplay = u?.displayName?.trim() || u?.name?.trim();
+  if (userDisplay) return userDisplay;
+
+  const creatorHandle = c?.handle ? String(c.handle).replace(/^@/, "").trim().toLowerCase() : "";
+  if (creatorHandle) return `@${creatorHandle}`;
+
+  const userHandle = u?.username ? String(u.username).replace(/^@/, "").trim().toLowerCase() : "";
+  if (userHandle) return `@${userHandle}`;
+
   return "Creator";
 }

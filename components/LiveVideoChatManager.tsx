@@ -365,6 +365,39 @@ export const LiveVideoChatManager: React.FC<LiveVideoChatManagerProps> = ({
     setActiveSession(null);
   }, []);
 
+  const handleDeleteSession = useCallback(
+    async (session: LiveVideoChatSession) => {
+      if (!creatorId || !session?.id) return;
+      if (!window.confirm("Delete this video session from the list?")) return;
+      setActionLoading(session.id);
+      try {
+        const token = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
+        if (!token) throw new Error("Please sign in");
+        const res = await fetch("/api/liveVideoChat?action=deleteSession", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            sessionId: session.id,
+            creatorId,
+          }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || !(data as { success?: boolean }).success) {
+          throw new Error((data as { error?: string }).error || "Failed to delete session");
+        }
+        showToast?.("Video session deleted.", "success");
+      } catch (e) {
+        showToast?.(e instanceof Error ? e.message : "Failed to delete session.", "error");
+      } finally {
+        setActionLoading(null);
+      }
+    },
+    [creatorId, showToast]
+  );
+
   // Select a fan from dropdown
   const handleSelectFan = useCallback((fan: FanOption | null) => {
     if (fan) {
