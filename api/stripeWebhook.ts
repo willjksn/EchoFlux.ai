@@ -30,14 +30,18 @@ const stripeSecretKey = useTestMode
   ? (process.env.STRIPE_SECRET_KEY_Test || process.env.STRIPE_SECRET_KEY_TEST || process.env.STRIPE_SECRET_KEY)
   : (process.env.STRIPE_SECRET_KEY_LIVE || process.env.STRIPE_SECRET_KEY);
 
+const stripe = stripeSecretKey
+  ? new Stripe(stripeSecretKey, {
+      apiVersion: '2024-06-20' as any, // Type assertion to handle Stripe types
+    })
+  : null;
+
 if (!stripeSecretKey) {
   const mode = useTestMode ? 'test' : 'live';
-  throw new Error(`STRIPE_SECRET_KEY_${useTestMode ? 'Test' : 'LIVE'} or STRIPE_SECRET_KEY must be set for ${mode} mode`);
+  console.error(
+    `stripeWebhook init: missing STRIPE_SECRET_KEY_${useTestMode ? 'Test' : 'LIVE'} / STRIPE_SECRET_KEY for ${mode} mode`,
+  );
 }
-
-const stripe = new Stripe(stripeSecretKey, {
-  apiVersion: '2024-06-20' as any, // Type assertion to handle Stripe types
-});
 
 // Log which mode is being used
 console.log(`Stripe webhook initialized in ${useTestMode ? 'TEST' : 'LIVE'} mode (STRIPE_USE_TEST_MODE=${process.env.STRIPE_USE_TEST_MODE || 'not set'})`);
@@ -77,7 +81,11 @@ async function readRawBody(req: VercelRequest): Promise<Buffer> {
   return Buffer.concat(chunks);
 }
 
-function verifyWebhookSignature(rawBody: Buffer, sig: string): Stripe.Event {
+function verifyWebhookSignature(
+  stripeClient: Stripe,
+  rawBody: Buffer,
+  sig: string,
+): Stripe.Event {
   const secrets = collectStripeWebhookSecrets();
   if (secrets.length === 0) {
     throw new Error(
@@ -88,7 +96,7 @@ function verifyWebhookSignature(rawBody: Buffer, sig: string): Stripe.Event {
   const errors: string[] = [];
   for (const secret of secrets) {
     try {
-      return stripe.webhooks.constructEvent(rawBody, sig, secret);
+      return stripeClient.webhooks.constructEvent(rawBody, sig, secret);
     } catch (e: unknown) {
       errors.push(e instanceof Error ? e.message : String(e));
     }
@@ -892,7 +900,7 @@ async function processFanHubSubscriptionInvoicePaid(
 }
 
 /** Connect + same handlers: fan storefront events (checkout on connected account includes event.account). */
-async function handleConnectEvent(db: Firestore, _stripe: Stripe, event: Stripe.Event): Promise<void> {
+async function handleConnectEvent(db: Firestore, stripeClient: Stripe, event: Stripe.Event): Promise<void> {
   if (event.type === 'checkout.session.completed') {
     const session = event.data.object as Stripe.Checkout.Session;
     const handled = await processFanHubCheckoutSessionCompleted(db, session);
@@ -913,7 +921,7 @@ async function handleConnectEvent(db: Firestore, _stripe: Stripe, event: Stripe.
   }
 
   if (event.type === 'invoice.payment_succeeded') {
-    await processFanHubSubscriptionInvoicePaid(db, stripe, event.data.object as Stripe.Invoice);
+    await processFanHubSubscriptionInvoicePaid(db, stripeClient, event.data.object as Stripe.Invoice);
     return;
   }
 
@@ -992,6 +1000,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
+  if (!stripe) {
+    return res.status(500).json({ error: 'Stripe is not configured' });
+  }
 
   if (collectStripeWebhookSecrets().length === 0) {
     return res.status(500).json({ error: "Stripe webhook secret is not configured" });
@@ -1005,7 +1016,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   let event: Stripe.Event;
   try {
     const rawBody = await readRawBody(req);
-    event = verifyWebhookSignature(rawBody, sig);
+    event = verifyWebhookSignature(stripe, rawBody, sig);
   } catch (err: any) {
     console.error('Webhook signature verification failed:', err.message);
     return res.status(400).json({ error: `Webhook Error: ${err.message}` });

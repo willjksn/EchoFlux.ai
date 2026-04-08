@@ -2941,6 +2941,14 @@
 
 /* Responsive */
 @media (max-width: 480px) {
+  html,
+  body,
+  #root,
+  .stormij-theme {
+    max-width: 100%;
+    overflow-x: hidden;
+  }
+
   .stormij-theme .storefront-member-header {
     position: sticky;
     top: 0;
@@ -2949,6 +2957,29 @@
 
   .fan-member-content {
     padding: 0.9rem 0.8rem calc(env(safe-area-inset-bottom, 0px) + 0.9rem);
+    width: 100%;
+    max-width: 100%;
+    overflow-x: hidden;
+  }
+
+  .fan-member-messages,
+  .fan-member-messages-compose-wrap,
+  .fan-member-messages-compose,
+  .fan-member-messages-list,
+  .fan-member-messages-input {
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    box-sizing: border-box;
+  }
+
+  .stormij-theme .fan-member-messages-list .fh-dm-bubble-wrap {
+    max-width: min(86vw, 22rem);
+    min-width: 0;
+  }
+
+  .stormij-theme .fan-member-messages-list .fh-dm-bubble {
+    max-width: 100%;
   }
 
   .fan-member-about--settings {

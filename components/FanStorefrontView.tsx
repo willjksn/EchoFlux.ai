@@ -3719,6 +3719,9 @@ export const FanStorefrontView: React.FC = () => {
       style={{ 
         fontFamily: globalFont,
         backgroundColor: bg,
+        width: "100%",
+        maxWidth: "100%",
+        overflowX: "hidden",
         minHeight: "100dvh",
         paddingBottom: "env(safe-area-inset-bottom, 0px)",
         "--fan-primary": primary,
