@@ -124,6 +124,7 @@ export const ShowcaseMedia: React.FC<{
   if (mediaKind === "video") {
     return (
       <video
+        key={u}
         ref={videoRef}
         src={u}
         className={`${className} transition-opacity ease-in-out`}
@@ -139,10 +140,12 @@ export const ShowcaseMedia: React.FC<{
       />
     );
   }
-  const imgOpacityClass = `transition-opacity duration-500 ease-out ${imgVisible ? "opacity-100" : "opacity-0"}`;
+  /** Short fade: long fades read as a second “load” after any stale-frame flash. */
+  const imgOpacityClass = `transition-opacity duration-[180ms] ease-out ${imgVisible ? "opacity-100" : "opacity-0"}`;
 
   return (
     <img
+      key={u}
       ref={imgRef}
       src={u}
       alt={alt}

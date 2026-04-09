@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { WITME_FIRST_CREATOR_SLUG, witmePublicHref } from "../../src/lib/witmeFirstCreator";
 import { trackWitmeEvent } from "../../src/lib/witmeTrackEvent";
 import { witmeCreatorPagePath, type WitmeShowcaseCreator } from "../../src/lib/witmeShowcase";
@@ -29,7 +29,10 @@ export function pickFeaturedShowcaseCreators(showcase: WitmeShowcaseCreator[]): 
 
 export type WitmeLegalLink = { label: string; url: string };
 
-/** Single hero collage tile: soft placeholder until media paints, then match final chrome. */
+/** Hero mid-stop (`via-[#202b3f]`): tile reads as continuous background, not an empty “card”. */
+const HERO_TILE_BLEND = "border-[#202b3f] bg-[#202b3f]";
+
+/** Single hero collage tile: hero-matched fill until media paints; no contrasting outline flash. */
 function WitmeHeroCollageCell({
   creator,
   idx,
@@ -47,18 +50,24 @@ function WitmeHeroCollageCell({
   const path = witmeCreatorPagePath(creator.pageSlug);
   const href = creator.linkLive && path ? witmePublicHref(path) : null;
   const alt = `${creator.name || "Creator"} on WitMe`;
+
+  useEffect(() => {
+    setMediaReady(false);
+  }, [creator.imageUrl, creator.mediaKind]);
+
   const frameClass =
-    "aspect-[5/7] overflow-hidden rounded-2xl transition-[border-color,box-shadow,background-color] duration-500 ease-out " +
+    "relative aspect-[5/7] overflow-hidden rounded-2xl transition-[border-color,box-shadow,background-color] duration-300 ease-out " +
     (mediaReady
-      ? "border border-white/25 bg-black/35 shadow-2xl shadow-black/50 ring-1 ring-white/10"
-      : "border border-transparent bg-gradient-to-br from-white/[0.06] to-black/40 shadow-md shadow-black/20 ring-0");
+      ? "border border-white/20 bg-transparent shadow-2xl shadow-black/40 ring-1 ring-white/10"
+      : `border shadow-none ring-0 ${HERO_TILE_BLEND}`);
+
   const inner = (
     <div className={frameClass}>
       <ShowcaseMedia
         url={creator.imageUrl}
         mediaKind={creator.mediaKind}
         alt={alt}
-        className="h-full w-full"
+        className="relative z-[1] h-full w-full"
         objectPosition={creator.mediaObjectPosition}
         mediaScale={creator.mediaScale ?? 1}
         objectFit="cover"
@@ -94,11 +103,36 @@ function WitmeHeroVisualCollage({
   enableTracking?: boolean;
 }) {
   const items = creators.filter((c) => c.imageUrl.trim()).slice(0, 3);
+
+  const heroImagePreloadKey = items
+    .slice(0, 2)
+    .filter((c) => c.mediaKind !== "video" && c.imageUrl.trim())
+    .map((c) => c.imageUrl.trim())
+    .join("\u0001");
+
+  useEffect(() => {
+    if (!heroImagePreloadKey) return;
+    const hrefs = heroImagePreloadKey.split("\u0001").filter(Boolean);
+    const links: HTMLLinkElement[] = [];
+    for (const href of hrefs) {
+      const link = document.createElement("link");
+      link.rel = "preload";
+      link.as = "image";
+      link.href = href;
+      link.setAttribute("fetchpriority", "high");
+      document.head.appendChild(link);
+      links.push(link);
+    }
+    return () => {
+      links.forEach((el) => el.remove());
+    };
+  }, [heroImagePreloadKey]);
+
   if (items.length === 0) return null;
 
   const wrapFrame = (creator: WitmeShowcaseCreator, idx: number, className: string, imgLoading: "eager" | "lazy") => (
     <WitmeHeroCollageCell
-      key={`${creator.pageSlug}-${idx}`}
+      key={`${creator.pageSlug}-${idx}-${creator.imageUrl.trim()}`}
       creator={creator}
       idx={idx}
       className={className}
