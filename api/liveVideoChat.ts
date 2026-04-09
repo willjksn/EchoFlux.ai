@@ -4,6 +4,7 @@ import { verifyAuth } from "./verifyAuth.js";
 import { createVideoRoom, createMeetingToken, deleteVideoRoom, isDailyConfigured } from "./_dailyco.js";
 import { trackVideoUsage, canCreatorStartVideoChat, getCreatorQuotaStatus } from "./_videoUsageTracking.js";
 import { sendFanNotification } from "./_fanNotifications.js";
+import { resolveCreatorPartyDisplayLabel } from "./_fanDmLabels.js";
 import type { LiveVideoChatSession, LiveVideoChatStatus } from "../types";
 
 const ECHOFLUX_COMMISSION_RATE = 0.10; // 10% commission
@@ -320,8 +321,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           return res.status(400).json({ error: "Room not ready" });
         }
 
-        // Generate token
-        const userName = isCreator ? "Creator" : (session.fanDisplayName || "Fan");
+        // Generate token (Daily shows user_name to the other participant)
+        const userName = isCreator
+          ? await resolveCreatorPartyDisplayLabel(db, session.creatorId)
+          : session.fanDisplayName || "Fan";
         const token = await createMeetingToken(
           session.roomName,
           decoded.uid,
