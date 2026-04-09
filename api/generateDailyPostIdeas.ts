@@ -6,6 +6,8 @@ import { getAdminDb } from "./_firebaseAdmin.js";
 import { verifyAuth } from "./verifyAuth.js";
 import { parseJSON } from "./_geminiShared.js";
 import { enforceRateLimit } from "./_rateLimit.js";
+import { getLatestTrends } from "./_trendsHelper.js";
+import { searchWeb } from "./_webSearch.js";
 
 export interface DailyPostIdeaPayload {
   id: string;
@@ -162,6 +164,11 @@ ${toneSettings.profanity !== undefined && toneSettings.profanity > 0 ? `- Profan
 ${toneSettings.emojiLevel !== undefined ? `- Emoji usage (${toneSettings.emojiLevel}/100): ${toneSettings.emojiLevel < 20 ? 'No emojis' : toneSettings.emojiLevel < 40 ? 'Minimal emojis (1-2)' : toneSettings.emojiLevel < 60 ? 'Moderate emojis' : 'Heavy emoji usage'}` : ''}
 ` : '';
 
+  const personalityPrimary = Boolean(
+    opts.prioritizeCreatorPersonality && creatorContext.trim(),
+  );
+  const effectiveToneStyleGuidance = personalityPrimary ? "" : toneStyleGuidance;
+
   const ideaCount = swapOnly ? "ONE" : opts.generateAllFormats ? "exactly 4 (one per format: Reel, Carousel, Photo, Story)" : "exactly 3";
   
   // Creator profile guidance - conservative by default, only racy when spicyMode enabled
@@ -245,7 +252,7 @@ OUTPUT STRICT JSON ONLY (no markdown, no code fence):
       "id": "idea_<short_unique_id>",
       "format": "${platform === "fan_hub" ? "photo | video | text | poll" : platform === "twitter" ? "tweet | thread | poll | video" : "reel | carousel | photo | story | mixed"}",
       "title": "Short punchy title (3-6 words)",
-      "hook": "FULL ready-to-use caption (2-4 sentences, engaging, matches the content). This is what they'll actually post.",
+      "hook": "FULL ready-to-use caption (2-4 sentences). Optimize for GOAL + reach/engagement; may lean trend/personality/story — not only a literal shot description.",
       "shotList": ["SPECIFIC instruction 1: exactly what to show/do", "SPECIFIC instruction 2", "SPECIFIC instruction 3", "..."],
       "captionStarter": "Alternative caption opening they could use",
       "cta": "Specific call-to-action for this exact post",${platform === "fan_hub" ? "" : `
@@ -333,26 +340,47 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
   const effectiveTone = tone || toneFromProfile || "relatable";
   const creatorContext = [creatorPersonality, niche].filter(Boolean).join("\n");
 
+  const userPlan = typeof (userData as { plan?: string })?.plan === "string" ? (userData as { plan: string }).plan : "Free";
+  const userRole = typeof (userData as { role?: string })?.role === "string" ? (userData as { role: string }).role : undefined;
+
   let trendContext = "";
   if (useTrends) {
     try {
-      const trendRes = await fetch(
-        `${req.headers["x-forwarded-proto"] || "https"}://${req.headers.host}/api/getTrendingContext`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: (req.headers.authorization as string) || "",
-          },
-          body: JSON.stringify({ niche: niche || "lifestyle", platforms: [platform] }),
-        }
-      );
-      if (trendRes.ok) {
-        const data = await trendRes.json();
-        trendContext = data.trendContext || "";
-      }
+      trendContext = await getLatestTrends();
     } catch (e) {
-      console.warn("Trends fetch failed:", e);
+      console.warn("[generateDailyPostIdeas] getLatestTrends failed:", e);
+      trendContext = "";
+    }
+    const nicheLabel = (niche || "lifestyle").trim().slice(0, 100);
+    const platformLabel =
+      platform === "fan_hub"
+        ? "creator fan pages and membership feeds"
+        : platform === "instagram"
+          ? "Instagram Reels and feed"
+          : platform === "twitter"
+            ? "X Twitter"
+            : platform === "facebook"
+              ? "Facebook"
+              : platform;
+    const year = new Date().getFullYear();
+    const trendQueries = [
+      `${nicheLabel} ${platformLabel} viral hooks trends algorithm growth tips creators ${year}`,
+    ];
+    for (const q of trendQueries) {
+      try {
+        const sw = await searchWeb(q, authUser.uid, userPlan, userRole, {
+          maxResults: 5,
+          searchDepth: "basic",
+          allowQuotaUserTrendSearch: true,
+        });
+        if (sw.success && sw.results?.length) {
+          trendContext +=
+            "\n\nLIVE WEB RESEARCH (Tavily — cite at least one concrete angle when relevant):\n" +
+            sw.results.map((r, i) => `${i + 1}. ${r.title}: ${r.snippet}`).join("\n");
+        }
+      } catch (e) {
+        console.warn("[generateDailyPostIdeas] Tavily search failed:", e);
+      }
     }
   }
 

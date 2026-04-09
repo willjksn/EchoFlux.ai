@@ -422,17 +422,26 @@ function EngagementMediaThumb({ url, isVideo }: { url: string | null; isVideo: b
     );
   }
   if (isVideo) {
-    const videoSrc = url.includes("#t=") ? url : `${url}#t=0.1`;
+    const videoSrc = url.split("#")[0];
     return (
       <video
         src={videoSrc}
-        poster={url}
         className="w-full h-full object-cover bg-black"
         muted
         playsInline
         preload="metadata"
         controls={false}
         aria-hidden
+        onLoadedMetadata={(e) => {
+          const v = e.currentTarget;
+          try {
+            if (Number.isFinite(v.duration) && v.duration > 0) {
+              v.currentTime = Math.min(0.1, v.duration * 0.02);
+            }
+          } catch {
+            /* ignore */
+          }
+        }}
       />
     );
   }

@@ -966,13 +966,22 @@ function FeedCard({
             <video
               key={`${post.id}-hub-v-${slideIdx}`}
               ref={feedVideoRef}
-              src={currentUrl.includes("#t=") ? currentUrl : `${currentUrl}#t=0.1`}
-              poster={currentUrl}
+              src={currentUrl.split("#")[0]}
               muted={feedVideoMuted}
               playsInline
               className="feed-card-media feed-card-media-video"
               preload="metadata"
               {...feedVideoDownloadGuardProps}
+              onLoadedMetadata={(e) => {
+                const v = e.currentTarget;
+                try {
+                  if (Number.isFinite(v.duration) && v.duration > 0) {
+                    v.currentTime = Math.min(0.1, v.duration * 0.02);
+                  }
+                } catch {
+                  /* ignore seek errors */
+                }
+              }}
               onPlay={() => setFeedVideoPlaying(true)}
               onPause={() => setFeedVideoPlaying(false)}
               onVolumeChange={(e) => setFeedVideoMuted(e.currentTarget.muted)}

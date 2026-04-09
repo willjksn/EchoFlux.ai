@@ -211,17 +211,20 @@ async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
   });
   if (!ok) return;
 
-  // Fetch user's plan and role from Firestore
-  let userPlan = 'Free';
+  // Fetch user's plan, role, and profile fields from Firestore
+  let userPlan = "Free";
   let userRole: string | undefined;
+  let firestoreUserData: Record<string, unknown> | null = null;
   try {
     const { getAdminDb } = await import("./_firebaseAdmin.js");
     const db = getAdminDb();
     const userDoc = await db.collection("users").doc(authUser.uid).get();
     if (userDoc.exists) {
-      const userData = userDoc.data();
-      userPlan = userData?.plan || 'Free';
-      userRole = userData?.role;
+      firestoreUserData = (userDoc.data() || {}) as Record<string, unknown>;
+      userPlan = (typeof firestoreUserData.plan === "string" && firestoreUserData.plan
+        ? firestoreUserData.plan
+        : "Free") as string;
+      userRole = firestoreUserData.role as string | undefined;
     }
   } catch (error) {
     console.error("Failed to fetch user plan:", error);
@@ -282,7 +285,19 @@ async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
   const sanitizedPromptText = promptText ? sanitizeForAI(promptText, 2000) : undefined;
   const sanitizedTone = tone ? sanitizeForAI(tone, 100) : undefined;
   const sanitizedGoal = goal ? sanitizeForAI(goal, 100) : undefined;
-  const sanitizedCreatorPersonality = creatorPersonality ? sanitizeForAI(creatorPersonality, 1000) : undefined;
+  let personalityForPrompt =
+    creatorPersonality && String(creatorPersonality).trim()
+      ? sanitizeForAI(String(creatorPersonality).trim(), 1000)
+      : undefined;
+  if (usePersonality && !personalityForPrompt?.trim() && firestoreUserData) {
+    const fromRoot =
+      typeof firestoreUserData.creatorPersonality === "string" ? firestoreUserData.creatorPersonality.trim() : "";
+    const settingsBlock = (firestoreUserData.settings || {}) as { creatorPersonality?: string };
+    const fromSettings =
+      typeof settingsBlock.creatorPersonality === "string" ? settingsBlock.creatorPersonality.trim() : "";
+    const raw = fromRoot || fromSettings;
+    if (raw) personalityForPrompt = sanitizeForAI(raw, 1000);
+  }
   const sanitizedFavoriteHashtags = favoriteHashtags ? sanitizeForAI(favoriteHashtags, 500) : undefined;
 
   const normalizedPlatformsEarly = Array.isArray(platforms)
@@ -306,6 +321,14 @@ async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
       p === "twitter"
     );
   });
+  const isFanHubCaption =
+    normalizedPlatformsEarly.some(
+      (p) =>
+        p === "my page" ||
+        p === "mypage" ||
+        p.includes("fan hub") ||
+        p.includes("fanhub"),
+    ) && !isOnlyFansPlatformEarly;
   /** My Page / Facebook / X: no AI hashtags unless useFavoriteHashtags. Instagram: always allow hashtags in output. */
   const includeAiHashtags =
     !isOnlyFansPlatformEarly &&
@@ -475,13 +498,37 @@ ${shouldGenerateOnlyFansHashtags ? '- HASHTAGS MUST BE EXPLICIT AND MATCH THE CA
   let currentTrends = '';
   let onlyfansResearch = '';
   
-  // Always get latest trends from weekly Tavily job (no Tavily calls needed here)
+  // Weekly Tavily job digest (cached) + optional live Tavily for Fan Hub (quota-gated)
+  let fanHubTavilyContext = "";
   try {
     // If this is OnlyFans, prefer OnlyFans-filtered weekly trends for relevance.
     currentTrends = isOnlyFansPlatform ? await getOnlyFansWeeklyTrends() : await getLatestTrends();
   } catch (error) {
     console.error('[generateCaptions] Error fetching trends:', error);
     currentTrends = 'Trend data unavailable. Using general best practices.';
+  }
+
+  if (isFanHubCaption && !isOnlyFansPlatform) {
+    try {
+      const { searchWeb } = await import("./_webSearch.js");
+      const nicheRaw =
+        firestoreUserData && typeof firestoreUserData.niche === "string"
+          ? firestoreUserData.niche.trim().slice(0, 80)
+          : "creator";
+      const q = `${nicheRaw} fan page membership community engagement viral hooks ${new Date().getFullYear()}`;
+      const sw = await searchWeb(q, authUser.uid, userPlan, userRole, {
+        maxResults: 5,
+        searchDepth: "basic",
+        allowQuotaUserTrendSearch: true,
+      });
+      if (sw.success && sw.results?.length) {
+        fanHubTavilyContext =
+          "\nLIVE WEB RESEARCH (Tavily — use when it improves the caption):\n" +
+          sw.results.map((r, i) => `${i + 1}. ${r.title}: ${r.snippet}`).join("\n");
+      }
+    } catch (e) {
+      console.warn("[generateCaptions] Fan Hub Tavily context skipped:", e);
+    }
   }
   
   // Get OnlyFans-specific research if OnlyFans platform is detected
@@ -559,10 +606,22 @@ ONLYFANS EXPLICIT MODE (HIGH INTENSITY):
 `
     : "";
 
+  const strategicMediaCaptionHint =
+    !isExplicitContent &&
+    !isOnlyFansPlatform &&
+    (Boolean(finalMedia) || finalMediaList.length > 0)
+      ? `
+MEDIA + CAPTION STRATEGY (general / non-explicit):
+- Media may be attached, but the caption does NOT have to be a literal scene description if a stronger angle fits the PRIMARY GOAL, trends (weekly + any live research above), and (when enabled) creator personality.
+- Prefer hooks that drive saves, comments, DMs, or follows when that matches the goal; stay believable for the post (mood, theme, or implied connection is enough).
+`
+      : "";
+
   // Build prompt
   const desiredCaptionCount = isOnlyFansPlatform ? 5 : 3;
   // For carousels, we generate the same number of variants, but each must summarize all media.
   const prompt = `
+${strategicMediaCaptionHint}
 ${sanitizedPromptText ? `
 🚨 USER INSTRUCTIONS ARE PRIMARY (MUST FOLLOW FIRST) 🚨
 - The user provided specific instructions or suggestions for what they want in the caption (see "Extra instructions" / USER INSTRUCTIONS below).
@@ -617,9 +676,11 @@ ${platforms.map(platform => {
     return `- My Page (Fan Hub): Do NOT generate hashtags - Fan Hub does not use hashtags. Return "hashtags": [] for every caption.
 - NEVER say "link in bio" - this IS their own page, there's no external link needed.
 - Optimal length: 100-500 characters. Write engaging, personal content for your fan community.
-- Focus on connection, exclusivity, and fan engagement. Use casual, authentic language.
-- Can include light CTAs for tips, your store, or engagement (likes, comments).
-- Emojis are encouraged (2-4) to add personality and warmth.
+- Focus on connection, exclusivity, retention, tips, and comments — optimize for member engagement and "sticky" feed behavior.
+- When LIVE WEB RESEARCH (Tavily) appears above, you may lean on a timely hook, meme, or community pattern if it fits the creator and user instructions.
+- The caption does NOT have to literally describe the image/video if a stronger angle serves engagement (story, hot take, question, trend tie-in) — still keep the post believable for the media when media is attached.
+- When "Use creator personality" is on, match that voice first; trends and goal are supporting layers.
+- Use casual, authentic language. Emojis are encouraged (2-4) when they fit the voice.
 - If the user provides specific keywords or themes, you MUST incorporate them directly into the caption.`;
   }
   if (platformName.includes('instagram')) {
@@ -687,9 +748,9 @@ ${isOnlyFansPlatform ? `
 - Gemini has knowledge of OnlyFans/Fansly/Fanvue creator culture - use that knowledge to write authentically
 ` : ''}
 
-${usePersonality && sanitizedCreatorPersonality ? `
+${usePersonality && personalityForPrompt ? `
 🎯 CREATOR PERSONALITY & BRAND VOICE (PRIMARY WHEN THIS TOGGLE IS ON):
-${sanitizedCreatorPersonality}
+${personalityForPrompt}
 
 CREATOR PERSONALITY OVERRIDE (ENABLED — THIS TOGGLES "USE CREATOR PERSONALITY"):
 - The creator turned ON "Use creator personality." This personality text is the PRIMARY authority for voice, vocabulary, attitude, humor level, formality, and brand style in the captions.

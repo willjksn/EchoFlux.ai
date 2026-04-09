@@ -815,8 +815,10 @@ DO NOT include hashtags.`;
         body: JSON.stringify({
           promptText,
           platforms: ["my page"],
+          goal: "Increase Followers/Fans",
           tone: effectiveTone,
           usePersonality,
+          creatorPersonality: user?.settings?.creatorPersonality?.trim() || undefined,
           toneSettings: { 
             spiciness: spicyLevel * 10,
             // Add randomness seed to ensure unique results
@@ -841,7 +843,7 @@ DO NOT include hashtags.`;
     } finally {
       setGenerating(false);
     }
-  }, [caption, aiTone, customTone, usePersonality, contentSpiciness, showToast]);
+  }, [caption, aiTone, customTone, usePersonality, contentSpiciness, showToast, user?.settings?.creatorPersonality]);
 
   // Poll handlers
   const addPollOption = () => {

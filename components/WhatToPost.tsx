@@ -609,17 +609,8 @@ export const WhatToPost: React.FC<WhatToPostProps> = ({ onOpenAdvanced }) => {
 
               {/* Creator personality overrides tone/sliders (same as Compose when personality is on) */}
               <div className="rounded-lg border border-gray-200 dark:border-gray-600 p-3">
-                <label className="flex items-start gap-3 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    className="mt-1 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
-                    checked={draftSettings.prioritizeCreatorPersonality === true}
-                    disabled={!user.settings?.creatorPersonality?.trim()}
-                    onChange={(e) =>
-                      setDraftSettings((p) => ({ ...p, prioritizeCreatorPersonality: e.target.checked }))
-                    }
-                  />
-                  <span>
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0 flex-1" id="what-to-post-personality-label">
                     <span className="block text-sm font-medium text-gray-900 dark:text-white">
                       Personality first
                     </span>
@@ -633,8 +624,33 @@ export const WhatToPost: React.FC<WhatToPostProps> = ({ onOpenAdvanced }) => {
                         </span>
                       ) : null}
                     </span>
-                  </span>
-                </label>
+                  </div>
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={draftSettings.prioritizeCreatorPersonality === true}
+                    aria-labelledby="what-to-post-personality-label"
+                    disabled={!user.settings?.creatorPersonality?.trim()}
+                    onClick={() =>
+                      setDraftSettings((p) => ({
+                        ...p,
+                        prioritizeCreatorPersonality: !p.prioritizeCreatorPersonality,
+                      }))
+                    }
+                    className={`relative inline-block h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-800 ${
+                      draftSettings.prioritizeCreatorPersonality
+                        ? "bg-primary-600"
+                        : "bg-gray-200 dark:bg-gray-600"
+                    } disabled:opacity-50 disabled:cursor-not-allowed`}
+                  >
+                    <span
+                      aria-hidden
+                      className={`pointer-events-none absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform duration-200 ease-in-out ${
+                        draftSettings.prioritizeCreatorPersonality ? "translate-x-5" : "translate-x-0"
+                      }`}
+                    />
+                  </button>
+                </div>
               </div>
             </div>
             <div className="mt-6 flex justify-end">

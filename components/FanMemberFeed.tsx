@@ -658,12 +658,21 @@ function FanMemberPostMedia({
         lockedCurrent ? (
           <video
             key={`${post.id}-v-${idx}`}
-            src={currentUrl.includes("#t=") ? currentUrl : `${currentUrl}#t=0.1`}
-            poster={currentUrl}
+            src={currentUrl.split("#")[0]}
             controls={false}
             className={splitModal ? "feed-comments-modal-media feed-comments-modal-media-video" : "feed-card-media feed-card-media-video"}
             playsInline
             preload="metadata"
+            onLoadedMetadata={(e) => {
+              const v = e.currentTarget;
+              try {
+                if (Number.isFinite(v.duration) && v.duration > 0) {
+                  v.currentTime = Math.min(0.1, v.duration * 0.02);
+                }
+              } catch {
+                /* ignore */
+              }
+            }}
           />
         ) : splitModal ? (
           <ViewPostModalVideo
@@ -674,13 +683,22 @@ function FanMemberPostMedia({
         ) : (
           <video
             key={`${post.id}-v-${idx}`}
-            src={currentUrl.includes("#t=") ? currentUrl : `${currentUrl}#t=0.1`}
-            poster={currentUrl}
+            src={currentUrl.split("#")[0]}
             controls
             className="feed-card-media feed-card-media-video"
             playsInline
             preload="metadata"
             {...feedVideoDownloadGuardProps}
+            onLoadedMetadata={(e) => {
+              const v = e.currentTarget;
+              try {
+                if (Number.isFinite(v.duration) && v.duration > 0) {
+                  v.currentTime = Math.min(0.1, v.duration * 0.02);
+                }
+              } catch {
+                /* ignore */
+              }
+            }}
           />
         )
       ) : (

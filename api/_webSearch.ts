@@ -1,5 +1,7 @@
-import fetch from "node-fetch";
 import { canUseTavily, recordTavilyApiCall, recordTavilyUsage } from "./_tavilyUsage.js";
+
+/** Native fetch (Node 18+ / Vercel). Avoids relying on hoisted `node-fetch` for serverless bundles. */
+const httpFetch = globalThis.fetch.bind(globalThis);
 
 export interface WebSearchResult {
   title: string;
@@ -18,6 +20,12 @@ export interface WebSearchOptions {
   maxResults?: number;
   searchDepth?: "basic" | "advanced";
   bypassCache?: boolean;
+  /**
+   * When true with a real userId + userPlan, allows Tavily for that user if `canUseTavily` permits
+   * (Pro/Elite monthly quota). Used for server-orchestrated trend research (e.g. What to Post).
+   * Admins and system callers are unchanged.
+   */
+  allowQuotaUserTrendSearch?: boolean;
 }
 
 // Simple in-memory cache for Tavily results (resets on server restart)
@@ -88,13 +96,15 @@ export async function searchWeb(
   const apiKey = process.env.TAVILY_API_KEY;
 
   // COST CONTROL / POLICY:
-  // Only allow Tavily for:
-  // - system jobs (no userId), e.g. weeklyTrendsJob
-  // - Admin users
-  // All end-user requests (including anonymous/public) must NOT trigger Tavily.
+  // - System jobs (no userId), e.g. weeklyTrendsJob
+  // - Admin users (unlimited)
+  // - Server features that pass allowQuotaUserTrendSearch + userId + plan: gated by monthly quota (Pro/Elite)
   const isSystemCaller = !userId;
   const isAdminCaller = userRole === "Admin";
-  if (!isSystemCaller && !isAdminCaller) {
+  const allowQuotaUser =
+    options?.allowQuotaUserTrendSearch === true &&
+    Boolean(userId && userPlan && String(userPlan).trim());
+  if (!isSystemCaller && !isAdminCaller && !allowQuotaUser) {
     return {
       success: false,
       note:
@@ -143,7 +153,7 @@ export async function searchWeb(
 
   try {
     console.log('[Tavily] Searching web for:', query);
-    const res = await fetch("https://api.tavily.com/search", {
+    const res = await httpFetch("https://api.tavily.com/search", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
