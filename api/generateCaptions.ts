@@ -166,6 +166,10 @@ async function generateWithRetry(
   throw lastError;
 }
 
+/** Only the first minute is sent to the model when we trim (Cloudinary or client clip). */
+const VIDEO_CAPTION_ANALYZE_SEC = 60;
+const VIDEO_CAPTION_MAX_DURATION_SEC = 600;
+
 // Convert external image/video URL → inlineData
 async function fetchMediaFromUrl(mediaUrl: string): Promise<MediaData | null> {
   try {
@@ -182,6 +186,38 @@ async function fetchMediaFromUrl(mediaUrl: string): Promise<MediaData | null> {
     console.error("Error fetching media:", error);
     return null;
   }
+}
+
+function cloudinaryVideoFetchTrimUrl(remoteUrl: string, durationSec: number): string | null {
+  const cloudName = process.env.CLOUDINARY_CLOUD_NAME?.trim();
+  if (!cloudName) return null;
+  try {
+    const enc = encodeURIComponent(remoteUrl);
+    return `https://res.cloudinary.com/${cloudName}/video/fetch/f_mp4,du_${durationSec}/${enc}`;
+  } catch {
+    return null;
+  }
+}
+
+function urlProbablyVideoByString(u: string): boolean {
+  return /\.(mp4|mov|webm|m4v|mkv|avi)(\?|#|$)/i.test(u);
+}
+
+/** Prefer Cloudinary trim for remote videos so we do not pull multi-minute files into the function. */
+async function fetchMediaFromUrlWithVideoTrim(remoteUrl: string): Promise<MediaData | null> {
+  if (!urlProbablyVideoByString(remoteUrl)) {
+    return fetchMediaFromUrl(remoteUrl);
+  }
+  const trimUrl = cloudinaryVideoFetchTrimUrl(remoteUrl, VIDEO_CAPTION_ANALYZE_SEC);
+  if (trimUrl) {
+    const trimmed = await fetchMediaFromUrl(trimUrl);
+    if (trimmed?.mimeType?.startsWith("video/")) {
+      console.log("[generateCaptions] Using Cloudinary first-60s trim");
+      return trimmed;
+    }
+    console.warn("[generateCaptions] Cloudinary trim failed or returned non-video; fetching full URL");
+  }
+  return fetchMediaFromUrl(remoteUrl);
 }
 
 async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
@@ -305,7 +341,23 @@ async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
       randomSeed?: number;
     };
   } = req.body || {};
-  
+
+  const rawVideoDur = (req.body as { videoDurationSec?: unknown })?.videoDurationSec;
+  let videoDurationSec: number | undefined;
+  if (typeof rawVideoDur === "number" && Number.isFinite(rawVideoDur) && rawVideoDur > 0) {
+    videoDurationSec = rawVideoDur;
+  } else if (typeof rawVideoDur === "string" && rawVideoDur.trim()) {
+    const n = Number(rawVideoDur.trim());
+    if (Number.isFinite(n) && n > 0) videoDurationSec = n;
+  }
+  if (videoDurationSec != null && videoDurationSec > VIDEO_CAPTION_MAX_DURATION_SEC) {
+    res.status(413).json({
+      error: "VIDEO_TOO_LONG",
+      note: `Video is too long (${Math.ceil(videoDurationSec / 60)} min). Maximum for AI captions is ${VIDEO_CAPTION_MAX_DURATION_SEC / 60} minutes — trim or use a shorter clip.`,
+    });
+    return;
+  }
+
   // Sanitize text inputs
   const sanitizedPromptText = promptText ? sanitizeForAI(promptText, 2000) : undefined;
   const sanitizedTone = tone ? sanitizeForAI(tone, 100) : undefined;
@@ -448,14 +500,13 @@ async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
     : [];
 
   if (normalizedMediaUrls.length > 0) {
-    // Carousel: fetch each media item
+    // Carousel: fetch each media item (trim remote videos to first 60s when Cloudinary is configured)
     for (const u of normalizedMediaUrls) {
-      const fetched = await fetchMediaFromUrl(u);
+      const fetched = await fetchMediaFromUrlWithVideoTrim(u);
       if (fetched) finalMediaList.push(fetched);
     }
   } else if (mediaUrl) {
-    // Always use URL if available (avoids payload size issues)
-    const fetched = await fetchMediaFromUrl(mediaUrl);
+    const fetched = await fetchMediaFromUrlWithVideoTrim(mediaUrl);
     if (fetched) finalMedia = fetched;
   } else if (mediaData?.data && mediaData?.mimeType) {
     // Only use mediaData if no URL provided (for backwards compatibility)
@@ -902,21 +953,15 @@ ALL CAPTIONS:
 ` : ''}
 
 ${isVideo ? `
-IMPORTANT: You are analyzing a VIDEO file. Watch the entire video and analyze:
-- The complete narrative/story being told
-- Key scenes and transitions throughout the video
-- Actions, movements, and visual elements across all frames
-- The overall mood, pacing, and visual style
-- Any text, graphics, or on-screen elements
-- The beginning, middle, and end of the video
-- What happens throughout the entire video duration
+IMPORTANT: You are analyzing a VIDEO clip. The file may be ONLY THE FIRST ~${VIDEO_CAPTION_ANALYZE_SEC} SECONDS of a longer recording (trimmed for speed). Do not assume you saw the full video.
+- Focus on what happens in this opening segment: key actions, mood, pacing, and visual style
+- If the clip feels like an intro or teaser, captions can reflect that ("wait until you see…") without claiming you saw the ending
+- Describe movements, setting, and on-screen elements visible in this segment
 ${isExplicitContent ? `
-- For EXPLICIT content: Analyze sexual/explicit scenes, poses, intimate actions, explicit content shown
-- Describe EXPLICIT/SEXUAL details with BOLD, DIRECT, EXPLICIT language - what sexual/explicit content is happening
-- Focus on EXPLICIT SEXUAL CONTENT shown throughout the video - describe with explicit adult terminology
+- For EXPLICIT content: Describe explicit/intimate content visible in THIS segment with bold, direct adult language where appropriate
 ` : ''}
 
-Create captions that capture the full video experience, not just a single frame.
+Create captions that match the segment you can see; it is fine to imply there is more beyond this clip.
 ` : isCarousel ? `
 IMPORTANT: You are analyzing a CAROUSEL (multiple images/videos) for a single post.
 - You will be given multiple media items representing one coherent post.

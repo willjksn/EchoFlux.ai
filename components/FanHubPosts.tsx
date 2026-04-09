@@ -23,6 +23,7 @@ import { FanHubFeed, type FeedPost } from "./FanHubFeed";
 import { EmojiButton } from "./EmojiPicker";
 import { useCreatorHandle } from "../src/hooks/useCreatorHandle";
 import { canUseSjHeartEmoji } from "../src/lib/customEmoji";
+import { maybeTrimVideoForCaption } from "../src/lib/videoCaptionClip";
 
 type CaptionStyle = "static" | "scroll-up" | "scroll-across" | "dissolve";
 type AiTone = "" | "flirty" | "casual" | "motivational" | "premium" | "playful" | "mysterious" | "confident" | "custom";
@@ -924,8 +925,45 @@ Write 2-4 sentences that are engaging and on-topic.`;
         promptText = undefined;
       }
 
-      const mediaPayload = await resolveFanHubCaptionMedia(media);
+      let mediaPayload = await resolveFanHubCaptionMedia(media);
       const regenerationNonce = Date.now();
+
+      const visualForCaption = media.filter((m) => m.type === "image" || m.type === "video");
+      const singleVideoOnly =
+        visualForCaption.length === 1 && visualForCaption[0]!.type === "video";
+      let videoDurationSec: number | undefined;
+      if (singleVideoOnly) {
+        const v = visualForCaption[0]!;
+        let vidUrl: string | null = null;
+        let revoke: string | null = null;
+        try {
+          if (typeof v.url === "string" && (v.url.startsWith("https://") || v.url.startsWith("http://"))) {
+            vidUrl = v.url;
+          } else if (typeof v.url === "string" && v.url.startsWith("blob:")) {
+            vidUrl = v.url;
+          } else if (v.file) {
+            revoke = URL.createObjectURL(v.file);
+            vidUrl = revoke;
+          }
+          if (vidUrl) {
+            const trim = await maybeTrimVideoForCaption(vidUrl, true);
+            if (!trim.ok) {
+              showToast?.(trim.error, "error");
+              return;
+            }
+            if ("mediaData" in trim && trim.mediaData) {
+              mediaPayload = { mediaData: trim.mediaData };
+            } else if ("mediaUrl" in trim && trim.mediaUrl) {
+              mediaPayload = { mediaUrl: trim.mediaUrl };
+            }
+            if ("videoDurationSec" in trim && trim.videoDurationSec != null && trim.videoDurationSec > 0) {
+              videoDurationSec = trim.videoDurationSec;
+            }
+          }
+        } finally {
+          if (revoke) URL.revokeObjectURL(revoke);
+        }
+      }
 
       // If the box still contains a long prior AI caption, don't force "write about this exact text" — anchor on media like Compose.
       if (
@@ -941,6 +979,7 @@ Write 2-4 sentences that are engaging and on-topic.`;
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({
           ...(mediaPayload ?? {}),
+          ...(typeof videoDurationSec === "number" && videoDurationSec > 0 ? { videoDurationSec } : {}),
           ...(promptText != null ? { promptText } : {}),
           platforms: ["my page"],
           goal: "Increase Followers/Fans",

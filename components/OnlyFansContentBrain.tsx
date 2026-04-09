@@ -8,6 +8,7 @@ import { OnlyFansCalendarEvent } from './OnlyFansCalendar';
 import { FanSelector } from './FanSelector';
 import { loadEmojiSettings } from '../src/utils/loadEmojiSettings';
 import { findAdultTrends } from '../src/services/geminiService';
+import { maybeTrimVideoForCaption } from '../src/lib/videoCaptionClip';
 
 type ContentType = 'captions' | 'mediaCaptions' | 'postIdeas' | 'shootConcepts' | 'weeklyPlan' | 'trends' | 'monetizationPlanner' | 'messaging' | 'guides' | 'history';
 
@@ -72,6 +73,30 @@ async function fetchGenerateCaptionsJson(url: string, init: RequestInit): Promis
         throw new Error(o.note || o.message || o.error || "Caption generation failed.");
     }
     return parsed as any;
+}
+
+async function applyVideoCaptionFieldsToBody(
+    base: Record<string, unknown>,
+    mediaUrl: string | undefined | null,
+    isVideo: boolean
+): Promise<{ error: string } | { body: Record<string, unknown> }> {
+    if (!isVideo || !mediaUrl || (!mediaUrl.startsWith('https://') && !mediaUrl.startsWith('http://'))) {
+        return { body: { ...base } };
+    }
+    const trim = await maybeTrimVideoForCaption(mediaUrl, true);
+    if (!trim.ok) return { error: trim.error };
+    const out = { ...base };
+    delete out.mediaUrl;
+    delete out.mediaData;
+    if ("mediaData" in trim && trim.mediaData) {
+        out.mediaData = trim.mediaData;
+    } else if ("mediaUrl" in trim && trim.mediaUrl) {
+        out.mediaUrl = trim.mediaUrl;
+    }
+    if (trim.videoDurationSec != null && trim.videoDurationSec > 0) {
+        out.videoDurationSec = trim.videoDurationSec;
+    }
+    return { body: out };
 }
 
 // Predict Modal Component (similar to Compose)
@@ -1804,24 +1829,34 @@ export const OnlyFansContentBrain: React.FC<OnlyFansContentBrainProps> = ({ init
             const emojiSettings = await loadEmojiSettings(user.id);
 
             const captionsUrl = new URL('/api/generateCaptions', window.location.origin);
+            const baseBody: Record<string, unknown> = {
+                mediaUrl: uploadedMediaUrl || undefined,
+                tone: finalTone === 'Explicit' ? 'Sexy / Explicit' : finalTone,
+                goal: captionGoal,
+                platforms: [selectedPlatform],
+                promptText: uploadedMediaUrl 
+                    ? `${promptSeed || `Analyze this image/video in detail and describe what you see. Create explicit captions tailored for ${selectedPlatform}. Mention ${selectedPlatform} naturally when it helps drive subs (e.g., "come see me on ${selectedPlatform}") but only when it fits the line. Be very descriptive and explicit about what is visually present.`}${personalityContext}${fanContext}\n\n[CRITICAL - GENERATE FRESH CAPTIONS: Variety seed ${Date.now()}-${Math.random().toString(36).substr(2, 9)}-${Math.random().toString(36).substr(2, 9)}] - You MUST generate completely NEW, UNIQUE captions that are DIFFERENT from any previous generation. Do NOT reuse, repeat, or modify previous captions. Create entirely fresh content with different wording, structure, and angles each time.`
+                    : `${promptSeed || `Create explicit captions tailored for ${selectedPlatform}. Mention ${selectedPlatform} naturally when it helps drive subs (e.g., "come see me on ${selectedPlatform}") but only when it fits the line.`}${personalityContext}${fanContext}\n\n[CRITICAL - GENERATE FRESH CAPTIONS: Variety seed ${Date.now()}-${Math.random().toString(36).substr(2, 9)}-${Math.random().toString(36).substr(2, 9)}] - You MUST generate completely NEW, UNIQUE captions that are DIFFERENT from any previous generation. Do NOT reuse, repeat, or modify previous captions. Create entirely fresh content with different wording, structure, and angles each time.`,
+                emojiEnabled: emojiSettings.enabled,
+                emojiIntensity: emojiSettings.intensity,
+            };
+            const clipPrep = await applyVideoCaptionFieldsToBody(
+                baseBody,
+                uploadedMediaUrl,
+                uploadedMediaType === 'video'
+            );
+            if ('error' in clipPrep) {
+                showToast?.(clipPrep.error, 'error');
+                setError(clipPrep.error);
+                return;
+            }
             const data = await fetchGenerateCaptionsJson(captionsUrl.toString(), {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                     ...(token ? { Authorization: `Bearer ${token}` } : {}),
                 },
-                body: JSON.stringify({
-                    mediaUrl: uploadedMediaUrl || undefined, // Include media URL to analyze image/video
-                    tone: finalTone === 'Explicit' ? 'Sexy / Explicit' : finalTone,
-                    goal: captionGoal,
-                    // Target all premium creator platforms we support
-                    platforms: [selectedPlatform],
-                    promptText: uploadedMediaUrl 
-                        ? `${promptSeed || `Analyze this image/video in detail and describe what you see. Create explicit captions tailored for ${selectedPlatform}. Mention ${selectedPlatform} naturally when it helps drive subs (e.g., "come see me on ${selectedPlatform}") but only when it fits the line. Be very descriptive and explicit about what is visually present.`}${personalityContext}${fanContext}\n\n[CRITICAL - GENERATE FRESH CAPTIONS: Variety seed ${Date.now()}-${Math.random().toString(36).substr(2, 9)}-${Math.random().toString(36).substr(2, 9)}] - You MUST generate completely NEW, UNIQUE captions that are DIFFERENT from any previous generation. Do NOT reuse, repeat, or modify previous captions. Create entirely fresh content with different wording, structure, and angles each time.`
-                        : `${promptSeed || `Create explicit captions tailored for ${selectedPlatform}. Mention ${selectedPlatform} naturally when it helps drive subs (e.g., "come see me on ${selectedPlatform}") but only when it fits the line.`}${personalityContext}${fanContext}\n\n[CRITICAL - GENERATE FRESH CAPTIONS: Variety seed ${Date.now()}-${Math.random().toString(36).substr(2, 9)}-${Math.random().toString(36).substr(2, 9)}] - You MUST generate completely NEW, UNIQUE captions that are DIFFERENT from any previous generation. Do NOT reuse, repeat, or modify previous captions. Create entirely fresh content with different wording, structure, and angles each time.`,
-                    emojiEnabled: emojiSettings.enabled,
-                    emojiIntensity: emojiSettings.intensity,
-                }),
+                body: JSON.stringify(clipPrep.body),
             });
             // API returns array of {caption: string, hashtags: string[]}
             let captions: string[] = [];
@@ -2462,21 +2497,30 @@ Format as a numbered list with brief descriptions. For each idea, clearly specif
 
             const emojiSettings = await loadEmojiSettings(user.id);
             const captionsUrl = new URL('/api/generateCaptions', window.location.origin);
+            const isWeeklyVideo =
+                overrideMedia?.mediaType === 'video' || cardState?.mediaType === 'video';
+            const weeklyBase: Record<string, unknown> = {
+                mediaUrl,
+                tone: finalTone === 'Explicit' ? 'Sexy / Explicit' : finalTone,
+                goal: captionGoal,
+                platforms: [selectedPlatform],
+                promptText: `${promptSeed}${personalityContext ? `\n\n${personalityContext}` : ''}\n\n[CRITICAL - GENERATE FRESH CAPTIONS: Variety seed ${Date.now()}-${Math.random().toString(36).substr(2, 9)}] - Generate unique captions.`,
+                emojiEnabled: emojiSettings.enabled,
+                emojiIntensity: emojiSettings.intensity,
+            };
+            const weeklyClip = await applyVideoCaptionFieldsToBody(weeklyBase, mediaUrl, isWeeklyVideo);
+            if ('error' in weeklyClip) {
+                updateWeeklyPlanCardState(action.cardKey, { isGenerating: false, error: weeklyClip.error });
+                showToast?.(weeklyClip.error, 'error');
+                return;
+            }
             const data = await fetchGenerateCaptionsJson(captionsUrl.toString(), {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                     ...(token ? { Authorization: `Bearer ${token}` } : {}),
                 },
-                body: JSON.stringify({
-                    mediaUrl,
-                    tone: finalTone === 'Explicit' ? 'Sexy / Explicit' : finalTone,
-                    goal: captionGoal,
-                    platforms: [selectedPlatform],
-                    promptText: `${promptSeed}${personalityContext ? `\n\n${personalityContext}` : ''}\n\n[CRITICAL - GENERATE FRESH CAPTIONS: Variety seed ${Date.now()}-${Math.random().toString(36).substr(2, 9)}] - Generate unique captions.`,
-                    emojiEnabled: emojiSettings.enabled,
-                    emojiIntensity: emojiSettings.intensity,
-                }),
+                body: JSON.stringify(weeklyClip.body),
             });
             let captions: string[] = [];
             if (Array.isArray(data)) {
@@ -3837,22 +3881,33 @@ Output format:
             const emojiSettings = await loadEmojiSettings(user.id);
             
             const captionsUrl = new URL('/api/generateCaptions', window.location.origin);
+            const mediaTabBase: Record<string, unknown> = {
+                mediaUrl,
+                tone: mediaCaptionTone === 'Explicit' ? 'Sexy / Explicit' : mediaCaptionTone,
+                goal: mediaCaptionGoal,
+                platforms: [selectedPlatform],
+                promptText: `${(mediaCaptionPrompt || '') || `Create explicit captions tailored for ${selectedPlatform}. Mention ${selectedPlatform} naturally when it helps drive subs (e.g., "join me on ${selectedPlatform}") but only when it fits the line.`} [Variety seed: ${Date.now()}-${Math.random().toString(36).substr(2, 9)}] - Generate diverse, unique captions each time. Avoid repetition.`.trim(),
+                analyticsData: buildAnalyticsData(),
+                emojiEnabled: emojiSettings.enabled,
+                emojiIntensity: emojiSettings.intensity,
+            };
+            const mediaTabClip = await applyVideoCaptionFieldsToBody(
+                mediaTabBase,
+                mediaUrl,
+                mediaFile.type.startsWith('video/')
+            );
+            if ('error' in mediaTabClip) {
+                showToast?.(mediaTabClip.error, 'error');
+                setError(mediaTabClip.error);
+                return;
+            }
             const data = await fetchGenerateCaptionsJson(captionsUrl.toString(), {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                     ...(token ? { Authorization: `Bearer ${token}` } : {}),
                 },
-                body: JSON.stringify({
-                    mediaUrl: mediaUrl, // Use Firebase Storage URL instead of base64
-                    tone: mediaCaptionTone === 'Explicit' ? 'Sexy / Explicit' : mediaCaptionTone,
-                    goal: mediaCaptionGoal,
-                    platforms: [selectedPlatform],
-                    promptText: `${(mediaCaptionPrompt || '') || `Create explicit captions tailored for ${selectedPlatform}. Mention ${selectedPlatform} naturally when it helps drive subs (e.g., "join me on ${selectedPlatform}") but only when it fits the line.`} [Variety seed: ${Date.now()}-${Math.random().toString(36).substr(2, 9)}] - Generate diverse, unique captions each time. Avoid repetition.`.trim(),
-                    analyticsData: buildAnalyticsData(),
-                    emojiEnabled: emojiSettings.enabled,
-                    emojiIntensity: emojiSettings.intensity,
-                }),
+                body: JSON.stringify(mediaTabClip.body),
             });
             // API returns array of {caption: string, hashtags: string[]}
             let captions: {caption: string; hashtags: string[]}[] = [];
@@ -4043,21 +4098,32 @@ Output format:
             const emojiSettings = await loadEmojiSettings(user.id);
             
             const captionsUrl = new URL('/api/generateCaptions', window.location.origin);
+            const regenBase: Record<string, unknown> = {
+                mediaUrl: uploadedMediaUrl,
+                tone: finalTone === 'Explicit' ? 'Sexy / Explicit' : finalTone,
+                goal: captionGoal,
+                platforms: [selectedPlatform],
+                promptText: `${String(captionPrompt || '') || `Analyze this image/video in detail and describe what you see. Create explicit ${selectedPlatform} captions based on the actual content shown. Be very descriptive and explicit about what is visually present. Mention ${selectedPlatform} naturally only when it helps drive subs.`} [Variety seed: ${Date.now()}-${Math.random().toString(36).substr(2, 9)}] - Generate diverse, unique captions each time. Avoid repetition.`.trim(),
+                emojiEnabled: emojiSettings.enabled,
+                emojiIntensity: emojiSettings.intensity,
+            };
+            const regenClip = await applyVideoCaptionFieldsToBody(
+                regenBase,
+                uploadedMediaUrl,
+                uploadedMediaType === 'video'
+            );
+            if ('error' in regenClip) {
+                showToast?.(regenClip.error, 'error');
+                setError(regenClip.error);
+                return;
+            }
             const data = await fetchGenerateCaptionsJson(captionsUrl.toString(), {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                     ...(token ? { Authorization: `Bearer ${token}` } : {}),
                 },
-                body: JSON.stringify({
-                    mediaUrl: uploadedMediaUrl,
-                    tone: finalTone === 'Explicit' ? 'Sexy / Explicit' : finalTone,
-                    goal: captionGoal,
-                    platforms: [selectedPlatform],
-                    promptText: `${String(captionPrompt || '') || `Analyze this image/video in detail and describe what you see. Create explicit ${selectedPlatform} captions based on the actual content shown. Be very descriptive and explicit about what is visually present. Mention ${selectedPlatform} naturally only when it helps drive subs.`} [Variety seed: ${Date.now()}-${Math.random().toString(36).substr(2, 9)}] - Generate diverse, unique captions each time. Avoid repetition.`.trim(),
-                    emojiEnabled: emojiSettings.enabled,
-                    emojiIntensity: emojiSettings.intensity,
-                }),
+                body: JSON.stringify(regenClip.body),
             });
             let captions: {caption: string; hashtags: string[]}[] = [];
             if (Array.isArray(data)) {
