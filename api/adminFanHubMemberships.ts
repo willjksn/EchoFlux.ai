@@ -494,8 +494,69 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           updatedAt: chosen.updatedAt || existing.updatedAt || rowWithBackfill.updatedAt,
         });
       }
-      byFan[fanId] = Array.from(dedupedByCreator.values())
-        .sort((a, b) => a.creatorName.localeCompare(b.creatorName));
+
+      const mergeMembershipRows = (a: MembershipRow, b: MembershipRow): MembershipRow => {
+        const primary = statusRank(b.status) > statusRank(a.status) ? b : a;
+        const secondary = statusRank(b.status) > statusRank(a.status) ? a : b;
+        const name = (n: string) => n.trim().toLowerCase();
+        const pickName =
+          primary.creatorName && name(primary.creatorName) !== "unknown creator"
+            ? primary.creatorName
+            : secondary.creatorName && name(secondary.creatorName) !== "unknown creator"
+              ? secondary.creatorName
+              : primary.creatorName || secondary.creatorName;
+        const pickId =
+          normalizeCreatorId(primary.creatorId) || normalizeCreatorId(secondary.creatorId) || primary.creatorId;
+        return {
+          ...primary,
+          creatorId: pickId,
+          creatorName: pickName,
+          creatorHandle: primary.creatorHandle || secondary.creatorHandle,
+          purchaseCount: Math.max(a.purchaseCount || 0, b.purchaseCount || 0),
+          purchasesCents: Math.max(a.purchasesCents || 0, b.purchasesCents || 0),
+          tipCount: Math.max(a.tipCount || 0, b.tipCount || 0),
+          tipsCents: Math.max(a.tipsCents || 0, b.tipsCents || 0),
+          totalSpentCents: Math.max(a.totalSpentCents || 0, b.totalSpentCents || 0),
+          subscriptionPriceCents: Math.max(a.subscriptionPriceCents || 0, b.subscriptionPriceCents || 0),
+        };
+      };
+
+      let merged = Array.from(dedupedByCreator.values());
+      const byLowerName = new Map<string, MembershipRow>();
+      const unknownOrEmpty: MembershipRow[] = [];
+      for (const r of merged) {
+        const n = (r.creatorName || "").trim().toLowerCase();
+        if (!n || n === "unknown creator") {
+          unknownOrEmpty.push(r);
+          continue;
+        }
+        const prev = byLowerName.get(n);
+        if (!prev) {
+          byLowerName.set(n, r);
+          continue;
+        }
+        byLowerName.set(n, mergeMembershipRows(prev, r));
+      }
+
+      let finalRows: MembershipRow[] = [];
+      if (byLowerName.size > 0) {
+        finalRows = Array.from(byLowerName.values());
+        if (unknownOrEmpty.length > 0) {
+          if (finalRows.length === 1) {
+            let base = finalRows[0];
+            for (const u of unknownOrEmpty) {
+              base = mergeMembershipRows(base, u);
+            }
+            finalRows = [base];
+          } else {
+            finalRows = [...finalRows, ...unknownOrEmpty];
+          }
+        }
+      } else if (unknownOrEmpty.length > 0) {
+        finalRows = [unknownOrEmpty.reduce((acc, row) => mergeMembershipRows(acc, row))];
+      }
+
+      byFan[fanId] = finalRows.sort((a, b) => a.creatorName.localeCompare(b.creatorName));
     }
 
     return res.status(200).json({

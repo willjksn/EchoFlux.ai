@@ -77,7 +77,6 @@ export async function recordCaptionGeneration(
     const now = Timestamp.now();
 
     if (!usageDoc.exists) {
-      // Create new record
       await usageRef.set({
         userId,
         month,
@@ -86,20 +85,22 @@ export async function recordCaptionGeneration(
         lastUpdated: now,
       });
     } else {
-      // Increment count
       await usageRef.update({
         count: FieldValue.increment(count),
         lastUpdated: now,
       });
     }
 
-    // Also update the user document's monthlyCaptionGenerationsUsed field
-    const userRef = db.collection('users').doc(userId);
+    // Mirror caption_usage (per calendar month) on the user doc so dashboards stay aligned with enforcement.
+    const usageAfter = await usageRef.get();
+    const syncedCount = (usageAfter.data()?.count as number) ?? count;
+
+    const userRef = db.collection("users").doc(userId);
     const userDoc = await userRef.get();
     if (userDoc.exists) {
-      const currentCount = userDoc.data()?.monthlyCaptionGenerationsUsed || 0;
       await userRef.update({
-        monthlyCaptionGenerationsUsed: currentCount + count,
+        monthlyCaptionGenerationsUsed: syncedCount,
+        captionUsageMonth: month,
       });
     }
   } catch (error) {

@@ -781,6 +781,8 @@ export interface User {
     trendAlerts: boolean;
   };
   monthlyCaptionGenerationsUsed: number;
+  /** YYYY-MM matching Firestore caption_usage; server sets when recording generations */
+  captionUsageMonth?: string;
   monthlyImageGenerationsUsed: number;
   monthlyVideoGenerationsUsed: number;
   monthlyAdGenerationsUsed?: number;
