@@ -82,6 +82,33 @@ export function checkoutSessionsRetrieve(
   return stripe.checkout.sessions.retrieve(sessionId, params);
 }
 
+export function subscriptionsRetrieve(
+  stripe: Stripe,
+  subscriptionId: string,
+  connectedAccountId?: string | null,
+  params?: Stripe.SubscriptionRetrieveParams,
+): Promise<Stripe.Response<Stripe.Subscription>> {
+  const id = typeof connectedAccountId === "string" ? connectedAccountId.trim() : "";
+  const p = params ?? {};
+  if (id) {
+    return stripe.subscriptions.retrieve(subscriptionId, p, { stripeAccount: id });
+  }
+  return stripe.subscriptions.retrieve(subscriptionId, p);
+}
+
+/** Customer portal for subscription / payment method management (use `stripeAccount` for Connect). */
+export function billingPortalSessionsCreate(
+  stripe: Stripe,
+  params: Stripe.BillingPortal.SessionCreateParams,
+  connectedAccountId?: string | null,
+): Promise<Stripe.Response<Stripe.BillingPortal.Session>> {
+  const id = typeof connectedAccountId === "string" ? connectedAccountId.trim() : "";
+  if (id) {
+    return stripe.billingPortal.sessions.create(params, { stripeAccount: id });
+  }
+  return stripe.billingPortal.sessions.create(params);
+}
+
 export function isStripeConfigured(): boolean {
   return !!platformStripe && !!stripeSecretKey;
 }

@@ -1037,6 +1037,9 @@ export const FanStorefrontView: React.FC = () => {
   const [memberUsernameRequired, setMemberUsernameRequired] = useState(false);
   const [cancelMembershipLoading, setCancelMembershipLoading] = useState(false);
   const [cancelMembershipMessage, setCancelMembershipMessage] = useState<string | null>(null);
+  const [membershipManageModalOpen, setMembershipManageModalOpen] = useState(false);
+  const [billingPortalLoading, setBillingPortalLoading] = useState(false);
+  const [billingPortalError, setBillingPortalError] = useState<string | null>(null);
   const [membershipType, setMembershipType] = useState<"free" | "paid" | null>(null);
   const [billedSubscriptionPriceCents, setBilledSubscriptionPriceCents] = useState<number | null>(null);
   const [limitedMemberAccess, setLimitedMemberAccess] = useState(false);
@@ -2796,9 +2799,8 @@ export const FanStorefrontView: React.FC = () => {
     return `${mins}:${String(secs).padStart(2, "0")}`;
   };
 
-  const handleCancelMembership = async () => {
+  const runFanCancelAtPeriodEnd = async () => {
     if (!creator?.creatorId || !auth.currentUser) return;
-    if (!window.confirm("Cancel your membership? You'll keep access until the end of your current billing period.")) return;
     setCancelMembershipLoading(true);
     setCancelMembershipMessage(null);
     try {
@@ -2815,10 +2817,50 @@ export const FanStorefrontView: React.FC = () => {
         ? `Membership will end on ${new Date(endDate).toLocaleDateString()}. You keep access until then.`
         : "Membership set to cancel at the end of your billing period.";
       setCancelMembershipMessage(msg);
+      setMembershipManageModalOpen(false);
     } catch (e) {
       setCancelMembershipMessage(e instanceof Error ? e.message : "Failed to cancel membership.");
     } finally {
       setCancelMembershipLoading(false);
+    }
+  };
+
+  const handleScheduleCancelFromModal = async () => {
+    if (!creator?.creatorId || !auth.currentUser) return;
+    if (
+      !window.confirm(
+        "Schedule cancellation at the end of your current billing period? You'll keep full access until then and won't be charged again.",
+      )
+    ) {
+      return;
+    }
+    await runFanCancelAtPeriodEnd();
+  };
+
+  const handleOpenBillingPortal = async () => {
+    if (!creator?.creatorId || !auth.currentUser) return;
+    setBillingPortalLoading(true);
+    setBillingPortalError(null);
+    try {
+      const token = await auth.currentUser.getIdToken(true);
+      const returnUrl =
+        typeof window !== "undefined"
+          ? `${window.location.origin}${window.location.pathname}${window.location.search || ""}`
+          : "";
+      const res = await fetch("/api/createFanBillingPortalSession", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ creatorId: creator.creatorId, returnUrl }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error((data as { error?: string }).error || "Could not open billing portal");
+      const url = (data as { url?: string }).url;
+      if (!url) throw new Error("No portal URL returned");
+      window.location.href = url;
+    } catch (e) {
+      setBillingPortalError(e instanceof Error ? e.message : "Could not open billing portal");
+    } finally {
+      setBillingPortalLoading(false);
     }
   };
 
@@ -4455,6 +4497,83 @@ export const FanStorefrontView: React.FC = () => {
           </div>
         </div>
       ) : null}
+      {membershipManageModalOpen && creator ? (
+        <div
+          className="fixed inset-0 z-[110] flex items-center justify-center p-4"
+          style={{ backgroundColor: "rgba(0,0,0,0.55)" }}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="fan-membership-manage-title"
+        >
+          <div
+            className="w-full max-w-lg rounded-2xl p-6 shadow-xl max-h-[90vh] overflow-y-auto"
+            style={{ backgroundColor: "#fff", color: theme?.text || "#1f2937" }}
+          >
+            <h2 id="fan-membership-manage-title" className="text-lg font-bold mb-2">
+              Manage your membership
+            </h2>
+            <p className="text-sm mb-4 opacity-90 leading-relaxed">
+              Update your payment method, cancel, or keep your subscription in Stripe&apos;s secure customer portal — or
+              schedule cancellation at the end of your current period without leaving this page.
+            </p>
+
+            {billingPortalError ? (
+              <p
+                className="text-sm mb-3 rounded-lg px-3 py-2"
+                style={{ backgroundColor: "color-mix(in srgb, #b91c1c 12%, white)", color: "#991b1b" }}
+              >
+                {billingPortalError}
+              </p>
+            ) : null}
+
+            <div className="flex flex-col gap-3">
+              <button
+                type="button"
+                className="w-full px-4 py-3 rounded-xl text-sm font-semibold text-white border-0 disabled:opacity-50"
+                style={{ backgroundColor: primary }}
+                disabled={billingPortalLoading || cancelMembershipLoading}
+                onClick={() => {
+                  void handleOpenBillingPortal();
+                }}
+              >
+                {billingPortalLoading ? "Opening…" : "Open Stripe customer portal"}
+              </button>
+              <p className="text-xs opacity-75 -mt-1 mb-1">
+                Stripe handles card updates, cancellation, and resuming your plan. You&apos;ll return here when you&apos;re
+                done.
+              </p>
+
+              <div className="border-t border-gray-200 my-1 pt-3">
+                <button
+                  type="button"
+                  className="w-full px-4 py-3 rounded-xl text-sm font-semibold border disabled:opacity-50"
+                  style={{ borderColor: `${primary}66`, color: primary, backgroundColor: `${primary}0a` }}
+                  disabled={cancelMembershipLoading || billingPortalLoading}
+                  onClick={() => {
+                    void handleScheduleCancelFromModal();
+                  }}
+                >
+                  {cancelMembershipLoading ? "Updating…" : "Cancel at end of billing period (in app)"}
+                </button>
+                <p className="text-xs opacity-75 mt-2">
+                  Schedules cancel at period end in Stripe immediately. You keep access until the date shown after you
+                  confirm.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                className="w-full px-4 py-2.5 rounded-xl text-sm font-medium border mt-1"
+                style={{ borderColor: `${primary}44`, color: primary }}
+                disabled={billingPortalLoading || cancelMembershipLoading}
+                onClick={() => setMembershipManageModalOpen(false)}
+              >
+                Keep my membership — close
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
       {/* Member Header — witme wordmark only (no creator avatar / community subtitle) */}
       <header
         className="storefront-member-header storefront-member-header--leftnav"
@@ -5435,8 +5554,10 @@ export const FanStorefrontView: React.FC = () => {
                     {!fanPageAdminBypass && subscribed && membershipType === "paid" ? (
                       <button
                         type="button"
-                        onClick={handleCancelMembership}
-                        disabled={cancelMembershipLoading}
+                        onClick={() => {
+                          setBillingPortalError(null);
+                          setMembershipManageModalOpen(true);
+                        }}
                         className="storefront-cancel-membership-btn"
                         style={{
                           color: primary,
@@ -5444,7 +5565,7 @@ export const FanStorefrontView: React.FC = () => {
                           backgroundColor: `${primary}0f`,
                         }}
                       >
-                        {cancelMembershipLoading ? "Updating..." : "Manage subscription"}
+                        Manage subscription
                       </button>
                     ) : null}
                   </div>

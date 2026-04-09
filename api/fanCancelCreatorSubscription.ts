@@ -5,9 +5,72 @@
  * Webhook customer.subscription.deleted will update Firestore when period ends.
  */
 import type { VercelRequest, VercelResponse } from "@vercel/node";
+import type { Firestore } from "firebase-admin/firestore";
+import type Stripe from "stripe";
 import { getPlatformStripe } from "./_stripeConnect.js";
 import { getAdminDb } from "./_firebaseAdmin.js";
 import { verifyAuth } from "./verifyAuth.js";
+
+function subscriptionPeriodEndIso(sub: Stripe.Subscription): string | null {
+  const cpe = (sub as Stripe.Subscription & { current_period_end?: number }).current_period_end;
+  return typeof cpe === "number" && Number.isFinite(cpe) ? new Date(cpe * 1000).toISOString() : null;
+}
+
+function fanHubStripeStatusForFirestore(sub: Stripe.Subscription): string {
+  const raw = sub.status;
+  if (raw === "active" || raw === "trialing") return raw;
+  if (raw === "canceled" || raw === "unpaid" || raw === "incomplete_expired") return "canceled";
+  if (raw === "past_due") return "past_due";
+  return raw;
+}
+
+/**
+ * Keep Firestore in sync when a fan schedules cancel-at-period-end from the storefront.
+ * Profile UI uses the API response; Fan Hub User Management reads fans + creatorSubscribers only.
+ */
+async function syncFanHubFirestoreAfterScheduleCancel(
+  db: Firestore,
+  creatorId: string,
+  fanId: string,
+  subscription: Stripe.Subscription,
+  periodEndIso: string | null
+): Promise<void> {
+  const now = new Date().toISOString();
+  const subStatus = fanHubStripeStatusForFirestore(subscription);
+
+  await db
+    .collection("creatorSubscribers")
+    .doc(creatorId)
+    .collection("subscribers")
+    .doc(fanId)
+    .set(
+      {
+        cancelAtPeriodEnd: true,
+        currentPeriodEnd: periodEndIso,
+        stripeSubscriptionId: subscription.id,
+        status: subStatus,
+        updatedAt: now,
+      },
+      { merge: true }
+    );
+
+  const fanRef = db.collection("creators").doc(creatorId).collection("fans").doc(fanId);
+  const fanSnap = await fanRef.get();
+  const fanPayload: Record<string, unknown> = {
+    subscriptionStatus: subStatus,
+    cancelAtPeriodEnd: true,
+    updatedAt: now,
+  };
+  if (periodEndIso) {
+    fanPayload.subscriptionCurrentPeriodEnd = periodEndIso;
+    fanPayload.subscriptionEndDate = periodEndIso;
+  }
+  if (fanSnap.exists) {
+    await fanRef.update(fanPayload as any);
+  } else {
+    await fanRef.set(fanPayload, { merge: true });
+  }
+}
 
 const PLATFORM_OWNER_IDS = (process.env.PLATFORM_OWNER_CREATOR_IDS || "")
   .split(",")
@@ -114,19 +177,28 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   try {
     const subscription = await stripe.subscriptions.retrieve(subscriptionId, stripeOpts);
-    const subCpe = (subscription as { current_period_end?: number }).current_period_end;
+    const periodEarly = subscriptionPeriodEndIso(subscription);
     if (subscription.cancel_at_period_end) {
+      try {
+        await syncFanHubFirestoreAfterScheduleCancel(db, creatorId, fanId, subscription, periodEarly);
+      } catch (syncErr) {
+        console.error("fanCancelCreatorSubscription Firestore sync (already scheduled):", syncErr);
+      }
       return res.status(200).json({
         ok: true,
         message: "Subscription is already set to cancel at the end of the billing period",
-        currentPeriodEnd:
-          typeof subCpe === "number" && Number.isFinite(subCpe) ? new Date(subCpe * 1000).toISOString() : null,
+        currentPeriodEnd: periodEarly,
       });
     }
 
     await stripe.subscriptions.update(subscriptionId, { cancel_at_period_end: true }, stripeOpts);
-    const periodEnd =
-      typeof subCpe === "number" && Number.isFinite(subCpe) ? new Date(subCpe * 1000).toISOString() : null;
+    const subAfter = await stripe.subscriptions.retrieve(subscriptionId, stripeOpts);
+    const periodEnd = subscriptionPeriodEndIso(subAfter);
+    try {
+      await syncFanHubFirestoreAfterScheduleCancel(db, creatorId, fanId, subAfter, periodEnd);
+    } catch (syncErr) {
+      console.error("fanCancelCreatorSubscription Firestore sync:", syncErr);
+    }
 
     return res.status(200).json({
       ok: true,

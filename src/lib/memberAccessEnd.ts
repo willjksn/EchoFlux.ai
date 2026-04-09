@@ -63,6 +63,8 @@ const ACCESS_END_KEYS = [
   /** Echo creators fans subdoc + Stripe webhook */
   "subscriptionCurrentPeriodEnd",
   "subscription_current_period_end",
+  /** Some flows mirror creator-style naming on fan docs */
+  "subscriptionEndDate",
 ] as const;
 
 /**
