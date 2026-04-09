@@ -407,7 +407,7 @@ export const OnlyFansSextingSession: React.FC = () => {
 
   // Refs
   const timerIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesScrollContainerRef = useRef<HTMLDivElement>(null);
   const sendInputRef = useRef<HTMLInputElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
   const videoInputRef = useRef<HTMLInputElement>(null);
@@ -612,9 +612,13 @@ export const OnlyFansSextingSession: React.FC = () => {
     };
   }, [sessionStarted, sessionPaused, timeRemainingSeconds]);
 
-  // Auto-scroll messages
+  // Keep the newest message in view without scrollIntoView (that can scroll the page / outer layout).
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    const el = messagesScrollContainerRef.current;
+    if (!el) return;
+    requestAnimationFrame(() => {
+      el.scrollTop = el.scrollHeight;
+    });
   }, [messages]);
 
   const formatTime = (seconds: number) => {
@@ -1004,7 +1008,10 @@ export const OnlyFansSextingSession: React.FC = () => {
             {/* Conversation Panel */}
             <div className="chat-session-conversation-panel">
               <h3 className="chat-session-panel-title">Conversation</h3>
-              <div className="chat-session-messages-wrap chat-session-messages-wrap-active">
+              <div
+                ref={messagesScrollContainerRef}
+                className="chat-session-messages-wrap chat-session-messages-wrap-active"
+              >
                 {messages.length === 0 ? (
                   <p className="chat-session-empty-msg">No messages yet. Start the conversation!</p>
                 ) : (
@@ -1018,7 +1025,6 @@ export const OnlyFansSextingSession: React.FC = () => {
                     );
                   })
                 )}
-                <div ref={messagesEndRef} />
               </div>
 
               {/* Send Row */}

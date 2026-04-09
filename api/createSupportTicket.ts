@@ -1,6 +1,7 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { getAdminDb } from "./_firebaseAdmin.js";
 import { verifyAuth } from "./verifyAuth.js";
+import { sendSupportTicketAcknowledgmentEmail } from "./_supportTicketAcknowledgmentEmail.js";
 
 type ReporterKind = "fan" | "creator";
 
@@ -141,6 +142,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     });
 
     await batch.commit();
+
+    void sendSupportTicketAcknowledgmentEmail({
+      to: authUser.email,
+      reporterName: baseTicket.reporterName,
+      ticketId,
+    });
 
     return res.status(200).json({ success: true, ticketId });
   } catch (error: any) {

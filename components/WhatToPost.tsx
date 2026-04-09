@@ -215,6 +215,7 @@ const DEFAULT_SETTINGS: WhatToPostSettings = {
   tone: 'relatable',
   useTrends: true, // Always use trends now - integrated into idea generation
   spicyMode: false,
+  prioritizeCreatorPersonality: false,
 };
 
 interface WhatToPostProps {
@@ -321,6 +322,7 @@ export const WhatToPost: React.FC<WhatToPostProps> = ({ onOpenAdvanced }) => {
             analyzeMyPageEngagement: platformToUse === 'mypage',
             // Optional creator hint for guiding idea generation
             creatorHint: opts.hint || '',
+            prioritizeCreatorPersonality: s.prioritizeCreatorPersonality === true,
           }),
         });
         const data = await res.json();
@@ -603,6 +605,36 @@ export const WhatToPost: React.FC<WhatToPostProps> = ({ onOpenAdvanced }) => {
                   <span>🔥</span>
                   <span><strong>Trends included</strong> — Ideas are automatically based on what's trending in your niche.</span>
                 </p>
+              </div>
+
+              {/* Creator personality overrides tone/sliders (same as Compose when personality is on) */}
+              <div className="rounded-lg border border-gray-200 dark:border-gray-600 p-3">
+                <label className="flex items-start gap-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    className="mt-1 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                    checked={draftSettings.prioritizeCreatorPersonality === true}
+                    disabled={!user.settings?.creatorPersonality?.trim()}
+                    onChange={(e) =>
+                      setDraftSettings((p) => ({ ...p, prioritizeCreatorPersonality: e.target.checked }))
+                    }
+                  />
+                  <span>
+                    <span className="block text-sm font-medium text-gray-900 dark:text-white">
+                      Personality first
+                    </span>
+                    <span className="block text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                      Use your{" "}
+                      <strong className="font-medium text-gray-700 dark:text-gray-300">Creator personality</strong> from
+                      Settings as the main voice. Tone and style sliders are ignored when they conflict.
+                      {!user.settings?.creatorPersonality?.trim() ? (
+                        <span className="block mt-1 text-amber-600 dark:text-amber-400">
+                          Add a personality in Settings → AI Training to enable this.
+                        </span>
+                      ) : null}
+                    </span>
+                  </span>
+                </label>
               </div>
             </div>
             <div className="mt-6 flex justify-end">

@@ -688,15 +688,15 @@ ${isOnlyFansPlatform ? `
 ` : ''}
 
 ${usePersonality && sanitizedCreatorPersonality ? `
-🎯 CREATOR PERSONALITY & BRAND VOICE (USE WHEN RELEVANT):
+🎯 CREATOR PERSONALITY & BRAND VOICE (PRIMARY WHEN THIS TOGGLE IS ON):
 ${sanitizedCreatorPersonality}
 
-CRITICAL - PERSONALITY USAGE (CONSISTENT FOR COMPOSE AND PREMIUM CONTENT STUDIO):
-- Use ONLY the creator personality text provided above for THIS user. Never use example values, sample text, or placeholder data from any other source as if it were this user's data.
-- Use personality when it is RELEVANT to the caption request: brand voice, tone, style, and preferences should influence wording. Do NOT force physical attributes (height, weight, body measurements, bust size, etc.) into every caption.
-- Physical attributes (height, weight, body stats) should ONLY be used when the user explicitly asks (e.g. "describe myself", "describe me") or when the content naturally calls for it (e.g. roleplay, outfit fit). Most captions do not require repeating physical stats.
-- Match the creator's brand voice and style. Weave in personality details when they enhance the content—not in every line. Do not overwrite or ignore the user's own instructions in favor of personality.
-- For roleplay, messaging, or content that describes the creator, use the personality description as the source of truth. For general captions, use tone and style; reserve physical/details for when relevant.
+CREATOR PERSONALITY OVERRIDE (ENABLED — THIS TOGGLES "USE CREATOR PERSONALITY"):
+- The creator turned ON "Use creator personality." This personality text is the PRIMARY authority for voice, vocabulary, attitude, humor level, formality, and brand style in the captions.
+- The selected tone label (${sanitizedTone || tone || "friendly"}), PRIMARY GOAL voice-framing, emoji "match tone" examples, and ALL tone sliders (formality, humor, empathy, spiciness, profanity) are SECONDARY. If any of them conflict with the personality description, follow the personality—not the tone label or sliders.
+- User-provided caption instructions (USER INSTRUCTIONS / Extra instructions) still define topic, angle, and must-haves; write those in the personality's authentic voice.
+- Use ONLY the creator personality text above for THIS user. Never use example or placeholder data as if it were this user's data.
+- Do NOT force physical attributes into every caption—only when the user asks or the content naturally needs it (roleplay, outfit fit, etc.).
 ` : ''}
 
 ${useFavoriteHashtags && sanitizedFavoriteHashtags && includeAiHashtags ? `

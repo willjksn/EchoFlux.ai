@@ -42,6 +42,8 @@ export interface GenerateDailyPostIdeasBody {
   analyzeMyPageEngagement?: boolean;
   /** Optional hint from creator to guide idea generation (e.g. "beach photos", "workout motivation"). */
   creatorHint?: string;
+  /** When true and profile has personality text, personality overrides tone + tone sliders for voice. */
+  prioritizeCreatorPersonality?: boolean;
 }
 
 const CONTENT_POLICY_SAFE = `
@@ -93,6 +95,7 @@ function buildPrompt(opts: {
   creatorGender?: string;
   targetAudienceGender?: string;
   creatorHint?: string;
+  prioritizeCreatorPersonality?: boolean;
 }): string {
   const {
     platform,
@@ -207,13 +210,17 @@ GOAL: ${goal}. ${goalGuidance}
 EFFORT (minutes): ${effort}. ${effortGuidance}
 PREFERRED FORMAT: ${format}. ${formatGuidance}
 ${platformFormatGuidance}
-TONE: ${tone}. Keep hooks and copy in this voice.
-${toneStyleGuidance}
+TONE: ${tone}.${personalityPrimary ? " SECONDARY for voice — creator personality block below overrides this label (and tone sliders) when they conflict." : " Keep hooks and copy in this voice."}
+${effectiveToneStyleGuidance}
 ${spicyMode ? CONTENT_POLICY_SPICY : CONTENT_POLICY_SAFE}
 
 ${creatorContext ? `CREATOR PERSONALITY & NICHE (IMPORTANT - reflect this in ALL ideas):
 ${creatorContext}
-Generate ideas that match this personality - the tone, style, and content should feel authentic to who this creator is.
+${personalityPrimary ? `VOICE PRIORITY (PERSONALITY FIRST — TOGGLE ON):
+- This personality text is PRIMARY for voice, attitude, hooks, and caption style in every idea.
+- Ignore the TONE field above and the writing-style sliders when they conflict with the personality.
+- Still align topics and CTAs with GOAL: ${goal} — express them in this brand voice.
+` : ""}Generate ideas that match this personality - the tone, style, and content should feel authentic to who this creator is.
 ` : "No creator profile provided; use broad, relatable angles."}
 ${creatorProfileGuidance}
 ${opts.creatorHint ? `
@@ -284,7 +291,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
   const db = getAdminDb();
   const userDoc = await db.collection("users").doc(authUser.uid).get();
   const userData = userDoc.exists ? userDoc.data() : {};
-  const creatorPersonality = userData?.creatorPersonality || "";
+  const settingsBlock = (userData?.settings || {}) as { creatorPersonality?: string };
+  const creatorPersonality =
+    (typeof userData?.creatorPersonality === "string" && userData.creatorPersonality.trim()
+      ? userData.creatorPersonality
+      : "") ||
+    (typeof settingsBlock.creatorPersonality === "string" ? settingsBlock.creatorPersonality : "") ||
+    "";
   const toneFromProfile = userData?.aiTone || userData?.tone || "";
   const niche = userData?.niche || "";
   // Get user's tone settings for style preferences
@@ -306,6 +319,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
     generateAllFormats = false,
     analyzeMyPageEngagement = false,
     creatorHint = "",
+    prioritizeCreatorPersonality = false,
   } = (req.body || {}) as GenerateDailyPostIdeasBody;
 
   // Map balanced_followers_engagement to goal with engagement bias
@@ -415,6 +429,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
       creatorGender,
       targetAudienceGender,
       creatorHint,
+      prioritizeCreatorPersonality: Boolean(prioritizeCreatorPersonality),
     });
 
     const result = await model.generateContent({

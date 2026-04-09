@@ -65,9 +65,11 @@ export const ReportProblemModal: React.FC<ReportProblemModalProps> = ({
     }
     setIsSubmitting(true);
     try {
-      // Always log the report server-side (for tracking/admin review).
       const token = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
-      if (token) {
+      // Fan Hub / storefront in-app flow uses createSupportTicket only (creator-scoped). Calling
+      // reportProblem here too created a second platform-level IT ticket for the same report.
+      const skipDuplicatePlatformTicket = mode === "inApp" && typeof onSubmitInApp === "function";
+      if (token && !skipDuplicatePlatformTicket) {
         await fetch("/api/reportProblem", {
           method: "POST",
           headers: {

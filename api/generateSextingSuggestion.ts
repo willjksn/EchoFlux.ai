@@ -198,7 +198,7 @@ ${toneSettings.profanity !== undefined && toneSettings.profanity > 0 ? `- Profan
 
     const voicePriorityBlock = useCreatorPersonalityPrimary
       ? `
-VOICE PRIORITY: The creator turned ON "use my personality." The CREATOR PERSONALITY block below is PRIMARY for voice, attitude, and wording. The session tone "${tone}" is only a light hint if personality does not imply style — personality overrides tone.
+VOICE PRIORITY: The creator turned ON "use my personality." The CREATOR PERSONALITY block below is PRIMARY for voice, attitude, and wording. It OVERRIDES session tone "${tone}", chat/session type "${roleplayType}" when they conflict, AND all studio tone sliders (formality, humor, warmth, profanity). Use explicitness ${explicitnessLevel}/10 only insofar as it does not contradict the personality; if in doubt, personality wins.
 `
       : `
 VOICE PRIORITY: Personality override is OFF. Match the chat/session type ("${roleplayType}") and tone ("${tone}") closely. Use explicitness ${explicitnessLevel}/10 as configured below.
@@ -213,7 +213,7 @@ Session context:
 - Tone: ${tone}${useCreatorPersonalityPrimary ? " (secondary to personality when both conflict)" : " (primary)"}
 - Fan name: ${fanName}
 - Explicitness / heat level: ${explicitnessLevel}/10 — ${explicitnessContext}
-${voicePriorityBlock}${toneStyleGuidance}
+${voicePriorityBlock}${useCreatorPersonalityPrimary ? "" : toneStyleGuidance}
 ${personalityContext ? `${personalityContext}
 
 CREATOR PERSONALITY (USE WHEN RELEVANT - CONSISTENT WITH COMPOSE AND PREMIUM CONTENT STUDIO):
@@ -254,7 +254,7 @@ ${fanName && fanName !== "Fan" ? `- Fan's name is "${fanName}" — treat as opti
 - Use platform slang organically - it should feel natural, not like you're checking off a list
 
 Guidelines:
-- ${useCreatorPersonalityPrimary ? `Follow CREATOR PERSONALITY first; use tone "${tone}" only where personality does not specify voice.` : `Follow tone "${tone}" and session type "${roleplayType}" together.`} Studio tone sliders (formality, humor, warmth, etc.) apply on top of that baseline. Only go extremely explicit when tone is Explicit and explicitness is 10.
+- ${useCreatorPersonalityPrimary ? `Follow CREATOR PERSONALITY exclusively for voice; ignore conflicting tone/slider hints. Use tone "${tone}" only where personality is silent on style.` : `Follow tone "${tone}" and session type "${roleplayType}" together.`} ${useCreatorPersonalityPrimary ? "Do not apply studio tone sliders when they conflict with personality." : "Studio tone sliders (formality, humor, warmth, etc.) apply on top of that baseline."} Only go extremely explicit when appropriate to personality${useCreatorPersonalityPrimary ? "" : " and when tone is Explicit and explicitness is 10"}.
 - Be bold, playful, and explicitly adult (sexting) while respecting the chosen tone.
 - Keep replies concise (1-3 sentences each).
 - Vary style across suggestions (teasing, direct, playful).

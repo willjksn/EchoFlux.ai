@@ -349,6 +349,29 @@ type DmLiveSession = {
   remainingSeconds: number;
 };
 
+/** Avoid replacing `dmMessages` when polling returns the same rows (keeps scroll/layout stable). */
+function fanDmMessagesEqualish(a: FanDmMessage[], b: FanDmMessage[]): boolean {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    const x = a[i];
+    const y = b[i];
+    if (
+      x.id !== y.id ||
+      x.senderId !== y.senderId ||
+      x.content !== y.content ||
+      x.createdAt !== y.createdAt ||
+      (x.read ?? false) !== (y.read ?? false) ||
+      (x.attachmentUrl ?? "") !== (y.attachmentUrl ?? "") ||
+      (x.attachmentType ?? "") !== (y.attachmentType ?? "") ||
+      (x.reported ?? false) !== (y.reported ?? false) ||
+      (x.reportId ?? "") !== (y.reportId ?? "")
+    ) {
+      return false;
+    }
+  }
+  return true;
+}
+
 function normalizeFanPurchaseType(raw: Record<string, unknown>): FanDeliveryPurchaseType {
   const type = typeof raw.type === "string" ? raw.type.trim().toLowerCase() : "";
   const productType = typeof raw.productType === "string" ? raw.productType.trim().toLowerCase() : "";
@@ -3277,12 +3300,15 @@ export const FanStorefrontView: React.FC = () => {
         );
         if (gen !== dmThreadFetchGen.current) return;
         const msgData = await msgRes.json().catch(() => ({}));
-        setDmMessages(Array.isArray(msgData.messages) ? msgData.messages : []);
+        const incomingMsgs = Array.isArray(msgData.messages) ? (msgData.messages as FanDmMessage[]) : [];
+        setDmMessages((prev) => (fanDmMessagesEqualish(prev, incomingMsgs) ? prev : incomingMsgs));
         const raw = msgData.labels as { fan?: unknown; creator?: unknown } | undefined;
-        setDmLabels(
+        const nextLabels =
           raw && typeof raw.fan === "string" && typeof raw.creator === "string"
             ? { fan: raw.fan, creator: raw.creator }
-            : null
+            : null;
+        setDmLabels((prev) =>
+          prev?.fan === nextLabels?.fan && prev?.creator === nextLabels?.creator ? prev : nextLabels
         );
         if (requestedThreadId) setDmPreferredThreadId(null);
       } else {

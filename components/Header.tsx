@@ -33,10 +33,13 @@ export const Header: React.FC<HeaderProps> = ({ pageTitle }) => {
   const clientSwitcherRef = useRef<HTMLDivElement>(null);
   const notificationsRef = useRef<HTMLDivElement>(null);
   
-  // Social inbox removed; show only usage/system and announcement notifications.
+  // Social inbox removed; show usage, announcements, and IT support ticket admin alerts.
   const visibleNotifications = useMemo(() => {
-    return notifications.filter(n =>
-      n.messageId?.startsWith('usage-') || n.messageId?.startsWith('announcement-')
+    return notifications.filter(
+      (n) =>
+        n.messageId?.startsWith("usage-") ||
+        n.messageId?.startsWith("announcement-") ||
+        n.messageId === "admin-support_ticket_created"
     );
   }, [notifications]);
 
@@ -88,6 +91,16 @@ export const Header: React.FC<HeaderProps> = ({ pageTitle }) => {
         )
       );
       
+      setIsNotificationsOpen(false);
+      return;
+    }
+
+    // New IT support ticket (admin): open Admin Dashboard (IT Support lives under Tools).
+    if (notification.messageId === "admin-support_ticket_created") {
+      setActivePage("admin");
+      setNotifications((prevNotifications) =>
+        prevNotifications.map((n) => (n.id === notification.id ? { ...n, read: true } : n))
+      );
       setIsNotificationsOpen(false);
       return;
     }
@@ -222,13 +235,14 @@ export const Header: React.FC<HeaderProps> = ({ pageTitle }) => {
                     <div className="py-1 max-h-80 overflow-y-auto">
                         {visibleNotifications.length > 0 ? visibleNotifications.map(notification => {
                             const isUsageNotification = notification.messageId?.startsWith('usage-');
+                            const isItTicketNotification = notification.messageId === 'admin-support_ticket_created';
                             return (
                                 <button key={notification.id} onClick={() => handleNotificationClick(notification)} className="w-full text-left px-4 py-3 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
                                     <div className="flex items-start">
                                         <div className="flex-shrink-0 mt-1">
                                           <div className="relative">
-                                            <div className={`p-2 rounded-full ${!notification.read ? (isUsageNotification ? 'bg-yellow-100 dark:bg-yellow-900/50' : 'bg-primary-100 dark:bg-primary-900/50') : 'bg-gray-100 dark:bg-gray-700'}`}>
-                                                {isUsageNotification ? <WarningIcon className="w-5 h-5 text-yellow-600 dark:text-yellow-400" /> : <ChatIcon />}
+                                            <div className={`p-2 rounded-full ${!notification.read ? (isUsageNotification ? 'bg-yellow-100 dark:bg-yellow-900/50' : isItTicketNotification ? 'bg-amber-100 dark:bg-amber-900/40' : 'bg-primary-100 dark:bg-primary-900/50') : 'bg-gray-100 dark:bg-gray-700'}`}>
+                                                {isUsageNotification ? <WarningIcon className="w-5 h-5 text-yellow-600 dark:text-yellow-400" /> : isItTicketNotification ? <WarningIcon className="w-5 h-5 text-amber-700 dark:text-amber-300" /> : <ChatIcon />}
                                             </div>
                                             {!notification.read && <span className="absolute top-0 right-0 h-2 w-2 bg-blue-500 rounded-full"></span>}
                                           </div>

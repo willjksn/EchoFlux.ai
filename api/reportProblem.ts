@@ -1,6 +1,7 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { getAdminDb } from "./_firebaseAdmin.js";
 import { getVerifyAuth, withErrorHandling } from "./_errorHandler.js";
+import { sendSupportTicketAcknowledgmentEmail } from "./_supportTicketAcknowledgmentEmail.js";
 
 async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
   if (req.method !== "POST") {
@@ -152,6 +153,12 @@ async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
   });
 
   await batch.commit();
+
+  void sendSupportTicketAcknowledgmentEmail({
+    to: user.email,
+    reporterName,
+    ticketId,
+  });
 
   res.status(200).json({ success: true });
 }

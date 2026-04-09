@@ -362,6 +362,9 @@ ${explicitnessContext ? `\nEXPLICITNESS LEVEL: ${explicitnessLevel}/10\n${explic
       ? favoriteHashtags.trim().slice(0, 600)
       : '';
 
+    const effectiveToneStyleGuidance =
+      usePersonality && safeCreatorPersonality ? "" : toneStyleGuidance;
+
     const prompt = `
 You are an elite content strategist specializing in ${niche} for ${audience}. Your expertise is creating data-driven strategies that achieve specific business goals.
 
@@ -386,19 +389,19 @@ ${durationWeeks === 1 ? '\n⚠️ IMPORTANT: This is a ONE-WEEK plan. Generate E
 
 Strategy Parameters:
 - Primary Goal: ${goal} (THIS IS THE MOST IMPORTANT - every content piece should directly support this goal)
-- Tone: ${tone}${isExplicitContent ? ' (EXPLICIT/ADULT CONTENT - Generate bold, sales-oriented, explicit content ideas)' : ''}
+- Tone: ${tone}${usePersonality && safeCreatorPersonality ? " (SECONDARY when creator personality is enabled — personality wins for voice)" : ""}${isExplicitContent ? ' (EXPLICIT/ADULT CONTENT - Generate bold, sales-oriented, explicit content ideas)' : ''}
 - Platform Focus: ${platformFocus || 'Mixed / All'}
 - Target Audience: ${audience}
 - Niche: ${niche}
 - Duration: ${durationWeeks} week${durationWeeks === 1 ? '' : 's'}${durationWeeks === 1 ? ' (ONE WEEK ONLY - generate content for 7 days, not multiple weeks)' : ''}
-${toneStyleGuidance}
+${effectiveToneStyleGuidance}
 ${safeContextDescription ? `\nADDITIONAL CONTEXT & REQUIREMENTS:\n${safeContextDescription}\n\nUse this additional context to tailor the strategy according to the user's specific requirements, preferences, and desired approach.\n` : ''}
-${usePersonality && safeCreatorPersonality ? `\nCREATOR PERSONALITY & BRAND VOICE:\n${safeCreatorPersonality}\n\nCRITICAL - PERSONALITY INTEGRATION:
+${usePersonality && safeCreatorPersonality ? `\nCREATOR PERSONALITY & BRAND VOICE:\n${safeCreatorPersonality}\n\nCRITICAL - PERSONALITY INTEGRATION (TOGGLE ON):
 - The above personality description contains ALL information about this creator: brand voice, style, values, physical attributes, personality traits, preferences, and what makes them unique
+- PERSONALITY OVERRIDES the strategy "Tone" field, all tone sliders (formality, humor, warmth, profanity, emoji level), and goal-*voice* framing when any of them conflict. Still organize the plan toward the primary goal "${goal}" using tactics and topics that fit this brand voice—do not use a generic tone that contradicts the personality.
 - Use this COMPLETE personality description to shape the voice, tone, framing, and content of the entire strategy
-- When generating content ideas, incorporate relevant details from the personality (physical attributes, traits, preferences, etc.) when they enhance the content
+- When generating content ideas, incorporate relevant details from the personality when they enhance the content
 - If the strategy includes content that describes the creator, use ALL relevant information from the personality description
-- The personality description is comprehensive - use ALL of it, not just parts of it, when creating content that reflects or describes this creator
 - Make the strategy feel authentic to this specific creator's complete brand and personality\n` : ''}
 ${useFavoriteHashtags && safeFavoriteHashtags ? `\nFAVORITE HASHTAGS:\n${safeFavoriteHashtags}\n\nIncorporate relevant hashtags into the strategy recommendations where appropriate.\n` : ''}
 

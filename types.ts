@@ -1166,6 +1166,8 @@ export interface WhatToPostSettings {
     tone: string;
     useTrends?: boolean;
     spicyMode?: boolean;
+    /** When true, creator personality from Settings overrides tone & tone sliders for idea voice (matches Compose / strategy). */
+    prioritizeCreatorPersonality?: boolean;
 }
 
 /** Saved idea in Firestore (users/{uid}/savedIdeas) */
