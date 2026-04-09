@@ -8,12 +8,28 @@ export const VIDEO_CAPTION_CLIP_SECONDS = 60;
 /** Reject longer sources so we do not download huge files or wait forever. */
 export const VIDEO_CAPTION_MAX_DURATION_SEC = 600;
 
+/**
+ * Do NOT set crossOrigin for Firebase Storage / third-party URLs unless same-origin.
+ * `crossOrigin="anonymous"` forces CORS; most Storage buckets lack Access-Control-Allow-Origin
+ * and the video fails to load (echoflux.ai → firebasestorage.googleapis.com).
+ */
+function applyVideoCrossOriginForSrc(video: HTMLVideoElement, src: string): void {
+  try {
+    const mediaUrl = new URL(src, typeof window !== "undefined" ? window.location.href : "https://example.com");
+    if (typeof window !== "undefined" && mediaUrl.origin === window.location.origin) {
+      video.crossOrigin = "anonymous";
+    }
+  } catch {
+    /* leave default — no crossOrigin */
+  }
+  video.src = src;
+}
+
 export async function getVideoDurationSec(src: string): Promise<number | null> {
   const video = document.createElement("video");
   video.preload = "metadata";
-  video.crossOrigin = "anonymous";
   video.muted = true;
-  video.src = src;
+  applyVideoCrossOriginForSrc(video, src);
   return new Promise((resolve) => {
     const finish = (d: number | null) => {
       try {
@@ -57,10 +73,9 @@ export async function clipVideoUrlToBlob(
   maxSeconds: number
 ): Promise<{ blob: Blob; mimeType: string } | null> {
   const video = document.createElement("video");
-  video.crossOrigin = "anonymous";
   video.muted = true;
   video.playsInline = true;
-  video.src = src;
+  applyVideoCrossOriginForSrc(video, src);
 
   await new Promise<void>((resolve, reject) => {
     video.onloadedmetadata = () => resolve();

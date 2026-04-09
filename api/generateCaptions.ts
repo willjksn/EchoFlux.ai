@@ -200,7 +200,7 @@ function cloudinaryVideoFetchTrimUrl(remoteUrl: string, durationSec: number): st
 }
 
 function urlProbablyVideoByString(u: string): boolean {
-  return /\.(mp4|mov|webm|m4v|mkv|avi)(\?|#|$)/i.test(u);
+  return /\.(mp4|mov|m4v|webm|mkv|avi|qt|quicktime)(\?|#|&|$)/i.test(u);
 }
 
 /** Prefer Cloudinary trim for remote videos so we do not pull multi-minute files into the function. */
