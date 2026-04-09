@@ -363,7 +363,13 @@ async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
 
   // Disable caching when randomSeed is provided (for unique results each time)
   const hasRandomSeed = toneSettings?.randomSeed !== undefined;
-  const canCache = !hasRandomSeed && !mediaData && !mediaUrl && (!mediaUrls || mediaUrls.length === 0);
+  // Never cache Fan Hub / My Page captions — same inputs were returning identical text for repeat Generate clicks.
+  const canCache =
+    !isFanHubCaption &&
+    !hasRandomSeed &&
+    !mediaData &&
+    !mediaUrl &&
+    (!mediaUrls || mediaUrls.length === 0);
   const cacheKey = canCache
     ? buildCacheKey({
         userId: authUser.uid,
@@ -642,11 +648,23 @@ MEDIA + CAPTION STRATEGY (general / non-explicit):
 `
       : "";
 
+  const fanHubVarietyBlock =
+    isFanHubCaption && hasRandomSeed
+      ? `
+FAN HUB — FRESH GENERATION (must differ from prior runs):
+- regenerationNonce: ${String(toneSettings?.randomSeed ?? 0)}
+- Do NOT output a generic filler caption (e.g. repeated "thanks for being here" / "your support means everything" as the whole post).
+- Change hook, structure, emoji placement, and optional question/CTA vs any boilerplate fan-page line.
+- If media is attached, include at least one concrete detail grounded in what is shown (action, setting, mood, outfit, lighting, or vibe).
+`
+      : "";
+
   // Build prompt — Fan Hub / My Page: one plain caption (matches composer UX)
   const desiredCaptionCount = isOnlyFansPlatform ? 5 : isFanHubCaption ? 1 : 3;
   // For carousels, we generate the same number of variants, but each must summarize all media.
   const prompt = `
 ${strategicMediaCaptionHint}
+${fanHubVarietyBlock}
 ${sanitizedPromptText ? `
 🚨 USER INSTRUCTIONS ARE PRIMARY (MUST FOLLOW FIRST) 🚨
 - The user provided specific instructions or suggestions for what they want in the caption (see "Extra instructions" / USER INSTRUCTIONS below).

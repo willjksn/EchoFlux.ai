@@ -885,10 +885,9 @@ export const FanHubPosts: React.FC = () => {
       // IMPORTANT: If there's any text in the caption box, use it as direction for the AI
       // Even in "generate" mode, the user's input should guide what gets generated
       const userInput = caption.trim();
-      let promptText: string;
-      
+      let promptText: string | undefined;
+
       if (mode === "suggest" && userInput) {
-        // AI Suggest mode - user typed keywords/topic, generate a caption ABOUT that topic
         promptText = `The creator typed: "${userInput}"
 
 Write an engaging caption for their fan page post that is SPECIFICALLY ABOUT "${userInput}".
@@ -898,13 +897,13 @@ CRITICAL REQUIREMENTS:
 - If they typed a body part (like "boobs", "ass", etc.), the caption should reference that body part directly
 - If they typed a theme (like "beach", "gym", etc.), the caption should be about that theme
 - DO NOT ignore what they typed - it's the main subject of the post
+- If image/video is attached, stay consistent with what's visible; use their text as the angle, not a generic filler caption.
 
 ${spicyGuidance}
 DO NOT say "link in bio" - this is their own page.
 DO NOT include hashtags.
 Write 2-4 sentences that are engaging and on-topic.`;
       } else if (userInput) {
-        // Generate mode WITH user input - same logic
         promptText = `The creator wants a caption about: "${userInput}"
 
 Write an engaging caption for their fan page post that is SPECIFICALLY ABOUT "${userInput}".
@@ -914,39 +913,61 @@ CRITICAL REQUIREMENTS:
 - If they typed a body part, the caption should reference that body part directly
 - If they typed a theme, the caption should be about that theme
 - DO NOT ignore what they typed - it's the main subject of the post
+- If image/video is attached, stay consistent with what's visible; use their text as the angle, not a generic filler caption.
 
 ${spicyGuidance}
 DO NOT say "link in bio" - this is their own page.
 DO NOT include hashtags.
 Write 2-4 sentences that are engaging and on-topic.`;
       } else {
-        // Generate mode without any input - generic caption
-        promptText = `Write an engaging, unique caption for this fan page post. 
-${spicyGuidance} 
-Be creative and different each time.
-DO NOT say "link in bio" - this is their own page.
-DO NOT include hashtags.`;
+        // Match Compose: omit promptText so the full server prompt + media analysis drives output.
+        promptText = undefined;
       }
-      
+
+      const mediaPayload = await resolveFanHubCaptionMedia(media);
+      const regenerationNonce = Date.now();
+
+      // If the box still contains a long prior AI caption, don't force "write about this exact text" — anchor on media like Compose.
+      if (
+        mode === "generate" &&
+        mediaPayload != null &&
+        userInput.length > 160
+      ) {
+        promptText = undefined;
+      }
+
       const res = await fetch("/api/generateCaptions", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({
-          promptText,
+          ...(mediaPayload ?? {}),
+          ...(promptText != null ? { promptText } : {}),
           platforms: ["my page"],
           goal: "Increase Followers/Fans",
           tone: effectiveTone,
           usePersonality,
+          useFavoriteHashtags: false,
           creatorPersonality: user?.settings?.creatorPersonality?.trim() || undefined,
-          toneSettings: { 
+          toneSettings: {
             spiciness: spicyLevel * 10,
-            // Add randomness seed to ensure unique results
-            randomSeed: Date.now(),
+            randomSeed: regenerationNonce,
           },
         }),
       });
-      
-      if (!res.ok) throw new Error("Failed to generate caption");
+
+      if (!res.ok) {
+        if (res.status === 413) {
+          let note = "Media is too large to analyze in one request. Try a shorter video or use a smaller file.";
+          try {
+            const errBody = (await res.json()) as { note?: string };
+            if (errBody?.note) note = errBody.note;
+          } catch {
+            /* ignore */
+          }
+          throw new Error(note);
+        }
+        throw new Error("Failed to generate caption");
+      }
       
       const data = await res.json();
       const pickPlainCaption = (payload: unknown): string | undefined => {
