@@ -98,6 +98,28 @@ function base64ToBytes(base64: string) {
   return bytes;
 }
 
+/** Unwrap JSON-in-caption / markdown fences (mirrors api/generateCaptions). */
+function normalizeCaptionPlainTextForUi(raw: string): string {
+  let s = String(raw ?? '').trim();
+  s = s.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
+  if ((s.startsWith('[') || s.startsWith('{')) && s.includes('"caption"')) {
+    try {
+      const p = JSON.parse(s) as unknown;
+      if (Array.isArray(p) && p.length > 0) {
+        const first = p[0] as { caption?: string };
+        if (first && typeof first.caption === 'string') return first.caption.trim();
+      }
+      if (p && typeof p === 'object' && p !== null && 'caption' in p) {
+        const c = (p as { caption?: string }).caption;
+        if (typeof c === 'string') return c.trim();
+      }
+    } catch {
+      /* keep s */
+    }
+  }
+  return s.trim();
+}
+
 interface MediaBoxProps {
   mediaItem: MediaItemState;
   index: number;
@@ -397,15 +419,22 @@ export const MediaBox: React.FC<MediaBoxProps> = ({
   };
 
   const normalizeCaptionResults = (res: any): CaptionResult[] => {
-    if (Array.isArray(res)) return res as CaptionResult[];
-    if (Array.isArray(res?.captions)) return res.captions as CaptionResult[];
-    if (res?.caption) return [{ caption: res.caption, hashtags: res.hashtags || [] }];
-    return [];
+    let raw: CaptionResult[] = [];
+    if (Array.isArray(res)) raw = res as CaptionResult[];
+    else if (Array.isArray(res?.captions)) raw = res.captions as CaptionResult[];
+    else if (res?.caption) raw = [{ caption: res.caption, hashtags: res.hashtags || [] }];
+    return raw.map((r) => ({
+      ...r,
+      caption: normalizeCaptionPlainTextForUi(
+        typeof r.caption === 'string' ? r.caption : String(r.caption ?? '')
+      ),
+      hashtags: Array.isArray(r.hashtags) ? r.hashtags : [],
+    }));
   };
 
   const firstCaptionTextFromResults = (results: CaptionResult[]) => {
     if (results.length === 0) return '';
-    const caption = results[0].caption || '';
+    const caption = normalizeCaptionPlainTextForUi(results[0].caption || '');
     const hashtags = (results[0].hashtags || []).join(' ').trim();
     // Only add hashtags section if there are hashtags (My Page/Fan Hub won't have them)
     return hashtags ? `${caption}\n\n${hashtags}` : caption;
@@ -578,9 +607,11 @@ export const MediaBox: React.FC<MediaBoxProps> = ({
   };
 
   const handleSelectCaption = (result: CaptionResult) => {
-    const captionText =
-      result.caption + '\n\n' + (result.hashtags || []).join(' ');
-    onUpdate(index, { captionText });
+    const cap = normalizeCaptionPlainTextForUi(
+      typeof result.caption === 'string' ? result.caption : String(result.caption ?? '')
+    );
+    const captionText = cap + '\n\n' + (result.hashtags || []).join(' ');
+    onUpdate(index, { captionText: captionText.trimEnd() });
   };
 
 

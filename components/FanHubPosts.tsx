@@ -163,6 +163,125 @@ const ClockIcon = () => (
   </svg>
 );
 
+/** Pill switch (same interaction model as What to Post → Personality first). */
+const FanHubSwitch: React.FC<{
+  checked: boolean;
+  onCheckedChange: (next: boolean) => void;
+  disabled?: boolean;
+  "aria-label"?: string;
+  "aria-labelledby"?: string;
+}> = ({ checked, onCheckedChange, disabled, "aria-label": ariaLabel, "aria-labelledby": ariaLabelledBy }) => (
+  <button
+    type="button"
+    role="switch"
+    aria-checked={checked}
+    aria-label={ariaLabel}
+    aria-labelledby={ariaLabelledBy}
+    disabled={disabled}
+    onClick={() => onCheckedChange(!checked)}
+    className={`relative inline-block h-6 w-11 shrink-0 rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus-visible:ring-2 focus-visible:ring-pink-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-800 ${
+      checked ? "bg-pink-500" : "bg-gray-200 dark:bg-gray-600"
+    } disabled:opacity-50 disabled:cursor-not-allowed`}
+  >
+    <span
+      aria-hidden
+      className={`pointer-events-none absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform duration-200 ease-in-out ${
+        checked ? "translate-x-5" : "translate-x-0"
+      }`}
+    />
+  </button>
+);
+
+const FanHubSwitchRow: React.FC<{
+  label: string;
+  labelId: string;
+  checked: boolean;
+  onCheckedChange: (next: boolean) => void;
+}> = ({ label, labelId, checked, onCheckedChange }) => (
+  <div className="flex items-center justify-between gap-3 min-w-0">
+    <span id={labelId} className="text-sm text-gray-600 dark:text-gray-400">
+      {label}
+    </span>
+    <FanHubSwitch checked={checked} onCheckedChange={onCheckedChange} aria-labelledby={labelId} />
+  </div>
+);
+
+function fanHubFileToBase64Data(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const s = reader.result as string;
+      resolve(s.includes(",") ? s.split(",")[1]! : s);
+    };
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(file);
+  });
+}
+
+async function fanHubBlobUrlToBase64(blobUrl: string): Promise<{ data: string; mimeType: string }> {
+  const res = await fetch(blobUrl);
+  const blob = await res.blob();
+  const mimeType = blob.type || "application/octet-stream";
+  const buf = await blob.arrayBuffer();
+  const bytes = new Uint8Array(buf);
+  const chunk = 0x8000;
+  let binary = "";
+  for (let i = 0; i < bytes.length; i += chunk) {
+    binary += String.fromCharCode(...bytes.subarray(i, Math.min(i + chunk, bytes.length)));
+  }
+  return { data: btoa(binary), mimeType };
+}
+
+/**
+ * First image/video for caption generation — same pattern as Compose (server fetches URL and attaches to Gemini).
+ */
+async function resolveFanHubCaptionMedia(
+  items: MediaItem[]
+): Promise<
+  | { mediaUrl: string }
+  | { mediaUrls: string[] }
+  | { mediaData: { data: string; mimeType: string } }
+  | null
+> {
+  const visual = items.filter((m) => m.type === "image" || m.type === "video");
+  if (visual.length === 0) return null;
+
+  const httpUrls = [
+    ...new Set(
+      visual
+        .map((m) => (typeof m.url === "string" ? m.url.trim() : ""))
+        .filter((u) => u.startsWith("https://") || u.startsWith("http://"))
+    ),
+  ];
+
+  if (httpUrls.length > 1) {
+    return { mediaUrls: httpUrls.slice(0, 6) };
+  }
+  if (httpUrls.length === 1) {
+    return { mediaUrl: httpUrls[0]! };
+  }
+
+  const first = visual[0]!;
+  if (first.file) {
+    const mime =
+      first.file.type || (first.type === "video" ? "video/mp4" : "image/jpeg");
+    const data = await fanHubFileToBase64Data(first.file);
+    return { mediaData: { data, mimeType: mime } };
+  }
+  if (typeof first.url === "string" && first.url.startsWith("blob:")) {
+    const { data, mimeType: blobMime } = await fanHubBlobUrlToBase64(first.url);
+    const mime =
+      blobMime && blobMime !== "application/octet-stream"
+        ? blobMime
+        : first.type === "video"
+          ? "video/mp4"
+          : "image/jpeg";
+    return { mediaData: { data, mimeType: mime } };
+  }
+
+  return null;
+}
+
 export const FanHubPosts: React.FC = () => {
   const { user, showToast } = useAppContext();
   const [showComposer, setShowComposer] = useState(false);
@@ -830,8 +949,35 @@ DO NOT include hashtags.`;
       if (!res.ok) throw new Error("Failed to generate caption");
       
       const data = await res.json();
-      // API returns array of captions
-      const generatedCaption = Array.isArray(data) && data[0]?.caption ? data[0].caption : data.caption;
+      const pickPlainCaption = (payload: unknown): string | undefined => {
+        if (payload == null) return undefined;
+        if (typeof payload === "string") {
+          const t = payload.trim();
+          if (t.startsWith("[") && t.includes('"caption"')) {
+            try {
+              const arr = JSON.parse(t) as unknown;
+              return pickPlainCaption(arr);
+            } catch {
+              return payload;
+            }
+          }
+          return payload;
+        }
+        if (Array.isArray(payload) && payload[0] && typeof payload[0] === "object" && payload[0] !== null) {
+          const c = (payload[0] as { caption?: unknown }).caption;
+          if (typeof c === "string") return c;
+        }
+        if (typeof payload === "object" && payload !== null && "captions" in payload) {
+          const inner = (payload as { captions?: unknown }).captions;
+          return pickPlainCaption(inner);
+        }
+        if (typeof payload === "object" && payload !== null && "caption" in payload) {
+          const c = (payload as { caption?: unknown }).caption;
+          if (typeof c === "string") return c;
+        }
+        return undefined;
+      };
+      const generatedCaption = pickPlainCaption(data);
       if (generatedCaption) {
         // Always replace the caption, don't append
         setCaption(generatedCaption);
@@ -843,7 +989,7 @@ DO NOT include hashtags.`;
     } finally {
       setGenerating(false);
     }
-  }, [caption, aiTone, customTone, usePersonality, contentSpiciness, showToast, user?.settings?.creatorPersonality]);
+  }, [caption, aiTone, customTone, usePersonality, contentSpiciness, showToast, user?.settings?.creatorPersonality, media]);
 
   // Poll handlers
   const addPollOption = () => {
@@ -1514,15 +1660,19 @@ DO NOT include hashtags.`;
                       className="px-2 py-1.5 text-sm border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 w-32"
                     />
                   )}
-                  <label className="flex items-center gap-1.5 text-sm text-gray-600 dark:text-gray-400 cursor-pointer">
-                    <input
-                      type="checkbox"
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span
+                      id="fanhub-composer-use-personality-label"
+                      className="text-sm text-gray-600 dark:text-gray-400 whitespace-nowrap"
+                    >
+                      Use Personality
+                    </span>
+                    <FanHubSwitch
                       checked={usePersonality}
-                      onChange={(e) => setUsePersonality(e.target.checked)}
-                      className="rounded border-gray-300 text-pink-500 focus:ring-pink-500"
+                      onCheckedChange={setUsePersonality}
+                      aria-labelledby="fanhub-composer-use-personality-label"
                     />
-                    Use Personality
-                  </label>
+                  </div>
                 </div>
                 
               </div>
@@ -1782,43 +1932,31 @@ DO NOT include hashtags.`;
               )}
 
               {/* ===== DISPLAY OPTIONS (per-post; fans see heart but not count when "Hide like counts" is on) ===== */}
-              <div className="flex flex-wrap gap-4">
-                <label className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={showTipButton}
-                    onChange={(e) => setShowTipButton(e.target.checked)}
-                    className="rounded border-gray-300 text-pink-500 focus:ring-pink-500"
-                  />
-                  Show Tip Button
-                </label>
-                <label className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={hideLikeCounts}
-                    onChange={(e) => setHideLikeCounts(e.target.checked)}
-                    className="rounded border-gray-300 text-pink-500 focus:ring-pink-500"
-                  />
-                  Hide like counts
-                </label>
-                <label className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={hideComments}
-                    onChange={(e) => setHideComments(e.target.checked)}
-                    className="rounded border-gray-300 text-pink-500 focus:ring-pink-500"
-                  />
-                  Hide Comments
-                </label>
-                <label className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={hideLikes}
-                    onChange={(e) => setHideLikes(e.target.checked)}
-                    className="rounded border-gray-300 text-pink-500 focus:ring-pink-500"
-                  />
-                  Hide Likes
-                </label>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-3">
+                <FanHubSwitchRow
+                  labelId="fanhub-display-tip-label"
+                  label="Show Tip Button"
+                  checked={showTipButton}
+                  onCheckedChange={setShowTipButton}
+                />
+                <FanHubSwitchRow
+                  labelId="fanhub-display-hide-like-counts-label"
+                  label="Hide like counts"
+                  checked={hideLikeCounts}
+                  onCheckedChange={setHideLikeCounts}
+                />
+                <FanHubSwitchRow
+                  labelId="fanhub-display-hide-comments-label"
+                  label="Hide Comments"
+                  checked={hideComments}
+                  onCheckedChange={setHideComments}
+                />
+                <FanHubSwitchRow
+                  labelId="fanhub-display-hide-likes-label"
+                  label="Hide Likes"
+                  checked={hideLikes}
+                  onCheckedChange={setHideLikes}
+                />
               </div>
             </div>
 

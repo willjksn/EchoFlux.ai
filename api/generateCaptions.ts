@@ -42,6 +42,31 @@ function stripHashtagTokensFromCaption(text: string): string {
     .trim();
 }
 
+/**
+ * If the model put JSON (whole array/object) inside "caption", unwrap to the first caption string.
+ * Strip markdown fences. Keeps normal prose unchanged.
+ */
+function normalizeCaptionPlainOutput(raw: string): string {
+  let s = String(raw ?? "").trim();
+  s = s.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "").trim();
+  if ((s.startsWith("[") || s.startsWith("{")) && s.includes('"caption"')) {
+    try {
+      const p = JSON.parse(s) as unknown;
+      if (Array.isArray(p) && p.length > 0) {
+        const first = p[0] as { caption?: string };
+        if (first && typeof first.caption === "string") return first.caption.trim();
+      }
+      if (p && typeof p === "object" && p !== null && "caption" in p) {
+        const c = (p as { caption?: string }).caption;
+        if (typeof c === "string") return c.trim();
+      }
+    } catch {
+      /* keep s */
+    }
+  }
+  return s.trim();
+}
+
 // Sleep helper
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -617,8 +642,8 @@ MEDIA + CAPTION STRATEGY (general / non-explicit):
 `
       : "";
 
-  // Build prompt
-  const desiredCaptionCount = isOnlyFansPlatform ? 5 : 3;
+  // Build prompt — Fan Hub / My Page: one plain caption (matches composer UX)
+  const desiredCaptionCount = isOnlyFansPlatform ? 5 : isFanHubCaption ? 1 : 3;
   // For carousels, we generate the same number of variants, but each must summarize all media.
   const prompt = `
 ${strategicMediaCaptionHint}
@@ -957,7 +982,7 @@ ${isOnlyFansPlatform ? '- OnlyFans does NOT use hashtags. Return empty array: "h
 ${isOnlyFansPlatform || !includeAiHashtags ? '- Do NOT return non-empty hashtag arrays for this request.' : '- Hashtags must be relevant to the content, niche, and tone'}
 ${includeAiHashtags && !isOnlyFansPlatform ? '- Hashtags should be formatted as strings in the array (e.g., ["#tag1", "#tag2", "#tag3"])' : ''}
 
-Return ONLY strict JSON like:
+Return ONLY strict JSON like (top-level array only — no prose outside the array):
 
 [
   {
@@ -965,6 +990,7 @@ Return ONLY strict JSON like:
     "hashtags": ${isOnlyFansPlatform || !includeAiHashtags ? '[]' : '["#one", "#two", "#three", "#four", "#five"]'}
   }
 ]
+${isFanHubCaption ? "\n(For My Page: the array must contain exactly one element.)\n" : ""}
 
 ${isExplicitContent ? `
 IMPORTANT - Caption Variety and Hashtag Requirements:
@@ -1149,6 +1175,16 @@ ${includeAiHashtags
       hashtags: [],
     }));
   }
+
+  // Normalize caption body (unwrap accidental JSON-in-string); strip #tags when hashtags disabled.
+  captions = (captions || []).map((c: any) => {
+    const rawCap = typeof c.caption === "string" ? c.caption : String(c.caption ?? "");
+    const plain = normalizeCaptionPlainOutput(rawCap);
+    return {
+      ...c,
+      caption: plain,
+    };
+  });
 
   // My Page / Facebook / X without "Hashtags" AI enhancement: strip hashtag arrays and #tokens from caption body.
   if (!includeAiHashtags) {
