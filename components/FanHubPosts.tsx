@@ -955,21 +955,48 @@ Write 2-4 sentences that are engaging and on-topic.`;
         }),
       });
 
+      const rawBody = await res.text();
+      let data: unknown;
+      try {
+        data = rawBody ? JSON.parse(rawBody) : null;
+      } catch {
+        throw new Error("Caption service returned an invalid response. Try again.");
+      }
+
+      const apiErrorMessage = (obj: Record<string, unknown> | null): string | undefined => {
+        if (!obj) return undefined;
+        const note = obj.note;
+        const message = obj.message;
+        const error = obj.error;
+        if (typeof note === "string" && note.trim()) return note.trim();
+        if (typeof message === "string" && message.trim()) return message.trim();
+        if (typeof error === "string" && error.trim()) return error.trim();
+        return undefined;
+      };
+
       if (!res.ok) {
         if (res.status === 413) {
-          let note = "Media is too large to analyze in one request. Try a shorter video or use a smaller file.";
-          try {
-            const errBody = (await res.json()) as { note?: string };
-            if (errBody?.note) note = errBody.note;
-          } catch {
-            /* ignore */
-          }
+          const note =
+            apiErrorMessage(data && typeof data === "object" ? (data as Record<string, unknown>) : null) ||
+            "Media is too large to analyze in one request. Try a shorter video or use a smaller file.";
           throw new Error(note);
         }
-        throw new Error("Failed to generate caption");
+        if (res.status === 401) {
+          throw new Error("Please sign in again.");
+        }
+        if (res.status === 429) {
+          throw new Error("Too many caption requests. Wait a minute and try again.");
+        }
+        const fromBody = apiErrorMessage(data && typeof data === "object" ? (data as Record<string, unknown>) : null);
+        throw new Error(fromBody || `Caption request failed (${res.status}).`);
       }
-      
-      const data = await res.json();
+
+      // generateCaptions uses withErrorHandling: errors may be HTTP 200 + { success: false, note }
+      if (data && typeof data === "object" && data !== null && (data as { success?: boolean }).success === false) {
+        const msg =
+          apiErrorMessage(data as Record<string, unknown>) || "Caption generation failed. Please try again.";
+        throw new Error(msg);
+      }
       const pickPlainCaption = (payload: unknown): string | undefined => {
         if (payload == null) return undefined;
         if (typeof payload === "string") {
@@ -1003,10 +1030,15 @@ Write 2-4 sentences that are engaging and on-topic.`;
         // Always replace the caption, don't append
         setCaption(generatedCaption);
         showToast?.("Caption generated!", "success");
+      } else {
+        throw new Error(
+          "No caption was returned. If this keeps happening, check that AI keys are configured on the server.",
+        );
       }
     } catch (error) {
       console.error("Caption generation error:", error);
-      showToast?.("Failed to generate caption", "error");
+      const msg = error instanceof Error ? error.message : "Failed to generate caption";
+      showToast?.(msg, "error");
     } finally {
       setGenerating(false);
     }

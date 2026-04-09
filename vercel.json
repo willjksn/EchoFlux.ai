@@ -3,6 +3,12 @@
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
 
+  "functions": {
+    "api/generateCaptions.ts": {
+      "maxDuration": 60
+    }
+  },
+
   "git": {
     "deploymentEnabled": {
       "main": true

@@ -23,6 +23,57 @@ type AdultTrendOpportunity = {
     bestPractices?: string;
 };
 
+const GENERATE_CAPTIONS_FETCH_MS = 95_000;
+
+function parseGenerateCaptionsHttpError(response: Response, bodyText: string): string {
+    if (response.status === 413) {
+        try {
+            const j = JSON.parse(bodyText) as { note?: string };
+            if (j.note) return j.note;
+        } catch {
+            /* ignore */
+        }
+        return "File too large. Use a smaller image or video.";
+    }
+    if (response.status === 401) return "Please sign in again.";
+    if (response.status === 429) return "Too many caption requests. Wait a minute and try again.";
+    try {
+        const j = JSON.parse(bodyText) as { note?: string; error?: string; message?: string };
+        const m = j.note || j.message || j.error;
+        if (typeof m === "string" && m.trim()) return m.trim();
+    } catch {
+        /* ignore */
+    }
+    if (response.status >= 500) {
+        return "Caption service failed (often a timeout on large videos). Try smaller or shorter media, or try again in a moment.";
+    }
+    const plain = bodyText.replace(/<[^>]*>/g, "").trim().slice(0, 240);
+    return plain || `Request failed (${response.status})`;
+}
+
+/** Long timeout + clear errors when Vercel returns 500/HTML (timeouts, cold starts). */
+async function fetchGenerateCaptionsJson(url: string, init: RequestInit): Promise<any> {
+    const response = await fetch(url, {
+        ...init,
+        signal: init.signal ?? AbortSignal.timeout(GENERATE_CAPTIONS_FETCH_MS),
+    });
+    const text = await response.text();
+    if (!response.ok) {
+        throw new Error(parseGenerateCaptionsHttpError(response, text));
+    }
+    let parsed: unknown;
+    try {
+        parsed = JSON.parse(text) as unknown;
+    } catch {
+        throw new Error("Invalid response from caption service.");
+    }
+    if (parsed && typeof parsed === "object" && (parsed as { success?: boolean }).success === false) {
+        const o = parsed as { note?: string; error?: string; message?: string };
+        throw new Error(o.note || o.message || o.error || "Caption generation failed.");
+    }
+    return parsed as any;
+}
+
 // Predict Modal Component (similar to Compose)
 const PredictModal: React.FC<{ result: any; onClose: () => void; onCopy: (text: string) => void; onSave?: () => void; showToast?: (message: string, type: 'success' | 'error') => void }> = ({ result, onClose, onCopy, onSave, showToast }) => {
     const ideas = result.ideas || result.postIdeas || result.nextPostIdeas;
@@ -1753,7 +1804,7 @@ export const OnlyFansContentBrain: React.FC<OnlyFansContentBrainProps> = ({ init
             const emojiSettings = await loadEmojiSettings(user.id);
 
             const captionsUrl = new URL('/api/generateCaptions', window.location.origin);
-            const response = await fetch(captionsUrl.toString(), {
+            const data = await fetchGenerateCaptionsJson(captionsUrl.toString(), {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -1772,16 +1823,6 @@ export const OnlyFansContentBrain: React.FC<OnlyFansContentBrainProps> = ({ init
                     emojiIntensity: emojiSettings.intensity,
                 }),
             });
-
-            if (!response.ok) {
-                if (response.status === 413) {
-                    const errorData = await response.json().catch(() => ({}));
-                    throw new Error(errorData.note || 'File too large. Please use a smaller image/video (max 4MB for images, 20MB for videos).');
-                }
-                throw new Error('Failed to generate captions');
-            }
-
-            const data = await response.json();
             // API returns array of {caption: string, hashtags: string[]}
             let captions: string[] = [];
             if (Array.isArray(data)) {
@@ -2421,7 +2462,7 @@ Format as a numbered list with brief descriptions. For each idea, clearly specif
 
             const emojiSettings = await loadEmojiSettings(user.id);
             const captionsUrl = new URL('/api/generateCaptions', window.location.origin);
-            const response = await fetch(captionsUrl.toString(), {
+            const data = await fetchGenerateCaptionsJson(captionsUrl.toString(), {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -2437,12 +2478,6 @@ Format as a numbered list with brief descriptions. For each idea, clearly specif
                     emojiIntensity: emojiSettings.intensity,
                 }),
             });
-
-            if (!response.ok) {
-                throw new Error('Failed to generate captions');
-            }
-
-            const data = await response.json();
             let captions: string[] = [];
             if (Array.isArray(data)) {
                 captions = data.map((item: any) => {
@@ -3802,7 +3837,7 @@ Output format:
             const emojiSettings = await loadEmojiSettings(user.id);
             
             const captionsUrl = new URL('/api/generateCaptions', window.location.origin);
-            const response = await fetch(captionsUrl.toString(), {
+            const data = await fetchGenerateCaptionsJson(captionsUrl.toString(), {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -3819,19 +3854,6 @@ Output format:
                     emojiIntensity: emojiSettings.intensity,
                 }),
             });
-
-            if (!response.ok) {
-                if (response.status === 413) {
-                    const errorData = await response.json().catch(() => ({}));
-                    const errorMsg = errorData.note || errorData.error || 'File too large. Please use a smaller image/video (max 4MB for images, 20MB for videos).';
-                    throw new Error(errorMsg);
-                }
-                const errorData = await response.json().catch(() => ({}));
-                const errorMsg = errorData.error || errorData.message || 'Failed to generate captions';
-                throw new Error(errorMsg);
-            }
-
-            const data = await response.json();
             // API returns array of {caption: string, hashtags: string[]}
             let captions: {caption: string; hashtags: string[]}[] = [];
             if (Array.isArray(data)) {
@@ -4021,7 +4043,7 @@ Output format:
             const emojiSettings = await loadEmojiSettings(user.id);
             
             const captionsUrl = new URL('/api/generateCaptions', window.location.origin);
-            const response = await fetch(captionsUrl.toString(), {
+            const data = await fetchGenerateCaptionsJson(captionsUrl.toString(), {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -4037,14 +4059,6 @@ Output format:
                     emojiIntensity: emojiSettings.intensity,
                 }),
             });
-
-            if (!response.ok) {
-                const errorData = await response.json().catch(() => ({}));
-                const errorMsg = errorData.error || errorData.message || 'Failed to generate captions';
-                throw new Error(errorMsg);
-            }
-
-            const data = await response.json();
             let captions: {caption: string; hashtags: string[]}[] = [];
             if (Array.isArray(data)) {
                 captions = data.map((item: any) => ({

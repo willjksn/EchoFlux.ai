@@ -133,22 +133,27 @@ export async function generateCaptions(opts: {
 }) {
   const { mediaUrl, mediaUrls, mediaData, goal, tone, promptText, platforms, usePersonality, useFavoriteHashtags, creatorPersonality, favoriteHashtags, emojiIntensity, toneSettings } = opts;
 
-  return await callFunction("generateCaptions", {
-    mediaUrl: mediaUrl || null,
-    mediaUrls: Array.isArray(mediaUrls) ? mediaUrls : null,
-    mediaData: mediaData || null,
-    goal: goal || null,
-    tone: tone || null,
-    promptText: promptText || null,
-    platforms: platforms || null, // Pass platforms for hashtag generation
-    usePersonality: usePersonality || false,
-    useFavoriteHashtags: useFavoriteHashtags || false,
-    creatorPersonality: creatorPersonality || null,
-    favoriteHashtags: favoriteHashtags || null,
-    emojiEnabled: emojiIntensity !== 0,
-    emojiIntensity: emojiIntensity ?? 50, // Default to 50 if not set
-    toneSettings: toneSettings || null, // Pass full tone settings
-  });
+  // Video / multi-media caption analysis can exceed the default 30s client timeout; keep under Vercel maxDuration (see vercel.json).
+  return await callFunction(
+    "generateCaptions",
+    {
+      mediaUrl: mediaUrl || null,
+      mediaUrls: Array.isArray(mediaUrls) ? mediaUrls : null,
+      mediaData: mediaData || null,
+      goal: goal || null,
+      tone: tone || null,
+      promptText: promptText || null,
+      platforms: platforms || null, // Pass platforms for hashtag generation
+      usePersonality: usePersonality || false,
+      useFavoriteHashtags: useFavoriteHashtags || false,
+      creatorPersonality: creatorPersonality || null,
+      favoriteHashtags: favoriteHashtags || null,
+      emojiEnabled: emojiIntensity !== 0,
+      emojiIntensity: emojiIntensity ?? 50, // Default to 50 if not set
+      toneSettings: toneSettings || null, // Pass full tone settings
+    },
+    90_000
+  );
 }
 
 /* ----------------------------------------------------

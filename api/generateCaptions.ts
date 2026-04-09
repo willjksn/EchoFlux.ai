@@ -1231,3 +1231,8 @@ ${includeAiHashtags
 }
 
 export default withErrorHandling(handler);
+
+/** Vercel: allow Gemini video / retries to finish (default is often 10s on Hobby). */
+export const config = {
+  maxDuration: 60,
+};
