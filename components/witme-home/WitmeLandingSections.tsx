@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import { WITME_FIRST_CREATOR_SLUG, witmePublicHref } from "../../src/lib/witmeFirstCreator";
 import { trackWitmeEvent } from "../../src/lib/witmeTrackEvent";
 import { witmeCreatorPagePath, type WitmeShowcaseCreator } from "../../src/lib/witmeShowcase";
@@ -29,6 +29,62 @@ export function pickFeaturedShowcaseCreators(showcase: WitmeShowcaseCreator[]): 
 
 export type WitmeLegalLink = { label: string; url: string };
 
+/** Single hero collage tile: soft placeholder until media paints, then match final chrome. */
+function WitmeHeroCollageCell({
+  creator,
+  idx,
+  className,
+  imgLoading,
+  enableTracking,
+}: {
+  creator: WitmeShowcaseCreator;
+  idx: number;
+  className: string;
+  imgLoading: "eager" | "lazy";
+  enableTracking: boolean;
+}) {
+  const [mediaReady, setMediaReady] = useState(false);
+  const path = witmeCreatorPagePath(creator.pageSlug);
+  const href = creator.linkLive && path ? witmePublicHref(path) : null;
+  const alt = `${creator.name || "Creator"} on WitMe`;
+  const frameClass =
+    "aspect-[5/7] overflow-hidden rounded-2xl transition-[border-color,box-shadow,background-color] duration-500 ease-out " +
+    (mediaReady
+      ? "border border-white/25 bg-black/35 shadow-2xl shadow-black/50 ring-1 ring-white/10"
+      : "border border-transparent bg-gradient-to-br from-white/[0.06] to-black/40 shadow-md shadow-black/20 ring-0");
+  const inner = (
+    <div className={frameClass}>
+      <ShowcaseMedia
+        url={creator.imageUrl}
+        mediaKind={creator.mediaKind}
+        alt={alt}
+        className="h-full w-full"
+        objectPosition={creator.mediaObjectPosition}
+        mediaScale={creator.mediaScale ?? 1}
+        objectFit="cover"
+        layout="fill"
+        imgLoading={imgLoading}
+        onReady={() => setMediaReady(true)}
+      />
+    </div>
+  );
+  const tracked =
+    href != null ? (
+      <a
+        href={href}
+        className="block rounded-2xl transition hover:opacity-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/60 focus-visible:ring-offset-2 focus-visible:ring-offset-[#26324a]"
+        onClick={() => {
+          if (enableTracking) trackWitmeEvent("cta_hero_visual_creator", { handle: creator.handle, slot: idx });
+        }}
+      >
+        {inner}
+      </a>
+    ) : (
+      inner
+    );
+  return <div className={className}>{tracked}</div>;
+}
+
 /** Stacked / offset frames so the hero shows real creator imagery beside “Different worlds” copy. */
 function WitmeHeroVisualCollage({
   creators,
@@ -40,45 +96,16 @@ function WitmeHeroVisualCollage({
   const items = creators.filter((c) => c.imageUrl.trim()).slice(0, 3);
   if (items.length === 0) return null;
 
-  const wrapFrame = (creator: WitmeShowcaseCreator, idx: number, className: string, imgLoading: "eager" | "lazy") => {
-    const path = witmeCreatorPagePath(creator.pageSlug);
-    const href = creator.linkLive && path ? witmePublicHref(path) : null;
-    const alt = `${creator.name || "Creator"} on WitMe`;
-    const inner = (
-      <div className="aspect-[5/7] overflow-hidden rounded-2xl border border-white/25 bg-black/35 shadow-2xl shadow-black/50 ring-1 ring-white/10">
-        <ShowcaseMedia
-          url={creator.imageUrl}
-          mediaKind={creator.mediaKind}
-          alt={alt}
-          className="h-full w-full"
-          objectPosition={creator.mediaObjectPosition}
-          mediaScale={creator.mediaScale ?? 1}
-          objectFit="cover"
-          layout="fill"
-          imgLoading={imgLoading}
-        />
-      </div>
-    );
-    const tracked =
-      href != null ? (
-        <a
-          href={href}
-          className="block transition hover:opacity-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/60 focus-visible:ring-offset-2 focus-visible:ring-offset-[#26324a] rounded-2xl"
-          onClick={() => {
-            if (enableTracking) trackWitmeEvent("cta_hero_visual_creator", { handle: creator.handle, slot: idx });
-          }}
-        >
-          {inner}
-        </a>
-      ) : (
-        inner
-      );
-    return (
-      <div key={`${creator.pageSlug}-${idx}`} className={className}>
-        {tracked}
-      </div>
-    );
-  };
+  const wrapFrame = (creator: WitmeShowcaseCreator, idx: number, className: string, imgLoading: "eager" | "lazy") => (
+    <WitmeHeroCollageCell
+      key={`${creator.pageSlug}-${idx}`}
+      creator={creator}
+      idx={idx}
+      className={className}
+      imgLoading={imgLoading}
+      enableTracking={enableTracking}
+    />
+  );
 
   if (items.length === 1) {
     return (

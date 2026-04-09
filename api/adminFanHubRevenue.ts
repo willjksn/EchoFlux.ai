@@ -137,6 +137,26 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     recentTransactions.sort((a, b) => Date.parse(b.timestamp) - Date.parse(a.timestamp));
     const recentSlice = recentTransactions.slice(0, 50);
 
+    const creatorIds = [...new Set(Object.keys(byCreatorId))];
+    const creatorDisplayNames: Record<string, string> = {};
+    const chunkSize = 10;
+    for (let i = 0; i < creatorIds.length; i += chunkSize) {
+      const chunk = creatorIds.slice(i, i + chunkSize);
+      const refs = chunk.map((id) => db.collection("creators").doc(id));
+      const snaps = await db.getAll(...refs);
+      snaps.forEach((snap, j) => {
+        const id = chunk[j];
+        if (!snap.exists) {
+          creatorDisplayNames[id] = "Unknown Creator";
+          return;
+        }
+        const cd = snap.data() as Record<string, unknown>;
+        const handle = typeof cd.handle === "string" ? cd.handle.trim() : "";
+        const dn = typeof cd.displayName === "string" ? cd.displayName.trim() : "";
+        creatorDisplayNames[id] = dn || handle || "Unknown Creator";
+      });
+    }
+
     return res.status(200).json({
       totalRevenue,
       tips,
@@ -144,6 +164,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       treats,
       subscriptions,
       byCreatorId,
+      creatorDisplayNames,
       recentTransactions: recentSlice,
       orderCount: docs.length,
     });

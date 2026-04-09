@@ -31,8 +31,6 @@ type TicketMessageRow = {
   createdAt: string | null;
 };
 
-const MAILTO_SAFE_LEN = 1750;
-
 function buildTicketEmailHeader(ticket: ITTicket, messages: TicketMessageRow[]): string {
   const creatorLine =
     ticket.creatorDisplayName ||
@@ -67,6 +65,7 @@ export const AdminITSupportPanel: React.FC = () => {
   const [emailDetailLoading, setEmailDetailLoading] = useState(false);
   const [emailBody, setEmailBody] = useState("");
   const [emailAiLoading, setEmailAiLoading] = useState(false);
+  const [emailSending, setEmailSending] = useState(false);
 
   const loadTickets = async () => {
     setIsLoading(true);
@@ -142,6 +141,7 @@ export const AdminITSupportPanel: React.FC = () => {
     setEmailBody("");
     setEmailDetailLoading(false);
     setEmailAiLoading(false);
+    setEmailSending(false);
   }, []);
 
   const generateEmailDraft = useCallback(async () => {
@@ -173,40 +173,45 @@ export const AdminITSupportPanel: React.FC = () => {
     }
   }, [emailTicket, showToast]);
 
-  const openMailto = useCallback(() => {
+  const sendSupportEmail = useCallback(async () => {
     if (!emailTicket) return;
-    const to = emailTicket.reporterEmail?.trim();
-    if (!to) {
-      showToast("This ticket has no reporter email on file.", "error");
+    const reply = emailBody.trim();
+    if (!reply) {
+      showToast("Write a reply before sending.", "error");
       return;
     }
-    const subject = `Re: EchoFlux support (ticket ${emailTicket.id.slice(0, 8)}…)`;
-    const header = buildTicketEmailHeader(emailTicket, emailMessages);
-    const fullBody = `${header}${emailBody.trim() ? emailBody.trim() : ""}`;
-    const params = new URLSearchParams();
-    params.set("subject", subject);
-    params.set("body", fullBody);
-    const href = `mailto:${encodeURIComponent(to)}?${params.toString()}`;
-    if (href.length > MAILTO_SAFE_LEN) {
-      void navigator.clipboard.writeText(fullBody).then(
-        () => {
-          const shortParams = new URLSearchParams();
-          shortParams.set("subject", subject);
-          shortParams.set(
-            "body",
-            "(Full message including ticket context was copied to your clipboard — paste below your greeting.)\n\n"
-          );
-          window.location.href = `mailto:${encodeURIComponent(to)}?${shortParams.toString()}`;
-          showToast("Email client opened; full draft copied to clipboard (link was too long).", "info");
+    setEmailSending(true);
+    try {
+      const token = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
+      if (!token) throw new Error("Not authenticated");
+      const res = await fetch("/api/adminSendSupportTicketEmail", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
         },
-        () => {
-          showToast("Could not copy draft. Shorten your reply or copy manually from the modal.", "error");
-        }
-      );
-      return;
+        body: JSON.stringify({ ticketId: emailTicket.id, replyText: reply }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        const d = data as { error?: string; details?: string };
+        const base = d.error || "Failed to send email";
+        throw new Error(d.details ? `${base}: ${d.details}` : base);
+      }
+      if (!(data as { success?: boolean }).success) {
+        const d = data as { error?: string; details?: string };
+        const base = d.error || "Failed to send email";
+        throw new Error(d.details ? `${base}: ${d.details}` : base);
+      }
+      showToast("Email sent. It appears in Email Center → History.", "success");
+      closeEmailModal();
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "Failed to send email";
+      showToast(msg, "error");
+    } finally {
+      setEmailSending(false);
     }
-    window.location.href = href;
-  }, [emailTicket, emailMessages, emailBody, showToast]);
+  }, [emailTicket, emailBody, showToast, closeEmailModal]);
 
   const updateStatus = async (ticketId: string, status: TicketStatus) => {
     setUpdatingId(ticketId);
@@ -445,11 +450,16 @@ export const AdminITSupportPanel: React.FC = () => {
               </button>
               <button
                 type="button"
-                disabled={!emailTicket.reporterEmail?.trim() || emailDetailLoading}
-                onClick={() => openMailto()}
+                disabled={
+                  !emailTicket.reporterEmail?.trim() ||
+                  emailDetailLoading ||
+                  emailSending ||
+                  !emailBody.trim()
+                }
+                onClick={() => void sendSupportEmail()}
                 className="px-3 py-2 rounded-md text-sm font-semibold bg-primary-600 text-white hover:bg-primary-700 disabled:opacity-50"
               >
-                Open in email app
+                {emailSending ? "Sending…" : "Send email"}
               </button>
             </div>
           </div>

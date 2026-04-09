@@ -435,6 +435,7 @@ export const AdminDashboard: React.FC = () => {
                     treats: number;
                     subscriptions: number;
                     byCreatorId: Record<string, number>;
+                    creatorDisplayNames?: Record<string, string>;
                     recentTransactions: Array<{
                         id: string;
                         creatorId: string;
@@ -444,17 +445,7 @@ export const AdminDashboard: React.FC = () => {
                     }>;
                 };
 
-                const displayByCreatorId: Record<string, string> = {};
-                try {
-                    const creatorsSnap = await getDocs(collection(db, 'creators'));
-                    creatorsSnap.forEach((d) => {
-                        const cd = d.data() as { displayName?: string };
-                        displayByCreatorId[d.id] = cd.displayName || 'Unknown Creator';
-                    });
-                } catch (creatorsErr) {
-                    // Never block revenue cards if client-side creators/* read is restricted.
-                    console.warn('adminFanHubRevenue: creators name lookup skipped', creatorsErr);
-                }
+                const displayByCreatorId = data.creatorDisplayNames ?? {};
 
                 const resolveCreatorName = (creatorId: string) => {
                     const u = users.find((x) => x.id === creatorId);

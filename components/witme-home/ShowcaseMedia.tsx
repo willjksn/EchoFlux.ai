@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import type { WitmeShowcaseCreator } from "../../src/lib/witmeShowcase";
 import { parseObjectPositionPercentPair } from "../../src/lib/objectPositionPan";
 
@@ -28,6 +28,8 @@ export const ShowcaseMedia: React.FC<{
   layout?: "fill" | "intrinsic";
   /** Passed to `<img>` when `mediaKind` is image (e.g. eager for above-the-fold hero). */
   imgLoading?: "eager" | "lazy";
+  /** Fires once when the image or first video frame is ready (hero collage frame styling). */
+  onReady?: () => void;
 }> = ({
   url,
   mediaKind,
@@ -38,6 +40,7 @@ export const ShowcaseMedia: React.FC<{
   objectFit = "cover",
   layout = "fill",
   imgLoading = "lazy",
+  onReady,
 }) => {
   const u = url.trim();
   const fitStyle = showcaseObjectStyle(objectPosition, objectFit);
@@ -55,6 +58,37 @@ export const ShowcaseMedia: React.FC<{
   const intrinsicStyle: React.CSSProperties =
     layout === "intrinsic" ? { width: "auto", height: "auto", maxWidth: "100%" } : {};
   const videoRef = useRef<HTMLVideoElement>(null);
+  const imgRef = useRef<HTMLImageElement>(null);
+  const readyOnce = useRef(false);
+  const [imgVisible, setImgVisible] = useState(false);
+
+  const fireReady = useCallback(() => {
+    if (readyOnce.current) return;
+    readyOnce.current = true;
+    if (mediaKind !== "video") setImgVisible(true);
+    onReady?.();
+  }, [mediaKind, onReady]);
+
+  useEffect(() => {
+    readyOnce.current = false;
+    setImgVisible(false);
+  }, [u, mediaKind]);
+
+  useEffect(() => {
+    if (mediaKind !== "video" || !u) return;
+    const v = videoRef.current;
+    if (!v) return;
+    const onData = () => fireReady();
+    if (v.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) onData();
+    else v.addEventListener("loadeddata", onData, { once: true });
+    return () => v.removeEventListener("loadeddata", onData);
+  }, [mediaKind, u, fireReady]);
+
+  useEffect(() => {
+    if (mediaKind === "video" || !u) return;
+    const el = imgRef.current;
+    if (el?.complete && el.naturalHeight > 0) fireReady();
+  }, [mediaKind, u, fireReady]);
 
   useEffect(() => {
     const v = videoRef.current;
@@ -105,13 +139,19 @@ export const ShowcaseMedia: React.FC<{
       />
     );
   }
+  const imgOpacityClass = `transition-opacity duration-500 ease-out ${imgVisible ? "opacity-100" : "opacity-0"}`;
+
   return (
     <img
+      ref={imgRef}
       src={u}
       alt={alt}
-      className={mergedClass}
+      className={`${imgOpacityClass} ${mergedClass}`.trim()}
       style={{ ...fitStyle, ...mediaTransformStyle, ...intrinsicStyle }}
       loading={imgLoading}
+      decoding="async"
+      fetchPriority={imgLoading === "eager" ? "high" : undefined}
+      onLoad={() => fireReady()}
     />
   );
 };
