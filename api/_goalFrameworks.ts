@@ -105,6 +105,65 @@ STRATEGIC FRAMEWORK FOR ${goal}:
   }
 }
 
+/**
+ * Fan Hub / My Page captions: audience is already on the creator's member page.
+ * Avoid Instagram/TikTok/X-style follow and growth CTAs.
+ */
+export function getFanHubCaptionGoalFramework(goal: string): string {
+  const header = `
+FAN HUB / MY PAGE — STRATEGY (MEMBER-ONLY CONTEXT):
+- Readers are already on this creator's personal fan / member page. Do NOT write as if recruiting strangers from a public FYP or feed.
+- FORBIDDEN: asking to follow, follow for more, follow if you liked the video, hit follow, turn on notifications to follow, "new here?", "road to X followers", "help me grow", smash follow, or any variant of gaining new followers / subscribers on other apps.
+- FORBIDDEN: generic open-platform growth hooks (Instagram/TikTok/X discovery tone) unless USER INSTRUCTIONS explicitly ask for them.
+- OK: voice, mood, story, humor, questions, appreciation for supporters, comments/replies, tips or unlocks if it fits the product — all without implying the reader is not already a member.
+`;
+
+  switch (goal) {
+    case 'Increase Followers/Fans':
+      return `${header}
+- The goal label may mention followers — on Fan Hub, interpret that as deepening loyalty and closeness with people already here, not audience expansion. Still no follow / recruit language.`;
+    case 'Lead Generation':
+      return `${header}
+- Lead capture is in-member only: soft prompts to comment, DM, or take an action on this page — not "follow to see more" elsewhere.`;
+    case 'Sales Conversion':
+      return `${header}
+- Focus on tips, unlocks, bundles, or purchases that fit this page — not follow-me or cross-platform funnel language unless the user asked.`;
+    case 'Brand Awareness':
+      return `${header}
+- Reinforce recognizable voice and story for existing members; no reach / discovery / follow framing.`;
+    case 'Community Engagement':
+    case 'Customer Engagement':
+      return `${header}
+- Conversation starters, polls-in-text, "your turn" — for people already in the community.`;
+    case 'Increase Engagement':
+      return `${header}
+- Prefer comments, replies, saves-on-page, and discussion — not "double tap if", "share to grow", or follow bait.`;
+    default:
+      return `${header}
+- Align with the selected goal using member-appropriate language only (no public-platform growth tactics).`;
+  }
+}
+
+export function getFanHubCaptionGoalCTAs(goal: string): string {
+  switch (goal) {
+    case 'Increase Followers/Fans':
+      return '- Examples (tone-dependent): "What do you think?", "Drop a comment", "This one\'s for you guys on here" — never follow / subscribe / find me on [platform]';
+    case 'Lead Generation':
+      return '- "Reply if you want [X]", "Comment and I\'ll DM you", "Tap in below" — on-page only; no follow recruitment';
+    case 'Sales Conversion':
+      return '- "Tip if you love it", "Unlock in messages", "Customs open — ask here" — no follow-for-more';
+    case 'Brand Awareness':
+      return '- Voice and memorable lines for people already here: "who relates?", "this is so us" — never follow me / follow for / tag someone who doesn\'t follow you yet';
+    case 'Community Engagement':
+    case 'Customer Engagement':
+      return '- "Comment your take", "What would you do?", "Stories from you guys?" — member conversation, not growth CTAs';
+    case 'Increase Engagement':
+      return '- "Comment your answer", "Save this for later", "Agree or disagree?" — no double-tap / follow-if / FYP language';
+    default:
+      return '- Member-appropriate CTAs only; questions and replies welcome — never ask to follow or grow audience';
+  }
+}
+
 export function getGoalSpecificCTAs(goal: string): string {
   switch (goal) {
     case 'Increase Followers/Fans':

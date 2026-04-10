@@ -6,7 +6,12 @@ import {
   getModelRouter,
   withErrorHandling,
 } from "./_errorHandler.js";
-import { getGoalFramework, getGoalSpecificCTAs } from "./_goalFrameworks.js";
+import {
+  getFanHubCaptionGoalCTAs,
+  getFanHubCaptionGoalFramework,
+  getGoalFramework,
+  getGoalSpecificCTAs,
+} from "./_goalFrameworks.js";
 import { getLatestTrends, getOnlyFansWeeklyTrends } from "./_trendsHelper.js";
 import { getOnlyFansResearchContext } from "./_onlyfansResearch.js";
 import { enforceRateLimit } from "./_rateLimit.js";
@@ -597,7 +602,7 @@ ${shouldGenerateOnlyFansHashtags ? '- HASHTAGS MUST BE EXPLICIT AND MATCH THE CA
         firestoreUserData && typeof firestoreUserData.niche === "string"
           ? firestoreUserData.niche.trim().slice(0, 80)
           : "creator";
-      const q = `${nicheRaw} fan page membership community engagement viral hooks ${new Date().getFullYear()}`;
+      const q = `${nicheRaw} fan membership community posts authentic creator voice ${new Date().getFullYear()}`;
       const sw = await searchWeb(q, authUser.uid, userPlan, userRole, {
         maxResults: 5,
         searchDepth: "basic",
@@ -639,7 +644,7 @@ ${shouldGenerateOnlyFansHashtags ? '- HASHTAGS MUST BE EXPLICIT AND MATCH THE CA
   
   // Get goal-specific framework if a specific goal is provided
   if (goal && goal !== "engagement") {
-    goalContext = getGoalFramework(goal);
+    goalContext = isFanHubCaption ? getFanHubCaptionGoalFramework(goal) : getGoalFramework(goal);
   }
 
   const onlyFansPlatformContext = isOnlyFansPlatform
@@ -692,7 +697,13 @@ ONLYFANS EXPLICIT MODE (HIGH INTENSITY):
     !isExplicitContent &&
     !isOnlyFansPlatform &&
     (Boolean(finalMedia) || finalMediaList.length > 0)
-      ? `
+      ? isFanHubCaption
+        ? `
+MEDIA + CAPTION STRATEGY (Fan Hub / My Page — members already here):
+- Media may be attached; the caption does not have to be a literal scene description if a stronger angle fits the PRIMARY GOAL, trends (weekly + any live research above), and (when enabled) creator personality.
+- Prefer hooks that fit an existing member feed: mood, story, questions, appreciation — not recruiting followers or public-platform growth. When personality is on, that voice wins over generic social tactics.
+`
+        : `
 MEDIA + CAPTION STRATEGY (general / non-explicit):
 - Media may be attached, but the caption does NOT have to be a literal scene description if a stronger angle fits the PRIMARY GOAL, trends (weekly + any live research above), and (when enabled) creator personality.
 - Prefer hooks that drive saves, comments, DMs, or follows when that matches the goal; stay believable for the post (mood, theme, or implied connection is enough).
@@ -705,7 +716,7 @@ MEDIA + CAPTION STRATEGY (general / non-explicit):
 FAN HUB — FRESH GENERATION (must differ from prior runs):
 - regenerationNonce: ${String(toneSettings?.randomSeed ?? 0)}
 - Do NOT output a generic filler caption (e.g. repeated "thanks for being here" / "your support means everything" as the whole post).
-- Change hook, structure, emoji placement, and optional question/CTA vs any boilerplate fan-page line.
+- Change hook, structure, emoji placement, and optional question or on-page CTA — never follow / follow-for-more / recruit-new-fan phrasing.
 - If media is attached, include at least one concrete detail grounded in what is shown (action, setting, mood, outfit, lighting, or vibe).
 `
       : "";
@@ -769,11 +780,12 @@ ${platforms.map(platform => {
   if (platformName === 'my page' || platformName === 'mypage' || platformName.includes('fan hub') || platformName.includes('fanhub')) {
     return `- My Page (Fan Hub): Do NOT generate hashtags - Fan Hub does not use hashtags. Return "hashtags": [] for every caption.
 - NEVER say "link in bio" - this IS their own page, there's no external link needed.
-- Optimal length: 100-500 characters. Write engaging, personal content for your fan community.
-- Focus on connection, exclusivity, retention, tips, and comments — optimize for member engagement and "sticky" feed behavior.
-- When LIVE WEB RESEARCH (Tavily) appears above, you may lean on a timely hook, meme, or community pattern if it fits the creator and user instructions.
+- Audience: people already on this member page — NOT Instagram/TikTok/X strangers. Do NOT ask anyone to follow you, follow for more, follow if they liked the video, hit follow, turn on notifications to follow, or any "grow my following" / FYP / discovery language.
+- Optimal length: 100-500 characters. Write personal content for your existing fan community.
+- Focus on connection, exclusivity, retention, tips, and comments — optimize for member engagement and "sticky" feed behavior, without recruiting new followers.
+- When LIVE WEB RESEARCH (Tavily) appears above, use it only if it fits a member-page tone (ignore generic viral follow-bait patterns).
 - The caption does NOT have to literally describe the image/video if a stronger angle serves engagement (story, hot take, question, trend tie-in) — still keep the post believable for the media when media is attached.
-- When "Use creator personality" is on, match that voice first; trends and goal are supporting layers.
+- When "Use creator personality" is on, that voice is PRIMARY; trends and goal support it — never default to generic influencer follow hooks.
 - Use casual, authentic language. Emojis are encouraged (2-4) when they fit the voice.
 - If the user provides specific keywords or themes, you MUST incorporate them directly into the caption.`;
   }
@@ -885,7 +897,7 @@ ${isOnlyFansPlatform ? `Generate 3–5 UNIQUE, DIVERSE captions` : `Generate EXA
 ${sanitizedPromptText ? `- USER INSTRUCTIONS (FOLLOW FIRST - do not overwrite): ${sanitizedPromptText}\n` : ''}- Goal: ${sanitizedGoal || goal || "engagement"}${isExplicitContent ? ' (Mix of EXPLICIT SEXUAL content description and sales-focused captions)' : sanitizedGoal || goal ? ` (Every caption must directly support achieving: ${sanitizedGoal || goal})` : ''}
 - Tone: ${sanitizedTone || tone || "friendly"}${isExplicitContent ? ' (EXPLICIT/ADULT CONTENT - Generate BOLD, EXPLICIT, RAW, UNCENSORED captions with explicit sexual language that describe what is visually shown in explicit detail, plus sales-focused captions)' : ''}
 ${!sanitizedPromptText ? `- Extra instructions: none\n` : ''}
-${goal && goal !== "engagement" ? `\nGOAL-SPECIFIC CTAs TO CONSIDER: ${getGoalSpecificCTAs(goal)}\n` : ''}
+${goal && goal !== "engagement" ? (isFanHubCaption ? `\nMEMBER-APPROPRIATE CTAs (no follow / growth language): ${getFanHubCaptionGoalCTAs(goal)}\n` : `\nGOAL-SPECIFIC CTAs TO CONSIDER: ${getGoalSpecificCTAs(goal)}\n`) : ''}
 
 CRITICAL - VARIETY REQUIREMENT:
 - Each caption MUST be completely different from the others
@@ -893,13 +905,17 @@ CRITICAL - VARIETY REQUIREMENT:
 - Vary the writing style, sentence length, and approach
 - Generate fresh, unique content each time - never reuse or repeat previous captions
 - If regenerating, create entirely new captions with different angles, wording, and styles
-${!isOnlyFansPlatform ? `
+${!isOnlyFansPlatform && !isFanHubCaption ? `
 CAPTION VARIANTS (SOCIAL PLATFORMS):
 - Return 3 variants that feel meaningfully different:
   - Variant 1: Short + punchy hook + clear CTA
   - Variant 2: Micro-story / personal angle (creator POV) + soft CTA
   - Variant 3: Value/insight bullets or 2-line structure + engagement question
 - Keep each variant within platform limits (if multiple platforms selected, obey the strictest limit).
+` : ''}
+${isFanHubCaption ? `
+FAN HUB — SINGLE CAPTION:
+- Return exactly one caption in the JSON array. Make it feel natural for people already on this page; no follow / subscribe / find-me-on-[app] recruitment.
 ` : ''}
 ${isExplicitContent ? `
 IMPORTANT - EXPLICIT CONTENT CAPTION REQUIREMENTS:
