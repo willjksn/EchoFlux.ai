@@ -112,6 +112,13 @@ export const Strategy: React.FC<{ onBackToSimple?: () => void }> = ({ onBackToSi
     const hasStrategyAccess = user?.role === 'Admin' || 
                                ['Free', 'Pro', 'Elite'].includes(user?.plan || '');
 
+    const hasPostIdeasInput = niche.trim().length > 0;
+    const hasAudienceInput = audience.trim().length > 0;
+    const hasPersonalityLead =
+        usePersonality && Boolean(settings.creatorPersonality?.trim());
+    const canGenerateStrategyInputs =
+        hasPostIdeasInput || hasAudienceInput || hasPersonalityLead;
+
     // Load usage stats
     const loadUsageStats = async () => {
         if (!user?.id) return;
@@ -397,8 +404,8 @@ export const Strategy: React.FC<{ onBackToSimple?: () => void }> = ({ onBackToSi
     }
 
     const handleGenerate = async () => {
-        if (!niche || !audience) {
-            showToast('Please fill in all required fields.', 'error');
+        if (!canGenerateStrategyInputs) {
+            showToast('Add post ideas, target audience, or turn on Personality (with a description in Settings).', 'error');
             return;
         }
         setIsLoading(true);
@@ -507,12 +514,18 @@ export const Strategy: React.FC<{ onBackToSimple?: () => void }> = ({ onBackToSi
                 
                 // Set the plan first
                 setPlan(planWithStatus);
+
+                const strategyNamePrefix =
+                    niche.trim() ||
+                    (usePersonality && settings.creatorPersonality?.trim()
+                        ? 'Personality-led'
+                        : audience.trim() || 'Strategy');
+                const autoName = `${strategyNamePrefix} • ${goal} • ${new Date().toLocaleDateString()}`.slice(0, 80);
                 
                 // AUTOSAVE: Persist the generated strategy via server API (Admin SDK),
                 // so it works even if client Firestore listeners fail.
                 // NOTE: OFFLINE_MODE should not prevent saving strategies.
                 if (user?.id) {
-                    const autoName = `${niche} • ${goal} • ${new Date().toLocaleDateString()}`.slice(0, 80);
                     try {
                         const saved = await saveStrategy(planWithStatus, autoName, goal, niche, audience, {
                             tone,
@@ -570,7 +583,7 @@ export const Strategy: React.FC<{ onBackToSimple?: () => void }> = ({ onBackToSi
                     const fallbackId = `local_${Date.now()}`;
                     const strategyData = {
                         id: fallbackId,
-                        name: `${niche} • ${goal} • ${new Date().toLocaleDateString()}`.slice(0, 80),
+                        name: autoName,
                         plan: planWithStatus,
                         goal,
                         niche,
@@ -801,7 +814,7 @@ export const Strategy: React.FC<{ onBackToSimple?: () => void }> = ({ onBackToSi
             try {
                 const promptText = [
                     `You are generating a caption for a roadmap item inside a content strategy.`,
-                    `Niche: ${niche || 'N/A'}`,
+                    `Post ideas: ${niche || 'N/A'}`,
                     `Target audience: ${audience || 'N/A'}`,
                     `Primary goal: ${goal || 'engagement'}`,
                     `Tone: ${tone || 'friendly'}`,
@@ -984,7 +997,7 @@ export const Strategy: React.FC<{ onBackToSimple?: () => void }> = ({ onBackToSi
             try {
                 const promptText = [
                     `You are generating a caption for a roadmap item inside a content strategy.`,
-                    `Niche: ${niche || 'N/A'}`,
+                    `Post ideas: ${niche || 'N/A'}`,
                     `Target audience: ${audience || 'N/A'}`,
                     `Primary goal: ${goal || 'engagement'}`,
                     `Tone: ${tone || 'friendly'}`,
@@ -1294,7 +1307,7 @@ export const Strategy: React.FC<{ onBackToSimple?: () => void }> = ({ onBackToSi
                             Plan My Week
                         </h1>
                         <p className="text-base sm:text-lg text-gray-600 dark:text-gray-400">
-                            Create an AI-powered content strategy tailored to your primary goal using niche research, current trends, and your content history
+                            Create an AI-powered content strategy tailored to your primary goal using trend-aware research, optional post ideas, and your content history
                         </p>
                     </div>
                     <button
@@ -1359,7 +1372,7 @@ export const Strategy: React.FC<{ onBackToSimple?: () => void }> = ({ onBackToSi
                                                 </span>
                                             </div>
                                             <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">
-                                                Goal: {strategy.goal} • Niche: {strategy.niche} • Audience: {strategy.audience}
+                                                Goal: {strategy.goal} • Post ideas: {strategy.niche || '—'} • Audience: {strategy.audience || '—'}
                                             </p>
                                             <p className="text-xs text-gray-500 dark:text-gray-400">
                                                 Created: {new Date(strategy.createdAt).toLocaleDateString()}
@@ -1397,35 +1410,54 @@ export const Strategy: React.FC<{ onBackToSimple?: () => void }> = ({ onBackToSi
                         Create Your Content Strategy
                     </h2>
                     <p className="text-gray-600 dark:text-gray-400">
-                        AI creates a personalized strategy for your primary goal using niche research, current social media trends, and insights from your content history.
+                        AI builds a personalized plan using trends, your primary goal, tone, and platform—plus any post ideas, audience, or (when enabled) your creator personality from Settings.
                     </p>
+                    <div className="mt-4 rounded-xl border border-primary-200/80 dark:border-primary-800/60 bg-primary-50/60 dark:bg-primary-950/25 px-4 py-3 text-sm text-gray-700 dark:text-gray-300">
+                        <p className="font-semibold text-gray-900 dark:text-white mb-1">To generate a strategy</p>
+                        <p className="text-gray-600 dark:text-gray-400">
+                            Choose a <span className="font-medium text-gray-800 dark:text-gray-200">Primary Goal</span> below, then fill in <span className="font-medium text-gray-800 dark:text-gray-200">at least one</span> of:{' '}
+                            <span className="font-medium text-gray-800 dark:text-gray-200">Post ideas</span>,{' '}
+                            <span className="font-medium text-gray-800 dark:text-gray-200">Target audience</span>, or turn on{' '}
+                            <span className="font-medium text-gray-800 dark:text-gray-200">Personality</span> (needs text in Settings → AI Training).
+                        </p>
+                    </div>
                 </div>
 
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
                     <div>
                         <label className="block text-sm font-semibold text-gray-700 dark:text-white mb-2">
-                            Brand Niche <span className="text-red-500">*</span>
+                            Post ideas
+                            <span className="text-gray-500 dark:text-gray-400 font-normal"> (optional if audience or Personality is on)</span>
                         </label>
                         <input 
                             type="text" 
                             value={niche} 
                             onChange={e => setNiche(e.target.value)} 
-                            placeholder="e.g. Vegan Skincare, Fitness Coaching, Tech Reviews" 
+                            placeholder="e.g. day-in-the-life, GRWM, tips, behind the brand" 
                             className="w-full p-3.5 border-2 rounded-xl bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 dark:text-white dark:placeholder-gray-400 transition-all"
+                            aria-describedby="strategy-post-ideas-hint"
                         />
+                        <p id="strategy-post-ideas-hint" className="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
+                            What topics or themes you want in the calendar—not the same as &ldquo;Extra instructions&rdquo; below, which is for rules and preferences.
+                        </p>
                     </div>
                     <div>
                         <label className="block text-sm font-semibold text-gray-700 dark:text-white mb-2">
-                            Target Audience <span className="text-red-500">*</span>
+                            Target audience
+                            <span className="text-gray-500 dark:text-gray-400 font-normal"> (optional if post ideas or Personality is on)</span>
                         </label>
                         <input 
                             type="text" 
                             value={audience} 
                             onChange={e => setAudience(e.target.value)} 
-                            placeholder="e.g. Busy Moms in 30s, Tech Enthusiasts, Fitness Beginners" 
+                            placeholder="e.g. new moms, gamers, local clients" 
                             className="w-full p-3.5 border-2 rounded-xl bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 dark:text-white dark:placeholder-gray-400 transition-all"
+                            aria-describedby="strategy-audience-hint"
                         />
+                        <p id="strategy-audience-hint" className="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
+                            Who you are speaking to. Leave blank only if Personality or post ideas already imply your crowd.
+                        </p>
                     </div>
                 </div>
 
@@ -1510,7 +1542,7 @@ export const Strategy: React.FC<{ onBackToSimple?: () => void }> = ({ onBackToSi
                         </select>
                     </div>
 
-                    {/* Context Description Section */}
+                    {/* Extra instructions (optional) — distinct from Post ideas */}
                     <div className="col-span-1 md:col-span-2">
                         <div className="flex items-center gap-2 mb-2">
                             <input
@@ -1521,12 +1553,12 @@ export const Strategy: React.FC<{ onBackToSimple?: () => void }> = ({ onBackToSi
                                 className="w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500 dark:bg-gray-700 dark:border-gray-600"
                             />
                             <label htmlFor="useContextDescription" className="text-sm font-semibold text-gray-700 dark:text-white">
-                                Context Description
+                                Extra instructions for the AI
                             </label>
                             <button
                                 onClick={async () => {
                                     if (!contextDescription.trim()) {
-                                        showToast('Add a short description first, then click AI Help to refine it.', 'error');
+                                        showToast('Add text in Extra instructions first, then use AI Help to refine it.', 'error');
                                         return;
                                     }
                                     try {
@@ -1538,7 +1570,7 @@ CURRENT DESCRIPTION:
 ${contextDescription}
 
 CONTEXT:
-Niche: ${niche || 'Not set'}
+Post ideas: ${niche || 'Not set'}
 Audience: ${audience || 'Not set'}
 Goal: ${goal || 'Not set'}
 Tone: ${tone || 'Not set'}
@@ -1572,7 +1604,7 @@ Return only the rewritten context description.
                                             throw new Error('No text generated');
                                         }
                                         setContextDescription(rewritten);
-                                        showToast('Context updated.', 'success');
+                                        showToast('Extra instructions updated.', 'success');
                                     } catch (error: any) {
                                         showToast(error?.message || 'AI help failed. Please try again.', 'error');
                                     }
@@ -1587,13 +1619,14 @@ Return only the rewritten context description.
                             <textarea
                                 value={contextDescription}
                                 onChange={(e) => setContextDescription(e.target.value)}
-                                placeholder="Describe the type of strategy you're looking for (themes, content mix, post types, style preferences, etc.)"
+                                placeholder="e.g. More Reels than static posts, avoid politics, promote my link-in-bio on Fridays, batch-friendly ideas…"
                                 className="w-full px-4 py-3 border-2 border-gray-300 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white resize-y min-h-[100px]"
                                 rows={4}
+                                aria-describedby="strategy-context-hint"
                             />
                         )}
-                        <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                            Optional: Provide additional context about the type of strategy you want to help the AI generate a more tailored plan.
+                        <p id="strategy-context-hint" className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                            Optional. Use this for <span className="font-medium text-gray-600 dark:text-gray-300">constraints and preferences</span> (content mix, dos/don&rsquo;ts, cadence)—not for listing topic themes; that belongs in <span className="font-medium text-gray-600 dark:text-gray-300">Post ideas</span> above.
                         </p>
                     </div>
 
@@ -1604,7 +1637,10 @@ Return only the rewritten context description.
                         </label>
                         <div className="flex flex-wrap gap-3">
                             <button
-                                onClick={() => setUsePersonality(!usePersonality)}
+                                onClick={() => {
+                                    if (!settings.creatorPersonality) return;
+                                    setUsePersonality((prev) => !prev);
+                                }}
                                 disabled={!settings.creatorPersonality}
                                 className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-2 ${
                                     usePersonality
@@ -1632,9 +1668,9 @@ Return only the rewritten context description.
                         </div>
                         <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
                             {usePersonality && useFavoriteHashtags
-                                ? 'AI will use your personality and favorite hashtags when generating strategies.'
+                                ? 'Personality leads topic ideas and voice; hashtags are woven in where relevant.'
                                 : usePersonality
-                                ? 'AI will use your creator personality when generating strategies.'
+                                ? 'When on, personality leads what to post and how it sounds—post ideas and audience can be blank; trends and your goal still shape the plan.'
                                 : useFavoriteHashtags
                                 ? 'AI will use your favorite hashtags when generating strategies.'
                                 : 'Enable toggles above to include your personality or hashtags in AI-generated strategies.'}
@@ -1653,13 +1689,13 @@ Return only the rewritten context description.
                                     Strategy generated and auto-saved.
                                 </span>
                             ) : (
-                                'Fill in all required fields (*) and click Generate to create your strategy'
+                                'Set Primary Goal (*), then add post ideas, audience, or turn on Personality—then Generate'
                             )}
                         </div>
                         <div className="flex gap-3 flex-shrink-0 overflow-x-auto pb-2 -mx-6 px-6 sm:mx-0 sm:px-0 sm:pb-0">
                             <button 
                                 onClick={handleGenerate} 
-                                disabled={isLoading || !niche || !audience || (usageStats?.strategy.remaining === 0)} 
+                                disabled={isLoading || !canGenerateStrategyInputs || (usageStats?.strategy.remaining === 0)} 
                                 className="px-8 py-3 bg-gradient-to-r from-primary-600 to-primary-700 text-white font-bold rounded-xl shadow-lg hover:shadow-xl hover:from-primary-700 hover:to-primary-800 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 whitespace-nowrap flex-shrink-0"
                             >
                                 {isLoading ? (
@@ -2062,7 +2098,13 @@ Return only the rewritten context description.
                                                                         postGoal: goal === 'Lead Generation' ? 'leads' : goal === 'Sales Conversion' ? 'sales' : 'engagement',
                                                                         postTone: tone || 'friendly',
                                                                     };
-                                                                    localStorage.setItem('draftPostToEdit', JSON.stringify(draft));
+                                                                    const draftJson = JSON.stringify(draft);
+                                                                    localStorage.setItem('draftPostToEdit', draftJson);
+                                                                    try {
+                                                                        sessionStorage.setItem('draftPostToEdit', draftJson);
+                                                                    } catch {
+                                                                        /* ignore quota / private mode */
+                                                                    }
                                                                     setActivePage('compose');
                                                                     showToast('Opened in Compose!', 'success');
                                                                 }}
@@ -2082,7 +2124,13 @@ Return only the rewritten context description.
                                                                     originalPlatform: day.platform || 'Instagram',
                                                                     action: 'repurpose',
                                                                 };
-                                                                localStorage.setItem('repurposeFromStrategy', JSON.stringify(repurposeData));
+                                                                const repurposeJson = JSON.stringify(repurposeData);
+                                                                localStorage.setItem('repurposeFromStrategy', repurposeJson);
+                                                                try {
+                                                                    sessionStorage.setItem('repurposeFromStrategy', repurposeJson);
+                                                                } catch {
+                                                                    /* ignore */
+                                                                }
                                                                 setActivePage('compose');
                                                                 showToast('Opening Repurpose in Compose...', 'success');
                                                             }}
@@ -2778,7 +2826,7 @@ Return only the rewritten context description.
                             Create strategy from trend
                         </h3>
                         <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
-                            We prefilled your niche/audience from the opportunity{opportunityContext?.platform ? ` (${opportunityContext.platform})` : ''}. Adjust goal, tone, and duration before generating.
+                            We prefilled post ideas and audience from the opportunity{opportunityContext?.platform ? ` (${opportunityContext.platform})` : ''}. Adjust goal, tone, and duration before generating.
                         </p>
 
                         {opportunityContext?.title && (
@@ -2791,7 +2839,7 @@ Return only the rewritten context description.
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                             <div>
                                 <label className="block text-sm font-semibold text-gray-700 dark:text-white mb-2">
-                                    Brand Niche
+                                    Post ideas
                                 </label>
                                 <input
                                     type="text"
@@ -2908,7 +2956,7 @@ Return only the rewritten context description.
                                     setShowOpportunityModal(false);
                                     await handleGenerate();
                                 }}
-                                disabled={isLoading || !niche || !audience || (usageStats?.strategy.remaining === 0)}
+                                disabled={isLoading || !canGenerateStrategyInputs || (usageStats?.strategy.remaining === 0)}
                                 className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                             >
                                 Generate Strategy

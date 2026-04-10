@@ -64,7 +64,49 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
   }
 
   const { niche, audience, goal, duration, tone, platformFocus, analyticsData, emojiEnabled, emojiIntensity, contextDescription, usePersonality, useFavoriteHashtags, creatorPersonality, favoriteHashtags, toneSettings } = req.body || {};
-  
+
+  const rawNiche = typeof niche === "string" ? niche.trim() : "";
+  const rawAudience = typeof audience === "string" ? audience.trim() : "";
+  const goalStr =
+    goal !== undefined && goal !== null ? String(goal).trim() : "";
+  const safeCreatorPersonality =
+    typeof creatorPersonality === "string"
+      ? creatorPersonality.trim().slice(0, 1200)
+      : "";
+  const safeFavoriteHashtags =
+    typeof favoriteHashtags === "string"
+      ? favoriteHashtags.trim().slice(0, 600)
+      : "";
+  const usePersonalityBool = Boolean(usePersonality && safeCreatorPersonality);
+
+  if (!goalStr) {
+    res.status(400).json({ error: "Primary goal is required" });
+    return;
+  }
+  if (!rawNiche && !rawAudience && !usePersonalityBool) {
+    res.status(400).json({
+      error:
+        "Add post ideas, target audience, or enable Personality (with a description in Settings).",
+    });
+    return;
+  }
+
+  const effectiveNiche =
+    rawNiche ||
+    (usePersonalityBool
+      ? "Personality-led — topics from creator voice (see CREATOR PERSONALITY block)"
+      : "General social content");
+  const effectiveAudience =
+    rawAudience ||
+    "Inferred from personality, goal, tone, platform focus, and trends";
+  const researchNicheSeed =
+    rawNiche ||
+    (usePersonalityBool
+      ? safeCreatorPersonality.slice(0, 120).replace(/\s+/g, " ").trim()
+      : "") ||
+    "social media creator content";
+  const researchAudienceSeed = rawAudience || "social media audience";
+
   // Build tone style guidance from settings
   const toneStyleGuidance = toneSettings ? `
 WRITING STYLE PREFERENCES (apply to all content ideas):
@@ -74,11 +116,6 @@ ${toneSettings.empathy !== undefined ? `- Warmth (${toneSettings.empathy}/100): 
 ${toneSettings.profanity !== undefined && toneSettings.profanity > 0 ? `- Profanity (${toneSettings.profanity}/100): ${toneSettings.profanity < 30 ? 'Very mild swearing OK' : toneSettings.profanity < 50 ? 'Moderate casual swearing' : 'Frequent swearing acceptable'}` : '- Keep language clean, no swearing'}
 ${toneSettings.emojiLevel !== undefined ? `- Emoji usage (${toneSettings.emojiLevel}/100): ${toneSettings.emojiLevel < 20 ? 'No emojis' : toneSettings.emojiLevel < 40 ? 'Minimal emojis' : toneSettings.emojiLevel < 60 ? 'Moderate emojis' : 'Heavy emoji usage'}` : ''}
 ` : '';
-
-  if (!niche || !audience || !goal) {
-    res.status(400).json({ error: "Missing required fields: niche, audience, and goal are required" });
-    return;
-  }
 
   try {
     // Use strategy task type for better model routing
@@ -99,8 +136,8 @@ ${toneSettings.emojiLevel !== undefined ? `- Emoji usage (${toneSettings.emojiLe
     // Detect if this is for OnlyFans platform
     const isOnlyFansPlatform = platformFocus === 'OnlyFans' || 
                                (Array.isArray(platforms) && platforms.includes('OnlyFans')) ||
-                               niche?.toLowerCase().includes('onlyfans') ||
-                               niche?.toLowerCase().includes('adult content creator');
+                               rawNiche.toLowerCase().includes('onlyfans') ||
+                               rawNiche.toLowerCase().includes('adult content creator');
     
     // Detect explicit content context
     const isExplicitContent = tone === 'Explicit/Adult Content' || 
@@ -132,8 +169,8 @@ ${toneSettings.emojiLevel !== undefined ? `- Emoji usage (${toneSettings.emojiLe
         // Get OnlyFans-specific research with timeout
         try {
           const researchPromise = getOnlyFansResearchContext(
-            audience || 'Subscribers',
-            goal || 'Sales Conversion',
+            rawAudience || effectiveAudience || 'Subscribers',
+            goalStr || 'Sales Conversion',
             authUser.uid,
             userPlan,
             userRole
@@ -302,7 +339,7 @@ ${explicitnessContext ? `\nEXPLICITNESS LEVEL: ${explicitnessLevel}/10\n${explic
 ` : '';
 
     // Get goal-specific strategic framework
-    const goalFramework = getGoalFramework(goal);
+    const goalFramework = getGoalFramework(goalStr);
     
     // Get trends - use OnlyFans weekly trends if OnlyFans platform, otherwise general trends
     // Add timeout to prevent trends from taking too long
@@ -327,7 +364,7 @@ ${explicitnessContext ? `\nEXPLICITNESS LEVEL: ${explicitnessLevel}/10\n${explic
     // Add timeout to prevent research from taking too long
     let nicheResearch = '';
     try {
-      const researchPromise = researchNicheStrategy(niche, audience, goal, platformFocus, authUser.uid, userPlan, userRole);
+      const researchPromise = researchNicheStrategy(researchNicheSeed, researchAudienceSeed, goalStr, platformFocus, authUser.uid, userPlan, userRole);
       const timeoutPromise = new Promise((_, reject) => 
         setTimeout(() => reject(new Error('Research timeout')), 20000) // 20 second timeout
       );
@@ -355,18 +392,56 @@ ${explicitnessContext ? `\nEXPLICITNESS LEVEL: ${explicitnessLevel}/10\n${explic
     const safeContextDescription = typeof contextDescription === 'string'
       ? contextDescription.trim().slice(0, 1500)
       : '';
-    const safeCreatorPersonality = typeof creatorPersonality === 'string'
-      ? creatorPersonality.trim().slice(0, 1200)
-      : '';
-    const safeFavoriteHashtags = typeof favoriteHashtags === 'string'
-      ? favoriteHashtags.trim().slice(0, 600)
-      : '';
 
-    const effectiveToneStyleGuidance =
-      usePersonality && safeCreatorPersonality ? "" : toneStyleGuidance;
+    const personalityLeadBlock =
+      usePersonalityBool && safeCreatorPersonality
+        ? `
+CREATOR PERSONALITY & BRAND VOICE (PRIMARY WHEN THIS TOGGLE IS ON):
+${safeCreatorPersonality}
+
+CRITICAL — PERSONALITY-FIRST PLANNING:
+- This block is the top priority for topics, hooks, angles, and voice. Ideas must feel native to this creator—not generic for the category.
+- ${rawNiche ? `Post ideas from the user: "${rawNiche}". Blend with personality; if voice conflicts, personality wins.` : `The user did not specify post ideas—propose a clear, varied set of specific content ideas that fit this personality, the primary goal (${goalStr}), tone (${tone}), platform focus (${platformFocus || "Mixed / All"}), and audience context (${effectiveAudience}).`}
+- Trend and research sections below support timeliness and formats; do not replace this personality with generic category content.
+- PERSONALITY OVERRIDES the strategy "Tone" field and tone sliders when they conflict. Still steer tactics toward "${goalStr}" using approaches that fit this voice.
+- If the strategy describes the creator, use details from this personality description.
+
+`
+        : "";
+
+    const favoriteHashtagsBlock =
+      useFavoriteHashtags && safeFavoriteHashtags
+        ? `
+FAVORITE HASHTAGS:
+${safeFavoriteHashtags}
+
+Incorporate relevant hashtags into the strategy recommendations where appropriate.
+
+`
+        : "";
+
+    const strategistOpening =
+      usePersonalityBool && !rawNiche
+        ? `You are an elite content strategist. The creator's personality (below) is the PRIMARY anchor for what to post and how it sounds. Combine it with research and trend context so ideas stay specific, timely, and aligned with the primary goal. Audience context: ${effectiveAudience}.`
+        : usePersonalityBool && rawNiche
+          ? `You are an elite content strategist. Blend the user's post ideas ("${rawNiche}") with their creator personality (below)—personality takes priority for voice and authenticity when anything conflicts. Target audience: ${effectiveAudience}. Every idea should support the primary goal.`
+          : `You are an elite content strategist specializing in ${effectiveNiche} for ${effectiveAudience}. Your expertise is creating data-driven strategies that achieve specific business goals.`;
+
+    const primaryStrategySourceInstruction =
+      usePersonalityBool && !rawNiche
+        ? `3. PRIMARY STRATEGY SOURCE: Creator personality + trend/research context + goal (${goalStr}). Invent specific, varied post ideas rooted in the personality; use research/trends for formats, hooks, and timing—never generic ideas that ignore the personality.`
+        : usePersonalityBool && rawNiche
+          ? `3. PRIMARY STRATEGY SOURCE: Post ideas ("${rawNiche}") + creator personality + research/trends. Personality wins on voice; post ideas define direction; research sharpens execution.`
+          : `3. PRIMARY STRATEGY SOURCE: Use the topic-specific research above as your PRIMARY source of insights:
+   - This research includes successful strategies, competitor analysis, and proven tactics for ${effectiveNiche} targeting ${effectiveAudience}
+   - Adapt successful strategies from the research to fit the goal: ${goalStr}
+   - Incorporate proven content formats, engagement tactics, and platform strategies from the research
+   - Use trending topics and hashtags identified in the research`;
+
+    const effectiveToneStyleGuidance = usePersonalityBool ? "" : toneStyleGuidance;
 
     const prompt = `
-You are an elite content strategist specializing in ${niche} for ${audience}. Your expertise is creating data-driven strategies that achieve specific business goals.
+${strategistOpening}
 
 ${creatorProfileGuidance}
 
@@ -376,57 +451,46 @@ ${goalFramework}
 
 ${isOnlyFansPlatform && onlyfansResearch ? `ONLYFANS-SPECIFIC RESEARCH & BEST PRACTICES:\n${onlyfansResearch}\n` : ''}
 
+${personalityLeadBlock}${favoriteHashtagsBlock}
 ${nicheResearch}
 
 ${currentTrends}
 
-${analyticsContext ? analyticsContext : 'Note: No analytics data available. Use best practices for this niche and audience.'}
+${analyticsContext ? analyticsContext : 'Note: No analytics data available. Use best practices for this content direction and audience.'}
 
 ${fanHubAnalyticsContext}
 
-PRIMARY OBJECTIVE: Create a ${durationWeeks}-week content strategy specifically designed to achieve: ${goal}
+PRIMARY OBJECTIVE: Create a ${durationWeeks}-week content strategy specifically designed to achieve: ${goalStr}
 ${durationWeeks === 1 ? '\n⚠️ IMPORTANT: This is a ONE-WEEK plan. Generate EXACTLY 1 week (7 days) with 10-14 detailed content items. Do NOT generate multiple weeks.' : ''}
 
 Strategy Parameters:
-- Primary Goal: ${goal} (THIS IS THE MOST IMPORTANT - every content piece should directly support this goal)
-- Tone: ${tone}${usePersonality && safeCreatorPersonality ? " (SECONDARY when creator personality is enabled — personality wins for voice)" : ""}${isExplicitContent ? ' (EXPLICIT/ADULT CONTENT - Generate bold, sales-oriented, explicit content ideas)' : ''}
+- Primary Goal: ${goalStr} (THIS IS THE MOST IMPORTANT - every content piece should directly support this goal)
+- Tone: ${tone}${usePersonalityBool ? " (SECONDARY when creator personality is enabled — personality wins for voice)" : ""}${isExplicitContent ? ' (EXPLICIT/ADULT CONTENT - Generate bold, sales-oriented, explicit content ideas)' : ''}
 - Platform Focus: ${platformFocus || 'Mixed / All'}
-- Target Audience: ${audience}
-- Niche: ${niche}
+- Target Audience: ${effectiveAudience}${rawAudience ? "" : " (inferred when not provided)"}
+- Post ideas / content direction: ${effectiveNiche}${rawNiche ? "" : " (inferred / personality-led when not provided)"}
 - Duration: ${durationWeeks} week${durationWeeks === 1 ? '' : 's'}${durationWeeks === 1 ? ' (ONE WEEK ONLY - generate content for 7 days, not multiple weeks)' : ''}
 ${effectiveToneStyleGuidance}
 ${safeContextDescription ? `\nADDITIONAL CONTEXT & REQUIREMENTS:\n${safeContextDescription}\n\nUse this additional context to tailor the strategy according to the user's specific requirements, preferences, and desired approach.\n` : ''}
-${usePersonality && safeCreatorPersonality ? `\nCREATOR PERSONALITY & BRAND VOICE:\n${safeCreatorPersonality}\n\nCRITICAL - PERSONALITY INTEGRATION (TOGGLE ON):
-- The above personality description contains ALL information about this creator: brand voice, style, values, physical attributes, personality traits, preferences, and what makes them unique
-- PERSONALITY OVERRIDES the strategy "Tone" field, all tone sliders (formality, humor, warmth, profanity, emoji level), and goal-*voice* framing when any of them conflict. Still organize the plan toward the primary goal "${goal}" using tactics and topics that fit this brand voice—do not use a generic tone that contradicts the personality.
-- Use this COMPLETE personality description to shape the voice, tone, framing, and content of the entire strategy
-- When generating content ideas, incorporate relevant details from the personality when they enhance the content
-- If the strategy includes content that describes the creator, use ALL relevant information from the personality description
-- Make the strategy feel authentic to this specific creator's complete brand and personality\n` : ''}
-${useFavoriteHashtags && safeFavoriteHashtags ? `\nFAVORITE HASHTAGS:\n${safeFavoriteHashtags}\n\nIncorporate relevant hashtags into the strategy recommendations where appropriate.\n` : ''}
 
 CRITICAL INSTRUCTIONS FOR GOAL ACHIEVEMENT:
-1. Every content piece must directly contribute to achieving "${goal}" - evaluate each topic against: "Does this help achieve ${goal}?"
-2. Use the strategic framework above to guide content creation - these are proven tactics for ${goal}
-3. PRIMARY STRATEGY SOURCE: Use the niche-specific research above as your PRIMARY source of insights:
-   - This research includes successful strategies, competitor analysis, and proven tactics for ${niche} targeting ${audience}
-   - Adapt successful strategies from the research to fit the goal: ${goal}
-   - Incorporate proven content formats, engagement tactics, and platform strategies from the research
-   - Use trending topics and hashtags identified in the research
+1. Every content piece must directly contribute to achieving "${goalStr}" - evaluate each topic against: "Does this help achieve ${goalStr}?"
+2. Use the strategic framework above to guide content creation - these are proven tactics for ${goalStr}
+${primaryStrategySourceInstruction}
 4. Create a strategic progression:${durationWeeks === 1 ? 
    '\n   - For one-week plans, focus on a balanced mix: foundation building, engagement, and action-driving content all within the single week' :
    `\n   - Week 1-2: Foundation building (awareness, trust, value delivery)
    - Week 3-4: Engagement and relationship building
-   - Week 5+: Action-driving content that directly moves toward ${goal}`}
-5. Include specific CTAs and engagement tactics aligned with ${goal}:
-   ${getGoalSpecificCTAs(goal)}
+   - Week 5+: Action-driving content that directly moves toward ${goalStr}`}
+5. Include specific CTAs and engagement tactics aligned with ${goalStr}:
+   ${getGoalSpecificCTAs(goalStr)}
 6. Balance content types to maximize goal achievement:
    - Educational content: Establishes authority and provides value
    - Entertaining content: Builds connection and shareability
    - Inspirational content: Creates emotional connection
    - Promotional content: Directly drives action toward goal
 7. Ensure content is actionable and measurable:
-   - Each week should have clear milestones toward ${goal}
+   - Each week should have clear milestones toward ${goalStr}
    - Content should be trackable (can measure if it's working)
    - Include variety but maintain focus on the primary goal
 8. Platform optimization:
@@ -484,7 +548,7 @@ ${durationWeeks === 1 ? '⚠️ CRITICAL: Generate EXACTLY 1 WEEK (7 days) of co
 ${durationWeeks === 1 ? '- Provide comprehensive, detailed content across all 7 days with variety' : ''}
 - Distribute content across platforms: ${platforms.join(', ')}
  - DO NOT just provide topic names - provide FULL detailed descriptions for each content item
-- Content should align with goal: ${goal}
+- Content should align with goal: ${goalStr}
 - Use tone: ${tone}${isExplicitContent ? ' - EXPLICIT/ADULT CONTENT: Generate bold, explicit content ideas that describe specific explicit/intimate content to be created (not generic subscription prompts)' : ''}
 - Make topics specific and actionable${isExplicitContent ? ' - describe specific explicit scenes, intimate moments, explicit photoset concepts with details (outfits, settings, poses, moods) - NOT generic "subscribe for more" type topics' : ''}
 - Ensure variety in formats and platforms
@@ -612,7 +676,7 @@ IMPORTANT: When generating imageIdeas and videoIdeas:
       };
 
       const defaultCta = (() => {
-        const ctas = getGoalSpecificCTAs(goal);
+        const ctas = getGoalSpecificCTAs(goalStr);
         return typeof ctas === "string" && ctas.trim().length > 0 ? ctas.split("\n")[0].trim() : "Comment your thoughts and share this with someone who needs it.";
       })();
 
@@ -624,12 +688,14 @@ IMPORTANT: When generating imageIdeas and videoIdeas:
           const platform = safeString(item.platform) || (platforms[0] || "Instagram");
           const itemCta = ensureMin(item.cta, defaultCta, 6);
 
-          const descriptionFallback = `Create a ${format} about "${topic}" for ${audience}. Include specific talking points, how to present it, and what to show/do on-screen.`;
-          const angleFallback = `Hook with a bold claim or question about "${topic}", then deliver 2-3 concrete insights tailored to ${audience}.`;
+          const descriptionFallback = `Create a ${format} about "${topic}" for ${effectiveAudience}. Include specific talking points, how to present it, and what to show/do on-screen.`;
+          const angleFallback = `Hook with a bold claim or question about "${topic}", then deliver 2-3 concrete insights tailored to ${effectiveAudience}.`;
           const ctaFallback = defaultCta;
           
           // Generate a fallback caption if not provided
-          const captionFallback = `${item.angle || angleFallback}\n\n${item.description || descriptionFallback}\n\n${itemCta}${!isOnlyFansPlatform && !isMyPagePlatform ? `\n\n#${niche.replace(/\s+/g, '')} #${goal.replace(/\s+/g, '')} #contentcreator` : ''}`;
+          const hashtagBase = (rawNiche || "creator").replace(/\s+/g, "").slice(0, 40);
+          const goalTag = goalStr.replace(/\s+/g, "");
+          const captionFallback = `${item.angle || angleFallback}\n\n${item.description || descriptionFallback}\n\n${itemCta}${!isOnlyFansPlatform && !isMyPagePlatform ? `\n\n#${hashtagBase} #${goalTag} #contentcreator` : ''}`;
 
           const imageIdeas = Array.isArray(item.imageIdeas) ? item.imageIdeas.filter((x: any) => safeString(x).length > 0) : [];
           const videoIdeas = Array.isArray(item.videoIdeas) ? item.videoIdeas.filter((x: any) => safeString(x).length > 0) : [];
@@ -657,12 +723,12 @@ IMPORTANT: When generating imageIdeas and videoIdeas:
       // Ensure metrics structure
       if (!plan.metrics) {
         plan.metrics = {
-          primaryKPI: goal === 'Increase Followers/Fans' ? 'Follower Growth' :
-                     goal === 'Lead Generation' ? 'Leads Generated' :
-                     goal === 'Sales Conversion' ? 'Revenue' :
-                     goal === 'Brand Awareness' ? 'Reach' : 'Engagement Rate',
+          primaryKPI: goalStr === 'Increase Followers/Fans' ? 'Follower Growth' :
+                     goalStr === 'Lead Generation' ? 'Leads Generated' :
+                     goalStr === 'Sales Conversion' ? 'Revenue' :
+                     goalStr === 'Brand Awareness' ? 'Reach' : 'Engagement Rate',
           successCriteria: [
-            `Achieve ${goal.toLowerCase()} targets`,
+            `Achieve ${goalStr.toLowerCase()} targets`,
             "Maintain consistent posting schedule"
           ]
         };

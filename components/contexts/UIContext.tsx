@@ -3,6 +3,7 @@ import React, { createContext, useState, useEffect, useCallback, useContext, Rea
 import { Page, DashboardNavState, TourStep, PaymentPlan, Toast, ComposeContextData, Plan } from '../../types';
 import { useAuth } from './AuthContext';
 import { getTourStepsForPlan } from '../../constants';
+import { setComposeStrategyHandoffActive } from '../../src/lib/composeStrategyHandoff';
 
 interface UIContextType {
     isDarkMode: boolean;
@@ -123,6 +124,15 @@ export const UIProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
     });
     
     const [activePageState, setActivePageState] = useState<Page>('dashboard');
+
+    // Allow Strategy → Compose handoff to survive React Strict Mode remounts (see composeStrategyHandoff.ts).
+    // Treat approvals (drafts) as the same shell as compose so switching tabs does not drop the handoff.
+    useEffect(() => {
+        if (activePageState !== 'compose' && activePageState !== 'approvals') {
+            setComposeStrategyHandoffActive(false);
+        }
+    }, [activePageState]);
+
     const [isSidebarOpen, setIsSidebarOpen] = useState<boolean>(false);
     
     const [dashboardNavState, setDashboardNavState] = useState<DashboardNavState | null>(null);

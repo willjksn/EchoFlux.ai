@@ -1,9 +1,9 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useAppContext } from './AppContext';
 import { DailyPostIdea, WhatToPostSettings, CalendarEvent, Platform } from '../types';
 import { auth, db } from '../firebaseConfig';
 import { doc, setDoc } from 'firebase/firestore';
-import { SparklesIcon, RefreshIcon, SettingsIcon, XMarkIcon, CalendarIcon } from './icons/UIIcons';
+import { SparklesIcon, RefreshIcon, SettingsIcon, XMarkIcon, CalendarIcon, TrashIcon } from './icons/UIIcons';
 
 type PlatformOption = 'instagram' | 'facebook' | 'x' | 'mypage';
 
@@ -222,8 +222,53 @@ interface WhatToPostProps {
   onOpenAdvanced: () => void;
 }
 
+const MAX_IDEA_HISTORY = 5;
+
+type WhatToPostHistoryEntry = {
+  id: string;
+  createdAt: string;
+  platform: PlatformOption;
+  ideas: DailyPostIdea[];
+};
+
+function historyStorageKey(userId: string) {
+  return `whatToPostHistory_${userId}`;
+}
+
+function loadHistoryFromStorage(userId: string): WhatToPostHistoryEntry[] {
+  try {
+    const raw = localStorage.getItem(historyStorageKey(userId));
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .filter(
+        (row): row is WhatToPostHistoryEntry =>
+          row != null &&
+          typeof row === "object" &&
+          typeof (row as WhatToPostHistoryEntry).id === "string" &&
+          Array.isArray((row as WhatToPostHistoryEntry).ideas)
+      )
+      .slice(0, MAX_IDEA_HISTORY);
+  } catch {
+    return [];
+  }
+}
+
+function saveHistoryToStorage(userId: string, entries: WhatToPostHistoryEntry[]) {
+  try {
+    localStorage.setItem(historyStorageKey(userId), JSON.stringify(entries.slice(0, MAX_IDEA_HISTORY)));
+  } catch {
+    /* ignore */
+  }
+}
+
 export const WhatToPost: React.FC<WhatToPostProps> = ({ onOpenAdvanced }) => {
   const { user, showToast, setActivePage, addCalendarEvent } = useAppContext();
+
+  const [ideaHistory, setIdeaHistory] = useState<WhatToPostHistoryEntry[]>([]);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const ideasRef = useRef<DailyPostIdea[]>([]);
   
   // Load persisted ideas from localStorage on mount
   const [ideas, setIdeas] = useState<DailyPostIdea[]>(() => {
@@ -253,6 +298,65 @@ export const WhatToPost: React.FC<WhatToPostProps> = ({ onOpenAdvanced }) => {
     } catch { return false; }
   });
   const [creatorHint, setCreatorHint] = useState('');
+
+  ideasRef.current = ideas;
+
+  useEffect(() => {
+    if (!user?.id) {
+      setIdeaHistory([]);
+      return;
+    }
+    setIdeaHistory(loadHistoryFromStorage(user.id));
+  }, [user?.id]);
+
+  const pushCurrentIdeasToHistory = useCallback(
+    (platformUsed: PlatformOption) => {
+      if (!user?.id) return;
+      const prev = ideasRef.current;
+      if (prev.length === 0) return;
+      const entry: WhatToPostHistoryEntry = {
+        id: `h_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+        createdAt: new Date().toISOString(),
+        platform: platformUsed,
+        ideas: prev.map((i) => ({ ...i })),
+      };
+      setIdeaHistory((h) => {
+        const next = [entry, ...h].slice(0, MAX_IDEA_HISTORY);
+        saveHistoryToStorage(user.id, next);
+        return next;
+      });
+    },
+    [user?.id]
+  );
+
+  const restoreHistoryEntry = useCallback(
+    (entry: WhatToPostHistoryEntry) => {
+      if (!user?.id) return;
+      if (ideasRef.current.length > 0) {
+        pushCurrentIdeasToHistory(selectedPlatform);
+      }
+      const platformOk = PLATFORM_OPTIONS.some((p) => p.id === entry.platform) ? entry.platform : "instagram";
+      setIdeas(entry.ideas.map((i) => ({ ...i })));
+      setSelectedPlatform(platformOk);
+      setHasGenerated(true);
+      setHistoryOpen(false);
+      showToast?.("Loaded this generation.", "success");
+    },
+    [user?.id, selectedPlatform, pushCurrentIdeasToHistory, showToast]
+  );
+
+  const deleteHistoryEntry = useCallback(
+    (entryId: string) => {
+      if (!user?.id) return;
+      setIdeaHistory((h) => {
+        const next = h.filter((e) => e.id !== entryId);
+        saveHistoryToStorage(user.id, next);
+        return next;
+      });
+      showToast?.("Removed from history.", "success");
+    },
+    [user?.id, showToast]
+  );
 
   // Check if user has access to advanced planner (Elite, Agency, or Admin)
   const hasAdvancedAccess = user?.plan === 'Elite' || user?.plan === 'Agency' || user?.role === 'Admin';
@@ -342,6 +446,9 @@ export const WhatToPost: React.FC<WhatToPostProps> = ({ onOpenAdvanced }) => {
             return;
           }
         }
+        if (newIdeas.length > 0 && !opts.swapId && ideasRef.current.length > 0 && user?.id) {
+          pushCurrentIdeasToHistory(platformToUse);
+        }
         setIdeas(newIdeas);
         setHasGenerated(true);
         if (data.settings && typeof data.settings === 'object') {
@@ -357,7 +464,7 @@ export const WhatToPost: React.FC<WhatToPostProps> = ({ onOpenAdvanced }) => {
         setRegeneratingAll(false);
       }
     },
-    [user?.id, settings, selectedPlatform, showToast]
+    [user?.id, settings, selectedPlatform, showToast, pushCurrentIdeasToHistory]
   );
 
   // Don't auto-generate on page load - wait for user to click Generate Ideas
@@ -507,6 +614,80 @@ export const WhatToPost: React.FC<WhatToPostProps> = ({ onOpenAdvanced }) => {
           </button>
         </div>
       </div>
+
+      {ideaHistory.length > 0 && (
+        <div className="mb-5 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50/80 dark:bg-gray-800/40 overflow-hidden">
+          <button
+            type="button"
+            onClick={() => setHistoryOpen((v) => !v)}
+            aria-expanded={historyOpen}
+            className="w-full flex items-center justify-between gap-3 px-4 py-3 text-left text-sm font-medium text-gray-800 dark:text-gray-200 hover:bg-gray-100/80 dark:hover:bg-gray-700/50 transition-colors"
+          >
+            <span className="flex flex-col sm:flex-row sm:items-center sm:gap-2 min-w-0">
+              <span className="flex items-center gap-2">
+                <span aria-hidden>🕐</span>
+                <span>Idea history</span>
+                <span className="font-normal text-gray-500 dark:text-gray-400">
+                  ({ideaHistory.length} saved)
+                </span>
+              </span>
+              {!historyOpen && (
+                <span className="text-xs font-normal text-gray-500 dark:text-gray-400 sm:ml-1">
+                  — tap &quot;Show list&quot; to load a past generation
+                </span>
+              )}
+            </span>
+            <span className="shrink-0 inline-flex items-center gap-1.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-2.5 py-1 text-xs font-semibold text-primary-600 dark:text-primary-400">
+              {historyOpen ? "Hide list" : "Show list"}
+            </span>
+          </button>
+          {historyOpen && (
+            <ul className="border-t border-gray-200 dark:border-gray-700 divide-y divide-gray-200 dark:divide-gray-700">
+              {ideaHistory.map((entry) => {
+                const plat = PLATFORM_OPTIONS.find((p) => p.id === entry.platform);
+                return (
+                  <li
+                    key={entry.id}
+                    className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 bg-white/60 dark:bg-gray-900/20"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium text-gray-900 dark:text-white">
+                        {new Date(entry.createdAt).toLocaleString(undefined, {
+                          dateStyle: "medium",
+                          timeStyle: "short",
+                        })}
+                      </p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                        {plat?.icon} {plat?.label ?? entry.platform} · {entry.ideas.length} idea
+                        {entry.ideas.length === 1 ? "" : "s"}
+                        {entry.ideas[0]?.title ? ` · ${entry.ideas[0].title.slice(0, 48)}${entry.ideas[0].title.length > 48 ? "…" : ""}` : ""}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => restoreHistoryEntry(entry)}
+                        className="px-3 py-1.5 rounded-lg bg-primary-600 text-white text-xs font-semibold hover:bg-primary-700"
+                      >
+                        Load
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => deleteHistoryEntry(entry.id)}
+                        className="p-1.5 rounded-lg border border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-400 hover:bg-red-50 dark:hover:bg-red-900/20 hover:text-red-600 dark:hover:text-red-400 hover:border-red-200 dark:hover:border-red-800"
+                        title="Remove from history"
+                        aria-label="Remove from history"
+                      >
+                        <TrashIcon className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </div>
+      )}
 
       {/* Quick Settings Drawer */}
       {drawerOpen && (

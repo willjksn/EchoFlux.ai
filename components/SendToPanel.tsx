@@ -69,7 +69,7 @@ export const SendToPanel: React.FC<SendToPanelProps> = ({ payload, onSent, class
           showToast?.('Saved to Compose drafts.', 'success');
           setActivePage('compose');
           if (typeof window !== 'undefined') {
-            window.history.pushState({}, '', '/compose/drafts');
+            window.history.pushState({}, '', '/compose');
           }
           onSent?.('draft');
           break;

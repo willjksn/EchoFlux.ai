@@ -137,6 +137,8 @@ const MainContent: React.FC = () => {
             );
             case 'settings': return <Settings />;
             case 'compose': return <Compose />;
+            // URL syncs to /compose/drafts; prop ensures Approvals shows on first paint
+            case 'approvals': return <Compose approvalsWorkflow />;
             case 'calendar': return <Calendar />;
             case 'team': return <Team />;
             case 'opportunities': {

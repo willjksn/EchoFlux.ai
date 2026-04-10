@@ -51,6 +51,10 @@ import { MediaItemState } from '../types';
 import { publishFacebookPost, publishInstagramPost, publishTweet, publishPinterestPin } from '../src/services/socialMediaService';
 import { PinterestBoardSelectionModal } from './PinterestBoardSelectionModal';
 import { hasCalendarAccess } from '../src/utils/planAccess';
+import {
+  isComposeStrategyHandoffActive,
+  setComposeStrategyHandoffActive,
+} from '../src/lib/composeStrategyHandoff';
 import { Approvals } from './Approvals';
 
 const fileToBase64 = (file: File): Promise<string> => {
@@ -637,7 +641,8 @@ const CaptionGenerator: React.FC = () => {
   // Load draft post from Workflow if navigating from there
   useEffect(() => {
     const checkForDraft = () => {
-      const draftPostData = localStorage.getItem('draftPostToEdit');
+      const draftPostData =
+        localStorage.getItem('draftPostToEdit') ?? sessionStorage.getItem('draftPostToEdit');
       // Only load draft if we're on the compose page and have user data, and haven't already loaded a draft
       if (draftPostData && user && activePage === 'compose' && !draftLoadedRef.current) {
         try {
@@ -708,15 +713,26 @@ const CaptionGenerator: React.FC = () => {
           
           // Mark draft as loaded to prevent Firestore from overwriting
           draftLoadedRef.current = true;
+          setComposeStrategyHandoffActive(true);
           
           showToast('Draft loaded. Continue editing.', 'success');
           
-          // Clear localStorage after successful load
+          // Clear handoff storage after successful load
           localStorage.removeItem('draftPostToEdit');
+          try {
+            sessionStorage.removeItem('draftPostToEdit');
+          } catch {
+            /* ignore */
+          }
         } catch (error) {
           console.error('Failed to load draft post:', error);
           showToast('Failed to load draft. Please try again.', 'error');
           localStorage.removeItem('draftPostToEdit');
+          try {
+            sessionStorage.removeItem('draftPostToEdit');
+          } catch {
+            /* ignore */
+          }
         }
       } else if (draftPostData && activePage !== 'compose') {
         // Draft data exists but we're not on compose page yet - wait for navigation
@@ -784,12 +800,18 @@ const CaptionGenerator: React.FC = () => {
   useEffect(() => {
     if (activePage !== 'compose' || !user) return;
     
-    const repurposeData = localStorage.getItem('repurposeFromStrategy');
+    const repurposeData =
+      localStorage.getItem('repurposeFromStrategy') ?? sessionStorage.getItem('repurposeFromStrategy');
     if (!repurposeData) return;
     
     try {
       const data = JSON.parse(repurposeData);
       localStorage.removeItem('repurposeFromStrategy');
+      try {
+        sessionStorage.removeItem('repurposeFromStrategy');
+      } catch {
+        /* ignore */
+      }
       
       if (data.action === 'repurpose' && data.content) {
         // Create a media item with the caption pre-filled for repurposing
@@ -816,6 +838,7 @@ const CaptionGenerator: React.FC = () => {
         }));
         
         draftLoadedRef.current = true;
+        setComposeStrategyHandoffActive(true);
         
         // Show instruction toast
         showToast('Caption loaded! Click "Repurpose" button below your post to adapt it for other platforms.', 'info');
@@ -823,6 +846,11 @@ const CaptionGenerator: React.FC = () => {
     } catch (error) {
       console.error('Failed to load repurpose data:', error);
       localStorage.removeItem('repurposeFromStrategy');
+      try {
+        sessionStorage.removeItem('repurposeFromStrategy');
+      } catch {
+        /* ignore */
+      }
     }
   }, [activePage, user, showToast, setComposeState]);
 
@@ -837,9 +865,14 @@ const CaptionGenerator: React.FC = () => {
       if (draftLoadedRef.current) {
         return;
       }
+      // Strategy → Compose handoff: Strict Mode remount clears localStorage/refs but must not restore old compose_media.
+      if (isComposeStrategyHandoffActive()) {
+        return;
+      }
       
       // Also check localStorage as a backup
-      const draftPostData = localStorage.getItem('draftPostToEdit');
+      const draftPostData =
+        localStorage.getItem('draftPostToEdit') ?? sessionStorage.getItem('draftPostToEdit');
       if (draftPostData) {
         // Draft will be loaded by the other useEffect, so skip this
         return;
@@ -4535,22 +4568,11 @@ const CaptionGenerator: React.FC = () => {
 
 type ComposeTab = 'captions' | 'image' | 'video';
 
-const COMPOSE_PAGE_PATH = '/compose';
-const COMPOSE_DRAFTS_PATH = '/compose/drafts';
-
-function getComposeMainTabFromPath(): 'create' | 'drafts' {
-  if (typeof window === 'undefined') return 'create';
-  const p = window.location.pathname || '';
-  const path = p.replace(/\/+$/, '');
-  if (path === '/compose/drafts' || path === '/drafts') return 'drafts';
-  return 'create';
-}
-
 const tabs: { id: ComposeTab; label: string; icon: React.ReactNode }[] = [
   { id: 'captions', label: 'Captions', icon: <CaptionIcon /> },
 ];
 
-export const Compose: React.FC = () => {
+export const Compose: React.FC<{ approvalsWorkflow?: boolean }> = ({ approvalsWorkflow = false }) => {
   const {
     user,
     setUser,
@@ -4562,30 +4584,29 @@ export const Compose: React.FC = () => {
   } = useAppContext();
   const [activeTab, setActiveTab] = useState<ComposeTab>('captions');
   const [initialPrompt, setInitialPrompt] = useState<string | undefined>(undefined);
-  
-  // Top-level tab: Create | Drafts (synced with /compose and /compose/drafts)
-  const [mainTab, setMainTabState] = useState<'create' | 'drafts'>(getComposeMainTabFromPath);
 
-  const setMainTab = (tab: 'create' | 'drafts') => {
-    setMainTabState(tab);
-    const path = tab === 'drafts' ? COMPOSE_DRAFTS_PATH : COMPOSE_PAGE_PATH;
-    window.history.pushState({}, '', path);
-  };
-
-  // Sync main tab from pathname on mount and on popstate
+  /** Drafts / approvals UI: no tab in Compose — opened via URL /compose/drafts or setActivePage('approvals'). */
+  const [draftsPathTick, setDraftsPathTick] = useState(0);
   useEffect(() => {
-    const onPopState = () => setMainTabState(getComposeMainTabFromPath());
+    const onPopState = () => setDraftsPathTick((n) => n + 1);
     window.addEventListener('popstate', onPopState);
     return () => window.removeEventListener('popstate', onPopState);
   }, []);
-
+  const showApprovalsView = useMemo(() => {
+    if (approvalsWorkflow) return true;
+    const p =
+      typeof window !== 'undefined'
+        ? (window.location.pathname || '').replace(/\/+$/, '') || '/'
+        : '/';
+    return p === '/compose/drafts' || p === '/drafts';
+  }, [draftsPathTick, approvalsWorkflow]);
   useEffect(() => {
-    const tab = getComposeMainTabFromPath();
-    setMainTabState(tab);
-    if (typeof window !== 'undefined' && window.location.pathname === '/drafts') {
-      window.history.replaceState({}, '', COMPOSE_DRAFTS_PATH);
+    if (typeof window !== 'undefined' && window.location.pathname.replace(/\/+$/, '') === '/drafts') {
+      window.history.replaceState({}, '', '/compose/drafts');
+      setDraftsPathTick((n) => n + 1);
     }
   }, []);
+
   
   // Predict and Repurpose modals (for history viewing)
   const [predictResult, setPredictResult] = useState<any>(null);
@@ -4725,32 +4746,7 @@ export const Compose: React.FC = () => {
 
   return (
     <div className="max-w-7xl mx-auto">
-      <div className="flex border-b border-gray-200 dark:border-gray-700 mb-6">
-        <button
-          type="button"
-          onClick={() => setMainTab('create')}
-          className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
-            mainTab === 'create'
-              ? 'border-primary-600 text-primary-600 dark:text-primary-400'
-              : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
-          }`}
-        >
-          Create
-        </button>
-        <button
-          type="button"
-          onClick={() => setMainTab('drafts')}
-          className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
-            mainTab === 'drafts'
-              ? 'border-primary-600 text-primary-600 dark:text-primary-400'
-              : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
-          }`}
-        >
-          Drafts
-        </button>
-      </div>
-
-      {mainTab === 'drafts' ? (
+      {showApprovalsView ? (
         <Approvals />
       ) : (
       <>
