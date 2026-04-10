@@ -787,7 +787,8 @@ ${platforms.map(platform => {
 - The caption does NOT have to literally describe the image/video if a stronger angle serves engagement (story, hot take, question, trend tie-in) — still keep the post believable for the media when media is attached.
 - When "Use creator personality" is on, that voice is PRIMARY; trends and goal support it — never default to generic influencer follow hooks.
 - Use casual, authentic language. Emojis are encouraged (2-4) when they fit the voice.
-- If the user provides specific keywords or themes, you MUST incorporate them directly into the caption.`;
+- If the user provides specific keywords or themes, you MUST incorporate them directly into the caption.
+- Each API request is independent: output one complete standalone caption for the attached media only. Do not extend, partially reuse, or append to a hypothetical prior caption—no "another thought:", "also,", or stacking a new sentence onto an old hook.`;
   }
   if (platformName.includes('instagram')) {
     return `- Instagram: Maximum 2,200 characters for captions. Optimal length: 125-150 characters for engagement. Include 10-30 relevant hashtags for maximum reach. Hashtags should be relevant to content, niche, and trending topics. Use 1–4 creative, relevant emojis (don’t spam) to enhance tone.`;
@@ -916,6 +917,7 @@ CAPTION VARIANTS (SOCIAL PLATFORMS):
 ${isFanHubCaption ? `
 FAN HUB — SINGLE CAPTION:
 - Return exactly one caption in the JSON array. Make it feel natural for people already on this page; no follow / subscribe / find-me-on-[app] recruitment.
+- Treat every request as brand new: write the full caption from scratch for this media; never assume the creator is editing an existing draft in the UI.
 ` : ''}
 ${isExplicitContent ? `
 IMPORTANT - EXPLICIT CONTENT CAPTION REQUIREMENTS:

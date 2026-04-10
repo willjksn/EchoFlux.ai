@@ -883,12 +883,14 @@ export const FanHubPosts: React.FC = () => {
         ? "Be bold and provocative, push boundaries with spicy content."
         : "Be very explicit and adult-oriented, no holding back.";
       
-      // IMPORTANT: If there's any text in the caption box, use it as direction for the AI
-      // Even in "generate" mode, the user's input should guide what gets generated
+      // Generate: never send the current caption box as promptText — that made the model "write about"
+      // the previous AI line and feel like an extra sentence. Each Generate is a full fresh caption from
+      // the attached media (+ server prompt / personality). Use "AI Suggest" to refine text in the box.
+      // Suggest: the box text is explicit direction for the model.
       const userInput = caption.trim();
       let promptText: string | undefined;
 
-      if (mode === "suggest" && userInput) {
+      if (mode === "suggest") {
         promptText = `The creator typed: "${userInput}"
 
 Write an engaging caption for their fan page post that is SPECIFICALLY ABOUT "${userInput}".
@@ -904,24 +906,7 @@ ${spicyGuidance}
 DO NOT say "link in bio" - this is their own page.
 DO NOT include hashtags.
 Write 2-4 sentences that are engaging and on-topic.`;
-      } else if (userInput) {
-        promptText = `The creator wants a caption about: "${userInput}"
-
-Write an engaging caption for their fan page post that is SPECIFICALLY ABOUT "${userInput}".
-
-CRITICAL REQUIREMENTS:
-- The caption MUST be about "${userInput}" - use this exact word/phrase in the caption
-- If they typed a body part, the caption should reference that body part directly
-- If they typed a theme, the caption should be about that theme
-- DO NOT ignore what they typed - it's the main subject of the post
-- If image/video is attached, stay consistent with what's visible; use their text as the angle, not a generic filler caption.
-
-${spicyGuidance}
-DO NOT say "link in bio" - this is their own page.
-DO NOT include hashtags.
-Write 2-4 sentences that are engaging and on-topic.`;
       } else {
-        // Match Compose: omit promptText so the full server prompt + media analysis drives output.
         promptText = undefined;
       }
 
@@ -963,15 +948,6 @@ Write 2-4 sentences that are engaging and on-topic.`;
         } finally {
           if (revoke) URL.revokeObjectURL(revoke);
         }
-      }
-
-      // If the box still contains a long prior AI caption, don't force "write about this exact text" — anchor on media like Compose.
-      if (
-        mode === "generate" &&
-        mediaPayload != null &&
-        userInput.length > 160
-      ) {
-        promptText = undefined;
       }
 
       const res = await fetch("/api/generateCaptions", {
