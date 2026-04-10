@@ -111,7 +111,12 @@ export const PremiumStudioLayout: React.FC<PremiumStudioLayoutProps> = ({ childr
         setTab('sessions');
         return;
       }
-      if (t === 'purchase_confirmed' || t === 'content_unlocked') {
+      if (t === 'live_session_scheduled') {
+        if (d.jointKind === 'video_call') setTab('videoChats');
+        else setTab('sessions');
+        return;
+      }
+      if (t === 'purchase_confirmed' || t === 'content_unlocked' || t === 'creator_new_purchase') {
         setTab('purchases');
         return;
       }

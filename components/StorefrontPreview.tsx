@@ -597,7 +597,7 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
         else goMessages();
         return;
       }
-      if (p.type === "purchase_confirmed" || p.type === "content_unlocked") {
+      if (p.type === "purchase_confirmed" || p.type === "content_unlocked" || p.type === "live_session_scheduled") {
         goTreats();
         return;
       }

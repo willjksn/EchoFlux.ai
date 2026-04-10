@@ -10,6 +10,7 @@ import {
   ensureFanDmThreadForMember,
 } from './_syncFanHubFanPreference.js';
 import { mergeGuestTreatPurchasesIntoUid } from './_mergeGuestFanPurchases.js';
+import { sendCreatorHubNotification } from './_fanNotifications.js';
 
 // Check STRIPE_USE_TEST_MODE toggle first, then select appropriate key
 // Set STRIPE_USE_TEST_MODE=true in Vercel to use test mode, false or unset for live mode
@@ -494,6 +495,26 @@ export async function processFanHubCheckoutSessionCompleted(
     const totalOrders = (stats?.totalOrders ?? 0) + 1;
     await statsRef.set({ totalRevenueCents: totalRevenue, totalOrders, updatedAt: now }, { merge: true });
     console.log(`Fan hub: product checkout creator=${creatorId} fan=${fanId} product=${productId}`);
+
+    try {
+      const amountLabel = (amountTotal / 100).toFixed(2);
+      const buyerLabel = (fanName && String(fanName).trim()) || fanEmail || 'A fan';
+      const itemLabel = (productTitle && String(productTitle).trim()) || 'Store item';
+      await sendCreatorHubNotification({
+        creatorId,
+        type: 'creator_new_purchase',
+        title: 'New store purchase',
+        body: `${buyerLabel} bought ${itemLabel} ($${amountLabel}).`,
+        data: {
+          orderId: session.id,
+          productId,
+          destination: 'purchases',
+        },
+      });
+    } catch (e) {
+      console.warn('sendCreatorHubNotification (product checkout):', e);
+    }
+
     return true;
   }
 

@@ -3988,6 +3988,10 @@ export const FanStorefrontView: React.FC = () => {
         goTab("messages");
         return;
       }
+      if (p.type === "live_session_scheduled") {
+        goTab("purchases");
+        return;
+      }
       if (d.threadId?.trim()) {
         const threadId = d.threadId.trim();
         setDmPreferredThreadId(threadId);
