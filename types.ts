@@ -593,6 +593,8 @@ export interface LiveVideoChatSession {
     endedAt?: string;     // ISO
     /** Scheduled for later (ISO timestamp) */
     scheduledFor?: string;
+    /** Fan Hub store order that this session fulfills (if started from Purchases) */
+    sourceOrderId?: string;
 }
 
 /** Fan entitlement per creator: subscription + unlocked product ids (Firestore: creatorEntitlements/{creatorId}/grants/{fanId}) */

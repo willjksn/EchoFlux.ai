@@ -6,8 +6,22 @@ import { trackVideoUsage, canCreatorStartVideoChat, getCreatorQuotaStatus } from
 import { sendFanNotification } from "./_fanNotifications.js";
 import { resolveCreatorPartyDisplayLabel } from "./_fanDmLabels.js";
 import type { LiveVideoChatSession, LiveVideoChatStatus } from "../types";
+import {
+  isJointLiveSessionProductId,
+  jointSessionKindFromProductId,
+} from "../src/lib/treatSessionClassification.js";
+import { creatorIdFirestoreQueryVariants, normalizeCreatorId } from "../src/lib/creatorIdNormalize.js";
 
 const ECHOFLUX_COMMISSION_RATE = 0.10; // 10% commission
+
+function durationMinutesFromJointProductId(productId: string): number {
+  const id = productId.trim().toLowerCase();
+  const m = id.match(/_(\d+)m$/);
+  if (m) return Math.max(1, Math.min(240, parseInt(m[1], 10)));
+  if (id.includes("1h") || id.endsWith("60m")) return 60;
+  if (id === "chat_session") return 30;
+  return 15;
+}
 
 function toSession(doc: FirebaseFirestore.DocumentSnapshot): LiveVideoChatSession {
   const d = doc.data() as Record<string, unknown>;
@@ -31,6 +45,7 @@ function toSession(doc: FirebaseFirestore.DocumentSnapshot): LiveVideoChatSessio
     startedAt: d.startedAt as string | undefined,
     endedAt: d.endedAt as string | undefined,
     scheduledFor: d.scheduledFor as string | undefined,
+    sourceOrderId: d.sourceOrderId as string | undefined,
   };
 }
 
@@ -43,6 +58,7 @@ function toSession(doc: FirebaseFirestore.DocumentSnapshot): LiveVideoChatSessio
  * POST /api/liveVideoChat?action=start     - Mark session as started (first join)
  * POST /api/liveVideoChat?action=end       - End the session
  * POST /api/liveVideoChat?action=token     - Get meeting token for joining
+ * POST /api/liveVideoChat?action=fromOrder - Creator starts paid 1:1 video from a scheduled store order (live_video_*)
  * POST /api/liveVideoChat?action=deleteSession - Creator deletes completed/declined/cancelled/expired session doc
  * GET  /api/liveVideoChat?sessionId=       - Get session details
  * GET  /api/liveVideoChat?creatorId=       - List sessions for creator
@@ -518,6 +534,126 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           roomName,
           quotaRemaining: quotaCheck.remainingMinutes,
           session: { id: sessionRef.id, ...sessionData }
+        });
+      }
+
+      // FROM_ORDER — Creator starts a paid 1:1 video call from a scheduled Fan Hub store order (live_video_* only)
+      if (action === "fromOrder") {
+        const orderId = typeof body.orderId === "string" ? body.orderId.trim() : "";
+        const creatorId = typeof body.creatorId === "string" ? body.creatorId.trim() : "";
+
+        if (!orderId || !creatorId) {
+          return res.status(400).json({ error: "orderId and creatorId required" });
+        }
+
+        if (decoded.uid !== creatorId) {
+          return res.status(403).json({ error: "Only the creator can start this session" });
+        }
+
+        const orderRef = db.collection("orders").doc(orderId);
+        const orderSnap = await orderRef.get();
+        if (!orderSnap.exists) {
+          return res.status(404).json({ error: "Order not found" });
+        }
+
+        const ord = orderSnap.data() as Record<string, unknown>;
+        const storedCreatorRaw = typeof ord.creatorId === "string" ? ord.creatorId.trim() : "";
+        const storedCandidateIds = new Set<string>();
+        for (const v of creatorIdFirestoreQueryVariants(storedCreatorRaw)) {
+          storedCandidateIds.add(normalizeCreatorId(v));
+        }
+        if (storedCreatorRaw.includes("@")) {
+          const dash = storedCreatorRaw.lastIndexOf("-");
+          if (dash > 0) {
+            storedCandidateIds.add(normalizeCreatorId(storedCreatorRaw.slice(0, dash)));
+          }
+        }
+        const sc = normalizeCreatorId(storedCreatorRaw);
+        if (sc) storedCandidateIds.add(sc);
+
+        const callerCandidateIds = new Set<string>();
+        for (const v of creatorIdFirestoreQueryVariants(decoded.uid)) {
+          callerCandidateIds.add(normalizeCreatorId(v));
+        }
+        callerCandidateIds.add(normalizeCreatorId(decoded.uid));
+
+        const ownsOrder = Array.from(callerCandidateIds).some((id) => id && storedCandidateIds.has(id));
+        if (!ownsOrder) {
+          return res.status(403).json({ error: "Forbidden" });
+        }
+
+        const productId = typeof ord.productId === "string" ? ord.productId.trim() : "";
+        if (!productId || !isJointLiveSessionProductId(productId)) {
+          return res.status(400).json({ error: "This order is not a joint live session product" });
+        }
+        if (jointSessionKindFromProductId(productId) !== "video_call") {
+          return res.status(400).json({
+            error: "This order is a chat session — open Messages with the fan instead of starting a video room.",
+          });
+        }
+
+        const fanId = typeof ord.fanId === "string" ? ord.fanId.trim() : "";
+        if (!fanId || fanId.startsWith("guest_")) {
+          return res.status(400).json({ error: "Fan must be signed in to join a video call" });
+        }
+
+        const amountPaidCents =
+          typeof ord.amountCents === "number" && Number.isFinite(ord.amountCents)
+            ? Math.max(0, Math.round(ord.amountCents))
+            : 0;
+        const creatorEarningsCents = Math.round(amountPaidCents * (1 - ECHOFLUX_COMMISSION_RATE));
+        const durationMinutes = durationMinutesFromJointProductId(productId);
+        const fanDisplayName =
+          (typeof ord.fanName === "string" && ord.fanName.trim()) ||
+          (typeof ord.fanEmail === "string" && ord.fanEmail.trim()) ||
+          undefined;
+
+        const quotaCheck = await canCreatorStartVideoChat(creatorId, durationMinutes);
+        if (!quotaCheck.allowed) {
+          return res.status(403).json({
+            error: "Video chat quota exceeded",
+            reason: quotaCheck.reason,
+            remainingMinutes: quotaCheck.remainingMinutes,
+            monthlyLimit: quotaCheck.monthlyLimit,
+          });
+        }
+
+        const sessionRef = db.collection("creators").doc(creatorId).collection("liveVideoChats").doc();
+        const { roomUrl, roomName } = await createVideoRoom(sessionRef.id, durationMinutes);
+
+        const sessionData: Omit<LiveVideoChatSession, "id"> = {
+          creatorId,
+          fanId,
+          fanDisplayName,
+          productId,
+          durationMinutes,
+          minutesUsed: 0,
+          amountPaidCents,
+          creatorEarningsCents,
+          status: "accepted",
+          roomUrl,
+          roomName,
+          requestedAt: new Date().toISOString(),
+          acceptedAt: new Date().toISOString(),
+          sourceOrderId: orderId,
+        };
+
+        await sessionRef.set(sessionData);
+
+        await sendFanNotification({
+          fanId,
+          type: "video_chat_accepted",
+          title: "Video call ready",
+          body: "Your creator started the video call. Join now!",
+          data: { sessionId: sessionRef.id, creatorId, orderId },
+        });
+
+        return res.status(201).json({
+          sessionId: sessionRef.id,
+          roomUrl,
+          roomName,
+          quotaRemaining: quotaCheck.remainingMinutes,
+          session: { id: sessionRef.id, ...sessionData },
         });
       }
 

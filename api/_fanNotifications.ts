@@ -17,6 +17,7 @@ export type FanNotificationType =
   | 'new_message'
   | 'session_starting'
   | 'session_reminder'
+  | 'live_session_scheduled'
   | 'purchase_confirmed'
   | 'content_unlocked';
 
@@ -36,6 +37,35 @@ export interface FanNotification {
  * Send a notification to a fan
  * Stores in Firestore and can trigger push/email
  */
+/**
+ * In-app bell for creators (Fan Hub): `users/{creatorId}/notifications`
+ * Same field shape as fan rows so `FanHubNotificationBell` can render and orderBy createdAt.
+ */
+export async function sendCreatorHubNotification(params: {
+  creatorId: string;
+  type: string;
+  title: string;
+  body: string;
+  data?: Record<string, string>;
+}): Promise<string> {
+  const db = getAdminDb();
+  const now = new Date();
+  const notification = {
+    fanId: '',
+    type: params.type,
+    title: params.title,
+    body: params.body,
+    data: params.data || {},
+    read: false,
+    createdAt: now.toISOString(),
+    expiresAt: new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+  };
+  const coll = db.collection('users').doc(params.creatorId).collection('notifications');
+  const docRef = coll.doc();
+  await docRef.set({ ...notification, id: docRef.id });
+  return docRef.id;
+}
+
 export async function sendFanNotification(params: {
   fanId: string;
   type: FanNotificationType;
@@ -222,6 +252,53 @@ export async function scheduleReminder(params: {
 
   const docRef = await db.collection('scheduled_notifications').add(reminder);
   return docRef.id;
+}
+
+/**
+ * Upsert the fan's "5 minutes before session start" reminder for a scheduled joint order.
+ * Deterministic doc id so rescheduling replaces the same pending reminder.
+ */
+export async function upsertOrderSessionFiveMinuteReminder(params: {
+  orderId: string;
+  fanId: string;
+  jointKind: 'video_call' | 'chat_session';
+  sessionStart: Date;
+  itemName: string;
+  whenLabel: string;
+  creatorId: string;
+}): Promise<void> {
+  const db = getAdminDb();
+  const docId = `order_${params.orderId}_session_5min_reminder`;
+  const ref = db.collection('scheduled_notifications').doc(docId);
+  const reminderAt = new Date(params.sessionStart.getTime() - 5 * 60 * 1000);
+  const now = new Date();
+
+  if (reminderAt.getTime() <= now.getTime()) {
+    await ref.delete().catch(() => undefined);
+    return;
+  }
+
+  const isVideo = params.jointKind === 'video_call';
+  const snap = await ref.get();
+  const payload: Record<string, unknown> = {
+    fanId: params.fanId,
+    type: isVideo ? 'video_chat_reminder' : 'session_reminder',
+    title: isVideo ? 'Video call in 5 minutes' : 'Chat session in 5 minutes',
+    body: `Your ${params.itemName} starts at ${params.whenLabel}. Open your member hub to join.`,
+    data: {
+      orderId: params.orderId,
+      creatorId: params.creatorId,
+      jointKind: params.jointKind,
+      destination: isVideo ? 'videoChats' : 'sessions',
+    },
+    scheduledFor: reminderAt.toISOString(),
+    sent: false,
+    updatedAt: now.toISOString(),
+  };
+  if (!snap.exists) {
+    payload.createdAt = now.toISOString();
+  }
+  await ref.set(payload, { merge: true });
 }
 
 /**

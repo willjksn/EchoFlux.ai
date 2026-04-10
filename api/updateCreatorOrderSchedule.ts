@@ -2,7 +2,15 @@ import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { getAdminDb } from "./_firebaseAdmin.js";
 import { verifyAuth } from "./verifyAuth.js";
 import { creatorIdFirestoreQueryVariants, normalizeCreatorId } from "../src/lib/creatorIdNormalize.js";
-import { sendFanNotification } from "./_fanNotifications.js";
+import {
+  sendCreatorHubNotification,
+  sendFanNotification,
+  upsertOrderSessionFiveMinuteReminder,
+} from "./_fanNotifications.js";
+import {
+  isJointLiveSessionProductId,
+  jointSessionKindFromProductId,
+} from "../src/lib/treatSessionClassification.js";
 
 type Body = {
   orderId?: string;
@@ -13,6 +21,8 @@ type Body = {
   deliveryType?: "video" | "image" | "audio" | "text" | "link" | null;
   deliveryText?: string | null;
   deliveryUrl?: string | null;
+  /** ISO timestamp for the scheduled session start (creator's local picker from Fan Hub Purchases). Used for 5‑minute fan reminders. */
+  scheduledStartIso?: string | null;
 };
 
 function localScheduleParts(now: Date): { date: string; time: string } {
@@ -75,6 +85,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       fanId?: string;
       productTitle?: string;
       productId?: string;
+      type?: string;
       scheduleStatus?: "pending" | "scheduled" | "completed" | "cancelled";
       scheduledDate?: string | null;
       scheduledTime?: string | null;
@@ -149,6 +160,106 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     await ref.set(patch, { merge: true });
+
+    const productIdForKind =
+      typeof data?.productId === "string" && data.productId.trim()
+        ? data.productId.trim()
+        : typeof data?.type === "string" && data.type.trim()
+          ? data.type.trim()
+          : "";
+
+    // Joint live video / chat sessions: notify fan + creator when a time is set (async treats: no schedule ping).
+    // Skip when this same request is marking delivered — avoid "session scheduled" when completing delivery.
+    if (
+      scheduleStatus === "scheduled" &&
+      deliveryStatus !== "delivered" &&
+      isJointLiveSessionProductId(productIdForKind)
+    ) {
+      const fanId = typeof data?.fanId === "string" ? data.fanId.trim() : "";
+      const dateAfter =
+        patch.scheduledDate !== undefined
+          ? (patch.scheduledDate as string | null)
+          : data?.scheduledDate ?? null;
+      const timeAfter =
+        patch.scheduledTime !== undefined
+          ? (patch.scheduledTime as string | null)
+          : data?.scheduledTime ?? null;
+      const dateStr = dateAfter && String(dateAfter).trim() ? String(dateAfter).trim() : "";
+      const timeStr = timeAfter && String(timeAfter).trim() ? String(timeAfter).trim() : "";
+      const when =
+        dateStr && timeStr ? `${dateStr} at ${timeStr}` : dateStr ? dateStr : timeStr ? timeStr : "the scheduled time";
+      const itemName =
+        typeof data?.productTitle === "string" && data.productTitle.trim()
+          ? data.productTitle.trim()
+          : productIdForKind || "your session";
+      const jointKind = jointSessionKindFromProductId(productIdForKind);
+      const fanTitle = jointKind === "video_call" ? "Video call scheduled" : "Chat session scheduled";
+      const fanBody = `Your session (${itemName}) is set for ${when}. Open Purchases for details.`;
+      const creatorTitle = jointKind === "video_call" ? "Video call scheduled" : "Chat session scheduled";
+      const creatorBody = `You scheduled ${itemName} with a fan for ${when}.`;
+
+      if (fanId && !fanId.startsWith("guest_")) {
+        try {
+          await sendFanNotification({
+            fanId,
+            type: "live_session_scheduled",
+            title: fanTitle,
+            body: fanBody,
+            data: {
+              orderId,
+              creatorId: storedCreatorId,
+              jointKind,
+              destination: "purchases",
+            },
+          });
+        } catch (e) {
+          console.error("updateCreatorOrderSchedule: fan schedule notification failed", e);
+        }
+      }
+
+      if (storedCreatorId) {
+        try {
+          await sendCreatorHubNotification({
+            creatorId: storedCreatorId,
+            type: "live_session_scheduled",
+            title: creatorTitle,
+            body: creatorBody,
+            data: {
+              orderId,
+              fanId,
+              jointKind,
+              destination: jointKind === "video_call" ? "videoChats" : "sessions",
+            },
+          });
+        } catch (e) {
+          console.error("updateCreatorOrderSchedule: creator schedule notification failed", e);
+        }
+      }
+
+      const fanUid = fanId && !fanId.startsWith("guest_") ? fanId : "";
+      const isoRaw =
+        typeof body.scheduledStartIso === "string" && body.scheduledStartIso.trim()
+          ? body.scheduledStartIso.trim()
+          : "";
+      if (fanUid && isoRaw) {
+        const sessionStart = new Date(isoRaw);
+        if (!Number.isNaN(sessionStart.getTime())) {
+          try {
+            await upsertOrderSessionFiveMinuteReminder({
+              orderId,
+              fanId: fanUid,
+              jointKind,
+              sessionStart,
+              itemName,
+              whenLabel: when,
+              creatorId: storedCreatorId || storedCreatorRaw,
+            });
+          } catch (e) {
+            console.error("updateCreatorOrderSchedule: 5min reminder upsert failed", e);
+          }
+        }
+      }
+    }
 
     // Notify fan when creator marks this purchase as delivered.
     if (deliveryStatus === "delivered") {
