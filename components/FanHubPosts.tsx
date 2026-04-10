@@ -982,7 +982,7 @@ Write 2-4 sentences that are engaging and on-topic.`;
           ...(typeof videoDurationSec === "number" && videoDurationSec > 0 ? { videoDurationSec } : {}),
           ...(promptText != null ? { promptText } : {}),
           platforms: ["my page"],
-          goal: "Increase Followers/Fans",
+          goal: "Community Engagement",
           tone: effectiveTone,
           usePersonality,
           useFavoriteHashtags: false,
