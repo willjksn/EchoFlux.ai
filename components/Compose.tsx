@@ -55,6 +55,7 @@ import {
   isComposeStrategyHandoffActive,
   setComposeStrategyHandoffActive,
 } from '../src/lib/composeStrategyHandoff';
+import { stripStrategyFormatPrefix } from '../src/lib/strategyComposeHandoff';
 import { Approvals } from './Approvals';
 
 const fileToBase64 = (file: File): Promise<string> => {
@@ -102,6 +103,13 @@ const emptyPlatforms: Record<Platform, boolean> = {
 const SpeechRecognition =
   (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
 const isSpeechRecognitionSupported = !!SpeechRecognition;
+
+/**
+ * Compose shell remounts on every navigation; a naive "reset on mount" effect was wiping
+ * Strategy→Compose handoffs after CaptionGenerator applied them. Track the last user we
+ * initialized for and only clear compose state on logout or account switch.
+ */
+let composeShellLastUserId: string | null = null;
 
 const CaptionGenerator: React.FC = () => {
   const {
@@ -672,6 +680,10 @@ const CaptionGenerator: React.FC = () => {
               }))
             : undefined;
           
+          const igType = draftPost.instagramPostType;
+          const instagramPostType =
+            igType === 'Post' || igType === 'Reel' || igType === 'Story' ? igType : undefined;
+
           const mediaItem: MediaItemState = {
             id: draftPost.id,
             previewUrl: primaryMediaUrl || '',
@@ -679,7 +691,7 @@ const CaptionGenerator: React.FC = () => {
             mimeType: draftPost.mediaType === 'video' ? 'video/mp4' : (draftPost.mediaType === 'image' ? 'image/jpeg' : 'image/jpeg'),
             type: (draftPost.mediaType || 'image') as 'image' | 'video',
             results: [],
-            captionText: draftPost.content || '',
+            captionText: stripStrategyFormatPrefix(String(draftPost.content || '')),
             postGoal: draftPost.postGoal || 'engagement',
             postTone: draftPost.postTone || 'friendly',
             selectedPlatforms: draftPost.platforms?.reduce((acc: Record<Platform, boolean>, p: Platform) => {
@@ -688,6 +700,7 @@ const CaptionGenerator: React.FC = () => {
             }, { ...emptyPlatforms }) || { ...emptyPlatforms },
             scheduledDate: draftPost.scheduledDate || undefined,
             additionalImages: additionalImages,
+            ...(instagramPostType ? { instagramPostType } : {}),
           };
           
           console.log('Compose: Created media item:', {
@@ -816,6 +829,9 @@ const CaptionGenerator: React.FC = () => {
       if (data.action === 'repurpose' && data.content) {
         // Create a media item with the caption pre-filled for repurposing
         const platformKey = (data.originalPlatform || 'Instagram') as Platform;
+        const igType = data.instagramPostType;
+        const instagramPostType =
+          igType === 'Post' || igType === 'Reel' || igType === 'Story' ? igType : undefined;
         const mediaItem: MediaItemState = {
           id: `strategy-repurpose-${Date.now()}`,
           previewUrl: '',
@@ -823,13 +839,14 @@ const CaptionGenerator: React.FC = () => {
           mimeType: 'image/jpeg',
           type: 'image',
           results: [],
-          captionText: data.content,
+          captionText: stripStrategyFormatPrefix(String(data.content || '')),
           postGoal: 'engagement',
           postTone: 'friendly',
           selectedPlatforms: {
             ...emptyPlatforms,
             [platformKey]: true,
           },
+          ...(instagramPostType ? { instagramPostType } : {}),
         };
         
         setComposeState(prev => ({
@@ -4624,10 +4641,23 @@ export const Compose: React.FC<{ approvalsWorkflow?: boolean }> = ({ approvalsWo
     }
   }, [composeContext, clearComposeContext, setComposeState]);
 
-  // Clear compose state when user changes (new login)
+  // Clear compose state only on logout or when switching accounts — not on every Compose remount.
   useEffect(() => {
-    if (user) {
-      // Reset compose state to ensure clean slate for new users
+    if (!user?.id) {
+      if (composeShellLastUserId !== null) {
+        setComposeState({
+          media: null,
+          mediaItems: [],
+          results: [],
+          captionText: "",
+          postGoal: "engagement",
+          postTone: "friendly",
+        });
+      }
+      composeShellLastUserId = null;
+      return;
+    }
+    if (composeShellLastUserId !== null && composeShellLastUserId !== user.id) {
       setComposeState({
         media: null,
         mediaItems: [],
@@ -4637,7 +4667,8 @@ export const Compose: React.FC<{ approvalsWorkflow?: boolean }> = ({ approvalsWo
         postTone: "friendly",
       });
     }
-  }, [user?.id]); // Only reset when user ID changes (new login)
+    composeShellLastUserId = user.id;
+  }, [user?.id, setComposeState]);
 
   const handleGenerateCaptionsForImage = async (base64Data: string) => {
     // Upload image to Firebase Storage first to avoid payload size limits

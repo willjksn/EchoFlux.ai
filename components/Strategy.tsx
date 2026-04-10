@@ -11,6 +11,10 @@ import { db } from '../firebaseConfig';
 import { doc, setDoc, getDoc, collection, getDocs, query, orderBy, deleteDoc } from 'firebase/firestore';
 import { OFFLINE_MODE } from '../constants';
 import { hasCalendarAccess } from '../src/utils/planAccess';
+import {
+    stripStrategyFormatPrefix,
+    instagramPostTypeFromStrategyFormat,
+} from '../src/lib/strategyComposeHandoff';
 
 export const Strategy: React.FC<{ onBackToSimple?: () => void }> = ({ onBackToSimple }) => {
     const { 
@@ -2091,12 +2095,21 @@ Return only the rewritten context description.
                                                             <button
                                                                 onClick={() => {
                                                                     // Send to Compose with pre-filled caption
+                                                                    const platform = (day.platform || 'Instagram') as string;
+                                                                    const handoffText = stripStrategyFormatPrefix(
+                                                                        day.caption || day.topic || ''
+                                                                    );
+                                                                    const igType =
+                                                                        platform === 'Instagram'
+                                                                            ? instagramPostTypeFromStrategyFormat(day.format)
+                                                                            : undefined;
                                                                     const draft = {
                                                                         id: `strategy_${selectedStrategy?.id || 'temp'}_${weekIndex}_${dayIndex}_${Date.now()}`,
-                                                                        content: day.caption || day.topic,
-                                                                        platforms: [day.platform || 'Instagram'],
+                                                                        content: handoffText,
+                                                                        platforms: [platform],
                                                                         postGoal: goal === 'Lead Generation' ? 'leads' : goal === 'Sales Conversion' ? 'sales' : 'engagement',
                                                                         postTone: tone || 'friendly',
+                                                                        ...(igType ? { instagramPostType: igType } : {}),
                                                                     };
                                                                     const draftJson = JSON.stringify(draft);
                                                                     localStorage.setItem('draftPostToEdit', draftJson);
@@ -2116,13 +2129,21 @@ Return only the rewritten context description.
                                                         </div>
                                                         
                                                         {/* Repurpose button */}
-                                                        <button
+                                                            <button
                                                             onClick={() => {
                                                                 // Send to Compose with repurpose flag
+                                                                const platform = (day.platform || 'Instagram') as string;
+                                                                const igType =
+                                                                    platform === 'Instagram'
+                                                                        ? instagramPostTypeFromStrategyFormat(day.format)
+                                                                        : undefined;
                                                                 const repurposeData = {
-                                                                    content: day.caption || day.topic,
-                                                                    originalPlatform: day.platform || 'Instagram',
+                                                                    content: stripStrategyFormatPrefix(
+                                                                        day.caption || day.topic || ''
+                                                                    ),
+                                                                    originalPlatform: platform,
                                                                     action: 'repurpose',
+                                                                    ...(igType ? { instagramPostType: igType } : {}),
                                                                 };
                                                                 const repurposeJson = JSON.stringify(repurposeData);
                                                                 localStorage.setItem('repurposeFromStrategy', repurposeJson);

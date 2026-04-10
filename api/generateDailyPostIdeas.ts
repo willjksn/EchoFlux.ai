@@ -154,20 +154,28 @@ function buildPrompt(opts: {
         : "Generate a mix: e.g. 2 reels + 1 carousel, or 1 reel + 1 photo + 1 story, varied and scannable."
       : `Prefer format: ${format}. All ideas should be clearly ${format}-friendly.`;
 
-  // Build tone style guidance from settings
-  const toneStyleGuidance = toneSettings ? `
-WRITING STYLE PREFERENCES:
+  const personalityPrimary = Boolean(
+    opts.prioritizeCreatorPersonality && creatorContext.trim(),
+  );
+
+  // When personality leads, slider formality/humor/warmth often flatten the creator's voice — keep emoji + profanity only.
+  const toneStyleGuidance = toneSettings
+    ? personalityPrimary
+      ? `
+WRITING STYLE (personality-first — follow emoji & profanity strictly; CREATOR PERSONALITY block defines all other voice traits):
+${toneSettings.profanity !== undefined && toneSettings.profanity > 0 ? `- Profanity (${toneSettings.profanity}/100): ${toneSettings.profanity < 30 ? 'Very mild swearing OK' : toneSettings.profanity < 50 ? 'Moderate casual swearing' : 'Frequent swearing acceptable'}` : '- Keep language clean, no swearing'}
+${toneSettings.emojiLevel !== undefined ? `- Emoji usage (${toneSettings.emojiLevel}/100): ${toneSettings.emojiLevel < 20 ? 'No emojis in hook/captionStarter' : toneSettings.emojiLevel < 40 ? 'At most 1-2 emojis total' : toneSettings.emojiLevel < 60 ? 'Moderate emojis (a few, purposeful)' : 'Liberal, expressive emoji use that matches the voice'}` : ''}
+- Ignore formality/humor/warmth slider numbers for voice — mirror the personality text instead. Do not sanitize hooks to sound generic.
+`
+      : `
+WRITING STYLE PREFERENCES (apply to hook and captionStarter):
 ${toneSettings.formality !== undefined ? `- Formality (${toneSettings.formality}/100): ${toneSettings.formality < 30 ? 'Very casual, use slang' : toneSettings.formality < 50 ? 'Casual and conversational' : toneSettings.formality < 70 ? 'Balanced tone' : 'Professional and polished'}` : ''}
 ${toneSettings.humor !== undefined ? `- Humor (${toneSettings.humor}/100): ${toneSettings.humor < 30 ? 'Serious, minimal humor' : toneSettings.humor < 50 ? 'Light occasional humor' : toneSettings.humor < 70 ? 'Witty and playful' : 'Very funny, comedic'}` : ''}
 ${toneSettings.empathy !== undefined ? `- Warmth (${toneSettings.empathy}/100): ${toneSettings.empathy < 30 ? 'Direct and straightforward' : toneSettings.empathy < 50 ? 'Friendly' : toneSettings.empathy < 70 ? 'Warm and understanding' : 'Very supportive'}` : ''}
 ${toneSettings.profanity !== undefined && toneSettings.profanity > 0 ? `- Profanity (${toneSettings.profanity}/100): ${toneSettings.profanity < 30 ? 'Very mild swearing OK' : toneSettings.profanity < 50 ? 'Moderate casual swearing' : 'Frequent swearing acceptable'}` : '- Keep language clean, no swearing'}
-${toneSettings.emojiLevel !== undefined ? `- Emoji usage (${toneSettings.emojiLevel}/100): ${toneSettings.emojiLevel < 20 ? 'No emojis' : toneSettings.emojiLevel < 40 ? 'Minimal emojis (1-2)' : toneSettings.emojiLevel < 60 ? 'Moderate emojis' : 'Heavy emoji usage'}` : ''}
-` : '';
-
-  const personalityPrimary = Boolean(
-    opts.prioritizeCreatorPersonality && creatorContext.trim(),
-  );
-  const effectiveToneStyleGuidance = personalityPrimary ? "" : toneStyleGuidance;
+${toneSettings.emojiLevel !== undefined ? `- Emoji usage (${toneSettings.emojiLevel}/100): ${toneSettings.emojiLevel < 20 ? 'No emojis in hook/captionStarter' : toneSettings.emojiLevel < 40 ? 'At most 1-2 emojis total' : toneSettings.emojiLevel < 60 ? 'Moderate emojis (a few, purposeful)' : 'Liberal, expressive emoji use that matches the voice'}` : ''}
+`
+    : "";
 
   const ideaCount = swapOnly ? "ONE" : opts.generateAllFormats ? "exactly 4 (one per format: Reel, Carousel, Photo, Story)" : "exactly 3";
   
@@ -218,14 +226,15 @@ EFFORT (minutes): ${effort}. ${effortGuidance}
 PREFERRED FORMAT: ${format}. ${formatGuidance}
 ${platformFormatGuidance}
 TONE: ${tone}.${personalityPrimary ? " SECONDARY for voice — creator personality block below overrides this label (and tone sliders) when they conflict." : " Keep hooks and copy in this voice."}
-${effectiveToneStyleGuidance}
+${toneStyleGuidance}
 ${spicyMode ? CONTENT_POLICY_SPICY : CONTENT_POLICY_SAFE}
 
 ${creatorContext ? `CREATOR PERSONALITY & NICHE (IMPORTANT - reflect this in ALL ideas):
 ${creatorContext}
 ${personalityPrimary ? `VOICE PRIORITY (PERSONALITY FIRST — TOGGLE ON):
-- This personality text is PRIMARY for voice, attitude, hooks, and caption style in every idea.
-- Ignore the TONE field above and the writing-style sliders when they conflict with the personality.
+- This personality text is PRIMARY for voice, attitude, hooks, and caption style. Every hook must sound like THIS creator typing — not a strategist or generic influencer.
+- TRENDS (below) inform topics only — do not import trend-speak into hooks.
+- WRITING STYLE above: emoji + profanity only; all other traits come from this personality block.
 - Still align topics and CTAs with GOAL: ${goal} — express them in this brand voice.
 ` : ""}Generate ideas that match this personality - the tone, style, and content should feel authentic to who this creator is.
 ` : "No creator profile provided; use broad, relatable angles."}
@@ -241,6 +250,9 @@ ${useTrends && trendContext ? `TRENDS / CONTEXT (use where relevant):\n${trendCo
 ${fanHubGuidance}
 
 ${existingIdeasForContext?.length ? `EXISTING IDEAS (DO NOT DUPLICATE - generate completely different ideas):\n${existingIdeasForContext.map((i) => `${i.title}: ${i.hook}`).join("\n")}\n` : ""}
+${personalityPrimary ? `
+FINAL CHECK — HOOKS: If a hook could fit any creator in this niche, rewrite until it clearly matches the CREATOR PERSONALITY text above.
+` : ""}
 
 BLUEPRINT FORMAT (be SPECIFIC and ACTIONABLE):
 Each idea should be a clear blueprint the creator can follow step-by-step. Not vague suggestions - EXACT instructions.
@@ -252,9 +264,9 @@ OUTPUT STRICT JSON ONLY (no markdown, no code fence):
       "id": "idea_<short_unique_id>",
       "format": "${platform === "fan_hub" ? "photo | video | text | poll" : platform === "twitter" ? "tweet | thread | poll | video" : "reel | carousel | photo | story | mixed"}",
       "title": "Short punchy title (3-6 words)",
-      "hook": "FULL ready-to-use caption (2-4 sentences). Optimize for GOAL + reach/engagement; may lean trend/personality/story — not only a literal shot description.",
+      "hook": "FULL ready-to-use caption (2-4 sentences), FIRST PERSON (I/my/we — never third-person narrator). Optimize for GOAL + reach/engagement; match WRITING STYLE PREFERENCES for emojis and tone.",
       "shotList": ["SPECIFIC instruction 1: exactly what to show/do", "SPECIFIC instruction 2", "SPECIFIC instruction 3", "..."],
-      "captionStarter": "Alternative caption opening they could use",
+      "captionStarter": "Alternative first-person opening line (same emoji/tone rules as hook)",
       "cta": "Specific call-to-action for this exact post",${platform === "fan_hub" ? "" : `
       "hashtags": ["#tag1", "#tag2", "..."],`}
       "whyThisWorks": "Why this specific idea will perform well",
@@ -266,7 +278,8 @@ OUTPUT STRICT JSON ONLY (no markdown, no code fence):
 
 IMPORTANT RULES:
 - shotList must have 3-5 SPECIFIC, ACTIONABLE items (not vague like "nice pose" - say exactly what pose, what angle, what to wear)
-- hook should be a COMPLETE caption ready to copy/paste, not just one sentence
+- hook should be a COMPLETE caption ready to copy/paste, not just one sentence — scroll-stopping and conversational, not a dull restatement of the title; always first-person creator voice, not "explaining" the post in third person
+- NEVER prefix hook or captionStarter with "Reel:", "Post:", "Story:", or similar format labels (format is in the JSON "format" field only)
 - Be EXPLICIT about what the content should include${platform === "fan_hub" ? `
 - DO NOT include hashtags for My Page/Fan Hub content
 - NEVER say "link in bio" - this is already their own page, no external links needed` : ""}

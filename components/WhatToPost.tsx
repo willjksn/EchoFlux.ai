@@ -4,6 +4,10 @@ import { DailyPostIdea, WhatToPostSettings, CalendarEvent, Platform } from '../t
 import { auth, db } from '../firebaseConfig';
 import { doc, setDoc } from 'firebase/firestore';
 import { SparklesIcon, RefreshIcon, SettingsIcon, XMarkIcon, CalendarIcon, TrashIcon } from './icons/UIIcons';
+import {
+  stripStrategyFormatPrefix,
+  instagramPostTypeFromContentFormat,
+} from '../src/lib/strategyComposeHandoff';
 
 type PlatformOption = 'instagram' | 'facebook' | 'x' | 'mypage';
 
@@ -496,24 +500,36 @@ export const WhatToPost: React.FC<WhatToPostProps> = ({ onOpenAdvanced }) => {
   };
 
   const handleWriteCaption = (idea: DailyPostIdea) => {
-    const content = buildCaptionFromIdea(idea);
+    const content = stripStrategyFormatPrefix(buildCaptionFromIdea(idea));
     const platformMap: Record<PlatformOption, Platform> = {
       instagram: 'Instagram',
       facebook: 'Facebook',
       x: 'X',
       mypage: 'Instagram', // Default for Fan Hub posts
     };
+    const targetPlatform = platformMap[selectedPlatform];
+    const igType =
+      targetPlatform === 'Instagram'
+        ? instagramPostTypeFromContentFormat(idea.format)
+        : undefined;
     const draft = {
       id: `draft_${idea.id}_${Date.now()}`,
       content,
-      platforms: [platformMap[selectedPlatform]],
+      platforms: [targetPlatform],
       postGoal: settings.goal === 'engagement' ? 'engagement' : settings.goal === 'reach' ? 'brand_awareness' : 'engagement',
       postTone: settings.tone || 'friendly',
       mediaUrl: undefined,
       mediaType: 'image',
+      ...(igType ? { instagramPostType: igType } : {}),
     };
     try {
-      localStorage.setItem('draftPostToEdit', JSON.stringify(draft));
+      const draftJson = JSON.stringify(draft);
+      localStorage.setItem('draftPostToEdit', draftJson);
+      try {
+        sessionStorage.setItem('draftPostToEdit', draftJson);
+      } catch {
+        /* ignore */
+      }
       setActivePage('compose');
       if (window.history?.pushState) window.history.pushState({}, '', '/compose');
       showToast('Draft opened in Compose.', 'success');

@@ -107,15 +107,25 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
     "social media creator content";
   const researchAudienceSeed = rawAudience || "social media audience";
 
-  // Build tone style guidance from settings
-  const toneStyleGuidance = toneSettings ? `
-WRITING STYLE PREFERENCES (apply to all content ideas):
+  // Tone sliders: with personality ON, formality/humor/warmth often fight the personality text (user hears "it ignores me").
+  // Keep sliders authoritative for emoji + profanity; personality is ground truth for voice when usePersonalityBool.
+  const toneStyleGuidance = toneSettings
+    ? usePersonalityBool
+      ? `
+WRITING STYLE (personality mode — follow emoji & profanity lines strictly; personality block defines all other voice traits):
+${toneSettings.profanity !== undefined && toneSettings.profanity > 0 ? `- Profanity (${toneSettings.profanity}/100): ${toneSettings.profanity < 30 ? 'Very mild swearing OK' : toneSettings.profanity < 50 ? 'Moderate casual swearing' : 'Frequent swearing acceptable'}` : '- Keep language clean, no swearing'}
+${toneSettings.emojiLevel !== undefined ? `- Emoji usage (${toneSettings.emojiLevel}/100): ${toneSettings.emojiLevel < 20 ? 'No emojis in captions' : toneSettings.emojiLevel < 40 ? 'At most 1-2 emojis total per caption' : toneSettings.emojiLevel < 60 ? 'Moderate emojis (a few, purposeful)' : 'Liberal, expressive emoji use that matches the voice'}` : ''}
+- Formality, humor, warmth sliders: IGNORE their numbers for caption voice — the CREATOR PERSONALITY & BRAND VOICE section defines those. Do not "sanitize" or corporate-wash captions to match sliders.
+`
+      : `
+WRITING STYLE PREFERENCES (apply to every "caption", hook, and ready-to-post line — especially emoji count and warmth):
 ${toneSettings.formality !== undefined ? `- Formality (${toneSettings.formality}/100): ${toneSettings.formality < 30 ? 'Very casual, use slang and informal language' : toneSettings.formality < 50 ? 'Casual and conversational' : toneSettings.formality < 70 ? 'Balanced tone' : 'Professional and polished'}` : ''}
 ${toneSettings.humor !== undefined ? `- Humor (${toneSettings.humor}/100): ${toneSettings.humor < 30 ? 'Serious, minimal humor' : toneSettings.humor < 50 ? 'Light occasional humor' : toneSettings.humor < 70 ? 'Witty and playful' : 'Very funny, comedic tone'}` : ''}
 ${toneSettings.empathy !== undefined ? `- Warmth (${toneSettings.empathy}/100): ${toneSettings.empathy < 30 ? 'Direct and straightforward' : toneSettings.empathy < 50 ? 'Friendly but not overly warm' : toneSettings.empathy < 70 ? 'Warm and understanding' : 'Very supportive'}` : ''}
 ${toneSettings.profanity !== undefined && toneSettings.profanity > 0 ? `- Profanity (${toneSettings.profanity}/100): ${toneSettings.profanity < 30 ? 'Very mild swearing OK' : toneSettings.profanity < 50 ? 'Moderate casual swearing' : 'Frequent swearing acceptable'}` : '- Keep language clean, no swearing'}
-${toneSettings.emojiLevel !== undefined ? `- Emoji usage (${toneSettings.emojiLevel}/100): ${toneSettings.emojiLevel < 20 ? 'No emojis' : toneSettings.emojiLevel < 40 ? 'Minimal emojis' : toneSettings.emojiLevel < 60 ? 'Moderate emojis' : 'Heavy emoji usage'}` : ''}
-` : '';
+${toneSettings.emojiLevel !== undefined ? `- Emoji usage (${toneSettings.emojiLevel}/100): ${toneSettings.emojiLevel < 20 ? 'No emojis in captions' : toneSettings.emojiLevel < 40 ? 'At most 1-2 emojis total per caption' : toneSettings.emojiLevel < 60 ? 'Moderate emojis (a few, purposeful)' : 'Liberal, expressive emoji use that matches the voice'}` : ''}
+`
+    : "";
 
   try {
     // Use strategy task type for better model routing
@@ -292,16 +302,17 @@ ${creatorGender ? `- The creator is: ${creatorGender}` : ''}
 ${targetAudienceGender ? `- Target audience: ${targetAudienceGender === 'Male' ? 'Men' : targetAudienceGender === 'Female' ? 'Women' : targetAudienceGender === 'Both' ? 'Both men and women' : 'All audiences'}` : ''}
 
 MANDATORY CONTENT RULES BASED ON CREATOR PROFILE:
+(These she/he rules apply to imageIdeas, videoIdeas, and internal planning — NOT to the "caption" field: captions are always first person from the creator, I/my/we.)
 ${creatorGender === 'Female' && targetAudienceGender === 'Male' ? `- ALL content ideas must feature the FEMALE creator appealing to MALE audience
 - Ideas should showcase HER (the creator): bikini photos, lingerie looks, selfies, body shots, intimate content
 - NEVER suggest photos of men, mankinis, men in bikinis, or content featuring men
 - Focus on feminine aesthetics, curves, confidence, seduction, flirtation aimed at male viewers
-- Use "she/her" when referring to the creator, never "he/him"` : ''}
+- Use "she/her" when referring to the creator in shot descriptions, never "he/him"` : ''}
 ${creatorGender === 'Male' && targetAudienceGender === 'Female' ? `- ALL content ideas must feature the MALE creator appealing to FEMALE audience
 - Ideas should showcase HIM (the creator): shirtless photos, gym content, suits, confidence poses
 - NEVER suggest photos of women or content featuring women as the subject
 - Focus on masculine aesthetics, physique, charm, romance aimed at female viewers
-- Use "he/him" when referring to the creator, never "she/her"` : ''}
+- Use "he/him" when referring to the creator in shot descriptions, never "she/her"` : ''}
 ${creatorGender === 'Female' && targetAudienceGender === 'Female' ? `- ALL content ideas must feature the FEMALE creator appealing to FEMALE audience
 - Ideas should showcase HER: confidence, beauty, lifestyle, behind-the-scenes, relatability
 - Focus on aesthetics that appeal to women viewers` : ''}
@@ -384,7 +395,7 @@ ${explicitnessContext ? `\nEXPLICITNESS LEVEL: ${explicitnessLevel}/10\n${explic
           "description": "Detailed description of the content idea with specific angles and execution details",
           "angle": "What makes this post compelling and unique - detailed angle description",
           "cta": "Specific call-to-action tailored to the content and goal",
-          "caption": "Ready-to-use social media caption for this content (2-4 sentences with hook, body, CTA, and hashtags if appropriate)",
+          "caption": "FINISHED post copy as if from a strong caption generator: scroll-stopping hook first line, conversational body, clear CTA, hashtags at end when appropriate—NOT a dull restatement of topic; NEVER start with Reel/Post/Story labels",
           "imageIdeas": ["Idea 1 for images", "Idea 2 for images", "Idea 3 for images"],
           "videoIdeas": ["Idea 1 for videos", "Idea 2 for videos"]
         }`;
@@ -396,18 +407,27 @@ ${explicitnessContext ? `\nEXPLICITNESS LEVEL: ${explicitnessLevel}/10\n${explic
     const personalityLeadBlock =
       usePersonalityBool && safeCreatorPersonality
         ? `
-CREATOR PERSONALITY & BRAND VOICE (PRIMARY WHEN THIS TOGGLE IS ON):
+CREATOR PERSONALITY & BRAND VOICE (PRIMARY — READ THIS BEFORE WRITING ANY "caption"):
 ${safeCreatorPersonality}
 
 CRITICAL — PERSONALITY-FIRST PLANNING:
-- This block is the top priority for topics, hooks, angles, and voice. Ideas must feel native to this creator—not generic for the category.
-- ${rawNiche ? `Post ideas from the user: "${rawNiche}". Blend with personality; if voice conflicts, personality wins.` : `The user did not specify post ideas—propose a clear, varied set of specific content ideas that fit this personality, the primary goal (${goalStr}), tone (${tone}), platform focus (${platformFocus || "Mixed / All"}), and audience context (${effectiveAudience}).`}
-- Trend and research sections below support timeliness and formats; do not replace this personality with generic category content.
-- PERSONALITY OVERRIDES the strategy "Tone" field and tone sliders when they conflict. Still steer tactics toward "${goalStr}" using approaches that fit this voice.
-- If the strategy describes the creator, use details from this personality description.
+- This block is the top priority for HOW captions sound (word choice, humor, energy, slang, attitude). Every caption must read like THIS person typed it on their phone — not like a strategist, narrator, or generic influencer.
+- ${rawNiche ? `Post ideas from the user: "${rawNiche}". Topics and angles should reflect these ideas AND this voice; if anything conflicts, personality wins for wording.` : `The user did not specify post ideas—propose specific content ideas that only this personality would post, aligned with goal (${goalStr}), platform focus (${platformFocus || "Mixed / All"}), and audience (${effectiveAudience}).`}
+- Research and trends above/below inform WHAT to post, timing, and formats — do NOT import their tone of voice into captions. Never replace this personality with "best practices" speak.
+- Strategy "Tone" dropdown is secondary when this block is present. Emoji and profanity rules come from Settings (see WRITING STYLE in parameters).
+- Steer tactics toward "${goalStr}" using approaches that still sound like this creator.
 
 `
         : "";
+
+    const personalityCaptionFinalCheck = usePersonalityBool
+      ? `
+FINAL — CAPTIONS VS PERSONALITY (MANDATORY):
+- Before outputting JSON, skim every "caption" field: if it could belong to any random creator in this niche, rewrite it until it clearly matches CREATOR PERSONALITY & BRAND VOICE above.
+- Do not flatten voice to sound "on-brand" in a generic way; keep quirks, specificity, and attitude from the personality text.
+
+`
+      : "";
 
     const favoriteHashtagsBlock =
       useFavoriteHashtags && safeFavoriteHashtags
@@ -422,23 +442,21 @@ Incorporate relevant hashtags into the strategy recommendations where appropriat
 
     const strategistOpening =
       usePersonalityBool && !rawNiche
-        ? `You are an elite content strategist. The creator's personality (below) is the PRIMARY anchor for what to post and how it sounds. Combine it with research and trend context so ideas stay specific, timely, and aligned with the primary goal. Audience context: ${effectiveAudience}.`
+        ? `You are an elite content strategist. Market research and trends appear first for topics and timing; the CREATOR PERSONALITY & BRAND VOICE section (after that context) is the PRIMARY anchor for caption voice and authenticity. Use research for WHAT/when — never for generic influencer diction in captions. Audience: ${effectiveAudience}.`
         : usePersonalityBool && rawNiche
-          ? `You are an elite content strategist. Blend the user's post ideas ("${rawNiche}") with their creator personality (below)—personality takes priority for voice and authenticity when anything conflicts. Target audience: ${effectiveAudience}. Every idea should support the primary goal.`
+          ? `You are an elite content strategist. Blend the user's post ideas ("${rawNiche}") with their creator personality (full block below, after research/trends). Post ideas steer topics; personality steers every caption's voice. Target audience: ${effectiveAudience}.`
           : `You are an elite content strategist specializing in ${effectiveNiche} for ${effectiveAudience}. Your expertise is creating data-driven strategies that achieve specific business goals.`;
 
     const primaryStrategySourceInstruction =
       usePersonalityBool && !rawNiche
-        ? `3. PRIMARY STRATEGY SOURCE: Creator personality + trend/research context + goal (${goalStr}). Invent specific, varied post ideas rooted in the personality; use research/trends for formats, hooks, and timing—never generic ideas that ignore the personality.`
+        ? `3. PRIMARY STRATEGY SOURCE: Creator personality (voice + differentiated topics) + trend/research for timing and formats + goal (${goalStr}). Research suggests themes; captions must still sound like the personality block — not like the research prose.`
         : usePersonalityBool && rawNiche
-          ? `3. PRIMARY STRATEGY SOURCE: Post ideas ("${rawNiche}") + creator personality + research/trends. Personality wins on voice; post ideas define direction; research sharpens execution.`
+          ? `3. PRIMARY STRATEGY SOURCE: Post ideas ("${rawNiche}") define topics; creator personality defines caption voice; research/trends refine angles and timing. Do not let research replace the personality voice in "caption" fields.`
           : `3. PRIMARY STRATEGY SOURCE: Use the topic-specific research above as your PRIMARY source of insights:
    - This research includes successful strategies, competitor analysis, and proven tactics for ${effectiveNiche} targeting ${effectiveAudience}
    - Adapt successful strategies from the research to fit the goal: ${goalStr}
    - Incorporate proven content formats, engagement tactics, and platform strategies from the research
    - Use trending topics and hashtags identified in the research`;
-
-    const effectiveToneStyleGuidance = usePersonalityBool ? "" : toneStyleGuidance;
 
     const prompt = `
 ${strategistOpening}
@@ -451,7 +469,7 @@ ${goalFramework}
 
 ${isOnlyFansPlatform && onlyfansResearch ? `ONLYFANS-SPECIFIC RESEARCH & BEST PRACTICES:\n${onlyfansResearch}\n` : ''}
 
-${personalityLeadBlock}${favoriteHashtagsBlock}
+${favoriteHashtagsBlock}
 ${nicheResearch}
 
 ${currentTrends}
@@ -459,6 +477,8 @@ ${currentTrends}
 ${analyticsContext ? analyticsContext : 'Note: No analytics data available. Use best practices for this content direction and audience.'}
 
 ${fanHubAnalyticsContext}
+
+${personalityLeadBlock}
 
 PRIMARY OBJECTIVE: Create a ${durationWeeks}-week content strategy specifically designed to achieve: ${goalStr}
 ${durationWeeks === 1 ? '\n⚠️ IMPORTANT: This is a ONE-WEEK plan. Generate EXACTLY 1 week (7 days) with 10-14 detailed content items. Do NOT generate multiple weeks.' : ''}
@@ -470,7 +490,7 @@ Strategy Parameters:
 - Target Audience: ${effectiveAudience}${rawAudience ? "" : " (inferred when not provided)"}
 - Post ideas / content direction: ${effectiveNiche}${rawNiche ? "" : " (inferred / personality-led when not provided)"}
 - Duration: ${durationWeeks} week${durationWeeks === 1 ? '' : 's'}${durationWeeks === 1 ? ' (ONE WEEK ONLY - generate content for 7 days, not multiple weeks)' : ''}
-${effectiveToneStyleGuidance}
+${toneStyleGuidance}
 ${safeContextDescription ? `\nADDITIONAL CONTEXT & REQUIREMENTS:\n${safeContextDescription}\n\nUse this additional context to tailor the strategy according to the user's specific requirements, preferences, and desired approach.\n` : ''}
 
 CRITICAL INSTRUCTIONS FOR GOAL ACHIEVEMENT:
@@ -538,13 +558,16 @@ ${durationWeeks === 1 ? '⚠️ CRITICAL: Generate EXACTLY 1 WEEK (7 days) of co
    * description: Detailed description with specific angles and execution details (2-3 sentences minimum)
    * angle: What makes this post compelling and unique - detailed explanation
    * cta: Specific call-to-action tailored to the content and goal
-   * caption: A READY-TO-USE caption for this content (this is critical - the creator will use this caption directly):
+   * caption: READY-TO-USE copy the creator can paste as the actual post (same quality bar as your in-app caption generator):
+     - FIRST PERSON: Write as the creator speaking to their audience — use "I", "my", "me", or "we" (brand/collective). Never third-person narration ("This creator…", "She shares…", "Today's post is about…" as a detached narrator).
+     - Do NOT copy the "topic" field verbatim as the caption; expand into real, engaging social copy
+     - Do NOT begin the caption with "Reel:", "Post:", "Story:", or any format label—those belong only in the JSON "format" field
+     - Shape the caption to match this item's "format": Reel = punchy short lines, pattern-interrupt hook, mobile-first rhythm; Story = 1-2 very short lines + light CTA; Post = strong opener, readable body, CTA
      - Start with an attention-grabbing hook (question, bold statement, or intriguing opener)
-     - Include 2-3 sentences of engaging body content
-     - End with the CTA
-     - Include 3-5 relevant hashtags at the end (unless for OnlyFans/Fan Hub where hashtags aren't used)
-     - Match the specified tone: ${tone}
-     - Make it feel authentic and conversational, not generic
+     - Include engaging body content (not a boring title or outline)
+     - End with the CTA; include 3-5 relevant hashtags at the end when the platform uses hashtags (unless OnlyFans/Fan Hub)
+     - ${usePersonalityBool ? `Voice: mirror CREATOR PERSONALITY & BRAND VOICE exactly for diction and attitude; use WRITING STYLE above only for emoji count and profanity` : `Match tone (${tone}); follow WRITING STYLE PREFERENCES above for emoji density, warmth, humor, and formality`}
+     - Sound human and platform-native, not generic or robotic
 ${durationWeeks === 1 ? '- Provide comprehensive, detailed content across all 7 days with variety' : ''}
 - Distribute content across platforms: ${platforms.join(', ')}
  - DO NOT just provide topic names - provide FULL detailed descriptions for each content item
@@ -564,7 +587,7 @@ EXPLICIT CONTENT GUIDELINES:
   * Detailed explicit themes: "Boudoir photoset with specific outfit, setting, and mood descriptions"
   * Variety: Different poses, outfits, settings, moods for explicit content each day
   
-- Captions should DESCRIBE the explicit content shown in detail:
+- Captions should DESCRIBE the explicit content shown in detail (still first person — "I'm…", "my…", never narrator voice):
   * Analyze what's in the media and describe it explicitly
   * Use bold, direct language about what's visually shown
   * Describe specific poses, outfits, settings, actions, moods
@@ -595,6 +618,7 @@ IMPORTANT: When generating imageIdeas and videoIdeas:
 - Consider the engagement patterns - if certain visual styles are working, incorporate similar approaches
 - Make image/video type suggestions specific (e.g., "Behind-the-scenes photo with natural lighting", "Quick tutorial video with text overlays", "Product showcase with lifestyle context")
 ` : ''}
+${personalityCaptionFinalCheck}
 `;
 
     const response = await model.generateContent({
@@ -670,6 +694,8 @@ IMPORTANT: When generating imageIdeas and videoIdeas:
 
       // Post-validate: ensure required fields are always present/non-empty for UI reliability
       const safeString = (v: any) => (typeof v === "string" ? v.trim() : "");
+      const stripStrategyCaptionFormatPrefix = (s: string) =>
+        s.replace(/^\s*(reel|post|story)\s*[:—–-]\s*/i, "").trim();
       const ensureMin = (v: any, fallback: string, minLen = 8) => {
         const s = safeString(v);
         return s.length >= minLen ? s : fallback;
@@ -700,6 +726,8 @@ IMPORTANT: When generating imageIdeas and videoIdeas:
           const imageIdeas = Array.isArray(item.imageIdeas) ? item.imageIdeas.filter((x: any) => safeString(x).length > 0) : [];
           const videoIdeas = Array.isArray(item.videoIdeas) ? item.videoIdeas.filter((x: any) => safeString(x).length > 0) : [];
 
+          const captionCleaned = stripStrategyCaptionFormatPrefix(safeString(item.caption));
+
           return {
             ...item,
             topic,
@@ -708,7 +736,7 @@ IMPORTANT: When generating imageIdeas and videoIdeas:
             description: ensureMin(item.description, descriptionFallback, 20),
             angle: ensureMin(item.angle, angleFallback, 12),
             cta: itemCta,
-            caption: ensureMin(item.caption, captionFallback, 20),
+            caption: ensureMin(captionCleaned, captionFallback, 20),
             imageIdeas: imageIdeas.length > 0 ? imageIdeas : [
               `On-brand visual concept for "${topic}" (clean composition, clear focal point, text overlay with hook)`,
               `Behind-the-scenes style image supporting "${topic}" (authentic, candid, process-oriented)`,
