@@ -6,6 +6,9 @@
   "functions": {
     "api/generateCaptions.ts": {
       "maxDuration": 60
+    },
+    "api/createCheckoutSession.ts": {
+      "maxDuration": 60
     }
   },
 

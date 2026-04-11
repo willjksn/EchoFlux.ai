@@ -392,6 +392,8 @@ export const LoginModal: React.FC<LoginModalProps> = ({
           return;
         }
 
+        const hasInviteCode = !!inviteCode && inviteCode.trim() !== '';
+
         // Check if email is already registered before storing as pending signup
         try {
           const signInMethods = await fetchSignInMethodsForEmail(auth, email);
@@ -399,7 +401,12 @@ export const LoginModal: React.FC<LoginModalProps> = ({
             // Email is already registered - check if there's a payment attempt
             const paymentAttemptStr = typeof window !== 'undefined' ? localStorage.getItem('paymentAttempt') : null;
             let errorMessage = 'This email is already registered. Please sign in instead.';
-            
+
+            if (hasInviteCode) {
+              errorMessage =
+                'This email already has an account. Use Log in with this email, then finish Creator Pro / Creator Elite checkout from the plan screen.';
+            }
+
             if (paymentAttemptStr) {
               try {
                 const paymentAttempt = JSON.parse(paymentAttemptStr);
@@ -410,7 +417,10 @@ export const LoginModal: React.FC<LoginModalProps> = ({
                 // Ignore parse errors
               }
             }
-            
+
+            if (hasInviteCode) {
+              setIsLogin(true);
+            }
             setErrorModal({ show: true, message: errorMessage });
             setIsLoading(false);
             return;
@@ -419,8 +429,6 @@ export const LoginModal: React.FC<LoginModalProps> = ({
           // If check fails, we'll proceed anyway - the actual signup will catch the error
           console.warn('Could not check if email exists:', checkError);
         }
-
-        const hasInviteCode = !!inviteCode && inviteCode.trim() !== '';
 
         if (hasInviteCode) {
           // INVITE FLOW (Pro/Elite): redeem invite and skip Stripe payment, but still requires signup + onboarding.
@@ -558,7 +566,13 @@ export const LoginModal: React.FC<LoginModalProps> = ({
         // Handle signup-specific errors
         const errorCode = error?.code || '';
         if (errorCode === 'auth/email-already-in-use') {
-          errorMessage = 'This email is already registered. Please sign in instead.';
+          const onInvite = typeof inviteCode === 'string' && inviteCode.trim() !== '';
+          errorMessage = onInvite
+            ? 'This email already has an account. Firebase sometimes hides that until sign-up for privacy. Use Log in with this email — if you already redeemed a creator invite, you can finish Creator Pro / Elite checkout from the plan screen. If you have not redeemed yet, sign in and ask support or use a fresh invite code.'
+            : 'This email is already registered. Please sign in instead.';
+          if (onInvite) {
+            setIsLogin(true);
+          }
           // Show popup modal for email already in use
           setErrorModal({ show: true, message: errorMessage });
         } else if (errorCode === 'auth/invalid-email') {

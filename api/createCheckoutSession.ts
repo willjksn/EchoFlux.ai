@@ -200,7 +200,30 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(401).json({ error: 'Unauthorized', message: authError.message || 'Authentication failed' });
     }
 
-    const { planName, billingCycle, referralCode } = req.body;
+    const rawBody = req.body;
+    const body: Record<string, unknown> | null =
+      typeof rawBody === 'string'
+        ? (() => {
+            try {
+              return JSON.parse(rawBody) as Record<string, unknown>;
+            } catch {
+              return null;
+            }
+          })()
+        : rawBody && typeof rawBody === 'object'
+          ? (rawBody as Record<string, unknown>)
+          : null;
+    if (!body) {
+      return res.status(400).json({ error: 'Invalid or missing JSON body' });
+    }
+
+    const planName = body.planName as string | undefined;
+    const billingCycle = body.billingCycle as string | undefined;
+    const rawReferral = body.referralCode;
+    const referralCode =
+      typeof rawReferral === 'string' && rawReferral.trim()
+        ? rawReferral.trim().toUpperCase()
+        : null;
 
     if (!planName || !billingCycle) {
       return res.status(400).json({ error: 'Plan name and billing cycle are required' });
@@ -229,34 +252,51 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       INVITE_CREATOR_CHECKOUT_PLANS.has(planName) && (!priceId || priceId.trim() === '');
 
     if (INVITE_CREATOR_CHECKOUT_PLANS.has(planName)) {
-      const db = getAdminDb();
-      const userSnap = await db.collection('users').doc(decodedToken.uid).get();
-      const u = userSnap.data() as Record<string, unknown> | undefined;
-      if (!userSnap.exists) {
-        return res.status(403).json({
-          error: 'Forbidden',
-          message: 'User profile not found.',
+      let db;
+      try {
+        db = getAdminDb();
+      } catch (adminErr: unknown) {
+        console.error('createCheckoutSession: Firestore admin unavailable:', adminErr);
+        return res.status(503).json({
+          error: 'Service unavailable',
+          message: 'Could not verify your account for invite checkout. Try again in a moment.',
         });
       }
-      const subStatus = u?.subscriptionStatus as string | undefined;
-      const inviteGrant = u?.inviteGrantPlan as string | undefined;
-      if (subStatus !== 'creator_invite_pending' || inviteGrant !== 'CreatorChoice') {
-        return res.status(403).json({
-          error: 'Forbidden',
-          message: 'This plan is only available after redeeming a creator invite code.',
-        });
-      }
-      const currentPlan = (u?.plan as string | undefined) || 'Free';
-      if (currentPlan !== 'Free') {
-        return res.status(403).json({
-          error: 'Forbidden',
-          message: 'Account is not eligible for creator invite checkout.',
-        });
-      }
-      if (typeof u?.stripeSubscriptionId === 'string' && u.stripeSubscriptionId.trim()) {
-        return res.status(403).json({
-          error: 'Forbidden',
-          message: 'You already have an active subscription.',
+      try {
+        const userSnap = await db.collection('users').doc(decodedToken.uid).get();
+        const u = userSnap.data() as Record<string, unknown> | undefined;
+        if (!userSnap.exists) {
+          return res.status(403).json({
+            error: 'Forbidden',
+            message: 'User profile not found.',
+          });
+        }
+        const subStatus = u?.subscriptionStatus as string | undefined;
+        const inviteGrant = u?.inviteGrantPlan as string | undefined;
+        if (subStatus !== 'creator_invite_pending' || inviteGrant !== 'CreatorChoice') {
+          return res.status(403).json({
+            error: 'Forbidden',
+            message: 'This plan is only available after redeeming a creator invite code.',
+          });
+        }
+        const currentPlan = (u?.plan as string | undefined) || 'Free';
+        if (currentPlan !== 'Free') {
+          return res.status(403).json({
+            error: 'Forbidden',
+            message: 'Account is not eligible for creator invite checkout.',
+          });
+        }
+        if (typeof u?.stripeSubscriptionId === 'string' && u.stripeSubscriptionId.trim()) {
+          return res.status(403).json({
+            error: 'Forbidden',
+            message: 'You already have an active subscription.',
+          });
+        }
+      } catch (firestoreErr: unknown) {
+        console.error('createCheckoutSession: Firestore read failed:', firestoreErr);
+        return res.status(503).json({
+          error: 'Service unavailable',
+          message: 'Could not load your profile for checkout. Please try again.',
         });
       }
     }
@@ -316,7 +356,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           planName,
           billingCycle,
           userId: decodedToken.uid,
-          ...(referralCode ? { referralCode: referralCode.toUpperCase() } : {}),
+          ...(referralCode ? { referralCode } : {}),
         },
       },
       metadata: {
@@ -324,7 +364,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         planName,
         billingCycle,
         userType: 'Creator', // Default to Creator for now
-        ...(referralCode ? { referralCode: referralCode.toUpperCase() } : {}),
+        ...(referralCode ? { referralCode } : {}),
       },
       success_url: `${req.headers.origin || process.env.NEXT_PUBLIC_APP_URL || 'https://engagesuite.ai'}/dashboard?payment=success&session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${req.headers.origin || process.env.NEXT_PUBLIC_APP_URL || 'https://engagesuite.ai'}/pricing?canceled=true`,
@@ -509,23 +549,28 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     console.error('Error details:', {
       message: error.message,
       stack: error.stack,
-      planName: req.body?.planName,
-      billingCycle: req.body?.billingCycle,
+      planName: (req.body as { planName?: string } | undefined)?.planName,
+      billingCycle: (req.body as { billingCycle?: string } | undefined)?.billingCycle,
       type: error.type,
       code: error.code,
       raw: error.raw,
     });
-    
+
+    if (res.headersSent) {
+      return;
+    }
+
     // Provide more specific error messages for common Stripe errors
     let errorMessage = error.message || 'An unexpected error occurred';
     if (error.type === 'StripeInvalidRequestError') {
       if (error.message?.includes('No such price')) {
-        errorMessage = `Invalid Price ID configured for ${req.body?.planName} plan. Please check your Stripe Price IDs in environment variables.`;
+        const pn = (req.body as { planName?: string } | undefined)?.planName;
+        errorMessage = `Invalid Price ID configured for ${pn || 'selected'} plan. Please check your Stripe Price IDs in environment variables.`;
       } else if (error.message?.includes('No such customer')) {
         errorMessage = 'Customer lookup failed. Please try again.';
       }
     }
-    
+
     return res.status(500).json({
       error: 'Failed to create checkout session',
       message: errorMessage,
