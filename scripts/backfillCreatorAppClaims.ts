@@ -18,19 +18,34 @@ const SA =
   process.env.ECHOFLUX_SERVICE_ACCOUNT || path.join(PROJECT_ROOT, "echoflux-service-account.json");
 
 const CREATOR_APP_CLAIM = "creatorApp";
-const PAID_PLANS = new Set(["Pro", "Elite", "Agency", "OnlyFansStudio"]);
+const PAID_PLANS = new Set([
+  "Pro",
+  "Elite",
+  "Agency",
+  "OnlyFansStudio",
+  "CreatorPro",
+  "CreatorElite",
+]);
 
 type UserDoc = {
   role?: string;
   plan?: string | null;
   hasCompletedOnboarding?: boolean;
   accountOrigin?: string;
+  subscriptionStatus?: string;
+  inviteGrantPlan?: string;
 };
 
 function shouldHaveCreatorAppAccess(userData: UserDoc | undefined, creatorDocExists: boolean): boolean {
   const d = userData || {};
   if (d.role === "Admin") return true;
   if (creatorDocExists) return true;
+  if (
+    d.subscriptionStatus === "creator_invite_pending" &&
+    d.inviteGrantPlan === "CreatorChoice"
+  ) {
+    return true;
+  }
   const plan = typeof d.plan === "string" ? d.plan : "";
   if (plan && PAID_PLANS.has(plan)) return true;
   if (d.hasCompletedOnboarding === true && d.accountOrigin !== "fan_hub") return true;

@@ -7,13 +7,23 @@ import type admin from "firebase-admin";
 
 export const CREATOR_APP_CLAIM = "creatorApp";
 
-const PAID_PLANS = new Set(["Pro", "Elite", "Agency", "OnlyFansStudio"]);
+const PAID_PLANS = new Set([
+  "Pro",
+  "Elite",
+  "Agency",
+  "OnlyFansStudio",
+  /** Invite checkout tiers ($1 / $2) after CreatorChoice Stripe subscription */
+  "CreatorPro",
+  "CreatorElite",
+]);
 
 export type UserDocForClaim = {
   role?: string;
   plan?: string | null;
   hasCompletedOnboarding?: boolean;
   accountOrigin?: string;
+  subscriptionStatus?: string;
+  inviteGrantPlan?: string;
 };
 
 export function shouldHaveCreatorAppAccess(params: {
@@ -23,6 +33,13 @@ export function shouldHaveCreatorAppAccess(params: {
   const d = params.userData || {};
   if (d.role === "Admin") return true;
   if (params.creatorDocExists) return true;
+  // CreatorChoice invite: Firestore stays plan Free until Stripe; must still use creator shell + plan picker.
+  if (
+    d.subscriptionStatus === "creator_invite_pending" &&
+    d.inviteGrantPlan === "CreatorChoice"
+  ) {
+    return true;
+  }
   const plan = typeof d.plan === "string" ? d.plan : "";
   if (plan && PAID_PLANS.has(plan)) return true;
   if (d.hasCompletedOnboarding === true && d.accountOrigin !== "fan_hub") return true;
