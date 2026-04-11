@@ -43,11 +43,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
 
       const existingUserData = userSnap.exists ? (userSnap.data() as any) : null;
+      // Idempotency only when this same code was already applied to this uid (not any past invite on the account).
       const alreadyRedeemedThisCode =
-        existingUserData?.invitedWithCode === normalizedCode ||
-        existingUserData?.inviteGrantRedeemedAt ||
-        existingUserData?.subscriptionStatus === "invite_grant" ||
-        existingUserData?.subscriptionStatus === "creator_invite_pending";
+        existingUserData?.invitedWithCode === normalizedCode &&
+        (existingUserData?.subscriptionStatus === "invite_grant" ||
+          existingUserData?.subscriptionStatus === "creator_invite_pending" ||
+          !!existingUserData?.inviteGrantRedeemedAt);
 
       // Expiry check
       const expiresAtIso = inviteData?.expiresAt

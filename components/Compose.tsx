@@ -594,6 +594,10 @@ const CaptionGenerator: React.FC = () => {
     }
 
     const saveMediaItems = async () => {
+      // Rules use request.auth.uid; prefer Auth user id so path matches the signed-in principal.
+      const uid = auth.currentUser?.uid ?? user.id;
+      if (!uid) return;
+
       for (const item of composeState.mediaItems) {
         // Skip items with blob URLs - they won't work after reload
         if (item.previewUrl && (item.previewUrl.startsWith('blob:') || item.previewUrl.startsWith('data:'))) {
@@ -624,11 +628,11 @@ const CaptionGenerator: React.FC = () => {
 
           if (item.id) {
             // Update existing
-            await setDoc(doc(db, 'users', user.id, 'compose_media', item.id), itemData);
+            await setDoc(doc(db, 'users', uid, 'compose_media', item.id), itemData);
           } else {
             // Create new
             const newId = Date.now().toString();
-            await setDoc(doc(db, 'users', user.id, 'compose_media', newId), {
+            await setDoc(doc(db, 'users', uid, 'compose_media', newId), {
               ...itemData,
               createdAt: new Date().toISOString(),
             });
@@ -4163,62 +4167,21 @@ const CaptionGenerator: React.FC = () => {
       <div className="space-y-6">
 
 
-        {/* Always show media boxes - initialize with one empty box if none exist */}
+        {/* Empty composer: no phantom MediaBox (deleting the last card used to re-show an identical "New Post" with a no-op onRemove). */}
         {composeState.mediaItems.length === 0 ? (
           <div className="flex justify-center">
-            <div className="w-full max-w-md">
-              <MediaBox
-              key="initial"
-              mediaItem={{
-                id: Date.now().toString(),
-                previewUrl: '',
-                data: '',
-                mimeType: '',
-                type: 'image',
-                results: [],
-                captionText: '',
-                postGoal: composeState.postGoal,
-                postTone: composeState.postTone,
-                selectedPlatforms: { ...emptyPlatforms },
-              }}
-              index={0}
-              onUpdate={(idx, updates) => {
-                if (composeState.mediaItems.length === 0) {
-                  handleAddMediaBox();
-                  setTimeout(() => {
-                    handleUpdateMediaItem(0, updates);
-                  }, 0);
-                } else {
-                  handleUpdateMediaItem(idx, updates);
-                }
-              }}
-              onRemove={() => {}}
-              canGenerate={canGenerate}
-              onGenerateComplete={handleCaptionGenerationComplete}
-              goalOptions={goalOptions}
-              toneOptions={toneOptions}
-              isSelected={false}
-              onToggleSelect={() => {}}
-              onPreview={handlePreviewMedia}
-              onPublish={handlePublishMedia}
-              onSchedule={handleScheduleMedia}
-              onSaveToWorkflow={handleSaveToWorkflowMedia}
-              onAIAutoSchedule={async (idx) => {
-                await handleAIAutoScheduleSingle(idx);
-              }}
-              platformIcons={platformIcons}
-              onUpgradeClick={() => {
-                setUpgradeModalReason('limit');
-                setIsUpgradeModalOpen(true);
-              }}
-              usePersonality={usePersonality}
-              useFavoriteHashtags={useFavoriteHashtags}
-              creatorPersonality={settings.creatorPersonality}
-              favoriteHashtags={settings.favoriteHashtags}
-              onTogglePersonality={() => setUsePersonality(prev => !prev)}
-              onToggleHashtags={() => setUseFavoriteHashtags(prev => !prev)}
-              creatorIdentityActive={creatorIdentityActive}
-            />
+            <div className="w-full max-w-md bg-white dark:bg-gray-900 rounded-2xl border border-dashed border-gray-300 dark:border-gray-600 p-10 text-center shadow-sm">
+              <p className="text-sm text-gray-600 dark:text-gray-400 mb-5">
+                No posts here yet. Add a post card to upload media and write captions.
+              </p>
+              <button
+                type="button"
+                onClick={handleAddMediaBox}
+                className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-primary-600 text-white text-sm font-medium hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 dark:focus:ring-offset-gray-900"
+              >
+                <PlusIcon />
+                New post
+              </button>
             </div>
           </div>
         ) : composeState.mediaItems.length === 1 ? (

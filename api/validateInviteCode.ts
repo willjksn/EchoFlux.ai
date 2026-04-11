@@ -1,6 +1,7 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { getAdminDb } from "./_firebaseAdmin.js";
 import { enforceRateLimit } from "./_rateLimit.js";
+import { verifyAuth } from "./verifyAuth.js";
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== "POST") {
@@ -22,6 +23,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     identifier: ip,
   });
   if (!ok) return;
+
+  const authUser = await verifyAuth(req);
 
   const { inviteCode } = (req.body || {}) as { inviteCode?: string };
 
@@ -58,15 +61,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
     }
     
-    // Check if invite is already used
-    if (inviteData?.used === true) {
-      return res.status(200).json({
-        valid: false,
-        error: "This invite code has already been used.",
-      });
-    }
-
-    // Check if invite has expired (optional - if expiresAt field exists)
+    // Expiry first (applies even if the code was redeemed)
     if (inviteData?.expiresAt) {
       const expiresAt = inviteData.expiresAt.toDate ? inviteData.expiresAt.toDate() : new Date(inviteData.expiresAt);
       if (expiresAt < new Date()) {
@@ -77,11 +72,30 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
     }
 
-    // Check if invite has reached max uses (if maxUses field exists)
-    if (inviteData?.maxUses && inviteData?.usedCount >= inviteData.maxUses) {
+    const maxUses = typeof inviteData?.maxUses === "number" ? inviteData.maxUses : 1;
+    const usedCount = typeof inviteData?.usedCount === "number" ? inviteData.usedCount : 0;
+    const usedByUid = typeof (inviteData as any)?.usedBy === "string" ? (inviteData as any).usedBy : "";
+    const isExhausted = inviteData?.used === true || usedCount >= maxUses;
+
+    // Single-use (or max reached): still valid for the account that already redeemed (CreatorChoice checkout, retries, re-validation).
+    if (isExhausted) {
+      if (authUser?.uid && usedByUid && authUser.uid === usedByUid) {
+        const expiresAtIso = inviteData?.expiresAt
+          ? (inviteData.expiresAt.toDate ? inviteData.expiresAt.toDate() : new Date(inviteData.expiresAt)).toISOString()
+          : null;
+        return res.status(200).json({
+          valid: true,
+          code: normalizedCode,
+          grantPlan,
+          creatorChoice: grantPlan === "CreatorChoice",
+          expiresAt: expiresAtIso,
+          message: "Invite already applied to your account.",
+          redeemedByYou: true,
+        });
+      }
       return res.status(200).json({
         valid: false,
-        error: "This invite code has reached its usage limit.",
+        error: "This invite code has already been used.",
       });
     }
 

@@ -1004,10 +1004,6 @@ ${contextLines || 'None'}
           <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide mb-2">
             AI Enhancements
           </label>
-          <p className="text-[11px] text-gray-500 dark:text-gray-400 mb-2 leading-snug">
-            <strong>Hashtags</strong> below only adds AI hashtags for <strong>My Page</strong>, <strong>Facebook</strong>, and{" "}
-            <strong>X</strong>. Instagram caption generation still uses hashtags when relevant. Leave it off for clean captions on My Page / Facebook / X.
-          </p>
           {creatorIdentityActive ? (
             <p className="text-[11px] text-primary-600 dark:text-primary-300 mb-2 leading-snug">
               Creator Identity is active by default for your captions. Turn on <strong>Personality Override</strong> when you want this generation to follow the specific tone saved in Settings instead.

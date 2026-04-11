@@ -21,7 +21,7 @@ export const Header: React.FC<HeaderProps> = ({ pageTitle }) => {
   const {
     isDarkMode, toggleTheme, setIsSidebarOpen, handleLogout, setActivePage,
     user, clients, selectedClient, setSelectedClient, notifications,
-    setNotifications, navigateToDashboardWithFilter, activePage, showToast,
+    setNotifications, activePage, showToast,
   } = useAppContext();
 
   if (!user) {
@@ -94,74 +94,51 @@ export const Header: React.FC<HeaderProps> = ({ pageTitle }) => {
   };
   
   const handleToggleNotifications = () => {
-    setIsNotificationsOpen(prev => !prev);
+    setIsNotificationsOpen((prev) => !prev);
   };
 
-  const handleNotificationClick = (notification: Notification) => {
-    // Handle usage limit notifications differently
-    if (notification.messageId?.startsWith('usage-')) {
-      // Navigate to pricing page for usage limit notifications
-      setActivePage('pricing');
-      
-      // Mark notification as read
-      setNotifications(prevNotifications => 
-        prevNotifications.map(n => 
-          n.id === notification.id ? { ...n, read: true } : n
-        )
-      );
-      
-      setIsNotificationsOpen(false);
-      return;
-    }
+  const visibleNotificationIds = useMemo(
+    () => new Set(visibleNotifications.map((n) => n.id)),
+    [visibleNotifications]
+  );
 
-    // New IT support ticket (admin): open Admin Dashboard (IT Support lives under Tools).
-    if (notification.messageId === "admin-support_ticket_created") {
-      setActivePage("admin");
-      setNotifications((prevNotifications) =>
-        prevNotifications.map((n) => (n.id === notification.id ? { ...n, read: true } : n))
-      );
-      setIsNotificationsOpen(false);
-      return;
-    }
+  const dismissReminder = useCallback(
+    (id: string, e?: React.MouseEvent) => {
+      e?.preventDefault();
+      e?.stopPropagation();
+      setNotifications((prev) => prev.filter((n) => n.id !== id));
+    },
+    [setNotifications]
+  );
 
-    // Announcement reminders (offline/studio friendly)
-    if (notification.messageId?.startsWith('announcement-')) {
-      setNotifications(prevNotifications => 
-        prevNotifications.map(n => 
-          n.id === notification.id ? { ...n, read: true } : n
-        )
-      );
-      setIsNotificationsOpen(false);
-      return;
-    }
-    
-    // Social inbox removed; suppress DM/comment navigation.
-    if (true) {
-      setNotifications(prevNotifications => 
-        prevNotifications.map(n => 
-          n.id === notification.id ? { ...n, read: true } : n
-        )
-      );
-      setIsNotificationsOpen(false);
-      return;
-    }
-
-    // Handle regular message notifications (DMs/comments)
-    setSelectedClient(null); // Switch to main account to ensure message is visible
-    navigateToDashboardWithFilter(
-      { platform: 'All', messageType: 'All', sentiment: 'All' }, 
-      notification.messageId
-    );
-    
-    // Mark only the clicked notification as read
-    setNotifications(prevNotifications => 
-      prevNotifications.map(n => 
-        n.id === notification.id ? { ...n, read: true } : n
-      )
-    );
-
+  const clearAllVisibleReminders = useCallback(() => {
+    setNotifications((prev) => prev.filter((n) => !visibleNotificationIds.has(n.id)));
     setIsNotificationsOpen(false);
-  };
+  }, [setNotifications, visibleNotificationIds]);
+
+  const clearReadVisibleReminders = useCallback(() => {
+    setNotifications((prev) =>
+      prev.filter((n) => !(visibleNotificationIds.has(n.id) && n.read))
+    );
+  }, [setNotifications, visibleNotificationIds]);
+
+  /** Row tap: mark read and close only — no surprise navigation (pricing/admin/dashboard). */
+  const handleReminderRowActivate = useCallback((notification: Notification) => {
+    setNotifications((prev) =>
+      prev.map((n) => (n.id === notification.id ? { ...n, read: true } : n))
+    );
+    setIsNotificationsOpen(false);
+  }, []);
+
+  const openPricingFromReminder = useCallback(
+    (e: React.MouseEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      setActivePage('pricing');
+      setIsNotificationsOpen(false);
+    },
+    [setActivePage]
+  );
 
   const handleMarkAllAsRead = () => {
     setNotifications(prevNotifications => 
@@ -259,18 +236,56 @@ export const Header: React.FC<HeaderProps> = ({ pageTitle }) => {
             </button>
             {isNotificationsOpen && (
                 <div className="absolute right-0 mt-2 w-80 bg-white dark:bg-gray-800 rounded-lg shadow-lg ring-1 ring-black ring-opacity-5 z-20 flex flex-col">
-                    <div className="p-4 border-b border-gray-200 dark:border-gray-700">
-                        <h3 className="font-semibold text-gray-900 dark:text-white">
+                    <div className="p-3 border-b border-gray-200 dark:border-gray-700 flex flex-wrap items-center justify-between gap-2">
+                        <h3 className="font-semibold text-gray-900 dark:text-white text-sm">
                           {OFFLINE_MODE ? 'Reminders' : 'Account & usage'}
                         </h3>
+                        {visibleNotifications.length > 0 ? (
+                          <div className="flex flex-wrap items-center justify-end gap-1.5">
+                            {hasUnreadNotifications ? (
+                              <button
+                                type="button"
+                                onClick={handleMarkAllAsRead}
+                                className="text-xs font-medium text-primary-600 dark:text-primary-400 hover:underline"
+                              >
+                                Mark all read
+                              </button>
+                            ) : null}
+                            {visibleNotifications.some((n) => n.read) ? (
+                              <button
+                                type="button"
+                                onClick={clearReadVisibleReminders}
+                                className="text-xs font-medium rounded-md border border-gray-200 dark:border-gray-600 px-2 py-1 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700/80"
+                              >
+                                Clear read
+                              </button>
+                            ) : null}
+                            <button
+                              type="button"
+                              onClick={clearAllVisibleReminders}
+                              className="text-xs font-medium rounded-md border border-gray-200 dark:border-gray-600 px-2 py-1 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700/80"
+                            >
+                              Clear all
+                            </button>
+                          </div>
+                        ) : null}
                     </div>
                     <div className="py-1 max-h-80 overflow-y-auto">
                         {visibleNotifications.length > 0 ? visibleNotifications.map(notification => {
                             const isUsageNotification = notification.messageId?.startsWith('usage-');
                             const isItTicketNotification = notification.messageId === 'admin-support_ticket_created';
                             return (
-                                <button key={notification.id} onClick={() => handleNotificationClick(notification)} className="w-full text-left px-4 py-3 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
-                                    <div className="flex items-start">
+                                <div
+                                  key={notification.id}
+                                  className="flex items-stretch border-b border-gray-100 dark:border-gray-700/80 last:border-b-0"
+                                >
+                                  <div className="min-w-0 flex-1 px-4 py-3 hover:bg-gray-100/80 dark:hover:bg-gray-700/50 transition-colors">
+                                    <button
+                                      type="button"
+                                      onClick={() => handleReminderRowActivate(notification)}
+                                      className="w-full text-left hover:opacity-90 transition-opacity"
+                                    >
+                                      <div className="flex items-start">
                                         <div className="flex-shrink-0 mt-1">
                                           <div className="relative">
                                             <div className={`p-2 rounded-full ${!notification.read ? (isUsageNotification ? 'bg-yellow-100 dark:bg-yellow-900/50' : isItTicketNotification ? 'bg-amber-100 dark:bg-amber-900/40' : 'bg-primary-100 dark:bg-primary-900/50') : 'bg-gray-100 dark:bg-gray-700'}`}>
@@ -283,8 +298,28 @@ export const Header: React.FC<HeaderProps> = ({ pageTitle }) => {
                                             <p className={`text-sm font-medium ${!notification.read ? 'text-gray-900 dark:text-white' : 'text-gray-600 dark:text-gray-300'}`}>{notification.text}</p>
                                             <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{notification.timestamp}</p>
                                         </div>
-                                    </div>
-                                </button>
+                                      </div>
+                                    </button>
+                                    {isUsageNotification ? (
+                                      <button
+                                        type="button"
+                                        onClick={openPricingFromReminder}
+                                        className="mt-2 text-xs font-medium text-primary-600 dark:text-primary-400 hover:underline"
+                                      >
+                                        View plans & billing
+                                      </button>
+                                    ) : null}
+                                  </div>
+                                  <button
+                                    type="button"
+                                    aria-label={`Dismiss: ${notification.text?.slice(0, 40) || 'notification'}`}
+                                    title="Dismiss"
+                                    onClick={(e) => dismissReminder(notification.id, e)}
+                                    className="shrink-0 px-3 text-gray-400 hover:text-gray-700 hover:bg-gray-100 dark:hover:bg-gray-700 dark:hover:text-gray-200 border-l border-gray-200 dark:border-gray-700"
+                                  >
+                                    <span className="text-lg leading-none" aria-hidden>×</span>
+                                  </button>
+                                </div>
                             );
                         }) : (
                            <p className="text-center text-sm text-gray-500 dark:text-gray-400 py-6">
@@ -292,16 +327,6 @@ export const Header: React.FC<HeaderProps> = ({ pageTitle }) => {
                            </p> 
                         )}
                     </div>
-                    {hasUnreadNotifications && (
-                      <div className="p-2 border-t border-gray-200 dark:border-gray-700">
-                          <button
-                              onClick={handleMarkAllAsRead}
-                              className="w-full text-center text-sm font-medium text-primary-600 dark:text-primary-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md py-1.5 transition-colors"
-                          >
-                              Mark all as read
-                          </button>
-                      </div>
-                    )}
                 </div>
             )}
           </div>

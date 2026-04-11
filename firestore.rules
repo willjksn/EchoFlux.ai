@@ -144,19 +144,27 @@ service cloud.firestore {
        * Client reads to hide message notifications for muted conversations.
        */
       match /dm_muted_threads/{threadId} {
-        allow read: if isOwner(userId);
+        allow read: if isOwner(userId) || isAdmin();
         allow write: if false;
       }
 
+      /** Compose draft cards — client persists via Compose.tsx (users/{uid}/compose_media/{id}). */
+      match /compose_media/{mediaId} {
+        allow read: if (isAuthenticated() && request.auth.uid == userId) || isAdmin();
+        allow create, update, delete: if (isAuthenticated() && request.auth.uid == userId) || isAdmin();
+      }
+
       /** ---------------------------------------------------
-       * USER SUBCOLLECTIONS (messages, posts, CRM, calendar, voices, strategies, media_library, etc.)
+       * USER SUBCOLLECTIONS (messages, posts, CRM, calendar, voices, media_library, onlyfans_media_vault, etc.)
        * ----------------------------------------------------
-       * - Users can fully manage their own subcollections
-       * - Admins get full access to all subcollections
+       * Recursive wildcard must be the final path segment (Firestore rules requirement).
+       * Previous `{subCollection=**}/{docId}` pattern did not apply reliably — Admins could not list peers' media_library.
+       * Writes under dm_muted_threads/* are denied (server/Admin SDK only).
        */
-      match /{subCollection=**}/{docId} {
-        allow read, write: if isAuthenticated() && request.auth.uid == userId;
-        allow read, write: if isAdmin();
+      match /{document=**} {
+        allow read: if (isAuthenticated() && request.auth.uid == userId) || isAdmin();
+        allow write: if !document.matches('dm_muted_threads/.*')
+          && ((isAuthenticated() && request.auth.uid == userId) || isAdmin());
       }
     }
 

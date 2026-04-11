@@ -17,6 +17,21 @@ import type { Plan } from '../types';
 import { isMaintenanceMode, canBypassMaintenance } from '../src/utils/maintenance';
 import { isInviteOnlyMode } from '../src/utils/inviteOnly';
 
+/** Optional ID token so validateInviteCode can treat “already used” as valid for the redeemer (CreatorChoice / retries). */
+async function inviteValidateFetchHeaders(): Promise<Record<string, string>> {
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  try {
+    const u = auth.currentUser;
+    if (u) {
+      const t = await u.getIdToken();
+      headers.Authorization = `Bearer ${t}`;
+    }
+  } catch {
+    /* ignore */
+  }
+  return headers;
+}
+
 /* ---------- Terms & Privacy content (unchanged) ---------- */
 
 const Terms: React.FC = () => (
@@ -198,11 +213,14 @@ export const LoginModal: React.FC<LoginModalProps> = ({
         setInviteCode(pendingCode.trim().toUpperCase());
         // Auto-validate the invite code
         setIsValidatingInvite(true);
-        fetch('/api/validateInviteCode', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ inviteCode: pendingCode.trim().toUpperCase() }),
-        })
+        void (async () => {
+          const headers = await inviteValidateFetchHeaders();
+          return fetch('/api/validateInviteCode', {
+            method: 'POST',
+            headers,
+            body: JSON.stringify({ inviteCode: pendingCode.trim().toUpperCase() }),
+          });
+        })()
           .then((resp) => resp.json().catch(() => ({})))
           .then((data) => {
             const gp = data?.grantPlan;
@@ -413,9 +431,10 @@ export const LoginModal: React.FC<LoginModalProps> = ({
           // Skip re-validation if already validated successfully
           if (inviteCodeValid !== true || !grantPlan) {
             try {
+              const headers = await inviteValidateFetchHeaders();
               const resp = await fetch('/api/validateInviteCode', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers,
                 body: JSON.stringify({ inviteCode: inviteCode.trim() }),
               });
               const data = await resp.json().catch(() => ({}));
@@ -628,9 +647,10 @@ export const LoginModal: React.FC<LoginModalProps> = ({
       // If an invite code is provided, validate it before opening popup (fast fail)
       if (startedGoogleSignup && hasInviteCode) {
         try {
+          const headers = await inviteValidateFetchHeaders();
           const resp = await fetch('/api/validateInviteCode', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers,
             body: JSON.stringify({ inviteCode: inviteCode.trim() }),
           });
           const data = await resp.json().catch(() => ({}));
@@ -888,9 +908,10 @@ export const LoginModal: React.FC<LoginModalProps> = ({
                         if (inviteCode.trim().length >= 4) {
                           setIsValidatingInvite(true);
                           try {
+                            const headers = await inviteValidateFetchHeaders();
                             const resp = await fetch('/api/validateInviteCode', {
                               method: 'POST',
-                              headers: { 'Content-Type': 'application/json' },
+                              headers,
                               body: JSON.stringify({ inviteCode: inviteCode.trim() }),
                             });
                             const data = await resp.json();
