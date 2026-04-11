@@ -129,6 +129,16 @@ export function getAdminDb() {
   }
 }
 
+/** Like getAdminDb() but never throws (avoids Vercel FUNCTION_INVOCATION_FAILED on misconfigured env). */
+export function tryGetAdminDb(): ReturnType<typeof getAdminDb> | null {
+  try {
+    return getAdminDb();
+  } catch (e) {
+    console.error("tryGetAdminDb: Firebase Admin unavailable:", e);
+    return null;
+  }
+}
+
 // Lazy export for backward compatibility - use getAdminDb() instead
 // This Proxy export can cause issues in serverless environments
 // Use getAdminDb() function instead

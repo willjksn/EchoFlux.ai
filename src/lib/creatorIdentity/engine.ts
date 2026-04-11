@@ -5,15 +5,15 @@ import type {
   MonetizationFit,
   NicheCategory,
   AudienceDriver,
-} from './types';
-import { CREATOR_IDENTITY_QUESTIONS } from './questionBank';
+} from './types.js';
+import { CREATOR_IDENTITY_QUESTIONS } from './questionBank.js';
 import {
   applyOptionRule,
   applyRankedMonetization,
   applyRankedNiches,
   emptyBuckets,
-} from './scoringRules';
-import { synthesizeGeneratedProfile } from './synthesize';
+} from './scoringRules.js';
+import { synthesizeGeneratedProfile } from './synthesize.js';
 
 function topKeys(scores: Record<string, number>, n: number): string[] {
   return Object.entries(scores)

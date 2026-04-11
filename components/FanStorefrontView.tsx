@@ -4715,6 +4715,7 @@ export const FanStorefrontView: React.FC = () => {
                 className="storefront-header-notify-bell"
                 onNavigate={handleFanHubNotificationNavigate}
                 hidden={memberSuppressDmNotifications}
+                showToast={showToast}
               />
             )}
             {isLoggedIn && nextSessionAlert ? (

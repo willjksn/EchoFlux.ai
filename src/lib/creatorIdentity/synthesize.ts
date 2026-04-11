@@ -5,7 +5,7 @@ import type {
   MonetizationFit,
   NicheCategory,
   AudienceDriver,
-} from './types';
+} from './types.js';
 
 const NICHE_LABEL: Record<string, string> = {
   lifestyle: 'Lifestyle',

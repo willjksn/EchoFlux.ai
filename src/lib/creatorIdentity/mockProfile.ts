@@ -1,5 +1,5 @@
-import { buildCreatorIdentityProfile } from './engine';
-import type { CreatorIdentityDraftAnswers } from './types';
+import { buildCreatorIdentityProfile } from './engine.js';
+import type { CreatorIdentityDraftAnswers } from './types.js';
 
 /** Minimal structured answers for Storybook / manual QA of the results UI. */
 export const MOCK_CREATOR_IDENTITY_ANSWERS: CreatorIdentityDraftAnswers = {

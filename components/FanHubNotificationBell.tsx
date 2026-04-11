@@ -59,6 +59,8 @@ export type FanHubNotificationBellProps = {
   onNavigate?: (payload: FanHubNotificationNavigatePayload) => void;
   /** When true, render nothing (e.g. live premium chat session — DM pings suppressed). */
   hidden?: boolean;
+  /** Optional toast when dismiss / clear succeeds or fails (e.g. from `useAppContext` or `useUI`). */
+  showToast?: (message: string, type: "success" | "error" | "info") => void;
 };
 
 function notificationDataAsStrings(raw: unknown): Record<string, string> {
@@ -105,11 +107,14 @@ export const FanHubNotificationBell: React.FC<FanHubNotificationBellProps> = ({
   compact = false,
   onNavigate,
   hidden = false,
+  showToast,
 }) => {
   const [uid, setUid] = useState<string | null>(() => auth.currentUser?.uid ?? null);
   const [open, setOpen] = useState(false);
   const [rows, setRows] = useState<Row[]>([]);
   const [listenError, setListenError] = useState<string | null>(null);
+  const [clearingAll, setClearingAll] = useState(false);
+  const [dismissingIds, setDismissingIds] = useState<Set<string>>(() => new Set());
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const mutedThreadIds = useDmMutedThreadIds(uid);
 
@@ -186,15 +191,55 @@ export const FanHubNotificationBell: React.FC<FanHubNotificationBellProps> = ({
 
   const markAllRead = async () => {
     if (!uid) return;
-    await Promise.all(rows.filter((r) => !r.read).map((r) => markRead(r.id)));
+    const unreadRows = rows.filter((r) => !r.read);
+    if (unreadRows.length === 0) return;
+    try {
+      await Promise.all(unreadRows.map((r) => markRead(r.id)));
+      showToast?.("Marked all as read", "success");
+    } catch (e) {
+      console.error("markAllRead", e);
+      showToast?.("Could not update notifications", "error");
+    }
+  };
+
+  const dismissNotification = async (id: string, e?: React.MouseEvent) => {
+    e?.preventDefault();
+    e?.stopPropagation();
+    if (!uid) return;
+    setDismissingIds((prev) => new Set(prev).add(id));
+    try {
+      await deleteDoc(doc(db, "users", uid, "notifications", id));
+      showToast?.("Notification removed", "success");
+    } catch (err) {
+      console.error("dismissNotification", err);
+      showToast?.("Could not remove notification", "error");
+    } finally {
+      setDismissingIds((prev) => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
+    }
   };
 
   const clearAllNotifications = async () => {
-    if (!uid || rows.length === 0) return;
+    if (!uid || rows.length === 0 || clearingAll) return;
+    if (
+      !window.confirm(
+        `Remove all ${rows.length} notification${rows.length === 1 ? "" : "s"} from this list? This cannot be undone.`
+      )
+    ) {
+      return;
+    }
+    setClearingAll(true);
     try {
       await Promise.all(rows.map((r) => deleteDoc(doc(db, "users", uid, "notifications", r.id))));
+      showToast?.("All notifications cleared", "success");
     } catch (e) {
       console.error("clearAllNotifications", e);
+      showToast?.("Could not clear all notifications", "error");
+    } finally {
+      setClearingAll(false);
     }
   };
 
@@ -245,14 +290,15 @@ export const FanHubNotificationBell: React.FC<FanHubNotificationBellProps> = ({
           role="dialog"
           aria-label="Notifications"
         >
-          <div className="flex items-center justify-between gap-2 px-3 py-2 border-b border-black/5 dark:border-slate-700">
+          <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 border-b border-black/5 dark:border-slate-700">
             <span className="text-sm font-semibold text-gray-900 dark:text-white">Notifications</span>
-            <div className="flex items-center gap-3">
+            <div className="flex flex-wrap items-center justify-end gap-2">
               {unread > 0 ? (
                 <button
                   type="button"
                   onClick={() => void markAllRead()}
-                  className="text-xs font-medium text-pink-600 dark:text-pink-400 hover:underline"
+                  disabled={clearingAll}
+                  className="text-xs font-medium text-pink-600 dark:text-pink-400 hover:underline disabled:opacity-50"
                 >
                   Mark all read
                 </button>
@@ -261,9 +307,10 @@ export const FanHubNotificationBell: React.FC<FanHubNotificationBellProps> = ({
                 <button
                   type="button"
                   onClick={() => void clearAllNotifications()}
-                  className="text-xs font-medium text-gray-500 dark:text-gray-300 hover:underline"
+                  disabled={clearingAll}
+                  className="text-xs font-medium rounded-md border border-gray-200 dark:border-slate-600 px-2 py-1 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-800 disabled:opacity-50"
                 >
-                  Clear all
+                  {clearingAll ? "Clearing…" : "Clear all"}
                 </button>
               ) : null}
             </div>
@@ -280,8 +327,9 @@ export const FanHubNotificationBell: React.FC<FanHubNotificationBellProps> = ({
                     r.type === "new_message" &&
                     r.threadId &&
                     mutedThreadIds.has(r.threadId);
+                  const dismissing = dismissingIds.has(r.id);
                   return (
-                    <li key={r.id}>
+                    <li key={r.id} className="flex items-stretch gap-0">
                       <button
                         type="button"
                         onClick={() => {
@@ -295,7 +343,7 @@ export const FanHubNotificationBell: React.FC<FanHubNotificationBellProps> = ({
                             data: r.data,
                           });
                         }}
-                        className={`w-full text-left px-3 py-2.5 hover:bg-black/[0.03] dark:hover:bg-white/5 ${
+                        className={`min-w-0 flex-1 text-left px-3 py-2.5 hover:bg-black/[0.03] dark:hover:bg-white/5 ${
                           r.read
                             ? "opacity-80"
                             : mutedDm
@@ -303,7 +351,7 @@ export const FanHubNotificationBell: React.FC<FanHubNotificationBellProps> = ({
                               : "bg-pink-50/50 dark:bg-pink-950/20"
                         }`}
                       >
-                        <p className="text-sm font-medium text-gray-900 dark:text-white pr-6 flex items-center gap-2 flex-wrap">
+                        <p className="text-sm font-medium text-gray-900 dark:text-white pr-1 flex items-center gap-2 flex-wrap">
                           {r.title}
                           {mutedDm ? (
                             <span className="text-[10px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
@@ -319,6 +367,22 @@ export const FanHubNotificationBell: React.FC<FanHubNotificationBellProps> = ({
                             {new Date(r.createdAtMs).toLocaleString()}
                           </p>
                         ) : null}
+                      </button>
+                      <button
+                        type="button"
+                        aria-label={`Dismiss: ${r.title}`}
+                        title="Dismiss"
+                        disabled={dismissing || clearingAll}
+                        onClick={(e) => void dismissNotification(r.id, e)}
+                        className="shrink-0 px-2.5 text-gray-400 hover:text-gray-700 hover:bg-black/[0.04] dark:hover:bg-white/10 dark:hover:text-gray-200 disabled:opacity-40 border-l border-black/5 dark:border-slate-700"
+                      >
+                        {dismissing ? (
+                          <span className="text-[10px] font-medium">…</span>
+                        ) : (
+                          <svg className="w-4 h-4 mx-auto" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+                            <path d="M18 6L6 18M6 6l12 12" strokeLinecap="round" />
+                          </svg>
+                        )}
                       </button>
                     </li>
                   );

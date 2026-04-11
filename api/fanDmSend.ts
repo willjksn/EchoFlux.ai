@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { getAdminDb } from "./_firebaseAdmin.js";
+import { tryGetAdminDb } from "./_firebaseAdmin.js";
 import { verifyAuth } from "./verifyAuth.js";
 import { enforceRateLimit } from "./_rateLimit.js";
 import {
@@ -61,6 +61,7 @@ async function hasActiveOrPausedChatSessionForThread(db: Firestore, creatorId: s
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+  try {
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
   }
@@ -106,8 +107,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   if (threadIdParam) {
     threadId = threadIdParam;
-    const db = getAdminDb();
-    if (!db) return res.status(500).json({ error: "Database unavailable" });
+    const db = tryGetAdminDb();
+    if (!db) {
+      return res.status(503).json({
+        error: "Database unavailable",
+        code: "FIREBASE_ADMIN_NOT_CONFIGURED",
+        hint:
+          "Firebase Admin failed to initialize. In Vercel → Project → Settings → Environment Variables, set FIREBASE_SERVICE_ACCOUNT_KEY_BASE64 or FIREBASE_ADMIN_KEY for the environment you deployed (Production vs Preview), then redeploy.",
+      });
+    }
     const threadSnap = await db.collection(FAN_DM_THREADS).doc(threadId).get();
     if (!threadSnap.exists) {
       return res.status(404).json({ error: "Thread not found" });
@@ -159,8 +167,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
-    const db = getAdminDb();
-    if (!db) return res.status(500).json({ error: "Database unavailable" });
+    const db = tryGetAdminDb();
+    if (!db) {
+      return res.status(503).json({
+        error: "Database unavailable",
+        code: "FIREBASE_ADMIN_NOT_CONFIGURED",
+        hint:
+          "Firebase Admin failed to initialize. In Vercel → Project → Settings → Environment Variables, set FIREBASE_SERVICE_ACCOUNT_KEY_BASE64 or FIREBASE_ADMIN_KEY for the environment you deployed (Production vs Preview), then redeploy.",
+      });
+    }
 
     // Ban check: if fan is sending to creator, ensure fan is not blocked
     if (uid === fanIdFinal && (await isFanBlocked(db, creatorIdFinal, fanIdFinal))) {
@@ -262,5 +277,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       error: "Failed to send message",
       details: process.env.NODE_ENV === "development" ? (e as Error)?.message : undefined,
     });
+  }
+  } catch (fatal: unknown) {
+    console.error("fanDmSend uncaught:", fatal);
+    if (!res.headersSent) {
+      return res.status(500).json({
+        error: "Failed to process request",
+        code: "UNHANDLED",
+        hint:
+          "See Vercel → this project → Logs. Typical causes: Firestore error during thread load, rate limiter failure, or an unexpected exception. Confirm FIREBASE_* env vars on this deployment.",
+        details:
+          process.env.VERCEL_ENV === "preview" || process.env.NODE_ENV === "development"
+            ? fatal instanceof Error
+              ? fatal.message
+              : String(fatal)
+            : undefined,
+      });
+    }
   }
 }

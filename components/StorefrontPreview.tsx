@@ -2040,6 +2040,7 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
                 compact
                 className="storefront-preview-notify-bell"
                 onNavigate={handlePreviewNotificationNavigate}
+                showToast={showToast}
               />
               {/* Profile avatar button */}
               <button

@@ -1,4 +1,4 @@
-import type { ScoreBuckets } from './types';
+import type { ScoreBuckets } from './types.js';
 
 /** Partial deltas per answer option id (questionId:optionId). */
 export type RuleDelta = Partial<{

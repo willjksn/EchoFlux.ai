@@ -156,7 +156,7 @@ export const PremiumStudioLayout: React.FC<PremiumStudioLayoutProps> = ({ childr
   const creatorId = isFanHub ? auth.currentUser?.uid : undefined;
   const fanTheme = useCreatorFanHubTheme(creatorId);
   const [previewTheme, setPreviewTheme] = useState<Partial<typeof fanTheme> | null>(null);
-  const { isDarkMode } = useUI();
+  const { isDarkMode, showToast } = useUI();
   useEffect(() => {
     if (!isFanHub || typeof window === 'undefined') {
       setPreviewTheme(null);
@@ -316,6 +316,7 @@ export const PremiumStudioLayout: React.FC<PremiumStudioLayoutProps> = ({ childr
             className="shrink-0"
             onNavigate={handleFanHubNotificationNavigate}
             hidden={suppressFanHubDmNotifications}
+            showToast={showToast}
           />
         ) : null}
       </div>

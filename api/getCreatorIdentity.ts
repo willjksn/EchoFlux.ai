@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { verifyAuth } from "./verifyAuth.js";
-import { getAdminDb } from "./_firebaseAdmin.js";
+import { tryGetAdminDb } from "./_firebaseAdmin.js";
 import { isCreatorIdentityPlan } from "./_creatorIdentityElite.js";
 import { getCreatorIdentityCurrent } from "./_creatorIdentityFirestore.js";
 
@@ -17,9 +17,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
       return;
     }
 
-    const db = getAdminDb();
+    const db = tryGetAdminDb();
     if (!db) {
-      res.status(500).json({ error: "Database unavailable" });
+      res.status(503).json({
+        error: "Database unavailable",
+        code: "FIREBASE_ADMIN_NOT_CONFIGURED",
+        hint:
+          "Set FIREBASE_SERVICE_ACCOUNT_KEY_BASE64 or FIREBASE_ADMIN_KEY on this Vercel environment (Production vs Preview), then redeploy.",
+      });
       return;
     }
 

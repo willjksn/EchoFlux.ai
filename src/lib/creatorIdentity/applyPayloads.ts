@@ -1,4 +1,4 @@
-import type { CreatorIdentityProfile, PremiumStudioIdentityDefaults, WitmeAutofillPayload } from './types';
+import type { CreatorIdentityProfile, PremiumStudioIdentityDefaults, WitmeAutofillPayload } from './types.js';
 
 function asObjectRecord(x: unknown): Record<string, unknown> {
   if (x && typeof x === 'object' && !Array.isArray(x)) {

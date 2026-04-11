@@ -1,4 +1,4 @@
-import type { CreatorIdentityQuestion } from './types';
+import type { CreatorIdentityQuestion } from './types.js';
 
 export const CREATOR_IDENTITY_PROMISE =
   "Let's figure out what people are really drawn to you for — and what they'll pay you for.";
