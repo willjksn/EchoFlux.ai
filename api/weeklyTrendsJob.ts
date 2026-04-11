@@ -90,7 +90,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
       },
       {
         category: "instagram_trends",
-        query: "Instagram algorithm updates 2024 2025 best practices Reels",
+        query:
+          "Instagram algorithm ranking signals 2025 2026 Reels Explore discovery best practices creator tips engagement",
+      },
+      {
+        category: "instagram_reels_growth",
+        query:
+          "Instagram Reels growth strategies 2025 2026 hooks retention trending formats short video creator",
+      },
+      {
+        category: "instagram_discoverability",
+        query:
+          "Instagram hashtags discoverability 2025 2026 niche mix saves shares comments growth creator strategy",
       },
       {
         category: "tiktok_trends",

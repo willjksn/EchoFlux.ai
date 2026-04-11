@@ -142,6 +142,9 @@ ${toneSettings.emojiLevel !== undefined ? `- Emoji usage (${toneSettings.emojiLe
     const platforms = platformFocus && platformFocus !== 'Mixed / All' 
       ? [platformFocus] 
       : ['Instagram', 'TikTok', 'X', 'LinkedIn', 'Facebook', 'Threads', 'YouTube', 'Pinterest'];
+
+    /** Scheduled Tavily trends (unchanged cadence); strategy prompt uses this branch only for Instagram-only plans. */
+    const isInstagramFocus = platformFocus === 'Instagram';
     
     // Detect if this is for OnlyFans platform
     const isOnlyFansPlatform = platformFocus === 'OnlyFans' || 
@@ -281,7 +284,9 @@ Use this analytics data to inform your strategy:
 3. Create content similar to what's getting high engagement
 4. For image ideas: Suggest visual styles/types that match high-performing content
 5. For video ideas: Suggest video formats/types that align with trending engagement patterns
-`;
+${isInstagramFocus ? `
+6. Instagram-only strategy: Weight Reels vs Posts vs Stories using what actually drove engagement above; propose more of what worked, with controlled experiments on hooks and formats.
+` : ''}`;
     }
 
     // Build explicitness context based on user's explicitness level for OnlyFans
@@ -458,6 +463,19 @@ Incorporate relevant hashtags into the strategy recommendations where appropriat
    - Incorporate proven content formats, engagement tactics, and platform strategies from the research
    - Use trending topics and hashtags identified in the research`;
 
+    const instagramFocusGuidance = isInstagramFocus
+      ? `
+INSTAGRAM-ONLY STRATEGY (platform focus is Instagram only; trend context comes from scheduled research above — same cadence, no live pulls):
+- Discovery and reach: prioritize Reels-first concepts — strong opening frame, tight pacing, native vertical feel; design for watch time, saves, comments, and shares. Do not promise virality or guaranteed algorithm outcomes.
+- Use scheduled trend data with an Instagram lens (categories such as instagram_trends, instagram_reels_growth, instagram_discoverability, video_content_trends, engagement_strategies, hashtag_strategies when present in context above).
+- FORMAT MIX across all items in this plan: target roughly 60–70% Reels, 15–25% Feed Posts, 10–20% Stories — keep variety but skew heavily Reels for discovery. Use carousels only when the idea clearly needs multi-slide education or storytelling.
+- Captions: hook in the first line; scannable lines; blend broader-discovery hashtags with niche tags where appropriate.
+${analyticsData
+          ? `- ANALYTICS DATA is included above: prioritize topics, formats, and posting days that already perform well; propose iterations and tests that build on winners.`
+          : `- No analytics payload: still run Reels-heavy plan; in metrics/milestones, suggest tracking saves, shares, reach, and profile visits via Instagram Insights.`}
+`
+      : "";
+
     const prompt = `
 ${strategistOpening}
 
@@ -492,6 +510,7 @@ Strategy Parameters:
 - Duration: ${durationWeeks} week${durationWeeks === 1 ? '' : 's'}${durationWeeks === 1 ? ' (ONE WEEK ONLY - generate content for 7 days, not multiple weeks)' : ''}
 ${toneStyleGuidance}
 ${safeContextDescription ? `\nADDITIONAL CONTEXT & REQUIREMENTS:\n${safeContextDescription}\n\nUse this additional context to tailor the strategy according to the user's specific requirements, preferences, and desired approach.\n` : ''}
+${instagramFocusGuidance}
 
 CRITICAL INSTRUCTIONS FOR GOAL ACHIEVEMENT:
 1. Every content piece must directly contribute to achieving "${goalStr}" - evaluate each topic against: "Does this help achieve ${goalStr}?"
@@ -513,13 +532,15 @@ ${primaryStrategySourceInstruction}
    - Each week should have clear milestones toward ${goalStr}
    - Content should be trackable (can measure if it's working)
    - Include variety but maintain focus on the primary goal
-8. Platform optimization:
+8. Platform optimization:${isInstagramFocus ? `
+   - Instagram ONLY: Follow INSTAGRAM-ONLY STRATEGY above. Every item: "platform": "Instagram". Reels-heavy mix (~60–70% Reels). Leverage analytics when provided.
+   - Do not assign topics to other platforms.` : `
    - Instagram: Visual storytelling, Reels for reach, Stories for engagement
    - TikTok: Trending formats, quick hooks, entertainment value
    - X/Twitter: Thought leadership, timely takes, conversation starters
    - LinkedIn: Professional insights, industry expertise, B2B value
    - YouTube: Educational deep-dives, tutorials, long-form value
-   - Adapt content format to platform strengths while maintaining goal focus
+   - Adapt content format to platform strengths while maintaining goal focus`}
 
 Return ONLY valid JSON in this exact structure:${durationWeeks === 1 ? '\n⚠️ CRITICAL: The "weeks" array must contain EXACTLY ONE object. Do NOT add multiple week objects.' : ''}
 
@@ -552,7 +573,7 @@ Return ONLY valid JSON in this exact structure:${durationWeeks === 1 ? '\n⚠️
 
 Requirements:
 ${durationWeeks === 1 ? '⚠️ CRITICAL: Generate EXACTLY 1 WEEK (7 days) of content. DO NOT generate 2 or more weeks.' : `- Generate ${durationWeeks} weeks of content`}
-- ${durationWeeks === 1 ? 'Generate 10-14 detailed content items for the single week' : `Each week should have 5-7 content items`} (mix of Posts, Reels, and Stories)
+- ${durationWeeks === 1 ? 'Generate 10-14 detailed content items for the single week' : `Each week should have 5-7 content items`} (mix of Posts, Reels, and Stories)${isInstagramFocus ? ' — Instagram-only: obey Reels-heavy FORMAT MIX in INSTAGRAM-ONLY STRATEGY; every item platform "Instagram"' : ''}
  - Each content item MUST include ALL of these fields with detailed information:
    * topic: Specific, detailed content idea (not just a one-word topic)
    * description: Detailed description with specific angles and execution details (2-3 sentences minimum)
@@ -616,7 +637,8 @@ IMPORTANT: When generating imageIdeas and videoIdeas:
 - Base suggestions on what types of images/videos are getting high engagement according to the analytics
 - Suggest visual styles, compositions, and formats that match trending content types
 - Consider the engagement patterns - if certain visual styles are working, incorporate similar approaches
-- Make image/video type suggestions specific (e.g., "Behind-the-scenes photo with natural lighting", "Quick tutorial video with text overlays", "Product showcase with lifestyle context")
+- Make image/video type suggestions specific (e.g., "Behind-the-scenes photo with natural lighting", "Quick tutorial video with text overlays", "Product showcase with lifestyle context")${isInstagramFocus ? `
+- Instagram: Prioritize Reels-oriented videoIdeas (hook-first, pattern interrupt, on-screen text where it fits winners); align imageIdeas with feed/carousel strengths shown in analytics.` : ''}
 ` : ''}
 ${personalityCaptionFinalCheck}
 `;
