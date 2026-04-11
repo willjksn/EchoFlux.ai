@@ -579,7 +579,7 @@ export const FanHubMessages: React.FC = () => {
         body.attachmentUrl = attachments[0].url;
         body.attachmentType = attachments[0].type;
       } else if (attachments.length > 1) {
-        body.attachments = attachments;
+        body.attachments = attachments.map((a) => ({ url: a.url, type: a.type }));
       }
       const res = await fetch("/api/fanDmSend", {
         method: "POST",

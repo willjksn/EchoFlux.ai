@@ -15,6 +15,36 @@ import {
 import { sendFanNotification } from "./_fanNotifications.js";
 import type { Firestore } from "firebase-admin/firestore";
 
+/** Vercel usually parses JSON; some proxies / versions may leave a string or Buffer. */
+function parseFanDmRequestBody(req: VercelRequest): Record<string, unknown> {
+  const b = req.body as unknown;
+  if (b == null || b === "") return {};
+  if (typeof b === "string") {
+    try {
+      const parsed = JSON.parse(b) as unknown;
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+        return parsed as Record<string, unknown>;
+      }
+      return {};
+    } catch {
+      return {};
+    }
+  }
+  if (typeof Buffer !== "undefined" && Buffer.isBuffer(b)) {
+    try {
+      const parsed = JSON.parse(b.toString("utf8")) as unknown;
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+        return parsed as Record<string, unknown>;
+      }
+      return {};
+    } catch {
+      return {};
+    }
+  }
+  if (typeof b === "object" && !Array.isArray(b)) return b as Record<string, unknown>;
+  return {};
+}
+
 async function hasActiveOrPausedChatSessionForThread(db: Firestore, creatorId: string, threadId: string): Promise<boolean> {
   const snap = await db
     .collection("chatSessions")
@@ -51,14 +81,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   });
   if (!ok) return;
 
-  const body = (req.body || {}) as Record<string, unknown>;
+  const body = parseFanDmRequestBody(req);
   const creatorId = body.creatorId as string;
   const fanId = body.fanId as string;
   const threadIdParam = body.threadId as string | undefined;
   const content = typeof body.content === "string" ? body.content.trim() : "";
-  const attachmentList = parseIncomingFanDmAttachments(body as Record<string, unknown>);
+  const attachmentList = parseIncomingFanDmAttachments(body);
   if (!content && attachmentList.length === 0) {
-    return res.status(400).json({ error: "content or at least one attachment is required" });
+    const hadAttachmentsKey = Object.prototype.hasOwnProperty.call(body, "attachments");
+    return res.status(400).json({
+      error: "content or at least one attachment is required",
+      ...(hadAttachmentsKey
+        ? {
+            code: "ATTACHMENTS_UNREADABLE",
+            hint: "The server could not read any valid items from `attachments`. Each entry needs { url, type } where type is image|video|audio.",
+          }
+        : {}),
+    });
   }
 
   let creatorIdFinal: string;

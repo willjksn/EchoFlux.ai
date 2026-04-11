@@ -5,19 +5,55 @@ export const DM_MAX_ATTACHMENTS_PER_MESSAGE = 10;
 
 export type DmAttachmentItem = { url: string; type: DmAttachmentKind };
 
+/** Some proxies / runtimes turn JSON arrays into `{ "0": {...}, "1": {...} }`. */
+function attachmentArrayCandidates(raw: unknown): unknown[] {
+  if (Array.isArray(raw)) return raw;
+  if (raw && typeof raw === "object" && !Array.isArray(raw)) {
+    const o = raw as Record<string, unknown>;
+    const keys = Object.keys(o);
+    if (keys.length === 0) return [];
+    const allNumeric = keys.every((k) => /^\d+$/.test(k));
+    if (allNumeric) {
+      return keys
+        .sort((a, b) => Number(a) - Number(b))
+        .map((k) => o[k]);
+    }
+  }
+  return [];
+}
+
+function parseAttachmentKindField(raw: unknown): DmAttachmentKind | null {
+  const v = typeof raw === "string" ? raw.trim().toLowerCase() : "";
+  if (v === "image" || v === "video" || v === "audio") return v;
+  return null;
+}
+
+function attachmentUrlFromItem(o: Record<string, unknown>): string {
+  const u = o.url;
+  const alt = o.attachmentUrl;
+  if (typeof u === "string" && u.trim()) return u.trim();
+  if (typeof alt === "string" && alt.trim()) return alt.trim();
+  return "";
+}
+
+function attachmentItemFromUnknown(item: unknown): DmAttachmentItem | null {
+  if (!item || typeof item !== "object") return null;
+  const o = item as Record<string, unknown>;
+  const url = attachmentUrlFromItem(o);
+  const t =
+    parseAttachmentKindField(o.type) ?? parseAttachmentKindField(o.attachmentType);
+  if (!url || !t) return null;
+  return { url, type: t };
+}
+
 export function parseIncomingFanDmAttachments(body: Record<string, unknown>): DmAttachmentItem[] {
   const list: DmAttachmentItem[] = [];
-  const raw = body.attachments;
-  if (Array.isArray(raw)) {
-    for (const item of raw) {
-      if (!item || typeof item !== "object") continue;
-      const o = item as Record<string, unknown>;
-      const url = typeof o.url === "string" ? o.url.trim() : "";
-      const t = o.type;
-      if (!url || (t !== "image" && t !== "video" && t !== "audio")) continue;
-      list.push({ url, type: t });
-      if (list.length >= DM_MAX_ATTACHMENTS_PER_MESSAGE) break;
-    }
+  const candidates = attachmentArrayCandidates(body.attachments);
+  for (const item of candidates) {
+    const parsed = attachmentItemFromUnknown(item);
+    if (!parsed) continue;
+    list.push(parsed);
+    if (list.length >= DM_MAX_ATTACHMENTS_PER_MESSAGE) break;
   }
   if (list.length === 0) {
     const attachmentUrl = typeof body.attachmentUrl === "string" ? body.attachmentUrl.trim() : "";
@@ -52,16 +88,10 @@ export function firestoreDataToMessageAttachmentFields(data: Record<string, unkn
   attachments?: DmAttachmentItem[];
 } {
   const fromArray: DmAttachmentItem[] = [];
-  const raw = data.attachments;
-  if (Array.isArray(raw)) {
-    for (const item of raw) {
-      if (!item || typeof item !== "object") continue;
-      const o = item as Record<string, unknown>;
-      const url = typeof o.url === "string" ? o.url.trim() : "";
-      const t = o.type;
-      if (!url || (t !== "image" && t !== "video" && t !== "audio")) continue;
-      fromArray.push({ url, type: t });
-    }
+  const candidates = attachmentArrayCandidates(data.attachments);
+  for (const item of candidates) {
+    const parsed = attachmentItemFromUnknown(item);
+    if (parsed) fromArray.push(parsed);
   }
 
   const legacyUrl = typeof data.attachmentUrl === "string" ? data.attachmentUrl.trim() : "";
