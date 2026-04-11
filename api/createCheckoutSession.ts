@@ -2,6 +2,8 @@ import { VercelRequest, VercelResponse } from '@vercel/node';
 import Stripe from 'stripe';
 import {
   echofluxAnnualTotalCents,
+  ECHOFLUX_CREATOR_ELITE_INVITE_USD,
+  ECHOFLUX_CREATOR_PRO_INVITE_USD,
   ECHOFLUX_ELITE_MONTHLY_USD,
   ECHOFLUX_PRO_MONTHLY_USD,
 } from '../constants.js';
@@ -222,6 +224,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     const priceId = isAnnual ? planPrices.annually : planPrices.monthly;
+    /** Dedicated CreatorPro/CreatorElite Price IDs are optional if Pro/Elite monthly IDs exist (inline $1/$2 on same product). */
+    const useInviteInlineUnitPrice =
+      INVITE_CREATOR_CHECKOUT_PLANS.has(planName) && (!priceId || priceId.trim() === '');
 
     if (INVITE_CREATOR_CHECKOUT_PLANS.has(planName)) {
       const db = getAdminDb();
@@ -256,7 +261,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
     }
     
-    if (!priceId || priceId.trim() === '') {
+    if ((!priceId || priceId.trim() === '') && !useInviteInlineUnitPrice) {
       const cycleDisplay = isAnnual ? 'annual' : 'monthly';
       const suffix = isAnnual ? 'ANNUALLY' : 'MONTHLY';
       const envVarBase = `STRIPE_PRICE_${planName.toUpperCase()}_${suffix}`;
@@ -305,7 +310,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       // Ensure the resulting subscription carries plan metadata, so future subscription.updated events
       // can reliably map back to the correct plan (without needing price→plan reverse mapping).
       subscription_data: {
-        trial_period_days: INVITE_CREATOR_CHECKOUT_PLANS.has(planName) ? 0 : 7,
+        // Do not pass trial_period_days: 0 — Stripe can reject it; omit the field for no trial (invite checkout).
+        ...(INVITE_CREATOR_CHECKOUT_PLANS.has(planName) ? {} : { trial_period_days: 7 }),
         metadata: {
           planName,
           billingCycle,
@@ -358,6 +364,43 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         } else {
           sessionParams.line_items = [{ price: priceId, quantity: 1 }];
         }
+      } else if (useInviteInlineUnitPrice) {
+        const sourcePlan = planName === 'CreatorElite' ? 'Elite' : 'Pro';
+        const sourceMonthlyId = PLAN_PRICE_IDS[sourcePlan].monthly;
+        if (!sourceMonthlyId?.trim()) {
+          console.error(
+            `Invite checkout needs STRIPE_PRICE_${planName.toUpperCase()}_MONTHLY or STRIPE_PRICE_${sourcePlan.toUpperCase()}_MONTHLY for product fallback.`,
+          );
+          return res.status(500).json({
+            error: 'Payment configuration error',
+            message: `Stripe is not configured for invite checkout. Set STRIPE_PRICE_${planName.toUpperCase()}_MONTHLY or ensure STRIPE_PRICE_${sourcePlan.toUpperCase()}_MONTHLY is set (used to attach $${planName === 'CreatorElite' ? ECHOFLUX_CREATOR_ELITE_INVITE_USD : ECHOFLUX_CREATOR_PRO_INVITE_USD}/mo billing).`,
+          });
+        }
+        const monthlyPrice = await stripe.prices.retrieve(sourceMonthlyId);
+        const currency = monthlyPrice.currency || 'usd';
+        const product =
+          typeof monthlyPrice.product === 'string' ? monthlyPrice.product : monthlyPrice.product?.id;
+        if (!product) {
+          return res.status(500).json({
+            error: 'Payment configuration error',
+            message: `Could not resolve Stripe product from ${sourcePlan} monthly price for invite checkout.`,
+          });
+        }
+        const unitCents =
+          planName === 'CreatorElite'
+            ? Math.round(ECHOFLUX_CREATOR_ELITE_INVITE_USD * 100)
+            : Math.round(ECHOFLUX_CREATOR_PRO_INVITE_USD * 100);
+        sessionParams.line_items = [
+          {
+            price_data: {
+              currency,
+              product,
+              unit_amount: unitCents,
+              recurring: { interval: 'month' },
+            },
+            quantity: 1,
+          },
+        ];
       } else {
         sessionParams.line_items = [{ price: priceId, quantity: 1 }];
       }
