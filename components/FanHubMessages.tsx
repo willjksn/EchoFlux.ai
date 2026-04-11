@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef, Fragment, useMemo } from "react";
 import { useAppContext } from "./AppContext";
+import { onAuthStateChanged } from "firebase/auth";
 import { auth, db } from "../firebaseConfig";
 import { collection, doc, getDoc, onSnapshot, orderBy, query } from "firebase/firestore";
 import type { FanDmThread, FanDmMessage } from "../types";
@@ -16,6 +17,13 @@ import {
 } from "../src/lib/fanHubDisplay";
 import { uploadFanDmAttachment, type DmAttachmentKind } from "../src/lib/dmMediaUpload";
 import {
+  DM_MAX_ATTACHMENTS_PER_MESSAGE,
+  firestoreDataToMessageAttachmentFields,
+  getMessageAttachments,
+  type DmAttachmentItem,
+} from "../src/lib/fanDmAttachments";
+import { DmMessageAttachmentStack } from "./DmMessageAttachmentStack";
+import {
   AUDIO_RECORDER_TIMESLICE_MS,
   createAudioMediaRecorder,
   effectiveBlobType,
@@ -26,7 +34,6 @@ import {
 import { AudioLevelMeter } from "./AudioLevelMeter";
 import { RecordingDurationLabel } from "./RecordingDurationLabel";
 import { DmAudioPlayer } from "./DmAudioPlayer";
-import { inferIsAudioFromUrl } from "../src/lib/mediaUrlInfer";
 import { usePremiumStudioTab } from "./PremiumStudioLayout";
 
 const VideoIcon = () => (
@@ -149,8 +156,11 @@ async function parseApiBody(res: Response): Promise<{ json: Record<string, unkno
 export const FanHubMessages: React.FC = () => {
   const { user, showToast } = useAppContext();
   const premiumTab = usePremiumStudioTab();
-  /** Must match message `senderId` from API (Firebase Auth uid). */
-  const creatorId = auth.currentUser?.uid ?? user?.id;
+  /**
+   * Prefer `user.id` from AuthContext so hooks re-run after auth + user doc hydrate.
+   * Using only `auth.currentUser` does not trigger re-renders when persistence restores the session.
+   */
+  const creatorId = user?.id ?? auth.currentUser?.uid ?? null;
   const [threads, setThreads] = useState<FanDmThread[]>([]);
   /** When thread list API fails, empty threads looked like “no conversations”. */
   const [threadsError, setThreadsError] = useState<string | null>(null);
@@ -163,8 +173,7 @@ export const FanHubMessages: React.FC = () => {
   /** Set when /api/fanDmMessages fails (otherwise empty array looked like “no messages”). */
   const [messagesError, setMessagesError] = useState<string | null>(null);
   const [reply, setReply] = useState("");
-  const [pendingAttachmentUrl, setPendingAttachmentUrl] = useState<string | null>(null);
-  const [pendingAttachmentType, setPendingAttachmentType] = useState<DmAttachmentKind | null>(null);
+  const [pendingAttachments, setPendingAttachments] = useState<DmAttachmentItem[]>([]);
   const [pendingAttachmentUploading, setPendingAttachmentUploading] = useState(false);
   const [sending, setSending] = useState(false);
   const [deletingThreadId, setDeletingThreadId] = useState<string | null>(null);
@@ -402,6 +411,15 @@ export const FanHubMessages: React.FC = () => {
   // True realtime updates for active thread (efficient read stream).
   useEffect(() => {
     if (!selectedThread || !creatorId) return;
+    if (creatorId !== selectedThread.creatorId) return;
+    const expectedId = threadIdForCreatorFan(selectedThread.creatorId, selectedThread.fanId);
+    if (selectedThread.id !== expectedId) {
+      console.warn(
+        "FanHubMessages: thread id does not match creator/fan pair; skipping Firestore realtime (messages still load via API)."
+      );
+      return;
+    }
+
     const parseCreated = (rawCreated: unknown): string => {
       if (rawCreated && typeof (rawCreated as { toDate?: () => Date }).toDate === "function") {
         return (rawCreated as { toDate: () => Date }).toDate().toISOString();
@@ -413,59 +431,52 @@ export const FanHubMessages: React.FC = () => {
       return "";
     };
 
-    const q = query(
-      collection(db, "fanDmThreads", selectedThread.id, "messages"),
-      orderBy("createdAt", "asc")
-    );
+    let unsubSnap: (() => void) | undefined;
+    const unsubAuth = onAuthStateChanged(auth, (fbUser) => {
+      unsubSnap?.();
+      unsubSnap = undefined;
+      if (!fbUser || fbUser.uid !== selectedThread.creatorId) return;
 
-    const unsub = onSnapshot(
-      q,
-      (snap) => {
-        const liveMessages = snap.docs.map((d) => {
-          const data = d.data() as {
-            senderId?: string;
-            content?: string;
-            createdAt?: unknown;
-            read?: boolean;
-            attachmentUrl?: string;
-            attachmentType?: "image" | "video" | "audio";
-            reported?: boolean;
-            reportId?: string;
-          };
-          const attachmentUrl =
-            typeof data.attachmentUrl === "string" ? data.attachmentUrl.trim() : undefined;
-          const attachmentType =
-            data.attachmentType === "image" ||
-            data.attachmentType === "video" ||
-            data.attachmentType === "audio"
-              ? data.attachmentType
-              : undefined;
-          return {
-            id: d.id,
-            threadId: selectedThread.id,
-            senderId: String(data.senderId || ""),
-            content: String(data.content || ""),
-            createdAt: parseCreated(data.createdAt),
-            read: data.read === true,
-            ...(attachmentUrl ? { attachmentUrl, attachmentType } : {}),
-            reported: data.reported === true,
-            reportId: typeof data.reportId === "string" ? data.reportId : undefined,
-          } as FanDmMessage;
-        });
-        setMessages(liveMessages);
-        setMessagesError(null);
-      },
-      (err) => {
-        console.warn("FanHubMessages realtime subscription failed:", err);
-      }
-    );
+      const q = query(
+        collection(db, "fanDmThreads", selectedThread.id, "messages"),
+        orderBy("createdAt", "asc")
+      );
 
-    return () => unsub();
-  }, [selectedThread?.id, creatorId]);
+      unsubSnap = onSnapshot(
+        q,
+        (snap) => {
+          const liveMessages = snap.docs.map((d) => {
+            const data = d.data() as Record<string, unknown>;
+            const att = firestoreDataToMessageAttachmentFields(data);
+            return {
+              id: d.id,
+              threadId: selectedThread.id,
+              senderId: String(data.senderId || ""),
+              content: String(data.content || ""),
+              createdAt: parseCreated(data.createdAt),
+              read: data.read === true,
+              ...att,
+              reported: data.reported === true,
+              reportId: typeof data.reportId === "string" ? data.reportId : undefined,
+            } as FanDmMessage;
+          });
+          setMessages(liveMessages);
+          setMessagesError(null);
+        },
+        (err) => {
+          console.warn("FanHubMessages realtime subscription failed:", err);
+        }
+      );
+    });
+
+    return () => {
+      unsubSnap?.();
+      unsubAuth();
+    };
+  }, [selectedThread?.id, selectedThread?.creatorId, selectedThread?.fanId, creatorId]);
 
   useEffect(() => {
-    setPendingAttachmentUrl(null);
-    setPendingAttachmentType(null);
+    setPendingAttachments([]);
     setPendingAttachmentUploading(false);
   }, [selectedThread?.id]);
 
@@ -542,27 +553,33 @@ export const FanHubMessages: React.FC = () => {
     autoStickToBottomRef.current = true;
   }, [selectedThread?.id]);
 
-  const sendDmWithPayload = async (
-    content: string,
-    attachmentUrl?: string,
-    attachmentType?: DmAttachmentKind
-  ) => {
+  const sendDmWithPayload = async (content: string, attachments: DmAttachmentItem[]) => {
     if (!selectedThread || !creatorId) return;
-    if (!content.trim() && !attachmentUrl) return;
+    if (!content.trim() && attachments.length === 0) return;
+    const expectedThreadId = threadIdForCreatorFan(selectedThread.creatorId, selectedThread.fanId);
+    if (selectedThread.id !== expectedThreadId) {
+      showToast?.(
+        "This thread ID does not match the member record, so the server will reject sends. Try starting a new message from the member directory.",
+        "error"
+      );
+      return;
+    }
     setSending(true);
     const prevReply = reply;
     setReply("");
     try {
       const token = auth.currentUser ? await auth.currentUser.getIdToken() : null;
-      const body: Record<string, string> = {
+      const body: Record<string, unknown> = {
         threadId: selectedThread.id,
         creatorId: selectedThread.creatorId,
         fanId: selectedThread.fanId,
         content: content.trim(),
       };
-      if (attachmentUrl) {
-        body.attachmentUrl = attachmentUrl;
-        if (attachmentType) body.attachmentType = attachmentType;
+      if (attachments.length === 1) {
+        body.attachmentUrl = attachments[0].url;
+        body.attachmentType = attachments[0].type;
+      } else if (attachments.length > 1) {
+        body.attachments = attachments;
       }
       const res = await fetch("/api/fanDmSend", {
         method: "POST",
@@ -579,8 +596,7 @@ export const FanHubMessages: React.FC = () => {
       setMessagesError(loadErr);
       setMessageLabels(nextLabels);
       void fetchThreads();
-      setPendingAttachmentUrl(null);
-      setPendingAttachmentType(null);
+      setPendingAttachments([]);
       autoStickToBottomRef.current = true;
       requestAnimationFrame(() => messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }));
       showToast?.("Sent", "success");
@@ -594,28 +610,35 @@ export const FanHubMessages: React.FC = () => {
 
   const sendReply = async () => {
     if (!selectedThread || !creatorId) return;
-    if (!reply.trim() && !pendingAttachmentUrl) return;
-    await sendDmWithPayload(
-      reply.trim(),
-      pendingAttachmentUrl || undefined,
-      pendingAttachmentType || undefined
-    );
+    if (!reply.trim() && pendingAttachments.length === 0) return;
+    await sendDmWithPayload(reply.trim(), pendingAttachments);
   };
 
-  const clearPendingAttachment = () => {
-    setPendingAttachmentUrl(null);
-    setPendingAttachmentType(null);
+  const removePendingAttachmentAt = (index: number) => {
+    setPendingAttachments((prev) => prev.filter((_, i) => i !== index));
   };
 
   const onFileSelected: React.ChangeEventHandler<HTMLInputElement> = async (e) => {
-    const file = e.target.files?.[0];
+    const files = Array.from(e.target.files || []);
     e.target.value = "";
-    if (!file || !creatorId || !selectedThread) return;
+    if (!files.length || !creatorId || !selectedThread) return;
+    const room = DM_MAX_ATTACHMENTS_PER_MESSAGE - pendingAttachments.length;
+    if (room <= 0) {
+      showToast?.(`You can add up to ${DM_MAX_ATTACHMENTS_PER_MESSAGE} files per message.`, "info");
+      return;
+    }
+    const slice = files.slice(0, room);
+    if (slice.length < files.length) {
+      showToast?.(`Only ${room} more file(s) allowed this message (max ${DM_MAX_ATTACHMENTS_PER_MESSAGE}).`, "info");
+    }
     setPendingAttachmentUploading(true);
     try {
-      const { url, attachmentType } = await uploadFanDmAttachment(creatorId, file);
-      setPendingAttachmentUrl(url);
-      setPendingAttachmentType(attachmentType);
+      const uploaded: DmAttachmentItem[] = [];
+      for (const file of slice) {
+        const { url, attachmentType: type } = await uploadFanDmAttachment(creatorId, file);
+        uploaded.push({ url, type });
+      }
+      setPendingAttachments((prev) => [...prev, ...uploaded]);
     } catch (err) {
       showToast?.(err instanceof Error ? err.message : "Upload failed", "error");
     } finally {
@@ -675,8 +698,13 @@ export const FanHubMessages: React.FC = () => {
         const file = new File([blob], `voice-${Date.now()}.${ext}`, { type: fileType });
         try {
           const { url } = await uploadFanDmAttachment(creatorId, file);
-          setPendingAttachmentUrl(url);
-          setPendingAttachmentType("audio");
+          setPendingAttachments((prev) => {
+            if (prev.length >= DM_MAX_ATTACHMENTS_PER_MESSAGE) {
+              showToast?.(`Max ${DM_MAX_ATTACHMENTS_PER_MESSAGE} attachments per message.`, "info");
+              return prev;
+            }
+            return [...prev, { url, type: "audio" as const }];
+          });
         } catch (err) {
           showToast?.(err instanceof Error ? err.message : "Voice upload failed", "error");
         }
@@ -1237,6 +1265,7 @@ export const FanHubMessages: React.FC = () => {
                       !prev || formatDmDayCalendarKey(prev.createdAt) !== formatDmDayCalendarKey(m.createdAt);
                     const dividerLabel = formatDmDateDividerLabel(m.createdAt);
                     const timeStr = formatDmShortTime(m.createdAt);
+                    const msgAttachments = getMessageAttachments(m);
                     return (
                       <Fragment key={m.id}>
                         {showDayDivider && dividerLabel ? (
@@ -1279,43 +1308,9 @@ export const FanHubMessages: React.FC = () => {
                                 <div className="fh-dm-bubble__head fh-dm-bubble__head--primary">{fanBubbleHead}</div>
                               )}
                               <div className="fh-dm-bubble__body">
-                                {m.attachmentUrl && m.attachmentType === "image" ? (
-                                  <div className="fh-dm-attachment">
-                                    <a
-                                      href={m.attachmentUrl}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      className="fh-dm-attachment-link"
-                                      aria-label="Open image in new tab"
-                                    >
-                                      <img src={m.attachmentUrl} alt="" loading="lazy" />
-                                    </a>
-                                  </div>
-                                ) : null}
-                                {m.attachmentUrl && m.attachmentType === "video" ? (
-                                  <div className="fh-dm-attachment">
-                                    <a
-                                      href={m.attachmentUrl}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      className="fh-dm-attachment-link"
-                                      aria-label="Open video in new tab"
-                                    >
-                                      <video src={m.attachmentUrl} controls playsInline />
-                                    </a>
-                                  </div>
-                                ) : null}
-                                {m.attachmentUrl &&
-                                (m.attachmentType === "audio" ||
-                                  (inferIsAudioFromUrl(m.attachmentUrl) &&
-                                    m.attachmentType !== "image" &&
-                                    m.attachmentType !== "video")) ? (
-                                  <div className="fh-dm-attachment">
-                                    <DmAudioPlayer src={m.attachmentUrl} variant="voiceNote" />
-                                  </div>
-                                ) : null}
+                                <DmMessageAttachmentStack attachments={msgAttachments} />
                                 {m.content?.trim() ? m.content : null}
-                                {!m.content?.trim() && !m.attachmentUrl ? (
+                                {!m.content?.trim() && msgAttachments.length === 0 ? (
                                   <span className="italic opacity-70">(empty message)</span>
                                 ) : null}
                               </div>
@@ -1356,37 +1351,43 @@ export const FanHubMessages: React.FC = () => {
                     <AudioLevelMeter key={`dm-creator-voice-${voiceMeterKey}`} stream={voiceMeterStream} className="w-full max-w-md" />
                   </div>
                 ) : null}
-                {pendingAttachmentUploading && !pendingAttachmentUrl ? (
-                  <p className="text-xs text-gray-500 dark:text-gray-400">Uploading attachment…</p>
+                {pendingAttachmentUploading ? (
+                  <p className="text-xs text-gray-500 dark:text-gray-400">Uploading…</p>
                 ) : null}
-                {pendingAttachmentUrl && pendingAttachmentType ? (
+                {pendingAttachments.length > 0 ? (
                   <div className="fh-dm-pending-attach">
-                    <div className="fh-dm-pending-attach__inner">
-                      {pendingAttachmentType === "image" ? (
-                        <img src={pendingAttachmentUrl} alt="" className="fh-dm-pending-attach__thumb" />
-                      ) : pendingAttachmentType === "video" ? (
-                        <video src={pendingAttachmentUrl} className="fh-dm-pending-attach__thumb" muted playsInline />
-                      ) : (
-                        <div className="fh-dm-pending-attach__voice-label">
-                          <span className="fh-dm-pending-attach__voice-icon" aria-hidden>
-                            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2">
-                              <path d="M12 14a3 3 0 0 0 3-3V5a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3z" />
-                              <path d="M19 10v1a7 7 0 0 1-14 0v-1" />
-                            </svg>
-                          </span>
-                          Voice note ready — click Send
+                    <div className="flex flex-wrap gap-2">
+                      {pendingAttachments.map((a, idx) => (
+                        <div key={`${a.url}-${idx}`} className="fh-dm-pending-attach__inner relative">
+                          {a.type === "image" ? (
+                            <img src={a.url} alt="" className="fh-dm-pending-attach__thumb" />
+                          ) : a.type === "video" ? (
+                            <video src={a.url} className="fh-dm-pending-attach__thumb" muted playsInline />
+                          ) : (
+                            <div className="fh-dm-pending-attach__voice-label px-2 py-1">
+                              <span className="fh-dm-pending-attach__voice-icon" aria-hidden>
+                                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2">
+                                  <path d="M12 14a3 3 0 0 0 3-3V5a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3z" />
+                                  <path d="M19 10v1a7 7 0 0 1-14 0v-1" />
+                                </svg>
+                              </span>
+                              Voice
+                            </div>
+                          )}
+                          <button
+                            type="button"
+                            className="fh-dm-pending-attach__remove"
+                            aria-label="Remove attachment"
+                            onClick={() => removePendingAttachmentAt(idx)}
+                          >
+                            ×
+                          </button>
                         </div>
-                      )}
-                      <button
-                        type="button"
-                        className="fh-dm-pending-attach__remove"
-                        aria-label="Remove attachment"
-                        onClick={clearPendingAttachment}
-                      >
-                        ×
-                      </button>
+                      ))}
                     </div>
-                    <p className="fh-dm-pending-attach__hint">Add a caption if you like, then Send.</p>
+                    <p className="fh-dm-pending-attach__hint mt-1">
+                      Up to {DM_MAX_ATTACHMENTS_PER_MESSAGE} per message. Add a caption if you like, then Send.
+                    </p>
                   </div>
                 ) : null}
                 <div className="flex gap-2 items-end">
@@ -1394,6 +1395,7 @@ export const FanHubMessages: React.FC = () => {
                   ref={fileInputRef}
                   type="file"
                   accept="image/*,video/*"
+                  multiple
                   className="hidden"
                   onChange={onFileSelected}
                 />
@@ -1401,9 +1403,14 @@ export const FanHubMessages: React.FC = () => {
                   <button
                     type="button"
                     className="fh-dm-compose-icon"
-                    title="Photo or video"
-                    aria-label="Upload photo or video"
-                    disabled={sending || !selectedThread || pendingAttachmentUploading}
+                    title="Photos or videos (multiple)"
+                    aria-label="Upload photos or videos"
+                    disabled={
+                      sending ||
+                      !selectedThread ||
+                      pendingAttachmentUploading ||
+                      pendingAttachments.length >= DM_MAX_ATTACHMENTS_PER_MESSAGE
+                    }
                     onClick={() => fileInputRef.current?.click()}
                   >
                     <PhotoIcon />
@@ -1413,7 +1420,12 @@ export const FanHubMessages: React.FC = () => {
                     className={`fh-dm-compose-icon ${isRecordingVoice ? "fh-dm-compose-icon--recording" : ""}`}
                     title={isRecordingVoice ? "Stop recording" : "Record voice message"}
                     aria-label={isRecordingVoice ? "Stop recording" : "Record voice message"}
-                    disabled={sending || !selectedThread || pendingAttachmentUploading}
+                    disabled={
+                      sending ||
+                      !selectedThread ||
+                      pendingAttachmentUploading ||
+                      pendingAttachments.length >= DM_MAX_ATTACHMENTS_PER_MESSAGE
+                    }
                     onClick={() => toggleVoiceRecording()}
                   >
                     <MicIcon />
@@ -1427,7 +1439,7 @@ export const FanHubMessages: React.FC = () => {
                   onKeyDown={(e) => {
                     if (e.key === "Enter" && !e.shiftKey) {
                       e.preventDefault();
-                      if (reply.trim() || pendingAttachmentUrl) void sendReply();
+                      if (reply.trim() || pendingAttachments.length > 0) void sendReply();
                     }
                   }}
                   placeholder="Message"
@@ -1439,7 +1451,7 @@ export const FanHubMessages: React.FC = () => {
                   disabled={
                     sending ||
                     pendingAttachmentUploading ||
-                    (!reply.trim() && !pendingAttachmentUrl)
+                    (!reply.trim() && pendingAttachments.length === 0)
                   }
                   className="px-4 py-2 fh-btn text-sm font-medium disabled:opacity-50 shrink-0"
                 >

@@ -20,12 +20,21 @@ async function readJsonBody(r: Response): Promise<Record<string, unknown>> {
   try {
     return JSON.parse(text) as Record<string, unknown>;
   } catch {
-    const snippet = text.replace(/\s+/g, ' ').trim().slice(0, 180);
-    throw new Error(
-      r.status >= 500
-        ? `Server error (${r.status}). If you are on local dev, set DEV_API_PROXY in .env.local to your deployed API URL (see docs/LOCAL_DEV.md). ${snippet}`
-        : `Unexpected response (${r.status}): ${snippet}`
-    );
+    const snippet = text.replace(/\s+/g, ' ').trim().slice(0, 220);
+    if (r.status >= 500) {
+      const invocationFailed = /FUNCTION_INVOCATION_FAILED/i.test(text);
+      const onLocalhost =
+        typeof window !== 'undefined' &&
+        (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+      const proxyHint = onLocalhost
+        ? ' On localhost, `/api` is proxied via DEV_API_PROXY in `.env.local` — that target deployment must be healthy (see docs/LOCAL_DEV.md).'
+        : '';
+      const vercelHint = invocationFailed
+        ? ` Vercel could not run the function (crash or platform error). Open Vercel → this project → Logs, find the request id if shown, and fix the underlying error — often missing FIREBASE_SERVICE_ACCOUNT_KEY_BASE64 (or FIREBASE_ADMIN_KEY) for the environment you deployed (Production vs Preview), or an exception during cold start.${proxyHint}`
+        : ` Check the deployment logs on Vercel.${proxyHint} If you only see this on localhost, set DEV_API_PROXY to a working app URL.`;
+      throw new Error(`Server error (${r.status}).${vercelHint} Response: ${snippet}`);
+    }
+    throw new Error(`Unexpected response (${r.status}): ${snippet}`);
   }
 }
 

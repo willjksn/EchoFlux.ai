@@ -56,6 +56,12 @@ import {
 } from "../src/lib/fanHubDisplay";
 import { uploadFanDmAttachment, type DmAttachmentKind } from "../src/lib/dmMediaUpload";
 import {
+  DM_MAX_ATTACHMENTS_PER_MESSAGE,
+  attachmentsSignature,
+  getMessageAttachments,
+  type DmAttachmentItem,
+} from "../src/lib/fanDmAttachments";
+import {
   AUDIO_RECORDER_TIMESLICE_MS,
   createAudioMediaRecorder,
   effectiveBlobType,
@@ -65,8 +71,8 @@ import {
 } from "../src/lib/browserMediaRecording";
 import { AudioLevelMeter } from "./AudioLevelMeter";
 import { RecordingDurationLabel } from "./RecordingDurationLabel";
-import { DmAudioPlayer } from "./DmAudioPlayer";
-import { inferIsAudioFromUrl, inferIsVideoFromUrl } from "../src/lib/mediaUrlInfer";
+import { DmMessageAttachmentStack } from "./DmMessageAttachmentStack";
+import { inferIsVideoFromUrl } from "../src/lib/mediaUrlInfer";
 import { FanHubNotificationBell, type FanHubNotificationNavigatePayload } from "./FanHubNotificationBell";
 import { getAvatarCropStyle } from "../src/lib/avatarCrop";
 import { resolveStoreCopy } from "../src/lib/storefrontStoreCopy";
@@ -363,6 +369,7 @@ function fanDmMessagesEqualish(a: FanDmMessage[], b: FanDmMessage[]): boolean {
       (x.read ?? false) !== (y.read ?? false) ||
       (x.attachmentUrl ?? "") !== (y.attachmentUrl ?? "") ||
       (x.attachmentType ?? "") !== (y.attachmentType ?? "") ||
+      attachmentsSignature(x) !== attachmentsSignature(y) ||
       (x.reported ?? false) !== (y.reported ?? false) ||
       (x.reportId ?? "") !== (y.reportId ?? "")
     ) {
@@ -1137,8 +1144,7 @@ export const FanStorefrontView: React.FC = () => {
   const [dmSending, setDmSending] = useState(false);
   const [dmInput, setDmInput] = useState("");
   /** Staged media: send only when the user clicks Send (not immediately after upload/record). */
-  const [dmPendingAttachmentUrl, setDmPendingAttachmentUrl] = useState<string | null>(null);
-  const [dmPendingAttachmentType, setDmPendingAttachmentType] = useState<DmAttachmentKind | null>(null);
+  const [dmPendingAttachments, setDmPendingAttachments] = useState<DmAttachmentItem[]>([]);
   const [dmPendingAttachmentUploading, setDmPendingAttachmentUploading] = useState(false);
   const [dmPreferredThreadId, setDmPreferredThreadId] = useState<string | null>(null);
   const [dmPreferredSessionId, setDmPreferredSessionId] = useState<string | null>(null);
@@ -3439,15 +3445,13 @@ export const FanStorefrontView: React.FC = () => {
 
   useEffect(() => {
     if (activeTab !== "messages") {
-      setDmPendingAttachmentUrl(null);
-      setDmPendingAttachmentType(null);
+      setDmPendingAttachments([]);
       setDmPendingAttachmentUploading(false);
     }
   }, [activeTab]);
 
   useEffect(() => {
-    setDmPendingAttachmentUrl(null);
-    setDmPendingAttachmentType(null);
+    setDmPendingAttachments([]);
     setDmPendingAttachmentUploading(false);
   }, [creator?.creatorId]);
 
@@ -3483,19 +3487,15 @@ export const FanStorefrontView: React.FC = () => {
     };
   }, []);
 
-  const sendDmWithPayload = async (
-    content: string,
-    attachmentUrl?: string,
-    attachmentType?: DmAttachmentKind
-  ) => {
+  const sendDmWithPayload = async (content: string, attachments: DmAttachmentItem[]) => {
     if (!creator?.creatorId || !auth.currentUser) return;
-    if (!content.trim() && !attachmentUrl) return;
+    if (!content.trim() && attachments.length === 0) return;
     setDmSending(true);
     const prevInput = dmInput;
     setDmInput("");
     try {
       const token = await auth.currentUser.getIdToken(true);
-      const body: Record<string, string> = {
+      const body: Record<string, unknown> = {
         creatorId: creator.creatorId,
         fanId: auth.currentUser.uid,
         content: content.trim(),
@@ -3503,9 +3503,11 @@ export const FanStorefrontView: React.FC = () => {
       if (dmThread && dmThread.creatorId === creator.creatorId) {
         body.threadId = dmThread.id;
       }
-      if (attachmentUrl) {
-        body.attachmentUrl = attachmentUrl;
-        if (attachmentType) body.attachmentType = attachmentType;
+      if (attachments.length === 1) {
+        body.attachmentUrl = attachments[0].url;
+        body.attachmentType = attachments[0].type;
+      } else if (attachments.length > 1) {
+        body.attachments = attachments;
       }
       const res = await fetch("/api/fanDmSend", {
         method: "POST",
@@ -3515,8 +3517,7 @@ export const FanStorefrontView: React.FC = () => {
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error((data as { error?: string }).error || "Failed to send");
       await fetchDmThreadAndMessages();
-      setDmPendingAttachmentUrl(null);
-      setDmPendingAttachmentType(null);
+      setDmPendingAttachments([]);
       dmAutoStickToBottomRef.current = true;
       requestAnimationFrame(() => {
         const listEl = dmMessagesListRef.current;
@@ -3531,33 +3532,44 @@ export const FanStorefrontView: React.FC = () => {
 
   const sendDm = async () => {
     if (!creator?.creatorId || !auth.currentUser) return;
-    if (!dmInput.trim() && !dmPendingAttachmentUrl) return;
-    await sendDmWithPayload(
-      dmInput.trim(),
-      dmPendingAttachmentUrl || undefined,
-      dmPendingAttachmentType || undefined
-    );
+    if (!dmInput.trim() && dmPendingAttachments.length === 0) return;
+    await sendDmWithPayload(dmInput.trim(), dmPendingAttachments);
   };
 
-  const clearDmPendingAttachment = () => {
-    setDmPendingAttachmentUrl(null);
-    setDmPendingAttachmentType(null);
+  const removeDmPendingAttachmentAt = (index: number) => {
+    setDmPendingAttachments((prev) => prev.filter((_, i) => i !== index));
   };
 
   const onDmFileSelected: React.ChangeEventHandler<HTMLInputElement> = async (e) => {
-    const file = e.target.files?.[0];
+    const files = Array.from(e.target.files || []);
     e.target.value = "";
-    if (!file || !auth.currentUser) return;
+    if (!files.length || !auth.currentUser) return;
     const videoOn = creator?.monetization?.videoEnabled !== false;
-    if (!videoOn && file.type.startsWith("video/")) {
-      showToast?.("This creator doesn’t accept video attachments in DMs.", "info");
+    const room = DM_MAX_ATTACHMENTS_PER_MESSAGE - dmPendingAttachments.length;
+    if (room <= 0) {
+      showToast?.(`You can add up to ${DM_MAX_ATTACHMENTS_PER_MESSAGE} files per message.`, "info");
       return;
     }
+    const slice = files.slice(0, room);
+    if (slice.length < files.length) {
+      showToast?.(`Only ${room} more file(s) allowed this message (max ${DM_MAX_ATTACHMENTS_PER_MESSAGE}).`, "info");
+    }
+    const allowed = slice.filter((file) => {
+      if (!videoOn && file.type.startsWith("video/")) {
+        showToast?.("This creator doesn’t accept video attachments in DMs.", "info");
+        return false;
+      }
+      return true;
+    });
+    if (!allowed.length) return;
     setDmPendingAttachmentUploading(true);
     try {
-      const { url, attachmentType } = await uploadFanDmAttachment(auth.currentUser.uid, file);
-      setDmPendingAttachmentUrl(url);
-      setDmPendingAttachmentType(attachmentType);
+      const uploaded: DmAttachmentItem[] = [];
+      for (const file of allowed) {
+        const { url, attachmentType: type } = await uploadFanDmAttachment(auth.currentUser.uid, file);
+        uploaded.push({ url, type });
+      }
+      setDmPendingAttachments((prev) => [...prev, ...uploaded]);
     } catch {
       /* silent */
     } finally {
@@ -3612,8 +3624,13 @@ export const FanStorefrontView: React.FC = () => {
         const file = new File([blob], `voice-${Date.now()}.${ext}`, { type: fileType });
         try {
           const { url } = await uploadFanDmAttachment(uid, file);
-          setDmPendingAttachmentUrl(url);
-          setDmPendingAttachmentType("audio");
+          setDmPendingAttachments((prev) => {
+            if (prev.length >= DM_MAX_ATTACHMENTS_PER_MESSAGE) {
+              showToast?.(`Max ${DM_MAX_ATTACHMENTS_PER_MESSAGE} attachments per message.`, "info");
+              return prev;
+            }
+            return [...prev, { url, type: "audio" as const }];
+          });
         } catch {
           /* silent */
         }
@@ -5078,6 +5095,7 @@ export const FanStorefrontView: React.FC = () => {
                           const dividerLabel = formatDmDateDividerLabel(m.createdAt);
                           const timeStr = formatDmShortTime(m.createdAt);
                           const fanLine = formatDmBubbleAuthorLine(dmLabels?.fan || "You");
+                          const msgAttachments = getMessageAttachments(m);
                           return (
                             <Fragment key={m.id}>
                               {showDayDivider && dividerLabel ? (
@@ -5110,43 +5128,11 @@ export const FanStorefrontView: React.FC = () => {
                                         </div>
                                       )}
                                       <div className="fh-dm-bubble__body">
-                                        {m.attachmentUrl && m.attachmentType === "image" ? (
-                                          <div className="fh-dm-attachment">
-                                            <a
-                                              href={m.attachmentUrl}
-                                              target="_blank"
-                                              rel="noopener noreferrer"
-                                              className="fh-dm-attachment-link"
-                                              aria-label="Open image in new tab"
-                                            >
-                                              <img src={m.attachmentUrl} alt="" loading="lazy" />
-                                            </a>
-                                          </div>
-                                        ) : null}
-                                        {m.attachmentUrl && m.attachmentType === "video" ? (
-                                          <div className="fh-dm-attachment">
-                                            <a
-                                              href={m.attachmentUrl}
-                                              target="_blank"
-                                              rel="noopener noreferrer"
-                                              className="fh-dm-attachment-link"
-                                              aria-label="Open video in new tab"
-                                            >
-                                              <video src={m.attachmentUrl} controls playsInline />
-                                            </a>
-                                          </div>
-                                        ) : null}
-                                        {m.attachmentUrl &&
-                                        (m.attachmentType === "audio" ||
-                                          (inferIsAudioFromUrl(m.attachmentUrl) &&
-                                            m.attachmentType !== "image" &&
-                                            m.attachmentType !== "video")) ? (
-                                          <div className="fh-dm-attachment">
-                                            <DmAudioPlayer src={m.attachmentUrl} variant="voiceNote" />
-                                          </div>
+                                        {msgAttachments.length ? (
+                                          <DmMessageAttachmentStack attachments={msgAttachments} />
                                         ) : null}
                                         {m.content?.trim() ? m.content : null}
-                                        {!m.content?.trim() && !m.attachmentUrl ? (
+                                        {!m.content?.trim() && msgAttachments.length === 0 ? (
                                           <span className="italic opacity-70">(empty message)</span>
                                         ) : null}
                                       </div>
@@ -5188,39 +5174,45 @@ export const FanStorefrontView: React.FC = () => {
                           <AudioLevelMeter key={`dm-fan-voice-${dmVoiceMeterKey}`} stream={dmVoiceMeterStream} barColor={primary} />
                         </div>
                       ) : null}
-                      {dmPendingAttachmentUploading && !dmPendingAttachmentUrl ? (
+                      {dmPendingAttachmentUploading ? (
                         <div className="fh-dm-pending-attach">
                           <p className="fh-dm-pending-attach__uploading">Uploading attachment…</p>
                         </div>
                       ) : null}
-                      {dmPendingAttachmentUrl && dmPendingAttachmentType ? (
+                      {dmPendingAttachments.length > 0 ? (
                         <div className="fh-dm-pending-attach">
-                          <div className="fh-dm-pending-attach__inner">
-                            {dmPendingAttachmentType === "image" ? (
-                              <img src={dmPendingAttachmentUrl} alt="" className="fh-dm-pending-attach__thumb" />
-                            ) : dmPendingAttachmentType === "video" ? (
-                              <video src={dmPendingAttachmentUrl} className="fh-dm-pending-attach__thumb" muted playsInline />
-                            ) : (
-                              <div className="fh-dm-pending-attach__voice-label">
-                                <span className="fh-dm-pending-attach__voice-icon" aria-hidden>
-                                  <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2">
-                                    <path d="M12 14a3 3 0 0 0 3-3V5a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3z" />
-                                    <path d="M19 10v1a7 7 0 0 1-14 0v-1" />
-                                  </svg>
-                                </span>
-                                Voice note ready — tap Send
+                          <div className="flex flex-wrap gap-2">
+                            {dmPendingAttachments.map((a, idx) => (
+                              <div key={`${a.url}-${idx}`} className="fh-dm-pending-attach__inner relative">
+                                {a.type === "image" ? (
+                                  <img src={a.url} alt="" className="fh-dm-pending-attach__thumb" />
+                                ) : a.type === "video" ? (
+                                  <video src={a.url} className="fh-dm-pending-attach__thumb" muted playsInline />
+                                ) : (
+                                  <div className="fh-dm-pending-attach__voice-label">
+                                    <span className="fh-dm-pending-attach__voice-icon" aria-hidden>
+                                      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2">
+                                        <path d="M12 14a3 3 0 0 0 3-3V5a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3z" />
+                                        <path d="M19 10v1a7 7 0 0 1-14 0v-1" />
+                                      </svg>
+                                    </span>
+                                    Voice
+                                  </div>
+                                )}
+                                <button
+                                  type="button"
+                                  className="fh-dm-pending-attach__remove"
+                                  aria-label="Remove attachment"
+                                  onClick={() => removeDmPendingAttachmentAt(idx)}
+                                >
+                                  ×
+                                </button>
                               </div>
-                            )}
-                            <button
-                              type="button"
-                              className="fh-dm-pending-attach__remove"
-                              aria-label="Remove attachment"
-                              onClick={clearDmPendingAttachment}
-                            >
-                              ×
-                            </button>
+                            ))}
                           </div>
-                          <p className="fh-dm-pending-attach__hint">Add a caption if you like, then Send.</p>
+                          <p className="fh-dm-pending-attach__hint">
+                            Up to {DM_MAX_ATTACHMENTS_PER_MESSAGE} per message. Add a caption if you like, then Send.
+                          </p>
                         </div>
                       ) : null}
                       <div className="fan-member-messages-compose">
@@ -5228,6 +5220,7 @@ export const FanStorefrontView: React.FC = () => {
                         ref={dmFileInputRef}
                         type="file"
                         accept={videoEnabled ? "image/*,video/*" : "image/*"}
+                        multiple
                         className="hidden"
                         onChange={onDmFileSelected}
                       />
@@ -5235,9 +5228,14 @@ export const FanStorefrontView: React.FC = () => {
                         <button
                           type="button"
                           className="fh-dm-compose-icon"
-                          title={videoEnabled ? "Photo or video" : "Photo"}
-                          aria-label={videoEnabled ? "Upload photo or video" : "Upload photo"}
-                          disabled={dmSending || fanBanned || dmPendingAttachmentUploading}
+                          title={videoEnabled ? "Photos or videos (multiple)" : "Photos (multiple)"}
+                          aria-label={videoEnabled ? "Upload photos or videos" : "Upload photos"}
+                          disabled={
+                            dmSending ||
+                            fanBanned ||
+                            dmPendingAttachmentUploading ||
+                            dmPendingAttachments.length >= DM_MAX_ATTACHMENTS_PER_MESSAGE
+                          }
                           onClick={() => dmFileInputRef.current?.click()}
                         >
                           <DmPhotoIcon />
@@ -5247,7 +5245,12 @@ export const FanStorefrontView: React.FC = () => {
                           className={`fh-dm-compose-icon ${dmRecordingVoice ? "fh-dm-compose-icon--recording" : ""}`}
                           title={dmRecordingVoice ? "Stop recording" : "Voice message"}
                           aria-label={dmRecordingVoice ? "Stop recording" : "Record voice"}
-                          disabled={dmSending || fanBanned || dmPendingAttachmentUploading}
+                          disabled={
+                            dmSending ||
+                            fanBanned ||
+                            dmPendingAttachmentUploading ||
+                            dmPendingAttachments.length >= DM_MAX_ATTACHMENTS_PER_MESSAGE
+                          }
                           onClick={() => toggleDmVoice()}
                         >
                           <DmMicIcon />
@@ -5267,7 +5270,7 @@ export const FanStorefrontView: React.FC = () => {
                         onKeyDown={(e) => {
                           if (e.key === "Enter" && !e.shiftKey) {
                             e.preventDefault();
-                            if (dmInput.trim() || dmPendingAttachmentUrl) void sendDm();
+                            if (dmInput.trim() || dmPendingAttachments.length > 0) void sendDm();
                           }
                         }}
                         placeholder="Message"
@@ -5278,7 +5281,7 @@ export const FanStorefrontView: React.FC = () => {
                         disabled={
                           dmSending ||
                           dmPendingAttachmentUploading ||
-                          (!dmInput.trim() && !dmPendingAttachmentUrl)
+                          (!dmInput.trim() && dmPendingAttachments.length === 0)
                         }
                         onClick={sendDm}
                         className="fan-member-messages-send"

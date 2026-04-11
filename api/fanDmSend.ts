@@ -8,6 +8,10 @@ import {
   getThreadId,
   isFanBlocked,
 } from "./_fanDmHelpers.js";
+import {
+  parseIncomingFanDmAttachments,
+  previewTextForFanDmAttachments,
+} from "../src/lib/fanDmAttachments.js";
 import { sendFanNotification } from "./_fanNotifications.js";
 import type { Firestore } from "firebase-admin/firestore";
 
@@ -52,14 +56,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const fanId = body.fanId as string;
   const threadIdParam = body.threadId as string | undefined;
   const content = typeof body.content === "string" ? body.content.trim() : "";
-  const attachmentUrl = typeof body.attachmentUrl === "string" ? body.attachmentUrl.trim() : "";
-  const attachmentTypeRaw = body.attachmentType;
-  const attachmentType =
-    attachmentTypeRaw === "image" || attachmentTypeRaw === "video" || attachmentTypeRaw === "audio"
-      ? attachmentTypeRaw
-      : undefined;
-  if (!content && !attachmentUrl) {
-    return res.status(400).json({ error: "content or attachmentUrl is required" });
+  const attachmentList = parseIncomingFanDmAttachments(body as Record<string, unknown>);
+  if (!content && attachmentList.length === 0) {
+    return res.status(400).json({ error: "content or at least one attachment is required" });
   }
 
   let creatorIdFinal: string;
@@ -134,17 +133,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const threadSnap = await threadRef.get();
     const fanHasSentMessage = uid === fanIdFinal;
 
-    const previewText =
-      content.slice(0, 100) ||
-      (attachmentType === "image"
-        ? "📷 Photo"
-        : attachmentType === "video"
-          ? "🎬 Video"
-          : attachmentType === "audio"
-            ? "🎤 Voice message"
-            : attachmentUrl
-              ? "Attachment"
-              : "");
+    const previewText = previewTextForFanDmAttachments(content, attachmentList);
 
     if (!threadSnap.exists) {
       await threadRef.set({
@@ -177,8 +166,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       createdAt: now,
       read: false,
     };
-    if (attachmentUrl) msgPayload.attachmentUrl = attachmentUrl;
-    if (attachmentType) msgPayload.attachmentType = attachmentType;
+    if (attachmentList.length === 1) {
+      msgPayload.attachmentUrl = attachmentList[0].url;
+      msgPayload.attachmentType = attachmentList[0].type;
+    } else if (attachmentList.length > 1) {
+      msgPayload.attachments = attachmentList;
+    }
     await msgRef.set(msgPayload);
 
     const recipientId = uid === fanIdFinal ? creatorIdFinal : fanIdFinal;
@@ -206,6 +199,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       console.error("fanDmSend: notification failed (message still sent)", notifyErr);
     }
 
+    const responseAttachments =
+      attachmentList.length === 1
+        ? { attachmentUrl: attachmentList[0].url, attachmentType: attachmentList[0].type }
+        : attachmentList.length > 1
+          ? { attachments: attachmentList }
+          : {};
+
     return res.status(201).json({
       message: {
         id: msgRef.id,
@@ -214,7 +214,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         content: content || "",
         createdAt: now,
         read: false,
-        ...(attachmentUrl ? { attachmentUrl, attachmentType } : {}),
+        ...responseAttachments,
       },
     });
   } catch (e: unknown) {

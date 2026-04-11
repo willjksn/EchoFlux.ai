@@ -637,6 +637,8 @@ export interface FanDmMessage {
     /** Optional media (Firebase Storage or CDN URL). */
     attachmentUrl?: string;
     attachmentType?: "image" | "video" | "audio";
+    /** Multiple photos/videos/voice notes in one message (legacy single-file uses attachmentUrl only). */
+    attachments?: Array<{ url: string; type: "image" | "video" | "audio" }>;
     reported?: boolean;
     reportId?: string;
 }

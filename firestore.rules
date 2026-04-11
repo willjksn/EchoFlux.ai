@@ -337,18 +337,26 @@ service cloud.firestore {
      *  ------------------------------------------------------- 
      *  Deny all other collections to prevent unauthorized access
      */
+    /** fanDmThreads/{threadId}/messages/* — parent doc must exist before get(); avoids spurious permission-denied on queries. */
+    function fanDmThreadDoc(threadId) {
+      return get(/databases/$(database)/documents/fanDmThreads/$(threadId));
+    }
+
+    function isFanDmThreadParticipantById(threadId) {
+      return exists(/databases/$(database)/documents/fanDmThreads/$(threadId))
+        && (
+          fanDmThreadDoc(threadId).data.creatorId == request.auth.uid ||
+          fanDmThreadDoc(threadId).data.fanId == request.auth.uid
+        );
+    }
+
     match /fanDmThreads/{threadId} {
       allow read: if isAuthenticated() &&
         (resource.data.creatorId == request.auth.uid || resource.data.fanId == request.auth.uid || isAdmin());
       allow create, update, delete: if false;
 
       match /messages/{messageId} {
-        allow read: if isAuthenticated() &&
-          (
-            get(/databases/$(database)/documents/fanDmThreads/$(threadId)).data.creatorId == request.auth.uid ||
-            get(/databases/$(database)/documents/fanDmThreads/$(threadId)).data.fanId == request.auth.uid ||
-            isAdmin()
-          );
+        allow read: if isAuthenticated() && (isFanDmThreadParticipantById(threadId) || isAdmin());
         allow create, update, delete: if false;
       }
     }

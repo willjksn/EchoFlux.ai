@@ -4,6 +4,7 @@ import { getAdminDb } from "./_firebaseAdmin.js";
 import { verifyAuth } from "./verifyAuth.js";
 import { FAN_DM_THREADS, FAN_DM_MESSAGES } from "./_fanDmHelpers.js";
 import { resolveFanPartyDisplayLabel, resolveCreatorPartyDisplayLabel } from "./_fanDmLabels.js";
+import { firestoreDataToMessageAttachmentFields } from "../src/lib/fanDmAttachments.js";
 
 const BATCH_SIZE = 400;
 
@@ -111,14 +112,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const data = d.data();
         const createdAt = parseCreated(data.createdAt);
         const read = data.read === true || markedIds.has(d.id);
-        const attachmentUrl =
-          typeof data.attachmentUrl === "string" ? data.attachmentUrl.trim() : undefined;
-        const attachmentType =
-          data.attachmentType === "image" ||
-          data.attachmentType === "video" ||
-          data.attachmentType === "audio"
-            ? data.attachmentType
-            : undefined;
+        const att = firestoreDataToMessageAttachmentFields(data as Record<string, unknown>);
         return {
           id: d.id,
           threadId,
@@ -126,7 +120,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           content: data.content,
           createdAt,
           read,
-          ...(attachmentUrl ? { attachmentUrl, attachmentType } : {}),
+          ...att,
           reported: data.reported,
           reportId: data.reportId,
           _sort: createdAt || d.id,
