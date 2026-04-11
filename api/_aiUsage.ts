@@ -1,5 +1,6 @@
 import { Timestamp, FieldValue } from "firebase-admin/firestore";
 import { getAdminDb } from "./_firebaseAdmin.js";
+import { normalizePlanForLimits } from "./_planLimits.js";
 
 export type AiUsageType = "general_ai" | "sexting_session";
 
@@ -37,7 +38,7 @@ function getCurrentMonth(): string {
 }
 
 function normalizePlan(plan: string): string {
-  return plan === "OnlyFansStudio" ? "Elite" : plan;
+  return normalizePlanForLimits(plan);
 }
 
 export async function getAiUsageStats(

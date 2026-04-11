@@ -43,7 +43,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     html?: string;
     createInvite?: {
       enabled?: boolean;
-      grantPlan?: "Free" | "Pro" | "Elite";
+      grantPlan?: "Pro" | "Elite";
       maxUses?: number;
       expiresAt?: string | null;
     };
@@ -61,14 +61,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const nowIso = new Date().toISOString();
 
   let inviteCode: string | null = null;
-  let invitePlan: "Free" | "Pro" | "Elite" | null = null;
+  let invitePlan: "Pro" | "Elite" | null = null;
   let inviteExpiresAtIso: string | null = null;
   let inviteMaxUses: number | null = null;
 
   try {
     if (createInvite?.enabled) {
-      const grantPlan = createInvite.grantPlan || "Free";
-      if (grantPlan !== "Free" && grantPlan !== "Pro" && grantPlan !== "Elite") {
+      const grantPlan = createInvite.grantPlan || "Pro";
+      if (grantPlan !== "Pro" && grantPlan !== "Elite") {
         return res.status(400).json({ error: "Invalid grantPlan" });
       }
       const maxUses = Number(createInvite.maxUses ?? 1);

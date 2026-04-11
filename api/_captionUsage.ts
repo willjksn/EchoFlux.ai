@@ -12,6 +12,7 @@
  */
 
 import { getAdminDb } from "./_firebaseAdmin.js";
+import { normalizePlanForLimits } from "./_planLimits.js";
 import { Timestamp, FieldValue } from "firebase-admin/firestore";
 
 export interface CaptionUsage {
@@ -35,10 +36,7 @@ const CAPTION_LIMITS: Record<string, number> = {
  * Normalize plan name - OnlyFansStudio users share Elite's allowance
  */
 function normalizePlan(plan: string): string {
-  if (plan === 'OnlyFansStudio') {
-    return 'Elite'; // OnlyFansStudio is part of Elite plan, shares same allowance
-  }
-  return plan;
+  return normalizePlanForLimits(plan);
 }
 
 /**

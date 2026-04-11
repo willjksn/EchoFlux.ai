@@ -11,7 +11,7 @@ type WaitlistItem = {
   createdAt?: string;
   updatedAt?: string;
   inviteCode?: string;
-  grantPlan?: 'Free' | 'Pro' | 'Elite';
+  grantPlan?: 'Pro' | 'Elite';
   expiresAt?: string | null;
   emailStatus?: string;
   lastEmailedAt?: string;
@@ -26,7 +26,7 @@ export const WaitlistManager: React.FC = () => {
 
   const [approveEmail, setApproveEmail] = useState<string | null>(null);
   const [approveName, setApproveName] = useState<string | null>(null);
-  const [approvePlan, setApprovePlan] = useState<'Free' | 'Pro' | 'Elite'>('Free');
+  const [approvePlan, setApprovePlan] = useState<'Pro' | 'Elite'>('Pro');
   const [approveExpiresAt, setApproveExpiresAt] = useState<string>(''); // YYYY-MM-DD
   const [isApproving, setIsApproving] = useState(false);
   const [emailPreview, setEmailPreview] = useState<string | null>(null);
@@ -345,7 +345,7 @@ export const WaitlistManager: React.FC = () => {
                               onClick={() => {
                                 setApproveEmail(it.email);
                                 setApproveName(it.name || null);
-                                setApprovePlan('Free');
+                                setApprovePlan('Pro');
                                 setApproveExpiresAt('');
                               }}
                               className="text-primary-600 hover:text-primary-700"
@@ -417,10 +417,9 @@ export const WaitlistManager: React.FC = () => {
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Grant plan</label>
                 <select
                   value={approvePlan}
-                  onChange={(e) => setApprovePlan(e.target.value as any)}
+                  onChange={(e) => setApprovePlan(e.target.value as 'Pro' | 'Elite')}
                   className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
                 >
-                  <option value="Free">Free</option>
                   <option value="Pro">Pro</option>
                   <option value="Elite">Elite</option>
                 </select>

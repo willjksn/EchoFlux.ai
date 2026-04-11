@@ -19,6 +19,12 @@ import { getEmojiInstructions, getEmojiExamplesForTone } from "./_emojiHelper.js
 import { sanitizeForAI } from "./_inputSanitizer.js";
 import { buildCacheKey, getCachedResponse, setCachedResponse } from "./_aiCache.js";
 import { canGenerateCaptions, recordCaptionGeneration } from "./_captionUsage.js";
+import { isCreatorIdentityPlan } from "./_creatorIdentityElite.js";
+import { getCreatorIdentityCurrent } from "./_creatorIdentityFirestore.js";
+import {
+  buildCreatorIdentityBackgroundPromptBlock,
+  buildCreatorIdentityBaselinePromptBlock,
+} from "./_creatorIdentityPrompt.js";
 
 async function getGeminiShared() {
   try {
@@ -277,10 +283,11 @@ async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
   });
   if (!ok) return;
 
-  // Fetch user's plan, role, and profile fields from Firestore
+  // Fetch user's plan, role, profile fields, and Elite Creator Identity doc from Firestore
   let userPlan = "Free";
   let userRole: string | undefined;
   let firestoreUserData: Record<string, unknown> | null = null;
+  let creatorIdentityDoc: import("./_creatorIdentityFirestore.js").CreatorIdentityDoc | null = null;
   try {
     const { getAdminDb } = await import("./_firebaseAdmin.js");
     const db = getAdminDb();
@@ -291,6 +298,9 @@ async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
         ? firestoreUserData.plan
         : "Free") as string;
       userRole = firestoreUserData.role as string | undefined;
+    }
+    if (db && isCreatorIdentityPlan(userPlan)) {
+      creatorIdentityDoc = await getCreatorIdentityCurrent(db, authUser.uid);
     }
   } catch (error) {
     console.error("Failed to fetch user plan:", error);
@@ -380,6 +390,8 @@ async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
     const raw = fromRoot || fromSettings;
     if (raw) personalityForPrompt = sanitizeForAI(raw, 1000);
   }
+  /** Pro & Elite: when true, saved Creator Personality strongly guides this run (Personality Override). */
+  const usePersonalityOverrideBool = Boolean(usePersonality && personalityForPrompt?.trim());
   const sanitizedFavoriteHashtags = favoriteHashtags ? sanitizeForAI(favoriteHashtags, 500) : undefined;
 
   const normalizedPlatformsEarly = Array.isArray(platforms)
@@ -427,6 +439,10 @@ async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
     !mediaData &&
     !mediaUrl &&
     (!mediaUrls || mediaUrls.length === 0);
+  const creatorIdentityVersion =
+    creatorIdentityDoc && typeof (creatorIdentityDoc as { version?: unknown }).version === "number"
+      ? (creatorIdentityDoc as { version: number }).version
+      : 0;
   const cacheKey = canCache
     ? buildCacheKey({
         userId: authUser.uid,
@@ -440,6 +456,8 @@ async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
         emojiEnabled,
         emojiIntensity,
         spiciness: toneSettings?.spiciness,
+        creatorIdentityVersion,
+        usePersonalityOverrideBool,
       })
     : null;
   if (cacheKey) {
@@ -855,15 +873,22 @@ ${isOnlyFansPlatform ? `
 - Gemini has knowledge of OnlyFans/Fansly/Fanvue creator culture - use that knowledge to write authentically
 ` : ''}
 
-${usePersonality && personalityForPrompt ? `
-🎯 CREATOR PERSONALITY & BRAND VOICE (PRIMARY WHEN THIS TOGGLE IS ON):
+${isCreatorIdentityPlan(userPlan) && creatorIdentityDoc && !usePersonalityOverrideBool
+  ? buildCreatorIdentityBaselinePromptBlock(creatorIdentityDoc)
+  : ""}
+${isCreatorIdentityPlan(userPlan) && creatorIdentityDoc && usePersonalityOverrideBool
+  ? buildCreatorIdentityBackgroundPromptBlock(creatorIdentityDoc)
+  : ""}
+${usePersonalityOverrideBool && personalityForPrompt ? `
+🎯 PERSONALITY OVERRIDE & BRAND VOICE (PRIMARY FOR THIS RUN):
 ${personalityForPrompt}
 
-CREATOR PERSONALITY OVERRIDE (ENABLED — THIS TOGGLES "USE CREATOR PERSONALITY"):
-- The creator turned ON "Use creator personality." This personality text is the PRIMARY authority for voice, vocabulary, attitude, humor level, formality, and brand style in the captions.
-- The selected tone label (${sanitizedTone || tone || "friendly"}), PRIMARY GOAL voice-framing, emoji "match tone" examples, and ALL tone sliders (formality, humor, empathy, spiciness, profanity) are SECONDARY. If any of them conflict with the personality description, follow the personality—not the tone label or sliders.
-- User-provided caption instructions (USER INSTRUCTIONS / Extra instructions) still define topic, angle, and must-haves; write those in the personality's authentic voice.
-- Use ONLY the creator personality text above for THIS user. Never use example or placeholder data as if it were this user's data.
+PERSONALITY OVERRIDE (ENABLED):
+- The creator turned ON Personality Override. This text is the PRIMARY authority for voice, vocabulary, attitude, humor level, formality, and brand style in the captions.
+- On Elite, Creator Identity (if present above) is BACKGROUND only when it conflicts—always follow this override for voice.
+- The selected tone label (${sanitizedTone || tone || "friendly"}), PRIMARY GOAL voice-framing, emoji "match tone" examples, and ALL tone sliders (formality, humor, empathy, spiciness, profanity) are SECONDARY. If any of them conflict with the override text, follow the override—not the tone label or sliders.
+- User-provided caption instructions (USER INSTRUCTIONS / Extra instructions) still define topic, angle, and must-haves; write those in the same authentic voice as the override.
+- Use ONLY the personality override text above for THIS user. Never use example or placeholder data as if it were this user's data.
 - Do NOT force physical attributes into every caption—only when the user asks or the content naturally needs it (roleplay, outfit fit, etc.).
 ` : ''}
 

@@ -9,8 +9,8 @@ const DEFAULT_PASSWORD = "Password1!";
 
 function getStorageLimitMB(plan: string): number {
   if (plan === "Free") return 100;
-  if (plan === "Pro") return 5120;
-  if (plan === "Elite" || plan === "Growth") return 10240;
+  if (plan === "Pro" || plan === "CreatorPro") return 5120;
+  if (plan === "Elite" || plan === "CreatorElite" || plan === "Growth") return 10240;
   if (plan === "Agency") return 51200;
   if (plan === "Starter") return 1024;
   if (plan === "Caption" || plan === "OnlyFansStudio") return 10240;

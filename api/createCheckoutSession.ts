@@ -6,6 +6,9 @@ import {
   ECHOFLUX_PRO_MONTHLY_USD,
 } from '../constants.js';
 import { verifyAuth } from './verifyAuth.js';
+import { getAdminDb } from './_firebaseAdmin.js';
+
+const INVITE_CREATOR_CHECKOUT_PLANS = new Set(['CreatorPro', 'CreatorElite']);
 
 // Initialize Stripe only if secret key is available
 // Environment variable priority (for testing/sandbox support):
@@ -135,6 +138,14 @@ const PLAN_PRICE_IDS: Record<string, { monthly: string; annually: string }> = {
     monthly: getPriceId('Elite', 'monthly'),
     annually: getPriceId('Elite', 'annually'),
   },
+  CreatorPro: {
+    monthly: getPriceId('CreatorPro', 'monthly'),
+    annually: '',
+  },
+  CreatorElite: {
+    monthly: getPriceId('CreatorElite', 'monthly'),
+    annually: '',
+  },
   Agency: {
     monthly: getPriceId('Agency', 'monthly'),
     annually: getPriceId('Agency', 'annually'),
@@ -193,6 +204,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(400).json({ error: 'Plan name and billing cycle are required' });
     }
 
+    const isAnnual = billingCycle === 'annual' || billingCycle === 'annually' || billingCycle === 'yearly';
+    if (INVITE_CREATOR_CHECKOUT_PLANS.has(planName) && isAnnual) {
+      return res.status(400).json({
+        error: 'Invalid billing cycle',
+        message: 'Creator invite plans are monthly only.',
+      });
+    }
+
     const planPrices = PLAN_PRICE_IDS[planName];
     if (!planPrices) {
       console.error(`Invalid plan name: ${planName}`);
@@ -202,9 +221,40 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
     }
 
-    // Normalize billing cycle: accept 'annual', 'annually', or 'yearly' for annual, otherwise monthly
-    const isAnnual = billingCycle === 'annual' || billingCycle === 'annually' || billingCycle === 'yearly';
     const priceId = isAnnual ? planPrices.annually : planPrices.monthly;
+
+    if (INVITE_CREATOR_CHECKOUT_PLANS.has(planName)) {
+      const db = getAdminDb();
+      const userSnap = await db.collection('users').doc(decodedToken.uid).get();
+      const u = userSnap.data() as Record<string, unknown> | undefined;
+      if (!userSnap.exists) {
+        return res.status(403).json({
+          error: 'Forbidden',
+          message: 'User profile not found.',
+        });
+      }
+      const subStatus = u?.subscriptionStatus as string | undefined;
+      const inviteGrant = u?.inviteGrantPlan as string | undefined;
+      if (subStatus !== 'creator_invite_pending' || inviteGrant !== 'CreatorChoice') {
+        return res.status(403).json({
+          error: 'Forbidden',
+          message: 'This plan is only available after redeeming a creator invite code.',
+        });
+      }
+      const currentPlan = (u?.plan as string | undefined) || 'Free';
+      if (currentPlan !== 'Free') {
+        return res.status(403).json({
+          error: 'Forbidden',
+          message: 'Account is not eligible for creator invite checkout.',
+        });
+      }
+      if (typeof u?.stripeSubscriptionId === 'string' && u.stripeSubscriptionId.trim()) {
+        return res.status(403).json({
+          error: 'Forbidden',
+          message: 'You already have an active subscription.',
+        });
+      }
+    }
     
     if (!priceId || priceId.trim() === '') {
       const cycleDisplay = isAnnual ? 'annual' : 'monthly';
@@ -255,7 +305,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       // Ensure the resulting subscription carries plan metadata, so future subscription.updated events
       // can reliably map back to the correct plan (without needing price→plan reverse mapping).
       subscription_data: {
-        trial_period_days: 7, // 7-day free trial - card required but no charge until trial ends
+        trial_period_days: INVITE_CREATOR_CHECKOUT_PLANS.has(planName) ? 0 : 7,
         metadata: {
           planName,
           billingCycle,

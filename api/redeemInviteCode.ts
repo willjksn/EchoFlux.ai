@@ -4,7 +4,7 @@ import { verifyAuth } from "./verifyAuth.js";
 import { getAdminDb } from "./_firebaseAdmin.js";
 
 /**
- * Redeem an invite code to grant access (Pro/Elite) without Stripe.
+ * Redeem an invite code: Pro/Elite granted without Stripe, or CreatorChoice → pending paid checkout.
  * - Requires the user to be authenticated (Firebase ID token)
  * - Validates invite (exists, not expired, not fully used)
  * - Marks invite as used (increment usedCount; set used=true if max reached)
@@ -38,7 +38,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
       const inviteData = inviteSnap.data() as any;
       const grantPlan = inviteData?.grantPlan as string | undefined;
-      if (grantPlan !== "Free" && grantPlan !== "Pro" && grantPlan !== "Elite") {
+      if (grantPlan !== "Pro" && grantPlan !== "Elite" && grantPlan !== "CreatorChoice") {
         return { ok: false as const, status: 400 as const, error: "Invite is not configured with access" };
       }
 
@@ -46,7 +46,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const alreadyRedeemedThisCode =
         existingUserData?.invitedWithCode === normalizedCode ||
         existingUserData?.inviteGrantRedeemedAt ||
-        existingUserData?.subscriptionStatus === "invite_grant";
+        existingUserData?.subscriptionStatus === "invite_grant" ||
+        existingUserData?.subscriptionStatus === "creator_invite_pending";
 
       // Expiry check
       const expiresAtIso = inviteData?.expiresAt
@@ -80,22 +81,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       // If user doesn't exist, create with all required fields
       // If user exists, merge invite grant fields
       const isNewUser = !userSnap.exists;
+      const isCreatorChoice = grantPlan === "CreatorChoice";
       const userData: any = {
         id: user.uid,
         email: user.email || "",
         name: typeof fullName === "string" && fullName.trim() ? fullName.trim() : (existingUserData?.name || "New User"),
         userType: "Creator",
-        plan: grantPlan,
+        plan: isCreatorChoice ? "Free" : grantPlan,
         role: existingUserData?.role || "User",
         hasCompletedOnboarding: existingUserData?.hasCompletedOnboarding || false,
-        // Invite grant metadata
         invitedWithCode: normalizedCode,
         invitedAt: nowIso,
         inviteGrantPlan: grantPlan,
         inviteGrantExpiresAt: expiresAtIso,
         inviteGrantRedeemedAt: nowIso,
-        // Marker so UI can treat as grant (not Stripe subscription)
-        subscriptionStatus: "invite_grant",
+        subscriptionStatus: isCreatorChoice ? "creator_invite_pending" : "invite_grant",
       };
 
       // For new users, include all required fields

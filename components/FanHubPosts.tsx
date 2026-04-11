@@ -1733,7 +1733,7 @@ Write 2-4 sentences that are engaging and on-topic.`;
                       id="fanhub-composer-use-personality-label"
                       className="text-sm text-gray-600 dark:text-gray-400 whitespace-nowrap"
                     >
-                      Use Personality
+                      Personality Override
                     </span>
                     <FanHubSwitch
                       checked={usePersonality}

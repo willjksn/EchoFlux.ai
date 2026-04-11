@@ -152,10 +152,13 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                             }
                         }
 
-                        // Expire invite-granted access (do not affect Stripe subscribers).
-                        // If expired, downgrade to Free and force user to upgrade via Stripe (Pricing).
-                        const isInviteGrant = status === 'invite_grant' || !!inviteGrantPlan;
-                        if (isInviteGrant && !hasStripeSubscription && typeof expiresAtIso === 'string' && expiresAtIso) {
+                        // Expire time-boxed invite access (do not affect Stripe subscribers).
+                        const shouldApplyInviteExpiry =
+                          !hasStripeSubscription &&
+                          typeof expiresAtIso === 'string' &&
+                          expiresAtIso &&
+                          (status === 'invite_grant' || status === 'creator_invite_pending');
+                        if (shouldApplyInviteExpiry) {
                             const expiresMs = new Date(expiresAtIso).getTime();
                             if (Number.isFinite(expiresMs) && expiresMs < Date.now()) {
                                 const nowIso = new Date().toISOString();

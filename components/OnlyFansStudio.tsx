@@ -4,7 +4,7 @@ import { CopyIcon, SparklesIcon, SettingsIcon, XMarkIcon, CheckCircleIcon, Refre
 import { OnlyFansContentBrain } from './OnlyFansContentBrain';
 import { ContentGapAnalysis } from './ContentGapAnalysis';
 import { OnlyFansRoleplay } from './OnlyFansRoleplay';
-import { OnlyFansRoleplayIdeas } from './OnlyFansRoleplayIdeas';
+import { CreatorIdentityBuilder } from './CreatorIdentityBuilder';
 import { OnlyFansStudioSettings } from './OnlyFansStudioSettings';
 import { OnlyFansExportHub } from './OnlyFansExportHub';
 import { OnlyFansCalendar } from './OnlyFansCalendar';
@@ -875,12 +875,14 @@ export const OnlyFansStudio: React.FC<{ mode?: 'studio' | 'fanHub' }> = ({ mode 
                 </div>
             );
         }
-        // Persona Builder: OnlyFansRoleplayIdeas persona tab only
+        // Creator Identity Builder (Elite-tier Premium Studio)
         if (studioTab === 'persona') {
             return (
-                <div className="max-w-7xl mx-auto">
+                <div className="max-w-7xl mx-auto px-4 py-6">
                     <ErrorBoundary>
-                        <OnlyFansRoleplayIdeas initialTab="persona" singleTabMode />
+                        <div className="rounded-2xl bg-white dark:bg-gray-950 border border-gray-200 dark:border-gray-800 p-6 md:p-10 shadow-lg">
+                            <CreatorIdentityBuilder />
+                        </div>
                     </ErrorBoundary>
                 </div>
             );
@@ -959,8 +961,8 @@ export const OnlyFansStudio: React.FC<{ mode?: 'studio' | 'fanHub' }> = ({ mode 
                                 </div>
                             </div>
                             <div className="flex flex-wrap gap-2">
-                                <button onClick={() => setUseCreatorPersonalityTeaserPack(prev => !prev)} disabled={!creatorPersonality} className={`px-3 py-2 rounded-md text-sm font-medium transition-colors flex items-center justify-center gap-2 ${useCreatorPersonalityTeaserPack ? 'bg-primary-600 text-white hover:bg-primary-700' : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'} ${!creatorPersonality ? 'opacity-50 cursor-not-allowed' : ''}`} title={!creatorPersonality ? 'Add a creator personality in Settings → AI Training to enable' : undefined}>
-                                    <SparklesIcon className="w-4 h-4" /> Personality
+                                <button onClick={() => setUseCreatorPersonalityTeaserPack(prev => !prev)} disabled={!creatorPersonality} className={`px-3 py-2 rounded-md text-sm font-medium transition-colors flex items-center justify-center gap-2 ${useCreatorPersonalityTeaserPack ? 'bg-primary-600 text-white hover:bg-primary-700' : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'} ${!creatorPersonality ? 'opacity-50 cursor-not-allowed' : ''}`} title={!creatorPersonality ? 'Add Personality Override text in Settings → AI Training to enable' : undefined}>
+                                    <SparklesIcon className="w-4 h-4" /> Personality Override
                                 </button>
                             </div>
                             <div className="flex items-center justify-between gap-3">
@@ -1323,10 +1325,10 @@ export const OnlyFansStudio: React.FC<{ mode?: 'studio' | 'fanHub' }> = ({ mode 
                                             ? 'bg-primary-600 text-white hover:bg-primary-700'
                                             : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
                                     } ${!creatorPersonality ? 'opacity-50 cursor-not-allowed' : ''}`}
-                                    title={!creatorPersonality ? 'Add a creator personality in Settings → AI Training to enable' : undefined}
+                                    title={!creatorPersonality ? 'Add Personality Override text in Settings → AI Training to enable' : undefined}
                                 >
                                     <SparklesIcon className="w-4 h-4" />
-                                    Personality
+                                    Personality Override
                                 </button>
                             </div>
 

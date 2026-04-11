@@ -14,21 +14,8 @@ interface PricingProps {
     onNavigateRequest?: (page: Page) => void;
 }
 
-// All available plans (hidden plans commented out for future use)
-const allCreatorTiers = [
-    {
-        name: 'Free',
-        priceMonthly: 0,
-        priceAnnually: 0,
-        description: 'For individuals testing the studio.',
-        features: [
-            '10 AI caption generations',
-            'Content calendar',
-            'My Vault (100 MB storage)',
-            'Fair-use AI limits'
-        ],
-        isRecommended: false
-    },
+// Creator SaaS: Pro and Elite only (no public free tier; access via invite grant or paid checkout).
+const creatorTiers = [
     {
         name: 'Pro',
         priceMonthly: ECHOFLUX_PRO_MONTHLY_USD,
@@ -124,9 +111,6 @@ const allCreatorTiers = [
     //     isRecommended: false
     // },
 ];
-
-// Only show Pro and Elite plans (Free plan hidden - users can try with 7-day trial)
-const creatorTiers = allCreatorTiers.filter(tier => ['Pro', 'Elite'].includes(tier.name));
 
 export const Pricing: React.FC<PricingProps> = ({ onGetStartedClick, onNavigateRequest }) => {
     const { user, openPaymentModal, setActivePage, isAuthenticated, pricingView, setPricingView, showToast, setUser, setSelectedPlan } = useAppContext();

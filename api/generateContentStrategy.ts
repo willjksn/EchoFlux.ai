@@ -10,6 +10,13 @@ import { canGenerateStrategy, recordStrategyGeneration } from "./_strategyUsage.
 import { getOnlyFansResearchContext } from "./_onlyfansResearch.js";
 import { getEmojiInstructions, getEmojiExamplesForTone } from "./_emojiHelper.js";
 import { enforceRateLimit } from "./_rateLimit.js";
+import { isCreatorIdentityPlan } from "./_creatorIdentityElite.js";
+import { getCreatorIdentityCurrent } from "./_creatorIdentityFirestore.js";
+import {
+  buildCreatorIdentityBackgroundPromptBlock,
+  buildCreatorIdentityBaselinePromptBlock,
+  strategyNicheSeedFromIdentity,
+} from "./_creatorIdentityPrompt.js";
 
 export default async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
   if (req.method !== "POST") {
@@ -46,6 +53,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
   const userData = userDoc.data();
   const userPlan = userData?.plan || 'Free';
   const userRole = userData?.role;
+
+  const creatorIdentityDoc = isCreatorIdentityPlan(String(userPlan))
+    ? await getCreatorIdentityCurrent(db, authUser.uid)
+    : null;
+  const identitySeedStr = strategyNicheSeedFromIdentity(creatorIdentityDoc);
+  const hasIdentityBaseline = Boolean(identitySeedStr?.trim());
   
   // Get creator profile for gender-aware content generation
   const creatorGender = userData?.creatorGender || "";
@@ -83,10 +96,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
     res.status(400).json({ error: "Primary goal is required" });
     return;
   }
-  if (!rawNiche && !rawAudience && !usePersonalityBool) {
+  if (!rawNiche && !rawAudience && !usePersonalityBool && !hasIdentityBaseline) {
     res.status(400).json({
       error:
-        "Add post ideas, target audience, or enable Personality (with a description in Settings).",
+        "Add post ideas, target audience, enable Personality Override (with text in Settings), or complete Creator Identity (Elite).",
     });
     return;
   }
@@ -94,7 +107,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
   const effectiveNiche =
     rawNiche ||
     (usePersonalityBool
-      ? "Personality-led — topics from creator voice (see CREATOR PERSONALITY block)"
+      ? "Personality Override–led — topics from creator voice (see PERSONALITY OVERRIDE block)"
+      : hasIdentityBaseline
+        ? `Creator Identity–led — ${identitySeedStr.slice(0, 200)}`
       : "General social content");
   const effectiveAudience =
     rawAudience ||
@@ -104,18 +119,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
     (usePersonalityBool
       ? safeCreatorPersonality.slice(0, 120).replace(/\s+/g, " ").trim()
       : "") ||
+    (hasIdentityBaseline ? identitySeedStr.slice(0, 160).replace(/\s+/g, " ").trim() : "") ||
     "social media creator content";
   const researchAudienceSeed = rawAudience || "social media audience";
 
-  // Tone sliders: with personality ON, formality/humor/warmth often fight the personality text (user hears "it ignores me").
-  // Keep sliders authoritative for emoji + profanity; personality is ground truth for voice when usePersonalityBool.
+  // Tone sliders: with Personality Override ON, formality/humor/warmth often fight the override text (user hears "it ignores me").
+  // Keep sliders authoritative for emoji + profanity; override is ground truth for voice when usePersonalityBool.
   const toneStyleGuidance = toneSettings
     ? usePersonalityBool
       ? `
-WRITING STYLE (personality mode — follow emoji & profanity lines strictly; personality block defines all other voice traits):
+WRITING STYLE (Personality Override mode — follow emoji & profanity lines strictly; override block defines all other voice traits):
 ${toneSettings.profanity !== undefined && toneSettings.profanity > 0 ? `- Profanity (${toneSettings.profanity}/100): ${toneSettings.profanity < 30 ? 'Very mild swearing OK' : toneSettings.profanity < 50 ? 'Moderate casual swearing' : 'Frequent swearing acceptable'}` : '- Keep language clean, no swearing'}
 ${toneSettings.emojiLevel !== undefined ? `- Emoji usage (${toneSettings.emojiLevel}/100): ${toneSettings.emojiLevel < 20 ? 'No emojis in captions' : toneSettings.emojiLevel < 40 ? 'At most 1-2 emojis total per caption' : toneSettings.emojiLevel < 60 ? 'Moderate emojis (a few, purposeful)' : 'Liberal, expressive emoji use that matches the voice'}` : ''}
-- Formality, humor, warmth sliders: IGNORE their numbers for caption voice — the CREATOR PERSONALITY & BRAND VOICE section defines those. Do not "sanitize" or corporate-wash captions to match sliders.
+- Formality, humor, warmth sliders: IGNORE their numbers for caption voice — the PERSONALITY OVERRIDE & BRAND VOICE section defines those. Do not "sanitize" or corporate-wash captions to match sliders.
 `
       : `
 WRITING STYLE PREFERENCES (apply to every "caption", hook, and ready-to-post line — especially emoji count and warmth):
@@ -409,30 +425,47 @@ ${explicitnessContext ? `\nEXPLICITNESS LEVEL: ${explicitnessLevel}/10\n${explic
       ? contextDescription.trim().slice(0, 1500)
       : '';
 
+    const creatorIdentityBaselineBlock =
+      hasIdentityBaseline && creatorIdentityDoc && !usePersonalityBool
+        ? buildCreatorIdentityBaselinePromptBlock(creatorIdentityDoc)
+        : "";
+    const creatorIdentityBackgroundBlock =
+      hasIdentityBaseline && creatorIdentityDoc && usePersonalityBool
+        ? buildCreatorIdentityBackgroundPromptBlock(creatorIdentityDoc)
+        : "";
+
     const personalityLeadBlock =
       usePersonalityBool && safeCreatorPersonality
         ? `
-CREATOR PERSONALITY & BRAND VOICE (PRIMARY — READ THIS BEFORE WRITING ANY "caption"):
+${creatorIdentityBackgroundBlock}
+PERSONALITY OVERRIDE & BRAND VOICE (PRIMARY — READ THIS BEFORE WRITING ANY "caption"):
 ${safeCreatorPersonality}
 
-CRITICAL — PERSONALITY-FIRST PLANNING:
+CRITICAL — OVERRIDE-FIRST PLANNING:
 - This block is the top priority for HOW captions sound (word choice, humor, energy, slang, attitude). Every caption must read like THIS person typed it on their phone — not like a strategist, narrator, or generic influencer.
-- ${rawNiche ? `Post ideas from the user: "${rawNiche}". Topics and angles should reflect these ideas AND this voice; if anything conflicts, personality wins for wording.` : `The user did not specify post ideas—propose specific content ideas that only this personality would post, aligned with goal (${goalStr}), platform focus (${platformFocus || "Mixed / All"}), and audience (${effectiveAudience}).`}
-- Research and trends above/below inform WHAT to post, timing, and formats — do NOT import their tone of voice into captions. Never replace this personality with "best practices" speak.
+- On Elite, Creator Identity (if shown above as background) must not override this block when they conflict.
+- ${rawNiche ? `Post ideas from the user: "${rawNiche}". Topics and angles should reflect these ideas AND this voice; if anything conflicts, Personality Override wins for wording.` : `The user did not specify post ideas—propose specific content ideas that fit this override voice, aligned with goal (${goalStr}), platform focus (${platformFocus || "Mixed / All"}), and audience (${effectiveAudience}).`}
+- Research and trends above/below inform WHAT to post, timing, and formats — do NOT import their tone of voice into captions. Never replace this override with "best practices" speak.
 - Strategy "Tone" dropdown is secondary when this block is present. Emoji and profanity rules come from Settings (see WRITING STYLE in parameters).
 - Steer tactics toward "${goalStr}" using approaches that still sound like this creator.
 
 `
-        : "";
+        : `${creatorIdentityBaselineBlock}`;
 
     const personalityCaptionFinalCheck = usePersonalityBool
       ? `
-FINAL — CAPTIONS VS PERSONALITY (MANDATORY):
-- Before outputting JSON, skim every "caption" field: if it could belong to any random creator in this niche, rewrite it until it clearly matches CREATOR PERSONALITY & BRAND VOICE above.
-- Do not flatten voice to sound "on-brand" in a generic way; keep quirks, specificity, and attitude from the personality text.
+FINAL — CAPTIONS VS PERSONALITY OVERRIDE (MANDATORY):
+- Before outputting JSON, skim every "caption" field: if it could belong to any random creator in this niche, rewrite it until it clearly matches PERSONALITY OVERRIDE & BRAND VOICE above.
+- Do not flatten voice to sound "on-brand" in a generic way; keep quirks, specificity, and attitude from the override text.
 
 `
-      : "";
+      : hasIdentityBaseline
+        ? `
+FINAL — CAPTIONS VS CREATOR IDENTITY (MANDATORY):
+- Every "caption" should reflect the Creator Identity baseline (positioning, audience pull, monetization angle) even though Personality Override is off.
+
+`
+        : "";
 
     const favoriteHashtagsBlock =
       useFavoriteHashtags && safeFavoriteHashtags
@@ -447,16 +480,20 @@ Incorporate relevant hashtags into the strategy recommendations where appropriat
 
     const strategistOpening =
       usePersonalityBool && !rawNiche
-        ? `You are an elite content strategist. Market research and trends appear first for topics and timing; the CREATOR PERSONALITY & BRAND VOICE section (after that context) is the PRIMARY anchor for caption voice and authenticity. Use research for WHAT/when — never for generic influencer diction in captions. Audience: ${effectiveAudience}.`
+        ? `You are an elite content strategist. Market research and trends appear first for topics and timing; the PERSONALITY OVERRIDE section (after that context) is the PRIMARY anchor for caption voice and authenticity. Use research for WHAT/when — never for generic influencer diction in captions. Audience: ${effectiveAudience}.`
         : usePersonalityBool && rawNiche
-          ? `You are an elite content strategist. Blend the user's post ideas ("${rawNiche}") with their creator personality (full block below, after research/trends). Post ideas steer topics; personality steers every caption's voice. Target audience: ${effectiveAudience}.`
-          : `You are an elite content strategist specializing in ${effectiveNiche} for ${effectiveAudience}. Your expertise is creating data-driven strategies that achieve specific business goals.`;
+          ? `You are an elite content strategist. Blend the user's post ideas ("${rawNiche}") with their Personality Override (full block below, after research/trends). Post ideas steer topics; the override steers every caption's voice. Target audience: ${effectiveAudience}.`
+          : hasIdentityBaseline && !rawNiche
+            ? `You are an elite content strategist. Use Creator Identity (baseline block below) as the default brand lens for topics, tone, and monetization framing when Personality Override is off. Audience: ${effectiveAudience}.`
+            : `You are an elite content strategist specializing in ${effectiveNiche} for ${effectiveAudience}. Your expertise is creating data-driven strategies that achieve specific business goals.`;
 
     const primaryStrategySourceInstruction =
       usePersonalityBool && !rawNiche
-        ? `3. PRIMARY STRATEGY SOURCE: Creator personality (voice + differentiated topics) + trend/research for timing and formats + goal (${goalStr}). Research suggests themes; captions must still sound like the personality block — not like the research prose.`
+        ? `3. PRIMARY STRATEGY SOURCE: Personality Override (voice + differentiated topics) + trend/research for timing and formats + goal (${goalStr}). Research suggests themes; captions must still sound like the override block — not like the research prose.`
         : usePersonalityBool && rawNiche
-          ? `3. PRIMARY STRATEGY SOURCE: Post ideas ("${rawNiche}") define topics; creator personality defines caption voice; research/trends refine angles and timing. Do not let research replace the personality voice in "caption" fields.`
+          ? `3. PRIMARY STRATEGY SOURCE: Post ideas ("${rawNiche}") define topics; Personality Override defines caption voice; research/trends refine angles and timing. Do not let research replace the override voice in "caption" fields.`
+          : hasIdentityBaseline && !usePersonalityBool
+            ? `3. PRIMARY STRATEGY SOURCE: Creator Identity baseline + trend/research + goal (${goalStr}). Identity informs positioning and voice unless the user later enables Personality Override for a specific run.`
           : `3. PRIMARY STRATEGY SOURCE: Use the topic-specific research above as your PRIMARY source of insights:
    - This research includes successful strategies, competitor analysis, and proven tactics for ${effectiveNiche} targeting ${effectiveAudience}
    - Adapt successful strategies from the research to fit the goal: ${goalStr}
@@ -503,7 +540,7 @@ ${durationWeeks === 1 ? '\n⚠️ IMPORTANT: This is a ONE-WEEK plan. Generate E
 
 Strategy Parameters:
 - Primary Goal: ${goalStr} (THIS IS THE MOST IMPORTANT - every content piece should directly support this goal)
-- Tone: ${tone}${usePersonalityBool ? " (SECONDARY when creator personality is enabled — personality wins for voice)" : ""}${isExplicitContent ? ' (EXPLICIT/ADULT CONTENT - Generate bold, sales-oriented, explicit content ideas)' : ''}
+- Tone: ${tone}${usePersonalityBool ? " (SECONDARY when Personality Override is on — override wins for voice)" : ""}${isExplicitContent ? ' (EXPLICIT/ADULT CONTENT - Generate bold, sales-oriented, explicit content ideas)' : ''}
 - Platform Focus: ${platformFocus || 'Mixed / All'}
 - Target Audience: ${effectiveAudience}${rawAudience ? "" : " (inferred when not provided)"}
 - Post ideas / content direction: ${effectiveNiche}${rawNiche ? "" : " (inferred / personality-led when not provided)"}
@@ -587,7 +624,7 @@ ${durationWeeks === 1 ? '⚠️ CRITICAL: Generate EXACTLY 1 WEEK (7 days) of co
      - Start with an attention-grabbing hook (question, bold statement, or intriguing opener)
      - Include engaging body content (not a boring title or outline)
      - End with the CTA; include 3-5 relevant hashtags at the end when the platform uses hashtags (unless OnlyFans/Fan Hub)
-     - ${usePersonalityBool ? `Voice: mirror CREATOR PERSONALITY & BRAND VOICE exactly for diction and attitude; use WRITING STYLE above only for emoji count and profanity` : `Match tone (${tone}); follow WRITING STYLE PREFERENCES above for emoji density, warmth, humor, and formality`}
+     - ${usePersonalityBool ? `Voice: mirror PERSONALITY OVERRIDE & BRAND VOICE exactly for diction and attitude; use WRITING STYLE above only for emoji count and profanity` : hasIdentityBaseline ? `Voice: align with Creator Identity baseline and tone (${tone}); follow WRITING STYLE PREFERENCES` : `Match tone (${tone}); follow WRITING STYLE PREFERENCES above for emoji density, warmth, humor, and formality`}
      - Sound human and platform-native, not generic or robotic
 ${durationWeeks === 1 ? '- Provide comprehensive, detailed content across all 7 days with variety' : ''}
 - Distribute content across platforms: ${platforms.join(', ')}

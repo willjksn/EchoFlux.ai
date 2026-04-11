@@ -174,7 +174,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onGetSta
                         </div>
                         <div className="flex flex-wrap items-center gap-2 sm:gap-3 text-xs text-gray-700 dark:text-primary-100/90 min-w-0">
                           <span className="inline-flex items-center rounded-full bg-primary-50 border border-primary-200 px-3 py-1.5 whitespace-nowrap font-medium text-primary-700 shadow-sm dark:bg-white/20 dark:border-white/30 dark:text-white dark:shadow-lg flex-shrink-0">
-                            Free to start
+                            Pro & Elite plans
                           </span>
                           <span className="inline-flex items-center rounded-full bg-primary-50 border border-primary-200 px-3 py-1.5 whitespace-nowrap font-medium text-primary-700 shadow-sm dark:bg-white/20 dark:border-white/30 dark:text-white dark:shadow-lg flex-shrink-0">
                             Your own storefront
@@ -393,7 +393,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onGetSta
                 Create your witme page
               </button>
               <p className="mt-3 text-sm text-gray-500 dark:text-gray-400">
-                Fan-facing URL on witme.io. Free to set up; platform fees apply when you earn.
+                Fan-facing URL on witme.io with Pro or Elite. Platform fees apply when you earn.
               </p>
             </div>
           </div>

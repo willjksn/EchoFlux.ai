@@ -31,6 +31,10 @@ export const FAN_STOREFRONT_SIGNUP_SESSION_KEY = 'echofluxFanStorefrontSignup';
 /** EchoFlux creator subscriptions: monthly USD and fixed annual totals (match Stripe yearly prices). */
 export const ECHOFLUX_PRO_MONTHLY_USD = 29;
 export const ECHOFLUX_ELITE_MONTHLY_USD = 59;
+
+/** Invite-only Stripe prices: Creator Pro $1/mo, Creator Elite $2/mo (monthly only). */
+export const ECHOFLUX_CREATOR_PRO_INVITE_USD = 1;
+export const ECHOFLUX_CREATOR_ELITE_INVITE_USD = 2;
 export const ECHOFLUX_PRO_ANNUAL_TOTAL_USD = 276;
 export const ECHOFLUX_ELITE_ANNUAL_TOTAL_USD = 564;
 
@@ -118,7 +122,7 @@ export const KNOWN_APP_ROUTES: readonly string[] = [
 ] as const;
 
 /** Premium Studio tab IDs only (for /studio?tab=...) */
-export const STUDIO_TAB_IDS = ['ideas', 'drops', 'dmSession', 'persona', 'teasers'] as const;
+export const STUDIO_TAB_IDS = ['persona', 'ideas', 'drops', 'dmSession', 'teasers'] as const;
 export type StudioTabId = (typeof STUDIO_TAB_IDS)[number];
 
 /** Fan Hub tab IDs only (for /fan?tab=...) */
@@ -130,7 +134,7 @@ export const STUDIO_TAB_LABELS: Record<StudioTabId, string> = {
   ideas: 'New Ideas',
   drops: 'Drops & PPV',
   dmSession: 'DM Session',
-  persona: 'Persona Builder',
+  persona: 'Creator Identity',
   teasers: 'Teasers',
 };
 
@@ -411,7 +415,8 @@ export const MOCK_POSTS: Post[] = [
 ];
 
 export const getTourStepsForPlan = (user: User): TourStep[] => {
-    const hasFanHubAccess = ['Pro', 'Elite', 'Agency', 'OnlyFansStudio'].includes(user.plan);
+    const plan = user.plan || 'Free';
+    const hasFanHubAccess = ['Pro', 'Elite', 'CreatorPro', 'CreatorElite', 'Agency', 'OnlyFansStudio'].includes(plan);
     let steps: TourStep[] = [
       { elementId: 'tour-step-1-dashboard', page: 'dashboard', title: 'Your Command Center', content: 'This is your home base. Check stats, upcoming posts, and urgent items.', position: 'top' },
       { elementId: 'tour-step-theme-toggle', page: 'dashboard', title: 'Light / Dark Mode', content: 'Use the sun/moon button (top right) to toggle themes anytime.', position: 'left' },
@@ -431,7 +436,7 @@ export const getTourStepsForPlan = (user: User): TourStep[] => {
         elementId: 'tour-step-5-ai-training-tab',
         page: 'settings',
         title: 'AI Training',
-        content: 'Set your AI Personality and Creator Personality so captions and plans sound like you.',
+        content: 'Set your AI Personality and Personality Override text so captions and plans sound like you. Elite: complete Creator Identity for default brand direction.',
         position: 'bottom',
     });
 

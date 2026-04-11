@@ -4,6 +4,8 @@ import { Plan, UserType } from '../types';
 import { CheckIcon } from './icons/UIIcons';
 import { createAccountFromPendingSignup } from '../src/utils/createAccountFromPendingSignup';
 import {
+  ECHOFLUX_CREATOR_ELITE_INVITE_USD,
+  ECHOFLUX_CREATOR_PRO_INVITE_USD,
   ECHOFLUX_ELITE_MONTHLY_USD,
   ECHOFLUX_PRO_MONTHLY_USD,
   echofluxAnnualTotalUsd,
@@ -14,6 +16,8 @@ interface PlanSelectorModalProps {
     userType?: UserType; // Optional now since new users don't have userType yet
     onSelect: (plan: Plan) => void;
     onCancel?: () => void; // Optional cancel handler
+    /** After redeeming a CreatorChoice invite: $1 / $2 monthly checkout only (no trial). */
+    variant?: 'default' | 'creatorInvite';
 }
 
 // Free plan removed - users can try with 7-day trial on Pro/Elite
@@ -54,7 +58,28 @@ const creatorPlans = [
     },
 ];
 
-export const PlanSelectorModal: React.FC<PlanSelectorModalProps> = ({ userType, onSelect, onCancel }) => {
+const creatorInvitePlans = [
+    {
+        name: 'CreatorPro' as Plan,
+        priceMonthly: ECHOFLUX_CREATOR_PRO_INVITE_USD,
+        priceAnnually: ECHOFLUX_CREATOR_PRO_INVITE_USD,
+        description: 'Same Pro features — invite pricing',
+        features: creatorPlans[0].features,
+        isRecommended: false,
+        displayName: 'Creator Pro',
+    },
+    {
+        name: 'CreatorElite' as Plan,
+        priceMonthly: ECHOFLUX_CREATOR_ELITE_INVITE_USD,
+        priceAnnually: ECHOFLUX_CREATOR_ELITE_INVITE_USD,
+        description: 'Same Elite features — invite pricing',
+        features: creatorPlans[1].features,
+        isRecommended: true,
+        displayName: 'Creator Elite',
+    },
+];
+
+export const PlanSelectorModal: React.FC<PlanSelectorModalProps> = ({ userType, onSelect, onCancel, variant = 'default' }) => {
     // Default to Creator if no userType (new signups)
     const effectiveUserType = userType || 'Creator';
     const { user, setUser, openPaymentModal, showToast } = useAppContext();
@@ -65,8 +90,8 @@ export const PlanSelectorModal: React.FC<PlanSelectorModalProps> = ({ userType, 
     const [isLoading, setIsLoading] = useState(false);
     const [billingCycle, setBillingCycle] = useState<'monthly' | 'annually'>('monthly');
 
-    // Creator-focused: always show creator plans
-    const plans = creatorPlans;
+    const isCreatorInvite = variant === 'creatorInvite';
+    const plans = isCreatorInvite ? creatorInvitePlans : creatorPlans;
 
     // If user exists, they've already created their account, so this is a confirmation step
     // Otherwise, they're choosing a plan before creating their account
@@ -79,19 +104,39 @@ export const PlanSelectorModal: React.FC<PlanSelectorModalProps> = ({ userType, 
             try {
                 const attemptRaw = localStorage.getItem('paymentAttempt');
                 const attempt = attemptRaw ? JSON.parse(attemptRaw) : null;
-                if (attempt?.accountCreated && attempt?.resumeCheckout && (attempt?.plan === 'Pro' || attempt?.plan === 'Elite')) {
+                if (
+                    attempt?.accountCreated &&
+                    attempt?.resumeCheckout &&
+                    (attempt?.plan === 'Pro' ||
+                        attempt?.plan === 'Elite' ||
+                        attempt?.plan === 'CreatorPro' ||
+                        attempt?.plan === 'CreatorElite')
+                ) {
                     const cycle = (attempt?.billingCycle === 'annually' ? 'annually' : 'monthly') as 'monthly' | 'annually';
-                    const planData = attempt.plan === 'Pro'
-                        ? {
-                            name: 'Pro' as Plan,
-                            price: cycle === 'annually' ? echofluxEffectiveMonthlyWhenAnnualUsd(ECHOFLUX_PRO_MONTHLY_USD) : ECHOFLUX_PRO_MONTHLY_USD,
-                            cycle,
-                          }
-                        : {
-                            name: 'Elite' as Plan,
-                            price: cycle === 'annually' ? echofluxEffectiveMonthlyWhenAnnualUsd(ECHOFLUX_ELITE_MONTHLY_USD) : ECHOFLUX_ELITE_MONTHLY_USD,
-                            cycle,
-                          };
+                    const planData =
+                        attempt.plan === 'Pro'
+                            ? {
+                                name: 'Pro' as Plan,
+                                price: cycle === 'annually' ? echofluxEffectiveMonthlyWhenAnnualUsd(ECHOFLUX_PRO_MONTHLY_USD) : ECHOFLUX_PRO_MONTHLY_USD,
+                                cycle,
+                              }
+                            : attempt.plan === 'CreatorPro'
+                              ? {
+                                  name: 'CreatorPro' as Plan,
+                                  price: ECHOFLUX_CREATOR_PRO_INVITE_USD,
+                                  cycle: 'monthly' as const,
+                                }
+                              : attempt.plan === 'CreatorElite'
+                                ? {
+                                    name: 'CreatorElite' as Plan,
+                                    price: ECHOFLUX_CREATOR_ELITE_INVITE_USD,
+                                    cycle: 'monthly' as const,
+                                  }
+                                : {
+                                    name: 'Elite' as Plan,
+                                    price: cycle === 'annually' ? echofluxEffectiveMonthlyWhenAnnualUsd(ECHOFLUX_ELITE_MONTHLY_USD) : ECHOFLUX_ELITE_MONTHLY_USD,
+                                    cycle,
+                                  };
                     
                     // Mark as prompted to prevent duplicate openings
                     const attemptTs = typeof attempt?.timestamp === 'number' ? attempt.timestamp : null;
@@ -136,7 +181,7 @@ export const PlanSelectorModal: React.FC<PlanSelectorModalProps> = ({ userType, 
                 }
 
                 // All plans now require payment (Free plan removed - users can try with 7-day trial)
-                if (selectedPlan === 'Pro' || selectedPlan === 'Elite') {
+                if (selectedPlan === 'Pro' || selectedPlan === 'Elite' || selectedPlan === 'CreatorPro' || selectedPlan === 'CreatorElite') {
                     // For paid plans, create account first (needed for Stripe auth)
                     // Then redirect directly to Stripe payment
                     const result = await createAccountFromPendingSignup();
@@ -182,11 +227,12 @@ export const PlanSelectorModal: React.FC<PlanSelectorModalProps> = ({ userType, 
                 // User already exists - open payment modal for plan upgrade/change
                 const planData = plans.find(p => p.name === selectedPlan);
                 if (planData && openPaymentModal) {
-                    const price = billingCycle === 'annually' ? planData.priceAnnually : planData.priceMonthly;
-                    openPaymentModal({ 
-                        name: selectedPlan, 
-                        price: price,
-                        cycle: billingCycle
+                    const cycle = isCreatorInvite ? ('monthly' as const) : billingCycle;
+                    const price = cycle === 'annually' ? planData.priceAnnually : planData.priceMonthly;
+                    openPaymentModal({
+                        name: selectedPlan,
+                        price,
+                        cycle,
                     });
                     onSelect(selectedPlan);
                 }
@@ -217,14 +263,22 @@ export const PlanSelectorModal: React.FC<PlanSelectorModalProps> = ({ userType, 
                 <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl max-w-4xl w-full m-4 p-8 animate-fade-in-up max-h-[90vh] overflow-y-auto">
                     <div className="text-center mb-8">
                         <h2 className="text-3xl font-bold text-gray-900 dark:text-white">
-                            {isConfirmingPlan ? 'Confirm Your Plan' : 'Choose Your Plan'}
+                            {isCreatorInvite
+                                ? 'Choose your creator plan'
+                                : isConfirmingPlan
+                                  ? 'Confirm Your Plan'
+                                  : 'Choose Your Plan'}
                         </h2>
                         <p className="mt-2 text-gray-500 dark:text-gray-400">
-                            {isConfirmingPlan ? 'Confirm your plan selection to continue.' : 'Start with a free 7-day trial. Cancel anytime.'}
+                            {isCreatorInvite
+                                ? 'Invite pricing: $1/mo or $2/mo, billed monthly. No trial. After checkout you can connect Stripe for Fan Hub payouts.'
+                                : isConfirmingPlan
+                                  ? 'Confirm your plan selection to continue.'
+                                  : 'Start with a free 7-day trial. Cancel anytime.'}
                         </p>
                     </div>
 
-                {/* Billing Cycle Toggle */}
+                {!isCreatorInvite && (
                 <div className="flex justify-center items-center space-x-4 mb-6">
                     <span className={`font-medium ${billingCycle === 'monthly' ? 'text-primary-600 dark:text-primary-400' : 'text-gray-500 dark:text-gray-400'}`}>Monthly</span>
                     <button 
@@ -237,11 +291,17 @@ export const PlanSelectorModal: React.FC<PlanSelectorModalProps> = ({ userType, 
                         Annually <span className="text-sm text-green-500 font-semibold">(Save 20%)</span>
                     </span>
                 </div>
+                )}
 
 
                 <div className="grid gap-6 grid-cols-1 sm:grid-cols-2 max-w-4xl mx-auto justify-items-center">
                     {plans.map((plan) => {
                         const isSelected = selectedPlan === plan.name;
+                        const title =
+                            isCreatorInvite && 'displayName' in plan
+                                ? (plan as typeof creatorInvitePlans[0]).displayName
+                                : plan.name;
+                        const showAnnualNote = !isCreatorInvite && billingCycle === 'annually' && plan.priceMonthly > 0;
                         return (
                             <button
                                 key={plan.name}
@@ -260,7 +320,7 @@ export const PlanSelectorModal: React.FC<PlanSelectorModalProps> = ({ userType, 
                                 
                                 <div className="flex items-center justify-between mb-2 mt-4">
                                     <h3 className="text-xl font-bold text-gray-900 dark:text-white">
-                                        {plan.name}
+                                        {title}
                                     </h3>
                                     {isSelected && (
                                         <CheckIcon className="w-6 h-6 text-primary-600 dark:text-primary-400" />
@@ -273,9 +333,9 @@ export const PlanSelectorModal: React.FC<PlanSelectorModalProps> = ({ userType, 
                                         {(billingCycle === 'annually' ? plan.priceAnnually : plan.priceMonthly).toFixed(2).replace(/\.00$/, '')}
                                     </span>
                                     <span className="text-gray-500 dark:text-gray-400 text-sm ml-1">
-                                        /{billingCycle === 'annually' ? 'mo' : 'mo'}
+                                        /mo
                                     </span>
-                                    {billingCycle === 'annually' && plan.priceMonthly > 0 && (
+                                    {showAnnualNote && (
                                         <div className="text-xs text-gray-400 dark:text-gray-500 mt-1">
                                             Billed annually (${echofluxAnnualTotalUsd(plan.priceMonthly).toFixed(2)}/year)
                                         </div>

@@ -51,7 +51,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // Ensure invite has a plan grant configured
     const grantPlan = (inviteData as any)?.grantPlan as string | undefined;
-    if (grantPlan !== "Free" && grantPlan !== "Pro" && grantPlan !== "Elite") {
+    if (grantPlan !== "Pro" && grantPlan !== "Elite" && grantPlan !== "CreatorChoice") {
       return res.status(200).json({
         valid: false,
         error: "This invite code is not configured with access. Please contact support.",
@@ -93,6 +93,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       valid: true,
       code: normalizedCode,
       grantPlan,
+      /** When grantPlan is CreatorChoice, user picks CreatorPro ($1) or CreatorElite ($2) after signup. */
+      creatorChoice: grantPlan === "CreatorChoice",
       expiresAt: expiresAtIso,
       message: "Invite code is valid!",
     });

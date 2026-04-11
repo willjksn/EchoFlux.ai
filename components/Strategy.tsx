@@ -15,6 +15,7 @@ import {
     stripStrategyFormatPrefix,
     instagramPostTypeFromStrategyFormat,
 } from '../src/lib/strategyComposeHandoff';
+import { isCreatorIdentityPlanClient } from '../src/lib/creatorIdentity/planGate';
 
 export const Strategy: React.FC<{ onBackToSimple?: () => void }> = ({ onBackToSimple }) => {
     const { 
@@ -44,6 +45,7 @@ export const Strategy: React.FC<{ onBackToSimple?: () => void }> = ({ onBackToSi
     const [contextDescription, setContextDescription] = useState('');
     const [usePersonality, setUsePersonality] = useState(false);
     const [useFavoriteHashtags, setUseFavoriteHashtags] = useState(false);
+    const [hasCreatorIdentityProfile, setHasCreatorIdentityProfile] = useState(false);
     
     // Auto-set explicit tone when OnlyFans/Fanvue is selected.
     // IMPORTANT: Do not override user-selected tones like "Sexy / Explicit" for normal platforms.
@@ -121,7 +123,24 @@ export const Strategy: React.FC<{ onBackToSimple?: () => void }> = ({ onBackToSi
     const hasPersonalityLead =
         usePersonality && Boolean(settings.creatorPersonality?.trim());
     const canGenerateStrategyInputs =
-        hasPostIdeasInput || hasAudienceInput || hasPersonalityLead;
+        hasPostIdeasInput || hasAudienceInput || hasPersonalityLead || hasCreatorIdentityProfile;
+
+    useEffect(() => {
+        if (!user?.id || !isCreatorIdentityPlanClient(user.plan)) return;
+        (async () => {
+            try {
+                const token = await auth.currentUser?.getIdToken();
+                if (!token) return;
+                const r = await fetch('/api/getCreatorIdentity', { headers: { Authorization: `Bearer ${token}` } });
+                if (!r.ok) return;
+                const data = await r.json();
+                const p = data.profile;
+                if (p && p.status && p.status !== 'draft') setHasCreatorIdentityProfile(true);
+            } catch {
+                /* ignore */
+            }
+        })();
+    }, [user?.id, user?.plan]);
 
     // Load usage stats
     const loadUsageStats = async () => {
@@ -409,7 +428,10 @@ export const Strategy: React.FC<{ onBackToSimple?: () => void }> = ({ onBackToSi
 
     const handleGenerate = async () => {
         if (!canGenerateStrategyInputs) {
-            showToast('Add post ideas, target audience, or turn on Personality (with a description in Settings).', 'error');
+            showToast(
+                'Add post ideas, target audience, turn on Personality Override (with text in Settings), or complete Creator Identity (Elite).',
+                'error'
+            );
             return;
         }
         setIsLoading(true);
@@ -522,7 +544,7 @@ export const Strategy: React.FC<{ onBackToSimple?: () => void }> = ({ onBackToSi
                 const strategyNamePrefix =
                     niche.trim() ||
                     (usePersonality && settings.creatorPersonality?.trim()
-                        ? 'Personality-led'
+                        ? 'Personality Override–led'
                         : audience.trim() || 'Strategy');
                 const autoName = `${strategyNamePrefix} • ${goal} • ${new Date().toLocaleDateString()}`.slice(0, 80);
                 
@@ -1414,15 +1436,21 @@ export const Strategy: React.FC<{ onBackToSimple?: () => void }> = ({ onBackToSi
                         Create Your Content Strategy
                     </h2>
                     <p className="text-gray-600 dark:text-gray-400">
-                        AI builds a personalized plan using trends, your primary goal, tone, and platform—plus any post ideas, audience, or (when enabled) your creator personality from Settings.
+                        AI builds a personalized plan using trends, your primary goal, tone, and platform—plus post ideas, audience, (when enabled) Personality Override from Settings, or your Creator Identity baseline on Elite.
                     </p>
                     <div className="mt-4 rounded-xl border border-primary-200/80 dark:border-primary-800/60 bg-primary-50/60 dark:bg-primary-950/25 px-4 py-3 text-sm text-gray-700 dark:text-gray-300">
                         <p className="font-semibold text-gray-900 dark:text-white mb-1">To generate a strategy</p>
                         <p className="text-gray-600 dark:text-gray-400">
                             Choose a <span className="font-medium text-gray-800 dark:text-gray-200">Primary Goal</span> below, then fill in <span className="font-medium text-gray-800 dark:text-gray-200">at least one</span> of:{' '}
                             <span className="font-medium text-gray-800 dark:text-gray-200">Post ideas</span>,{' '}
-                            <span className="font-medium text-gray-800 dark:text-gray-200">Target audience</span>, or turn on{' '}
-                            <span className="font-medium text-gray-800 dark:text-gray-200">Personality</span> (needs text in Settings → AI Training).
+                            <span className="font-medium text-gray-800 dark:text-gray-200">Target audience</span>, turn on{' '}
+                            <span className="font-medium text-gray-800 dark:text-gray-200">Personality Override</span> (needs text in Settings → AI Training), or complete{' '}
+                            <span className="font-medium text-gray-800 dark:text-gray-200">Creator Identity</span> (Elite).
+                            {isCreatorIdentityPlanClient(user?.plan) && hasCreatorIdentityProfile && (
+                                <span className="block text-xs text-primary-600 dark:text-primary-300 mt-1">
+                                    Creator Identity is on by default for Elite; use the override when you want a different tone for this plan.
+                                </span>
+                            )}
                         </p>
                     </div>
                 </div>
@@ -1432,7 +1460,7 @@ export const Strategy: React.FC<{ onBackToSimple?: () => void }> = ({ onBackToSi
                     <div>
                         <label className="block text-sm font-semibold text-gray-700 dark:text-white mb-2">
                             Post ideas
-                            <span className="text-gray-500 dark:text-gray-400 font-normal"> (optional if audience or Personality is on)</span>
+                            <span className="text-gray-500 dark:text-gray-400 font-normal"> (optional if audience or Personality Override is on)</span>
                         </label>
                         <input 
                             type="text" 
@@ -1449,7 +1477,7 @@ export const Strategy: React.FC<{ onBackToSimple?: () => void }> = ({ onBackToSi
                     <div>
                         <label className="block text-sm font-semibold text-gray-700 dark:text-white mb-2">
                             Target audience
-                            <span className="text-gray-500 dark:text-gray-400 font-normal"> (optional if post ideas or Personality is on)</span>
+                            <span className="text-gray-500 dark:text-gray-400 font-normal"> (optional if post ideas or Personality Override is on)</span>
                         </label>
                         <input 
                             type="text" 
@@ -1460,7 +1488,7 @@ export const Strategy: React.FC<{ onBackToSimple?: () => void }> = ({ onBackToSi
                             aria-describedby="strategy-audience-hint"
                         />
                         <p id="strategy-audience-hint" className="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
-                            Who you are speaking to. Leave blank only if Personality or post ideas already imply your crowd.
+                            Who you are speaking to. Leave blank only if Personality Override, Creator Identity (Elite), or post ideas already imply your crowd.
                         </p>
                     </div>
                 </div>
@@ -1634,7 +1662,7 @@ Return only the rewritten context description.
                         </p>
                     </div>
 
-                    {/* Personality & Hashtag Toggle Buttons */}
+                    {/* Personality Override & Hashtag Toggle Buttons */}
                     <div className="col-span-1 md:col-span-2">
                         <label className="block text-sm font-semibold text-gray-700 dark:text-white mb-2">
                             Strategy AI Options
@@ -1651,10 +1679,14 @@ Return only the rewritten context description.
                                         ? 'bg-primary-600 text-white hover:bg-primary-700'
                                         : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
                                 } ${!settings.creatorPersonality ? 'opacity-50 cursor-not-allowed' : ''}`}
-                                title={!settings.creatorPersonality ? 'Add a personality description in Settings to enable' : undefined}
+                                title={
+                                    !settings.creatorPersonality
+                                        ? 'Add Personality Override text in Settings to enable'
+                                        : 'Apply saved Personality Override for this strategy'
+                                }
                             >
                                 <SparklesIcon className="w-4 h-4" />
-                                Personality
+                                Personality Override
                             </button>
                             <button
                                 onClick={() => setUseFavoriteHashtags(!useFavoriteHashtags)}
@@ -1672,12 +1704,12 @@ Return only the rewritten context description.
                         </div>
                         <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
                             {usePersonality && useFavoriteHashtags
-                                ? 'Personality leads topic ideas and voice; hashtags are woven in where relevant.'
+                                ? 'Personality Override leads topic ideas and voice; hashtags are woven in where relevant.'
                                 : usePersonality
-                                ? 'When on, personality leads what to post and how it sounds—post ideas and audience can be blank; trends and your goal still shape the plan.'
+                                ? 'When on, Personality Override leads what to post and how it sounds—post ideas and audience can be blank; trends and your goal still shape the plan.'
                                 : useFavoriteHashtags
                                 ? 'AI will use your favorite hashtags when generating strategies.'
-                                : 'Enable toggles above to include your personality or hashtags in AI-generated strategies.'}
+                                : 'Enable toggles above to include Personality Override or hashtags in AI-generated strategies.'}
                             {!settings.creatorPersonality && !settings.favoriteHashtags && ' Add them in Settings → AI Training to enable.'}
                         </p>
                     </div>
@@ -1693,7 +1725,7 @@ Return only the rewritten context description.
                                     Strategy generated and auto-saved.
                                 </span>
                             ) : (
-                                'Set Primary Goal (*), then add post ideas, audience, or turn on Personality—then Generate'
+                                'Set Primary Goal (*), then add post ideas, audience, Personality Override, or complete Creator Identity (Elite)—then Generate'
                             )}
                         </div>
                         <div className="flex gap-3 flex-shrink-0 overflow-x-auto pb-2 -mx-6 px-6 sm:mx-0 sm:px-0 sm:pb-0">

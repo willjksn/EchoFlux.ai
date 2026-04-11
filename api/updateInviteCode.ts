@@ -21,7 +21,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const { code, grantPlan, expiresAt, maxUses } = (req.body || {}) as {
       code?: string;
-      grantPlan?: "Free" | "Pro" | "Elite";
+      grantPlan?: "Pro" | "Elite" | "CreatorChoice";
       expiresAt?: string | null;
       maxUses?: number;
     };
@@ -32,8 +32,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const updates: any = {};
 
     if (grantPlan !== undefined) {
-      if (grantPlan !== "Free" && grantPlan !== "Pro" && grantPlan !== "Elite") {
-        return res.status(400).json({ error: "grantPlan must be 'Free', 'Pro' or 'Elite'" });
+      if (grantPlan !== "Pro" && grantPlan !== "Elite" && grantPlan !== "CreatorChoice") {
+        return res.status(400).json({
+          error: "grantPlan must be 'Pro', 'Elite', or 'CreatorChoice'",
+        });
       }
       updates.grantPlan = grantPlan;
     }

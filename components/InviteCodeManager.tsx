@@ -7,7 +7,7 @@ interface InviteCode {
   code: string;
   createdAt: string;
   createdBy: string;
-  grantPlan: 'Free' | 'Pro' | 'Elite' | null;
+  grantPlan: 'Pro' | 'Elite' | 'CreatorChoice' | null;
   used: boolean;
   usedCount: number;
   maxUses: number;
@@ -32,12 +32,12 @@ export const InviteCodeManager: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [isGenerating, setIsGenerating] = useState(false);
   const [generateCount, setGenerateCount] = useState(1);
-  const [generateGrantPlan, setGenerateGrantPlan] = useState<'Free' | 'Pro' | 'Elite'>('Pro');
+  const [generateGrantPlan, setGenerateGrantPlan] = useState<'Pro' | 'Elite' | 'CreatorChoice'>('Pro');
   const [generateMaxUses, setGenerateMaxUses] = useState(1);
   const [generateExpiresAt, setGenerateExpiresAt] = useState<string>(''); // YYYY-MM-DD
 
   const [editingInvite, setEditingInvite] = useState<InviteCode | null>(null);
-  const [editGrantPlan, setEditGrantPlan] = useState<'Free' | 'Pro' | 'Elite'>('Free');
+  const [editGrantPlan, setEditGrantPlan] = useState<'Pro' | 'Elite' | 'CreatorChoice'>('Pro');
   const [editMaxUses, setEditMaxUses] = useState<number>(1);
   const [editExpiresAt, setEditExpiresAt] = useState<string>(''); // YYYY-MM-DD
   const [isSavingEdit, setIsSavingEdit] = useState(false);
@@ -135,11 +135,11 @@ export const InviteCodeManager: React.FC = () => {
   const openEdit = (invite: InviteCode) => {
     setEditingInvite(invite);
     setEditGrantPlan(
-      (invite.grantPlan === 'Elite'
+      invite.grantPlan === 'Elite'
         ? 'Elite'
-        : invite.grantPlan === 'Pro'
-          ? 'Pro'
-          : 'Free') as 'Free' | 'Pro' | 'Elite'
+        : invite.grantPlan === 'CreatorChoice'
+          ? 'CreatorChoice'
+          : 'Pro'
     );
     setEditMaxUses(invite.maxUses || 1);
     setEditExpiresAt(invite.expiresAt ? isoToDateInputLocal(invite.expiresAt) : '');
@@ -271,11 +271,14 @@ export const InviteCodeManager: React.FC = () => {
             </label>
             <select
               value={generateGrantPlan}
-              onChange={(e) => setGenerateGrantPlan(e.target.value as 'Free' | 'Pro' | 'Elite')}
+              onChange={(e) =>
+                setGenerateGrantPlan(e.target.value as 'Pro' | 'Elite' | 'CreatorChoice')
+              }
               className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
             >
-              <option value="Pro">Pro</option>
-              <option value="Elite">Elite</option>
+              <option value="Pro">Pro (granted)</option>
+              <option value="Elite">Elite (granted)</option>
+              <option value="CreatorChoice">Creator choice ($1 / $2 checkout)</option>
             </select>
           </div>
           <div>
@@ -428,11 +431,14 @@ export const InviteCodeManager: React.FC = () => {
                 </label>
                 <select
                   value={editGrantPlan}
-                  onChange={(e) => setEditGrantPlan(e.target.value as 'Free' | 'Pro' | 'Elite')}
+                  onChange={(e) =>
+                    setEditGrantPlan(e.target.value as 'Pro' | 'Elite' | 'CreatorChoice')
+                  }
                   className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                 >
-                  <option value="Pro">Pro</option>
-                  <option value="Elite">Elite</option>
+                  <option value="Pro">Pro (granted)</option>
+                  <option value="Elite">Elite (granted)</option>
+                  <option value="CreatorChoice">Creator choice ($1 / $2 checkout)</option>
                 </select>
               </div>
 

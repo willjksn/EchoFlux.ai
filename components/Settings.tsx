@@ -12,6 +12,7 @@ import { doc, setDoc, deleteDoc } from 'firebase/firestore';
 import { connectSocialAccount, disconnectSocialAccount } from '../src/services/socialMediaService';
 import { startXOAuth1Authorization } from '../src/lib/startXOAuth1Authorization';
 import { PLATFORM_CAPABILITIES, hasCapability, getCapabilityDescription, getCapability, isFullySupported } from '../src/services/platformCapabilities';
+import { isCreatorIdentityPlanClient } from '../src/lib/creatorIdentity/planGate';
 
 interface SettingsProps {}
 
@@ -216,7 +217,26 @@ export const Settings: React.FC = () => {
     const [showConnectionGuideModal, setShowConnectionGuideModal] = useState(false);
     const [showCancelModal, setShowCancelModal] = useState(false);
     const [isCancelling, setIsCancelling] = useState(false);
-    
+    const [identitySummaryElite, setIdentitySummaryElite] = useState<string | null>(null);
+
+    useEffect(() => {
+        if (!user?.id || !isCreatorIdentityPlanClient(user.plan)) return;
+        (async () => {
+            try {
+                const token = await auth.currentUser?.getIdToken();
+                if (!token) return;
+                const r = await fetch('/api/getCreatorIdentity', { headers: { Authorization: `Bearer ${token}` } });
+                if (!r.ok) return;
+                const data = await r.json();
+                const p = data.profile;
+                const sum = p?.generatedProfile?.brandSummary;
+                if (typeof sum === 'string' && sum.trim()) setIdentitySummaryElite(sum.trim());
+            } catch {
+                /* ignore */
+            }
+        })();
+    }, [user?.id, user?.plan]);
+
     // Video minutes state
     const [videoQuota, setVideoQuota] = useState<{
         monthlyMinutesLimit: number;
@@ -1128,17 +1148,39 @@ export const Settings: React.FC = () => {
                             )}
                         </SettingsSection>
 
-                        <SettingsSection title="Creator Personality">
+                        <SettingsSection title="Personality Override">
                             <div className="space-y-4">
+                                {isCreatorIdentityPlanClient(user?.plan) && (
+                                    <div className="rounded-lg border border-primary-200 dark:border-primary-900/40 bg-primary-50/90 dark:bg-primary-950/30 p-4 space-y-2">
+                                        <p className="text-sm font-medium text-gray-900 dark:text-white">Creator Identity (Elite)</p>
+                                        <p className="text-xs text-gray-600 dark:text-gray-400">
+                                            Your Creator Identity powers your default brand direction in EchoFlux and witme.io. Open the builder anytime from Premium Studio → Creator Identity.
+                                        </p>
+                                        {identitySummaryElite && (
+                                            <p className="text-xs text-gray-700 dark:text-gray-300 line-clamp-4">{identitySummaryElite}</p>
+                                        )}
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setActivePage('onlyfansStudio');
+                                                window.history.pushState({}, '', '/studio?tab=persona');
+                                                window.dispatchEvent(new PopStateEvent('popstate'));
+                                            }}
+                                            className="text-sm font-medium text-primary-700 dark:text-primary-300 hover:underline"
+                                        >
+                                            Open Creator Identity Builder
+                                        </button>
+                                    </div>
+                                )}
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                        Personality Description / Brand
+                                        Personality Override (saved text)
                                     </label>
                                     <div className="relative">
                                         <textarea
                                             value={settings.creatorPersonality || ''}
                                             onChange={(e) => updateSetting('creatorPersonality', e.target.value)}
-                                            placeholder="Tell the AI about yourself, your brand voice, content style, values, and what makes you unique. This personality is used across all AI features: captions, chat bot responses, post ideas, roleplay scenarios, and text-only AI prompts."
+                                            placeholder="Tone or style direction for when Personality Override is turned on during caption or strategy generation."
                                             className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white resize-y min-h-[100px]"
                                             rows={4}
                                         />
@@ -1190,7 +1232,7 @@ Return only the rewritten personality description.
                                                         throw new Error('No text generated');
                                                     }
                                                     updateSetting('creatorPersonality', rewritten);
-                                                    showToast('Personality updated.', 'success');
+                                                    showToast('Personality Override text updated.', 'success');
                                                 } catch (error: any) {
                                                     showToast(error?.message || 'AI help failed. Please try again.', 'error');
                                                 }
@@ -1202,7 +1244,9 @@ Return only the rewritten personality description.
                                         </button>
                                     </div>
                                     <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                                        Describe your brand voice, content style, values, and what makes you unique. AI will use this when generating captions.
+                                        {isCreatorIdentityPlanClient(user?.plan)
+                                            ? 'Your Creator Identity powers your default brand direction. Use Personality Override when you want a more specific tone or style for a caption, strategy, or output.'
+                                            : 'Add a personality or tone direction you want EchoFlux to follow when Personality Override is turned on during caption or strategy generation.'}
                                     </p>
                                 </div>
                                 <div>

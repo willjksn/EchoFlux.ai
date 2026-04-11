@@ -42,7 +42,9 @@ const PLAN_RANK: Record<string, number> = {
   Starter: 0,
   Growth: 0,
   Pro: 1,
+  CreatorPro: 1,
   Elite: 2,
+  CreatorElite: 2,
   OnlyFansStudio: 2,
   Agency: 3,
 };

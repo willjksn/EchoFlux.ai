@@ -656,7 +656,7 @@ export interface FanDmReport {
     reviewedBy?: string;
 }
 
-export type Plan = 'Free' | 'Caption' | 'Pro' | 'Elite' | 'Agency' | 'Growth' | 'Starter' | 'OnlyFansStudio';
+export type Plan = 'Free' | 'Caption' | 'Pro' | 'Elite' | 'Agency' | 'Growth' | 'Starter' | 'OnlyFansStudio' | 'CreatorPro' | 'CreatorElite';
 
 export interface Client {
   id: string;

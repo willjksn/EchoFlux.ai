@@ -10,6 +10,7 @@
  */
 
 import { getAdminDb } from "./_firebaseAdmin.js";
+import { normalizePlanForLimits } from "./_planLimits.js";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 
 export interface TavilyUsage {
@@ -66,7 +67,7 @@ export async function canUseTavily(
   }
 
   // Check plan limit
-  const limit = TAVILY_LIMITS[userPlan] || 0;
+  const limit = TAVILY_LIMITS[normalizePlanForLimits(userPlan)] || 0;
   if (limit === 0) {
     return { allowed: false, remaining: 0, limit: 0 };
   }
@@ -254,7 +255,7 @@ export async function getTavilyUsageStats(
     return { count: 0, limit: 999999, remaining: 999999, month: getCurrentMonth() };
   }
 
-  const limit = TAVILY_LIMITS[userPlan] || 0;
+  const limit = TAVILY_LIMITS[normalizePlanForLimits(userPlan)] || 0;
   const db = getAdminDb();
   const month = getCurrentMonth();
   const usageRef = db.collection('tavily_usage').doc(`${userId}_${month}`);

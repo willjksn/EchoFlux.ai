@@ -804,20 +804,20 @@ export const WhatToPost: React.FC<WhatToPostProps> = ({ onOpenAdvanced }) => {
                 </p>
               </div>
 
-              {/* Creator personality overrides tone/sliders (same as Compose when personality is on) */}
+              {/* Personality Override overrides tone/sliders (same as Compose when override is on) */}
               <div className="rounded-lg border border-gray-200 dark:border-gray-600 p-3">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0 flex-1" id="what-to-post-personality-label">
                     <span className="block text-sm font-medium text-gray-900 dark:text-white">
-                      Personality first
+                      Personality Override first
                     </span>
                     <span className="block text-xs text-gray-500 dark:text-gray-400 mt-0.5">
                       Use your{" "}
-                      <strong className="font-medium text-gray-700 dark:text-gray-300">Creator personality</strong> from
+                      <strong className="font-medium text-gray-700 dark:text-gray-300">Personality Override</strong> text from
                       Settings as the main voice. Tone and style sliders are ignored when they conflict.
                       {!user.settings?.creatorPersonality?.trim() ? (
                         <span className="block mt-1 text-amber-600 dark:text-amber-400">
-                          Add a personality in Settings → AI Training to enable this.
+                          Add Personality Override text in Settings → AI Training to enable this.
                         </span>
                       ) : null}
                     </span>

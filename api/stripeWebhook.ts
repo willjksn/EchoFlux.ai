@@ -1198,7 +1198,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
               // Grant referral reward if applicable (Elite plan conversions)
               const referralCode = session.metadata?.referralCode || subscription.metadata?.referralCode;
-              if (referralCode && planName === 'Elite') {
+              if (referralCode && (planName === 'Elite' || planName === 'CreatorElite')) {
                 try {
                   await grantReferralRewardOnConversion(userId, planName, referralCode);
                 } catch (err) {
@@ -1339,7 +1339,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             typeof userData?.stripeSubscriptionId === "string" && userData.stripeSubscriptionId.trim()
               ? userData.stripeSubscriptionId.trim()
               : null;
-          if (subscriptionId && planName === 'Elite') {
+          if (subscriptionId && (planName === 'Elite' || planName === 'CreatorElite')) {
             try {
               const subscription = await stripe.subscriptions.retrieve(subscriptionId);
               const referralCode = subscription.metadata?.referralCode;

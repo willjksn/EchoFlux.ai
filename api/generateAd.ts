@@ -189,7 +189,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     // Check plan - Ad generation is available on Pro, Elite, Growth, Starter, and Agency plans
-    const allowedPlans = ["Pro", "Elite", "Growth", "Starter", "Agency"];
+    const allowedPlans = ["Pro", "Elite", "Growth", "Starter", "Agency", "CreatorPro", "CreatorElite"];
     const userPlan = userData.plan || "Free";
 
     if (!allowedPlans.includes(userPlan)) {
@@ -211,6 +211,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const planLimits: Record<string, { text: number; video: number }> = {
       Pro: { text: 50, video: 10 },
       Elite: { text: 200, video: 50 },
+      CreatorPro: { text: 50, video: 10 },
+      CreatorElite: { text: 200, video: 50 },
       Growth: { text: 100, video: 25 },
       Starter: { text: 30, video: 5 },
       Agency: { text: 500, video: 100 },

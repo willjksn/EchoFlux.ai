@@ -20,17 +20,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const db = getAdminDb();
 
-  // We keep this bounded; in early stage this is plenty.
-  const snap = await db
-    .collection("users")
-    .where("subscriptionStatus", "==", "invite_grant")
-    .orderBy("inviteGrantExpiresAt", "asc")
-    .limit(500)
-    .get();
+  const statuses = ["invite_grant", "creator_invite_pending"] as const;
 
   let remindersSent = 0;
   let expiredSent = 0;
   let downgraded = 0;
+  let processed = 0;
+
+  for (const subscriptionStatus of statuses) {
+  const snap = await db
+    .collection("users")
+    .where("subscriptionStatus", "==", subscriptionStatus)
+    .orderBy("inviteGrantExpiresAt", "asc")
+    .limit(500)
+    .get();
+
+  processed += snap.size;
 
   for (const doc of snap.docs) {
     const user = doc.data() as any;
@@ -147,10 +152,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       downgraded++;
     }
   }
+  }
 
   return res.status(200).json({
     success: true,
-    processed: snap.size,
+    processed,
     remindersSent,
     expiredSent,
     downgraded,

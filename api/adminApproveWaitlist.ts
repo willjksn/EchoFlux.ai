@@ -21,9 +21,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const adminDoc = await db.collection("users").doc(admin.uid).get();
   if ((adminDoc.data() as any)?.role !== "Admin") return res.status(403).json({ error: "Admin access required" });
 
-  const { email, grantPlan = "Free", expiresAt, name, subjectOverride, textOverride, htmlOverride } = (req.body || {}) as {
+  const { email, grantPlan = "Pro", expiresAt, name, subjectOverride, textOverride, htmlOverride } = (req.body || {}) as {
     email?: string;
-    grantPlan?: "Free" | "Pro" | "Elite";
+    grantPlan?: "Pro" | "Elite";
     expiresAt?: string | null;
     name?: string | null;
     subjectOverride?: string;
@@ -32,7 +32,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   };
 
   if (!email || typeof email !== "string") return res.status(400).json({ error: "email is required" });
-  if (grantPlan !== "Free" && grantPlan !== "Pro" && grantPlan !== "Elite") return res.status(400).json({ error: "Invalid grantPlan" });
+  if (grantPlan !== "Pro" && grantPlan !== "Elite") return res.status(400).json({ error: "Invalid grantPlan" });
 
   const normalizedEmail = email.trim().toLowerCase();
   const waitlistId = normalizedEmail.replace(/[^a-z0-9@._+-]/g, "_");

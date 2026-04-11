@@ -9,8 +9,7 @@ export async function grantReferralRewardOnConversion(
   planName: string,
   referralCode?: string
 ): Promise<void> {
-  if (!referralCode || planName !== 'Elite') {
-    // Only grant rewards for Elite plan conversions
+  if (!referralCode || (planName !== 'Elite' && planName !== 'CreatorElite')) {
     return;
   }
 

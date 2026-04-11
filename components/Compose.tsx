@@ -39,6 +39,7 @@ const ImageGenerator = lazy(() => import('./ImageGenerator').then(module => ({ d
 const VideoGenerator = lazy(() => import('./VideoGenerator').then(module => ({ default: module.VideoGenerator })));
 import { UpgradePrompt } from './UpgradePrompt';
 import { useAppContext } from './AppContext';
+import { isCreatorIdentityPlanClient } from '../src/lib/creatorIdentity/planGate';
 import { MobilePreviewModal } from './MobilePreviewModal';
 import { MediaBox } from './MediaBox';
 import { auth, db, storage } from '../firebaseConfig';
@@ -131,6 +132,8 @@ const CaptionGenerator: React.FC = () => {
     socialAccounts,
     activePage
   } = useAppContext();
+
+  const creatorIdentityActive = isCreatorIdentityPlanClient(user?.plan);
 
   // Error boundary - prevent blank page
   if (!user) {
@@ -4214,6 +4217,7 @@ const CaptionGenerator: React.FC = () => {
               favoriteHashtags={settings.favoriteHashtags}
               onTogglePersonality={() => setUsePersonality(prev => !prev)}
               onToggleHashtags={() => setUseFavoriteHashtags(prev => !prev)}
+              creatorIdentityActive={creatorIdentityActive}
             />
             </div>
           </div>
@@ -4253,6 +4257,7 @@ const CaptionGenerator: React.FC = () => {
                   favoriteHashtags={settings.favoriteHashtags}
                   onTogglePersonality={() => setUsePersonality(prev => !prev)}
                   onToggleHashtags={() => setUseFavoriteHashtags(prev => !prev)}
+                  creatorIdentityActive={creatorIdentityActive}
                 />
               ))}
             </div>
@@ -4292,6 +4297,7 @@ const CaptionGenerator: React.FC = () => {
                 favoriteHashtags={settings.favoriteHashtags}
                 onTogglePersonality={() => setUsePersonality(prev => !prev)}
                 onToggleHashtags={() => setUseFavoriteHashtags(prev => !prev)}
+                creatorIdentityActive={creatorIdentityActive}
               />
             ))}
           </div>

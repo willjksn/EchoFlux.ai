@@ -17,6 +17,7 @@
  */
 
 import { getAdminDb } from "./_firebaseAdmin.js";
+import { normalizePlanForLimits } from "./_planLimits.js";
 import { Timestamp } from "firebase-admin/firestore";
 
 export interface StrategyUsage {
@@ -59,7 +60,7 @@ export async function canGenerateStrategy(
   }
 
   // Base plan limit (bonus is applied per-month via strategy_usage doc)
-  const baseLimit = STRATEGY_LIMITS[userPlan] || 0;
+  const baseLimit = STRATEGY_LIMITS[normalizePlanForLimits(userPlan)] || 0;
   if (baseLimit === 0) {
     return { allowed: false, remaining: 0, limit: 0 };
   }
@@ -174,7 +175,7 @@ export async function getStrategyUsageStats(
     return { count: 0, limit: 999999, remaining: 999999, month: getCurrentMonth() };
   }
 
-  const baseLimit = STRATEGY_LIMITS[userPlan] || 0;
+  const baseLimit = STRATEGY_LIMITS[normalizePlanForLimits(userPlan)] || 0;
   const db = getAdminDb();
   const month = getCurrentMonth();
   const usageRef = db.collection('strategy_usage').doc(`${userId}_${month}`);

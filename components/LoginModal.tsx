@@ -108,7 +108,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({
   const [inviteCode, setInviteCode] = useState('');
   const [isValidatingInvite, setIsValidatingInvite] = useState(false);
   const [inviteCodeValid, setInviteCodeValid] = useState<boolean | null>(null);
-  const [inviteGrantPlan, setInviteGrantPlan] = useState<'Pro' | 'Elite' | null>(null);
+  const [inviteGrantPlan, setInviteGrantPlan] = useState<'Pro' | 'Elite' | 'CreatorChoice' | null>(null);
   const [inviteExpiresAt, setInviteExpiresAt] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [viewingPolicy, setViewingPolicy] = useState<'terms' | 'privacy' | null>(null);
@@ -206,7 +206,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({
           .then((resp) => resp.json().catch(() => ({})))
           .then((data) => {
             const gp = data?.grantPlan;
-            if (data?.valid && (gp === 'Pro' || gp === 'Elite')) {
+            if (data?.valid && (gp === 'Pro' || gp === 'Elite' || gp === 'CreatorChoice')) {
               setInviteCodeValid(true);
               setInviteGrantPlan(gp);
               setInviteExpiresAt(data.expiresAt || null);
@@ -407,7 +407,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({
         if (hasInviteCode) {
           // INVITE FLOW (Pro/Elite): redeem invite and skip Stripe payment, but still requires signup + onboarding.
           // Only re-validate if not already validated, or if validation state is unclear
-          let grantPlan: 'Pro' | 'Elite' | null = inviteGrantPlan;
+          let grantPlan: 'Pro' | 'Elite' | 'CreatorChoice' | null = inviteGrantPlan;
           let expiresAt: string | null = inviteExpiresAt;
           
           // Skip re-validation if already validated successfully
@@ -419,7 +419,12 @@ export const LoginModal: React.FC<LoginModalProps> = ({
                 body: JSON.stringify({ inviteCode: inviteCode.trim() }),
               });
               const data = await resp.json().catch(() => ({}));
-              if (!data?.valid || (data?.grantPlan !== 'Pro' && data?.grantPlan !== 'Elite')) {
+              if (
+                !data?.valid ||
+                (data?.grantPlan !== 'Pro' &&
+                  data?.grantPlan !== 'Elite' &&
+                  data?.grantPlan !== 'CreatorChoice')
+              ) {
                 setInviteCodeValid(false);
                 setInviteGrantPlan(null);
                 setInviteExpiresAt(null);
@@ -474,7 +479,12 @@ export const LoginModal: React.FC<LoginModalProps> = ({
           try { localStorage.removeItem('pendingSignup'); } catch {}
           try { localStorage.removeItem('pendingInviteCode'); } catch {}
 
-          showToast(`Account created. You now have ${grantPlan} access.`, 'success');
+          showToast(
+            grantPlan === 'CreatorChoice'
+              ? 'Account created. Choose Creator Pro ($1/mo) or Creator Elite ($2/mo) to continue.'
+              : `Account created. You now have ${grantPlan} access.`,
+            'success',
+          );
           onClose();
           // Force reload so AuthContext rehydrates the user doc AFTER invite redemption.
           // Without this, the app can briefly think invitedWithCode is missing and show InviteRequiredPage.
@@ -624,7 +634,12 @@ export const LoginModal: React.FC<LoginModalProps> = ({
             body: JSON.stringify({ inviteCode: inviteCode.trim() }),
           });
           const data = await resp.json().catch(() => ({}));
-          if (!data?.valid || (data?.grantPlan !== 'Pro' && data?.grantPlan !== 'Elite')) {
+          if (
+            !data?.valid ||
+            (data?.grantPlan !== 'Pro' &&
+              data?.grantPlan !== 'Elite' &&
+              data?.grantPlan !== 'CreatorChoice')
+          ) {
             setInviteCodeValid(false);
             setInviteGrantPlan(null);
             setInviteExpiresAt(null);
@@ -690,7 +705,12 @@ export const LoginModal: React.FC<LoginModalProps> = ({
 
             try { localStorage.removeItem('pendingSignup'); } catch {}
             try { localStorage.removeItem('pendingInviteCode'); } catch {}
-            showToast(`Account created. You now have ${redeemData.grantPlan} access.`, 'success');
+            showToast(
+              redeemData.grantPlan === 'CreatorChoice'
+                ? 'Account created. Choose Creator Pro ($1/mo) or Creator Elite ($2/mo) to continue.'
+                : `Account created. You now have ${redeemData.grantPlan} access.`,
+              'success',
+            );
             onClose();
             // Force reload so AuthContext rehydrates with invitedWithCode and avoids the InviteRequiredPage gate.
             window.location.reload();
@@ -881,7 +901,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({
                               setValidationErrors(prev => ({ ...prev, inviteCode: data.error || 'Invalid invite code' }));
                             } else {
                               const gp = data?.grantPlan;
-                              if (gp === 'Pro' || gp === 'Elite') {
+                              if (gp === 'Pro' || gp === 'Elite' || gp === 'CreatorChoice') {
                                 setInviteGrantPlan(gp);
                                 setInviteExpiresAt(data?.expiresAt || null);
                               } else {

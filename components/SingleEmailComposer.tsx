@@ -3,7 +3,7 @@ import { auth } from '../firebaseConfig';
 import { useAppContext } from './AppContext';
 import { dateInputToIsoEndOfDay } from '../src/utils/dateInput';
 
-type InvitePlan = 'Free' | 'Pro' | 'Elite';
+type InvitePlan = 'Pro' | 'Elite';
 
 export const SingleEmailComposer: React.FC = () => {
   const { showToast } = useAppContext();
@@ -14,7 +14,7 @@ export const SingleEmailComposer: React.FC = () => {
   const [isSending, setIsSending] = useState(false);
 
   const [includeInvite, setIncludeInvite] = useState(false);
-  const [invitePlan, setInvitePlan] = useState<InvitePlan>('Free');
+  const [invitePlan, setInvitePlan] = useState<InvitePlan>('Pro');
   const [inviteMaxUses, setInviteMaxUses] = useState<number>(1);
   const [inviteExpiresAt, setInviteExpiresAt] = useState<string>(''); // YYYY-MM-DD
   
@@ -256,7 +256,6 @@ export const SingleEmailComposer: React.FC = () => {
                 onChange={(e) => setInvitePlan(e.target.value as InvitePlan)}
                 className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-900 text-gray-900 dark:text-white"
               >
-                <option value="Free">Free</option>
                 <option value="Pro">Pro</option>
                 <option value="Elite">Elite</option>
               </select>

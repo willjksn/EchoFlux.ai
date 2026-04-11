@@ -138,6 +138,8 @@ interface MediaBoxProps {
   favoriteHashtags?: string;
   onTogglePersonality?: () => void;
   onToggleHashtags?: () => void;
+  /** Elite: Creator Identity applies by default in generation when this toggle is off. */
+  creatorIdentityActive?: boolean;
   onPublish: (index: number) => void;
   onSchedule: (index: number) => void;
   onSaveToWorkflow: (index: number, status: 'Draft' | 'Scheduled') => void;
@@ -170,6 +172,7 @@ export const MediaBox: React.FC<MediaBoxProps> = ({
   favoriteHashtags,
   onTogglePersonality,
   onToggleHashtags,
+  creatorIdentityActive = false,
 }) => {
   const { user, setUser, showToast, setActivePage } = useAppContext();
   const creatorHandleFromDoc = useCreatorHandle(user?.id);
@@ -1005,6 +1008,15 @@ ${contextLines || 'None'}
             <strong>Hashtags</strong> below only adds AI hashtags for <strong>My Page</strong>, <strong>Facebook</strong>, and{" "}
             <strong>X</strong>. Instagram caption generation still uses hashtags when relevant. Leave it off for clean captions on My Page / Facebook / X.
           </p>
+          {creatorIdentityActive ? (
+            <p className="text-[11px] text-primary-600 dark:text-primary-300 mb-2 leading-snug">
+              Creator Identity is active by default for your captions. Turn on <strong>Personality Override</strong> when you want this generation to follow the specific tone saved in Settings instead.
+            </p>
+          ) : (
+            <p className="text-[11px] text-gray-500 dark:text-gray-400 mb-2 leading-snug">
+              Use your saved personality to guide this output when Personality Override is on.
+            </p>
+          )}
           <div className="flex gap-2">
             <button
               onClick={onTogglePersonality}
@@ -1014,10 +1026,14 @@ ${contextLines || 'None'}
                   ? 'bg-gradient-to-r from-primary-500 to-indigo-500 text-white shadow-md'
                   : 'bg-white dark:bg-gray-700 text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-600 hover:border-primary-300'
               } ${!creatorPersonality ? 'opacity-40 cursor-not-allowed' : ''}`}
-              title={!creatorPersonality ? 'Add a personality description in Settings to enable' : 'Include your personality in AI generation'}
+              title={
+                !creatorPersonality
+                  ? 'Add Personality Override text in Settings (AI Training) to enable'
+                  : 'Apply saved Personality Override for this generation'
+              }
             >
               <SparklesIcon className="w-4 h-4" />
-              Personality
+              Personality Override
               {usePersonality && <CheckCircleIcon className="w-3.5 h-3.5" />}
             </button>
             <button

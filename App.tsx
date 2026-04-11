@@ -51,6 +51,8 @@ import { WitmeDiscoverPage, WitmeHomepage } from './components/WitmeHomepage';
 import { WitmePageManager } from './components/WitmePageManager';
 import {
   KNOWN_APP_ROUTES,
+  ECHOFLUX_CREATOR_ELITE_INVITE_USD,
+  ECHOFLUX_CREATOR_PRO_INVITE_USD,
   ECHOFLUX_ELITE_MONTHLY_USD,
   ECHOFLUX_PRO_MONTHLY_USD,
   echofluxEffectiveMonthlyWhenAnnualUsd,
@@ -623,6 +625,13 @@ const AppContent: React.FC = () => {
                 return;
             }
 
+            const subStatus = (user as { subscriptionStatus?: string }).subscriptionStatus;
+            const inviteGrantPlan = (user as { inviteGrantPlan?: string }).inviteGrantPlan;
+            if (subStatus === 'creator_invite_pending' && inviteGrantPlan === 'CreatorChoice') {
+                setOnboardingStep('plan-selector');
+                return;
+            }
+
             // If the user just created an account during plan selection (pendingSignup flow),
             // resume checkout automatically (so we don't drop back to the landing page).
             try {
@@ -636,26 +645,47 @@ const AppContent: React.FC = () => {
                 })();
                 const alreadyPromptedForThisAttempt = !!attemptTs && !!promptedAt && attemptTs === promptedAt;
 
-                if (!alreadyPromptedForThisAttempt && attempt?.accountCreated && attempt?.resumeCheckout && (attempt?.plan === 'Pro' || attempt?.plan === 'Elite')) {
+                if (
+                    !alreadyPromptedForThisAttempt &&
+                    attempt?.accountCreated &&
+                    attempt?.resumeCheckout &&
+                    (attempt?.plan === 'Pro' ||
+                        attempt?.plan === 'Elite' ||
+                        attempt?.plan === 'CreatorPro' ||
+                        attempt?.plan === 'CreatorElite')
+                ) {
                     const cycle = (attempt?.billingCycle === 'annually' ? 'annually' : 'monthly') as 'monthly' | 'annually';
                     const planName = attempt.plan as Plan;
-                    const planData = planName === 'Pro'
-                        ? {
-                            name: 'Pro' as const,
-                            price:
-                              cycle === 'annually'
-                                ? echofluxEffectiveMonthlyWhenAnnualUsd(ECHOFLUX_PRO_MONTHLY_USD)
-                                : ECHOFLUX_PRO_MONTHLY_USD,
-                            cycle,
-                          }
-                        : {
-                            name: 'Elite' as const,
-                            price:
-                              cycle === 'annually'
-                                ? echofluxEffectiveMonthlyWhenAnnualUsd(ECHOFLUX_ELITE_MONTHLY_USD)
-                                : ECHOFLUX_ELITE_MONTHLY_USD,
-                            cycle,
-                          };
+                    const planData =
+                        planName === 'Pro'
+                            ? {
+                                name: 'Pro' as const,
+                                price:
+                                    cycle === 'annually'
+                                        ? echofluxEffectiveMonthlyWhenAnnualUsd(ECHOFLUX_PRO_MONTHLY_USD)
+                                        : ECHOFLUX_PRO_MONTHLY_USD,
+                                cycle,
+                              }
+                            : planName === 'CreatorPro'
+                              ? {
+                                    name: 'CreatorPro' as const,
+                                    price: ECHOFLUX_CREATOR_PRO_INVITE_USD,
+                                    cycle: 'monthly' as const,
+                                  }
+                              : planName === 'CreatorElite'
+                                ? {
+                                    name: 'CreatorElite' as const,
+                                    price: ECHOFLUX_CREATOR_ELITE_INVITE_USD,
+                                    cycle: 'monthly' as const,
+                                  }
+                                : {
+                                    name: 'Elite' as const,
+                                    price:
+                                        cycle === 'annually'
+                                            ? echofluxEffectiveMonthlyWhenAnnualUsd(ECHOFLUX_ELITE_MONTHLY_USD)
+                                            : ECHOFLUX_ELITE_MONTHLY_USD,
+                                    cycle,
+                                  };
 
                     // Mark that we're prompting for this attempt
                     if (attemptTs) {
@@ -704,7 +734,15 @@ const AppContent: React.FC = () => {
                     const attemptRaw = localStorage.getItem('paymentAttempt');
                     const attempt = attemptRaw ? JSON.parse(attemptRaw) : null;
                     const checkoutTransition = localStorage.getItem('checkoutTransition');
-                    return (attempt?.accountCreated && attempt?.resumeCheckout && (attempt?.plan === 'Pro' || attempt?.plan === 'Elite')) || checkoutTransition === 'true';
+                    return (
+                        (attempt?.accountCreated &&
+                            attempt?.resumeCheckout &&
+                            (attempt?.plan === 'Pro' ||
+                                attempt?.plan === 'Elite' ||
+                                attempt?.plan === 'CreatorPro' ||
+                                attempt?.plan === 'CreatorElite')) ||
+                        checkoutTransition === 'true'
+                    );
                 } catch {
                     return false;
                 }
@@ -714,14 +752,20 @@ const AppContent: React.FC = () => {
                 setOnboardingStep('plan-selector');
                 return;
             }
-            const hasPaidPlan = user.plan === 'Pro' || user.plan === 'Elite' || user.plan === 'Agency';
+            const hasPaidPlan =
+                user.plan === 'Pro' ||
+                user.plan === 'Elite' ||
+                user.plan === 'CreatorPro' ||
+                user.plan === 'CreatorElite' ||
+                user.plan === 'Agency';
             
             // If user has a pre-selected plan from landing page, handle it
             if (selectedPlan) {
+                const igp = (user as { inviteGrantPlan?: string }).inviteGrantPlan;
                 const isInviteGranted =
-                    (user as any)?.subscriptionStatus === 'invite_grant' ||
-                    !!(user as any)?.invitedWithCode ||
-                    !!(user as any)?.inviteGrantPlan;
+                    (user as { subscriptionStatus?: string }).subscriptionStatus === 'invite_grant' ||
+                    igp === 'Pro' ||
+                    igp === 'Elite';
 
                 // If the user has invite-granted access, never override it based on a landing-page selection.
                 if (isInviteGranted) {
@@ -939,7 +983,7 @@ const AppContent: React.FC = () => {
         
         // For paid plans during signup, payment modal is opened in PlanSelectorModal
         // Just close the plan selector - don't start onboarding yet
-        if (plan === 'Pro' || plan === 'Elite') {
+        if (plan === 'Pro' || plan === 'Elite' || plan === 'CreatorPro' || plan === 'CreatorElite') {
             setOnboardingStep('none');
             return;
         }
@@ -1186,7 +1230,17 @@ const AppContent: React.FC = () => {
                 </div>
             )}
             {onboardingStep === 'plan-selector' && (
-                <PlanSelectorModal userType="Creator" onSelect={handlePlanSelected} onCancel={handlePlanCancel} />
+                <PlanSelectorModal
+                    userType="Creator"
+                    variant={
+                        (user as { subscriptionStatus?: string }).subscriptionStatus === 'creator_invite_pending' &&
+                        (user as { inviteGrantPlan?: string }).inviteGrantPlan === 'CreatorChoice'
+                            ? 'creatorInvite'
+                            : 'default'
+                    }
+                    onSelect={handlePlanSelected}
+                    onCancel={handlePlanCancel}
+                />
             )}
             {onboardingStep === 'creator' && <CreatorOnboardingModal onComplete={handleOnboardingComplete} />}
 
