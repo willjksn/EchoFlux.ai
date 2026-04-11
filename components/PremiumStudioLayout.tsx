@@ -4,7 +4,11 @@ import { useCreatorFanHubTheme } from '../src/hooks/useCreatorFanHubTheme';
 import { useUI } from './contexts/UIContext';
 import { auth } from '../firebaseConfig';
 import { STUDIO_TAB_IDS, FAN_HUB_TAB_IDS, STUDIO_TAB_LABELS, FAN_HUB_TAB_LABELS } from '../constants';
-import { FanHubNotificationBell } from './FanHubNotificationBell';
+import { FanHubNotificationBell, type FanHubNotificationNavigatePayload } from './FanHubNotificationBell';
+import {
+  FAN_HUB_DEEPLINK_STORAGE_KEY,
+  resolveFanHubNotificationTarget,
+} from '../src/lib/fanHubNotificationRouting';
 import {
   useUnreadNewMessageNotificationCount,
   clearNewMessageNotificationBadge,
@@ -95,39 +99,42 @@ export const PremiumStudioLayout: React.FC<PremiumStudioLayoutProps> = ({ childr
   const messagesTabBadgeCount = suppressFanHubDmNotifications ? 0 : unreadMessagesTabCount;
 
   const handleFanHubNotificationNavigate = useCallback(
-    (p: { type: string; data: Record<string, string> }) => {
+    (payload: FanHubNotificationNavigatePayload) => {
       if (!isFanHub) return;
-      const t = (p.type || '').trim();
-      const d = p.data;
-      if (t === 'new_message' && d.threadId?.trim()) {
-        openMessagesForThread(d.threadId);
-        return;
-      }
-      if (t === 'video_chat_accepted' || t === 'video_chat_starting' || t === 'video_chat_reminder') {
-        setTab('videoChats');
-        return;
-      }
-      if (t === 'session_starting' || t === 'session_reminder') {
-        setTab('sessions');
-        return;
-      }
-      if (t === 'live_session_scheduled') {
-        if (d.jointKind === 'video_call') setTab('videoChats');
-        else setTab('sessions');
-        return;
-      }
-      if (t === 'purchase_confirmed' || t === 'content_unlocked' || t === 'creator_new_purchase') {
-        setTab('purchases');
-        return;
-      }
-      if (d.threadId?.trim()) {
-        openMessagesForThread(d.threadId);
+      const { tab, threadId } = resolveFanHubNotificationTarget(payload.type, payload.data);
+      if (threadId) {
+        openMessagesForThread(threadId);
       } else {
-        setTab('messages');
+        setTab(tab);
       }
     },
     [isFanHub, openMessagesForThread, setTab]
   );
+
+  /** Apply Fan Hub tab/thread after navigating from EchoFlux header Firestore bell. */
+  useEffect(() => {
+    if (!isFanHub) return;
+    try {
+      const raw = sessionStorage.getItem(FAN_HUB_DEEPLINK_STORAGE_KEY);
+      if (!raw) return;
+      sessionStorage.removeItem(FAN_HUB_DEEPLINK_STORAGE_KEY);
+      const parsed = JSON.parse(raw) as { tab?: string; threadId?: string };
+      const tabId = typeof parsed.tab === 'string' ? parsed.tab.trim() : '';
+      const threadId = typeof parsed.threadId === 'string' ? parsed.threadId.trim() : '';
+      if (threadId) {
+        setPendingMessagesThreadId(threadId);
+        setTab('messages');
+      } else if (tabId && (FAN_HUB_TAB_IDS as readonly string[]).includes(tabId)) {
+        setTab(tabId);
+      }
+    } catch {
+      try {
+        sessionStorage.removeItem(FAN_HUB_DEEPLINK_STORAGE_KEY);
+      } catch {
+        /* ignore */
+      }
+    }
+  }, [isFanHub, setTab, setPendingMessagesThreadId]);
 
   /** Sync dm_muted_threads mirror so message badges respect conversations muted before this feature. */
   useEffect(() => {

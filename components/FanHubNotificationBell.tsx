@@ -212,7 +212,7 @@ export const FanHubNotificationBell: React.FC<FanHubNotificationBellProps> = ({
       showToast?.("Notification removed", "success");
     } catch (err) {
       console.error("dismissNotification", err);
-      showToast?.("Could not remove notification", "error");
+      showToast?.("Could not clear notification", "error");
     } finally {
       setDismissingIds((prev) => {
         const next = new Set(prev);
@@ -238,6 +238,28 @@ export const FanHubNotificationBell: React.FC<FanHubNotificationBellProps> = ({
     } catch (e) {
       console.error("clearAllNotifications", e);
       showToast?.("Could not clear all notifications", "error");
+    } finally {
+      setClearingAll(false);
+    }
+  };
+
+  const clearReadNotifications = async () => {
+    const readRows = rows.filter((r) => r.read);
+    if (!uid || readRows.length === 0 || clearingAll) return;
+    if (
+      !window.confirm(
+        `Clear ${readRows.length} read notification${readRows.length === 1 ? "" : "s"}? Unread items stay in the list.`
+      )
+    ) {
+      return;
+    }
+    setClearingAll(true);
+    try {
+      await Promise.all(readRows.map((r) => deleteDoc(doc(db, "users", uid, "notifications", r.id))));
+      showToast?.("Read notifications cleared", "success");
+    } catch (e) {
+      console.error("clearReadNotifications", e);
+      showToast?.("Could not clear read notifications", "error");
     } finally {
       setClearingAll(false);
     }
@@ -301,6 +323,16 @@ export const FanHubNotificationBell: React.FC<FanHubNotificationBellProps> = ({
                   className="text-xs font-medium text-pink-600 dark:text-pink-400 hover:underline disabled:opacity-50"
                 >
                   Mark all read
+                </button>
+              ) : null}
+              {rows.some((r) => r.read) ? (
+                <button
+                  type="button"
+                  onClick={() => void clearReadNotifications()}
+                  disabled={clearingAll}
+                  className="text-xs font-medium rounded-md border border-gray-200 dark:border-slate-600 px-2 py-1 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-800 disabled:opacity-50"
+                >
+                  {clearingAll ? "Clearing…" : "Clear read"}
                 </button>
               ) : null}
               {rows.length > 0 ? (

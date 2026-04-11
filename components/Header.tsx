@@ -1,5 +1,5 @@
 
-import React, { useState, useRef, useEffect, useMemo } from 'react';
+import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { SunIcon, MoonIcon, BellIcon, MenuIcon, LogoutIcon, ChatIcon, BriefcaseIcon, WarningIcon } from './icons/UIIcons';
 import { Client, Notification } from '../types';
 import { useAppContext } from './AppContext';
@@ -7,6 +7,11 @@ import { OFFLINE_MODE } from '../constants';
 import { ReportProblemModal } from './ReportProblemModal';
 import { ShareReviewModal } from './ShareReviewModal';
 import { getAvatarCropStyle } from '../src/lib/avatarCrop';
+import { FanHubNotificationBell, type FanHubNotificationNavigatePayload } from './FanHubNotificationBell';
+import {
+  FAN_HUB_DEEPLINK_STORAGE_KEY,
+  resolveFanHubNotificationTarget,
+} from '../src/lib/fanHubNotificationRouting';
 
 interface HeaderProps {
   pageTitle: string;
@@ -16,7 +21,7 @@ export const Header: React.FC<HeaderProps> = ({ pageTitle }) => {
   const {
     isDarkMode, toggleTheme, setIsSidebarOpen, handleLogout, setActivePage,
     user, clients, selectedClient, setSelectedClient, notifications,
-    setNotifications, navigateToDashboardWithFilter, activePage
+    setNotifications, navigateToDashboardWithFilter, activePage, showToast,
   } = useAppContext();
 
   if (!user) {
@@ -45,6 +50,20 @@ export const Header: React.FC<HeaderProps> = ({ pageTitle }) => {
 
   const hasUnreadNotifications = useMemo(() => visibleNotifications.some(n => !n.read), [visibleNotifications]);
   const showShareReviewInMenu = activePage !== 'fanHub';
+  const showEchoFluxFanActivityBell = activePage !== 'fanHub';
+
+  const handleEchoFluxFirestoreNotificationNavigate = useCallback(
+    (payload: FanHubNotificationNavigatePayload) => {
+      const { tab, threadId } = resolveFanHubNotificationTarget(payload.type, payload.data);
+      try {
+        sessionStorage.setItem(FAN_HUB_DEEPLINK_STORAGE_KEY, JSON.stringify({ tab, threadId }));
+      } catch {
+        /* ignore */
+      }
+      setActivePage('fanHub');
+    },
+    [setActivePage]
+  );
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -220,8 +239,21 @@ export const Header: React.FC<HeaderProps> = ({ pageTitle }) => {
           >
             {isDarkMode ? <SunIcon /> : <MoonIcon />}
           </button>
+          {showEchoFluxFanActivityBell ? (
+            <FanHubNotificationBell
+              accentColor="#2563eb"
+              iconColor={isDarkMode ? '#e5e7eb' : '#374151'}
+              className="shrink-0"
+              onNavigate={handleEchoFluxFirestoreNotificationNavigate}
+              showToast={showToast}
+            />
+          ) : null}
           <div className="relative" ref={notificationsRef}>
-            <button onClick={handleToggleNotifications} className="p-2 rounded-full text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 focus:outline-none" aria-label="Notifications">
+            <button
+              onClick={handleToggleNotifications}
+              className="p-2 rounded-full text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 focus:outline-none"
+              aria-label={OFFLINE_MODE ? 'Reminders' : 'Account and usage alerts'}
+            >
               <BellIcon />
               {hasUnreadNotifications && <span className="absolute top-0 right-0 h-2.5 w-2.5 bg-red-500 rounded-full border-2 border-white dark:border-gray-800"></span>}
             </button>
@@ -229,7 +261,7 @@ export const Header: React.FC<HeaderProps> = ({ pageTitle }) => {
                 <div className="absolute right-0 mt-2 w-80 bg-white dark:bg-gray-800 rounded-lg shadow-lg ring-1 ring-black ring-opacity-5 z-20 flex flex-col">
                     <div className="p-4 border-b border-gray-200 dark:border-gray-700">
                         <h3 className="font-semibold text-gray-900 dark:text-white">
-                          {OFFLINE_MODE ? 'Reminders' : 'Notifications'}
+                          {OFFLINE_MODE ? 'Reminders' : 'Account & usage'}
                         </h3>
                     </div>
                     <div className="py-1 max-h-80 overflow-y-auto">
