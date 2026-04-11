@@ -1,4 +1,4 @@
-import React, { useState, useRef, useMemo, useEffect } from 'react';
+import React, { useState, useRef, useMemo, useEffect, useCallback } from 'react';
 import { Settings as AppSettings, Platform, CustomVoice, SocialAccount } from '../types';
 import { OFFLINE_MODE, CONNECTION_VISIBLE_PLATFORMS, ANALYTICS_ENABLED, VIDEO_MINUTE_PACKS } from '../constants';
 import { InstagramIcon, TikTokIcon, ThreadsIcon, XIcon, YouTubeIcon, LinkedInIcon, FacebookIcon, PinterestIcon } from './icons/PlatformIcons';
@@ -236,6 +236,12 @@ export const Settings: React.FC = () => {
             }
         })();
     }, [user?.id, user?.plan]);
+
+    const openCreatorIdentityBuilder = useCallback(() => {
+        setActivePage('onlyfansStudio');
+        window.history.pushState({}, '', '/studio?tab=persona');
+        window.dispatchEvent(new PopStateEvent('popstate'));
+    }, [setActivePage]);
 
     // Video minutes state
     const [videoQuota, setVideoQuota] = useState<{
@@ -1006,6 +1012,32 @@ export const Settings: React.FC = () => {
                                 </>
                             )}
                         </SettingsSection>
+                        {isCreatorIdentityPlanClient(user?.plan) && (
+                            <div className="rounded-xl border border-primary-200/80 dark:border-primary-800/50 bg-gradient-to-r from-primary-50/90 to-white dark:from-primary-950/40 dark:to-gray-800/80 px-4 py-3 shadow-sm">
+                                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+                                    <div className="min-w-0 space-y-1">
+                                        <p className="text-sm font-semibold text-gray-900 dark:text-white">
+                                            Creator Identity{' '}
+                                            <span className="font-medium text-primary-700 dark:text-primary-300">(Elite)</span>
+                                        </p>
+                                        <p className="text-xs text-gray-600 dark:text-gray-400">
+                                            Your saved identity is the default brand baseline for captions and strategy. Open the full
+                                            builder in Premium Studio anytime.
+                                        </p>
+                                        {identitySummaryElite ? (
+                                            <p className="text-xs text-gray-700 dark:text-gray-300 line-clamp-2">{identitySummaryElite}</p>
+                                        ) : null}
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={openCreatorIdentityBuilder}
+                                        className="shrink-0 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-primary-700"
+                                    >
+                                        Open Creator Identity
+                                    </button>
+                                </div>
+                            </div>
+                        )}
                         <SettingsSection title="Creator Profile">
                             <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
                                 Help the AI generate content that matches you and appeals to your audience.
@@ -1154,18 +1186,16 @@ export const Settings: React.FC = () => {
                                     <div className="rounded-lg border border-primary-200 dark:border-primary-900/40 bg-primary-50/90 dark:bg-primary-950/30 p-4 space-y-2">
                                         <p className="text-sm font-medium text-gray-900 dark:text-white">Creator Identity (Elite)</p>
                                         <p className="text-xs text-gray-600 dark:text-gray-400">
-                                            Your Creator Identity powers your default brand direction in EchoFlux and witme.io. Open the builder anytime from Premium Studio → Creator Identity.
+                                            Your Creator Identity powers your default brand direction in EchoFlux and witme.io. Open the
+                                            builder from Premium Studio (Creator Identity tab), or use the shortcut above Creator Profile
+                                            on the General settings tab.
                                         </p>
                                         {identitySummaryElite && (
                                             <p className="text-xs text-gray-700 dark:text-gray-300 line-clamp-4">{identitySummaryElite}</p>
                                         )}
                                         <button
                                             type="button"
-                                            onClick={() => {
-                                                setActivePage('onlyfansStudio');
-                                                window.history.pushState({}, '', '/studio?tab=persona');
-                                                window.dispatchEvent(new PopStateEvent('popstate'));
-                                            }}
+                                            onClick={openCreatorIdentityBuilder}
                                             className="text-sm font-medium text-primary-700 dark:text-primary-300 hover:underline"
                                         >
                                             Open Creator Identity Builder

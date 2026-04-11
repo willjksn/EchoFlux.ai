@@ -4,6 +4,7 @@ import { auth, db } from '../firebaseConfig';
 import { doc, setDoc } from 'firebase/firestore';
 import { LogoIcon, DashboardIcon, TargetIcon, ComposeIcon, CalendarIcon, ImageIcon, SparklesIcon, HeartIcon, SettingsIcon } from './icons/UIIcons';
 import { FAN_HUB_THEME_PRESETS } from '../constants';
+import { isCreatorIdentityPlanClient } from '../src/lib/creatorIdentity/planGate';
 
 interface CreatorOnboardingModalProps {
     onComplete: (opts?: { openFanHub?: boolean }) => void;
@@ -24,12 +25,12 @@ export const CreatorOnboardingModal: React.FC<CreatorOnboardingModalProps> = ({ 
     const [fanHubSaving, setFanHubSaving] = useState(false);
 
     const userPlan = user?.plan || 'Pro';
-    const isProPlan = userPlan === 'Pro';
-    const isElitePlan = userPlan === 'Elite' || userPlan === 'Agency';
+    const isProPlan = userPlan === 'Pro' || userPlan === 'CreatorPro';
+    const isElitePlan = isCreatorIdentityPlanClient(user?.plan);
 
-    // Pro: Welcome, Content Focus, Audience, I am a..., Goal, Core, Fan Hub intro, Fan Hub setup, Completion = 9
-    // Elite: + Premium Studio = 10
-    const totalSteps = isProPlan ? 9 : 10;
+    // Pro: Welcome … Fan Hub setup, Completion = 9
+    // Elite (+ OnlyFansStudio / CreatorElite / Agency): + Creator Identity intro, + Premium Studio, Completion = 11
+    const totalSteps = isProPlan ? 9 : isElitePlan ? 11 : 10;
     const fanHubSetupStep = 8;
 
     const checkHandle = useCallback(async (value: string) => {
@@ -232,6 +233,7 @@ export const CreatorOnboardingModal: React.FC<CreatorOnboardingModalProps> = ({ 
                                 <>
                                     <li>• Everything in Pro, plus:</li>
                                     <li>• Premium Studio - advanced creator tools</li>
+                                    <li>• Creator Identity - AI-built brand baseline for captions & strategy</li>
                                     <li>• Enhanced Fan Hub features</li>
                                     <li>• 10GB Vault storage</li>
                                     <li>• 1,500 AI generations per month</li>
@@ -632,8 +634,48 @@ export const CreatorOnboardingModal: React.FC<CreatorOnboardingModalProps> = ({ 
             );
         }
 
-        // Step 9 (Elite only): Premium Studio Introduction
+        // Step 9 (Elite tier only): Creator Identity Builder
         if (step === 9 && isElitePlan) {
+            const openCreatorIdentityBuilder = () => {
+                window.open(`${window.location.origin}/studio?tab=persona`, '_blank', 'noopener,noreferrer');
+            };
+            return (
+                <div className="animate-fade-in">
+                    <div className="flex items-center justify-center gap-2 mb-2">
+                        <SparklesIcon />
+                        <h2 className="text-xl font-bold text-gray-900 dark:text-white">Creator Identity</h2>
+                    </div>
+                    <p className="text-center text-gray-500 dark:text-gray-400 text-sm mb-4">
+                        Elite includes a guided identity quiz so captions, strategy, and your optional Fan Hub fill stay on-brand.
+                    </p>
+                    <div className="p-4 bg-purple-50 dark:bg-purple-900/20 rounded-lg border border-purple-100 dark:border-purple-800 mb-4">
+                        <p className="text-sm text-purple-800 dark:text-purple-200">
+                            Complete the <strong>Creator Identity Builder</strong> in Premium Studio when you have a few minutes. You
+                            can pause anytime — progress is saved. You can also open it later from{' '}
+                            <strong className="whitespace-nowrap">Settings → General</strong> above Creator Profile.
+                        </p>
+                    </div>
+                    <ul className="text-sm text-gray-600 dark:text-gray-300 space-y-2 mb-4 list-disc list-inside">
+                        <li>Turns quiz answers into a structured brand profile</li>
+                        <li>Feeds your default tone into captions and strategy (unless you use Personality Override)</li>
+                        <li>Optional: fill Fan Hub / My Page copy from your identity when you choose</li>
+                    </ul>
+                    <button
+                        type="button"
+                        onClick={openCreatorIdentityBuilder}
+                        className="w-full px-4 py-2.5 bg-primary-600 text-white font-semibold rounded-lg hover:bg-primary-700 transition-colors"
+                    >
+                        Open Creator Identity Builder
+                    </button>
+                    <p className="mt-3 text-xs text-center text-gray-500 dark:text-gray-400">
+                        Opens in a new tab so you can keep this onboarding open. Use <strong>Next</strong> when you&apos;re ready to continue.
+                    </p>
+                </div>
+            );
+        }
+
+        // Step 10 (Elite tier only): Premium Studio Introduction
+        if (step === 10 && isElitePlan) {
             return (
                 <div className="animate-fade-in">
                     <div className="flex items-center justify-center gap-2 mb-2">
@@ -664,8 +706,10 @@ export const CreatorOnboardingModal: React.FC<CreatorOnboardingModalProps> = ({ 
                             <p className="text-xs text-purple-700 dark:text-purple-300 mt-1">Generate engaging DM templates and conversation starters.</p>
                         </div>
                         <div className="p-3 bg-purple-50 dark:bg-purple-900/20 rounded-lg">
-                            <h4 className="font-semibold text-purple-900 dark:text-purple-200 text-sm">Persona Builder</h4>
-                            <p className="text-xs text-purple-700 dark:text-purple-300 mt-1">Create AI personas for different content types and audiences.</p>
+                            <h4 className="font-semibold text-purple-900 dark:text-purple-200 text-sm">Creator Identity</h4>
+                            <p className="text-xs text-purple-700 dark:text-purple-300 mt-1">
+                                Your brand baseline quiz — first tab in Premium Studio. Powers captions and strategy by default.
+                            </p>
                         </div>
                         <div className="p-3 bg-purple-50 dark:bg-purple-900/20 rounded-lg">
                             <h4 className="font-semibold text-purple-900 dark:text-purple-200 text-sm">Teasers</h4>
@@ -716,10 +760,19 @@ export const CreatorOnboardingModal: React.FC<CreatorOnboardingModalProps> = ({ 
                                 <span>Explore <strong>Fan Hub</strong> to build your community</span>
                             </li>
                             {isElitePlan && (
-                                <li className="flex items-start gap-2">
-                                    <span className="bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold flex-shrink-0">5</span>
-                                    <span>Check out <strong>Premium Studio</strong> for advanced tools</span>
-                                </li>
+                                <>
+                                    <li className="flex items-start gap-2">
+                                        <span className="bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold flex-shrink-0">5</span>
+                                        <span>
+                                            Complete <strong>Creator Identity</strong> in Premium Studio (first tab) for smarter captions
+                                            and strategy
+                                        </span>
+                                    </li>
+                                    <li className="flex items-start gap-2">
+                                        <span className="bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold flex-shrink-0">6</span>
+                                        <span>Explore the rest of <strong>Premium Studio</strong> (ideas, drops, DMs, teasers)</span>
+                                    </li>
+                                </>
                             )}
                         </ol>
                     </div>

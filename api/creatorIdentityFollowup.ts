@@ -14,79 +14,88 @@ function isDraftAnswers(x: unknown): x is CreatorIdentityDraftAnswers {
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
-  if (req.method !== "POST") {
-    res.status(405).json({ error: "Method not allowed" });
-    return;
-  }
+  try {
+    if (req.method !== "POST") {
+      res.status(405).json({ error: "Method not allowed" });
+      return;
+    }
 
-  const user = await verifyAuth(req);
-  if (!user?.uid) {
-    res.status(401).json({ error: "Unauthorized" });
-    return;
-  }
+    const user = await verifyAuth(req);
+    if (!user?.uid) {
+      res.status(401).json({ error: "Unauthorized" });
+      return;
+    }
 
-  const db = getAdminDb();
-  if (!db) {
-    res.status(500).json({ error: "Database unavailable" });
-    return;
-  }
+    const db = getAdminDb();
+    if (!db) {
+      res.status(500).json({ error: "Database unavailable" });
+      return;
+    }
 
-  const userDoc = await db.collection("users").doc(user.uid).get();
-  const plan = userDoc.exists ? String((userDoc.data() as { plan?: string })?.plan || "") : "";
-  if (!isCreatorIdentityPlan(plan)) {
-    res.status(403).json({ error: "Not available on your plan." });
-    return;
-  }
+    const userDoc = await db.collection("users").doc(user.uid).get();
+    const plan = userDoc.exists ? String((userDoc.data() as { plan?: string })?.plan || "") : "";
+    if (!isCreatorIdentityPlan(plan)) {
+      res.status(403).json({ error: "Not available on your plan." });
+      return;
+    }
 
-  const body = (req.body || {}) as { answers?: unknown };
-  if (!isDraftAnswers(body.answers)) {
-    res.status(400).json({ error: "Invalid answers" });
-    return;
-  }
+    const body = (req.body || {}) as { answers?: unknown };
+    if (!isDraftAnswers(body.answers)) {
+      res.status(400).json({ error: "Invalid answers" });
+      return;
+    }
 
-  const buckets = scoreAnswers(body.answers);
-  const conf = computeConfidence(body.answers, buckets.niche, buckets.vibes);
-  if (!needsFollowup(conf, buckets.niche)) {
-    res.status(200).json({ needFollowup: false, questions: [] as unknown[] });
-    return;
-  }
+    const buckets = scoreAnswers(body.answers);
+    const conf = computeConfidence(body.answers, buckets.niche, buckets.vibes);
+    if (!needsFollowup(conf, buckets.niche)) {
+      res.status(200).json({ needFollowup: false, questions: [] as unknown[] });
+      return;
+    }
 
-  const keyCheck = checkApiKeys();
-  if (!keyCheck.hasKey) {
-    res.status(200).json({
-      needFollowup: true,
-      questions: fallbackQuestions(buckets.niche),
-      note: "AI not configured — returned template questions.",
-    });
-    return;
-  }
+    const keyCheck = checkApiKeys();
+    if (!keyCheck.hasKey) {
+      res.status(200).json({
+        needFollowup: true,
+        questions: fallbackQuestions(buckets.niche),
+        note: "AI not configured — returned template questions.",
+      });
+      return;
+    }
 
-  const nicheTop = Object.entries(buckets.niche)
-    .filter(([, v]) => v > 0)
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 3)
-    .map(([k]) => k);
+    const nicheTop = Object.entries(buckets.niche)
+      .filter(([, v]) => v > 0)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 3)
+      .map(([k]) => k);
 
-  const prompt = `You help clarify a creator's brand. Based on quiz signals, propose 3-5 short follow-up questions.
+    const prompt = `You help clarify a creator's brand. Based on quiz signals, propose 3-5 short follow-up questions.
 Top niche scores (internal ids): ${nicheTop.join(", ")}. Confidence is borderline.
 
 Return ONLY valid JSON array of objects, each: {"id":"string","question":"string","reason":"string","targetDimension":"niche|vibe|audience|monetization"}
 No markdown.`;
 
-  try {
-    const model = await getModelForTask("strategy", user.uid);
-    const r = await model.generateContent({
-      contents: [{ role: "user", parts: [{ text: prompt }] }],
-      generationConfig: { responseMimeType: "application/json" },
-    });
-    const text = r?.response?.text?.() || "";
-    const cleaned = text.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "").trim();
-    const parsed = JSON.parse(cleaned) as unknown;
-    const questions = Array.isArray(parsed) ? parsed.slice(0, 5) : [];
-    res.status(200).json({ needFollowup: true, questions });
+    try {
+      const model = await getModelForTask("strategy", user.uid);
+      const r = await model.generateContent({
+        contents: [{ role: "user", parts: [{ text: prompt }] }],
+        generationConfig: { responseMimeType: "application/json" },
+      });
+      const text = r?.response?.text?.() || "";
+      const cleaned = text.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "").trim();
+      const parsed = JSON.parse(cleaned) as unknown;
+      const questions = Array.isArray(parsed) ? parsed.slice(0, 5) : [];
+      res.status(200).json({ needFollowup: true, questions });
+    } catch (e) {
+      console.error("creatorIdentityFollowup AI error:", e);
+      res.status(200).json({ needFollowup: true, questions: fallbackQuestions(buckets.niche) });
+    }
   } catch (e) {
-    console.error("creatorIdentityFollowup AI error:", e);
-    res.status(200).json({ needFollowup: true, questions: fallbackQuestions(buckets.niche) });
+    console.error("creatorIdentityFollowup:", e);
+    if (!res.headersSent) {
+      res.status(500).json({
+        error: e instanceof Error ? e.message : "Server error",
+      });
+    }
   }
 }
 

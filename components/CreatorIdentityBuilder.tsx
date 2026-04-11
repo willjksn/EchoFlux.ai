@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { auth } from '../firebaseConfig';
 import { CREATOR_IDENTITY_PROMISE, CREATOR_IDENTITY_QUESTIONS } from '../src/lib/creatorIdentity/questionBank';
 import type { CreatorIdentityDraftAnswers, CreatorIdentityProfile, StructuredAnswer } from '../src/lib/creatorIdentity/types';
@@ -13,6 +13,22 @@ async function authHeader(): Promise<Record<string, string>> {
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
+/** Parse JSON; avoids `Unexpected token` when the server returns HTML or plain text. */
+async function readJsonBody(r: Response): Promise<Record<string, unknown>> {
+  const text = await r.text();
+  if (!text.trim()) return {};
+  try {
+    return JSON.parse(text) as Record<string, unknown>;
+  } catch {
+    const snippet = text.replace(/\s+/g, ' ').trim().slice(0, 180);
+    throw new Error(
+      r.status >= 500
+        ? `Server error (${r.status}). If you are on local dev, set DEV_API_PROXY in .env.local to your deployed API URL (see docs/LOCAL_DEV.md). ${snippet}`
+        : `Unexpected response (${r.status}): ${snippet}`
+    );
+  }
+}
+
 type FollowupQ = { id: string; question: string; reason: string; targetDimension?: string };
 
 export const CreatorIdentityBuilder: React.FC = () => {
@@ -25,6 +41,7 @@ export const CreatorIdentityBuilder: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [applying, setApplying] = useState<string | null>(null);
+  const builderScrollAnchorRef = useRef<HTMLDivElement>(null);
 
   const total = CREATOR_IDENTITY_QUESTIONS.length;
   const q = CREATOR_IDENTITY_QUESTIONS[step];
@@ -34,7 +51,7 @@ export const CreatorIdentityBuilder: React.FC = () => {
       const h = await authHeader();
       const r = await fetch('/api/getCreatorIdentity', { headers: { ...h } });
       if (!r.ok) return;
-      const data = await r.json();
+      const data = await readJsonBody(r);
       const p = data.profile as Record<string, unknown> | null;
       if (!p) return;
       const raw = p.rawAnswers as CreatorIdentityDraftAnswers | undefined;
@@ -59,6 +76,11 @@ export const CreatorIdentityBuilder: React.FC = () => {
   useEffect(() => {
     void loadProfile();
   }, [loadProfile]);
+
+  /** After Next/Back or phase change, scroll the scrollable main column to the top of this builder. */
+  useLayoutEffect(() => {
+    builderScrollAnchorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, [phase, step]);
 
   const progress = useMemo(() => Math.round(((step + 1) / total) * 100), [step, total]);
 
@@ -116,8 +138,8 @@ export const CreatorIdentityBuilder: React.FC = () => {
         headers: { ...h, 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'complete', answers }),
       });
-      const data = await r.json();
-      if (!r.ok) throw new Error(data.error || 'Save failed');
+      const data = await readJsonBody(r);
+      if (!r.ok) throw new Error(String(data.error || 'Save failed'));
       const p = data.profile as CreatorIdentityProfile;
       setProfile(p);
       if (p.status === 'needs_followup') {
@@ -126,7 +148,8 @@ export const CreatorIdentityBuilder: React.FC = () => {
           headers: { ...h, 'Content-Type': 'application/json' },
           body: JSON.stringify({ answers }),
         });
-        const fd = await fr.json();
+        const fd = await readJsonBody(fr);
+        if (!fr.ok) throw new Error(String(fd.error || 'Follow-up request failed'));
         const qs = Array.isArray(fd.questions) ? (fd.questions as FollowupQ[]) : [];
         setFollowupQs(qs.length ? qs : []);
         setPhase(qs.length ? 'followup' : 'results');
@@ -154,8 +177,8 @@ export const CreatorIdentityBuilder: React.FC = () => {
           followupQuestionsAsked: followupQs,
         }),
       });
-      const data = await r.json();
-      if (!r.ok) throw new Error(data.error || 'Save failed');
+      const data = await readJsonBody(r);
+      if (!r.ok) throw new Error(String(data.error || 'Save failed'));
       setProfile(data.profile as CreatorIdentityProfile);
       setPhase('results');
     } catch (e: unknown) {
@@ -175,8 +198,8 @@ export const CreatorIdentityBuilder: React.FC = () => {
         headers: { ...h, 'Content-Type': 'application/json' },
         body: JSON.stringify({ targets }),
       });
-      const data = await r.json();
-      if (!r.ok) throw new Error(data.error || 'Apply failed');
+      const data = await readJsonBody(r);
+      if (!r.ok) throw new Error(String(data.error || 'Apply failed'));
       await loadProfile();
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Apply failed');
@@ -194,7 +217,7 @@ export const CreatorIdentityBuilder: React.FC = () => {
     const conf =
       profile.confidenceScore >= 80 ? 'high' : profile.confidenceScore >= 55 ? 'medium' : 'low';
     return (
-      <div className="max-w-4xl mx-auto space-y-6 text-gray-900 dark:text-gray-100 pb-16">
+      <div ref={builderScrollAnchorRef} className="max-w-4xl mx-auto space-y-6 text-gray-900 dark:text-gray-100 pb-16">
         <header className="space-y-2 border-b border-gray-200 dark:border-slate-700/80 pb-6">
           <p className="text-xs font-semibold uppercase tracking-widest text-primary-600 dark:text-primary-400">Elite</p>
           <h1 className="text-3xl font-semibold text-gray-900 dark:text-white">Your Creator Identity</h1>
@@ -348,7 +371,7 @@ export const CreatorIdentityBuilder: React.FC = () => {
 
   if (phase === 'followup') {
     return (
-      <div className="max-w-xl mx-auto space-y-6 text-gray-900 dark:text-gray-100 pb-16">
+      <div ref={builderScrollAnchorRef} className="max-w-xl mx-auto space-y-6 text-gray-900 dark:text-gray-100 pb-16">
         <h2 className="text-xl font-semibold text-gray-900 dark:text-white">A few sharper questions</h2>
         <p className="text-sm text-gray-600 dark:text-slate-400">{CREATOR_IDENTITY_PROMISE}</p>
         {followupQs.map((fq) => (
@@ -378,7 +401,7 @@ export const CreatorIdentityBuilder: React.FC = () => {
   const a = answers.structured[q.id] || {};
 
   return (
-    <div className="max-w-xl mx-auto space-y-6 pb-16 text-gray-900 dark:text-gray-100">
+    <div ref={builderScrollAnchorRef} className="max-w-xl mx-auto space-y-6 pb-16 text-gray-900 dark:text-gray-100">
       <div className="flex items-center gap-2 text-primary-600 dark:text-primary-400 text-xs font-semibold uppercase tracking-wider">
         <SparklesIcon className="w-4 h-4 text-primary-600 dark:text-primary-400" /> Creator Identity Builder
       </div>
