@@ -712,6 +712,7 @@
   position: relative;
   z-index: 0;
   background: #111827;
+  touch-action: manipulation;
 }
 .feed-grid-video-overlay {
   position: absolute;
@@ -1139,7 +1140,10 @@
   background: #f3f4f6;
   cursor: default;
 }
-.feed-card-media-wrap-video { cursor: pointer; }
+.feed-card-media-wrap-video {
+  cursor: pointer;
+  touch-action: manipulation;
+}
 .feed-card-media-wrap::after {
   content: ""; position: absolute; inset: 0;
   box-shadow: inset 0 0 60px -20px rgba(0, 0, 0, 0.08);

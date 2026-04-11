@@ -32,6 +32,7 @@ import {
   captureFanFeedCarouselScrollSnaps,
   restoreFanFeedCarouselScrollSnaps,
 } from "../src/lib/fanFeedCarouselScrollRestore";
+import { tryFeedVideoPosterSeekOnce } from "../src/lib/feedVideoPosterSeek";
 
 const feedImageDownloadGuardProps = {
   draggable: false as const,
@@ -263,6 +264,26 @@ const PlayIcon = () => (
     <path d="M8 5v14l11-7z" />
   </svg>
 );
+
+function MemberFeedGridVideoCover({ src }: { src: string }) {
+  const posterSeekDoneRef = useRef(false);
+  const clean = src.split("#")[0]?.trim() || src;
+  useEffect(() => {
+    posterSeekDoneRef.current = false;
+  }, [clean]);
+  return (
+    <video
+      src={clean}
+      muted
+      playsInline
+      preload="metadata"
+      {...feedVideoDownloadGuardProps}
+      onLoadedMetadata={(e) => {
+        tryFeedVideoPosterSeekOnce(e.currentTarget, posterSeekDoneRef);
+      }}
+    />
+  );
+}
 
 const CarouselChevronLeft = () => (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
@@ -498,6 +519,7 @@ function FanMemberPostMedia({
   const [mediaIndex, setMediaIndex] = useState(0);
   const carouselRootRef = useRef<HTMLDivElement>(null);
   const scrollRestoreSnapsRef = useRef<FanFeedScrollSnap[] | null>(null);
+  const videoPosterSeekDoneRef = useRef(false);
 
   useEffect(() => {
     setMediaIndex(0);
@@ -591,11 +613,19 @@ function FanMemberPostMedia({
     (e.currentTarget as HTMLButtonElement).blur();
   }, []);
 
+  const idx = n > 0 ? Math.min(mediaIndex, n - 1) : 0;
+  const currentUrl = n > 0 ? urls[idx] : "";
+  const currentIsVideo =
+    n > 0 && (types[idx] === "video" || inferIsVideoFromUrl(currentUrl));
+  const activeVideoSrcKey =
+    currentIsVideo && currentUrl ? (currentUrl.split("#")[0]?.trim() ?? "") : "";
+
+  useEffect(() => {
+    videoPosterSeekDoneRef.current = false;
+  }, [idx, activeVideoSrcKey]);
+
   if (n === 0) return null;
 
-  const idx = Math.min(mediaIndex, n - 1);
-  const currentUrl = urls[idx];
-  const currentIsVideo = types[idx] === "video" || inferIsVideoFromUrl(currentUrl);
   const lockedCurrent = isMediaSlotLocked(lockedCfg, idx, n);
 
   const totalSlots = mediaTotals.images + mediaTotals.videos;
@@ -664,14 +694,7 @@ function FanMemberPostMedia({
             playsInline
             preload="metadata"
             onLoadedMetadata={(e) => {
-              const v = e.currentTarget;
-              try {
-                if (Number.isFinite(v.duration) && v.duration > 0) {
-                  v.currentTime = Math.min(0.1, v.duration * 0.02);
-                }
-              } catch {
-                /* ignore */
-              }
+              tryFeedVideoPosterSeekOnce(e.currentTarget, videoPosterSeekDoneRef);
             }}
           />
         ) : splitModal ? (
@@ -690,14 +713,7 @@ function FanMemberPostMedia({
             preload="metadata"
             {...feedVideoDownloadGuardProps}
             onLoadedMetadata={(e) => {
-              const v = e.currentTarget;
-              try {
-                if (Number.isFinite(v.duration) && v.duration > 0) {
-                  v.currentTime = Math.min(0.1, v.duration * 0.02);
-                }
-              } catch {
-                /* ignore */
-              }
+              tryFeedVideoPosterSeekOnce(e.currentTarget, videoPosterSeekDoneRef);
             }}
           />
         )
@@ -1725,38 +1741,7 @@ export const FanMemberFeed: React.FC<FanMemberFeedProps> = ({
                     {coverUrl ? (
                       coverIsVideo ? (
                         <>
-                          <video
-                            src={coverUrl.split("#")[0]}
-                            muted
-                            playsInline
-                            preload="metadata"
-                            onLoadedMetadata={(e) => {
-                              try {
-                                const v = e.currentTarget;
-                                if (Number.isFinite(v.duration) && v.duration > 0) {
-                                  v.currentTime = Math.min(0.08, v.duration * 0.02);
-                                } else {
-                                  v.currentTime = 0.05;
-                                }
-                              } catch {
-                                /* seek may fail on some streams */
-                              }
-                            }}
-                            onLoadedData={(e) => {
-                              try {
-                                const v = e.currentTarget;
-                                if (v.readyState >= 2 && v.currentTime === 0) {
-                                  if (Number.isFinite(v.duration) && v.duration > 0) {
-                                    v.currentTime = Math.min(0.08, v.duration * 0.02);
-                                  } else {
-                                    v.currentTime = 0.05;
-                                  }
-                                }
-                              } catch {
-                                /* noop */
-                              }
-                            }}
-                          />
+                          <MemberFeedGridVideoCover src={coverUrl} />
                           <span className="feed-grid-video-overlay" aria-hidden>
                             <PlayIcon />
                           </span>

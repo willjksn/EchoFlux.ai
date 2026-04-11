@@ -32,6 +32,7 @@ import {
   captureFanFeedCarouselScrollSnaps,
   restoreFanFeedCarouselScrollSnaps,
 } from "../src/lib/fanFeedCarouselScrollRestore";
+import { tryFeedVideoPosterSeekOnce } from "../src/lib/feedVideoPosterSeek";
 
 const feedImageDownloadGuardProps = {
   draggable: false as const,
@@ -282,11 +283,34 @@ const TipIcon = () => (
   <span className="feed-card-tip-icon feed-card-tip-dollar" aria-hidden>$</span>
 );
 
+const FEED_VIDEO_TAP_MAX_PX = 14;
+
 const PlayIcon = () => (
   <svg className="feed-card-play-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
     <path d="M8 5v14l11-7L8 5z" />
   </svg>
 );
+
+/** Grid cover: one guarded poster seek per mount (avoids double seek from metadata + loadeddata on mobile). */
+function FeedGridVideoCover({ src }: { src: string }) {
+  const posterSeekDoneRef = useRef(false);
+  const clean = src.split("#")[0]?.trim() || src;
+  useEffect(() => {
+    posterSeekDoneRef.current = false;
+  }, [clean]);
+  return (
+    <video
+      src={clean}
+      muted
+      playsInline
+      preload="metadata"
+      {...feedVideoDownloadGuardProps}
+      onLoadedMetadata={(e) => {
+        tryFeedVideoPosterSeekOnce(e.currentTarget, posterSeekDoneRef);
+      }}
+    />
+  );
+}
 
 const VolumeOnIcon = () => (
   <svg className="feed-card-sound-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
@@ -563,6 +587,9 @@ function FeedCard({
   const isLiked = !!currentUserId && (post.likedBy ?? []).includes(currentUserId);
   const isSaved = savedPostIds.includes(post.id);
   const feedVideoRef = useRef<HTMLVideoElement | null>(null);
+  const feedVideoPosterSeekDoneRef = useRef(false);
+  const videoTouchStartRef = useRef<{ x: number; y: number; pointerId: number } | null>(null);
+  const suppressVideoClickAfterTouchRef = useRef(false);
   const carouselRootRef = useRef<HTMLDivElement | null>(null);
   const feedCarouselScrollSnapsRef = useRef<ReturnType<typeof captureFanFeedCarouselScrollSnaps> | null>(null);
   const [feedVideoPlaying, setFeedVideoPlaying] = useState(false);
@@ -636,6 +663,10 @@ function FeedCard({
   }, [feedVideoMuted]);
 
   useEffect(() => {
+    feedVideoPosterSeekDoneRef.current = false;
+  }, [slideIdx, currentUrl]);
+
+  useEffect(() => {
     const v = feedVideoRef.current;
     if (!v) return;
     void v.pause();
@@ -707,22 +738,60 @@ function FeedCard({
   const modalIsVideo =
     !!modalUrl && (post.mediaTypes?.[modalIdx] === "video" || inferIsVideoFromUrl(modalUrl));
 
-  const videoAreaClick = useCallback((e: React.MouseEvent) => {
-    e.preventDefault();
+  const toggleFeedVideoPlay = useCallback(() => {
     const v = feedVideoRef.current;
     if (!v) return;
     if (v.paused) void v.play();
     else v.pause();
   }, []);
 
-  const videoAreaKeyDown = useCallback((e: React.KeyboardEvent) => {
-    if (e.key !== "Enter" && e.key !== " ") return;
-    e.preventDefault();
-    const v = feedVideoRef.current;
-    if (!v) return;
-    if (v.paused) void v.play();
-    else v.pause();
+  const videoAreaClick = useCallback(
+    (e: React.MouseEvent) => {
+      if (suppressVideoClickAfterTouchRef.current) {
+        suppressVideoClickAfterTouchRef.current = false;
+        e.preventDefault();
+        e.stopPropagation();
+        return;
+      }
+      e.preventDefault();
+      toggleFeedVideoPlay();
+    },
+    [toggleFeedVideoPlay]
+  );
+
+  const videoAreaPointerDown = useCallback((e: React.PointerEvent) => {
+    if (e.pointerType !== "touch" && e.pointerType !== "pen") return;
+    videoTouchStartRef.current = { x: e.clientX, y: e.clientY, pointerId: e.pointerId };
   }, []);
+
+  const videoAreaPointerUp = useCallback(
+    (e: React.PointerEvent) => {
+      if (e.pointerType !== "touch" && e.pointerType !== "pen") return;
+      const start = videoTouchStartRef.current;
+      videoTouchStartRef.current = null;
+      if (!start || start.pointerId !== e.pointerId) return;
+      const dx = Math.abs(e.clientX - start.x);
+      const dy = Math.abs(e.clientY - start.y);
+      if (dx > FEED_VIDEO_TAP_MAX_PX || dy > FEED_VIDEO_TAP_MAX_PX) return;
+      e.preventDefault();
+      suppressVideoClickAfterTouchRef.current = true;
+      toggleFeedVideoPlay();
+    },
+    [toggleFeedVideoPlay]
+  );
+
+  const videoAreaPointerCancel = useCallback(() => {
+    videoTouchStartRef.current = null;
+  }, []);
+
+  const videoAreaKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      if (e.key !== "Enter" && e.key !== " ") return;
+      e.preventDefault();
+      toggleFeedVideoPlay();
+    },
+    [toggleFeedVideoPlay]
+  );
 
   const pauseFeedVideo = useCallback(() => {
     const v = feedVideoRef.current;
@@ -960,6 +1029,9 @@ function FeedCard({
             role="button"
             tabIndex={0}
             onClick={videoAreaClick}
+            onPointerDown={videoAreaPointerDown}
+            onPointerUp={videoAreaPointerUp}
+            onPointerCancel={videoAreaPointerCancel}
             onKeyDown={videoAreaKeyDown}
             aria-label={feedVideoPlaying ? "Pause video" : "Play video"}
           >
@@ -973,14 +1045,7 @@ function FeedCard({
               preload="metadata"
               {...feedVideoDownloadGuardProps}
               onLoadedMetadata={(e) => {
-                const v = e.currentTarget;
-                try {
-                  if (Number.isFinite(v.duration) && v.duration > 0) {
-                    v.currentTime = Math.min(0.1, v.duration * 0.02);
-                  }
-                } catch {
-                  /* ignore seek errors */
-                }
+                tryFeedVideoPosterSeekOnce(e.currentTarget, feedVideoPosterSeekDoneRef);
               }}
               onPlay={() => setFeedVideoPlaying(true)}
               onPause={() => setFeedVideoPlaying(false)}
@@ -1993,39 +2058,7 @@ export const FanHubFeed: React.FC<{
                   {coverUrl ? (
                     coverIsVideo ? (
                       <>
-                        <video
-                          src={coverUrl.split("#")[0]}
-                          muted
-                          playsInline
-                          preload="metadata"
-                          {...feedVideoDownloadGuardProps}
-                          onLoadedMetadata={(e) => {
-                            try {
-                              const v = e.currentTarget;
-                              if (Number.isFinite(v.duration) && v.duration > 0) {
-                                v.currentTime = Math.min(0.08, v.duration * 0.02);
-                              } else {
-                                v.currentTime = 0.05;
-                              }
-                            } catch {
-                              /* seek may fail on some streams */
-                            }
-                          }}
-                          onLoadedData={(e) => {
-                            try {
-                              const v = e.currentTarget;
-                              if (v.readyState >= 2 && v.currentTime === 0) {
-                                if (Number.isFinite(v.duration) && v.duration > 0) {
-                                  v.currentTime = Math.min(0.08, v.duration * 0.02);
-                                } else {
-                                  v.currentTime = 0.05;
-                                }
-                              }
-                            } catch {
-                              /* noop */
-                            }
-                          }}
-                        />
+                        <FeedGridVideoCover src={coverUrl} />
                         <span className="feed-grid-video-overlay" aria-hidden>
                           <PlayIcon />
                         </span>
