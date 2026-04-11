@@ -5,7 +5,8 @@ import type { VercelResponse } from "@vercel/node";
 
 /**
  * Wraps an API handler with comprehensive error handling
- * Ensures all errors return 200 status with error details instead of 500
+ * Returns JSON with success: false. Status stays 200 for backward compatibility with clients that only read the body.
+ * Production responses avoid leaking internal error messages in `note`.
  */
 export function withErrorHandling(
   handler: (req: any, res: VercelResponse) => Promise<void>
@@ -15,23 +16,29 @@ export function withErrorHandling(
       await handler(req, res);
     } catch (err: any) {
       console.error("Unhandled API error:", err);
-      console.error("Error stack:", err?.stack);
-      
+      if (process.env.NODE_ENV === "development" || process.env.VERCEL_ENV === "preview") {
+        console.error("Error stack:", err?.stack);
+      }
+
       // If response already sent, don't try to send again
       if (res.headersSent) {
         return;
       }
 
-      // Return 200 with error details instead of 500
+      const dev = process.env.NODE_ENV === "development" || process.env.VERCEL_ENV === "preview";
       return res.status(200).json({
         success: false,
         error: "Internal server error",
-        note: err?.message || "An unexpected error occurred. Please try again.",
-        details: process.env.NODE_ENV === "development" ? {
-          message: err?.message,
-          stack: err?.stack,
-          name: err?.name,
-        } : undefined,
+        note: dev
+          ? err?.message || "An unexpected error occurred. Please try again."
+          : "An unexpected error occurred. Please try again.",
+        details: dev
+          ? {
+              message: err?.message,
+              stack: err?.stack,
+              name: err?.name,
+            }
+          : undefined,
       });
     }
   };

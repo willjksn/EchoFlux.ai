@@ -3,6 +3,7 @@ import { getPlatformStripe, checkoutSessionsRetrieve } from "./_stripeConnect.js
 import { getAdminDb } from "./_firebaseAdmin.js";
 import { verifyAuth } from "./verifyAuth.js";
 import { processFanHubCheckoutSessionCompleted } from "./stripeWebhook.js";
+import { enforceRateLimit } from "./_rateLimit.js";
 
 const PLATFORM_OWNER_IDS = (process.env.PLATFORM_OWNER_CREATOR_IDS || "")
   .split(",")
@@ -47,6 +48,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (!decoded?.uid) {
     return res.status(401).json({ error: "Unauthorized" });
   }
+
+  const syncRlOk = await enforceRateLimit({
+    req,
+    res,
+    keyPrefix: "syncFanCheckoutSession",
+    limit: 20,
+    windowMs: 60_000,
+    identifier: decoded.uid,
+  });
+  if (!syncRlOk) return;
 
   const body = (req.body || {}) as { sessionId?: string; creatorId?: string };
   const sessionId = (body.sessionId || "").trim();

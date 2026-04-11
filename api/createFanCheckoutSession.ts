@@ -5,6 +5,7 @@ import { getPlatformStripe, checkoutSessionsCreate } from "./_stripeConnect.js";
 import { getAdminDb } from "./_firebaseAdmin.js";
 import { verifyAuth } from "./verifyAuth.js";
 import { isFanBlocked } from "./_fanDmHelpers.js";
+import { enforceRateLimit } from "./_rateLimit.js";
 
 const DEFAULT_SUBSCRIPTION_CENTS = 999; // $9.99
 const PLATFORM_FEE_PERCENT = 0.10; // 10% platform fee on all fan payments
@@ -147,6 +148,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (type !== "tip" && !decoded?.uid && !allowGuestProduct) {
     return res.status(401).json({ error: "Unauthorized - please sign in" });
   }
+
+  const clientIp =
+    (req.headers["x-forwarded-for"] as string | undefined)?.split(",")[0]?.trim() ||
+    (req.headers["x-real-ip"] as string | undefined) ||
+    "anonymous";
+  const checkoutRateId = decoded?.uid ? `uid:${decoded.uid}` : `ip:${clientIp}`;
+  const checkoutRlOk = await enforceRateLimit({
+    req,
+    res,
+    keyPrefix: "createFanCheckoutSession",
+    limit: 24,
+    windowMs: 60_000,
+    identifier: checkoutRateId,
+  });
+  if (!checkoutRlOk) return;
+
   const configuredAppUrl = process.env.NEXT_PUBLIC_APP_URL || "https://echoflux.ai";
   const requestOrigin = String(req.headers.origin || req.headers.referer || "").replace(/\/$/, "");
   const origin = toSafeCheckoutUrl(requestOrigin, configuredAppUrl, STRIPE_USE_TEST_MODE).replace(/\/$/, "");
@@ -160,8 +177,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     try {
       db = getAdminDb();
     } catch (dbErr: unknown) {
-      const dbMsg = dbErr instanceof Error ? dbErr.message : "Database unavailable";
-      return res.status(503).json({ error: "Database unavailable", message: dbMsg });
+      console.error("[createFanCheckoutSession] getAdminDb failed:", dbErr);
+      return res.status(503).json({
+        error: "Database temporarily unavailable",
+        code: "DB_UNAVAILABLE",
+      });
     }
 
     if (decoded?.uid && (await isFanBlocked(db, creatorId, decoded.uid))) {
