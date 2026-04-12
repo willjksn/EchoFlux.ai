@@ -7,7 +7,8 @@ import type {
   AudienceDriver,
 } from './types.js';
 
-const NICHE_LABEL: Record<string, string> = {
+/** Human labels for niches (also used by AI profile prompt). */
+export const NICHE_LABEL: Record<string, string> = {
   lifestyle: 'Lifestyle',
   beauty: 'Beauty',
   fashion: 'Fashion',

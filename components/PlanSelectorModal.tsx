@@ -49,6 +49,7 @@ const creatorPlans = [
             '5 content strategies / month',
             'Enhanced live trend research (40 searches/month)',
             '1,500 caption ideas / month',
+            'Creator Identity Builder — guided brand profile for captions & strategy',
             'Bio Link Page (unlimited links)',
             'My Vault',
             'My Schedule',

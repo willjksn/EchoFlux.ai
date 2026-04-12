@@ -3,7 +3,8 @@ import { Announcement, Plan } from '../types';
 import { useAppContext } from './AppContext';
 import { auth } from '../firebaseConfig';
 
-const PLAN_OPTIONS: Plan[] = ['Free', 'Pro', 'Elite', 'Agency', 'Starter', 'Growth', 'Caption', 'OnlyFansStudio'];
+/** Plans listed for targeting / bulk grants (OnlyFansStudio omitted — not used for announcements). */
+const ANNOUNCEMENT_PLAN_CHECKBOXES: Plan[] = ['Pro', 'Elite'];
 
 type RewardType = 'extra_generations' | 'free_month' | 'storage_boost';
 
@@ -383,7 +384,7 @@ export const AdminAnnouncementsPanel: React.FC = () => {
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Target Plans</label>
             <div className="grid grid-cols-2 gap-2">
-              {PLAN_OPTIONS.filter(p => ['Free', 'Pro', 'Elite', 'OnlyFansStudio'].includes(p)).map(p => (
+              {ANNOUNCEMENT_PLAN_CHECKBOXES.map(p => (
                 <label key={p} className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
                   <input
                     type="checkbox"
@@ -473,7 +474,7 @@ export const AdminAnnouncementsPanel: React.FC = () => {
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Eligible upgraded-to plans</label>
             <div className="grid grid-cols-2 gap-2">
-              {(['Pro', 'Elite', 'OnlyFansStudio'] as Plan[]).map(p => (
+              {(['Pro', 'Elite'] as Plan[]).map(p => (
                 <label key={p} className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
                   <input
                     type="checkbox"
@@ -605,7 +606,7 @@ export const AdminAnnouncementsPanel: React.FC = () => {
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Target Plans (optional)</label>
                 <div className="grid grid-cols-2 gap-2">
-                  {PLAN_OPTIONS.filter(p => ['Free', 'Pro', 'Elite', 'OnlyFansStudio'].includes(p)).map(p => (
+                  {ANNOUNCEMENT_PLAN_CHECKBOXES.map(p => (
                     <label key={p} className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
                       <input
                         type="checkbox"

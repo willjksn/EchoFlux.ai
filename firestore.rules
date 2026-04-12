@@ -165,6 +165,16 @@ service cloud.firestore {
         allow create, update, delete: if (isAuthenticated() && request.auth.uid == userId) || isAdmin();
       }
 
+      /**
+       * Fan Hub / member bell: `users/{uid}/notifications` (Admin SDK creates; client reads, marks read, deletes).
+       * Explicit match avoids relying on `{document=**}` alone for updates (FanHubNotificationBell updateDoc/deleteDoc).
+       */
+      match /notifications/{notificationId} {
+        allow read: if (isAuthenticated() && request.auth.uid == userId) || isAdmin();
+        allow create: if false;
+        allow update, delete: if (isAuthenticated() && request.auth.uid == userId) || isAdmin();
+      }
+
       /** ---------------------------------------------------
        * USER SUBCOLLECTIONS (messages, posts, CRM, calendar, voices, media_library, onlyfans_media_vault, etc.)
        * ----------------------------------------------------

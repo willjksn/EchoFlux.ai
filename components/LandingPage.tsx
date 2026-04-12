@@ -380,7 +380,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onGetSta
                 </div>
                 <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">Your Brand, Your Way</h3>
                 <p className="text-gray-600 dark:text-gray-400">
-                  Customize colors, fonts, and layout. Add your logo, hero image, and social links. It's your page.
+                  Customize colors, fonts, and layout. Add your hero image and social links. It's your page.
                 </p>
               </div>
             </div>

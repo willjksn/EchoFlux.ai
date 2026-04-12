@@ -6,12 +6,30 @@ import {
   onSnapshot,
   orderBy,
   query,
-  updateDoc,
-  doc,
-  deleteDoc,
   type Timestamp,
 } from "firebase/firestore";
 import { auth, db } from "../firebaseConfig";
+import { resolveApiUrl } from "../src/lib/resolveApiUrl";
+
+/** Writes go through Vercel + Admin SDK so client Firestore rules cannot block mark-read / delete. */
+async function fanNotificationMutateApi(action: "mark_read" | "delete", notificationIds: string[]): Promise<void> {
+  const user = auth.currentUser;
+  if (!user) throw new Error("Not signed in");
+  if (!notificationIds.length) return;
+  const token = await user.getIdToken();
+  const res = await fetch(resolveApiUrl("/api/fanNotificationMutate"), {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ action, notificationIds }),
+  });
+  const data = (await res.json().catch(() => ({}))) as { error?: string };
+  if (!res.ok) {
+    throw new Error(data.error || "Could not update notifications");
+  }
+}
 
 /** DM thread ids the creator muted (no new_message badge; server mirror). */
 function useDmMutedThreadIds(uid: string | null): Set<string> {
@@ -183,7 +201,7 @@ export const FanHubNotificationBell: React.FC<FanHubNotificationBellProps> = ({
   const markRead = async (id: string) => {
     if (!uid) return;
     try {
-      await updateDoc(doc(db, "users", uid, "notifications", id), { read: true });
+      await fanNotificationMutateApi("mark_read", [id]);
     } catch (e) {
       console.error("markRead", e);
     }
@@ -194,7 +212,10 @@ export const FanHubNotificationBell: React.FC<FanHubNotificationBellProps> = ({
     const unreadRows = rows.filter((r) => !r.read);
     if (unreadRows.length === 0) return;
     try {
-      await Promise.all(unreadRows.map((r) => markRead(r.id)));
+      await fanNotificationMutateApi(
+        "mark_read",
+        unreadRows.map((r) => r.id)
+      );
       showToast?.("Marked all as read", "success");
     } catch (e) {
       console.error("markAllRead", e);
@@ -208,7 +229,7 @@ export const FanHubNotificationBell: React.FC<FanHubNotificationBellProps> = ({
     if (!uid) return;
     setDismissingIds((prev) => new Set(prev).add(id));
     try {
-      await deleteDoc(doc(db, "users", uid, "notifications", id));
+      await fanNotificationMutateApi("delete", [id]);
       showToast?.("Notification removed", "success");
     } catch (err) {
       console.error("dismissNotification", err);
@@ -233,7 +254,10 @@ export const FanHubNotificationBell: React.FC<FanHubNotificationBellProps> = ({
     }
     setClearingAll(true);
     try {
-      await Promise.all(rows.map((r) => deleteDoc(doc(db, "users", uid, "notifications", r.id))));
+      await fanNotificationMutateApi(
+        "delete",
+        rows.map((r) => r.id)
+      );
       showToast?.("All notifications cleared", "success");
     } catch (e) {
       console.error("clearAllNotifications", e);
@@ -255,7 +279,10 @@ export const FanHubNotificationBell: React.FC<FanHubNotificationBellProps> = ({
     }
     setClearingAll(true);
     try {
-      await Promise.all(readRows.map((r) => deleteDoc(doc(db, "users", uid, "notifications", r.id))));
+      await fanNotificationMutateApi(
+        "delete",
+        readRows.map((r) => r.id)
+      );
       showToast?.("Read notifications cleared", "success");
     } catch (e) {
       console.error("clearReadNotifications", e);

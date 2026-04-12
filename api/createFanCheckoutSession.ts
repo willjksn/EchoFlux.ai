@@ -336,6 +336,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         visible?: boolean;
         showOnLandingPage?: boolean;
         showInMemberStore?: boolean;
+        quantityLimit?: number;
+        soldCount?: number;
       };
       if (product.creatorId !== creatorId || product.archived) {
         return res.status(404).json({ error: "Product not found" });
@@ -348,6 +350,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
       if (!allowGuestProduct && decoded?.uid && product.showInMemberStore === false) {
         return res.status(400).json({ error: "This product is not available in the member store" });
+      }
+      const limitRaw = product.quantityLimit;
+      const limit =
+        typeof limitRaw === "number" && Number.isFinite(limitRaw) ? Math.max(0, Math.floor(limitRaw)) : null;
+      const soldRaw = product.soldCount;
+      const sold =
+        typeof soldRaw === "number" && Number.isFinite(soldRaw) ? Math.max(0, Math.floor(soldRaw)) : 0;
+      if (limit != null && limit > 0 && sold >= limit) {
+        return res.status(400).json({ error: "This product is sold out" });
       }
       const priceCents = Math.max(50, Number(product.priceCents) || 0);
       const title = product.title || "Product";

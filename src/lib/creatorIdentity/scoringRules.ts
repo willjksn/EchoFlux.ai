@@ -25,7 +25,11 @@ function addDelta(b: ScoreBuckets, d: RuleDelta) {
 /** Config-driven weights (expand over time). Keys: `${qId}:${optionId}`. */
 const RULES: Record<string, RuleDelta> = {
   // Q1
-  'q1:looks_visual': { niche: { beauty: 3, fashion: 2 }, audience: { attraction: 2, style_aspiration: 2 } },
+  // Visual first impression ≠ beauty niche (gaming, fitness, comedy all film themselves).
+  'q1:looks_visual': {
+    niche: { fashion: 2, lifestyle: 2, beauty: 1 },
+    audience: { attraction: 2, style_aspiration: 1 },
+  },
   'q1:personality': { niche: { humor_personality: 3 }, audience: { connection: 2, conversation: 1 } },
   'q1:energy_confidence': { niche: { fitness: 1 }, vibes: { confident: 3 }, audience: { inspiration: 2, attraction: 1 } },
   'q1:humor': { niche: { humor_personality: 3 }, vibes: { funny: 2 }, audience: { entertainment: 2 } },
@@ -57,7 +61,7 @@ const RULES: Record<string, RuleDelta> = {
   'q2:inspired': { audience: { inspiration: 4 }, niche: { wellness: 1, fitness: 1 } },
 
   // Q3
-  'q3:appearance': { audience: { attraction: 3, style_aspiration: 2 }, niche: { beauty: 2, fashion: 1 } },
+  'q3:appearance': { audience: { attraction: 3, style_aspiration: 2 }, niche: { fashion: 2, beauty: 1 } },
   'q3:confidence': { vibes: { confident: 3 }, audience: { inspiration: 2 } },
   'q3:personality': { audience: { connection: 3 }, niche: { humor_personality: 2 } },
   'q3:advice': { niche: { advice_coaching: 3 }, audience: { education: 3 } },
@@ -69,7 +73,10 @@ const RULES: Record<string, RuleDelta> = {
   'q3:exclusive_content': { audience: { exclusivity: 3 }, monetization: { locked_content: 2 } },
 
   // Q4
-  'q4:selfies': { niche: { beauty: 2, fashion: 2 }, audience: { style_aspiration: 2, attraction: 1 } },
+  'q4:selfies': {
+    niche: { fashion: 2, lifestyle: 2, personal_access: 1, beauty: 1 },
+    audience: { style_aspiration: 2, attraction: 1 },
+  },
   'q4:bts': { niche: { personal_access: 2, lifestyle: 1 }, audience: { connection: 2 }, monetization: { paid_posts: 1 } },
   'q4:talking_cam': { niche: { humor_personality: 2, advice_coaching: 1 }, audience: { connection: 2, conversation: 1 } },
   'q4:tutorials': { niche: { advice_coaching: 3 }, audience: { education: 3 } },
@@ -149,7 +156,7 @@ const RULES: Record<string, RuleDelta> = {
   'q9:fantasy': { audience: { escapism: 4 } },
   'q9:community': { audience: { community: 4 }, niche: { community_connection: 2 } },
   'q9:conversation': { audience: { conversation: 4 } },
-  'q9:style': { audience: { style_aspiration: 4 }, niche: { fashion: 2, beauty: 1 } },
+  'q9:style': { audience: { style_aspiration: 4 }, niche: { fashion: 3 } },
 
   // Q11 easiest offer
   'q11:membership': { monetization: { membership: 4 } },

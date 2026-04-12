@@ -1,7 +1,7 @@
 import { createHash } from 'crypto';
 import { VercelRequest, VercelResponse } from '@vercel/node';
 import Stripe from 'stripe';
-import type { Firestore } from 'firebase-admin/firestore';
+import { FieldValue, type Firestore } from 'firebase-admin/firestore';
 import { getAdminDb } from './_firebaseAdmin.js';
 import { recordPlanChangeEvent } from './_planChangeEvents.js';
 import { grantReferralRewardOnConversion } from './_grantReferralReward.js';
@@ -422,7 +422,9 @@ export async function processFanHubCheckoutSessionCompleted(
     const productTitle =
       (typeof session.metadata?.productTitle === 'string' && session.metadata.productTitle.trim()) || null;
     const orderRef = db.collection('orders').doc(session.id);
-    await orderRef.set({
+    const productRef = db.collection('products').doc(productId);
+
+    const orderPayload: Record<string, unknown> = {
       creatorId,
       fanId,
       productId,
@@ -437,7 +439,27 @@ export async function processFanHubCheckoutSessionCompleted(
       scheduleStatus: 'pending',
       ...(isGuestProductCheckout ? { guestCheckout: true } : {}),
       createdAt: now,
+    };
+
+    /** One order row + one soldCount bump per Stripe session (race-safe vs duplicate webhooks / sync). */
+    const insertedNewOrder = await db.runTransaction(async (tx) => {
+      const existingOrder = await tx.get(orderRef);
+      if (existingOrder.exists) return false;
+      tx.set(orderRef, orderPayload);
+      const pSnap = await tx.get(productRef);
+      if (pSnap.exists) {
+        tx.update(productRef, {
+          soldCount: FieldValue.increment(1),
+          updatedAt: now,
+        });
+      }
+      return true;
     });
+
+    if (!insertedNewOrder) {
+      console.log(`Fan hub: skip duplicate product checkout session=${session.id}`);
+      return true;
+    }
 
     const grantRef = db.collection('creatorEntitlements').doc(creatorId).collection('grants').doc(fanId);
     const grantSnap = await grantRef.get();

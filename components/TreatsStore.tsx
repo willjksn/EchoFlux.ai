@@ -943,7 +943,10 @@ export const TreatsStore: React.FC = () => {
             <div className="treats-manage-list">
               {displayedProducts.map((p) => {
                 const isEditing = editing?.id === p.id;
-                const qtyLeft = typeof p.quantityLimit === "number" ? p.quantityLimit - (p.soldCount || 0) : null;
+                const limit = toOptionalNonNegativeInt(p.quantityLimit);
+                const sold = toOptionalNonNegativeInt(p.soldCount) ?? 0;
+                const qtyLeft =
+                  typeof limit === "number" && limit > 0 ? Math.max(0, limit - sold) : null;
 
                 return (
                   <div

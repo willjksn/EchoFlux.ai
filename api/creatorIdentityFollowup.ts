@@ -71,6 +71,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
     const prompt = `You help clarify a creator's brand. Based on quiz signals, propose 3-5 short follow-up questions.
 Top niche scores (internal ids): ${nicheTop.join(", ")}. Confidence is borderline.
 
+Do not assume beauty, makeup, glam, or "aesthetic influencer" positioning unless "beauty" is clearly among the top niche signals or the creator's lane is obviously beauty from those ids. Prefer questions that disambiguate their actual top lanes.
+
 Return ONLY valid JSON array of objects, each: {"id":"string","question":"string","reason":"string","targetDimension":"niche|vibe|audience|monetization"}
 No markdown.`;
 

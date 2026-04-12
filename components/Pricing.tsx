@@ -44,6 +44,7 @@ const creatorTiers = [
         features: [
             'Everything in Pro',
             'Premium Studio tools',
+            'Creator Identity Builder — guided brand profile for captions & strategy',
             'Advanced content planning',
             'Chat session planner',
             'Chat session reply drafts in your voice (you send every message)',
