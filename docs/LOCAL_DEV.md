@@ -18,7 +18,7 @@
    npm run dev
    ```
 
-4. Open the **Local** URL from the terminal (often **http://localhost:5173/**). You should see (informational only — **do not paste into PowerShell**):
+4. Open the **Local** URL from the terminal (often **http://localhost:3000/**). You should see (informational only — **do not paste into PowerShell**):
 
    ```text
    [vite] API proxy active: /api -> https://your-app.vercel.app
@@ -39,9 +39,15 @@ npm run dev
 - Proxy timeout is **120s** to allow cold starts on Vercel.
 - Template line: see **`.env.example`**.
 
+### `/api/...` returns **404** (e.g. `markAdminAlertRead`)
+
+- **`npm run dev`:** Requests go to Vite’s **proxy** (see terminal). If you see a warning about **`localhost:3001`**, set **`DEV_API_PROXY`** in `.env.local` to your **Vercel deployment URL** (`https://….vercel.app`), not a hostname that only serves Firebase Hosting (those URLs have no `/api` serverless routes).
+- **`vite preview` / Firebase Hosting:** There is no proxy. Set **`VITE_API_BASE_URL`** at build time to the same Vercel origin (see **`.env.example`**), or open the app from Vercel.
+- **Alternative:** Run **`npm run dev:vercel`** so APIs run locally with Vercel’s dev server.
+
 ### Firebase sign-in: `auth/requests-from-referer-http://localhost:5173-are-blocked`
 
-Vite uses **port 5173** by default. If your **Google Cloud** browser API key (the one in `VITE_FIREBASE_API_KEY`) has **HTTP referrer** restrictions, each origin must be listed explicitly — e.g. `http://localhost:3000/*` does **not** cover port **5173**.
+This repo pins the dev server to **port 3000** in `vite.config.ts`. If your **Google Cloud** browser API key (the one in `VITE_FIREBASE_API_KEY`) has **HTTP referrer** restrictions, each origin must be listed explicitly — add **`http://localhost:3000/*`** and **`http://127.0.0.1:3000/*`**. Older setups may still use port **5173** if `strictPort` was not set.
 
 1. [Google Cloud Console](https://console.cloud.google.com/) → **APIs & Services** → **Credentials** → select the **Browser key** / Web client key used by Firebase.
 2. Under **Application restrictions** → **HTTP referrers**, add:

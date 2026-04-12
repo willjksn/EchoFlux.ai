@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
+import { FeedVideoPlaybackErrorOverlay } from "./FeedVideoPlaybackError";
 
 /**
  * View-post modal video: click-to-play (muted by default) + scrubber + play/pause + mute.
@@ -21,6 +22,7 @@ export function ViewPostModalVideo({
   const [duration, setDuration] = useState(0);
   const [current, setCurrent] = useState(0);
   const [dragging, setDragging] = useState(false);
+  const [decodeError, setDecodeError] = useState(false);
 
   const cleanSrc = useMemo(() => {
     const base = src.split("#")[0]?.trim() || src;
@@ -88,6 +90,7 @@ export function ViewPostModalVideo({
     v.currentTime = 0;
     setCurrent(0);
     setPlaying(false);
+    setDecodeError(false);
   }, [videoKey, cleanSrc]);
 
   return (
@@ -103,6 +106,7 @@ export function ViewPostModalVideo({
         onContextMenu={(e) => e.preventDefault()}
         onLoadedMetadata={onMeta}
         onDurationChange={onMeta}
+        onError={() => setDecodeError(true)}
         onPlay={() => setPlaying(true)}
         onPause={() => setPlaying(false)}
         onTimeUpdate={() => {
@@ -111,6 +115,8 @@ export function ViewPostModalVideo({
           if (v) setCurrent(v.currentTime);
         }}
       />
+      {decodeError ? <FeedVideoPlaybackErrorOverlay videoSrc={src} /> : null}
+      {!decodeError && (
       <div className="feed-comments-modal-video-bottom-bar">
         <div className="feed-comments-modal-video-controls">
           <button
@@ -203,6 +209,7 @@ export function ViewPostModalVideo({
           </div>
         ) : null}
       </div>
+      )}
     </div>
   );
 }

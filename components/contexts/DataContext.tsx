@@ -343,10 +343,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
               messageId: `admin-${alert.type || 'alert'}`,
             }));
 
+            // Replace Firestore-backed admin rows so dismiss/read in DB does not leave stale entries.
             setNotifications((prev) => {
-              const existingIds = new Set(prev.map((n) => n.id));
-              const toAdd = adminNotifications.filter((n) => !existingIds.has(n.id));
-              return [...toAdd, ...prev];
+              const nonAdmin = prev.filter((n) => !n.id.startsWith("admin-"));
+              return [...adminNotifications, ...nonAdmin];
             });
           },
           (error) => {

@@ -24,6 +24,7 @@ import { inferIsVideoFromUrl, normalizePostMediaTypes } from "../src/lib/mediaUr
 import { getFeedGridCoverMedia } from "../src/lib/feedGridCover";
 import { DmAudioPlayer } from "./DmAudioPlayer";
 import { ViewPostModalVideo } from "./ViewPostModalVideo";
+import { FeedVideoPlaybackErrorOverlay } from "./FeedVideoPlaybackError";
 import { feedCommentAuthorLabel, feedCommentAuthorInitial } from "../src/lib/feedCommentLabel";
 import { readFanCheckoutFetchResult, FAN_TIP_CHECKOUT_SUCCESS_QS } from "../src/lib/fanCheckoutResponse";
 import { useAppContext } from "./AppContext";
@@ -520,6 +521,7 @@ function FanMemberPostMedia({
   const carouselRootRef = useRef<HTMLDivElement>(null);
   const scrollRestoreSnapsRef = useRef<FanFeedScrollSnap[] | null>(null);
   const videoPosterSeekDoneRef = useRef(false);
+  const [memberVideoDecodeError, setMemberVideoDecodeError] = useState(false);
 
   useEffect(() => {
     setMediaIndex(0);
@@ -622,6 +624,7 @@ function FanMemberPostMedia({
 
   useEffect(() => {
     videoPosterSeekDoneRef.current = false;
+    setMemberVideoDecodeError(false);
   }, [idx, activeVideoSrcKey]);
 
   if (n === 0) return null;
@@ -704,18 +707,22 @@ function FanMemberPostMedia({
             accentHex={primary}
           />
         ) : (
-          <video
-            key={`${post.id}-v-${idx}`}
-            src={currentUrl.split("#")[0]}
-            controls
-            className="feed-card-media feed-card-media-video"
-            playsInline
-            preload="metadata"
-            {...feedVideoDownloadGuardProps}
-            onLoadedMetadata={(e) => {
-              tryFeedVideoPosterSeekOnce(e.currentTarget, videoPosterSeekDoneRef);
-            }}
-          />
+          <>
+            <video
+              key={`${post.id}-v-${idx}`}
+              src={currentUrl.split("#")[0]}
+              controls
+              className="feed-card-media feed-card-media-video"
+              playsInline
+              preload="metadata"
+              {...feedVideoDownloadGuardProps}
+              onLoadedMetadata={(e) => {
+                tryFeedVideoPosterSeekOnce(e.currentTarget, videoPosterSeekDoneRef);
+              }}
+              onError={() => setMemberVideoDecodeError(true)}
+            />
+            {memberVideoDecodeError ? <FeedVideoPlaybackErrorOverlay videoSrc={currentUrl} /> : null}
+          </>
         )
       ) : (
         <img

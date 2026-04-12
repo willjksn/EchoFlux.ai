@@ -26,6 +26,7 @@ import { getAvatarCropStyle } from "../src/lib/avatarCrop";
 import { inferIsVideoFromUrl, normalizePostMediaTypes } from "../src/lib/mediaUrlInfer";
 import { getFeedGridCoverMedia } from "../src/lib/feedGridCover";
 import { ViewPostModalVideo } from "./ViewPostModalVideo";
+import { FeedVideoPlaybackErrorOverlay } from "./FeedVideoPlaybackError";
 import { feedCommentAuthorLabel, feedCommentAuthorInitial } from "../src/lib/feedCommentLabel";
 import { renderTextWithCustomEmoji, type SjHeartEmojiAccessContext } from "../src/lib/customEmoji";
 import {
@@ -594,6 +595,7 @@ function FeedCard({
   const feedCarouselScrollSnapsRef = useRef<ReturnType<typeof captureFanFeedCarouselScrollSnaps> | null>(null);
   const [feedVideoPlaying, setFeedVideoPlaying] = useState(false);
   const [feedVideoMuted, setFeedVideoMuted] = useState(true);
+  const [feedVideoDecodeError, setFeedVideoDecodeError] = useState(false);
   const [adminMenuOpen, setAdminMenuOpen] = useState(false);
   const adminMenuRef = useRef<HTMLDivElement | null>(null);
 
@@ -664,6 +666,7 @@ function FeedCard({
 
   useEffect(() => {
     feedVideoPosterSeekDoneRef.current = false;
+    setFeedVideoDecodeError(false);
   }, [slideIdx, currentUrl]);
 
   useEffect(() => {
@@ -739,11 +742,12 @@ function FeedCard({
     !!modalUrl && (post.mediaTypes?.[modalIdx] === "video" || inferIsVideoFromUrl(modalUrl));
 
   const toggleFeedVideoPlay = useCallback(() => {
+    if (feedVideoDecodeError) return;
     const v = feedVideoRef.current;
     if (!v) return;
     if (v.paused) void v.play();
     else v.pause();
-  }, []);
+  }, [feedVideoDecodeError]);
 
   const videoAreaClick = useCallback(
     (e: React.MouseEvent) => {
@@ -1033,7 +1037,13 @@ function FeedCard({
             onPointerUp={videoAreaPointerUp}
             onPointerCancel={videoAreaPointerCancel}
             onKeyDown={videoAreaKeyDown}
-            aria-label={feedVideoPlaying ? "Pause video" : "Play video"}
+            aria-label={
+              feedVideoDecodeError
+                ? "Video cannot be played in this browser"
+                : feedVideoPlaying
+                  ? "Pause video"
+                  : "Play video"
+            }
           >
             <video
               key={`${post.id}-hub-v-${slideIdx}`}
@@ -1047,28 +1057,32 @@ function FeedCard({
               onLoadedMetadata={(e) => {
                 tryFeedVideoPosterSeekOnce(e.currentTarget, feedVideoPosterSeekDoneRef);
               }}
+              onError={() => setFeedVideoDecodeError(true)}
               onPlay={() => setFeedVideoPlaying(true)}
               onPause={() => setFeedVideoPlaying(false)}
               onVolumeChange={(e) => setFeedVideoMuted(e.currentTarget.muted)}
             />
-            {!feedVideoPlaying && (
+            {!feedVideoDecodeError && !feedVideoPlaying && (
               <span className="feed-card-play-overlay" aria-hidden>
                 <PlayIcon />
               </span>
             )}
-            <button
-              type="button"
-              className={`feed-card-sound-toggle${feedVideoMuted ? " muted" : ""}`}
-              aria-label={feedVideoMuted ? "Unmute video" : "Mute video"}
-              title={feedVideoMuted ? "Unmute" : "Mute"}
-              onClick={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                setFeedVideoMuted((prev) => !prev);
-              }}
-            >
-              {feedVideoMuted ? <VolumeOffIcon /> : <VolumeOnIcon />}
-            </button>
+            {!feedVideoDecodeError && (
+              <button
+                type="button"
+                className={`feed-card-sound-toggle${feedVideoMuted ? " muted" : ""}`}
+                aria-label={feedVideoMuted ? "Unmute video" : "Mute video"}
+                title={feedVideoMuted ? "Unmute" : "Mute"}
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setFeedVideoMuted((prev) => !prev);
+                }}
+              >
+                {feedVideoMuted ? <VolumeOffIcon /> : <VolumeOnIcon />}
+              </button>
+            )}
+            {feedVideoDecodeError && currentUrl ? <FeedVideoPlaybackErrorOverlay videoSrc={currentUrl} /> : null}
             {showCaptionOnMedia && (
               <FeedCardCaptionOverlay caption={post.body} style={captionStyle} size={post.overlayTextSize} sjHeartEmojiCtx={sjHeartEmojiCtx} />
             )}

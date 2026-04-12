@@ -3,6 +3,7 @@ import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react'
 import { SunIcon, MoonIcon, BellIcon, MenuIcon, LogoutIcon, ChatIcon, BriefcaseIcon, WarningIcon } from './icons/UIIcons';
 import { Client, Notification } from '../types';
 import { useAppContext } from './AppContext';
+import { auth } from '../firebaseConfig';
 import { OFFLINE_MODE } from '../constants';
 import { ReportProblemModal } from './ReportProblemModal';
 import { ShareReviewModal } from './ShareReviewModal';
@@ -12,6 +13,7 @@ import {
   FAN_HUB_DEEPLINK_STORAGE_KEY,
   resolveFanHubNotificationTarget,
 } from '../src/lib/fanHubNotificationRouting';
+import { resolveApiUrl } from '../src/lib/resolveApiUrl';
 
 interface HeaderProps {
   pageTitle: string;
@@ -44,7 +46,7 @@ export const Header: React.FC<HeaderProps> = ({ pageTitle }) => {
       (n) =>
         n.messageId?.startsWith("usage-") ||
         n.messageId?.startsWith("announcement-") ||
-        n.messageId === "admin-support_ticket_created"
+        n.messageId?.startsWith("admin-")
     );
   }, [notifications]);
 
@@ -102,19 +104,72 @@ export const Header: React.FC<HeaderProps> = ({ pageTitle }) => {
     [visibleNotifications]
   );
 
+  const adminAlertDocId = useCallback((notificationId: string) => {
+    return notificationId.startsWith("admin-") ? notificationId.slice("admin-".length) : null;
+  }, []);
+
+  const markAdminAlertsReadRemote = useCallback(
+    async (docIds: string[]) => {
+      if (!docIds.length) return;
+      const token = await auth.currentUser?.getIdToken();
+      const res = await fetch(resolveApiUrl("/api/markAdminAlertRead"), {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ alertIds: docIds }),
+      });
+      const data = (await res.json().catch(() => ({}))) as { error?: string };
+      if (!res.ok) {
+        throw new Error(data.error || "Could not dismiss admin alert");
+      }
+    },
+    []
+  );
+
   const dismissReminder = useCallback(
-    (id: string, e?: React.MouseEvent) => {
+    async (id: string, e?: React.MouseEvent) => {
       e?.preventDefault();
       e?.stopPropagation();
+      const docId = adminAlertDocId(id);
+      if (docId) {
+        try {
+          await markAdminAlertsReadRemote([docId]);
+        } catch (err) {
+          showToast(err instanceof Error ? err.message : "Could not dismiss alert", "error");
+          return;
+        }
+      }
       setNotifications((prev) => prev.filter((n) => n.id !== id));
     },
-    [setNotifications]
+    [adminAlertDocId, markAdminAlertsReadRemote, setNotifications, showToast]
   );
 
   const clearAllVisibleReminders = useCallback(() => {
-    setNotifications((prev) => prev.filter((n) => !visibleNotificationIds.has(n.id)));
-    setIsNotificationsOpen(false);
-  }, [setNotifications, visibleNotificationIds]);
+    const adminIds = visibleNotifications
+      .map((n) => adminAlertDocId(n.id))
+      .filter((x): x is string => Boolean(x));
+    void (async () => {
+      if (adminIds.length) {
+        try {
+          await markAdminAlertsReadRemote(adminIds);
+        } catch (err) {
+          showToast(err instanceof Error ? err.message : "Could not clear admin alerts", "error");
+          return;
+        }
+      }
+      setNotifications((prev) => prev.filter((n) => !visibleNotificationIds.has(n.id)));
+      setIsNotificationsOpen(false);
+    })();
+  }, [
+    adminAlertDocId,
+    markAdminAlertsReadRemote,
+    setNotifications,
+    showToast,
+    visibleNotificationIds,
+    visibleNotifications,
+  ]);
 
   const clearReadVisibleReminders = useCallback(() => {
     setNotifications((prev) =>
@@ -123,12 +178,25 @@ export const Header: React.FC<HeaderProps> = ({ pageTitle }) => {
   }, [setNotifications, visibleNotificationIds]);
 
   /** Row tap: mark read and close only — no surprise navigation (pricing/admin/dashboard). */
-  const handleReminderRowActivate = useCallback((notification: Notification) => {
-    setNotifications((prev) =>
-      prev.map((n) => (n.id === notification.id ? { ...n, read: true } : n))
-    );
-    setIsNotificationsOpen(false);
-  }, []);
+  const handleReminderRowActivate = useCallback(
+    (notification: Notification) => {
+      const docId = adminAlertDocId(notification.id);
+      if (docId) {
+        void (async () => {
+          try {
+            await markAdminAlertsReadRemote([docId]);
+          } catch {
+            /* snapshot may still update; avoid toast noise on double-tap */
+          }
+        })();
+      }
+      setNotifications((prev) =>
+        prev.map((n) => (n.id === notification.id ? { ...n, read: true } : n))
+      );
+      setIsNotificationsOpen(false);
+    },
+    [adminAlertDocId, markAdminAlertsReadRemote, setNotifications]
+  );
 
   const openPricingFromReminder = useCallback(
     (e: React.MouseEvent) => {
@@ -140,11 +208,21 @@ export const Header: React.FC<HeaderProps> = ({ pageTitle }) => {
     [setActivePage]
   );
 
-  const handleMarkAllAsRead = () => {
-    setNotifications(prevNotifications => 
-      prevNotifications.map(n => ({ ...n, read: true }))
-    );
-  };
+  const handleMarkAllAsRead = useCallback(() => {
+    const adminIds = notifications
+      .map((n) => adminAlertDocId(n.id))
+      .filter((x): x is string => Boolean(x));
+    void (async () => {
+      if (adminIds.length) {
+        try {
+          await markAdminAlertsReadRemote(adminIds);
+        } catch (err) {
+          showToast(err instanceof Error ? err.message : "Could not mark admin alerts read", "error");
+        }
+      }
+      setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+    })();
+  }, [notifications, adminAlertDocId, markAdminAlertsReadRemote, showToast, setNotifications]);
 
   const ClientSwitcher: React.FC = () => {
     // Hide agency/client switching for now; leave available only for Admin

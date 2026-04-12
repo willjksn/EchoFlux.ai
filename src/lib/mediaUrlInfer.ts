@@ -12,6 +12,17 @@ export function inferIsVideoFromUrl(url: string | undefined | null): boolean {
   }
 }
 
+/** QuickTime-style containers often fail in Chrome/Edge/Firefox on Windows; use for UX hints only. */
+export function inferQuickTimeStyleVideoFromUrl(url: string | undefined | null): boolean {
+  if (!url || typeof url !== "string") return false;
+  try {
+    const decoded = decodeURIComponent(url);
+    return /\.(mov|quicktime)(\?|#|&|$)/i.test(decoded);
+  } catch {
+    return /\.(mov|quicktime)(\?|#|&|$)/i.test(url);
+  }
+}
+
 export function inferIsAudioFromUrl(url: string | undefined | null): boolean {
   if (!url || typeof url !== "string") return false;
   try {
