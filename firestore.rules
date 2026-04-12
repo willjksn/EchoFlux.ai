@@ -154,6 +154,17 @@ service cloud.firestore {
         allow create, update, delete: if (isAuthenticated() && request.auth.uid == userId) || isAdmin();
       }
 
+      /** My Vault — folders + library items (MediaLibrary.tsx). */
+      match /media_folders/{folderId} {
+        allow read: if (isAuthenticated() && request.auth.uid == userId) || isAdmin();
+        allow create, update, delete: if (isAuthenticated() && request.auth.uid == userId) || isAdmin();
+      }
+
+      match /media_library/{itemId} {
+        allow read: if (isAuthenticated() && request.auth.uid == userId) || isAdmin();
+        allow create, update, delete: if (isAuthenticated() && request.auth.uid == userId) || isAdmin();
+      }
+
       /** ---------------------------------------------------
        * USER SUBCOLLECTIONS (messages, posts, CRM, calendar, voices, media_library, onlyfans_media_vault, etc.)
        * ----------------------------------------------------

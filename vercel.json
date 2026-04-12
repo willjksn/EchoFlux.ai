@@ -8,7 +8,8 @@
       "maxDuration": 60
     },
     "api/createCheckoutSession.ts": {
-      "maxDuration": 60
+      "maxDuration": 60,
+      "memory": 1024
     }
   },
 

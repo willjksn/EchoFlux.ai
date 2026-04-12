@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { MediaLibraryItem, MediaFolder } from '../types';
 import { useAppContext } from './AppContext';
 import { UploadIcon, TrashIcon, ImageIcon, VideoIcon, CheckCircleIcon, PlusIcon, XMarkIcon, FolderIcon, MicrophoneIcon } from './icons/UIIcons';
-import { db, storage } from '../firebaseConfig';
+import { auth, db, storage } from '../firebaseConfig';
 import { collection, setDoc, doc, getDocs, deleteDoc, query, orderBy, updateDoc, writeBatch, where } from 'firebase/firestore';
 // @ts-ignore
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
@@ -47,6 +47,9 @@ export const MediaLibrary: React.FC = () => {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
 
+  /** Firestore/Storage rules key off request.auth.uid — path must use the signed-in principal. */
+  const fsOwnerUid = () => auth.currentUser?.uid ?? user?.id ?? '';
+
   // Load folders
   useEffect(() => {
     if (!user) {
@@ -56,7 +59,9 @@ export const MediaLibrary: React.FC = () => {
 
     const loadFolders = async () => {
       try {
-        const foldersRef = collection(db, 'users', user.id, 'media_folders');
+        const uid = fsOwnerUid();
+        if (!uid) return;
+        const foldersRef = collection(db, 'users', uid, 'media_folders');
         const snapshot = await getDocs(foldersRef);
         
         const loadedFolders: MediaFolder[] = [];
@@ -72,11 +77,11 @@ export const MediaLibrary: React.FC = () => {
         if (!generalFolder) {
           const generalFolderData: MediaFolder = {
             id: GENERAL_FOLDER_ID,
-            userId: user.id,
+            userId: uid,
             name: 'General',
             createdAt: new Date().toISOString(),
           };
-          await setDoc(doc(db, 'users', user.id, 'media_folders', GENERAL_FOLDER_ID), generalFolderData);
+          await setDoc(doc(db, 'users', uid, 'media_folders', GENERAL_FOLDER_ID), generalFolderData);
           loadedFolders.unshift(generalFolderData);
         } else {
           // Sort: General first, then by name
@@ -105,7 +110,12 @@ export const MediaLibrary: React.FC = () => {
 
     const loadMedia = async () => {
       try {
-        const mediaRef = collection(db, 'users', user.id, 'media_library');
+        const uid = fsOwnerUid();
+        if (!uid) {
+          setIsLoading(false);
+          return;
+        }
+        const mediaRef = collection(db, 'users', uid, 'media_library');
         const q = query(mediaRef, orderBy('uploadedAt', 'desc'));
         const snapshot = await getDocs(q);
         
@@ -163,6 +173,8 @@ export const MediaLibrary: React.FC = () => {
 
   const handleFileSelect = async (files: FileList | null) => {
     if (!files || files.length === 0 || !user) return;
+    const uid = fsOwnerUid();
+    if (!uid) return;
 
     setIsUploading(true);
     const uploadPromises: Promise<void>[] = [];
@@ -177,7 +189,7 @@ export const MediaLibrary: React.FC = () => {
             fileType = 'audio';
           }
           const timestamp = Date.now();
-          const storagePath = `users/${user.id}/media_library/${timestamp}_${file.name}`;
+          const storagePath = `users/${uid}/media_library/${timestamp}_${file.name}`;
           const storageRef = ref(storage, storagePath);
 
           await uploadBytes(storageRef, file, { contentType: file.type });
@@ -185,7 +197,7 @@ export const MediaLibrary: React.FC = () => {
 
           const mediaItem: MediaLibraryItem = {
             id: timestamp.toString(),
-            userId: user.id,
+            userId: uid,
             url: mediaUrl,
             name: file.name,
             type: fileType,
@@ -198,7 +210,7 @@ export const MediaLibrary: React.FC = () => {
           };
 
           // Save to Firestore
-          await setDoc(doc(db, 'users', user.id, 'media_library', mediaItem.id), mediaItem);
+          await setDoc(doc(db, 'users', uid, 'media_library', mediaItem.id), mediaItem);
           
           setMediaItems(prev => [mediaItem, ...prev]);
           showToast(`Uploaded ${file.name}`, 'success');
@@ -230,12 +242,14 @@ export const MediaLibrary: React.FC = () => {
 
   const handleDelete = async (id: string) => {
     if (!user) return;
+    const uid = fsOwnerUid();
+    if (!uid) return;
     
     try {
       const item = mediaItems.find(m => m.id === id);
       if (!item) return;
 
-      await deleteDoc(doc(db, 'users', user.id, 'media_library', id));
+      await deleteDoc(doc(db, 'users', uid, 'media_library', id));
       setMediaItems(prev => prev.filter(m => m.id !== id));
       showToast('Media deleted from library', 'success');
     } catch (error) {
@@ -246,10 +260,12 @@ export const MediaLibrary: React.FC = () => {
 
   const handleBulkDelete = async () => {
     if (!user || selectedItems.size === 0) return;
+    const uid = fsOwnerUid();
+    if (!uid) return;
 
     try {
       const deletePromises = Array.from(selectedItems).map(id => 
-        deleteDoc(doc(db, 'users', user.id, 'media_library', id))
+        deleteDoc(doc(db, 'users', uid, 'media_library', id))
       );
       
       await Promise.all(deletePromises);
@@ -302,6 +318,8 @@ export const MediaLibrary: React.FC = () => {
   // Folder management functions
   const handleCreateFolder = async (name: string) => {
     if (!user) return;
+    const uid = fsOwnerUid();
+    if (!uid) return;
 
     // Check for duplicate names
     const existingFolder = folders.find(f => f.name.toLowerCase() === name.toLowerCase());
@@ -313,13 +331,13 @@ export const MediaLibrary: React.FC = () => {
     const folderId = `folder_${Date.now()}`;
     const newFolder: MediaFolder = {
       id: folderId,
-      userId: user.id,
+      userId: uid,
       name,
       createdAt: new Date().toISOString(),
       itemCount: 0,
     };
 
-    await setDoc(doc(db, 'users', user.id, 'media_folders', folderId), newFolder);
+    await setDoc(doc(db, 'users', uid, 'media_folders', folderId), newFolder);
     setFolders(prev => [...prev, newFolder].sort((a, b) => {
       if (a.id === GENERAL_FOLDER_ID) return -1;
       if (b.id === GENERAL_FOLDER_ID) return 1;
@@ -330,6 +348,8 @@ export const MediaLibrary: React.FC = () => {
 
   const handleRenameFolder = async (name: string) => {
     if (!user || !editingFolder) return;
+    const uid = fsOwnerUid();
+    if (!uid) return;
 
     // Check for duplicate names (excluding current folder)
     const existingFolder = folders.find(f => 
@@ -340,7 +360,7 @@ export const MediaLibrary: React.FC = () => {
       throw new Error('Duplicate folder name');
     }
 
-    await updateDoc(doc(db, 'users', user.id, 'media_folders', editingFolder.id), {
+    await updateDoc(doc(db, 'users', uid, 'media_folders', editingFolder.id), {
       name,
     });
 
@@ -358,6 +378,8 @@ export const MediaLibrary: React.FC = () => {
 
   const handleDeleteFolder = async (folderId: string) => {
     if (!user || folderId === GENERAL_FOLDER_ID) return;
+    const uid = fsOwnerUid();
+    if (!uid) return;
 
     const folder = folders.find(f => f.id === folderId);
     if (!folder) return;
@@ -372,7 +394,7 @@ export const MediaLibrary: React.FC = () => {
       if (itemsToMove.length > 0) {
         const batch = writeBatch(db);
         itemsToMove.forEach(item => {
-          batch.update(doc(db, 'users', user.id, 'media_library', item.id), {
+          batch.update(doc(db, 'users', uid, 'media_library', item.id), {
             folderId: GENERAL_FOLDER_ID,
           });
         });
@@ -387,7 +409,7 @@ export const MediaLibrary: React.FC = () => {
       }
 
       // Delete folder
-      await deleteDoc(doc(db, 'users', user.id, 'media_folders', folderId));
+      await deleteDoc(doc(db, 'users', uid, 'media_folders', folderId));
       setFolders(prev => prev.filter(f => f.id !== folderId));
 
       // Switch to General if deleted folder was selected
@@ -405,9 +427,11 @@ export const MediaLibrary: React.FC = () => {
   // Move single item to folder
   const handleMoveToFolder = async (itemId: string, folderId: string) => {
     if (!user) return;
+    const uid = fsOwnerUid();
+    if (!uid) return;
 
     try {
-      await updateDoc(doc(db, 'users', user.id, 'media_library', itemId), {
+      await updateDoc(doc(db, 'users', uid, 'media_library', itemId), {
         folderId,
       });
 
@@ -424,11 +448,13 @@ export const MediaLibrary: React.FC = () => {
 
   const handleMoveItems = async (targetFolderId: string) => {
     if (!user || selectedItems.size === 0) return;
+    const uid = fsOwnerUid();
+    if (!uid) return;
 
     try {
       const batch = writeBatch(db);
       Array.from(selectedItems).forEach(itemId => {
-        batch.update(doc(db, 'users', user.id, 'media_library', itemId), {
+        batch.update(doc(db, 'users', uid, 'media_library', itemId), {
           folderId: targetFolderId,
         });
       });
@@ -497,7 +523,8 @@ export const MediaLibrary: React.FC = () => {
         const blobType = effectiveBlobType(mediaRecorder, requestedMime);
         const audioBlob = new Blob(audioChunksRef.current, { type: blobType });
         
-        if (!user?.id) {
+        const voiceUid = auth.currentUser?.uid ?? user?.id;
+        if (!voiceUid) {
           showToast('Please sign in to save recordings', 'error');
           setIsRecording(false);
           return;
@@ -516,7 +543,7 @@ export const MediaLibrary: React.FC = () => {
           const ext = fileExtensionForAudioMime(normType);
           const timestamp = Date.now();
           const fileName = `voice_${timestamp}.${ext}`;
-          const storagePath = `users/${user.id}/media_library/${fileName}`;
+          const storagePath = `users/${voiceUid}/media_library/${fileName}`;
           const storageRef = ref(storage, storagePath);
           
           await uploadBytes(storageRef, audioBlob, { contentType: normType });
@@ -524,7 +551,7 @@ export const MediaLibrary: React.FC = () => {
           
           const mediaItem: MediaLibraryItem = {
             id: timestamp.toString(),
-            userId: user.id,
+            userId: voiceUid,
             url: mediaUrl,
             name: fileName,
             type: 'audio',
@@ -536,7 +563,7 @@ export const MediaLibrary: React.FC = () => {
             folderId: selectedFolderId,
           };
           
-          await setDoc(doc(db, 'users', user.id, 'media_library', mediaItem.id), mediaItem);
+          await setDoc(doc(db, 'users', voiceUid, 'media_library', mediaItem.id), mediaItem);
           
           setMediaItems(prev => [mediaItem, ...prev]);
           showToast('Voice note saved to vault', 'success');
