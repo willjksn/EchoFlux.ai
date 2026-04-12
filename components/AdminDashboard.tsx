@@ -14,7 +14,7 @@ import { AdminITSupportPanel } from './AdminITSupportPanel';
 import { InviteCodeManager } from './InviteCodeManager';
 import { WaitlistManager } from './WaitlistManager';
 import { EmailCenterPage } from './EmailCenterPage';
-import { TeamIcon, DollarSignIcon, UserPlusIcon, ArrowUpCircleIcon, ImageIcon, VideoIcon, LockIcon, TrendingIcon, TrashIcon, HeartIcon, StarIcon, ChatIcon, GlobeIcon } from './icons/UIIcons';
+import { TeamIcon, DollarSignIcon, UserPlusIcon, ArrowUpCircleIcon, ImageIcon, VideoIcon, LockIcon, TrendingIcon, TrashIcon, HeartIcon, StarIcon, ChatIcon, GlobeIcon, SparklesIcon } from './icons/UIIcons';
 import { db, auth } from '../firebaseConfig';
 import { collection, query, orderBy, onSnapshot, setDoc, doc, getDoc, deleteField, getDocs } from 'firebase/firestore';
 import { useAppContext } from './AppContext';
@@ -23,10 +23,31 @@ import { getModelUsageAnalytics, type ModelUsageStats } from '../src/services/mo
 import { hasActiveStripeEchofluxSubscription } from '../src/lib/echofluxStripeMrr';
 import { safeUsernameForHandle } from '../src/lib/fanHubDisplay';
 
+/** Gemini text models always listed in Requests by Model (0 when unused) so 2.5 / 2.0 / 1.5 show like other rows. */
+const GEMINI_TEXT_MODEL_DISPLAY_ORDER = [
+    'gemini-2.5-flash-lite',
+    'gemini-2.5-flash',
+    'gemini-2.0-flash-lite',
+    'gemini-2.0-flash',
+    'gemini-1.5-flash',
+    'gemini-1.5-pro',
+] as const;
+
+function buildRequestsByModelRows(requestsByModel: Record<string, number>): [string, number][] {
+    const geminiRows: [string, number][] = GEMINI_TEXT_MODEL_DISPLAY_ORDER.map((id) => [
+        id,
+        requestsByModel[id] ?? 0,
+    ]);
+    const otherRows = Object.entries(requestsByModel)
+        .filter(([k]) => !(GEMINI_TEXT_MODEL_DISPLAY_ORDER as readonly string[]).includes(k))
+        .sort((a, b) => b[1] - a[1]);
+    return [...geminiRows, ...otherRows];
+}
+
 // Fallback sample stats so the admin overview is visible even if the analytics
 // API is unreachable locally. These reflect the deployment numbers the user described.
 const DEFAULT_MODEL_USAGE_STATS: ModelUsageStats = {
-    totalRequests: 636,
+    totalRequests: 656,
     totalCost: 0.01,
     averageCostPerRequest: 0.0000157,
     errorRate: 2.0,
@@ -35,6 +56,8 @@ const DEFAULT_MODEL_USAGE_STATS: ModelUsageStats = {
     adImageRequestsByModel: {},
     adVideoRequestsByModel: {},
     requestsByModel: {
+        'gemini-2.5-flash': 12,
+        'gemini-2.5-flash-lite': 8,
         'gemini-2.0-flash': 354,
         'gemini-2.0-flash-lite': 267,
         'tavily-web-search': 15,
@@ -1657,26 +1680,36 @@ export const AdminDashboard: React.FC = () => {
                         <div>
                             <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Requests by Model</h4>
                             <div className="space-y-2">
-                                {Object.entries(modelUsageStats.requestsByModel)
-                                    .sort(([, a], [, b]) => (b as number) - (a as number))
+                                {buildRequestsByModelRows(modelUsageStats.requestsByModel || {})
                                     .map(([model, count]) => {
                                         const countNum = count as number;
                                         const percentage = modelUsageStats.totalRequests > 0 
                                             ? (countNum / modelUsageStats.totalRequests * 100).toFixed(1) 
                                             : '0';
+                                        const pctWidth = modelUsageStats.totalRequests > 0
+                                            ? Math.min(100, (countNum / modelUsageStats.totalRequests) * 100)
+                                            : 0;
                                         // Estimate cost for Replicate FLUX Dev (~$0.025 per image)
                                         const isReplicate = model === 'replicate-flux-dev' || model === 'replicate-flux-schnell' || model === 'replicate-sdxl';
+                                        const isGemini = model.startsWith('gemini-');
+                                        const isTavily = model.includes('tavily');
                                         const estimatedCost = isReplicate ? countNum * 0.025 : null;
                                         return (
                                             <div key={model}>
                                                 <div className="flex justify-between text-xs mb-1">
                                                     <span className="text-gray-600 dark:text-gray-400 font-mono flex items-center gap-1">
+                                                        {isGemini && (
+                                                            <SparklesIcon className="w-3 h-3 text-primary-500 dark:text-primary-400 flex-shrink-0" />
+                                                        )}
                                                         {isReplicate && (
-                                                            <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                                            <svg className="w-3 h-3 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                                                                 <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
                                                                 <circle cx="8.5" cy="8.5" r="1.5" />
                                                                 <polyline points="21 15 16 10 5 21" />
                                                             </svg>
+                                                        )}
+                                                        {isTavily && (
+                                                            <GlobeIcon className="w-3 h-3 flex-shrink-0" />
                                                         )}
                                                         {model}
                                                     </span>
@@ -1690,7 +1723,7 @@ export const AdminDashboard: React.FC = () => {
                                                     </span>
                                                 </div>
                                                 <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
-                                                    <div className={`h-2 rounded-full ${isReplicate ? 'bg-orange-500' : 'bg-primary-600'}`} style={{ width: `${percentage}%` }}></div>
+                                                    <div className={`h-2 rounded-full ${isReplicate ? 'bg-orange-500' : isGemini ? 'bg-violet-500 dark:bg-violet-600' : 'bg-primary-600'}`} style={{ width: `${pctWidth}%` }}></div>
                                                 </div>
                                             </div>
                                         );

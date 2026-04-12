@@ -84,6 +84,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
     }
 
     const settingsPatch: Record<string, unknown> = {};
+    const syncEchoFluxVoice =
+      targets.includes("echoProfile") ||
+      targets.includes("strategyDefaults") ||
+      targets.includes("captionDefaults");
+
     if (targets.includes("echoProfile")) {
       const nicheHuman = profile.primaryNiche ? profile.primaryNiche.replace(/_/g, " ") : "";
       settingsPatch.nicheFromCreatorIdentity = nicheHuman;
@@ -102,6 +107,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
         .filter(Boolean)
         .join("\n");
       eco.appliedToCaptionDefaults = true;
+    }
+    // What Compose / Strategy / captions actually read when "Personality Override" is on.
+    if (syncEchoFluxVoice) {
+      const g = profile.generatedProfile;
+      const personality = [g.brandStatement, g.brandSummary].filter((s) => typeof s === "string" && s.trim()).join("\n\n").trim();
+      if (personality) {
+        settingsPatch.creatorPersonality = personality.slice(0, 1200);
+      }
     }
     if (targets.includes("premiumStudio")) {
       const ps = profileToPremiumStudioDefaults(profile);

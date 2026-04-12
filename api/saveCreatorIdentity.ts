@@ -1,8 +1,9 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { verifyAuth } from "./verifyAuth.js";
 import { getAdminDb } from "./_firebaseAdmin.js";
+import { checkApiKeys } from "./_errorHandler.js";
 import { isCreatorIdentityPlan } from "./_creatorIdentityElite.js";
-import { getCreatorIdentityCurrent } from "./_creatorIdentityFirestore.js";
+import { tryAiGeneratedProfile } from "./_creatorIdentityAiGeneratedProfile.js";
 import {
   appendFollowupOpenText,
   buildCreatorIdentityProfile,
@@ -100,6 +101,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
         followupQuestionsAsked: body.followupQuestionsAsked,
         followupAnswers: body.action === "followup_submit" ? body.followupAnswers : undefined,
       });
+
+      if (profile.status === "completed") {
+        const keyCheck = checkApiKeys();
+        if (keyCheck.hasKey) {
+          const templateGp = profile.generatedProfile;
+          try {
+            const aiGp = await tryAiGeneratedProfile(profile, user.uid, templateGp);
+            if (aiGp) profile.generatedProfile = aiGp;
+          } catch (e) {
+            console.error("saveCreatorIdentity AI enrich:", e);
+          }
+        }
+      }
 
       if (prev && prevSnap.exists && prev.status !== "draft" && typeof prev.version === "number") {
         const histId = `v${prev.version}_${Date.now()}`;

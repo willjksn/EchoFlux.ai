@@ -43,6 +43,8 @@ const MODEL_COSTS: Record<string, { input: number; output: number }> = {
   'gemini-2.0-flash-lite': { input: 0.0375, output: 0.15 }, // ~50% of Flash
   'gemini-2.0-flash': { input: 0.075, output: 0.30 },
   'gemini-2.0-flash-thinking-exp': { input: 0.50, output: 1.50 }, // Approximate
+  'gemini-2.5-flash-lite': { input: 0.10, output: 0.40 }, // ai.google.dev pricing (standard)
+  'gemini-2.5-flash': { input: 0.30, output: 2.50 }, // includes thinking tokens in output pricing
   'gemini-1.5-flash': { input: 0.075, output: 0.30 },
   'gemini-1.5-pro': { input: 1.25, output: 5.00 },
 };

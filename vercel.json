@@ -10,6 +10,9 @@
     "api/createCheckoutSession.ts": {
       "maxDuration": 60,
       "memory": 1024
+    },
+    "api/saveCreatorIdentity.ts": {
+      "maxDuration": 60
     }
   },
 

@@ -1,7 +1,7 @@
 // api/_modelRouter.ts
 // Smart model routing based on task complexity and cost optimization
 
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import { GoogleGenerativeAI, type GenerativeModel } from "@google/generative-ai";
 
 const API_KEY = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
 
@@ -150,23 +150,95 @@ const MODEL_CONFIG: Record<TaskType, {
 };
 
 /**
- * Fallback chain if primary model fails or isn't available
+ * Fallback order after the primary model. When 2.0 Flash / Flash-Lite are retired,
+ * the next `generateContent` attempt uses 2.5, then 1.5 — no deploy required.
  */
 const FALLBACK_MODELS: Record<string, string[]> = {
-  'gemini-2.0-flash-lite': ['gemini-2.0-flash', 'gemini-1.5-flash'],
-  'gemini-2.0-flash': ['gemini-1.5-flash', 'gemini-1.5-pro'],
-  'gemini-1.5-pro': ['gemini-2.0-flash', 'gemini-1.5-flash'],
+  'gemini-2.0-flash-lite': ['gemini-2.5-flash-lite', 'gemini-2.0-flash', 'gemini-1.5-flash'],
+  'gemini-2.5-flash-lite': ['gemini-2.0-flash-lite', 'gemini-2.0-flash', 'gemini-1.5-flash'],
+  'gemini-2.0-flash': ['gemini-2.5-flash', 'gemini-1.5-flash', 'gemini-1.5-pro'],
+  'gemini-2.5-flash': ['gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-1.5-pro'],
+  'gemini-1.5-pro': ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash'],
+  'gemini-1.5-flash': ['gemini-2.5-flash-lite', 'gemini-2.0-flash-lite', 'gemini-2.5-flash'],
 };
+
+export function buildGeminiModelChain(primary: string): string[] {
+  if (!primary.startsWith('gemini-')) {
+    return [primary];
+  }
+  const rest = FALLBACK_MODELS[primary];
+  const chain = rest ? [primary, ...rest] : [primary];
+  const seen = new Set<string>();
+  return chain.filter((m) => {
+    if (seen.has(m)) return false;
+    seen.add(m);
+    return true;
+  });
+}
+
+type GenerateContentArgs = Parameters<GenerativeModel['generateContent']>;
+
+export type GeminiWithFallbacks = Pick<GenerativeModel, 'generateContent'>;
+
+/**
+ * Returns a model-like object whose `generateContent` tries the primary Gemini model,
+ * then each fallback on failure (e.g. 404 after deprecation, quota, transient errors).
+ */
+export function createGeminiModelWithFallbacks(
+  primaryModelName: string,
+  tracking?: { userId: string; taskType: TaskType; costTier: 'low' | 'medium' | 'high' }
+): GeminiWithFallbacks {
+  if (!API_KEY) {
+    throw new Error("GEMINI_API_KEY environment variable is missing.");
+  }
+
+  const genAI = new GoogleGenerativeAI(API_KEY);
+  const chain = buildGeminiModelChain(primaryModelName);
+
+  return {
+    async generateContent(...args: GenerateContentArgs) {
+      let lastErr: unknown;
+      for (let i = 0; i < chain.length; i++) {
+        const modelName = chain[i];
+        try {
+          const m = genAI.getGenerativeModel({ model: modelName });
+          const result = await m.generateContent(...args);
+          if (tracking?.userId) {
+            import('./trackModelUsage.js').then(({ trackModelUsage }) => {
+              trackModelUsage({
+                userId: tracking.userId,
+                taskType: tracking.taskType,
+                modelName,
+                costTier: tracking.costTier,
+                success: true,
+              }).catch(() => {});
+            });
+          }
+          return result;
+        } catch (e) {
+          lastErr = e;
+          const next = chain[i + 1];
+          if (next) {
+            console.warn(
+              `[Gemini] "${modelName}" failed; retrying with "${next}" (${e instanceof Error ? e.message : String(e)})`
+            );
+          }
+        }
+      }
+      throw lastErr;
+    },
+  };
+}
 
 /**
  * Get the appropriate model for a task type
- * Also tracks usage for analytics
+ * `generateContent` automatically falls back to Gemini 2.5 / 1.5 if the primary fails.
  */
 export async function getModelForTask(
   taskType: TaskType, 
   userId?: string,
-  fallback: boolean = false
-): Promise<any> {
+  _fallbackLegacyParam: boolean = false
+): Promise<GeminiWithFallbacks> {
   if (!API_KEY) {
     throw new Error("GEMINI_API_KEY environment variable is missing.");
   }
@@ -174,31 +246,12 @@ export async function getModelForTask(
   const config = MODEL_CONFIG[taskType] || MODEL_CONFIG['chatbot'];
   const modelName = config.model;
   const costTier = config.costTier;
-  
-  // Track usage asynchronously (don't await - fire and forget)
-  if (userId) {
-    // IMPORTANT: Vercel runtime bundles JS, not TS. Import the built JS module.
-    import('./trackModelUsage.js').then(({ trackModelUsage }) => {
-      trackModelUsage({
-        userId,
-        taskType,
-        modelName,
-        costTier,
-        success: true,
-      }).catch(() => {
-        // Silently fail - tracking shouldn't break the app
-      });
-    });
+
+  if (!modelName.startsWith('gemini-')) {
+    throw new Error(`getModelForTask: non-Gemini model "${modelName}" for task ${taskType}`);
   }
-  
-  const genAI = new GoogleGenerativeAI(API_KEY);
-  
-  // If fallback is enabled and model fails, try fallbacks
-  // For now, just return the primary model
-  // In production, you'd want to implement retry logic here
-  return genAI.getGenerativeModel({
-    model: modelName,
-  });
+
+  return createGeminiModelWithFallbacks(modelName, userId ? { userId, taskType, costTier } : undefined);
 }
 
 /**
@@ -217,18 +270,14 @@ export function getCostTierForTask(taskType: TaskType): 'low' | 'medium' | 'high
   return config.costTier;
 }
 
-/**
- * Legacy function - returns default model for backward compatibility
- */
-export function getModel(modelName?: string) {
-  if (!API_KEY) {
-    throw new Error("GEMINI_API_KEY environment variable is missing.");
-  }
+const DEFAULT_LEGACY_MODEL = 'gemini-2.0-flash';
 
-  const genAI = new GoogleGenerativeAI(API_KEY);
-  return genAI.getGenerativeModel({
-    model: modelName || 'gemini-2.0-flash',
-  });
+/**
+ * Legacy function — same fallback chain as task routing (2.0 → 2.5 → 1.5).
+ */
+export function getModel(modelName?: string): GeminiWithFallbacks {
+  const primary = modelName?.trim() || DEFAULT_LEGACY_MODEL;
+  return createGeminiModelWithFallbacks(primary);
 }
 
 /**

@@ -103,7 +103,6 @@ export function synthesizeGeneratedProfile(input: {
     suggestedContentPillars: pillars,
     suggestedMembershipName: `${pLabel} Inner Circle`,
     suggestedMembershipDescription: shortBio.slice(0, 400),
-    suggestedFanHubSections: ['Feed', 'Membership', 'Store', 'Messages'],
     premiumStudioProfile: {
       contentStyle: pillars,
       messageTone: input.brandVibes.map((v) => v.replace(/_/g, ' ')),
