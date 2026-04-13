@@ -6200,6 +6200,28 @@ button.treat-card:hover:not(:disabled) .treat-card-cta {
   flex-direction: column;
   gap: 1rem;
   margin-bottom: 2rem;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* View toggle sits above the list so the header row doesn’t reflow when switching layout */
+.purchases-list-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  min-height: 2.25rem;
+  margin-bottom: 0.5rem;
+}
+
+/* Creator Purchases — compact rows only; no outer fan-member box (avoids list jumping on toggle) */
+.purchases-list.purchases-list--compact {
+  gap: 0;
+}
+
+/* Full-width expanded row body (member compact uses horizontal inset; creators match card mode width) */
+.purchases-page .fan-member-purchase-compact-body {
+  padding-left: 0;
+  padding-right: 0;
 }
 
 .purchases-card {

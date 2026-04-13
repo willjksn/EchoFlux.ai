@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useAppContext } from "./AppContext";
 import { auth, db, storage } from "../firebaseConfig";
 import {
@@ -105,6 +105,25 @@ function isSubscriptionPurchase(p: Purchase): boolean {
     productName.includes("subscription") ||
     productName.includes("membership")
   );
+}
+
+/** Compact list row — mirrors member “Your purchases” minimize view. */
+function creatorPurchaseTypeLabel(p: Purchase): string {
+  if (isTipPurchase(p)) return "Tip";
+  if (isSubscriptionPurchase(p)) return "Membership";
+  const t = (p.orderType || "").trim().toLowerCase();
+  if (t === "post_unlock") return "Feed unlock";
+  return "Product";
+}
+
+function creatorPurchaseStatusLine(p: Purchase): string {
+  if (isTipPurchase(p)) return "Tip received";
+  if (isSubscriptionPurchase(p)) return "Subscription payment";
+  if (p.deliveryStatus === "delivered") return "Delivered";
+  if (p.scheduleStatus === "pending") return "Needs scheduling";
+  if (p.scheduleStatus === "scheduled") return "Scheduled";
+  if (p.scheduleStatus === "completed") return "Completed";
+  return "—";
 }
 
 function toLocalScheduleParts(date: Date): { date: string; time: string } {
@@ -229,6 +248,33 @@ export const FanHubPurchases: React.FC = () => {
   const deliveryPendingUnmountRef = useRef<typeof deliveryPendingMedia>(null);
   const deliveryPendingLatestRef = useRef<typeof deliveryPendingMedia>(null);
   const hiddenStorageKey = user?.id ? `fanhub_hidden_purchases_${user.id}` : null;
+
+  const creatorPurchasesCompactKey = useMemo(
+    () => (user?.id ? `fanhubCreatorPurchasesCompact:${user.id}` : null),
+    [user?.id],
+  );
+  const [creatorPurchasesListCompact, setCreatorPurchasesListCompact] = useState(false);
+  const setCreatorPurchasesListCompactPersisted = useCallback(
+    (compact: boolean) => {
+      setCreatorPurchasesListCompact(compact);
+      if (!creatorPurchasesCompactKey || typeof window === "undefined") return;
+      try {
+        if (compact) window.localStorage.setItem(creatorPurchasesCompactKey, "1");
+        else window.localStorage.removeItem(creatorPurchasesCompactKey);
+      } catch {
+        /* ignore */
+      }
+    },
+    [creatorPurchasesCompactKey],
+  );
+  useEffect(() => {
+    if (!creatorPurchasesCompactKey || typeof window === "undefined") return;
+    try {
+      setCreatorPurchasesListCompact(window.localStorage.getItem(creatorPurchasesCompactKey) === "1");
+    } catch {
+      setCreatorPurchasesListCompact(false);
+    }
+  }, [creatorPurchasesCompactKey]);
 
   useEffect(() => {
     purchasesRef.current = purchases;
@@ -1213,8 +1259,26 @@ export const FanHubPurchases: React.FC = () => {
         ))}
       </div>
 
+      {!loading && filteredPurchases.length > 0 ? (
+        <div className="purchases-list-toolbar">
+          <button
+            type="button"
+            className="purchases-btn purchases-btn-secondary"
+            onClick={() => setCreatorPurchasesListCompactPersisted(!creatorPurchasesListCompact)}
+          >
+            {creatorPurchasesListCompact ? "Expand cards" : "Minimize list"}
+          </button>
+        </div>
+      ) : null}
+
       {/* Purchase Cards */}
-      <div className="purchases-list">
+      <div
+        className={
+          creatorPurchasesListCompact && filteredPurchases.length > 0
+            ? "purchases-list purchases-list--compact"
+            : "purchases-list"
+        }
+      >
         {filteredPurchases.length === 0 ? (
           <p className="purchases-empty">
             {filterStatus === "all"
@@ -1232,11 +1296,9 @@ export const FanHubPurchases: React.FC = () => {
             const isCompleted = p.scheduleStatus === "completed";
             const isEditing = editingId === p.id;
 
-            return (
-              <div
-                key={p.id}
-                className={`purchases-card ${isPending ? "purchases-card-pending" : ""} ${isCompleted ? "purchases-card-completed" : ""} ${isDelivered ? "purchases-card-delivered" : ""}`}
-              >
+            const cardClassName = `purchases-card ${isPending ? "purchases-card-pending" : ""} ${isCompleted ? "purchases-card-completed" : ""} ${isDelivered ? "purchases-card-delivered" : ""}`;
+            const cardBody = (
+              <>
                 <div className="purchases-card-header">
                   <div className="purchases-card-info">
                     <p className="purchases-card-product">{p.productName}</p>
@@ -1789,6 +1851,23 @@ export const FanHubPurchases: React.FC = () => {
                     </p>
                   </div>
                 )}
+              </>
+            );
+            return creatorPurchasesListCompact ? (
+              <details key={p.id} className="fan-member-purchase-compact">
+                <summary className="fan-member-purchase-compact-summary">
+                  <span className="fan-member-purchase-compact-type">{creatorPurchaseTypeLabel(p)}</span>
+                  <span className="fan-member-purchase-compact-title">{p.productName}</span>
+                  <span className="fan-member-purchase-compact-status">{creatorPurchaseStatusLine(p)}</span>
+                  <span className="fan-member-purchase-compact-price">{formatAmount(p.amountCents)}</span>
+                </summary>
+                <div className="fan-member-purchase-compact-body">
+                  <div className={cardClassName}>{cardBody}</div>
+                </div>
+              </details>
+            ) : (
+              <div key={p.id} className={cardClassName}>
+                {cardBody}
               </div>
             );
           })
