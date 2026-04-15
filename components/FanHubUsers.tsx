@@ -288,6 +288,8 @@ export const FanHubUsers: React.FC = () => {
         avatarUrl?: string;
         /** True when Stripe cancel_at_period_end; access continues until subscriptionCurrentPeriodEnd */
         cancelAtPeriodEnd?: boolean;
+        /** Fan hub webhook sets when subscription deleted (approx. when status flipped to canceled) */
+        canceledAt?: Date | null;
         /** ISO or Date from webhook — end of current paid period */
         subscriptionCurrentPeriodEnd?: Date | null;
         /** From users/{uid}.signupDate when fan doc has no timeline */
@@ -362,6 +364,7 @@ export const FanHubUsers: React.FC = () => {
             firstOrder: subscribedAt,
             avatarUrl: data.avatarUrl || undefined,
             cancelAtPeriodEnd: parseCancelAtPeriodEndFromDoc(data as Record<string, unknown>),
+            canceledAt: firestoreDate(data.canceledAt),
             subscriptionCurrentPeriodEnd,
           });
         });
@@ -550,6 +553,11 @@ export const FanHubUsers: React.FC = () => {
             const cur = base.subscriptionCurrentPeriodEnd;
             const next = o.subscriptionCurrentPeriodEnd;
             if (!cur || next.getTime() > cur.getTime()) base.subscriptionCurrentPeriodEnd = next;
+          }
+          if (o.canceledAt) {
+            const cur = base.canceledAt;
+            const next = o.canceledAt;
+            if (!cur || next.getTime() > cur.getTime()) base.canceledAt = next;
           }
           if (o.profileSignupAt) {
             const cur = base.profileSignupAt;
@@ -752,6 +760,7 @@ export const FanHubUsers: React.FC = () => {
           subscriptionStatus: data.subscriptionStatus,
           cancelAtPeriodEnd: cancelAtEnd,
           accessEnd: data.subscriptionCurrentPeriodEnd ?? null,
+          canceledAt: data.canceledAt ?? null,
         });
         if (
           remainingAccess === "—" &&

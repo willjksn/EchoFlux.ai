@@ -3716,6 +3716,12 @@ export const FanStorefrontView: React.FC = () => {
     : hasAccessByCurrentMembershipBase || purchaseOnlyAccess;
   const forceCreatorPreviewLanding = forcePublicLanding && isViewingOwnStorefront;
   const hasMemberAreaAccess = hasAccessByCurrentMembership || purchaseOnlyAccess;
+  /** Paid wall: show unified membership modal (active = portal + cancel; lapsed = subscribe again + portal). */
+  const showMembershipHubEntry =
+    !fanPageAdminBypass &&
+    creatorRequiresPaidMembership &&
+    creator?.monetization?.freeAccessEnabled !== true &&
+    hasMemberAreaAccess;
   const canViewFeed = fanPageAdminBypass || !creatorRequiresPaidMembership || hasPaidMembership;
   const showLanding = previewMember
     ? false
@@ -4557,12 +4563,20 @@ export const FanStorefrontView: React.FC = () => {
             style={{ backgroundColor: "#fff", color: theme?.text || "#1f2937" }}
           >
             <h2 id="fan-membership-manage-title" className="text-lg font-bold mb-2">
-              Manage your membership
+              {hasPaidMembership ? "Manage your membership" : "Membership & billing"}
             </h2>
-            <p className="text-sm mb-4 opacity-90 leading-relaxed">
-              Update your payment method, cancel, or keep your subscription in Stripe&apos;s secure customer portal — or
-              schedule cancellation at the end of your current period without leaving this page.
-            </p>
+            {hasPaidMembership ? (
+              <p className="text-sm mb-4 opacity-90 leading-relaxed">
+                Update your payment method, cancel, or keep your subscription in Stripe&apos;s secure customer portal — or
+                schedule cancellation at the end of your current period without leaving this page.
+              </p>
+            ) : (
+              <p className="text-sm mb-4 opacity-90 leading-relaxed">
+                You don&apos;t have an active paid membership right now. Subscribe again to unlock the full member hub, or
+                open Stripe to update cards and view past invoices. Returning members can often resume from the portal as
+                well.
+              </p>
+            )}
 
             {billingPortalError ? (
               <p
@@ -4574,10 +4588,30 @@ export const FanStorefrontView: React.FC = () => {
             ) : null}
 
             <div className="flex flex-col gap-3">
+              {!hasPaidMembership ? (
+                <button
+                  type="button"
+                  className="w-full px-4 py-3 rounded-xl text-sm font-semibold text-white border-0 disabled:opacity-50"
+                  style={{ backgroundColor: primary }}
+                  disabled={billingPortalLoading || subscribing || joiningFree}
+                  onClick={() => {
+                    void startSubscriptionCheckout();
+                  }}
+                >
+                  {subscribing ? "Opening…" : "Subscribe again"}
+                </button>
+              ) : null}
+
               <button
                 type="button"
-                className="w-full px-4 py-3 rounded-xl text-sm font-semibold text-white border-0 disabled:opacity-50"
-                style={{ backgroundColor: primary }}
+                className={`w-full px-4 py-3 rounded-xl text-sm font-semibold border disabled:opacity-50 ${
+                  hasPaidMembership ? "text-white border-0" : ""
+                }`}
+                style={
+                  hasPaidMembership
+                    ? { backgroundColor: primary }
+                    : { borderColor: `${primary}66`, color: primary, backgroundColor: `${primary}0a` }
+                }
                 disabled={billingPortalLoading || cancelMembershipLoading}
                 onClick={() => {
                   void handleOpenBillingPortal();
@@ -4590,23 +4624,25 @@ export const FanStorefrontView: React.FC = () => {
                 done.
               </p>
 
-              <div className="border-t border-gray-200 my-1 pt-3">
-                <button
-                  type="button"
-                  className="w-full px-4 py-3 rounded-xl text-sm font-semibold border disabled:opacity-50"
-                  style={{ borderColor: `${primary}66`, color: primary, backgroundColor: `${primary}0a` }}
-                  disabled={cancelMembershipLoading || billingPortalLoading}
-                  onClick={() => {
-                    void handleScheduleCancelFromModal();
-                  }}
-                >
-                  {cancelMembershipLoading ? "Updating…" : "Cancel at end of billing period (in app)"}
-                </button>
-                <p className="text-xs opacity-75 mt-2">
-                  Schedules cancel at period end in Stripe immediately. You keep access until the date shown after you
-                  confirm.
-                </p>
-              </div>
+              {hasPaidMembership ? (
+                <div className="border-t border-gray-200 my-1 pt-3">
+                  <button
+                    type="button"
+                    className="w-full px-4 py-3 rounded-xl text-sm font-semibold border disabled:opacity-50"
+                    style={{ borderColor: `${primary}66`, color: primary, backgroundColor: `${primary}0a` }}
+                    disabled={cancelMembershipLoading || billingPortalLoading}
+                    onClick={() => {
+                      void handleScheduleCancelFromModal();
+                    }}
+                  >
+                    {cancelMembershipLoading ? "Updating…" : "Cancel at end of billing period (in app)"}
+                  </button>
+                  <p className="text-xs opacity-75 mt-2">
+                    Schedules cancel at period end in Stripe immediately. You keep access until the date shown after you
+                    confirm.
+                  </p>
+                </div>
+              ) : null}
 
               <button
                 type="button"
@@ -4615,7 +4651,7 @@ export const FanStorefrontView: React.FC = () => {
                 disabled={billingPortalLoading || cancelMembershipLoading}
                 onClick={() => setMembershipManageModalOpen(false)}
               >
-                Keep my membership — close
+                {hasPaidMembership ? "Keep my membership — close" : "Close"}
               </button>
             </div>
           </div>
@@ -5585,7 +5621,7 @@ export const FanStorefrontView: React.FC = () => {
                         {subscribing ? "Opening checkout..." : "Subscribe"}
                       </button>
                     ) : null}
-                    {!fanPageAdminBypass && subscribed && membershipType === "paid" ? (
+                    {showMembershipHubEntry ? (
                       <button
                         type="button"
                         onClick={() => {
@@ -5599,7 +5635,7 @@ export const FanStorefrontView: React.FC = () => {
                           backgroundColor: `${primary}0f`,
                         }}
                       >
-                        Manage subscription
+                        {hasPaidMembership ? "Manage subscription" : "Membership & billing"}
                       </button>
                     ) : null}
                   </div>

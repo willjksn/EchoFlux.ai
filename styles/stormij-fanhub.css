@@ -2215,15 +2215,156 @@
 }
 .feed-comments-modal-compose-input-wrap {
   flex: 1;
+  min-width: 0;
+}
+.feed-comments-modal-compose-field {
+  position: relative;
+  flex: 1;
+  min-width: 0;
 }
 .feed-comments-modal-compose-input {
   width: 100%;
-  padding: 0.5rem 0.75rem;
+  box-sizing: border-box;
+  padding: 0.5rem 2.5rem 0.5rem 0.75rem;
   border: 1px solid rgba(156, 163, 175, 0.3);
   border-radius: 20px;
   font-size: 0.9rem;
   outline: none;
   transition: border-color 0.2s ease;
+}
+.feed-comments-modal-compose-emoji-btn {
+  position: absolute;
+  right: 0.25rem;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.25rem;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: rgba(107, 114, 128, 0.95);
+  cursor: pointer;
+  transition: color 0.15s ease, background 0.15s ease;
+}
+.feed-comments-modal-compose-emoji-btn:hover {
+  color: rgba(55, 65, 81, 1);
+  background: rgba(156, 163, 175, 0.2);
+}
+.dark .feed-comments-modal-compose-emoji-btn {
+  color: rgba(156, 163, 175, 0.95);
+}
+.dark .feed-comments-modal-compose-emoji-btn:hover {
+  color: #e5e7eb;
+  background: rgba(75, 85, 99, 0.45);
+}
+.feed-comments-modal-emoji-picker {
+  position: absolute;
+  left: 0;
+  z-index: 80;
+  width: min(100%, 20rem);
+  max-width: calc(100vw - 2rem);
+  padding: 0.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  background: #fff;
+  border: 1px solid rgba(156, 163, 175, 0.35);
+  border-radius: 12px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.14);
+}
+.feed-comments-modal-emoji-picker--below {
+  top: calc(100% + 6px);
+}
+.feed-comments-modal-emoji-picker--above {
+  bottom: calc(100% + 6px);
+}
+.dark .feed-comments-modal-emoji-picker {
+  background: #1f2937;
+  border-color: rgba(75, 85, 99, 0.55);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
+}
+.feed-comments-modal-emoji-picker-search-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0.45rem 0.6rem;
+  border: 1px solid rgba(156, 163, 175, 0.35);
+  border-radius: 8px;
+  font-size: 0.8rem;
+  outline: none;
+  background: #f3f4f6;
+}
+.dark .feed-comments-modal-emoji-picker-search-input {
+  background: #374151;
+  border-color: rgba(75, 85, 99, 0.6);
+  color: #e5e7eb;
+}
+.feed-comments-modal-emoji-picker-grid {
+  display: grid;
+  grid-template-columns: repeat(8, minmax(0, 1fr));
+  gap: 2px;
+  max-height: 13rem;
+  overflow-y: auto;
+  padding-right: 2px;
+}
+.feed-comments-modal-emoji-picker-cell {
+  font-size: 1.35rem;
+  line-height: 1;
+  padding: 0.2rem;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.feed-comments-modal-emoji-picker-cell:hover {
+  background: rgba(156, 163, 175, 0.25);
+}
+.dark .feed-comments-modal-emoji-picker-cell:hover {
+  background: rgba(75, 85, 99, 0.5);
+}
+.feed-comments-modal-emoji-picker-img {
+  width: 1.5rem;
+  height: 1.5rem;
+  object-fit: contain;
+}
+.feed-comments-modal-emoji-picker-cats {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 4px;
+  padding-top: 0.35rem;
+  border-top: 1px solid rgba(156, 163, 175, 0.25);
+}
+.dark .feed-comments-modal-emoji-picker-cats {
+  border-top-color: rgba(75, 85, 99, 0.45);
+}
+.feed-comments-modal-emoji-picker-cat {
+  padding: 0.35rem;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(107, 114, 128, 0.85);
+}
+.feed-comments-modal-emoji-picker-cat:hover {
+  background: rgba(156, 163, 175, 0.2);
+}
+.feed-comments-modal-emoji-picker-cat.active {
+  background: rgba(167, 139, 250, 0.22);
+  color: var(--primary-600, #7c3aed);
+}
+.dark .feed-comments-modal-emoji-picker-cat {
+  color: rgba(156, 163, 175, 0.9);
+}
+.dark .feed-comments-modal-emoji-picker-cat.active {
+  background: rgba(124, 58, 237, 0.35);
+  color: #ddd6fe;
 }
 .feed-comments-modal-compose-input:focus {
   border-color: var(--primary-500, #a78bfa);

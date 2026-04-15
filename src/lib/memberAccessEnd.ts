@@ -80,14 +80,24 @@ export function pickLatestMemberAccessEnd(d: Record<string, unknown>): Date | nu
   return best;
 }
 
+function formatShortAccessDate(ms: number): string {
+  return new Date(ms).toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+}
+
 /**
  * Remaining access line: `29 days left (until Apr 18, 2026)` when still entitled;
- * cancelled with no end date → `Cancelled — end date not on file`.
+ * cancelled/expired with known period end shows that date; otherwise falls back to `canceledAt` from webhooks.
  */
 export function formatRemainingAccessForFanRow(input: {
   subscriptionStatus: string | null;
   cancelAtPeriodEnd: boolean;
   accessEnd: Date | null;
+  /** Fan doc `canceledAt` when subscription ended but `subscriptionCurrentPeriodEnd` was never stored */
+  canceledAt?: Date | null;
 }): string {
   const st = (input.subscriptionStatus || "").toLowerCase();
   const now = Date.now();
@@ -95,14 +105,14 @@ export function formatRemainingAccessForFanRow(input: {
     input.accessEnd && Number.isFinite(input.accessEnd.getTime())
       ? input.accessEnd.getTime()
       : null;
+  const canceledAtMs =
+    input.canceledAt && Number.isFinite(input.canceledAt.getTime())
+      ? input.canceledAt.getTime()
+      : null;
 
   const untilPhrase = (): string | null => {
     if (endMs == null || endMs <= now) return null;
-    const dateStr = new Date(endMs).toLocaleDateString(undefined, {
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-    });
+    const dateStr = formatShortAccessDate(endMs);
     const days = Math.ceil((endMs - now) / (24 * 60 * 60 * 1000));
     const daysPart = days === 1 ? "1 day left" : `${days} days left`;
     return `${daysPart} (until ${dateStr})`;
@@ -115,15 +125,23 @@ export function formatRemainingAccessForFanRow(input: {
   if (st === "canceled" || st === "cancelled") {
     const u = untilPhrase();
     if (u) return u;
-    if (endMs != null && endMs <= now) return "Expired";
-    return "Cancelled — end date not on file";
+    if (endMs != null && endMs <= now) {
+      return `Expired on ${formatShortAccessDate(endMs)}`;
+    }
+    if (canceledAtMs != null) {
+      return `Cancelled (recorded ${formatShortAccessDate(canceledAtMs)})`;
+    }
+    return "Cancelled — billing period end not recorded";
   }
 
   if (st === "active" || st === "trialing") {
     if (input.cancelAtPeriodEnd) {
       const u = untilPhrase();
       if (u) return u;
-      return "Cancelled — end date not on file";
+      if (canceledAtMs != null) {
+        return `Cancelling — period end not synced (updated ${formatShortAccessDate(canceledAtMs)})`;
+      }
+      return "Cancelling — period end not synced";
     }
     return "Active";
   }
