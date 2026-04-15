@@ -37,7 +37,7 @@ import {
 } from "../src/lib/fanFeedCarouselScrollRestore";
 import { tryFeedVideoPosterSeekOnce } from "../src/lib/feedVideoPosterSeek";
 import type { FanHubPostKind, LiveStreamPromoOnPost } from "../types";
-import { LiveStreamPromoBanner } from "./LiveStreamPromoBanner";
+import { LiveStreamPromoBanner, type LiveStreamCreatorBroadcastProps } from "./LiveStreamPromoBanner";
 
 const feedImageDownloadGuardProps = {
   draggable: false as const,
@@ -152,6 +152,12 @@ function parseLiveStreamPromoFromDoc(d: DocumentData): LiveStreamPromoOnPost | u
     promo.scheduledStart = o.scheduledStart.trim();
   }
   if (o.freeForSubscribers === true) promo.freeForSubscribers = true;
+  if (o.creatorTestOnly === true) promo.creatorTestOnly = true;
+  const ss = typeof o.streamStatus === "string" ? o.streamStatus.trim().toLowerCase() : "";
+  const allowed = ["draft", "scheduled", "live", "ended", "cancelled"] as const;
+  if (allowed.includes(ss as (typeof allowed)[number])) {
+    promo.streamStatus = ss as (typeof allowed)[number];
+  }
   return promo;
 }
 
@@ -203,6 +209,10 @@ function firestoreDocToFeedPost(docSnap: QueryDocumentSnapshot<DocumentData>, is
     postKind = "live_stream_promo";
   } else if (d.postKind === "standard") {
     postKind = "standard";
+  }
+
+  if (liveStreamPromo?.creatorTestOnly && !isAdminMode) {
+    return null;
   }
 
   return {
@@ -578,6 +588,8 @@ function FeedCard({
   openCommentsRequested,
   onOpenCommentsRequestConsumed,
   onCommentsOpenChange,
+  creatorFanPreviewUrl,
+  liveStreamCreatorBroadcast,
 }: {
   post: FeedPost;
   creatorName: string;
@@ -602,6 +614,10 @@ function FeedCard({
   openCommentsRequested?: boolean;
   onOpenCommentsRequestConsumed?: () => void;
   onCommentsOpenChange?: (isOpen: boolean) => void;
+  /** Creator feed: `https://witme.io/{handle}?preview=member` when handle is saved */
+  creatorFanPreviewUrl?: string;
+  /** Creator dashboard: inline Go live / End / Open broadcast on live-stream cards */
+  liveStreamCreatorBroadcast?: Omit<LiveStreamCreatorBroadcastProps, "streamId">;
 }) {
   const countBadgeStyle = useMemo(
     () => feedCardCountThemedStyle(creatorThemePrimary),
@@ -1235,7 +1251,18 @@ function FeedCard({
 
       {post.postKind === "live_stream_promo" && post.liveStreamPromo?.streamId ? (
         <div className="feed-card-live-stream-promo-wrap">
-          <LiveStreamPromoBanner variant="creator" promo={post.liveStreamPromo} accentHex={creatorThemePrimary} />
+          <LiveStreamPromoBanner
+            variant="creator"
+            promo={post.liveStreamPromo}
+            accentHex={creatorThemePrimary}
+            creatorFanPreviewUrl={creatorFanPreviewUrl}
+            creatorBroadcast={
+              isAdminMode && liveStreamCreatorBroadcast && post.liveStreamPromo.streamId
+                ? { streamId: post.liveStreamPromo.streamId, ...liveStreamCreatorBroadcast }
+                : undefined
+            }
+            onOpenStreamControls={isAdminMode && onEditPost ? () => onEditPost(post) : undefined}
+          />
         </div>
       ) : null}
 
@@ -1528,7 +1555,18 @@ function FeedCard({
                 <div className="feed-comments-modal-panel">
                   {post.postKind === "live_stream_promo" && post.liveStreamPromo?.streamId ? (
                     <div className="feed-comments-modal-live-promo">
-                      <LiveStreamPromoBanner variant="creator" promo={post.liveStreamPromo} accentHex={viewPostLinkColor} />
+                      <LiveStreamPromoBanner
+                        variant="creator"
+                        promo={post.liveStreamPromo}
+                        accentHex={viewPostLinkColor}
+                        creatorFanPreviewUrl={creatorFanPreviewUrl}
+                        creatorBroadcast={
+                          isAdminMode && liveStreamCreatorBroadcast && post.liveStreamPromo.streamId
+                            ? { streamId: post.liveStreamPromo.streamId, ...liveStreamCreatorBroadcast }
+                            : undefined
+                        }
+                        onOpenStreamControls={isAdminMode && onEditPost ? () => onEditPost(post) : undefined}
+                      />
                     </div>
                   ) : null}
                   {post.body?.trim() ? (
@@ -1634,7 +1672,8 @@ function FeedCard({
 export const FanHubFeed: React.FC<{
   isAdminMode?: boolean;
   onEditPostRequest?: (post: FeedPost) => void;
-}> = ({ isAdminMode = false, onEditPostRequest }) => {
+  liveStreamCreatorBroadcast?: Omit<LiveStreamCreatorBroadcastProps, "streamId">;
+}> = ({ isAdminMode = false, onEditPostRequest, liveStreamCreatorBroadcast }) => {
   const { user, setActivePage, showToast, openPaymentModal } = useAppContext();
   const [posts, setPosts] = useState<FeedPost[]>([]);
   const [loading, setLoading] = useState(true);
@@ -1682,6 +1721,13 @@ export const FanHubFeed: React.FC<{
     }),
     [creatorStorefront.handle, user?.role]
   );
+
+  /** Opens member-area preview on witme (same as My Page → Member preview). */
+  const creatorFanPreviewUrl = useMemo(() => {
+    const h = creatorStorefront.handle?.trim().replace(/^@/, "") ?? "";
+    if (!h || h === "preview") return undefined;
+    return `https://witme.io/${encodeURIComponent(h)}?preview=member`;
+  }, [creatorStorefront.handle]);
 
   useEffect(() => {
     if (!creatorId || !db) {
@@ -2202,6 +2248,8 @@ export const FanHubFeed: React.FC<{
                     setReturnToGridAfterPostId(null);
                   }
                 }}
+                creatorFanPreviewUrl={isAdminMode ? creatorFanPreviewUrl : undefined}
+                liveStreamCreatorBroadcast={isAdminMode ? liveStreamCreatorBroadcast : undefined}
               />
             ))}
           </div>

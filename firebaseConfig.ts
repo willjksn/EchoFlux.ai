@@ -29,17 +29,50 @@ const firebaseConfig = {
   measurementId: cleanEnv(import.meta.env.VITE_FIREBASE_MEASUREMENT_ID),
 };
 
+// Missing keys: index.tsx only loads the main app when VITE_FIREBASE_API_KEY is non-empty,
+// so this module is not imported in that case. If this file is imported without a key (e.g. tests),
+// initializeApp would fail — fail loudly with a clear message.
+if (!firebaseConfig.apiKey) {
+  throw new Error(
+    "[Firebase] VITE_FIREBASE_API_KEY is missing. Add Web SDK keys to .env.local. See ENV_SETUP_GUIDE.md.",
+  );
+}
+
+function logInvalidApiKeyHint() {
+  if (!import.meta.env.DEV) return;
+  console.error(
+    "[Firebase] auth/invalid-api-key usually means VITE_FIREBASE_API_KEY does not match your Firebase project. " +
+      "Copy the full config from Firebase Console → Project settings → General → Your apps (Web). " +
+      "All VITE_FIREBASE_* values must be from the same Web app. If the key has HTTP referrer restrictions, allow http://localhost:3000/* — see docs/LOCAL_DEV.md",
+  );
+}
+
 // ------------------------------------------------------------
 // Initialize Firebase
 // ------------------------------------------------------------
-const app = initializeApp(firebaseConfig);
+let app: ReturnType<typeof initializeApp>;
+try {
+  app = initializeApp(firebaseConfig);
+} catch (e: unknown) {
+  const code = e && typeof e === "object" && "code" in e ? String((e as { code?: string }).code) : "";
+  if (code.includes("invalid-api-key")) logInvalidApiKeyHint();
+  throw e;
+}
 
 // ------------------------------------------------------------
 // Auth — **critical**
 // - Use local persistence
 // - Wait for onAuthStateChanged to refresh token before functions run
 // ------------------------------------------------------------
-export const auth = getAuth(app);
+let auth: ReturnType<typeof getAuth>;
+try {
+  auth = getAuth(app);
+} catch (e: unknown) {
+  const code = e && typeof e === "object" && "code" in e ? String((e as { code?: string }).code) : "";
+  if (code.includes("invalid-api-key")) logInvalidApiKeyHint();
+  throw e;
+}
+export { auth };
 setPersistence(auth, browserLocalPersistence);
 
 // Warm the ID token cache on sign-in. Do **not** use getIdToken(true) here — it hits

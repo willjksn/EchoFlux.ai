@@ -1,0 +1,127 @@
+"use client";
+
+import React, { useEffect, useRef, useState } from "react";
+import { auth } from "../firebaseConfig";
+import { resolveApiUrl, DEV_API_404_USER_HINT } from "../src/lib/resolveApiUrl";
+
+interface LiveStreamWatchRoomProps {
+  creatorId: string;
+  streamId: string;
+  /** Shown in header */
+  title?: string;
+  onClose: () => void;
+}
+
+/**
+ * Daily Prebuilt iframe for fan live streams (presenter or viewer token from `/api/liveStreamDaily`).
+ */
+export const LiveStreamWatchRoom: React.FC<LiveStreamWatchRoomProps> = ({ creatorId, streamId, title, onClose }) => {
+  const iframeRef = useRef<HTMLIFrameElement>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [roomUrl, setRoomUrl] = useState<string | null>(null);
+  const [token, setToken] = useState<string | null>(null);
+  const [role, setRole] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const authToken = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
+        if (!authToken) {
+          setError("Sign in to join the stream.");
+          setLoading(false);
+          return;
+        }
+        const res = await fetch(resolveApiUrl("/api/liveStreamDaily"), {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${authToken}`,
+          },
+          body: JSON.stringify({ action: "token", creatorId, streamId }),
+        });
+        const data = (await res.json().catch(() => ({}))) as {
+          error?: string;
+          token?: string;
+          roomUrl?: string;
+          role?: string;
+        };
+        if (!res.ok) {
+          if (res.status === 404) {
+            throw new Error(`Could not reach live stream API (404). ${DEV_API_404_USER_HINT}`);
+          }
+          throw new Error(data.error || "Could not join the stream");
+        }
+        if (!data.token || !data.roomUrl) {
+          throw new Error("Invalid response from server");
+        }
+        if (cancelled) return;
+        setToken(data.token);
+        setRoomUrl(data.roomUrl);
+        setRole(data.role || null);
+      } catch (e) {
+        if (!cancelled) {
+          setError(e instanceof Error ? e.message : "Could not join the stream");
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [creatorId, streamId]);
+
+  const dailyUrl = roomUrl && token ? `${roomUrl}?t=${token}` : null;
+  const headerTitle = title?.trim() || "Live stream";
+
+  return (
+    <div className="fixed inset-0 z-[100] bg-gray-950 flex flex-col">
+      <div className="flex items-center justify-between gap-3 px-4 py-3 bg-gray-900/95 border-b border-gray-800">
+        <div className="min-w-0">
+          <h2 className="text-white font-semibold text-sm sm:text-base truncate">{headerTitle}</h2>
+          {role === "presenter" ? (
+            <p className="text-gray-400 text-xs truncate">You&apos;re broadcasting</p>
+          ) : (
+            <p className="text-gray-400 text-xs truncate">Watching live</p>
+          )}
+        </div>
+        <button
+          type="button"
+          onClick={onClose}
+          className="shrink-0 px-4 py-2 rounded-lg bg-gray-800 text-white text-sm font-medium hover:bg-gray-700 border border-gray-700"
+        >
+          Leave
+        </button>
+      </div>
+
+      <div className="flex-1 relative min-h-0">
+        {loading ? (
+          <div className="absolute inset-0 flex items-center justify-center text-gray-400 text-sm">Connecting…</div>
+        ) : error ? (
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 px-6 text-center">
+            <p className="text-red-300 text-sm max-w-md">{error}</p>
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-4 py-2 rounded-lg bg-gray-800 text-white text-sm hover:bg-gray-700"
+            >
+              Close
+            </button>
+          </div>
+        ) : dailyUrl ? (
+          <iframe
+            ref={iframeRef}
+            title="Live stream"
+            src={dailyUrl}
+            allow="camera; microphone; fullscreen; display-capture"
+            className="absolute inset-0 w-full h-full border-0"
+          />
+        ) : null}
+      </div>
+    </div>
+  );
+};
+
+export default LiveStreamWatchRoom;

@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useLayoutEffect, useCallback, useMemo, useRef } from "react";
 import {
   collection,
-  getDocs,
+  onSnapshot,
   orderBy,
   query,
   limit,
@@ -13,6 +13,7 @@ import {
   setDoc,
   type DocumentData,
   type DocumentSnapshot,
+  type Unsubscribe,
 } from "firebase/firestore";
 import { db, auth } from "../firebaseConfig";
 import {
@@ -40,6 +41,7 @@ import { EmojiIcon } from "./icons/UIIcons";
 import { useFanFeedCommentEmojiPicker } from "./fanFeedCommentEmojiPicker";
 import type { FanHubPostKind, LiveStreamPromoOnPost } from "../types";
 import { LiveStreamPromoBanner, type LiveStreamPromoFanAccess } from "./LiveStreamPromoBanner";
+import { LiveStreamWatchRoom } from "./LiveStreamWatchRoom";
 
 function liveStreamFanAccess(
   promo: LiveStreamPromoOnPost,
@@ -445,6 +447,12 @@ function parseLiveStreamPromoMember(data: DocumentData): LiveStreamPromoOnPost |
     promo.scheduledStart = o.scheduledStart.trim();
   }
   if (o.freeForSubscribers === true) promo.freeForSubscribers = true;
+  if (o.creatorTestOnly === true) promo.creatorTestOnly = true;
+  const ss = typeof o.streamStatus === "string" ? o.streamStatus.trim().toLowerCase() : "";
+  const allowed = ["draft", "scheduled", "live", "ended", "cancelled"] as const;
+  if (allowed.includes(ss as (typeof allowed)[number])) {
+    promo.streamStatus = ss as (typeof allowed)[number];
+  }
   return promo;
 }
 
@@ -546,7 +554,10 @@ const DEMO_POSTS: Post[] = [
   },
 ];
 
-function postFromFirestore(snap: DocumentSnapshot<DocumentData>): Post | null {
+function postFromFirestore(
+  snap: DocumentSnapshot<DocumentData>,
+  opts?: { allowCreatorTestLivePromos?: boolean },
+): Post | null {
   if (!snap.exists()) return null;
   const docId = snap.id;
   const data = snap.data();
@@ -596,6 +607,9 @@ function postFromFirestore(snap: DocumentSnapshot<DocumentData>): Post | null {
   const likedByRaw = Array.isArray(data.likedBy) ? (data.likedBy as unknown[]) : [];
   const likedBy = likedByRaw.map((v) => String(v));
   const liveStreamPromo = parseLiveStreamPromoMember(data);
+  if (liveStreamPromo?.creatorTestOnly && !opts?.allowCreatorTestLivePromos) {
+    return null;
+  }
   let postKind: FanHubPostKind | undefined;
   if (liveStreamPromo) {
     postKind = "live_stream_promo";
@@ -1055,29 +1069,82 @@ export async function fetchFanMemberPostForPurchases(
   };
 }
 
-function useMemberPostDetail(creatorId: string | undefined, viewPostId: string | null) {
+function useMemberPostDetail(
+  creatorId: string | undefined,
+  viewPostId: string | null,
+  opts?: { allowCreatorTestLivePromos?: boolean },
+) {
   const [detailPost, setDetailPost] = useState<Post | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
+  const [detailRev, setDetailRev] = useState(0);
 
-  const reload = useCallback(async () => {
+  const reload = useCallback(() => {
+    setDetailRev((n) => n + 1);
+  }, []);
+
+  useEffect(() => {
     if (!viewPostId || !creatorId || !db) {
       setDetailPost(null);
       setDetailLoading(false);
       return;
     }
+
+    if (viewPostId.startsWith("demo-")) {
+      const demo = DEMO_POSTS.find((p) => p.id === viewPostId) ?? null;
+      setDetailPost(demo);
+      setDetailLoading(false);
+      return;
+    }
+
+    let unsub: Unsubscribe | undefined;
+    let cancelled = false;
+
     setDetailLoading(true);
     setDetailPost(null);
-    try {
-      const found = await fetchMemberPostById(creatorId, viewPostId);
-      setDetailPost(found);
-    } finally {
-      setDetailLoading(false);
-    }
-  }, [viewPostId, creatorId]);
 
-  useEffect(() => {
-    void reload();
-  }, [reload]);
+    const refs = [
+      doc(db, "creators", creatorId, "fanPosts", viewPostId),
+      doc(db, "creators", creatorId, "posts", viewPostId),
+      doc(db, "users", creatorId, "posts", viewPostId),
+    ];
+
+    void (async () => {
+      let foundRef: (typeof refs)[number] | null = null;
+      for (const r of refs) {
+        try {
+          const s = await getDoc(r);
+          if (s.exists()) {
+            foundRef = r;
+            const p = postFromFirestore(s, { allowCreatorTestLivePromos: opts?.allowCreatorTestLivePromos });
+            if (!cancelled) setDetailPost(p);
+            break;
+          }
+        } catch {
+          continue;
+        }
+      }
+      if (cancelled) return;
+      if (!foundRef) {
+        setDetailPost(null);
+        setDetailLoading(false);
+        return;
+      }
+      if (cancelled) return;
+      unsub = onSnapshot(foundRef, (snap) => {
+        if (!snap.exists()) {
+          setDetailPost(null);
+          return;
+        }
+        setDetailPost(postFromFirestore(snap, { allowCreatorTestLivePromos: opts?.allowCreatorTestLivePromos }));
+      });
+      setDetailLoading(false);
+    })();
+
+    return () => {
+      cancelled = true;
+      unsub?.();
+    };
+  }, [viewPostId, creatorId, detailRev, opts?.allowCreatorTestLivePromos]);
 
   return { detailPost, detailLoading, reload };
 }
@@ -1194,6 +1261,7 @@ function FanMemberPostDetailModal({
   liveStreamCheckoutStreamId = null,
   onLiveStreamTicket,
   onLiveStreamSignIn,
+  onLiveStreamWatch,
   unlockingPostId,
   onUnlockPost,
   onUnlockNeedSignIn,
@@ -1229,6 +1297,7 @@ function FanMemberPostDetailModal({
   liveStreamCheckoutStreamId?: string | null;
   onLiveStreamTicket?: (streamId: string) => void | Promise<void>;
   onLiveStreamSignIn?: () => void;
+  onLiveStreamWatch?: (promo: LiveStreamPromoOnPost) => void;
   fanPageAdminBypass?: boolean;
   unlockingPostId?: string | null;
   onUnlockPost?: (postId: string) => void | Promise<void>;
@@ -1361,6 +1430,7 @@ function FanMemberPostDetailModal({
                       ticketLoading={liveStreamCheckoutStreamId === post.liveStreamPromo.streamId}
                       onGetTicket={() => void onLiveStreamTicket?.(post.liveStreamPromo!.streamId)}
                       onSignIn={onLiveStreamSignIn}
+                      onWatchLive={() => onLiveStreamWatch?.(post.liveStreamPromo!)}
                     />
                   </div>
                 ) : null}
@@ -1517,6 +1587,22 @@ function formatTimeAgo(date: Date): string {
   return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
+type MemberFeedBucketKey = "fanPosts" | "creatorPosts" | "userPosts";
+
+function mergeMemberFeedBuckets(buckets: Record<MemberFeedBucketKey, Map<string, Post>>): Post[] {
+  const final = new Map<string, Post>();
+  buckets.fanPosts.forEach((p, id) => final.set(id, p));
+  buckets.creatorPosts.forEach((p, id) => final.set(id, p));
+  buckets.userPosts.forEach((p, id) => final.set(id, p));
+  const list = Array.from(final.values());
+  list.sort((a, b) => {
+    if (a.pinned && !b.pinned) return -1;
+    if (!a.pinned && b.pinned) return 1;
+    return b.createdAt.getTime() - a.createdAt.getTime();
+  });
+  return list;
+}
+
 export const FanMemberFeed: React.FC<FanMemberFeedProps> = ({
   creatorId,
   creatorHandle,
@@ -1567,9 +1653,12 @@ export const FanMemberFeed: React.FC<FanMemberFeedProps> = ({
   const [tipLoading, setTipLoading] = useState(false);
   const [unlockingPostId, setUnlockingPostId] = useState<string | null>(null);
   const [liveStreamCheckoutStreamId, setLiveStreamCheckoutStreamId] = useState<string | null>(null);
+  const [liveStreamWatch, setLiveStreamWatch] = useState<{ streamId: string; title: string } | null>(null);
   const [viewMode, setViewMode] = useState<"feed" | "grid">("feed");
   const [gridHoveredVideoPostId, setGridHoveredVideoPostId] = useState<string | null>(null);
-  const { detailPost, detailLoading, reload: reloadDetailPost } = useMemberPostDetail(creatorId, viewPostId);
+  const { detailPost, detailLoading, reload: reloadDetailPost } = useMemberPostDetail(creatorId, viewPostId, {
+    allowCreatorTestLivePromos: fanPageAdminBypass,
+  });
   const [fanPublicProfile, setFanPublicProfile] = useState<{ photoURL?: string; displayName?: string }>({});
 
   const fanPhotoResolved =
@@ -1594,50 +1683,73 @@ export const FanMemberFeed: React.FC<FanMemberFeedProps> = ({
     [creatorId, liveStreamCheckoutStreamId, showToast],
   );
 
-  const fetchPosts = useCallback(async () => {
-    setLoading(true);
-    try {
-      const byId = new Map<string, Post>();
-      const tryMerge = async (path: [string, string, string]) => {
-        try {
-          const postsRef = collection(db, path[0], path[1], path[2]);
-          const q = query(postsRef, orderBy("createdAt", "desc"), limit(30));
-          const snapshot = await getDocs(q);
-          snapshot.docs.forEach((docSnap) => {
-            const p = postFromFirestore(docSnap);
-            if (p) byId.set(p.id, p);
-          });
-        } catch {
-          /* missing index or permission */
-        }
-      };
-      await tryMerge(["creators", creatorId, "fanPosts"]);
-      await tryMerge(["creators", creatorId, "posts"]);
-      await tryMerge(["users", creatorId, "posts"]);
+  const handleLiveStreamWatch = useCallback((promo: LiveStreamPromoOnPost) => {
+    setLiveStreamWatch({
+      streamId: promo.streamId,
+      title: promo.title?.trim() || "Live stream",
+    });
+  }, []);
 
-      const list = Array.from(byId.values());
-      list.sort((a, b) => {
-        if (a.pinned && !b.pinned) return -1;
-        if (!a.pinned && b.pinned) return 1;
-        return b.createdAt.getTime() - a.createdAt.getTime();
-      });
+  const feedBucketsRef = useRef<Record<MemberFeedBucketKey, Map<string, Post>>>({
+    fanPosts: new Map(),
+    creatorPosts: new Map(),
+    userPosts: new Map(),
+  });
 
-      if (list.length === 0) {
-        setPosts(DEMO_POSTS);
-      } else {
-        setPosts(list);
-      }
-    } catch (err) {
-      console.error("Error fetching posts:", err);
+  const rebalanceMemberFeed = useCallback(() => {
+    const list = mergeMemberFeedBuckets(feedBucketsRef.current);
+    if (list.length === 0) {
       setPosts(DEMO_POSTS);
-    } finally {
-      setLoading(false);
+    } else {
+      setPosts(list);
     }
-  }, [creatorId]);
+    setLoading(false);
+  }, []);
 
   useEffect(() => {
-    fetchPosts();
-  }, [fetchPosts]);
+    if (!creatorId || !db) {
+      setLoading(false);
+      return;
+    }
+
+    feedBucketsRef.current = {
+      fanPosts: new Map(),
+      creatorPosts: new Map(),
+      userPosts: new Map(),
+    };
+    setLoading(true);
+
+    const attach = (key: MemberFeedBucketKey, path: [string, string, string]): Unsubscribe => {
+      const postsRef = collection(db, path[0], path[1], path[2]);
+      const q = query(postsRef, orderBy("createdAt", "desc"), limit(30));
+      return onSnapshot(
+        q,
+        (snap) => {
+          const m = new Map<string, Post>();
+          snap.docs.forEach((d) => {
+            const p = postFromFirestore(d, { allowCreatorTestLivePromos: fanPageAdminBypass });
+            if (p) m.set(p.id, p);
+          });
+          feedBucketsRef.current[key] = m;
+          rebalanceMemberFeed();
+        },
+        () => {
+          feedBucketsRef.current[key] = new Map();
+          rebalanceMemberFeed();
+        },
+      );
+    };
+
+    const unsubs = [
+      attach("fanPosts", ["creators", creatorId, "fanPosts"]),
+      attach("creatorPosts", ["creators", creatorId, "posts"]),
+      attach("userPosts", ["users", creatorId, "posts"]),
+    ];
+
+    return () => {
+      unsubs.forEach((u) => u());
+    };
+  }, [creatorId, rebalanceMemberFeed, fanPageAdminBypass]);
 
   useEffect(() => {
     if (viewMode !== "grid") setGridHoveredVideoPostId(null);
@@ -1759,7 +1871,6 @@ export const FanMemberFeed: React.FC<FanMemberFeedProps> = ({
         const data = await res.json().catch(() => ({}));
         if (data.success) {
           setCommentDraft((prev) => ({ ...prev, [postId]: "" }));
-          fetchPosts();
           await afterSuccess?.();
         }
       } catch (err) {
@@ -1768,7 +1879,7 @@ export const FanMemberFeed: React.FC<FanMemberFeedProps> = ({
         setCommentSending(null);
       }
     },
-    [creatorId, fanId, commentDraft, commentSending, fanNameResolved, fetchPosts]
+    [creatorId, fanId, commentDraft, commentSending, fanNameResolved]
   );
 
   const toggleBookmark = useCallback(
@@ -1948,6 +2059,7 @@ export const FanMemberFeed: React.FC<FanMemberFeedProps> = ({
                     ticketLoading={liveStreamCheckoutStreamId === post.liveStreamPromo.streamId}
                     onGetTicket={() => void handleLiveStreamTicket(post.liveStreamPromo!.streamId)}
                     onSignIn={() => showToast?.("Sign in to get a ticket.", "error")}
+                    onWatchLive={() => handleLiveStreamWatch(post.liveStreamPromo!)}
                   />
                 </div>
               ) : null}
@@ -2261,7 +2373,17 @@ export const FanMemberFeed: React.FC<FanMemberFeedProps> = ({
         liveStreamCheckoutStreamId={liveStreamCheckoutStreamId}
         onLiveStreamTicket={handleLiveStreamTicket}
         onLiveStreamSignIn={() => showToast?.("Sign in to get a ticket.", "error")}
+        onLiveStreamWatch={handleLiveStreamWatch}
       />
+
+      {liveStreamWatch ? (
+        <LiveStreamWatchRoom
+          creatorId={creatorId}
+          streamId={liveStreamWatch.streamId}
+          title={liveStreamWatch.title}
+          onClose={() => setLiveStreamWatch(null)}
+        />
+      ) : null}
     </div>
   );
 };
@@ -2314,6 +2436,13 @@ export const FanMemberSaved: React.FC<FanMemberSavedProps> = ({
   );
   const [unlockingPostIdSaved, setUnlockingPostIdSaved] = useState<string | null>(null);
   const [liveStreamCheckoutStreamIdSaved, setLiveStreamCheckoutStreamIdSaved] = useState<string | null>(null);
+  const [liveStreamWatchSaved, setLiveStreamWatchSaved] = useState<{ streamId: string; title: string } | null>(null);
+  const handleLiveStreamWatchSaved = useCallback((promo: LiveStreamPromoOnPost) => {
+    setLiveStreamWatchSaved({
+      streamId: promo.streamId,
+      title: promo.title?.trim() || "Live stream",
+    });
+  }, []);
   const handleLiveStreamTicketSaved = useCallback(
     async (streamId: string) => {
       if (!creatorId || liveStreamCheckoutStreamIdSaved) return;
@@ -2349,7 +2478,9 @@ export const FanMemberSaved: React.FC<FanMemberSavedProps> = ({
   const [unsavingId, setUnsavingId] = useState<string | null>(null);
   const [viewPostId, setViewPostId] = useState<string | null>(null);
   const [commentDraft, setCommentDraft] = useState<Record<string, string>>({});
-  const { detailPost, detailLoading, reload: reloadDetailPost } = useMemberPostDetail(creatorId, viewPostId);
+  const { detailPost, detailLoading, reload: reloadDetailPost } = useMemberPostDetail(creatorId, viewPostId, {
+    allowCreatorTestLivePromos: fanPageAdminBypass,
+  });
   const [fanPublicProfile, setFanPublicProfile] = useState<{ photoURL?: string; displayName?: string }>({});
   const [expandedInlineCommentKeys, setExpandedInlineCommentKeys] = useState<Set<string>>(new Set());
   const [savedBookmarkCount, setSavedBookmarkCount] = useState(0);
@@ -2448,6 +2579,43 @@ export const FanMemberSaved: React.FC<FanMemberSavedProps> = ({
     return () => { cancelled = true; };
   }, [fanId, creatorId]);
 
+  const savedPostsWatchKey = useMemo(
+    () =>
+      [...posts]
+        .map((p) => `${p.id}\0${p.feedFirestorePath ?? ""}`)
+        .sort()
+        .join("\x1f"),
+    [posts],
+  );
+
+  useEffect(() => {
+    if (!db || !creatorId || !savedPostsWatchKey) return;
+    const entries = savedPostsWatchKey.split("\x1f").map((segment) => {
+      const i = segment.indexOf("\0");
+      if (i <= 0) return null;
+      return { id: segment.slice(0, i), path: segment.slice(i + 1) };
+    }).filter((x): x is { id: string; path: string } => x != null && x.path.length > 0);
+
+    const unsubs: Unsubscribe[] = [];
+    for (const { id, path } of entries) {
+      const segs = path.split("/").filter(Boolean);
+      if (segs.length < 4) continue;
+      try {
+        const dref = doc(db, ...(segs as [string, ...string[]]));
+        unsubs.push(
+          onSnapshot(dref, (snap) => {
+            const next = postFromFirestore(snap, { allowCreatorTestLivePromos: fanPageAdminBypass });
+            if (!next) return;
+            setPosts((prev) => prev.map((row) => (row.id === id ? next : row)));
+          }),
+        );
+      } catch {
+        /* invalid path */
+      }
+    }
+    return () => unsubs.forEach((u) => u());
+  }, [creatorId, savedPostsWatchKey, fanPageAdminBypass]);
+
   if (!fanId) {
     return (
       <div className="fan-member-feed">
@@ -2540,6 +2708,7 @@ export const FanMemberSaved: React.FC<FanMemberSavedProps> = ({
                     ticketLoading={liveStreamCheckoutStreamIdSaved === post.liveStreamPromo.streamId}
                     onGetTicket={() => void handleLiveStreamTicketSaved(post.liveStreamPromo!.streamId)}
                     onSignIn={() => showToastSaved?.("Sign in to get a ticket.", "error")}
+                    onWatchLive={() => handleLiveStreamWatchSaved(post.liveStreamPromo!)}
                   />
                 </div>
               ) : null}
@@ -2651,7 +2820,17 @@ export const FanMemberSaved: React.FC<FanMemberSavedProps> = ({
         liveStreamCheckoutStreamId={liveStreamCheckoutStreamIdSaved}
         onLiveStreamTicket={handleLiveStreamTicketSaved}
         onLiveStreamSignIn={() => showToastSaved?.("Sign in to get a ticket.", "error")}
+        onLiveStreamWatch={handleLiveStreamWatchSaved}
       />
+
+      {liveStreamWatchSaved ? (
+        <LiveStreamWatchRoom
+          creatorId={creatorId}
+          streamId={liveStreamWatchSaved.streamId}
+          title={liveStreamWatchSaved.title}
+          onClose={() => setLiveStreamWatchSaved(null)}
+        />
+      ) : null}
     </div>
   );
 };

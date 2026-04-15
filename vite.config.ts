@@ -106,6 +106,16 @@ export default defineConfig(({ mode }) => {
                 `API proxy error (${apiTarget}): ${err.message}\nCheck DEV_API_PROXY and that the deployment is up.`
               );
             });
+            proxy.on("proxyRes", (proxyRes, req) => {
+              const u = req.url ?? "";
+              if (!u.startsWith("/api")) return;
+              const code = proxyRes.statusCode ?? 0;
+              if (code === 404) {
+                console.warn(
+                  `\n[vite] API proxy 404: ${req.method ?? "?"} ${u}\n  → forwarded to ${apiTarget}\n  Fix: set DEV_API_PROXY in .env.local to a Vercel deployment that includes this route (e.g. latest main deploy), or run npm run dev:vercel for local /api. See docs/LOCAL_DEV.md\n`
+                );
+              }
+            });
           },
         },
       },

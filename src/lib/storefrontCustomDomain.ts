@@ -5,7 +5,22 @@
  *   VITE_CUSTOM_STOREFRONT_HOSTS=stormijxo.com,www.stormijxo.com
  *
  * Hostnames are normalized (lowercase; leading `www.` stripped for matching).
+ *
+ * **Never** list **echoflux.ai** here — if it were included, `/` on the main app would be routed to
+ * FanStorefrontView and appear stuck on “Loading…”. We always strip canonical SaaS hosts from the
+ * effective list even if misconfigured in env.
  */
+
+/** Creator shell at `/` — not fan-only custom-root storefront routing. */
+const CANONICAL_SAAS_APP_HOSTNAMES = new Set(["echoflux.ai"]);
+
+export function normalizeHostname(hostname: string): string {
+  return hostname.trim().toLowerCase().replace(/^www\./, "");
+}
+
+export function isCanonicalSaaSAppHostname(hostname: string): boolean {
+  return CANONICAL_SAAS_APP_HOSTNAMES.has(normalizeHostname(hostname));
+}
 
 export function getConfiguredCustomStorefrontHosts(): string[] {
   const raw =
@@ -13,12 +28,9 @@ export function getConfiguredCustomStorefrontHosts(): string[] {
   const s = typeof raw === "string" ? raw : "";
   return s
     .split(",")
-    .map((h) => h.trim().toLowerCase().replace(/^www\./, ""))
-    .filter(Boolean);
-}
-
-export function normalizeHostname(hostname: string): string {
-  return hostname.trim().toLowerCase().replace(/^www\./, "");
+    .map((h) => normalizeHostname(h))
+    .filter(Boolean)
+    .filter((h) => !isCanonicalSaaSAppHostname(h));
 }
 
 export function isConfiguredCustomStorefrontHost(hostname: string): boolean {

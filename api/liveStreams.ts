@@ -10,7 +10,7 @@ import type { LiveStreamEventStatus } from "../types";
  * Firestore: `creators/{creatorId}/liveStreams/{streamId}`
  *
  * POST body:
- * - { action: "create", title, scheduledStart, ticketCents?, freeForSubscribers?, description? }
+ * - { action: "create", title, scheduledStart, ticketCents?, freeForSubscribers?, description?, creatorTestOnly? }
  * - { action: "update", streamId, ...partial fields }
  *
  * GET: list recent streams for the authenticated creator (no query params).
@@ -52,6 +52,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     freeForSubscribers?: boolean;
     status?: LiveStreamEventStatus;
     promoPostId?: string;
+    creatorTestOnly?: boolean;
   };
 
   try {
@@ -73,6 +74,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           ? Math.max(0, Math.floor(body.ticketCents))
           : 0;
       const freeForSubscribers = !!body.freeForSubscribers;
+      const creatorTestOnly = body.creatorTestOnly === true;
       const description =
         typeof body.description === "string" && body.description.trim() ? body.description.trim() : undefined;
 
@@ -83,6 +85,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         scheduledStart: new Date(t).toISOString(),
         ticketCents,
         freeForSubscribers,
+        creatorTestOnly,
         ...(description ? { description } : {}),
         createdAt: FieldValue.serverTimestamp(),
         updatedAt: FieldValue.serverTimestamp(),
@@ -122,6 +125,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
       if (typeof body.promoPostId === "string" && body.promoPostId.trim()) {
         patch.promoPostId = body.promoPostId.trim();
+      }
+      if (typeof body.creatorTestOnly === "boolean") {
+        patch.creatorTestOnly = body.creatorTestOnly;
       }
 
       await ref.update(patch);

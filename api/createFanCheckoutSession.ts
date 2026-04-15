@@ -525,6 +525,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return res.status(404).json({ error: "Stream not found" });
       }
       const sdata = streamSnap.data() as Record<string, unknown>;
+      if (sdata.creatorTestOnly === true) {
+        return res.status(400).json({ error: "This stream is not available for purchase" });
+      }
       const st = String(sdata.status ?? "scheduled").trim().toLowerCase();
       if (st === "cancelled" || st === "ended") {
         return res.status(400).json({ error: "This stream is no longer available for purchase" });

@@ -327,6 +327,16 @@ service cloud.firestore {
         allow read, write: if isOwner(creatorId);
       }
 
+      /**
+       * Scheduled / live events (tickets, Daily room metadata).
+       * Primary writes: POST /api/liveStreams (Admin SDK).
+       * Client writes allowed for the owner so Fan Hub can fall back when /api/liveStreams is 404
+       * (local Vite + DEV_API_PROXY to an old deployment, or before rules deploy).
+       */
+      match /liveStreams/{streamId} {
+        allow read, write: if isOwner(creatorId);
+      }
+
       /** Subscriber / member mirror under creator (Dashboard fan stats; writes via Admin / webhooks) */
       match /subscribers/{subscriberId} {
         allow read: if isOwner(creatorId) || isAdmin();

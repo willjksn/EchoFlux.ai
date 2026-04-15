@@ -1,7 +1,21 @@
 import React, { useState, useRef, useCallback, useEffect } from "react";
 import { useAppContext } from "./AppContext";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
-import { collection, addDoc, serverTimestamp, getDocs, query, orderBy, limit, setDoc, doc } from "firebase/firestore";
+import {
+  collection,
+  addDoc,
+  serverTimestamp,
+  getDocs,
+  query,
+  orderBy,
+  limit,
+  setDoc,
+  doc,
+  getDoc,
+  updateDoc,
+  deleteField,
+  type DocumentData,
+} from "firebase/firestore";
 import { db, storage, auth } from "../firebaseConfig";
 import {
   AUDIO_RECORDER_TIMESLICE_MS,
@@ -24,7 +38,80 @@ import { EmojiButton } from "./EmojiPicker";
 import { useCreatorHandle } from "../src/hooks/useCreatorHandle";
 import { canUseSjHeartEmoji } from "../src/lib/customEmoji";
 import { maybeTrimVideoForCaption } from "../src/lib/videoCaptionClip";
-import { resolveApiUrl } from "../src/lib/resolveApiUrl";
+import { resolveApiUrl, DEV_API_404_USER_HINT } from "../src/lib/resolveApiUrl";
+import type { LiveStreamEventStatus } from "../types";
+import { LiveStreamWatchRoom } from "./LiveStreamWatchRoom";
+
+const LIVE_STREAM_DOC_STATUSES: LiveStreamEventStatus[] = ["draft", "scheduled", "live", "ended", "cancelled"];
+
+/** When /api/liveStreams returns 404 (route missing on proxy target), write the same shape as the API. */
+async function createLiveStreamDocClient(
+  creatorId: string,
+  fields: {
+    title: string;
+    scheduledStart: string;
+    ticketCents: number;
+    freeForSubscribers: boolean;
+    creatorTestOnly: boolean;
+    description?: string;
+  },
+): Promise<string> {
+  const t = Date.parse(fields.scheduledStart);
+  if (!Number.isFinite(t)) throw new Error("scheduledStart must be a valid date");
+  const title = fields.title.trim();
+  if (!title) throw new Error("title is required");
+  const colRef = collection(db, "creators", creatorId, "liveStreams");
+  const payload: Record<string, unknown> = {
+    creatorId,
+    title,
+    status: "scheduled",
+    scheduledStart: new Date(t).toISOString(),
+    ticketCents: Math.max(0, Math.floor(fields.ticketCents)),
+    freeForSubscribers: fields.freeForSubscribers,
+    creatorTestOnly: fields.creatorTestOnly,
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  };
+  if (fields.description?.trim()) payload.description = fields.description.trim();
+  const ref = await addDoc(colRef, payload);
+  return ref.id;
+}
+
+async function updateLiveStreamDocClient(
+  creatorId: string,
+  streamId: string,
+  patch: {
+    title?: string;
+    scheduledStart?: string;
+    ticketCents?: number;
+    freeForSubscribers?: boolean;
+    creatorTestOnly?: boolean;
+    description?: string | null;
+    promoPostId?: string;
+    status?: LiveStreamEventStatus;
+  },
+): Promise<void> {
+  const ref = doc(db, "creators", creatorId, "liveStreams", streamId);
+  const snap = await getDoc(ref);
+  if (!snap.exists()) throw new Error("Stream not found");
+  const u: Record<string, unknown> = { updatedAt: serverTimestamp() };
+  if (patch.title != null && patch.title.trim()) u.title = patch.title.trim();
+  if (patch.scheduledStart != null && patch.scheduledStart.trim()) {
+    const t = Date.parse(patch.scheduledStart);
+    if (Number.isFinite(t)) u.scheduledStart = new Date(t).toISOString();
+  }
+  if (patch.ticketCents != null && Number.isFinite(patch.ticketCents)) {
+    u.ticketCents = Math.max(0, Math.floor(patch.ticketCents));
+  }
+  if (patch.freeForSubscribers != null) u.freeForSubscribers = patch.freeForSubscribers;
+  if (patch.creatorTestOnly != null) u.creatorTestOnly = patch.creatorTestOnly;
+  if (patch.description !== undefined) {
+    u.description = patch.description?.trim() ? patch.description.trim() : deleteField();
+  }
+  if (patch.promoPostId != null && patch.promoPostId.trim()) u.promoPostId = patch.promoPostId.trim();
+  if (patch.status != null && LIVE_STREAM_DOC_STATUSES.includes(patch.status)) u.status = patch.status;
+  await updateDoc(ref, u as DocumentData);
+}
 
 type CaptionStyle = "static" | "scroll-up" | "scroll-across" | "dissolve";
 type AiTone = "" | "flirty" | "casual" | "motivational" | "premium" | "playful" | "mysterious" | "confident" | "custom";
@@ -185,10 +272,11 @@ const FanHubSwitch: React.FC<{
       checked ? "bg-pink-500" : "bg-gray-200 dark:bg-gray-600"
     } disabled:opacity-50 disabled:cursor-not-allowed`}
   >
+    {/* Thumb: w-11 (44px) − border-2×2 (8px) = 40px track; 20px knob + 2px inset each side → translate 16px (x-4), not x-5 */}
     <span
       aria-hidden
-      className={`pointer-events-none absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform duration-200 ease-in-out ${
-        checked ? "translate-x-5" : "translate-x-0"
+      className={`pointer-events-none absolute left-0.5 top-0 h-5 w-5 rounded-full bg-white shadow transition-transform duration-200 ease-in-out ${
+        checked ? "translate-x-4" : "translate-x-0"
       }`}
     />
   </button>
@@ -346,6 +434,10 @@ export const FanHubPosts: React.FC = () => {
   const [liveStreamTicketUsd, setLiveStreamTicketUsd] = useState("");
   const [liveStreamFreeForSubs, setLiveStreamFreeForSubs] = useState(false);
   const [liveStreamEditStreamId, setLiveStreamEditStreamId] = useState<string | null>(null);
+  const [liveStreamCreatorTestOnly, setLiveStreamCreatorTestOnly] = useState(false);
+  const [liveStreamComposerStatus, setLiveStreamComposerStatus] = useState<LiveStreamEventStatus | null>(null);
+  const [liveStreamBroadcast, setLiveStreamBroadcast] = useState<{ streamId: string } | null>(null);
+  const [liveStreamDailyBusy, setLiveStreamDailyBusy] = useState<false | "goLive" | "endLive">(false);
 
   // Text Overlay
   const [overlayEnabled, setOverlayEnabled] = useState(false);
@@ -403,6 +495,55 @@ export const FanHubPosts: React.FC = () => {
     const pad = (n: number) => String(n).padStart(2, "0");
     return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
   }
+
+  const runLiveStreamDaily = useCallback(
+    async (action: "goLive" | "endLive", streamIdOverride?: string) => {
+      const streamId = streamIdOverride ?? liveStreamEditStreamId;
+      if (!streamId) return;
+      const idToken = await auth.currentUser?.getIdToken();
+      if (!idToken) {
+        showToast?.("Sign in again to manage the broadcast.", "error");
+        return;
+      }
+      setLiveStreamDailyBusy(action);
+      try {
+        const res = await fetch(resolveApiUrl("/api/liveStreamDaily"), {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${idToken}`,
+          },
+          body: JSON.stringify({ action, streamId }),
+        });
+        const data = (await res.json().catch(() => ({}))) as { error?: string };
+        if (!res.ok) {
+          if (res.status === 404) {
+            throw new Error(`Live stream API not found (404). ${DEV_API_404_USER_HINT}`);
+          }
+          throw new Error(data.error || "Request failed");
+        }
+        if (action === "goLive") {
+          setLiveStreamComposerStatus("live");
+          setLiveStreamBroadcast({ streamId });
+        }
+        if (action === "endLive") {
+          setLiveStreamComposerStatus("ended");
+          setLiveStreamBroadcast(null);
+        }
+        showToast?.(
+          action === "goLive"
+            ? "Opening your broadcast — allow camera and mic when Daily asks."
+            : "Stream ended.",
+          "success",
+        );
+      } catch (e) {
+        showToast?.(e instanceof Error ? e.message : "Broadcast request failed", "error");
+      } finally {
+        setLiveStreamDailyBusy(false);
+      }
+    },
+    [liveStreamEditStreamId, showToast],
+  );
 
   // Load vault items from the user's media library (My Vault - sidebar "Vault")
   const loadVault = useCallback(async () => {
@@ -1139,7 +1280,14 @@ Write 2-4 sentences that are engaging and on-topic.`;
     try {
       const token = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
       if (!token) throw new Error("Not authenticated");
-      
+      /** Firestore rules use JWT uid for `creators/{uid}/liveStreams` client fallback. */
+      const ownerUid = auth.currentUser!.uid;
+      if (ownerUid !== creatorId) {
+        showToast?.("Session mismatch — sign out and back in, then try again.", "error");
+        setPublishing(false);
+        return;
+      }
+
       // Upload media files
       const uploadedUrls: string[] = [];
       const mediaTypes: ("image" | "video")[] = [];
@@ -1205,11 +1353,23 @@ Write 2-4 sentences that are engaging and on-topic.`;
                 scheduledStart: streamPromoScheduledIso,
                 ticketCents: streamPromoTicketCents,
                 freeForSubscribers: liveStreamFreeForSubs,
+                creatorTestOnly: liveStreamCreatorTestOnly,
                 description: caption.trim() || undefined,
               }),
             });
             const errBody = (await up.json().catch(() => ({}))) as { error?: string };
-            if (!up.ok) {
+            if (up.ok) {
+              /* ok */
+            } else if (up.status === 404) {
+              await updateLiveStreamDocClient(ownerUid, liveStreamEditStreamId, {
+                title: liveStreamTitle.trim(),
+                scheduledStart: streamPromoScheduledIso,
+                ticketCents: streamPromoTicketCents,
+                freeForSubscribers: liveStreamFreeForSubs,
+                creatorTestOnly: liveStreamCreatorTestOnly,
+                ...(caption.trim() ? { description: caption.trim() } : {}),
+              });
+            } else {
               throw new Error(errBody.error || "Could not update stream");
             }
           } else {
@@ -1225,18 +1385,37 @@ Write 2-4 sentences that are engaging and on-topic.`;
                 scheduledStart: streamPromoScheduledIso,
                 ticketCents: streamPromoTicketCents,
                 freeForSubscribers: liveStreamFreeForSubs,
+                creatorTestOnly: liveStreamCreatorTestOnly,
                 description: caption.trim() || undefined,
               }),
             });
             const data = (await cr.json().catch(() => ({}))) as { streamId?: string; error?: string };
-            if (!cr.ok || !data.streamId) {
+            if (cr.ok && data.streamId) {
+              streamIdForPost = data.streamId;
+            } else if (cr.status === 404) {
+              streamIdForPost = await createLiveStreamDocClient(ownerUid, {
+                title: liveStreamTitle.trim(),
+                scheduledStart: streamPromoScheduledIso,
+                ticketCents: streamPromoTicketCents,
+                freeForSubscribers: liveStreamFreeForSubs,
+                creatorTestOnly: liveStreamCreatorTestOnly,
+                ...(caption.trim() ? { description: caption.trim() } : {}),
+              });
+            } else {
               throw new Error(data.error || "Could not create stream");
             }
-            streamIdForPost = data.streamId;
           }
         } catch (e) {
           console.error(e);
-          showToast?.(e instanceof Error ? e.message : "Stream setup failed", "error");
+          const code =
+            typeof e === "object" && e !== null && "code" in e ? String((e as { code?: string }).code) : "";
+          const msg =
+            code === "permission-denied"
+              ? "Firestore blocked the stream save. Deploy latest firestore.rules (liveStreams) to your Firebase project, or fix DEV_API_PROXY so POST /api/liveStreams is not 404."
+              : e instanceof Error
+                ? e.message
+                : "Stream setup failed";
+          showToast?.(msg, "error");
           setPublishing(false);
           return;
         }
@@ -1327,6 +1506,8 @@ Write 2-4 sentences that are engaging and on-topic.`;
           title: liveStreamTitle.trim(),
           scheduledStart: streamPromoScheduledIso,
           ticketCents: streamPromoTicketCents,
+          streamStatus: liveStreamComposerStatus ?? "scheduled",
+          creatorTestOnly: liveStreamCreatorTestOnly,
           ...(liveStreamFreeForSubs ? { freeForSubscribers: true } : {}),
         };
       }
@@ -1338,7 +1519,7 @@ Write 2-4 sentences that are engaging and on-topic.`;
         const postRef = await addDoc(collection(db, "creators", creatorId, "fanPosts"), postData);
         if (liveStreamPromoEnabled && streamIdForPost && !liveStreamEditStreamId) {
           try {
-            await fetch(resolveApiUrl("/api/liveStreams"), {
+            const linkRes = await fetch(resolveApiUrl("/api/liveStreams"), {
               method: "POST",
               headers: {
                 "Content-Type": "application/json",
@@ -1348,8 +1529,17 @@ Write 2-4 sentences that are engaging and on-topic.`;
                 action: "update",
                 streamId: streamIdForPost,
                 promoPostId: postRef.id,
+                creatorTestOnly: liveStreamCreatorTestOnly,
               }),
             });
+            if (!linkRes.ok && linkRes.status === 404) {
+              await updateLiveStreamDocClient(ownerUid, streamIdForPost, {
+                promoPostId: postRef.id,
+                creatorTestOnly: liveStreamCreatorTestOnly,
+              });
+            } else if (!linkRes.ok) {
+              console.warn("liveStreams promoPostId link:", linkRes.status);
+            }
           } catch (linkErr) {
             console.error("liveStreams promoPostId link:", linkErr);
           }
@@ -1443,6 +1633,10 @@ Write 2-4 sentences that are engaging and on-topic.`;
     setLiveStreamTicketUsd("");
     setLiveStreamFreeForSubs(false);
     setLiveStreamEditStreamId(null);
+    setLiveStreamCreatorTestOnly(false);
+    setLiveStreamComposerStatus(null);
+    setLiveStreamBroadcast(null);
+    setLiveStreamDailyBusy(false);
     setEditingPostId(null);
   };
 
@@ -1533,6 +1727,11 @@ Write 2-4 sentences that are engaging and on-topic.`;
           : "",
       );
       setLiveStreamFreeForSubs(!!promo.freeForSubscribers);
+      setLiveStreamCreatorTestOnly(!!promo.creatorTestOnly);
+      const allowed: LiveStreamEventStatus[] = ["draft", "scheduled", "live", "ended", "cancelled"];
+      setLiveStreamComposerStatus(
+        promo.streamStatus && allowed.includes(promo.streamStatus) ? promo.streamStatus : "scheduled",
+      );
     } else {
       setLiveStreamPromoEnabled(false);
       setLiveStreamEditStreamId(null);
@@ -1540,6 +1739,8 @@ Write 2-4 sentences that are engaging and on-topic.`;
       setLiveStreamStartLocal("");
       setLiveStreamTicketUsd("");
       setLiveStreamFreeForSubs(false);
+      setLiveStreamCreatorTestOnly(false);
+      setLiveStreamComposerStatus(null);
     }
     setEditingPostId(post.id);
     setShowComposer(true);
@@ -1991,6 +2192,10 @@ Write 2-4 sentences that are engaging and on-topic.`;
                       setPollEnabled(false);
                       setTipGoalEnabled(false);
                       setOverlayEnabled(false);
+                      setLiveStreamComposerStatus("scheduled");
+                    } else {
+                      setLiveStreamComposerStatus(null);
+                      setLiveStreamCreatorTestOnly(false);
                     }
                   }}
                 />
@@ -2039,6 +2244,60 @@ Write 2-4 sentences that are engaging and on-topic.`;
                       checked={liveStreamFreeForSubs}
                       onCheckedChange={setLiveStreamFreeForSubs}
                     />
+                    <FanHubSwitchRow
+                      labelId="fanhub-live-stream-test-label"
+                      label="Test — hide from fan feed (rehearsal)"
+                      checked={liveStreamCreatorTestOnly}
+                      onCheckedChange={setLiveStreamCreatorTestOnly}
+                    />
+                    <p className="text-xs text-gray-500 dark:text-gray-400 -mt-1">
+                      Fans won&apos;t see this post, checkout, or the watch link. You still see it here and can go live with Daily.
+                    </p>
+                    {liveStreamPromoEnabled && liveStreamEditStreamId ? (
+                      <div className="mt-3 space-y-2 border-t border-gray-100 dark:border-gray-700 pt-3">
+                        <p className="text-xs text-gray-500 dark:text-gray-400">
+                          Broadcast status:{" "}
+                          <span className="font-medium text-gray-700 dark:text-gray-300">
+                            {liveStreamComposerStatus === "live"
+                              ? "Live"
+                              : liveStreamComposerStatus === "ended"
+                                ? "Ended"
+                                : "Not live"}
+                          </span>
+                          . Requires Daily.co (<code className="text-[10px]">DAILY_API_KEY</code>).
+                        </p>
+                        <div className="flex flex-wrap gap-2">
+                          <button
+                            type="button"
+                            disabled={!!liveStreamDailyBusy || liveStreamComposerStatus === "live"}
+                            onClick={() => void runLiveStreamDaily("goLive")}
+                            className="text-xs px-3 py-2 rounded-lg bg-violet-600 text-white hover:bg-violet-700 disabled:opacity-40"
+                          >
+                            {liveStreamDailyBusy === "goLive" ? "Starting…" : "Go live"}
+                          </button>
+                          <button
+                            type="button"
+                            disabled={!!liveStreamDailyBusy || liveStreamComposerStatus !== "live"}
+                            onClick={() => void runLiveStreamDaily("endLive")}
+                            className="text-xs px-3 py-2 rounded-lg bg-gray-700 text-white hover:bg-gray-600 disabled:opacity-40"
+                          >
+                            {liveStreamDailyBusy === "endLive" ? "Ending…" : "End stream"}
+                          </button>
+                          <button
+                            type="button"
+                            disabled={liveStreamComposerStatus !== "live"}
+                            onClick={() => setLiveStreamBroadcast({ streamId: liveStreamEditStreamId })}
+                            className="text-xs px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 text-gray-800 dark:text-gray-200 disabled:opacity-40"
+                          >
+                            Open broadcast (host)
+                          </button>
+                        </div>
+                      </div>
+                    ) : liveStreamPromoEnabled ? (
+                      <p className="text-xs text-amber-600 dark:text-amber-400 mt-2">
+                        Save once to create the stream. Broadcast controls show on that post in your feed.
+                      </p>
+                    ) : null}
                   </div>
                 )}
               </div>
@@ -2099,6 +2358,10 @@ Write 2-4 sentences that are engaging and on-topic.`;
                       setPollEnabled(false);
                       setTipGoalEnabled(false);
                       setOverlayEnabled(false);
+                      setLiveStreamComposerStatus("scheduled");
+                    } else {
+                      setLiveStreamComposerStatus(null);
+                      setLiveStreamCreatorTestOnly(false);
                     }
                   }}
                   className={`flex flex-col items-center gap-1 p-3 rounded-lg border-2 border-dashed transition ${
@@ -2493,8 +2756,28 @@ Write 2-4 sentences that are engaging and on-topic.`;
         </div>
       )}
 
-      {/* Feed Admin View */}
-      <FanHubFeed isAdminMode onEditPostRequest={openComposerForEdit} />
+      {/* Feed Admin View — min-w-0 avoids flex children expanding page width/height oddly */}
+      <div className="min-w-0">
+        <FanHubFeed
+          isAdminMode
+          onEditPostRequest={openComposerForEdit}
+          liveStreamCreatorBroadcast={{
+            onGoLive: (streamId) => void runLiveStreamDaily("goLive", streamId),
+            onEndStream: (streamId) => void runLiveStreamDaily("endLive", streamId),
+            onOpenBroadcast: (streamId) => setLiveStreamBroadcast({ streamId }),
+            dailyBusy: liveStreamDailyBusy,
+          }}
+        />
+      </div>
+
+      {liveStreamBroadcast && creatorId ? (
+        <LiveStreamWatchRoom
+          creatorId={creatorId}
+          streamId={liveStreamBroadcast.streamId}
+          title={liveStreamTitle.trim() || undefined}
+          onClose={() => setLiveStreamBroadcast(null)}
+        />
+      ) : null}
     </div>
   );
 };

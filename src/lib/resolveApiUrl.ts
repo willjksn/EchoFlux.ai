@@ -40,3 +40,10 @@ export function resolveApiUrl(path: string): string {
   if (!base) return p;
   return `${base}${p}`;
 }
+
+/**
+ * Shown when `/api/*` returns 404 — usually local Vite with no `DEV_API_PROXY`, or a deployment
+ * missing that serverless route. Not for end-user production copy; dev-oriented.
+ */
+export const DEV_API_404_USER_HINT =
+  "If you’re on localhost: set DEV_API_PROXY in .env.local to your Vercel app URL, or run npm run dev:vercel. See docs/LOCAL_DEV.md.";

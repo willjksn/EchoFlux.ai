@@ -501,6 +501,9 @@ export type FanHubPostLockedContent = LockedPostContent;
 /** Fan Hub feed post shape — standard vs scheduled live stream promo card. */
 export type FanHubPostKind = "standard" | "live_stream_promo";
 
+/** Scheduled / live broadcast event (Firestore: `creators/{creatorId}/liveStreams/{streamId}`). */
+export type LiveStreamEventStatus = "draft" | "scheduled" | "live" | "ended" | "cancelled";
+
 /** Denormalized on `fanPosts` when `postKind === "live_stream_promo"` (full event: `creators/{id}/liveStreams/{streamId}`). */
 export interface LiveStreamPromoOnPost {
   streamId: string;
@@ -512,10 +515,14 @@ export interface LiveStreamPromoOnPost {
   ticketCents: number;
   /** Paid-member pages: when true, active subscribers skip ticket (enforced when player/tickets ship) */
   freeForSubscribers?: boolean;
+  /** Denormalized from `liveStreams` when creator goes live / ends (fans see Watch CTA when `live`) */
+  streamStatus?: LiveStreamEventStatus;
+  /**
+   * When true: post is hidden from fan member feed (and fan APIs block watch/ticket).
+   * Creator dashboard feed still shows it for rehearsal. Mirrored on `liveStreams` doc.
+   */
+  creatorTestOnly?: boolean;
 }
-
-/** Scheduled / live broadcast event (Firestore: `creators/{creatorId}/liveStreams/{streamId}`). */
-export type LiveStreamEventStatus = "draft" | "scheduled" | "live" | "ended" | "cancelled";
 
 export interface CreatorLiveStreamFirestore {
   creatorId: string;
@@ -528,6 +535,11 @@ export interface CreatorLiveStreamFirestore {
   freeForSubscribers?: boolean;
   /** Linked fanPosts doc id after creator publishes the promo post */
   promoPostId?: string;
+  /** Daily.co Prebuilt room (set when creator starts broadcast) */
+  dailyRoomName?: string;
+  dailyRoomUrl?: string;
+  /** Hide from fans + block fan checkout/watch; creator-only rehearsal */
+  creatorTestOnly?: boolean;
   createdAt?: unknown;
   updatedAt?: unknown;
 }

@@ -21,6 +21,15 @@ interface DailyRoomConfig {
     start_video_off?: boolean;
     start_audio_off?: boolean;
     eject_at_room_exp?: boolean;
+    enable_hidden_participants?: boolean;
+    enable_mesh_sfu?: boolean;
+    experimental_optimize_large_calls?: boolean;
+    permissions?: {
+      canSend?: boolean | string[];
+      hasPresence?: boolean;
+      canReceive?: Record<string, unknown>;
+      canAdmin?: boolean | string[];
+    };
   };
 }
 
@@ -164,6 +173,89 @@ export async function getRoomDetails(roomName: string): Promise<DailyRoom | null
   } catch {
     return null;
   }
+}
+
+function sanitizeDailyRoomSegment(id: string): string {
+  return id.replace(/[^a-zA-Z0-9_-]/g, "-").slice(0, 48);
+}
+
+/**
+ * Large broadcast room for fan live streams (Daily interactive live streaming / Prebuilt).
+ * Reuses an existing room if the name already exists.
+ */
+export async function createOrGetLiveStreamBroadcastRoom(
+  creatorId: string,
+  streamId: string,
+  durationHours: number
+): Promise<{ roomUrl: string; roomName: string }> {
+  const safeCreator = sanitizeDailyRoomSegment(creatorId);
+  const safeStream = sanitizeDailyRoomSegment(streamId);
+  const roomName = `efls-${safeCreator}-${safeStream}`.slice(0, 120);
+  const existing = await getRoomDetails(roomName);
+  if (existing?.url) {
+    return { roomUrl: existing.url, roomName: existing.name || roomName };
+  }
+
+  const hours = Math.min(Math.max(durationHours, 1), 72);
+  const expirationTime = Math.floor(Date.now() / 1000) + hours * 3600;
+
+  const room = await dailyFetch<DailyRoom>('/rooms', {
+    method: 'POST',
+    body: JSON.stringify({
+      name: roomName,
+      privacy: 'private',
+      properties: {
+        exp: expirationTime,
+        max_participants: 10000,
+        enable_chat: true,
+        enable_screenshare: true,
+        eject_at_room_exp: true,
+        enable_hidden_participants: true,
+        enable_mesh_sfu: true,
+        experimental_optimize_large_calls: true,
+        permissions: {
+          canSend: false,
+        },
+      },
+    } as DailyRoomConfig),
+  });
+
+  return {
+    roomUrl: room.url,
+    roomName: room.name,
+  };
+}
+
+/**
+ * Meeting token for broadcast presenter (owner) or passive viewer (hidden participant).
+ */
+export async function createLiveStreamMeetingToken(
+  roomName: string,
+  userId: string,
+  userName: string,
+  role: 'presenter' | 'viewer',
+  durationMinutes: number
+): Promise<string> {
+  const isPresenter = role === 'presenter';
+  const expirationTime = Math.floor(Date.now() / 1000) + (durationMinutes + 5) * 60;
+
+  const tokenResponse = await dailyFetch<DailyMeetingToken>('/meeting-tokens', {
+    method: 'POST',
+    body: JSON.stringify({
+      properties: {
+        room_name: roomName,
+        user_name: userName,
+        user_id: userId,
+        is_owner: isPresenter,
+        exp: expirationTime,
+        enable_screenshare: isPresenter,
+        start_video_off: !isPresenter,
+        start_audio_off: !isPresenter,
+      },
+    }),
+  });
+
+  return tokenResponse.token;
 }
 
 /**

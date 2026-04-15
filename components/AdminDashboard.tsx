@@ -369,6 +369,29 @@ export const AdminDashboard: React.FC = () => {
         };
     } | null>(null);
     const [isLoadingVideoStats, setIsLoadingVideoStats] = useState(true);
+    type AdminLiveStreamsOverview = {
+        sampledDocs: number;
+        sampleLimit: number;
+        sampleTruncated: boolean;
+        byStatus: Record<string, number>;
+        withDailyRoom: number;
+        uniqueCreatorsWithStreams: number;
+        ticketsSold30d: number;
+        ticketRevenueCents30d: number;
+        recent: Array<{
+            creatorId: string;
+            streamId: string;
+            title: string;
+            status: string;
+            ticketCents: number;
+            hasDailyRoom: boolean;
+            scheduledStart?: string;
+            updatedAtMs: number;
+        }>;
+    };
+    const [liveStreamsOverview, setLiveStreamsOverview] = useState<AdminLiveStreamsOverview | null>(null);
+    const [liveStreamsOverviewLoading, setLiveStreamsOverviewLoading] = useState(false);
+    const [liveStreamsOverviewError, setLiveStreamsOverviewError] = useState<string | null>(null);
     const [witmeOverview, setWitmeOverview] = useState<{ pageViews: number; uniqueVisitors: number; loading: boolean }>({
         pageViews: 0,
         uniqueVisitors: 0,
@@ -406,6 +429,35 @@ export const AdminDashboard: React.FC = () => {
         };
         
         fetchVideoStats();
+    }, [currentUser?.role]);
+
+    useEffect(() => {
+        const fetchLiveStreamsOverview = async () => {
+            if (currentUser?.role !== "Admin") return;
+            setLiveStreamsOverviewLoading(true);
+            setLiveStreamsOverviewError(null);
+            try {
+                const token = await auth.currentUser?.getIdToken(true);
+                if (!token) return;
+                const res = await fetch("/api/adminLiveStreamsOverview", {
+                    headers: { Authorization: `Bearer ${token}` },
+                });
+                const data = await res.json().catch(() => ({}));
+                if (!res.ok) {
+                    setLiveStreamsOverview(null);
+                    setLiveStreamsOverviewError(typeof data?.error === "string" ? data.error : "Failed to load live streams overview");
+                    return;
+                }
+                setLiveStreamsOverview(data as AdminLiveStreamsOverview);
+            } catch (e) {
+                console.error("Failed to fetch live streams overview:", e);
+                setLiveStreamsOverviewError("Failed to load live streams overview");
+                setLiveStreamsOverview(null);
+            } finally {
+                setLiveStreamsOverviewLoading(false);
+            }
+        };
+        void fetchLiveStreamsOverview();
     }, [currentUser?.role]);
 
     useEffect(() => {
@@ -1755,6 +1807,114 @@ export const AdminDashboard: React.FC = () => {
                                             <span>${(videoUsageStats?.currentMonth?.estimatedCost || 0).toFixed(2)} cost</span>
                                         </div>
                                     </div>
+                                </div>
+
+                                {/* Fan live streams + Daily broadcast (all creators) */}
+                                <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-600">
+                                    <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                                        Fan live streams (all creators)
+                                    </h4>
+                                    <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">
+                                        Firestore <span className="font-mono">creators/*/liveStreams/*</span> plus paid ticket orders (30d). Sampled cap for cost control — totals are exact within the sample.
+                                    </p>
+                                    {liveStreamsOverviewLoading ? (
+                                        <p className="text-xs text-gray-500 dark:text-gray-400">Loading platform live stream snapshot…</p>
+                                    ) : liveStreamsOverviewError ? (
+                                        <p className="text-xs text-red-600 dark:text-red-400">{liveStreamsOverviewError}</p>
+                                    ) : liveStreamsOverview ? (
+                                        <div className="space-y-3">
+                                            {liveStreamsOverview.sampleTruncated ? (
+                                                <p className="text-xs text-amber-700 dark:text-amber-300 rounded border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 px-2 py-1.5">
+                                                    Sample hit limit ({liveStreamsOverview.sampledDocs.toLocaleString()} / {liveStreamsOverview.sampleLimit.toLocaleString()} docs). Increase accuracy by raising query limit in API later if needed.
+                                                </p>
+                                            ) : null}
+                                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+                                                <div className="rounded-lg border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-800/50 px-2 py-2">
+                                                    <span className="text-gray-500 dark:text-gray-400 block">Creators w/ streams</span>
+                                                    <span className="font-semibold text-gray-900 dark:text-white">
+                                                        {liveStreamsOverview.uniqueCreatorsWithStreams.toLocaleString()}
+                                                    </span>
+                                                </div>
+                                                <div className="rounded-lg border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-800/50 px-2 py-2">
+                                                    <span className="text-gray-500 dark:text-gray-400 block">Live now</span>
+                                                    <span className="font-semibold text-emerald-700 dark:text-emerald-300">
+                                                        {(liveStreamsOverview.byStatus?.live ?? 0).toLocaleString()}
+                                                    </span>
+                                                </div>
+                                                <div className="rounded-lg border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-800/50 px-2 py-2">
+                                                    <span className="text-gray-500 dark:text-gray-400 block">Daily room set</span>
+                                                    <span className="font-semibold text-cyan-700 dark:text-cyan-300">
+                                                        {liveStreamsOverview.withDailyRoom.toLocaleString()}
+                                                    </span>
+                                                </div>
+                                                <div className="rounded-lg border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-800/50 px-2 py-2">
+                                                    <span className="text-gray-500 dark:text-gray-400 block">Tickets sold (30d)</span>
+                                                    <span className="font-semibold text-gray-900 dark:text-white">
+                                                        {liveStreamsOverview.ticketsSold30d.toLocaleString()}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                            <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-600 dark:text-gray-400">
+                                                <span>Scheduled: {(liveStreamsOverview.byStatus?.scheduled ?? 0).toLocaleString()}</span>
+                                                <span>Ended: {(liveStreamsOverview.byStatus?.ended ?? 0).toLocaleString()}</span>
+                                                <span>Cancelled: {(liveStreamsOverview.byStatus?.cancelled ?? 0).toLocaleString()}</span>
+                                                <span>Draft: {(liveStreamsOverview.byStatus?.draft ?? 0).toLocaleString()}</span>
+                                                {(liveStreamsOverview.byStatus?.other ?? 0) > 0 ? (
+                                                    <span>Other: {(liveStreamsOverview.byStatus?.other ?? 0).toLocaleString()}</span>
+                                                ) : null}
+                                            </div>
+                                            <p className="text-xs text-gray-500 dark:text-gray-400">
+                                                Ticket revenue (30d, non-refunded):{" "}
+                                                <span className="font-semibold text-gray-800 dark:text-gray-200">
+                                                    ${(liveStreamsOverview.ticketRevenueCents30d / 100).toFixed(2)}
+                                                </span>
+                                            </p>
+                                            {liveStreamsOverview.recent.length > 0 ? (
+                                                <div className="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-600">
+                                                    <table className="min-w-full text-xs text-left">
+                                                        <thead className="bg-gray-100 dark:bg-gray-700/80 text-gray-600 dark:text-gray-300">
+                                                            <tr>
+                                                                <th className="px-2 py-1.5 font-medium">Creator</th>
+                                                                <th className="px-2 py-1.5 font-medium">Stream</th>
+                                                                <th className="px-2 py-1.5 font-medium">Status</th>
+                                                                <th className="px-2 py-1.5 font-medium">Ticket</th>
+                                                                <th className="px-2 py-1.5 font-medium">Daily</th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody className="divide-y divide-gray-200 dark:divide-gray-600">
+                                                            {liveStreamsOverview.recent.map((row) => (
+                                                                <tr key={`${row.creatorId}-${row.streamId}`} className="text-gray-800 dark:text-gray-200">
+                                                                    <td className="px-2 py-1.5 font-mono text-[10px] max-w-[120px] truncate" title={row.creatorId}>
+                                                                        {row.creatorId.slice(0, 8)}…
+                                                                    </td>
+                                                                    <td className="px-2 py-1.5 max-w-[200px]">
+                                                                        <span className="line-clamp-2" title={row.title}>
+                                                                            {row.title}
+                                                                        </span>
+                                                                    </td>
+                                                                    <td className="px-2 py-1.5 whitespace-nowrap">{row.status}</td>
+                                                                    <td className="px-2 py-1.5 whitespace-nowrap">
+                                                                        {row.ticketCents <= 0 ? "Free" : `$${(row.ticketCents / 100).toFixed(2)}`}
+                                                                    </td>
+                                                                    <td className="px-2 py-1.5 whitespace-nowrap">
+                                                                        {row.hasDailyRoom ? (
+                                                                            <span className="text-cyan-600 dark:text-cyan-400">Yes</span>
+                                                                        ) : (
+                                                                            <span className="text-gray-400">—</span>
+                                                                        )}
+                                                                    </td>
+                                                                </tr>
+                                                            ))}
+                                                        </tbody>
+                                                    </table>
+                                                </div>
+                                            ) : (
+                                                <p className="text-xs text-gray-500 dark:text-gray-400">No stream docs in sample.</p>
+                                            )}
+                                        </div>
+                                    ) : (
+                                        <p className="text-xs text-gray-500 dark:text-gray-400">No data.</p>
+                                    )}
                                 </div>
                             </div>
                         </div>

@@ -1,17 +1,8 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
-import App from './App';
 import './index.css';
 import './styles/stormij-fanhub.css';
 import './styles/fan-landing-feed.css';
-import { initSentry } from './src/sentry';
-import { initEnvValidation } from './src/utils/envValidation';
-
-// Validate environment variables at startup
-initEnvValidation();
-
-// Initialize Sentry BEFORE React renders
-initSentry();
 
 // If the site is accessed via a credentialed URL (e.g. https://user@host/...),
 // some third-party SDKs will crash when parsing URLs (userinfo is disallowed).
@@ -19,20 +10,15 @@ initSentry();
 (() => {
   if (typeof window === 'undefined') return;
   const href = window.location.href;
-  // Detect userinfo in the authority portion.
   if (/^https?:\/\/[^/]*@/.test(href)) {
     const safe =
       `${window.location.protocol}//${window.location.host}` +
       `${window.location.pathname}${window.location.search}${window.location.hash}`;
-    // Use replace to avoid adding an extra history entry.
     window.location.replace(safe);
   }
 })();
 
 // Patch fetch so relative `/api/*` calls don't inherit credentials from the current page URL.
-// This prevents errors like:
-// "Request cannot be constructed from a URL that includes credentials: /api/getUsageStats"
-// which can happen when the site is accessed via a URL that contains userinfo (e.g. Basic Auth).
 (() => {
   if (typeof window === 'undefined') return;
   if (typeof window.fetch !== 'function') return;
@@ -51,8 +37,6 @@ initSentry();
   };
 })();
 
-// Defensive DOM patch: avoid rare "Failed to execute 'removeChild' on 'Node'" crashes
-// that can occur due to browser quirks/races when temporary nodes are already detached.
 (() => {
   if (typeof window === 'undefined') return;
   const proto = (window as any).Node?.prototype as any;
@@ -66,7 +50,6 @@ initSentry();
     } catch (e: any) {
       const name = e?.name;
       const msg = String(e?.message || '');
-      // Ignore only the specific "not a child" failure; rethrow everything else.
       if (name === 'NotFoundError' || msg.includes('not a child of this node')) {
         return child;
       }
@@ -76,14 +59,51 @@ initSentry();
   proto.__echofluxPatchedRemoveChild = true;
 })();
 
+function MissingFirebaseEnv() {
+  return (
+    <div
+      style={{
+        minHeight: '100vh',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '2rem',
+        fontFamily: 'system-ui, sans-serif',
+        background: '#0f0f12',
+        color: '#e8e8ec',
+      }}
+    >
+      <div style={{ maxWidth: 520, lineHeight: 1.6 }}>
+        <h1 style={{ fontSize: '1.25rem', marginBottom: '0.75rem' }}>Firebase env not configured</h1>
+        <p style={{ marginBottom: '1rem', color: '#a8a8b0' }}>
+          Add your Web SDK keys to <code style={{ color: '#e8e8ec' }}>.env.local</code> (see{' '}
+          <code style={{ color: '#e8e8ec' }}>ENV_SETUP_GUIDE.md</code>). The dev server needs{' '}
+          <code style={{ color: '#e8e8ec' }}>VITE_FIREBASE_*</code> variables so the app can load.
+        </p>
+        <p style={{ fontSize: '0.875rem', color: '#787880' }}>
+          Restart <code style={{ color: '#a8a8b0' }}>npm run dev</code> after saving env changes.
+        </p>
+      </div>
+    </div>
+  );
+}
+
 const rootElement = document.getElementById('root');
 if (!rootElement) {
   throw new Error("Could not find root element to mount to");
 }
 
-const root = ReactDOM.createRoot(rootElement);
-root.render(
-  <React.StrictMode>
-    <App />
-  </React.StrictMode>
-);
+const rawKey = import.meta.env.VITE_FIREBASE_API_KEY;
+const firebaseKey = typeof rawKey === 'string' ? rawKey.trim() : '';
+
+if (!firebaseKey) {
+  ReactDOM.createRoot(rootElement).render(
+    <React.StrictMode>
+      <MissingFirebaseEnv />
+    </React.StrictMode>,
+  );
+} else {
+  void import('./bootstrap').then(({ mountApp }) => {
+    mountApp(rootElement);
+  });
+}
