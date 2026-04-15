@@ -22,17 +22,78 @@ function ticketLabel(promo: LiveStreamPromoOnPost): string {
   return `$${(promo.ticketCents / 100).toFixed(2)} ticket`;
 }
 
+/** Fan feed: computed access for CTA */
+export type LiveStreamPromoFanAccess =
+  | "sign_in"
+  | "checkout"
+  | "included"
+  | "free";
+
 /**
  * Feed card attachment for `postKind: live_stream_promo`.
- * Join / checkout wiring comes in a later iteration.
+ * Creator dashboard uses `variant="creator"` (non-interactive). Fans use `variant="fan"` with `fanAccess`.
  */
 export const LiveStreamPromoBanner: React.FC<{
   promo: LiveStreamPromoOnPost;
-  /** Creator theme / fan accent (hex) */
   accentHex?: string;
-}> = ({ promo, accentHex }) => {
+  variant?: "creator" | "fan";
+  fanAccess?: LiveStreamPromoFanAccess;
+  ticketLoading?: boolean;
+  onGetTicket?: () => void | Promise<void>;
+  onSignIn?: () => void;
+}> = ({
+  promo,
+  accentHex,
+  variant = "fan",
+  fanAccess = "free",
+  ticketLoading = false,
+  onGetTicket,
+  onSignIn,
+}) => {
   const title = promo.title?.trim() || "Live stream";
   const border = accentHex && /^#[0-9A-Fa-f]{6}$/.test(accentHex) ? accentHex : "#7c3aed";
+
+  const cta = (() => {
+    if (variant === "creator") {
+      return (
+        <button type="button" className="live-stream-promo-banner__cta" disabled>
+          Preview — fans check out here
+        </button>
+      );
+    }
+    switch (fanAccess) {
+      case "sign_in":
+        return (
+          <button type="button" className="live-stream-promo-banner__cta live-stream-promo-banner__cta--active" onClick={() => onSignIn?.()}>
+            Sign in for a ticket
+          </button>
+        );
+      case "checkout":
+        return (
+          <button
+            type="button"
+            className="live-stream-promo-banner__cta live-stream-promo-banner__cta--active"
+            disabled={ticketLoading}
+            onClick={() => void onGetTicket?.()}
+          >
+            {ticketLoading ? "Redirecting…" : "Get ticket"}
+          </button>
+        );
+      case "included":
+        return (
+          <button type="button" className="live-stream-promo-banner__cta live-stream-promo-banner__cta--muted" disabled>
+            You&apos;re in — player coming soon
+          </button>
+        );
+      case "free":
+      default:
+        return (
+          <button type="button" className="live-stream-promo-banner__cta live-stream-promo-banner__cta--muted" disabled>
+            Join — player coming soon
+          </button>
+        );
+    }
+  })();
 
   return (
     <div
@@ -54,9 +115,7 @@ export const LiveStreamPromoBanner: React.FC<{
         </span>
         <span>{ticketLabel(promo)}</span>
       </p>
-      <button type="button" className="live-stream-promo-banner__cta" disabled>
-        Join / ticket — coming soon
-      </button>
+      {cta}
     </div>
   );
 };

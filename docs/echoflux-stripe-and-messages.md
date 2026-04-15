@@ -27,14 +27,14 @@ This document defines the full behavior the Echoflux agent must follow for **Str
 |-------|--------|----------|
 | **api/stripeConnectOnboard** | POST | Create or reuse Express account; create account link; persist `stripeConnectAccountId` on `creators/{creatorId}`. Return `{ url, accountId }`. |
 | **api/stripeConnectStatus** | GET | Return `stripeConnectAccountId`, `chargesEnabled`, `payoutsEnabled`, `detailsSubmitted` for the authenticated creator. |
-| **api/createFanCheckoutSession** | POST | Body: `creatorId`, `type: 'subscription' \| 'product'`, `productId?` (required if type product), `subscriptionPriceCents?`, `successUrl?`, `cancelUrl?`. Create Stripe Checkout Session; payments go to creator’s Connect account. Return `{ url, sessionId }`. **Must return 400** if creator has not connected Stripe or `charges_enabled` is false; **must return 403** if fan is blocked. |
+| **api/createFanCheckoutSession** | POST | Body: `creatorId`, `type: 'subscription' \| 'product' \| 'tip' \| 'post_unlock' \| 'live_stream_ticket'`, `productId?` (product), `postId?` (post unlock), `streamId?` (live stream ticket), `amountCents?` (tip), `subscriptionPriceCents?`, `successUrl?`, `cancelUrl?`, etc. Create Stripe Checkout Session; payments go to creator’s Connect account. Return `{ url, sessionId }`. **Must return 400** if creator has not connected Stripe or `charges_enabled` is false; **must return 403** if fan is blocked. |
 | **api/stripeWebhook** | POST | Raw body required for signature verification. Verify with `STRIPE_WEBHOOK_SECRET` first, then `STRIPE_CONNECT_WEBHOOK_SECRET` if set. When `event.account` is present, run Connect logic only (no double-processing). |
 
 ### Connect webhook events (required behavior)
 
 | Event | Action |
 |-------|--------|
-| **checkout.session.completed** (Connect) | If `metadata.type === 'subscription'`: create/update `creatorSubscribers/{creatorId}/subscribers/{fanId}`; set `creatorEntitlements/{creatorId}/grants/{fanId}.subscription = true`. If `metadata.type === 'product'`: create `orders` doc; add `productId` to grant’s `unlockedProductIds`; update `creatorStats/{creatorId}` (totalRevenueCents, totalOrders). |
+| **checkout.session.completed** (Connect) | If `metadata.type === 'subscription'`: create/update `creatorSubscribers/{creatorId}/subscribers/{fanId}`; set `creatorEntitlements/{creatorId}/grants/{fanId}.subscription = true`. If `metadata.type === 'product'`: create `orders` doc; add `productId` to grant’s `unlockedProductIds`; update `creatorStats/{creatorId}` (totalRevenueCents, totalOrders). If `metadata.type === 'post_unlock'`: order + append `postId` to `unlockedFanPostIds`. If `metadata.type === 'live_stream_ticket'`: order + append `streamId` to `unlockedLiveStreamIds`. Tips and other types: see `api/stripeWebhook` (`processFanHubCheckoutSessionCompleted`). |
 | **customer.subscription.updated** (Connect) | Update `creatorSubscribers` and `creatorEntitlements` from `subscription.metadata.creatorId` / `fanId`. |
 | **customer.subscription.deleted** (Connect) | Set subscriber status to canceled; grant `subscription = false`. |
 | **charge.refunded** (Connect) | Find order by `stripePaymentIntentId`; set order `status = 'refunded'`; remove `productId` from grant’s `unlockedProductIds`; decrement `creatorStats` revenue and order count. |

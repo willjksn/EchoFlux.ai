@@ -1092,6 +1092,7 @@ export const FanStorefrontView: React.FC = () => {
   const [fanAuthUid, setFanAuthUid] = useState<string | undefined>(() => auth.currentUser?.uid);
   const [unlockedProductIds, setUnlockedProductIds] = useState<string[]>([]);
   const [unlockedFanPostIds, setUnlockedFanPostIds] = useState<string[]>([]);
+  const [unlockedLiveStreamIds, setUnlockedLiveStreamIds] = useState<string[]>([]);
   /** Synthetic member access from server (env-listed admins on selected storefronts). */
   const [fanPageAdminBypass, setFanPageAdminBypass] = useState(false);
   const [treatsProducts, setTreatsProducts] = useState<TreatProduct[]>([]);
@@ -2079,6 +2080,7 @@ export const FanStorefrontView: React.FC = () => {
       setMembershipType(null);
       setMemberUsernameRequired(false);
       setUnlockedFanPostIds([]);
+      setUnlockedLiveStreamIds([]);
       setLimitedMemberAccess(false);
       setFanPageAdminBypass(false);
       setEntitlementLoading(false);
@@ -2108,6 +2110,10 @@ export const FanStorefrontView: React.FC = () => {
           Array.isArray((data as { unlockedFanPostIds?: string[] }).unlockedFanPostIds)
             ? (data as { unlockedFanPostIds: string[] }).unlockedFanPostIds
             : [];
+        const nextUnlockedStreams =
+          Array.isArray((data as { unlockedLiveStreamIds?: string[] }).unlockedLiveStreamIds)
+            ? (data as { unlockedLiveStreamIds: string[] }).unlockedLiveStreamIds
+            : [];
         setSubscribed(!!(data as { subscribed?: boolean }).subscribed);
         setMembershipType(((data as { membershipType?: "free" | "paid" | null }).membershipType ?? null) as "free" | "paid" | null);
         setBilledSubscriptionPriceCents(
@@ -2118,10 +2124,12 @@ export const FanStorefrontView: React.FC = () => {
         setMemberUsernameRequired(!!(data as { memberUsernameRequired?: boolean }).memberUsernameRequired);
         setUnlockedProductIds(nextUnlockedProducts);
         setUnlockedFanPostIds(nextUnlockedPosts);
+        setUnlockedLiveStreamIds(nextUnlockedStreams);
         setLimitedMemberAccess(
           !!(data as { limitedMemberAccess?: boolean }).limitedMemberAccess ||
             nextUnlockedProducts.length > 0 ||
-            nextUnlockedPosts.length > 0
+            nextUnlockedPosts.length > 0 ||
+            nextUnlockedStreams.length > 0
         );
         setFanPageAdminBypass(!!(data as { fanPageAdminBypass?: boolean }).fanPageAdminBypass);
       } catch {
@@ -2131,6 +2139,7 @@ export const FanStorefrontView: React.FC = () => {
           setBilledSubscriptionPriceCents(null);
           setMemberUsernameRequired(false);
           setUnlockedFanPostIds([]);
+          setUnlockedLiveStreamIds([]);
           setLimitedMemberAccess(false);
           setFanPageAdminBypass(false);
         }
@@ -2159,6 +2168,10 @@ export const FanStorefrontView: React.FC = () => {
       Array.isArray((data as { unlockedFanPostIds?: string[] }).unlockedFanPostIds)
         ? (data as { unlockedFanPostIds: string[] }).unlockedFanPostIds
         : [];
+    const nextUnlockedStreams =
+      Array.isArray((data as { unlockedLiveStreamIds?: string[] }).unlockedLiveStreamIds)
+        ? (data as { unlockedLiveStreamIds: string[] }).unlockedLiveStreamIds
+        : [];
     setSubscribed(!!(data as { subscribed?: boolean }).subscribed);
     setMembershipType(
       ((data as { membershipType?: "free" | "paid" | null }).membershipType ?? null) as "free" | "paid" | null
@@ -2171,10 +2184,12 @@ export const FanStorefrontView: React.FC = () => {
     setMemberUsernameRequired(!!(data as { memberUsernameRequired?: boolean }).memberUsernameRequired);
     setUnlockedProductIds(nextUnlockedProducts);
     setUnlockedFanPostIds(nextUnlockedPosts);
+    setUnlockedLiveStreamIds(nextUnlockedStreams);
     setLimitedMemberAccess(
       !!(data as { limitedMemberAccess?: boolean }).limitedMemberAccess ||
         nextUnlockedProducts.length > 0 ||
-        nextUnlockedPosts.length > 0
+        nextUnlockedPosts.length > 0 ||
+        nextUnlockedStreams.length > 0
     );
     setFanPageAdminBypass(!!(data as { fanPageAdminBypass?: boolean }).fanPageAdminBypass);
   }, [creator?.creatorId]);
@@ -2194,6 +2209,21 @@ export const FanStorefrontView: React.FC = () => {
     );
   }, [creator?.creatorId, isLoggedIn, refetchMemberEntitlement]);
 
+  useEffect(() => {
+    if (typeof window === "undefined" || !creator?.creatorId || !isLoggedIn) return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("live_stream_ticket") !== "1") return;
+    if (params.get("session_id")) return;
+    void refetchMemberEntitlement();
+    params.delete("live_stream_ticket");
+    const qs = params.toString();
+    window.history.replaceState(
+      {},
+      "",
+      window.location.pathname + (qs ? `?${qs}` : "") + (window.location.hash || "")
+    );
+  }, [creator?.creatorId, isLoggedIn, refetchMemberEntitlement]);
+
   /** Member checkout return: apply Firestore same as webhook when session_id is present (webhook delay). */
   useEffect(() => {
     if (typeof window === "undefined" || !creator?.creatorId || !isLoggedIn || !auth.currentUser) return;
@@ -2202,7 +2232,8 @@ export const FanStorefrontView: React.FC = () => {
     const sid = params.get("session_id");
     const purchaseSync = params.get("purchase_sync") === "1";
     const postUnlock = params.get("post_unlock") === "1";
-    if (!sid || (!purchaseSync && !postUnlock)) return;
+    const liveStreamTicket = params.get("live_stream_ticket") === "1";
+    if (!sid || (!purchaseSync && !postUnlock && !liveStreamTicket)) return;
 
     let cancelled = false;
     (async () => {
@@ -2265,6 +2296,7 @@ export const FanStorefrontView: React.FC = () => {
         url.searchParams.delete("session_id");
         url.searchParams.delete("purchase_sync");
         url.searchParams.delete("post_unlock");
+        url.searchParams.delete("live_stream_ticket");
         url.searchParams.delete("tip");
         const qs = url.searchParams.toString();
         window.history.replaceState({}, "", url.pathname + (qs ? `?${qs}` : "") + (url.hash || ""));
@@ -2613,13 +2645,19 @@ export const FanStorefrontView: React.FC = () => {
                 Array.isArray((ent as { unlockedFanPostIds?: string[] }).unlockedFanPostIds)
                   ? (ent as { unlockedFanPostIds: string[] }).unlockedFanPostIds
                   : [];
+              const nextUnlockedStreams =
+                Array.isArray((ent as { unlockedLiveStreamIds?: string[] }).unlockedLiveStreamIds)
+                  ? (ent as { unlockedLiveStreamIds: string[] }).unlockedLiveStreamIds
+                  : [];
               setSubscribed(!!(ent as { subscribed?: boolean }).subscribed);
               setUnlockedProductIds(nextUnlockedProducts);
               setUnlockedFanPostIds(nextUnlockedPosts);
+              setUnlockedLiveStreamIds(nextUnlockedStreams);
               setLimitedMemberAccess(
                 !!(ent as { limitedMemberAccess?: boolean }).limitedMemberAccess ||
                   nextUnlockedProducts.length > 0 ||
-                  nextUnlockedPosts.length > 0
+                  nextUnlockedPosts.length > 0 ||
+                  nextUnlockedStreams.length > 0
               );
               setFanPageAdminBypass(!!(ent as { fanPageAdminBypass?: boolean }).fanPageAdminBypass);
             }
@@ -2771,6 +2809,11 @@ export const FanStorefrontView: React.FC = () => {
         setUnlockedFanPostIds(
           Array.isArray((ent as { unlockedFanPostIds?: string[] }).unlockedFanPostIds)
             ? (ent as { unlockedFanPostIds: string[] }).unlockedFanPostIds
+            : []
+        );
+        setUnlockedLiveStreamIds(
+          Array.isArray((ent as { unlockedLiveStreamIds?: string[] }).unlockedLiveStreamIds)
+            ? (ent as { unlockedLiveStreamIds: string[] }).unlockedLiveStreamIds
             : []
         );
         setFanPageAdminBypass(!!(ent as { fanPageAdminBypass?: boolean }).fanPageAdminBypass);
@@ -3658,7 +3701,8 @@ export const FanStorefrontView: React.FC = () => {
   const paidPageUnsubscribedBase = creatorRequiresPaidMembership && membershipType !== "paid";
   const hasAccessByCurrentMembershipBase =
     subscribed && (creator?.monetization?.freeAccessEnabled === true || hasPaidMembershipBase);
-  const hasUnlockedPurchases = unlockedProductIds.length > 0 || unlockedFanPostIds.length > 0;
+  const hasUnlockedPurchases =
+    unlockedProductIds.length > 0 || unlockedFanPostIds.length > 0 || unlockedLiveStreamIds.length > 0;
   const deliveredOrPurchasedProductIdSet = useMemo(() => {
     const out = new Set<string>();
     for (const o of fanPurchases) {
@@ -3876,7 +3920,12 @@ export const FanStorefrontView: React.FC = () => {
     if (typeof window !== "undefined") {
       const pending = new URLSearchParams(window.location.search);
       if (pending.get("session_id")) return;
-      if (pending.get("purchase_sync") === "1" || pending.get("post_unlock") === "1" || pending.get("tip") === "success") {
+      if (
+        pending.get("purchase_sync") === "1" ||
+        pending.get("post_unlock") === "1" ||
+        pending.get("live_stream_ticket") === "1" ||
+        pending.get("tip") === "success"
+      ) {
         return;
       }
     }
@@ -4860,6 +4909,8 @@ export const FanStorefrontView: React.FC = () => {
                 feedSettings={creator.feedSettings}
                 fanId={fanAuthUid}
                 unlockedFanPostIds={unlockedFanPostIds}
+                unlockedLiveStreamIds={unlockedLiveStreamIds}
+                liveStreamPaidMemberTicketSkip={subscribed && membershipType === "paid"}
                 fanPageAdminBypass={fanPageAdminBypass}
                 onOpenSaved={() => setActiveTabWithUrl("saved")}
                 tipsEnabled={creator.sections?.tip !== false}
@@ -4878,6 +4929,8 @@ export const FanStorefrontView: React.FC = () => {
                 feedSettings={creator.feedSettings}
                 fanId={fanAuthUid}
                 unlockedFanPostIds={unlockedFanPostIds}
+                unlockedLiveStreamIds={unlockedLiveStreamIds}
+                liveStreamPaidMemberTicketSkip={subscribed && membershipType === "paid"}
                 fanPageAdminBypass={fanPageAdminBypass}
                 onBackToFeed={() => setActiveTabWithUrl("feed")}
               />

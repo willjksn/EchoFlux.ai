@@ -5,6 +5,10 @@
 export const FAN_TIP_CHECKOUT_SUCCESS_QS =
   "tip=success&purchase_sync=1&session_id={CHECKOUT_SESSION_ID}";
 
+/** Member returns after paid live stream ticket (mirrors post_unlock + session sync). */
+export const LIVE_STREAM_TICKET_CHECKOUT_SUCCESS_QS =
+  "live_stream_ticket=1&purchase_sync=1&session_id={CHECKOUT_SESSION_ID}";
+
 /**
  * Fan storefront checkout APIs usually return JSON; dev proxy errors may return plain text.
  */

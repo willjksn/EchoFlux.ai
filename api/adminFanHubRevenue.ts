@@ -41,6 +41,7 @@ function normalizeOrderType(d: Record<string, unknown>): string {
     raw === "tip" ||
     raw === "unlock" ||
     raw === "post_unlock" ||
+    raw === "live_stream_ticket" ||
     raw === "subscription" ||
     raw === "product"
   ) {
@@ -120,7 +121,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
       // stripeWebhook writes post_unlock for paid post unlocks; legacy may use "unlock"
       if (orderType === "tip") tips += amount;
-      else if (orderType === "unlock" || orderType === "post_unlock") unlocks += amount;
+      else if (orderType === "unlock" || orderType === "post_unlock" || orderType === "live_stream_ticket") {
+        unlocks += amount;
+      }
       else if (orderType === "subscription") subscriptions += amount;
       else treats += amount;
 

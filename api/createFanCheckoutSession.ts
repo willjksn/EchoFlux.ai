@@ -85,7 +85,7 @@ function isCreatorPlatformOwner(
  * For regular creators: Funds go to creator's Connect account with 10% platform fee.
  * For platform owners (e.g., Stormij): Funds go directly to EchoFlux, no Connect account needed.
  * 
- * Body: { creatorId, type: 'subscription' | 'product' | 'tip' | 'post_unlock', productId?, postId?, subscriptionPriceCents?, amountCents?, tipHandle?, successUrl?, cancelUrl?, guestProduct?: boolean }
+ * Body: { creatorId, type: 'subscription' | 'product' | 'tip' | 'post_unlock' | 'live_stream_ticket', productId?, postId?, streamId?, subscriptionPriceCents?, amountCents?, tipHandle?, successUrl?, cancelUrl?, guestProduct?: boolean }
  * guestProduct: true → guest store checkout without Firebase auth; Stripe collects email; webhook uses guest_${stripeCustomerId}.
  * 
  * Tips can be made without authentication (anonymous tippers).
@@ -113,9 +113,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const body = (req.body || {}) as {
     creatorId?: string;
-    type?: "subscription" | "product" | "tip" | "post_unlock";
+    type?: "subscription" | "product" | "tip" | "post_unlock" | "live_stream_ticket";
     productId?: string;
     postId?: string;
+    streamId?: string;
     subscriptionPriceCents?: number;
     amountCents?: number;
     tipHandle?: string;
@@ -125,18 +126,29 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   };
 
   const creatorId = typeof body.creatorId === "string" ? body.creatorId.trim() : "";
-  const { type, productId, postId, subscriptionPriceCents, amountCents, tipHandle, successUrl, cancelUrl, guestProduct } = body;
+  const { type, productId, postId, streamId, subscriptionPriceCents, amountCents, tipHandle, successUrl, cancelUrl, guestProduct } = body;
   if (!creatorId || !type) {
     return res.status(400).json({ error: "creatorId and type are required" });
   }
-  if (type !== "subscription" && type !== "product" && type !== "tip" && type !== "post_unlock") {
-    return res.status(400).json({ error: "type must be 'subscription', 'product', 'tip', or 'post_unlock'" });
+  if (
+    type !== "subscription" &&
+    type !== "product" &&
+    type !== "tip" &&
+    type !== "post_unlock" &&
+    type !== "live_stream_ticket"
+  ) {
+    return res.status(400).json({
+      error: "type must be 'subscription', 'product', 'tip', 'post_unlock', or 'live_stream_ticket'",
+    });
   }
   if (type === "product" && !productId) {
     return res.status(400).json({ error: "productId is required for product checkout" });
   }
   if (type === "post_unlock" && !postId) {
     return res.status(400).json({ error: "postId is required for post unlock checkout" });
+  }
+  if (type === "live_stream_ticket" && !streamId) {
+    return res.status(400).json({ error: "streamId is required for live stream ticket checkout" });
   }
   if (type === "tip" && (!amountCents || amountCents < 100)) {
     return res.status(400).json({ error: "amountCents must be at least 100 ($1) for tips" });
@@ -497,6 +509,84 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             }),
       };
       const session = await checkoutSessionsCreate(stripe, unlockSessionParams, connectIdForCheckout);
+      return res.status(200).json({ url: session.url, sessionId: session.id });
+    }
+
+    // ==================== LIVE STREAM TICKET ====================
+    if (type === "live_stream_ticket") {
+      const streamIdStr = String(streamId!).trim();
+      if (!streamIdStr) {
+        return res.status(400).json({ error: "streamId is required for live stream ticket checkout" });
+      }
+
+      const streamRef = db.collection("creators").doc(creatorId).collection("liveStreams").doc(streamIdStr);
+      const streamSnap = await streamRef.get();
+      if (!streamSnap.exists) {
+        return res.status(404).json({ error: "Stream not found" });
+      }
+      const sdata = streamSnap.data() as Record<string, unknown>;
+      const st = String(sdata.status ?? "scheduled").trim().toLowerCase();
+      if (st === "cancelled" || st === "ended") {
+        return res.status(400).json({ error: "This stream is no longer available for purchase" });
+      }
+      const ticketCents =
+        typeof sdata.ticketCents === "number" && Number.isFinite(sdata.ticketCents)
+          ? Math.max(0, Math.round(sdata.ticketCents))
+          : 0;
+      if (ticketCents < 50) {
+        return res.status(400).json({ error: "This stream does not require a paid ticket" });
+      }
+      const ticketAmount = Math.min(100_000, ticketCents);
+
+      const grantRef = db.collection("creatorEntitlements").doc(creatorId).collection("grants").doc(fanId);
+      const grantSnap = await grantRef.get();
+      const grantData = grantSnap.data() as { unlockedLiveStreamIds?: string[] } | undefined;
+      const existingStreams = Array.isArray(grantData?.unlockedLiveStreamIds) ? grantData.unlockedLiveStreamIds : [];
+      if (existingStreams.includes(streamIdStr)) {
+        return res.status(400).json({ error: "You already have a ticket for this stream" });
+      }
+
+      const streamTitle =
+        typeof sdata.title === "string" && sdata.title.trim() ? sdata.title.trim() : "Live stream";
+      const lineTitle = `Live stream ticket — ${streamTitle}`;
+
+      const liveSessionParams: Stripe.Checkout.SessionCreateParams = {
+        mode: "payment",
+        payment_method_types: ["card"],
+        line_items: [
+          {
+            price_data: {
+              currency: "usd",
+              product_data: {
+                name: lineTitle,
+                description: "One-time access ticket",
+                metadata: { creatorId, streamId: streamIdStr },
+              },
+              unit_amount: ticketAmount,
+            },
+            quantity: 1,
+          },
+        ],
+        success_url: safeSuccessUrl,
+        cancel_url: safeCancelUrl,
+        client_reference_id: fanId,
+        metadata: {
+          creatorId,
+          fanId,
+          type: "live_stream_ticket",
+          streamId: streamIdStr,
+          amountCents: String(ticketAmount),
+          isPlatformOwner: isPlatformOwner ? "true" : "false",
+        },
+        ...(isPlatformOwner
+          ? {}
+          : {
+              payment_intent_data: {
+                application_fee_amount: Math.round(ticketAmount * PLATFORM_FEE_PERCENT),
+              },
+            }),
+      };
+      const session = await checkoutSessionsCreate(stripe, liveSessionParams, connectIdForCheckout);
       return res.status(200).json({ url: session.url, sessionId: session.id });
     }
 

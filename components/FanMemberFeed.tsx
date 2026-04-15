@@ -39,7 +39,24 @@ import { resolveApiUrl } from "../src/lib/resolveApiUrl";
 import { EmojiIcon } from "./icons/UIIcons";
 import { useFanFeedCommentEmojiPicker } from "./fanFeedCommentEmojiPicker";
 import type { FanHubPostKind, LiveStreamPromoOnPost } from "../types";
-import { LiveStreamPromoBanner } from "./LiveStreamPromoBanner";
+import { LiveStreamPromoBanner, type LiveStreamPromoFanAccess } from "./LiveStreamPromoBanner";
+
+function liveStreamFanAccess(
+  promo: LiveStreamPromoOnPost,
+  ctx: {
+    fanId?: string;
+    fanPageAdminBypass: boolean;
+    unlockedStreamIds: Set<string>;
+    paidSubscriberTicketSkip: boolean;
+  },
+): LiveStreamPromoFanAccess {
+  if (ctx.fanPageAdminBypass) return "included";
+  if (promo.ticketCents <= 0) return "free";
+  if (ctx.unlockedStreamIds.has(promo.streamId)) return "included";
+  if (promo.freeForSubscribers && ctx.paidSubscriberTicketSkip) return "included";
+  if (!ctx.fanId) return "sign_in";
+  return "checkout";
+}
 
 const feedImageDownloadGuardProps = {
   draggable: false as const,
@@ -97,6 +114,45 @@ async function startFanPostUnlockCheckoutSession(creatorId: string, postId: stri
       creatorId,
       type: "post_unlock",
       postId,
+      ...(successUrl ? { successUrl } : {}),
+      ...(cancelUrl ? { cancelUrl } : {}),
+    }),
+  });
+  const { ok, url, error } = await readFanCheckoutFetchResult(res);
+  if (!ok || !url) throw new Error(error || "Checkout failed. Please try again.");
+  return url;
+}
+
+function buildLiveStreamTicketCheckoutReturnUrls(): { successUrl?: string; cancelUrl?: string } {
+  if (typeof window === "undefined") return {};
+  const u = new URL(window.location.href);
+  const p = new URLSearchParams(u.search.startsWith("?") ? u.search.slice(1) : u.search);
+  p.set("live_stream_ticket", "1");
+  p.set("purchase_sync", "1");
+  const enc = p.toString();
+  const qs = enc
+    ? `${enc}&session_id={CHECKOUT_SESSION_ID}`
+    : `live_stream_ticket=1&purchase_sync=1&session_id={CHECKOUT_SESSION_ID}`;
+  const successUrl = buildTipCheckoutReturnUrl(u.pathname, `?${qs}`, u.hash || "");
+  const c = new URL(window.location.href);
+  const cancelUrl = buildTipCheckoutReturnUrl(c.pathname, c.search, c.hash || "");
+  return { successUrl, cancelUrl };
+}
+
+async function startLiveStreamTicketCheckoutSession(creatorId: string, streamId: string): Promise<string> {
+  const token = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
+  if (!token) throw new Error("Sign in to get a ticket.");
+  const { successUrl, cancelUrl } = buildLiveStreamTicketCheckoutReturnUrls();
+  const res = await fetch(resolveApiUrl("/api/createFanCheckoutSession"), {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({
+      creatorId,
+      type: "live_stream_ticket",
+      streamId,
       ...(successUrl ? { successUrl } : {}),
       ...(cancelUrl ? { cancelUrl } : {}),
     }),
@@ -413,6 +469,10 @@ interface FanMemberFeedProps {
   fanId?: string;
   /** Post IDs this fan has paid to unlock (from getFanEntitlement). */
   unlockedFanPostIds?: string[];
+  /** Live stream event ids the fan purchased a ticket for (`live_stream_ticket` checkout). */
+  unlockedLiveStreamIds?: string[];
+  /** Paid membership (not free tier): used with `freeForSubscribers` stream promos to skip ticket. */
+  liveStreamPaidMemberTicketSkip?: boolean;
   /** Server-granted QA access: show all locked media as unlocked (see FAN_PAGE_ADMIN_MEMBER_* env). */
   fanPageAdminBypass?: boolean;
   /** Optional member-header shortcut to open Saved tab. */
@@ -1129,6 +1189,11 @@ function FanMemberPostDetailModal({
   onReloadAfterComment,
   backLabel = "Back to Home",
   unlockedFanPostIds,
+  unlockedLiveStreamIds,
+  liveStreamPaidMemberTicketSkip = false,
+  liveStreamCheckoutStreamId = null,
+  onLiveStreamTicket,
+  onLiveStreamSignIn,
   unlockingPostId,
   onUnlockPost,
   onUnlockNeedSignIn,
@@ -1159,6 +1224,11 @@ function FanMemberPostDetailModal({
   /** e.g. "Back to Saved" on the Saved tab */
   backLabel?: string;
   unlockedFanPostIds?: Set<string>;
+  unlockedLiveStreamIds?: Set<string>;
+  liveStreamPaidMemberTicketSkip?: boolean;
+  liveStreamCheckoutStreamId?: string | null;
+  onLiveStreamTicket?: (streamId: string) => void | Promise<void>;
+  onLiveStreamSignIn?: () => void;
   fanPageAdminBypass?: boolean;
   unlockingPostId?: string | null;
   onUnlockPost?: (postId: string) => void | Promise<void>;
@@ -1279,7 +1349,19 @@ function FanMemberPostDetailModal({
                 <div className="feed-comments-modal-panel">
                 {post.postKind === "live_stream_promo" && post.liveStreamPromo?.streamId ? (
                   <div className="feed-comments-modal-live-promo">
-                    <LiveStreamPromoBanner promo={post.liveStreamPromo} accentHex={primary} />
+                    <LiveStreamPromoBanner
+                      promo={post.liveStreamPromo}
+                      accentHex={primary}
+                      fanAccess={liveStreamFanAccess(post.liveStreamPromo, {
+                        fanId,
+                        fanPageAdminBypass,
+                        unlockedStreamIds: unlockedLiveStreamIds ?? new Set(),
+                        paidSubscriberTicketSkip: liveStreamPaidMemberTicketSkip,
+                      })}
+                      ticketLoading={liveStreamCheckoutStreamId === post.liveStreamPromo.streamId}
+                      onGetTicket={() => void onLiveStreamTicket?.(post.liveStreamPromo!.streamId)}
+                      onSignIn={onLiveStreamSignIn}
+                    />
                   </div>
                 ) : null}
                 {post.content?.trim() ? (
@@ -1445,6 +1527,8 @@ export const FanMemberFeed: React.FC<FanMemberFeedProps> = ({
   feedSettings,
   fanId,
   unlockedFanPostIds: unlockedFanPostIdsProp = [],
+  unlockedLiveStreamIds: unlockedLiveStreamIdsProp = [],
+  liveStreamPaidMemberTicketSkip = false,
   fanPageAdminBypass = false,
   onOpenSaved,
   tipsEnabled = true,
@@ -1460,6 +1544,10 @@ export const FanMemberFeed: React.FC<FanMemberFeedProps> = ({
     [creatorHandle, user?.role]
   );
   const unlockedFanPostIdSet = useMemo(() => new Set(unlockedFanPostIdsProp), [unlockedFanPostIdsProp]);
+  const unlockedLiveStreamIdSet = useMemo(
+    () => new Set(unlockedLiveStreamIdsProp),
+    [unlockedLiveStreamIdsProp],
+  );
   const avatarCropStyle: React.CSSProperties = getAvatarCropStyle(avatarObjectPosition);
   const creatorAvatarSrc = typeof avatar === "string" && avatar.trim() ? avatar.trim() : undefined;
   const [posts, setPosts] = useState<Post[]>([]);
@@ -1478,6 +1566,7 @@ export const FanMemberFeed: React.FC<FanMemberFeedProps> = ({
   const [tipCustomAmount, setTipCustomAmount] = useState("");
   const [tipLoading, setTipLoading] = useState(false);
   const [unlockingPostId, setUnlockingPostId] = useState<string | null>(null);
+  const [liveStreamCheckoutStreamId, setLiveStreamCheckoutStreamId] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<"feed" | "grid">("feed");
   const [gridHoveredVideoPostId, setGridHoveredVideoPostId] = useState<string | null>(null);
   const { detailPost, detailLoading, reload: reloadDetailPost } = useMemberPostDetail(creatorId, viewPostId);
@@ -1489,6 +1578,21 @@ export const FanMemberFeed: React.FC<FanMemberFeedProps> = ({
     fanPublicProfile.displayName?.trim() ||
     auth.currentUser?.displayName?.trim() ||
     undefined;
+
+  const handleLiveStreamTicket = useCallback(
+    async (streamId: string) => {
+      if (!creatorId || liveStreamCheckoutStreamId) return;
+      setLiveStreamCheckoutStreamId(streamId);
+      try {
+        const url = await startLiveStreamTicketCheckoutSession(creatorId, streamId);
+        window.location.href = url;
+      } catch (e) {
+        showToast?.(e instanceof Error ? e.message : "Could not start checkout.", "error");
+        setLiveStreamCheckoutStreamId(null);
+      }
+    },
+    [creatorId, liveStreamCheckoutStreamId, showToast],
+  );
 
   const fetchPosts = useCallback(async () => {
     setLoading(true);
@@ -1832,7 +1936,19 @@ export const FanMemberFeed: React.FC<FanMemberFeedProps> = ({
 
               {post.postKind === "live_stream_promo" && post.liveStreamPromo?.streamId ? (
                 <div className="feed-card-live-stream-promo-wrap fan-feed-live-stream-promo">
-                  <LiveStreamPromoBanner promo={post.liveStreamPromo} accentHex={primary} />
+                  <LiveStreamPromoBanner
+                    promo={post.liveStreamPromo}
+                    accentHex={primary}
+                    fanAccess={liveStreamFanAccess(post.liveStreamPromo, {
+                      fanId,
+                      fanPageAdminBypass,
+                      unlockedStreamIds: unlockedLiveStreamIdSet,
+                      paidSubscriberTicketSkip: liveStreamPaidMemberTicketSkip,
+                    })}
+                    ticketLoading={liveStreamCheckoutStreamId === post.liveStreamPromo.streamId}
+                    onGetTicket={() => void handleLiveStreamTicket(post.liveStreamPromo!.streamId)}
+                    onSignIn={() => showToast?.("Sign in to get a ticket.", "error")}
+                  />
                 </div>
               ) : null}
 
@@ -2140,6 +2256,11 @@ export const FanMemberFeed: React.FC<FanMemberFeedProps> = ({
         onUnlockNeedSignIn={(m) => showToast?.(m, "error")}
         sjHeartEmojiCtx={sjHeartEmojiCtx}
         fanPageAdminBypass={fanPageAdminBypass}
+        unlockedLiveStreamIds={unlockedLiveStreamIdSet}
+        liveStreamPaidMemberTicketSkip={liveStreamPaidMemberTicketSkip}
+        liveStreamCheckoutStreamId={liveStreamCheckoutStreamId}
+        onLiveStreamTicket={handleLiveStreamTicket}
+        onLiveStreamSignIn={() => showToast?.("Sign in to get a ticket.", "error")}
       />
     </div>
   );
@@ -2156,6 +2277,8 @@ interface FanMemberSavedProps {
   feedSettings?: FanFeedVisibilitySettings;
   fanId: string | undefined;
   unlockedFanPostIds?: string[];
+  unlockedLiveStreamIds?: string[];
+  liveStreamPaidMemberTicketSkip?: boolean;
   fanPageAdminBypass?: boolean;
   /** Navigate back to the home feed from the Saved tab. */
   onBackToFeed: () => void;
@@ -2171,6 +2294,8 @@ export const FanMemberSaved: React.FC<FanMemberSavedProps> = ({
   feedSettings,
   fanId,
   unlockedFanPostIds: unlockedFanPostIdsSaved = [],
+  unlockedLiveStreamIds: unlockedLiveStreamIdsSaved = [],
+  liveStreamPaidMemberTicketSkip = false,
   fanPageAdminBypass = false,
   onBackToFeed,
 }) => {
@@ -2183,7 +2308,26 @@ export const FanMemberSaved: React.FC<FanMemberSavedProps> = ({
     [creatorHandle, userSaved?.role]
   );
   const unlockedFanPostIdSetSaved = useMemo(() => new Set(unlockedFanPostIdsSaved), [unlockedFanPostIdsSaved]);
+  const unlockedLiveStreamIdSetSaved = useMemo(
+    () => new Set(unlockedLiveStreamIdsSaved),
+    [unlockedLiveStreamIdsSaved],
+  );
   const [unlockingPostIdSaved, setUnlockingPostIdSaved] = useState<string | null>(null);
+  const [liveStreamCheckoutStreamIdSaved, setLiveStreamCheckoutStreamIdSaved] = useState<string | null>(null);
+  const handleLiveStreamTicketSaved = useCallback(
+    async (streamId: string) => {
+      if (!creatorId || liveStreamCheckoutStreamIdSaved) return;
+      setLiveStreamCheckoutStreamIdSaved(streamId);
+      try {
+        const url = await startLiveStreamTicketCheckoutSession(creatorId, streamId);
+        window.location.href = url;
+      } catch (e) {
+        showToastSaved?.(e instanceof Error ? e.message : "Could not start checkout.", "error");
+        setLiveStreamCheckoutStreamIdSaved(null);
+      }
+    },
+    [creatorId, liveStreamCheckoutStreamIdSaved, showToastSaved],
+  );
   const handleUnlockPostSaved = useCallback(
     async (postId: string) => {
       if (!creatorId || unlockingPostIdSaved) return;
@@ -2382,6 +2526,23 @@ export const FanMemberSaved: React.FC<FanMemberSavedProps> = ({
                 onUnlockPost={handleUnlockPostSaved}
                 onUnlockNeedSignIn={(m) => showToastSaved?.(m, "error")}
               />
+              {post.postKind === "live_stream_promo" && post.liveStreamPromo?.streamId ? (
+                <div className="feed-card-live-stream-promo-wrap fan-feed-live-stream-promo px-1">
+                  <LiveStreamPromoBanner
+                    promo={post.liveStreamPromo}
+                    accentHex={primary}
+                    fanAccess={liveStreamFanAccess(post.liveStreamPromo, {
+                      fanId,
+                      fanPageAdminBypass,
+                      unlockedStreamIds: unlockedLiveStreamIdSetSaved,
+                      paidSubscriberTicketSkip: liveStreamPaidMemberTicketSkip,
+                    })}
+                    ticketLoading={liveStreamCheckoutStreamIdSaved === post.liveStreamPromo.streamId}
+                    onGetTicket={() => void handleLiveStreamTicketSaved(post.liveStreamPromo!.streamId)}
+                    onSignIn={() => showToastSaved?.("Sign in to get a ticket.", "error")}
+                  />
+                </div>
+              ) : null}
               <div className="fan-feed-post-actions">
                 <button
                   type="button"
@@ -2485,6 +2646,11 @@ export const FanMemberSaved: React.FC<FanMemberSavedProps> = ({
         onUnlockNeedSignIn={(m) => showToastSaved?.(m, "error")}
         sjHeartEmojiCtx={sjHeartEmojiCtxSaved}
         fanPageAdminBypass={fanPageAdminBypass}
+        unlockedLiveStreamIds={unlockedLiveStreamIdSetSaved}
+        liveStreamPaidMemberTicketSkip={liveStreamPaidMemberTicketSkip}
+        liveStreamCheckoutStreamId={liveStreamCheckoutStreamIdSaved}
+        onLiveStreamTicket={handleLiveStreamTicketSaved}
+        onLiveStreamSignIn={() => showToastSaved?.("Sign in to get a ticket.", "error")}
       />
     </div>
   );

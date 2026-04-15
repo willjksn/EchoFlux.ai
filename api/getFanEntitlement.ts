@@ -67,7 +67,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const decoded = await verifyAuth(req);
   if (!decoded?.uid) {
-    return res.status(200).json({ subscribed: false, unlockedProductIds: [], unlockedFanPostIds: [] });
+    return res.status(200).json({
+      subscribed: false,
+      unlockedProductIds: [],
+      unlockedFanPostIds: [],
+      unlockedLiveStreamIds: [],
+    });
   }
 
   const fanId = decoded.uid;
@@ -85,6 +90,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         membershipType: "paid" as const,
         unlockedProductIds: [],
         unlockedFanPostIds: [],
+        unlockedLiveStreamIds: [],
         memberUsername: null,
         memberUsernameRequired: false,
         fanPageAdminBypass: true,
@@ -251,12 +257,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     let grantData: {
       unlockedProductIds?: string[];
       unlockedFanPostIds?: string[];
+      unlockedLiveStreamIds?: string[];
       subscription?: boolean;
       membershipType?: string;
     } | undefined = grantSnap.exists
       ? (grantSnap.data() as {
           unlockedProductIds?: string[];
           unlockedFanPostIds?: string[];
+          unlockedLiveStreamIds?: string[];
           subscription?: boolean;
           membershipType?: string;
         } | undefined)
@@ -272,6 +280,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           grantData = s.data() as {
             unlockedProductIds?: string[];
             unlockedFanPostIds?: string[];
+            unlockedLiveStreamIds?: string[];
             subscription?: boolean;
             membershipType?: string;
           } | undefined;
@@ -291,16 +300,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     let unlockedProductIds: string[] = [];
     let unlockedFanPostIds: string[] = [];
+    let unlockedLiveStreamIds: string[] = [];
     if (grantData || grantSnap.exists) {
       const effectiveGrantData = grantData || (grantSnap.data() as {
         unlockedProductIds?: string[];
         unlockedFanPostIds?: string[];
+        unlockedLiveStreamIds?: string[];
         subscription?: boolean;
         membershipType?: string;
       } | undefined);
       unlockedProductIds = Array.isArray(effectiveGrantData?.unlockedProductIds) ? effectiveGrantData.unlockedProductIds : [];
       unlockedFanPostIds = Array.isArray(effectiveGrantData?.unlockedFanPostIds) ? effectiveGrantData.unlockedFanPostIds : [];
-      if (unlockedProductIds.length > 0 || unlockedFanPostIds.length > 0) {
+      unlockedLiveStreamIds = Array.isArray(effectiveGrantData?.unlockedLiveStreamIds)
+        ? effectiveGrantData.unlockedLiveStreamIds
+        : [];
+      if (unlockedProductIds.length > 0 || unlockedFanPostIds.length > 0 || unlockedLiveStreamIds.length > 0) {
         limitedMemberAccess = true;
       }
     }
@@ -432,6 +446,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       membershipType,
       unlockedProductIds,
       unlockedFanPostIds,
+      unlockedLiveStreamIds,
       limitedMemberAccess,
       memberUsername,
       memberUsernameRequired,

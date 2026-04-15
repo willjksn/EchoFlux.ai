@@ -97,12 +97,20 @@ function verifyWebhookSignature(
   );
 }
 
-const FAN_HUB_CHECKOUT_TYPES = new Set(['subscription', 'product', 'tip', 'post_unlock']);
+const FAN_HUB_CHECKOUT_TYPES = new Set(['subscription', 'product', 'tip', 'post_unlock', 'live_stream_ticket']);
 
-function normalizeFanHubCheckoutType(rawType: string | undefined): 'subscription' | 'product' | 'tip' | 'post_unlock' | null {
+function normalizeFanHubCheckoutType(
+  rawType: string | undefined,
+): 'subscription' | 'product' | 'tip' | 'post_unlock' | 'live_stream_ticket' | null {
   if (!rawType) return null;
   if (rawType === 'treat') return 'product'; // Legacy Stormij payload alias.
-  if (rawType === 'subscription' || rawType === 'product' || rawType === 'tip' || rawType === 'post_unlock') {
+  if (
+    rawType === 'subscription' ||
+    rawType === 'product' ||
+    rawType === 'tip' ||
+    rawType === 'post_unlock' ||
+    rawType === 'live_stream_ticket'
+  ) {
     return rawType;
   }
   return null;
@@ -207,19 +215,31 @@ async function repairFanHubSubscriptionIdentityForSession(
     { merge: true },
   );
 
-  const oldGrant = (oldGrantSnap?.data() || {}) as { unlockedProductIds?: string[]; unlockedFanPostIds?: string[] };
-  const newGrant = (newGrantSnap?.data() || {}) as { unlockedProductIds?: string[]; unlockedFanPostIds?: string[] };
+  const oldGrant = (oldGrantSnap?.data() || {}) as {
+    unlockedProductIds?: string[];
+    unlockedFanPostIds?: string[];
+    unlockedLiveStreamIds?: string[];
+  };
+  const newGrant = (newGrantSnap?.data() || {}) as {
+    unlockedProductIds?: string[];
+    unlockedFanPostIds?: string[];
+    unlockedLiveStreamIds?: string[];
+  };
   const unlockedProductIds = Array.from(
     new Set([...(newGrant.unlockedProductIds || []), ...(oldGrant.unlockedProductIds || [])]),
   );
   const unlockedFanPostIds = Array.from(
     new Set([...(newGrant.unlockedFanPostIds || []), ...(oldGrant.unlockedFanPostIds || [])]),
   );
+  const unlockedLiveStreamIds = Array.from(
+    new Set([...(newGrant.unlockedLiveStreamIds || []), ...(oldGrant.unlockedLiveStreamIds || [])]),
+  );
   await grants.doc(toFanId).set(
     {
       subscription: true,
       unlockedProductIds,
       ...(unlockedFanPostIds.length ? { unlockedFanPostIds } : {}),
+      ...(unlockedLiveStreamIds.length ? { unlockedLiveStreamIds } : {}),
       updatedAt: nowIso,
       migratedFromFanId: fromFanId,
     },
@@ -618,6 +638,89 @@ export async function processFanHubCheckoutSessionCompleted(
     return true;
   }
 
+  if (type === 'live_stream_ticket' && session.metadata?.streamId) {
+    const ticketStreamId = session.metadata.streamId as string;
+    if (fanId.startsWith('guest_') || fanId.startsWith('anon_')) {
+      console.warn('Fan hub live_stream_ticket checkout invalid fan id', session.id);
+      return false;
+    }
+    const paymentIntentId = typeof session.payment_intent === 'string' ? session.payment_intent : (session.payment_intent as Stripe.PaymentIntent)?.id;
+    const amountTotal = session.amount_total ?? 0;
+
+    const orderRef = db.collection('orders').doc(session.id);
+    await orderRef.set({
+      creatorId,
+      fanId,
+      streamId: ticketStreamId,
+      postId: null,
+      productId: null,
+      type: 'live_stream_ticket',
+      stripeSessionId: session.id,
+      stripePaymentIntentId: paymentIntentId || null,
+      amountCents: amountTotal,
+      status: 'paid',
+      fanEmail: getCheckoutSessionEmail(session),
+      fanName: getCheckoutSessionName(session),
+      scheduleStatus: 'pending',
+      createdAt: now,
+    });
+
+    const grantRef = db.collection('creatorEntitlements').doc(creatorId).collection('grants').doc(fanId);
+    const grantSnap = await grantRef.get();
+    const existing = grantSnap.data() as {
+      unlockedFanPostIds?: string[];
+      unlockedProductIds?: string[];
+      unlockedLiveStreamIds?: string[];
+    } | undefined;
+    const unlockedStreams = Array.isArray(existing?.unlockedLiveStreamIds) ? existing.unlockedLiveStreamIds : [];
+    if (!unlockedStreams.includes(ticketStreamId)) {
+      await grantRef.set({ unlockedLiveStreamIds: [...unlockedStreams, ticketStreamId], updatedAt: now }, { merge: true });
+    }
+
+    const fanEmail = getCheckoutSessionEmail(session);
+    const fanName = getCheckoutSessionName(session);
+    const fanRef = db.collection('creators').doc(creatorId).collection('fans').doc(fanId);
+    const fanSnap = await fanRef.get();
+    if (!fanSnap.exists) {
+      await fanRef.set({
+        id: fanId,
+        creatorId,
+        email: fanEmail,
+        displayName: fanName,
+        stripeCustomerId: typeof session.customer === 'string' ? session.customer : (session.customer as any)?.id || null,
+        subscriptionStatus: null,
+        lastPurchaseAt: now,
+        totalSpentCents: amountTotal,
+        purchaseCount: 1,
+        createdAt: now,
+        updatedAt: now,
+      });
+    } else {
+      const fanData = fanSnap.data() as { totalSpentCents?: number; purchaseCount?: number };
+      await fanRef.update({
+        lastPurchaseAt: now,
+        totalSpentCents: (fanData.totalSpentCents || 0) + amountTotal,
+        purchaseCount: (fanData.purchaseCount || 0) + 1,
+        updatedAt: now,
+      });
+    }
+
+    try {
+      await reconcileFanHubFanPreferenceForMember(db, creatorId, fanId, now, 'stripe_live_stream_ticket');
+    } catch (e) {
+      console.error('reconcileFanHubFanPreference (live_stream_ticket):', e);
+    }
+
+    const statsRef = db.collection('creatorStats').doc(creatorId);
+    const statsSnap = await statsRef.get();
+    const stats = statsSnap.data() as { totalRevenueCents?: number; totalOrders?: number } | undefined;
+    const totalRevenue = (stats?.totalRevenueCents ?? 0) + amountTotal;
+    const totalOrders = (stats?.totalOrders ?? 0) + 1;
+    await statsRef.set({ totalRevenueCents: totalRevenue, totalOrders, updatedAt: now }, { merge: true });
+    console.log(`Fan hub: live_stream_ticket checkout creator=${creatorId} fan=${fanId} stream=${ticketStreamId}`);
+    return true;
+  }
+
   if (type === 'tip') {
     const paymentIntentId = typeof session.payment_intent === 'string' ? session.payment_intent : (session.payment_intent as Stripe.PaymentIntent)?.id;
     const amountTotal = session.amount_total ?? 0;
@@ -992,22 +1095,24 @@ async function handleConnectEvent(db: Firestore, stripeClient: Stripe, event: St
       fanId?: string;
       productId?: string;
       postId?: string;
+      streamId?: string;
       type?: string;
       amountCents?: number;
       status?: string;
     };
     if (order.status === 'refunded') return;
-    const { creatorId, fanId, productId, postId: orderPostId, type: orderType, amountCents = 0 } = order;
+    const { creatorId, fanId, productId, postId: orderPostId, streamId: orderStreamId, type: orderType, amountCents = 0 } = order;
     if (!creatorId || !fanId) return;
 
     await orderDoc.ref.update({ status: 'refunded', updatedAt: new Date().toISOString() });
 
-    if (productId || (orderType === 'post_unlock' && orderPostId)) {
+    if (productId || (orderType === 'post_unlock' && orderPostId) || (orderType === 'live_stream_ticket' && orderStreamId)) {
       const grantRef = db.collection('creatorEntitlements').doc(creatorId).collection('grants').doc(fanId);
       const grantSnap = await grantRef.get();
       const grantData = grantSnap.data() as {
         unlockedProductIds?: string[];
         unlockedFanPostIds?: string[];
+        unlockedLiveStreamIds?: string[];
       } | undefined;
       const patch: Record<string, unknown> = { updatedAt: new Date().toISOString() };
       if (productId) {
@@ -1018,6 +1123,11 @@ async function handleConnectEvent(db: Firestore, stripeClient: Stripe, event: St
       if (orderType === 'post_unlock' && orderPostId) {
         patch.unlockedFanPostIds = Array.isArray(grantData?.unlockedFanPostIds)
           ? grantData.unlockedFanPostIds.filter((id) => id !== orderPostId)
+          : [];
+      }
+      if (orderType === 'live_stream_ticket' && orderStreamId) {
+        patch.unlockedLiveStreamIds = Array.isArray(grantData?.unlockedLiveStreamIds)
+          ? grantData.unlockedLiveStreamIds.filter((id) => id !== orderStreamId)
           : [];
       }
       await grantRef.set(patch, { merge: true });

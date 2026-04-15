@@ -1235,7 +1235,7 @@ function FeedCard({
 
       {post.postKind === "live_stream_promo" && post.liveStreamPromo?.streamId ? (
         <div className="feed-card-live-stream-promo-wrap">
-          <LiveStreamPromoBanner promo={post.liveStreamPromo} accentHex={creatorThemePrimary} />
+          <LiveStreamPromoBanner variant="creator" promo={post.liveStreamPromo} accentHex={creatorThemePrimary} />
         </div>
       ) : null}
 
@@ -1528,7 +1528,7 @@ function FeedCard({
                 <div className="feed-comments-modal-panel">
                   {post.postKind === "live_stream_promo" && post.liveStreamPromo?.streamId ? (
                     <div className="feed-comments-modal-live-promo">
-                      <LiveStreamPromoBanner promo={post.liveStreamPromo} accentHex={viewPostLinkColor} />
+                      <LiveStreamPromoBanner variant="creator" promo={post.liveStreamPromo} accentHex={viewPostLinkColor} />
                     </div>
                   ) : null}
                   {post.body?.trim() ? (

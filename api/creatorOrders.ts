@@ -91,7 +91,9 @@ function inferLegacyPurchaseType(d: Record<string, unknown>): "tip" | "product" 
   return "product";
 }
 
-function normalizeOrderType(d: Record<string, unknown>): "tip" | "subscription" | "unlock" | "post_unlock" | "product" {
+function normalizeOrderType(
+  d: Record<string, unknown>,
+): "tip" | "subscription" | "unlock" | "post_unlock" | "live_stream_ticket" | "product" {
   const type = toLowerString(d.type);
   const productType = toLowerString(d.productType);
   const pick = type || productType;
@@ -99,6 +101,7 @@ function normalizeOrderType(d: Record<string, unknown>): "tip" | "subscription" 
   if (pick === "subscription") return "subscription";
   if (pick === "unlock" || pick === "unlock_media") return "unlock";
   if (pick === "post_unlock") return "post_unlock";
+  if (pick === "live_stream_ticket") return "live_stream_ticket";
   if (pick === "product" || pick === "treat") return "product";
   if (typeof d.tipHandle === "string" && d.tipHandle.trim()) return "tip";
   const productName = toLowerString(d.productName);

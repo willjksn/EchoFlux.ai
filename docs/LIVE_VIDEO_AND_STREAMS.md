@@ -46,7 +46,7 @@ Rename in the UI: **“Video in DMs”** (or similar) so it isn’t confused wit
 | Piece | Typical approach |
 |-------|------------------|
 | Video | **Daily Prebuilt** “broadcast” / live-stream style room, **Mux Live**, **LiveKit**, or **100ms** — one publisher, many subscribers. |
-| Paywall | **Stripe Checkout** one-time or price; webhook writes `liveStreamAccess/{streamId}/fans/{fanId}` or time-boxed claim. |
+| Paywall | **Stripe Checkout** one-time ticket (`createFanCheckoutSession` type `live_stream_ticket`, metadata `streamId`); Connect webhook appends `streamId` to `creatorEntitlements/{creatorId}/grants/{fanId}.unlockedLiveStreamIds` and creates an `orders` row (refund removes the id). Player/broadcast UI is still to be wired. |
 | Chat | **Firestore** onSnapshot (rate-limited), **Daily chat**, or **Ably/Pusher** for scale. |
 | Creator UI | Start/stop stream, see chat moderation (optional). |
 
