@@ -515,12 +515,13 @@ export const FanHubPosts: React.FC = () => {
           },
           body: JSON.stringify({ action, streamId }),
         });
-        const data = (await res.json().catch(() => ({}))) as { error?: string };
+        const data = (await res.json().catch(() => ({}))) as { error?: string; hint?: string };
         if (!res.ok) {
           if (res.status === 404) {
             throw new Error(`Live stream API not found (404). ${DEV_API_404_USER_HINT}`);
           }
-          throw new Error(data.error || "Request failed");
+          const detail = [data.error, data.hint].filter((s): s is string => !!s?.trim()).join(" — ");
+          throw new Error(detail || "Request failed");
         }
         if (action === "goLive") {
           setLiveStreamComposerStatus("live");

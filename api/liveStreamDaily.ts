@@ -57,6 +57,25 @@ function displayNameFromDecoded(decoded: { name?: string; email?: string }, uid:
   return `guest-${uid.slice(0, 8)}`;
 }
 
+/** Vercel may pass `body` as string, object, or Buffer — avoid uncaught JSON.parse → 500 */
+function parseLiveStreamDailyBody(req: { body?: unknown }): {
+  action?: string;
+  streamId?: string;
+  creatorId?: string;
+} {
+  try {
+    const raw = req.body;
+    if (raw == null || raw === "") return {};
+    if (typeof raw === "object" && !Buffer.isBuffer(raw)) {
+      return raw as { action?: string; streamId?: string; creatorId?: string };
+    }
+    const s = typeof raw === "string" ? raw : String(raw);
+    return JSON.parse(s || "{}") as { action?: string; streamId?: string; creatorId?: string };
+  } catch {
+    return {};
+  }
+}
+
 /**
  * Daily.co broadcast for fan live streams (interactive live streaming / Prebuilt).
  *
@@ -76,34 +95,30 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(503).json({ error: "Live video is not configured" });
   }
 
-  const decoded = await verifyAuth(req);
-  if (!decoded?.uid) {
-    return res.status(401).json({ error: "Unauthorized" });
-  }
-
-  const body = (typeof req.body === "string" ? JSON.parse(req.body || "{}") : req.body || {}) as {
-    action?: string;
-    streamId?: string;
-    creatorId?: string;
-  };
-
-  const action = typeof body.action === "string" ? body.action.trim() : "";
-  const streamId = typeof body.streamId === "string" ? body.streamId.trim() : "";
-  if (!streamId) {
-    return res.status(400).json({ error: "streamId is required" });
-  }
-
-  const db = tryGetAdminDb();
-  if (!db) {
-    return res.status(503).json({
-      error:
-        "Server database is not configured. Set FIREBASE_SERVICE_ACCOUNT_KEY_BASE64 (or equivalent) on the deployment that serves /api.",
-    });
-  }
-
-  const uid = decoded.uid;
-
   try {
+    const decoded = await verifyAuth(req);
+    if (!decoded?.uid) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    const body = parseLiveStreamDailyBody(req);
+
+    const action = typeof body.action === "string" ? body.action.trim() : "";
+    const streamId = typeof body.streamId === "string" ? body.streamId.trim() : "";
+    if (!streamId) {
+      return res.status(400).json({ error: "streamId is required" });
+    }
+
+    const db = tryGetAdminDb();
+    if (!db) {
+      return res.status(503).json({
+        error:
+          "Server database is not configured. Set FIREBASE_SERVICE_ACCOUNT_KEY_BASE64 (or equivalent) on the deployment that serves /api.",
+      });
+    }
+
+    const uid = decoded.uid;
+
     if (action === "goLive" || action === "endLive") {
       const streamRef = db.collection("creators").doc(uid).collection("liveStreams").doc(streamId);
       const snap = await streamRef.get();
@@ -111,7 +126,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return res.status(404).json({ error: "Stream not found" });
       }
       const sdata = snap.data() as Record<string, unknown>;
-      if (String(sdata.creatorId || "") !== uid) {
+      const docCreator = String(sdata.creatorId ?? "").trim();
+      if (docCreator && docCreator !== uid) {
         return res.status(403).json({ error: "Forbidden" });
       }
 
@@ -180,7 +196,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return res.status(404).json({ error: "Stream not found" });
       }
       const sdata = snap.data() as Record<string, unknown>;
-      if (String(sdata.creatorId || "") !== creatorId) {
+      const tokenDocCreator = String(sdata.creatorId ?? "").trim();
+      if (tokenDocCreator && tokenDocCreator !== creatorId) {
         return res.status(403).json({ error: "Invalid stream" });
       }
 
@@ -231,6 +248,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   } catch (e) {
     console.error("liveStreamDaily:", e);
     const msg = e instanceof Error ? e.message : "Request failed";
-    return res.status(500).json({ error: msg });
+    const isDaily = /daily\.co/i.test(msg) || msg.startsWith("Daily.co:");
+    return res.status(isDaily ? 502 : 500).json({
+      error: msg,
+      ...(isDaily ? { hint: "Check DAILY_API_KEY and Daily dashboard limits." } : {}),
+    });
   }
 }

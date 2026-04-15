@@ -57,6 +57,22 @@ interface DailyTokenConfig {
   start_audio_off?: boolean;
 }
 
+function formatDailyApiErrorBody(errorData: Record<string, unknown>, status: number, statusText: string): string {
+  const err = typeof errorData.error === "string" ? errorData.error.trim() : "";
+  let infoPart = "";
+  if (typeof errorData.info === "string") {
+    infoPart = errorData.info.trim();
+  } else if (errorData.info != null && typeof errorData.info === "object") {
+    try {
+      infoPart = JSON.stringify(errorData.info);
+    } catch {
+      infoPart = String(errorData.info);
+    }
+  }
+  const base = [err, infoPart].filter(Boolean).join(" — ");
+  return base || `HTTP ${status} ${statusText}`;
+}
+
 async function dailyFetch<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
   if (!DAILY_API_KEY) {
     throw new Error('DAILY_API_KEY not configured');
@@ -72,11 +88,9 @@ async function dailyFetch<T>(endpoint: string, options: RequestInit = {}): Promi
   });
 
   if (!response.ok) {
-    const errorData = await response.json().catch(() => ({}));
-    throw new Error(
-      (errorData as { error?: string }).error || 
-      `Daily.co API error: ${response.status} ${response.statusText}`
-    );
+    const errorData = (await response.json().catch(() => ({}))) as Record<string, unknown>;
+    const detail = formatDailyApiErrorBody(errorData, response.status, response.statusText);
+    throw new Error(`Daily.co: ${detail}`);
   }
 
   return response.json() as Promise<T>;
@@ -176,8 +190,11 @@ export async function getRoomDetails(roomName: string): Promise<DailyRoom | null
 }
 
 function sanitizeDailyRoomSegment(id: string): string {
-  return id.replace(/[^a-zA-Z0-9_-]/g, "-").slice(0, 48);
+  return id.replace(/[^a-zA-Z0-9_-]/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "").slice(0, 48);
 }
+
+/** Daily: only [A-Za-z0-9_-], max 128 chars (see POST /rooms docs). */
+const DAILY_ROOM_NAME_OK = /^[A-Za-z0-9_-]{1,128}$/;
 
 /**
  * Large broadcast room for fan live streams (Daily interactive live streaming / Prebuilt).
@@ -188,9 +205,13 @@ export async function createOrGetLiveStreamBroadcastRoom(
   streamId: string,
   durationHours: number
 ): Promise<{ roomUrl: string; roomName: string }> {
-  const safeCreator = sanitizeDailyRoomSegment(creatorId);
-  const safeStream = sanitizeDailyRoomSegment(streamId);
-  const roomName = `efls-${safeCreator}-${safeStream}`.slice(0, 120);
+  const safeCreator = sanitizeDailyRoomSegment(creatorId) || "c";
+  const safeStream = sanitizeDailyRoomSegment(streamId) || "s";
+  let roomName = `efls-${safeCreator}-${safeStream}`.slice(0, 128);
+  if (!DAILY_ROOM_NAME_OK.test(roomName)) {
+    throw new Error(`Daily.co: room name failed validation after sanitize: ${roomName}`);
+  }
+
   const existing = await getRoomDetails(roomName);
   if (existing?.url) {
     return { roomUrl: existing.url, roomName: existing.name || roomName };
@@ -199,29 +220,35 @@ export async function createOrGetLiveStreamBroadcastRoom(
   const hours = Math.min(Math.max(durationHours, 1), 72);
   const expirationTime = Math.floor(Date.now() / 1000) + hours * 3600;
 
-  // Do not set permissions.canSend: false — that blocks the host from sending video/audio in Prebuilt.
-  // Large-call flags are optional; omit if Daily rejects the combo on some accounts.
-  const room = await dailyFetch<DailyRoom>('/rooms', {
-    method: 'POST',
-    body: JSON.stringify({
-      name: roomName,
-      privacy: 'private',
-      properties: {
-        exp: expirationTime,
-        max_participants: 10000,
-        enable_chat: true,
-        enable_screenshare: true,
-        eject_at_room_exp: true,
-        enable_hidden_participants: true,
-        experimental_optimize_large_calls: true,
-      },
-    } as DailyRoomConfig),
-  });
-
-  return {
-    roomUrl: room.url,
-    roomName: room.name,
+  // Minimal properties: omit max_participants (Daily default is 200). Extra flags have caused invalid-request-error on some domains.
+  const createBody = {
+    name: roomName,
+    privacy: "private" as const,
+    properties: {
+      exp: expirationTime,
+      enable_chat: true,
+      enable_screenshare: true,
+      eject_at_room_exp: true,
+    },
   };
+
+  try {
+    const room = await dailyFetch<DailyRoom>("/rooms", {
+      method: "POST",
+      body: JSON.stringify(createBody),
+    });
+    return {
+      roomUrl: room.url,
+      roomName: room.name,
+    };
+  } catch (e) {
+    // Duplicate name / race: first GET missed, POST failed — room may exist now.
+    const retry = await getRoomDetails(roomName);
+    if (retry?.url) {
+      return { roomUrl: retry.url, roomName: retry.name || roomName };
+    }
+    throw e;
+  }
 }
 
 /**
