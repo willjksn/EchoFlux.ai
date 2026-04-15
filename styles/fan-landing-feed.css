@@ -2236,6 +2236,11 @@
   box-shadow: 0 0 0 3px rgba(201, 112, 130, 0.1);
 }
 
+/* Room for feed-comments-modal-compose-emoji-btn (same pattern as creator comment modal). */
+.fan-feed-comment-input.fan-feed-comment-input--with-emoji {
+  padding-right: 2.5rem;
+}
+
 .fan-feed-comment-send {
   padding: 0.6rem 1rem;
   border: none;

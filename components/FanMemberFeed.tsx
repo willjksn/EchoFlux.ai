@@ -36,6 +36,8 @@ import {
 } from "../src/lib/fanFeedCarouselScrollRestore";
 import { tryFeedVideoPosterSeekOnce } from "../src/lib/feedVideoPosterSeek";
 import { resolveApiUrl } from "../src/lib/resolveApiUrl";
+import { EmojiIcon } from "./icons/UIIcons";
+import { useFanFeedCommentEmojiPicker } from "./fanFeedCommentEmojiPicker";
 
 const feedImageDownloadGuardProps = {
   draggable: false as const,
@@ -992,6 +994,88 @@ function formatPostCalendarDate(date: Date): string {
   return date.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 }
 
+/** Expanded inline comments on the fan home feed — same emoji picker UX as creator / view-post modal. */
+function FanMemberInlineCommentRow({
+  postId,
+  expanded,
+  commentDraft,
+  setCommentDraft,
+  fanId,
+  commentSending,
+  primary,
+  submitComment,
+  sjHeartEmojiCtx,
+}: {
+  postId: string;
+  expanded: boolean;
+  commentDraft: Record<string, string>;
+  setCommentDraft: React.Dispatch<React.SetStateAction<Record<string, string>>>;
+  fanId?: string;
+  commentSending: string | null;
+  primary: string;
+  submitComment: (id: string) => void | Promise<void>;
+  sjHeartEmojiCtx: SjHeartEmojiAccessContext;
+}) {
+  const draft = commentDraft[postId] ?? "";
+  const setText = useCallback(
+    (next: string) => setCommentDraft((prev) => ({ ...prev, [postId]: next })),
+    [postId, setCommentDraft]
+  );
+  const emoji = useFanFeedCommentEmojiPicker({
+    composeSurfaceOpen: expanded,
+    commentText: draft,
+    setCommentText: setText,
+    maxLength: 500,
+    sjHeartEmojiCtx,
+  });
+  const sending = commentSending === postId;
+  const busy = !!commentSending;
+  return (
+    <>
+      <div className="fan-feed-comment-input-wrap">
+        <div className="feed-comments-modal-compose-input-wrap" style={{ flex: 1, minWidth: 0 }}>
+          <div ref={emoji.composeFieldRef} className="feed-comments-modal-compose-field">
+            <input
+              ref={emoji.commentInputRef}
+              type="text"
+              className="fan-feed-comment-input fan-feed-comment-input--with-emoji"
+              placeholder="Write a comment..."
+              value={draft}
+              onChange={(e) => setCommentDraft((prev) => ({ ...prev, [postId]: e.target.value }))}
+              onKeyDown={(e) => e.key === "Enter" && void submitComment(postId)}
+              disabled={!fanId || busy}
+              maxLength={500}
+            />
+            <button
+              type="button"
+              ref={emoji.composeEmojiButtonRef}
+              className="feed-comments-modal-compose-emoji-btn"
+              aria-label="Add emoji"
+              aria-expanded={emoji.composeEmojiPickerOpen}
+              onClick={(e) => {
+                e.stopPropagation();
+                emoji.setComposeEmojiPickerOpen((o) => !o);
+              }}
+            >
+              <EmojiIcon className="w-5 h-5" />
+            </button>
+          </div>
+        </div>
+        <button
+          type="button"
+          className="fan-feed-comment-send"
+          style={{ backgroundColor: primary }}
+          onClick={() => void submitComment(postId)}
+          disabled={!fanId || !draft.trim() || busy}
+        >
+          {sending ? "…" : "Send"}
+        </button>
+      </div>
+      {emoji.emojiPickerPortal}
+    </>
+  );
+}
+
 function FanMemberPostDetailModal({
   open,
   onClose,
@@ -1067,6 +1151,26 @@ function FanMemberPostDetailModal({
     return () => window.removeEventListener("keydown", onKey);
   }, [open, onClose]);
 
+  const pidForPicker = post?.id ?? "";
+  const commentsVisibleForCompose = !!(post && !post.hideComments && !feedSettings?.hideComments);
+  const composeSurfaceOpen = open && !!post && !!onSubmitComment && commentsVisibleForCompose;
+  const draftForPicker = open && post ? (commentDraft[pidForPicker] ?? "") : "";
+  const setDraftForPicker = useCallback(
+    (next: string) => {
+      const id = post?.id;
+      if (!id) return;
+      setCommentDraft((prev) => ({ ...prev, [id]: next }));
+    },
+    [post?.id, setCommentDraft]
+  );
+  const memberModalEmoji = useFanFeedCommentEmojiPicker({
+    composeSurfaceOpen,
+    commentText: draftForPicker,
+    setCommentText: setDraftForPicker,
+    maxLength: 500,
+    sjHeartEmojiCtx,
+  });
+
   if (!open) return null;
 
   const pid = post?.id ?? "";
@@ -1075,6 +1179,7 @@ function FanMemberPostDetailModal({
   const hasMedia = !!post && post.mediaUrls.length > 0;
 
   return (
+    <>
     <div
       className="fan-member-post-modal-backdrop fan-member-post-modal-backdrop--detail"
       role="presentation"
@@ -1219,21 +1324,38 @@ function FanMemberPostDetailModal({
                           )}
                         </div>
                         <div className="feed-comments-modal-compose-input-wrap">
-                          <input
-                            type="text"
-                            className="feed-comments-modal-compose-input"
-                            placeholder={fanId ? "Write a comment..." : "Log in to comment"}
-                            value={draft}
-                            onChange={(e) => setCommentDraft((prev) => ({ ...prev, [pid]: e.target.value }))}
-                            onKeyDown={(e) => {
-                              if (e.key === "Enter" && fanId && draft.trim() && onSubmitComment) {
-                                e.preventDefault();
-                                void onSubmitComment(pid, () => void onReloadAfterComment());
-                              }
-                            }}
-                            disabled={!fanId || commentSending === pid}
-                            aria-label="Write a comment"
-                          />
+                          <div ref={memberModalEmoji.composeFieldRef} className="feed-comments-modal-compose-field">
+                            <input
+                              ref={memberModalEmoji.commentInputRef}
+                              type="text"
+                              className="feed-comments-modal-compose-input"
+                              placeholder={fanId ? "Write a comment..." : "Log in to comment"}
+                              value={draft}
+                              onChange={(e) => setCommentDraft((prev) => ({ ...prev, [pid]: e.target.value }))}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter" && fanId && draft.trim() && onSubmitComment) {
+                                  e.preventDefault();
+                                  void onSubmitComment(pid, () => void onReloadAfterComment());
+                                }
+                              }}
+                              disabled={!fanId || commentSending === pid}
+                              aria-label="Write a comment"
+                              maxLength={500}
+                            />
+                            <button
+                              type="button"
+                              ref={memberModalEmoji.composeEmojiButtonRef}
+                              className="feed-comments-modal-compose-emoji-btn"
+                              aria-label="Add emoji"
+                              aria-expanded={memberModalEmoji.composeEmojiPickerOpen}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                memberModalEmoji.setComposeEmojiPickerOpen((o) => !o);
+                              }}
+                            >
+                              <EmojiIcon className="w-5 h-5" />
+                            </button>
+                          </div>
                         </div>
                         <button
                           type="submit"
@@ -1256,6 +1378,8 @@ function FanMemberPostDetailModal({
         </div>
       </div>
     </div>
+    {memberModalEmoji.emojiPickerPortal}
+    </>
   );
 }
 
@@ -1800,26 +1924,17 @@ export const FanMemberFeed: React.FC<FanMemberFeedProps> = ({
 
               {!(feedSettings?.hideComments || post.hideComments) && expandedComments.has(post.id) && (
                 <div className="fan-feed-comments">
-                  <div className="fan-feed-comment-input-wrap">
-                    <input
-                      type="text"
-                      className="fan-feed-comment-input"
-                      placeholder="Write a comment..."
-                      value={commentDraft[post.id] ?? ""}
-                      onChange={(e) => setCommentDraft((prev) => ({ ...prev, [post.id]: e.target.value }))}
-                      onKeyDown={(e) => e.key === "Enter" && submitComment(post.id)}
-                      disabled={!fanId || !!commentSending}
-                    />
-                    <button
-                      type="button"
-                      className="fan-feed-comment-send"
-                      style={{ backgroundColor: primary }}
-                      onClick={() => submitComment(post.id)}
-                      disabled={!fanId || !(commentDraft[post.id] ?? "").trim() || !!commentSending}
-                    >
-                      {commentSending === post.id ? "…" : "Send"}
-                    </button>
-                  </div>
+                  <FanMemberInlineCommentRow
+                    postId={post.id}
+                    expanded={expandedComments.has(post.id)}
+                    commentDraft={commentDraft}
+                    setCommentDraft={setCommentDraft}
+                    fanId={fanId}
+                    commentSending={commentSending}
+                    primary={primary}
+                    submitComment={submitComment}
+                    sjHeartEmojiCtx={sjHeartEmojiCtx}
+                  />
                   <div className="fan-feed-comments-list">
                     <p className="fan-feed-no-comments">No comments yet. Be the first!</p>
                   </div>
