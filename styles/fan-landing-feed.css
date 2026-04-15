@@ -2212,12 +2212,29 @@
 
 .fan-feed-comment-input-wrap {
   display: flex;
+  align-items: stretch;
   gap: 0.5rem;
   margin-bottom: 0.75rem;
 }
 
-.fan-feed-comment-input {
+/* Grow to fill row next to Send; inner field must be a flex container so compose-field + input stretch full width. */
+.fan-feed-comment-compose-slot {
   flex: 1;
+  min-width: 0;
+  display: flex;
+}
+
+.fan-feed-comment-compose-slot .feed-comments-modal-compose-field {
+  flex: 1;
+  min-width: 0;
+  width: 100%;
+}
+
+.fan-feed-comment-input {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
   padding: 0.6rem 0.875rem;
   background: #fff;
   border: 1px solid rgba(201, 112, 130, 0.2);
@@ -2242,6 +2259,8 @@
 }
 
 .fan-feed-comment-send {
+  flex-shrink: 0;
+  align-self: center;
   padding: 0.6rem 1rem;
   border: none;
   border-radius: 20px;

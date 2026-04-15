@@ -1033,7 +1033,7 @@ function FanMemberInlineCommentRow({
   return (
     <>
       <div className="fan-feed-comment-input-wrap">
-        <div className="feed-comments-modal-compose-input-wrap" style={{ flex: 1, minWidth: 0 }}>
+        <div className="feed-comments-modal-compose-input-wrap fan-feed-comment-compose-slot">
           <div ref={emoji.composeFieldRef} className="feed-comments-modal-compose-field">
             <input
               ref={emoji.commentInputRef}
