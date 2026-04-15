@@ -2290,6 +2290,7 @@
   left: auto;
   top: auto;
   min-height: 0;
+  pointer-events: auto;
   /* Above modal backdrop (10500) and host app overlays; inline style also sets z-index when allowed */
   z-index: 2147483646;
   visibility: visible;
@@ -2300,7 +2301,8 @@
 }
 .feed-comments-modal-emoji-picker--fixed .feed-comments-modal-emoji-picker-grid {
   flex: 1 1 auto;
-  min-height: 0;
+  /* Keep a visible scroll area when flex distributes height oddly (portaled popover) */
+  min-height: min(7rem, 30vh);
   max-height: none;
   overflow-y: auto;
 }

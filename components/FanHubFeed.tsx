@@ -716,6 +716,8 @@ function FeedCard({
   const [feedVideoPlaying, setFeedVideoPlaying] = useState(false);
   const [feedVideoMuted, setFeedVideoMuted] = useState(true);
   const [feedVideoDecodeError, setFeedVideoDecodeError] = useState(false);
+  /** Desktop hover preview: play muted loop while pointer is over the feed video area (like grid thumbnails). */
+  const [feedVideoMediaHover, setFeedVideoMediaHover] = useState(false);
   const [adminMenuOpen, setAdminMenuOpen] = useState(false);
   const adminMenuRef = useRef<HTMLDivElement | null>(null);
 
@@ -779,15 +781,29 @@ function FeedCard({
       setComposeEmojiPickerFixedStyle(null);
       return;
     }
-    const field = composeFieldRef.current;
-    if (!field) return;
-
-    const rect = field.getBoundingClientRect();
     const POPOVER_H = 300;
     const pad = 8;
     const vw = typeof window !== "undefined" ? window.innerWidth : 400;
     const vh = typeof window !== "undefined" ? window.innerHeight : 600;
     const w = Math.min(320, vw - 2 * pad);
+
+    const field = composeFieldRef.current;
+    if (!field) {
+      setComposeEmojiPickerFixedStyle({
+        position: "fixed",
+        left: Math.max(pad, (vw - w) / 2),
+        bottom: 24,
+        width: w,
+        maxHeight: Math.min(POPOVER_H, Math.floor(vh * 0.42)),
+        zIndex: 2147483646,
+        boxSizing: "border-box",
+        visibility: "visible",
+        opacity: 1,
+      });
+      return;
+    }
+
+    const rect = field.getBoundingClientRect();
     const left = Math.max(pad, Math.min(rect.left, vw - w - pad));
     const spaceBelow = vh - rect.bottom - pad;
     const spaceAbove = rect.top - pad;
@@ -836,7 +852,9 @@ function FeedCard({
 
   useEffect(() => {
     if (!composeEmojiPickerOpen) return;
+    const ignoreOutsideUntil = Date.now() + 220;
     const handlePointerDownOutside = (event: PointerEvent) => {
+      if (Date.now() < ignoreOutsideUntil) return;
       const t = event.target as Node;
       if (
         composeEmojiPickerRef.current?.contains(t) ||
@@ -847,13 +865,8 @@ function FeedCard({
       setComposeEmojiPickerOpen(false);
       setComposeEmojiSearch("");
     };
-    const t = window.setTimeout(() => {
-      document.addEventListener("pointerdown", handlePointerDownOutside, true);
-    }, 0);
-    return () => {
-      window.clearTimeout(t);
-      document.removeEventListener("pointerdown", handlePointerDownOutside, true);
-    };
+    document.addEventListener("pointerdown", handlePointerDownOutside);
+    return () => document.removeEventListener("pointerdown", handlePointerDownOutside);
   }, [composeEmojiPickerOpen]);
 
   useEffect(() => {
@@ -883,6 +896,33 @@ function FeedCard({
     void v.pause();
     setFeedVideoPlaying(false);
   }, [slideIdx]);
+
+  useEffect(() => {
+    if (!currentIsVideo) setFeedVideoMediaHover(false);
+  }, [currentIsVideo]);
+
+  useEffect(() => {
+    if (commentsOpen) setFeedVideoMediaHover(false);
+  }, [commentsOpen]);
+
+  useEffect(() => {
+    if (!currentIsVideo || feedVideoDecodeError) return;
+    const v = feedVideoRef.current;
+    if (!v) return;
+    if (feedVideoMediaHover) {
+      void v.play().catch(() => {});
+    } else {
+      v.pause();
+      setFeedVideoPlaying(false);
+      try {
+        v.currentTime = 0;
+      } catch {
+        /* ignore */
+      }
+      feedVideoPosterSeekDoneRef.current = false;
+      tryFeedVideoPosterSeekOnce(v, feedVideoPosterSeekDoneRef);
+    }
+  }, [feedVideoMediaHover, currentIsVideo, currentUrl, slideIdx, feedVideoDecodeError]);
 
   useLayoutEffect(() => {
     const snaps = feedCarouselScrollSnapsRef.current;
@@ -1240,6 +1280,8 @@ function FeedCard({
             className={`feed-card-media-wrap feed-card-media-wrap-video${inFeedCarouselClass}`}
             role="button"
             tabIndex={0}
+            onMouseEnter={() => setFeedVideoMediaHover(true)}
+            onMouseLeave={() => setFeedVideoMediaHover(false)}
             onClick={videoAreaClick}
             onPointerDown={videoAreaPointerDown}
             onPointerUp={videoAreaPointerUp}
@@ -1258,6 +1300,7 @@ function FeedCard({
               ref={feedVideoRef}
               src={currentUrl.split("#")[0]}
               muted={feedVideoMuted}
+              loop
               playsInline
               className="feed-card-media feed-card-media-video"
               preload="metadata"
@@ -1678,7 +1721,6 @@ function FeedCard({
                             className="feed-comments-modal-compose-emoji-btn"
                             aria-label="Add emoji"
                             aria-expanded={composeEmojiPickerOpen}
-                            onPointerDown={(e) => e.stopPropagation()}
                             onClick={(e) => {
                               e.stopPropagation();
                               setComposeEmojiPickerOpen((o) => !o);
@@ -1699,7 +1741,10 @@ function FeedCard({
           </div>,
           document.body
         )}
-      {composeEmojiPickerOpen
+      {composeEmojiPickerOpen &&
+      commentsOpen &&
+      typeof document !== "undefined" &&
+      document.body
         ? createPortal(
             <div
               ref={composeEmojiPickerRef}
