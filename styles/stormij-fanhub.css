@@ -732,6 +732,10 @@
   filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.45));
   opacity: 0.95;
 }
+.feed-grid-video-overlay.feed-grid-video-overlay--hidden {
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
 .feed-grid-item-text {
   width: 100%;
   height: 100%;
@@ -2286,6 +2290,10 @@
   left: auto;
   top: auto;
   min-height: 0;
+  /* Above modal backdrop (10500) and host app overlays; inline style also sets z-index when allowed */
+  z-index: 2147483646;
+  visibility: visible;
+  opacity: 1;
 }
 .feed-comments-modal-emoji-picker--fixed .feed-comments-modal-emoji-picker-search {
   flex-shrink: 0;

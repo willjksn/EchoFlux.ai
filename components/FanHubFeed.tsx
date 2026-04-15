@@ -332,24 +332,62 @@ const PlayIcon = () => (
   </svg>
 );
 
-/** Grid cover: one guarded poster seek per mount (avoids double seek from metadata + loadeddata on mobile). */
-function FeedGridVideoCover({ src }: { src: string }) {
+/** Grid cover: poster frame at rest; plays muted loop while `hoverActive` (desktop hover). */
+function FeedGridVideoThumbnail({ src, hoverActive }: { src: string; hoverActive: boolean }) {
+  const videoRef = useRef<HTMLVideoElement | null>(null);
   const posterSeekDoneRef = useRef(false);
   const clean = src.split("#")[0]?.trim() || src;
+  const [hidePlayOverlay, setHidePlayOverlay] = useState(false);
+
   useEffect(() => {
     posterSeekDoneRef.current = false;
   }, [clean]);
+
+  useEffect(() => {
+    const v = videoRef.current;
+    if (!v) return;
+    let cancelled = false;
+    if (hoverActive) {
+      void v.play().then(() => {
+        if (!cancelled) setHidePlayOverlay(true);
+      }).catch(() => {});
+    } else {
+      v.pause();
+      setHidePlayOverlay(false);
+      try {
+        v.currentTime = 0;
+      } catch {
+        /* ignore */
+      }
+      posterSeekDoneRef.current = false;
+      tryFeedVideoPosterSeekOnce(v, posterSeekDoneRef);
+    }
+    return () => {
+      cancelled = true;
+    };
+  }, [hoverActive, clean]);
+
   return (
-    <video
-      src={clean}
-      muted
-      playsInline
-      preload="metadata"
-      {...feedVideoDownloadGuardProps}
-      onLoadedMetadata={(e) => {
-        tryFeedVideoPosterSeekOnce(e.currentTarget, posterSeekDoneRef);
-      }}
-    />
+    <>
+      <video
+        ref={videoRef}
+        src={clean}
+        muted
+        loop
+        playsInline
+        preload="metadata"
+        {...feedVideoDownloadGuardProps}
+        onLoadedMetadata={(e) => {
+          tryFeedVideoPosterSeekOnce(e.currentTarget, posterSeekDoneRef);
+        }}
+      />
+      <span
+        className={`feed-grid-video-overlay${hidePlayOverlay ? " feed-grid-video-overlay--hidden" : ""}`}
+        aria-hidden
+      >
+        <PlayIcon />
+      </span>
+    </>
   );
 }
 
@@ -737,16 +775,21 @@ function FeedCard({
   }, [adminMenuOpen]);
 
   const updateComposeEmojiPickerPosition = useCallback(() => {
-    if (!composeEmojiPickerOpen || !composeFieldRef.current) {
+    if (!composeEmojiPickerOpen) {
       setComposeEmojiPickerFixedStyle(null);
       return;
     }
-    const rect = composeFieldRef.current.getBoundingClientRect();
+    const field = composeFieldRef.current;
+    if (!field) return;
+
+    const rect = field.getBoundingClientRect();
     const POPOVER_H = 300;
     const pad = 8;
-    const w = Math.min(320, window.innerWidth - 2 * pad);
-    const left = Math.max(pad, Math.min(rect.left, window.innerWidth - w - pad));
-    const spaceBelow = window.innerHeight - rect.bottom - pad;
+    const vw = typeof window !== "undefined" ? window.innerWidth : 400;
+    const vh = typeof window !== "undefined" ? window.innerHeight : 600;
+    const w = Math.min(320, vw - 2 * pad);
+    const left = Math.max(pad, Math.min(rect.left, vw - w - pad));
+    const spaceBelow = vh - rect.bottom - pad;
     const spaceAbove = rect.top - pad;
     const below = spaceBelow >= 160 || spaceBelow >= spaceAbove;
     const top = below ? rect.bottom + 6 : Math.max(pad, rect.top - POPOVER_H - 6);
@@ -760,14 +803,24 @@ function FeedCard({
       top,
       width: w,
       maxHeight: maxH,
-      zIndex: 11000,
+      zIndex: 2147483646,
       boxSizing: "border-box",
+      visibility: "visible",
+      opacity: 1,
     });
   }, [composeEmojiPickerOpen]);
 
   useLayoutEffect(() => {
+    if (!composeEmojiPickerOpen) {
+      setComposeEmojiPickerFixedStyle(null);
+      return;
+    }
     updateComposeEmojiPickerPosition();
-  }, [updateComposeEmojiPickerPosition]);
+    const id = window.requestAnimationFrame(() => {
+      updateComposeEmojiPickerPosition();
+    });
+    return () => window.cancelAnimationFrame(id);
+  }, [composeEmojiPickerOpen, updateComposeEmojiPickerPosition]);
 
   useEffect(() => {
     if (!composeEmojiPickerOpen) return;
@@ -783,7 +836,7 @@ function FeedCard({
 
   useEffect(() => {
     if (!composeEmojiPickerOpen) return;
-    const handleClickOutside = (event: MouseEvent) => {
+    const handlePointerDownOutside = (event: PointerEvent) => {
       const t = event.target as Node;
       if (
         composeEmojiPickerRef.current?.contains(t) ||
@@ -794,8 +847,13 @@ function FeedCard({
       setComposeEmojiPickerOpen(false);
       setComposeEmojiSearch("");
     };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
+    const t = window.setTimeout(() => {
+      document.addEventListener("pointerdown", handlePointerDownOutside, true);
+    }, 0);
+    return () => {
+      window.clearTimeout(t);
+      document.removeEventListener("pointerdown", handlePointerDownOutside, true);
+    };
   }, [composeEmojiPickerOpen]);
 
   useEffect(() => {
@@ -1620,7 +1678,11 @@ function FeedCard({
                             className="feed-comments-modal-compose-emoji-btn"
                             aria-label="Add emoji"
                             aria-expanded={composeEmojiPickerOpen}
-                            onClick={() => setComposeEmojiPickerOpen((o) => !o)}
+                            onPointerDown={(e) => e.stopPropagation()}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setComposeEmojiPickerOpen((o) => !o);
+                            }}
                           >
                             <EmojiIcon className="w-5 h-5" />
                           </button>
@@ -1637,12 +1699,28 @@ function FeedCard({
           </div>,
           document.body
         )}
-      {composeEmojiPickerOpen && composeEmojiPickerFixedStyle
+      {composeEmojiPickerOpen
         ? createPortal(
             <div
               ref={composeEmojiPickerRef}
               className="feed-comments-modal-emoji-picker feed-comments-modal-emoji-picker--fixed"
-              style={composeEmojiPickerFixedStyle}
+              style={
+                composeEmojiPickerFixedStyle ??
+                (typeof window !== "undefined"
+                  ? {
+                      position: "fixed",
+                      left: Math.max(12, (window.innerWidth - Math.min(320, window.innerWidth - 24)) / 2),
+                      bottom: 24,
+                      width: Math.min(320, window.innerWidth - 24),
+                      maxHeight: Math.min(300, Math.floor(window.innerHeight * 0.42)),
+                      zIndex: 2147483646,
+                      boxSizing: "border-box",
+                      visibility: "visible",
+                      opacity: 1,
+                    }
+                  : { position: "fixed", zIndex: 2147483646, boxSizing: "border-box" })
+              }
+              onPointerDown={(e) => e.stopPropagation()}
               role="dialog"
               aria-label="Emoji picker"
             >
@@ -1713,6 +1791,11 @@ export const FanHubFeed: React.FC<{
   const [loading, setLoading] = useState(true);
   const [savedPostIds, setSavedPostIds] = useState<string[]>([]);
   const [viewMode, setViewMode] = useState<"feed" | "grid">("feed");
+  const [gridHoveredVideoPostId, setGridHoveredVideoPostId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (viewMode !== "grid") setGridHoveredVideoPostId(null);
+  }, [viewMode]);
   const [openPostIdFromGrid, setOpenPostIdFromGrid] = useState<string | null>(null);
   const [returnToGridAfterPostId, setReturnToGridAfterPostId] = useState<string | null>(null);
   const [deletingPostId, setDeletingPostId] = useState<string | null>(null);
@@ -2292,16 +2375,18 @@ export const FanHubFeed: React.FC<{
                     setOpenPostIdFromGrid(post.id);
                     setViewMode("feed");
                   }}
+                  onMouseEnter={() => {
+                    if (coverIsVideo) setGridHoveredVideoPostId(post.id);
+                  }}
+                  onMouseLeave={() => setGridHoveredVideoPostId(null)}
                   aria-label="Open post"
                 >
                   {coverUrl ? (
                     coverIsVideo ? (
-                      <>
-                        <FeedGridVideoCover src={coverUrl} />
-                        <span className="feed-grid-video-overlay" aria-hidden>
-                          <PlayIcon />
-                        </span>
-                      </>
+                      <FeedGridVideoThumbnail
+                        src={coverUrl}
+                        hoverActive={gridHoveredVideoPostId === post.id}
+                      />
                     ) : (
                       <img src={coverUrl} alt="" loading="lazy" {...feedImageDownloadGuardProps} />
                     )
