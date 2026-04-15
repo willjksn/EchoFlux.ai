@@ -3,7 +3,7 @@ import type { Firestore } from "firebase-admin/firestore";
 import { FieldValue } from "firebase-admin/firestore";
 import { applyBrowserApiCors } from "./_browserApiCors.js";
 import { verifyAuth } from "./verifyAuth.js";
-import { getAdminDb } from "./_firebaseAdmin.js";
+import { tryGetAdminDb } from "./_firebaseAdmin.js";
 import { isFanBlocked } from "./_fanDmHelpers.js";
 import { shouldGrantFanPageAdminMemberAccess } from "../src/lib/fanPageAdminBypass.js";
 import {
@@ -93,9 +93,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(400).json({ error: "streamId is required" });
   }
 
-  const db = getAdminDb();
+  const db = tryGetAdminDb();
   if (!db) {
-    return res.status(500).json({ error: "Database unavailable" });
+    return res.status(503).json({
+      error:
+        "Server database is not configured. Set FIREBASE_SERVICE_ACCOUNT_KEY_BASE64 (or equivalent) on the deployment that serves /api.",
+    });
   }
 
   const uid = decoded.uid;

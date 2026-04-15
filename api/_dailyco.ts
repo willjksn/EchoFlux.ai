@@ -155,7 +155,7 @@ export async function createMeetingToken(
  */
 export async function deleteVideoRoom(roomName: string): Promise<void> {
   try {
-    await dailyFetch(`/rooms/${roomName}`, {
+    await dailyFetch(`/rooms/${encodeURIComponent(roomName)}`, {
       method: 'DELETE',
     });
   } catch (error) {
@@ -169,7 +169,7 @@ export async function deleteVideoRoom(roomName: string): Promise<void> {
  */
 export async function getRoomDetails(roomName: string): Promise<DailyRoom | null> {
   try {
-    return await dailyFetch<DailyRoom>(`/rooms/${roomName}`);
+    return await dailyFetch<DailyRoom>(`/rooms/${encodeURIComponent(roomName)}`);
   } catch {
     return null;
   }
@@ -199,6 +199,8 @@ export async function createOrGetLiveStreamBroadcastRoom(
   const hours = Math.min(Math.max(durationHours, 1), 72);
   const expirationTime = Math.floor(Date.now() / 1000) + hours * 3600;
 
+  // Do not set permissions.canSend: false — that blocks the host from sending video/audio in Prebuilt.
+  // Large-call flags are optional; omit if Daily rejects the combo on some accounts.
   const room = await dailyFetch<DailyRoom>('/rooms', {
     method: 'POST',
     body: JSON.stringify({
@@ -211,11 +213,7 @@ export async function createOrGetLiveStreamBroadcastRoom(
         enable_screenshare: true,
         eject_at_room_exp: true,
         enable_hidden_participants: true,
-        enable_mesh_sfu: true,
         experimental_optimize_large_calls: true,
-        permissions: {
-          canSend: false,
-        },
       },
     } as DailyRoomConfig),
   });

@@ -590,6 +590,7 @@ function FeedCard({
   onCommentsOpenChange,
   creatorFanPreviewUrl,
   liveStreamCreatorBroadcast,
+  liveStreamHostActiveStreamId,
 }: {
   post: FeedPost;
   creatorName: string;
@@ -618,6 +619,8 @@ function FeedCard({
   creatorFanPreviewUrl?: string;
   /** Creator dashboard: inline Go live / End / Open broadcast on live-stream cards */
   liveStreamCreatorBroadcast?: Omit<LiveStreamCreatorBroadcastProps, "streamId">;
+  /** Matches `liveStreamBroadcast` in Fan Hub — enables host buttons before Firestore sync */
+  liveStreamHostActiveStreamId?: string | null;
 }) {
   const countBadgeStyle = useMemo(
     () => feedCardCountThemedStyle(creatorThemePrimary),
@@ -1262,6 +1265,7 @@ function FeedCard({
                 : undefined
             }
             onOpenStreamControls={isAdminMode && onEditPost ? () => onEditPost(post) : undefined}
+            hostActiveStreamId={isAdminMode ? liveStreamHostActiveStreamId : undefined}
           />
         </div>
       ) : null}
@@ -1566,6 +1570,7 @@ function FeedCard({
                             : undefined
                         }
                         onOpenStreamControls={isAdminMode && onEditPost ? () => onEditPost(post) : undefined}
+                        hostActiveStreamId={isAdminMode ? liveStreamHostActiveStreamId : undefined}
                       />
                     </div>
                   ) : null}
@@ -1673,7 +1678,8 @@ export const FanHubFeed: React.FC<{
   isAdminMode?: boolean;
   onEditPostRequest?: (post: FeedPost) => void;
   liveStreamCreatorBroadcast?: Omit<LiveStreamCreatorBroadcastProps, "streamId">;
-}> = ({ isAdminMode = false, onEditPostRequest, liveStreamCreatorBroadcast }) => {
+  liveStreamHostActiveStreamId?: string | null;
+}> = ({ isAdminMode = false, onEditPostRequest, liveStreamCreatorBroadcast, liveStreamHostActiveStreamId }) => {
   const { user, setActivePage, showToast, openPaymentModal } = useAppContext();
   const [posts, setPosts] = useState<FeedPost[]>([]);
   const [loading, setLoading] = useState(true);
@@ -2250,6 +2256,7 @@ export const FanHubFeed: React.FC<{
                 }}
                 creatorFanPreviewUrl={isAdminMode ? creatorFanPreviewUrl : undefined}
                 liveStreamCreatorBroadcast={isAdminMode ? liveStreamCreatorBroadcast : undefined}
+                liveStreamHostActiveStreamId={isAdminMode ? liveStreamHostActiveStreamId : undefined}
               />
             ))}
           </div>

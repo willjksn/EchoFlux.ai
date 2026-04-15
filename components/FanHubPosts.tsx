@@ -2767,6 +2767,7 @@ Write 2-4 sentences that are engaging and on-topic.`;
             onOpenBroadcast: (streamId) => setLiveStreamBroadcast({ streamId }),
             dailyBusy: liveStreamDailyBusy,
           }}
+          liveStreamHostActiveStreamId={liveStreamBroadcast?.streamId ?? null}
         />
       </div>
 

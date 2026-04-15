@@ -61,6 +61,11 @@ export const LiveStreamPromoBanner: React.FC<{
   onSignIn?: () => void;
   /** When stream is `live` and fan may watch, opens Daily Prebuilt */
   onWatchLive?: () => void | Promise<void>;
+  /**
+   * Creator only: while host has started broadcast in this session (`liveStreamBroadcast` in parent),
+   * treat as live so **Open broadcast** / **End** work before Firestore promo sync.
+   */
+  hostActiveStreamId?: string | null;
 }> = ({
   promo,
   accentHex,
@@ -68,6 +73,7 @@ export const LiveStreamPromoBanner: React.FC<{
   creatorFanPreviewUrl,
   creatorBroadcast,
   onOpenStreamControls,
+  hostActiveStreamId,
   fanAccess = "free",
   ticketLoading = false,
   watchLoading = false,
@@ -80,17 +86,21 @@ export const LiveStreamPromoBanner: React.FC<{
   const streamStatus = promo.streamStatus as LiveStreamEventStatus | undefined;
   const streamIsLive = streamStatus === "live";
   const streamEnded = streamStatus === "ended";
+  /** Creator UI: optimistic live after successful Go live API, before fanPosts promo sync */
+  const streamLiveEffective =
+    variant === "creator" &&
+    (streamIsLive || (!!hostActiveStreamId && hostActiveStreamId === promo.streamId));
 
   const cta = (() => {
     if (variant === "creator") {
-      const stLabel = streamIsLive ? "Live now" : streamEnded ? "Ended" : "Scheduled";
+      const stLabel = streamLiveEffective ? "Live now" : streamEnded ? "Ended" : "Scheduled";
       const busy = !!creatorBroadcast?.dailyBusy;
       const canUseInlineHost =
         creatorBroadcast &&
         creatorBroadcast.streamId === promo.streamId &&
         !streamEnded;
       const steps =
-        streamIsLive ? (
+        streamLiveEffective ? (
           <>
             Fans tap <strong>Watch live</strong>. Your camera and mic are in the host window — tap <strong>Open broadcast (host)</strong> if you closed it.
           </>
@@ -101,14 +111,14 @@ export const LiveStreamPromoBanner: React.FC<{
             Start with <strong>Go live</strong>, then <strong>Open broadcast (host)</strong> when Daily asks for camera and mic.
           </>
         );
-      const primaryLabel = streamEnded ? "Edit stream post" : streamIsLive ? "Manage broadcast" : "Open stream controls";
+      const primaryLabel = streamEnded ? "Edit stream post" : streamLiveEffective ? "Manage broadcast" : "Open stream controls";
       return (
         <div className="live-stream-promo-banner__creator-panel">
           {canUseInlineHost ? (
             <div className="live-stream-promo-banner__creator-host-actions flex flex-wrap gap-2">
               <button
                 type="button"
-                disabled={busy || streamIsLive}
+                disabled={busy || !!streamLiveEffective}
                 className="live-stream-promo-banner__cta live-stream-promo-banner__cta--active text-xs px-3 py-2 rounded-lg"
                 onClick={() => creatorBroadcast.onGoLive(creatorBroadcast.streamId)}
               >
@@ -116,7 +126,7 @@ export const LiveStreamPromoBanner: React.FC<{
               </button>
               <button
                 type="button"
-                disabled={busy || !streamIsLive}
+                disabled={busy || !streamLiveEffective}
                 className="live-stream-promo-banner__cta bg-gray-700 text-white hover:bg-gray-600 text-xs px-3 py-2 rounded-lg disabled:opacity-40"
                 onClick={() => creatorBroadcast.onEndStream(creatorBroadcast.streamId)}
               >
@@ -124,7 +134,7 @@ export const LiveStreamPromoBanner: React.FC<{
               </button>
               <button
                 type="button"
-                disabled={busy || !streamIsLive}
+                disabled={busy || !streamLiveEffective}
                 className="live-stream-promo-banner__cta live-stream-promo-banner__cta--secondary-outline text-xs px-3 py-2 rounded-lg"
                 onClick={() => creatorBroadcast.onOpenBroadcast(creatorBroadcast.streamId)}
               >
@@ -133,7 +143,7 @@ export const LiveStreamPromoBanner: React.FC<{
             </div>
           ) : onOpenStreamControls && !canUseInlineHost && !streamEnded ? (
             <button type="button" className="live-stream-promo-banner__cta live-stream-promo-banner__cta--active" onClick={onOpenStreamControls}>
-              {streamIsLive ? "Manage broadcast" : "Open stream controls"}
+              {streamLiveEffective ? "Manage broadcast" : "Open stream controls"}
             </button>
           ) : null}
           {streamEnded && onOpenStreamControls ? (
