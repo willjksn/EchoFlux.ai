@@ -24,6 +24,7 @@ import { EmojiButton } from "./EmojiPicker";
 import { useCreatorHandle } from "../src/hooks/useCreatorHandle";
 import { canUseSjHeartEmoji } from "../src/lib/customEmoji";
 import { maybeTrimVideoForCaption } from "../src/lib/videoCaptionClip";
+import { resolveApiUrl } from "../src/lib/resolveApiUrl";
 
 type CaptionStyle = "static" | "scroll-up" | "scroll-across" | "dissolve";
 type AiTone = "" | "flirty" | "casual" | "motivational" | "premium" | "playful" | "mysterious" | "confident" | "custom";
@@ -337,7 +338,15 @@ export const FanHubPosts: React.FC = () => {
   const [tipGoalEnabled, setTipGoalEnabled] = useState(false);
   const [tipGoalDescription, setTipGoalDescription] = useState("");
   const [tipGoalAmount, setTipGoalAmount] = useState("");
-  
+
+  // Live stream promo (feed card + `creators/{id}/liveStreams/{streamId}`)
+  const [liveStreamPromoEnabled, setLiveStreamPromoEnabled] = useState(false);
+  const [liveStreamTitle, setLiveStreamTitle] = useState("");
+  const [liveStreamStartLocal, setLiveStreamStartLocal] = useState("");
+  const [liveStreamTicketUsd, setLiveStreamTicketUsd] = useState("");
+  const [liveStreamFreeForSubs, setLiveStreamFreeForSubs] = useState(false);
+  const [liveStreamEditStreamId, setLiveStreamEditStreamId] = useState<string | null>(null);
+
   // Text Overlay
   const [overlayEnabled, setOverlayEnabled] = useState(false);
   const [overlayText, setOverlayText] = useState("");
@@ -386,6 +395,14 @@ export const FanHubPosts: React.FC = () => {
     }
     return "00:00";
   };
+
+  function isoToDatetimeLocalValue(iso: string | undefined): string {
+    if (!iso?.trim()) return "";
+    const d = new Date(iso.trim());
+    if (Number.isNaN(d.getTime())) return "";
+    const pad = (n: number) => String(n).padStart(2, "0");
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  }
 
   // Load vault items from the user's media library (My Vault - sidebar "Vault")
   const loadVault = useCallback(async () => {
@@ -1084,17 +1101,40 @@ Write 2-4 sentences that are engaging and on-topic.`;
       showToast?.("Please sign in", "error");
       return;
     }
-    
+
+    if (liveStreamPromoEnabled && status !== "published") {
+      showToast?.(
+        "Live stream promos publish to the feed now. Use “When you go live” for the broadcast time.",
+        "error",
+      );
+      return;
+    }
+
+    if (liveStreamPromoEnabled) {
+      if (!liveStreamTitle.trim()) {
+        showToast?.("Add a stream title", "error");
+        return;
+      }
+      if (!liveStreamStartLocal.trim()) {
+        showToast?.("Choose when you go live", "error");
+        return;
+      }
+      if (!Number.isFinite(Date.parse(liveStreamStartLocal))) {
+        showToast?.("Invalid go-live time", "error");
+        return;
+      }
+    }
+
     if (!caption.trim() && media.length === 0) {
       showToast?.("Add a caption or media", "error");
       return;
     }
-    
+
     if (status === "scheduled" && !scheduledDateTime) {
       showToast?.("Please select a date and time", "error");
       return;
     }
-    
+
     setPublishing(true);
     try {
       const token = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
@@ -1130,7 +1170,78 @@ Write 2-4 sentences that are engaging and on-topic.`;
           }
         }
       }
-      
+
+      let streamIdForPost: string | undefined;
+      let streamPromoScheduledIso: string | undefined;
+      let streamPromoTicketCents = 0;
+
+      if (liveStreamPromoEnabled) {
+        streamPromoScheduledIso = new Date(liveStreamStartLocal).toISOString();
+        const ticketRaw = liveStreamTicketUsd.trim();
+        streamPromoTicketCents = 0;
+        if (ticketRaw) {
+          const n = parseFloat(ticketRaw);
+          if (!Number.isFinite(n) || n < 0) {
+            showToast?.("Ticket price must be zero or more", "error");
+            setPublishing(false);
+            return;
+          }
+          streamPromoTicketCents = Math.round(n * 100);
+        }
+
+        try {
+          if (liveStreamEditStreamId) {
+            streamIdForPost = liveStreamEditStreamId;
+            const up = await fetch(resolveApiUrl("/api/liveStreams"), {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${token}`,
+              },
+              body: JSON.stringify({
+                action: "update",
+                streamId: liveStreamEditStreamId,
+                title: liveStreamTitle.trim(),
+                scheduledStart: streamPromoScheduledIso,
+                ticketCents: streamPromoTicketCents,
+                freeForSubscribers: liveStreamFreeForSubs,
+                description: caption.trim() || undefined,
+              }),
+            });
+            const errBody = (await up.json().catch(() => ({}))) as { error?: string };
+            if (!up.ok) {
+              throw new Error(errBody.error || "Could not update stream");
+            }
+          } else {
+            const cr = await fetch(resolveApiUrl("/api/liveStreams"), {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${token}`,
+              },
+              body: JSON.stringify({
+                action: "create",
+                title: liveStreamTitle.trim(),
+                scheduledStart: streamPromoScheduledIso,
+                ticketCents: streamPromoTicketCents,
+                freeForSubscribers: liveStreamFreeForSubs,
+                description: caption.trim() || undefined,
+              }),
+            });
+            const data = (await cr.json().catch(() => ({}))) as { streamId?: string; error?: string };
+            if (!cr.ok || !data.streamId) {
+              throw new Error(data.error || "Could not create stream");
+            }
+            streamIdForPost = data.streamId;
+          }
+        } catch (e) {
+          console.error(e);
+          showToast?.(e instanceof Error ? e.message : "Stream setup failed", "error");
+          setPublishing(false);
+          return;
+        }
+      }
+
       // Get calendar date from scheduled time or now
       const postDate = scheduledDateTime || new Date();
       const calendarDate = postDate.toISOString().split("T")[0]; // YYYY-MM-DD
@@ -1182,16 +1293,16 @@ Write 2-4 sentences that are engaging and on-topic.`;
       }
       
       // Poll
-      if (pollEnabled && pollQuestion.trim() && pollOptions.filter((o) => o.trim()).length >= 2) {
+      if (!liveStreamPromoEnabled && pollEnabled && pollQuestion.trim() && pollOptions.filter((o) => o.trim()).length >= 2) {
         postData.poll = {
           question: pollQuestion,
           options: pollOptions.filter((o) => o.trim()),
           optionVotes: pollOptions.filter((o) => o.trim()).map(() => 0),
         };
       }
-      
+
       // Tip Goal
-      if (tipGoalEnabled && tipGoalDescription.trim() && tipGoalAmount) {
+      if (!liveStreamPromoEnabled && tipGoalEnabled && tipGoalDescription.trim() && tipGoalAmount) {
         postData.tipGoal = {
           description: tipGoalDescription,
           targetCents: Math.round(parseFloat(tipGoalAmount) * 100),
@@ -1208,12 +1319,41 @@ Write 2-4 sentences that are engaging and on-topic.`;
         (postData as Record<string, unknown>).overlayHighlight = overlayHighlight;
         (postData as Record<string, unknown>).overlayItalic = overlayItalic;
       }
-      
+
+      if (liveStreamPromoEnabled && streamIdForPost && streamPromoScheduledIso) {
+        (postData as Record<string, unknown>).postKind = "live_stream_promo";
+        (postData as Record<string, unknown>).liveStreamPromo = {
+          streamId: streamIdForPost,
+          title: liveStreamTitle.trim(),
+          scheduledStart: streamPromoScheduledIso,
+          ticketCents: streamPromoTicketCents,
+          ...(liveStreamFreeForSubs ? { freeForSubscribers: true } : {}),
+        };
+      }
+
       // Save to Firestore (update existing when editing, otherwise create new)
       if (editingPostId) {
         await setDoc(doc(db, "creators", creatorId, "fanPosts", editingPostId), postData, { merge: true });
       } else {
-        await addDoc(collection(db, "creators", creatorId, "fanPosts"), postData);
+        const postRef = await addDoc(collection(db, "creators", creatorId, "fanPosts"), postData);
+        if (liveStreamPromoEnabled && streamIdForPost && !liveStreamEditStreamId) {
+          try {
+            await fetch(resolveApiUrl("/api/liveStreams"), {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${token}`,
+              },
+              body: JSON.stringify({
+                action: "update",
+                streamId: streamIdForPost,
+                promoPostId: postRef.id,
+              }),
+            });
+          } catch (linkErr) {
+            console.error("liveStreams promoPostId link:", linkErr);
+          }
+        }
       }
       
       const message = status === "draft" 
@@ -1297,6 +1437,12 @@ Write 2-4 sentences that are engaging and on-topic.`;
     setShowTipButton(true);
     setScheduleDate("");
     setScheduleTime("");
+    setLiveStreamPromoEnabled(false);
+    setLiveStreamTitle("");
+    setLiveStreamStartLocal("");
+    setLiveStreamTicketUsd("");
+    setLiveStreamFreeForSubs(false);
+    setLiveStreamEditStreamId(null);
     setEditingPostId(null);
   };
 
@@ -1375,6 +1521,26 @@ Write 2-4 sentences that are engaging and on-topic.`;
     );
     setOverlayHighlight(!!post.overlayHighlight);
     setOverlayItalic(!!post.overlayItalic);
+    const promo = post.liveStreamPromo;
+    if (post.postKind === "live_stream_promo" && promo?.streamId) {
+      setLiveStreamPromoEnabled(true);
+      setLiveStreamEditStreamId(promo.streamId);
+      setLiveStreamTitle((promo.title || "").trim());
+      setLiveStreamStartLocal(isoToDatetimeLocalValue(promo.scheduledStart));
+      setLiveStreamTicketUsd(
+        typeof promo.ticketCents === "number" && promo.ticketCents > 0
+          ? (promo.ticketCents / 100).toFixed(2)
+          : "",
+      );
+      setLiveStreamFreeForSubs(!!promo.freeForSubscribers);
+    } else {
+      setLiveStreamPromoEnabled(false);
+      setLiveStreamEditStreamId(null);
+      setLiveStreamTitle("");
+      setLiveStreamStartLocal("");
+      setLiveStreamTicketUsd("");
+      setLiveStreamFreeForSubs(false);
+    }
     setEditingPostId(post.id);
     setShowComposer(true);
   }, []);
@@ -1813,48 +1979,136 @@ Write 2-4 sentences that are engaging and on-topic.`;
                 )}
               </div>
 
+              {/* Live stream promo */}
+              <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700">
+                <FanHubSwitchRow
+                  labelId="fanhub-live-stream-label"
+                  label="Live stream promo"
+                  checked={liveStreamPromoEnabled}
+                  onCheckedChange={(next) => {
+                    setLiveStreamPromoEnabled(next);
+                    if (next) {
+                      setPollEnabled(false);
+                      setTipGoalEnabled(false);
+                      setOverlayEnabled(false);
+                    }
+                  }}
+                />
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+                  Adds a ticket card to this post. The post publishes now; set the real go-live time below.
+                </p>
+                {liveStreamPromoEnabled && (
+                  <div className="mt-3 space-y-3 border-t border-gray-100 dark:border-gray-700 pt-3">
+                    <input
+                      type="text"
+                      value={liveStreamTitle}
+                      onChange={(e) => setLiveStreamTitle(e.target.value)}
+                      placeholder="Stream title (shown on the card)"
+                      className="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
+                    />
+                    <div>
+                      <label htmlFor="live-stream-start" className="text-xs text-gray-600 dark:text-gray-400 block mb-1">
+                        When you go live
+                      </label>
+                      <input
+                        id="live-stream-start"
+                        type="datetime-local"
+                        value={liveStreamStartLocal}
+                        onChange={(e) => setLiveStreamStartLocal(e.target.value)}
+                        className="w-full max-w-xs px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
+                      />
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="text-sm text-gray-600 dark:text-gray-400">Ticket (optional):</span>
+                      <div className="relative">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">$</span>
+                        <input
+                          type="number"
+                          min={0}
+                          step={0.01}
+                          value={liveStreamTicketUsd}
+                          onChange={(e) => setLiveStreamTicketUsd(e.target.value)}
+                          placeholder="0 = free"
+                          className="w-32 pl-7 pr-3 py-2 border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
+                        />
+                      </div>
+                    </div>
+                    <FanHubSwitchRow
+                      labelId="fanhub-live-stream-subs-label"
+                      label="Subscribers skip ticket (when billing supports it)"
+                      checked={liveStreamFreeForSubs}
+                      onCheckedChange={setLiveStreamFreeForSubs}
+                    />
+                  </div>
+                )}
+              </div>
+
               {/* ===== OPTIONAL FEATURES ===== */}
-              <div className="grid grid-cols-3 gap-2">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                 {/* Poll Button */}
                 <button
                   type="button"
+                  disabled={liveStreamPromoEnabled}
                   onClick={() => setPollEnabled(!pollEnabled)}
                   className={`flex flex-col items-center gap-1 p-3 rounded-lg border-2 border-dashed transition ${
                     pollEnabled
                       ? "border-pink-400 bg-pink-50 dark:bg-pink-900/20 text-pink-600 dark:text-pink-400"
                       : "border-gray-300 dark:border-gray-600 text-gray-500 dark:text-gray-400 hover:border-pink-400"
-                  }`}
+                  } disabled:opacity-40 disabled:pointer-events-none`}
                 >
                   <PollIcon />
                   <span className="text-xs font-medium">Poll</span>
                 </button>
-                
+
                 {/* Tip Goal Button */}
                 <button
                   type="button"
+                  disabled={liveStreamPromoEnabled}
                   onClick={() => setTipGoalEnabled(!tipGoalEnabled)}
                   className={`flex flex-col items-center gap-1 p-3 rounded-lg border-2 border-dashed transition ${
                     tipGoalEnabled
                       ? "border-pink-400 bg-pink-50 dark:bg-pink-900/20 text-pink-600 dark:text-pink-400"
                       : "border-gray-300 dark:border-gray-600 text-gray-500 dark:text-gray-400 hover:border-pink-400"
-                  }`}
+                  } disabled:opacity-40 disabled:pointer-events-none`}
                 >
                   <TipIcon />
                   <span className="text-xs font-medium">Tip Goal</span>
                 </button>
-                
+
                 {/* Text Overlay Button */}
                 <button
                   type="button"
+                  disabled={liveStreamPromoEnabled}
                   onClick={() => setOverlayEnabled(!overlayEnabled)}
                   className={`flex flex-col items-center gap-1 p-3 rounded-lg border-2 border-dashed transition ${
                     overlayEnabled
                       ? "border-pink-400 bg-pink-50 dark:bg-pink-900/20 text-pink-600 dark:text-pink-400"
                       : "border-gray-300 dark:border-gray-600 text-gray-500 dark:text-gray-400 hover:border-pink-400"
-                  }`}
+                  } disabled:opacity-40 disabled:pointer-events-none`}
                 >
                   <TextIcon />
                   <span className="text-xs font-medium">Overlay</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    const next = !liveStreamPromoEnabled;
+                    setLiveStreamPromoEnabled(next);
+                    if (next) {
+                      setPollEnabled(false);
+                      setTipGoalEnabled(false);
+                      setOverlayEnabled(false);
+                    }
+                  }}
+                  className={`flex flex-col items-center gap-1 p-3 rounded-lg border-2 border-dashed transition ${
+                    liveStreamPromoEnabled
+                      ? "border-pink-400 bg-pink-50 dark:bg-pink-900/20 text-pink-600 dark:text-pink-400"
+                      : "border-gray-300 dark:border-gray-600 text-gray-500 dark:text-gray-400 hover:border-pink-400"
+                  }`}
+                >
+                  <VideoCamIcon />
+                  <span className="text-xs font-medium">Live</span>
                 </button>
               </div>
 
@@ -2033,7 +2287,8 @@ Write 2-4 sentences that are engaging and on-topic.`;
               <button
                 type="button"
                 onClick={() => handlePublish("draft")}
-                disabled={publishing}
+                disabled={publishing || liveStreamPromoEnabled}
+                title={liveStreamPromoEnabled ? "Live stream promos publish immediately" : undefined}
                 className="px-4 py-2 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 font-medium transition"
               >
                 Save as Draft
@@ -2042,7 +2297,12 @@ Write 2-4 sentences that are engaging and on-topic.`;
                 <button
                   type="button"
                   onClick={() => setShowScheduleModal(true)}
-                  disabled={publishing || (!caption.trim() && media.length === 0)}
+                  disabled={
+                    publishing ||
+                    liveStreamPromoEnabled ||
+                    (!caption.trim() && media.length === 0)
+                  }
+                  title={liveStreamPromoEnabled ? "Use go-live time in Live stream promo instead" : undefined}
                   className="flex items-center gap-2 px-4 py-2.5 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-lg font-medium disabled:opacity-50 hover:bg-gray-50 dark:hover:bg-gray-600 transition"
                 >
                   <CalendarIcon />
@@ -2051,7 +2311,11 @@ Write 2-4 sentences that are engaging and on-topic.`;
                 <button
                   type="button"
                   onClick={() => handlePublish("published")}
-                  disabled={publishing || (!caption.trim() && media.length === 0)}
+                  disabled={
+                    publishing ||
+                    (!caption.trim() && media.length === 0) ||
+                    (liveStreamPromoEnabled && (!liveStreamTitle.trim() || !liveStreamStartLocal.trim()))
+                  }
                   className="px-6 py-2.5 bg-gradient-to-r from-pink-500 to-rose-500 text-white rounded-lg font-semibold disabled:opacity-50 hover:from-pink-600 hover:to-rose-600 transition shadow-lg shadow-pink-500/25"
                 >
                   {publishing ? "Publishing..." : "Publish Now"}
@@ -2134,7 +2398,7 @@ Write 2-4 sentences that are engaging and on-topic.`;
               <button
                 type="button"
                 onClick={handleScheduleConfirm}
-                disabled={publishing || !scheduleDate || !scheduleTime}
+                disabled={publishing || liveStreamPromoEnabled || !scheduleDate || !scheduleTime}
                 className="flex items-center gap-2 px-5 py-2 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-lg font-semibold disabled:opacity-50 hover:from-purple-600 hover:to-pink-600 transition"
               >
                 {publishing ? "Scheduling..." : "Schedule Post"}

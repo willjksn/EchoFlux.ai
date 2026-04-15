@@ -498,9 +498,46 @@ export type TreatProductType =
 /** Locked / PPV block on fan feed posts — alias for `LockedPostContent` in `src/lib/lockedPostMedia.ts`. */
 export type FanHubPostLockedContent = LockedPostContent;
 
+/** Fan Hub feed post shape — standard vs scheduled live stream promo card. */
+export type FanHubPostKind = "standard" | "live_stream_promo";
+
+/** Denormalized on `fanPosts` when `postKind === "live_stream_promo"` (full event: `creators/{id}/liveStreams/{streamId}`). */
+export interface LiveStreamPromoOnPost {
+  streamId: string;
+  /** Display title; falls back to post body if omitted */
+  title?: string;
+  /** ISO 8601 start time shown on the card */
+  scheduledStart?: string;
+  /** Join ticket in cents; 0 = free entry (tips still allowed) */
+  ticketCents: number;
+  /** Paid-member pages: when true, active subscribers skip ticket (enforced when player/tickets ship) */
+  freeForSubscribers?: boolean;
+}
+
+/** Scheduled / live broadcast event (Firestore: `creators/{creatorId}/liveStreams/{streamId}`). */
+export type LiveStreamEventStatus = "draft" | "scheduled" | "live" | "ended" | "cancelled";
+
+export interface CreatorLiveStreamFirestore {
+  creatorId: string;
+  title: string;
+  description?: string;
+  status: LiveStreamEventStatus;
+  /** ISO 8601 — when the stream is scheduled to start */
+  scheduledStart?: string;
+  ticketCents: number;
+  freeForSubscribers?: boolean;
+  /** Linked fanPosts doc id after creator publishes the promo post */
+  promoPostId?: string;
+  createdAt?: unknown;
+  updatedAt?: unknown;
+}
+
 /** Firestore-aligned fields for creator-published fan hub posts (subset; extend as needed). */
 export interface CreatorFanHubPostFirestore {
   creatorId?: string;
+  /** Default / omit = standard feed post */
+  postKind?: FanHubPostKind;
+  liveStreamPromo?: LiveStreamPromoOnPost;
   body?: string;
   content?: string;
   mediaUrls?: string[];

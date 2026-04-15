@@ -36,6 +36,8 @@ import {
   restoreFanFeedCarouselScrollSnaps,
 } from "../src/lib/fanFeedCarouselScrollRestore";
 import { tryFeedVideoPosterSeekOnce } from "../src/lib/feedVideoPosterSeek";
+import type { FanHubPostKind, LiveStreamPromoOnPost } from "../types";
+import { LiveStreamPromoBanner } from "./LiveStreamPromoBanner";
 
 const feedImageDownloadGuardProps = {
   draggable: false as const,
@@ -130,7 +132,28 @@ export type FeedPost = {
   publishedAt?: { toDate: () => Date } | Date | null;
   /** Firestore document path for like/comment writes (subcollection doc the feed loaded). */
   feedFirestorePath?: string;
+  postKind?: FanHubPostKind;
+  liveStreamPromo?: LiveStreamPromoOnPost;
 };
+
+function parseLiveStreamPromoFromDoc(d: DocumentData): LiveStreamPromoOnPost | undefined {
+  const raw = d.liveStreamPromo;
+  if (!raw || typeof raw !== "object") return undefined;
+  const o = raw as Record<string, unknown>;
+  const streamId = typeof o.streamId === "string" ? o.streamId.trim() : "";
+  if (!streamId) return undefined;
+  const ticketCents =
+    typeof o.ticketCents === "number" && Number.isFinite(o.ticketCents)
+      ? Math.max(0, Math.round(o.ticketCents))
+      : 0;
+  const promo: LiveStreamPromoOnPost = { streamId, ticketCents };
+  if (typeof o.title === "string" && o.title.trim()) promo.title = o.title.trim();
+  if (typeof o.scheduledStart === "string" && o.scheduledStart.trim()) {
+    promo.scheduledStart = o.scheduledStart.trim();
+  }
+  if (o.freeForSubscribers === true) promo.freeForSubscribers = true;
+  return promo;
+}
 
 function feedPostCreatedMs(p: FeedPost): number {
   const c = p.createdAt;
@@ -174,6 +197,14 @@ function firestoreDocToFeedPost(docSnap: QueryDocumentSnapshot<DocumentData>, is
     rawMediaUrls = [String(d.mediaUrl)];
   }
 
+  const liveStreamPromo = parseLiveStreamPromoFromDoc(d);
+  let postKind: FanHubPostKind | undefined;
+  if (liveStreamPromo) {
+    postKind = "live_stream_promo";
+  } else if (d.postKind === "standard") {
+    postKind = "standard";
+  }
+
   return {
     id: docSnap.id,
     body: (d.body as string) ?? (d.caption as string) ?? (d.content as string) ?? "",
@@ -197,6 +228,8 @@ function firestoreDocToFeedPost(docSnap: QueryDocumentSnapshot<DocumentData>, is
     pinned: !!d.pinned,
     pinnedAt: d.pinnedAt as FeedPost["pinnedAt"],
     feedFirestorePath: docSnap.ref.path,
+    postKind,
+    liveStreamPromo,
   };
 }
 
@@ -1200,6 +1233,12 @@ function FeedCard({
         )
       ) : null}
 
+      {post.postKind === "live_stream_promo" && post.liveStreamPromo?.streamId ? (
+        <div className="feed-card-live-stream-promo-wrap">
+          <LiveStreamPromoBanner promo={post.liveStreamPromo} accentHex={creatorThemePrimary} />
+        </div>
+      ) : null}
+
       {Array.isArray(post.audioUrls) && post.audioUrls.length > 0 && (
         <div className="feed-card-body" style={{ paddingTop: firstUrl ? 0 : undefined }}>
           {post.audioUrls.map((url, index) => (
@@ -1487,6 +1526,11 @@ function FeedCard({
                   </div>
                 )}
                 <div className="feed-comments-modal-panel">
+                  {post.postKind === "live_stream_promo" && post.liveStreamPromo?.streamId ? (
+                    <div className="feed-comments-modal-live-promo">
+                      <LiveStreamPromoBanner promo={post.liveStreamPromo} accentHex={viewPostLinkColor} />
+                    </div>
+                  ) : null}
                   {post.body?.trim() ? (
                     <div className="feed-comments-modal-post-body">
                       <p>{renderTextWithCustomEmoji(post.body, sjHeartEmojiCtx)}</p>

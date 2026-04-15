@@ -38,6 +38,8 @@ import { tryFeedVideoPosterSeekOnce } from "../src/lib/feedVideoPosterSeek";
 import { resolveApiUrl } from "../src/lib/resolveApiUrl";
 import { EmojiIcon } from "./icons/UIIcons";
 import { useFanFeedCommentEmojiPicker } from "./fanFeedCommentEmojiPicker";
+import type { FanHubPostKind, LiveStreamPromoOnPost } from "../types";
+import { LiveStreamPromoBanner } from "./LiveStreamPromoBanner";
 
 const feedImageDownloadGuardProps = {
   draggable: false as const,
@@ -367,6 +369,27 @@ interface Post {
   likedBy?: string[];
   /** Firestore path for the doc this row was merged from (informational; likes use API). */
   feedFirestorePath?: string;
+  postKind?: FanHubPostKind;
+  liveStreamPromo?: LiveStreamPromoOnPost;
+}
+
+function parseLiveStreamPromoMember(data: DocumentData): LiveStreamPromoOnPost | undefined {
+  const raw = data.liveStreamPromo;
+  if (!raw || typeof raw !== "object") return undefined;
+  const o = raw as Record<string, unknown>;
+  const streamId = typeof o.streamId === "string" ? o.streamId.trim() : "";
+  if (!streamId) return undefined;
+  const ticketCents =
+    typeof o.ticketCents === "number" && Number.isFinite(o.ticketCents)
+      ? Math.max(0, Math.round(o.ticketCents))
+      : 0;
+  const promo: LiveStreamPromoOnPost = { streamId, ticketCents };
+  if (typeof o.title === "string" && o.title.trim()) promo.title = o.title.trim();
+  if (typeof o.scheduledStart === "string" && o.scheduledStart.trim()) {
+    promo.scheduledStart = o.scheduledStart.trim();
+  }
+  if (o.freeForSubscribers === true) promo.freeForSubscribers = true;
+  return promo;
 }
 
 export interface FanFeedVisibilitySettings {
@@ -512,6 +535,13 @@ function postFromFirestore(snap: DocumentSnapshot<DocumentData>): Post | null {
         : rawComments.length;
   const likedByRaw = Array.isArray(data.likedBy) ? (data.likedBy as unknown[]) : [];
   const likedBy = likedByRaw.map((v) => String(v));
+  const liveStreamPromo = parseLiveStreamPromoMember(data);
+  let postKind: FanHubPostKind | undefined;
+  if (liveStreamPromo) {
+    postKind = "live_stream_promo";
+  } else if (data.postKind === "standard") {
+    postKind = "standard";
+  }
   return {
     id: docId,
     content: (data.body as string) || (data.content as string) || "",
@@ -530,6 +560,8 @@ function postFromFirestore(snap: DocumentSnapshot<DocumentData>): Post | null {
     lockedContent: lc,
     likedBy: likedBy.length > 0 ? likedBy : undefined,
     feedFirestorePath: snap.ref.path,
+    postKind,
+    liveStreamPromo,
   };
 }
 
@@ -1244,7 +1276,12 @@ function FanMemberPostDetailModal({
                   onUnlockNeedSignIn={onUnlockNeedSignIn}
                 />
               ) : null}
-              <div className="feed-comments-modal-panel">
+                <div className="feed-comments-modal-panel">
+                {post.postKind === "live_stream_promo" && post.liveStreamPromo?.streamId ? (
+                  <div className="feed-comments-modal-live-promo">
+                    <LiveStreamPromoBanner promo={post.liveStreamPromo} accentHex={primary} />
+                  </div>
+                ) : null}
                 {post.content?.trim() ? (
                   <div className="feed-comments-modal-post-body">
                     <p>{renderTextWithCustomEmoji(post.content, sjHeartEmojiCtx)}</p>
@@ -1790,6 +1827,12 @@ export const FanMemberFeed: React.FC<FanMemberFeedProps> = ({
                   {post.audioUrls.map((url) => (
                     <DmAudioPlayer key={`${post.id}-a-${url.slice(-24)}`} src={url} className="w-full" />
                   ))}
+                </div>
+              ) : null}
+
+              {post.postKind === "live_stream_promo" && post.liveStreamPromo?.streamId ? (
+                <div className="feed-card-live-stream-promo-wrap fan-feed-live-stream-promo">
+                  <LiveStreamPromoBanner promo={post.liveStreamPromo} accentHex={primary} />
                 </div>
               ) : null}
 
