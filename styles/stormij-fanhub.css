@@ -2280,6 +2280,25 @@
 .feed-comments-modal-emoji-picker--above {
   bottom: calc(100% + 6px);
 }
+/* Portaled to document.body — not clipped by .feed-comments-modal-panel overflow:hidden (desktop split). */
+.feed-comments-modal-emoji-picker.feed-comments-modal-emoji-picker--fixed {
+  position: fixed;
+  left: auto;
+  top: auto;
+  min-height: 0;
+}
+.feed-comments-modal-emoji-picker--fixed .feed-comments-modal-emoji-picker-search {
+  flex-shrink: 0;
+}
+.feed-comments-modal-emoji-picker--fixed .feed-comments-modal-emoji-picker-grid {
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: none;
+  overflow-y: auto;
+}
+.feed-comments-modal-emoji-picker--fixed .feed-comments-modal-emoji-picker-cats {
+  flex-shrink: 0;
+}
 .dark .feed-comments-modal-emoji-picker {
   background: #1f2937;
   border-color: rgba(75, 85, 99, 0.55);

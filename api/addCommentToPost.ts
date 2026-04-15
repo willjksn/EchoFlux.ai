@@ -1,5 +1,6 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import type { DocumentReference } from "firebase-admin/firestore";
+import { applyBrowserApiCors } from "./_browserApiCors.js";
 import { getVerifyAuth, getModelRouter, withErrorHandling } from "./_errorHandler.js";
 import { sanitizeForAI } from "./_inputSanitizer.js";
 import { getAdminDb } from "./_firebaseAdmin.js";
@@ -51,6 +52,8 @@ Reply (short, in creator voice):`;
 
 /** Add a fan comment to a post; if creator has Elite + AI reply on, may append an AI reply (max 2 per fan per post, random chance). */
 async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
+  if (applyBrowserApiCors(req, res)) return;
+
   if (req.method !== "POST") {
     res.status(405).json({ error: "Method not allowed" });
     return;

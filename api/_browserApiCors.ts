@@ -13,6 +13,15 @@ function extraAllowedOrigins(): string[] {
     .filter(Boolean);
 }
 
+/** Same list as client `VITE_CUSTOM_STOREFRONT_HOSTS` — allow browser API from custom apex domains. */
+function customStorefrontHostnames(): string[] {
+  const raw = process.env.VITE_CUSTOM_STOREFRONT_HOSTS || "";
+  return raw
+    .split(",")
+    .map((s) => s.trim().toLowerCase().replace(/^www\./, ""))
+    .filter(Boolean);
+}
+
 function isAllowedOrigin(origin: string): boolean {
   if (!origin) return false;
   try {
@@ -24,6 +33,8 @@ function isAllowedOrigin(origin: string): boolean {
     if (h.endsWith(".web.app") || h.endsWith(".firebaseapp.com")) return true;
     if (h === "witme.io" || h.endsWith(".witme.io")) return true;
     if (extraAllowedOrigins().includes(origin)) return true;
+    const hn = h.replace(/^www\./, "");
+    if (customStorefrontHostnames().includes(hn)) return true;
     return false;
   } catch {
     return false;

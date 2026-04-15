@@ -6,6 +6,7 @@ import { getAdminDb } from "./_firebaseAdmin.js";
 import { verifyAuth } from "./verifyAuth.js";
 import { isFanBlocked } from "./_fanDmHelpers.js";
 import { enforceRateLimit } from "./_rateLimit.js";
+import { applyBrowserApiCors } from "./_browserApiCors.js";
 
 const DEFAULT_SUBSCRIPTION_CENTS = 999; // $9.99
 const PLATFORM_FEE_PERCENT = 0.10; // 10% platform fee on all fan payments
@@ -90,6 +91,8 @@ function isCreatorPlatformOwner(
  * Tips can be made without authentication (anonymous tippers).
  */
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+  if (applyBrowserApiCors(req, res)) return;
+
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
   }

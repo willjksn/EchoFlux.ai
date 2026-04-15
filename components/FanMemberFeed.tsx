@@ -12,6 +12,7 @@ import {
   getDoc,
   setDoc,
   type DocumentData,
+  type DocumentSnapshot,
 } from "firebase/firestore";
 import { db, auth } from "../firebaseConfig";
 import {
@@ -34,6 +35,7 @@ import {
   restoreFanFeedCarouselScrollSnaps,
 } from "../src/lib/fanFeedCarouselScrollRestore";
 import { tryFeedVideoPosterSeekOnce } from "../src/lib/feedVideoPosterSeek";
+import { resolveApiUrl } from "../src/lib/resolveApiUrl";
 
 const feedImageDownloadGuardProps = {
   draggable: false as const,
@@ -81,7 +83,7 @@ async function startFanPostUnlockCheckoutSession(creatorId: string, postId: stri
   const token = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
   if (!token) throw new Error("Sign in to unlock this post.");
   const { successUrl, cancelUrl } = buildPostUnlockCheckoutReturnUrls();
-  const res = await fetch("/api/createFanCheckoutSession", {
+  const res = await fetch(resolveApiUrl("/api/createFanCheckoutSession"), {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -104,7 +106,7 @@ async function startFanTipCheckoutSession(creatorId: string, amountCents: number
   const token = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
   const successUrl = buildTipCheckoutReturnUrl(window.location.pathname, `?${FAN_TIP_CHECKOUT_SUCCESS_QS}`);
   const cancelUrl = buildTipCheckoutReturnUrl(window.location.pathname, "?tip=cancel");
-  const res = await fetch("/api/createFanCheckoutSession", {
+  const res = await fetch(resolveApiUrl("/api/createFanCheckoutSession"), {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -322,6 +324,9 @@ interface Post {
   hideLikeCounts?: boolean;
   lockedContent?: LockedPostContent;
   audioUrls?: string[];
+  likedBy?: string[];
+  /** Firestore path for the doc this row was merged from (informational; likes use API). */
+  feedFirestorePath?: string;
 }
 
 export interface FanFeedVisibilitySettings {
@@ -418,7 +423,10 @@ const DEMO_POSTS: Post[] = [
   },
 ];
 
-function postFromFirestore(docId: string, data: DocumentData): Post | null {
+function postFromFirestore(snap: DocumentSnapshot<DocumentData>): Post | null {
+  if (!snap.exists()) return null;
+  const docId = snap.id;
+  const data = snap.data();
   const status = (data.status as string) || "published";
   if (status === "draft") return null;
   const createdAt =
@@ -462,6 +470,8 @@ function postFromFirestore(docId: string, data: DocumentData): Post | null {
       : typeof data.commentsCount === "number"
         ? data.commentsCount
         : rawComments.length;
+  const likedByRaw = Array.isArray(data.likedBy) ? (data.likedBy as unknown[]) : [];
+  const likedBy = likedByRaw.map((v) => String(v));
   return {
     id: docId,
     content: (data.body as string) || (data.content as string) || "",
@@ -478,6 +488,8 @@ function postFromFirestore(docId: string, data: DocumentData): Post | null {
     hideLikes: data.hideLikes as boolean | undefined,
     hideLikeCounts: data.hideLikeCounts as boolean | undefined,
     lockedContent: lc,
+    likedBy: likedBy.length > 0 ? likedBy : undefined,
+    feedFirestorePath: snap.ref.path,
   };
 }
 
@@ -882,7 +894,7 @@ async function fetchMemberPostById(creatorId: string, postId: string): Promise<P
   for (const ref of refs) {
     const snap = await getDoc(ref);
     if (snap.exists()) {
-      const p = postFromFirestore(snap.id, snap.data());
+      const p = postFromFirestore(snap);
       if (p) return p;
     }
   }
@@ -1253,7 +1265,8 @@ export const FanMemberFeed: React.FC<FanMemberFeedProps> = ({
   const creatorAvatarSrc = typeof avatar === "string" && avatar.trim() ? avatar.trim() : undefined;
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
-  const [likedPosts, setLikedPosts] = useState<Set<string>>(new Set());
+  const [likeSavingPostId, setLikeSavingPostId] = useState<string | null>(null);
+  const likeInFlightRef = useRef<string | null>(null);
   const [bookmarkedPosts, setBookmarkedPosts] = useState<Set<string>>(new Set());
   const [expandedComments, setExpandedComments] = useState<Set<string>>(new Set());
   const [expandedInlineCommentKeys, setExpandedInlineCommentKeys] = useState<Set<string>>(new Set());
@@ -1287,7 +1300,7 @@ export const FanMemberFeed: React.FC<FanMemberFeedProps> = ({
           const q = query(postsRef, orderBy("createdAt", "desc"), limit(30));
           const snapshot = await getDocs(q);
           snapshot.docs.forEach((docSnap) => {
-            const p = postFromFirestore(docSnap.id, docSnap.data());
+            const p = postFromFirestore(docSnap);
             if (p) byId.set(p.id, p);
           });
         } catch {
@@ -1425,7 +1438,7 @@ export const FanMemberFeed: React.FC<FanMemberFeedProps> = ({
       if (!token) return;
       setCommentSending(postId);
       try {
-        const res = await fetch("/api/addCommentToPost", {
+        const res = await fetch(resolveApiUrl("/api/addCommentToPost"), {
           method: "POST",
           headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
           body: JSON.stringify({
@@ -1484,25 +1497,57 @@ export const FanMemberFeed: React.FC<FanMemberFeedProps> = ({
     [fanId, creatorId]
   );
 
-  const toggleLike = (postId: string) => {
-    setLikedPosts((prev) => {
-      const next = new Set(prev);
-      if (next.has(postId)) {
-        next.delete(postId);
-      } else {
-        next.add(postId);
+  const toggleLike = useCallback(
+    async (post: Post) => {
+      if (!fanId) {
+        showToast?.("Sign in to like posts.", "error");
+        return;
       }
-      return next;
-    });
-    // Update local like count for UI feedback
-    setPosts((prev) =>
-      prev.map((p) =>
-        p.id === postId
-          ? { ...p, likesCount: likedPosts.has(postId) ? p.likesCount - 1 : p.likesCount + 1 }
-          : p
-      )
-    );
-  };
+      if (post.id.startsWith("demo-")) {
+        showToast?.("Preview posts can’t be liked.", "info");
+        return;
+      }
+      if (likeInFlightRef.current) return;
+      likeInFlightRef.current = post.id;
+      setLikeSavingPostId(post.id);
+      try {
+        const token = await auth.currentUser?.getIdToken();
+        if (!token) {
+          showToast?.("Sign in to like posts.", "error");
+          return;
+        }
+        const res = await fetch(resolveApiUrl("/api/togglePostLike"), {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ creatorId, postId: post.id }),
+        });
+        const data = (await res.json().catch(() => ({}))) as {
+          success?: boolean;
+          likedBy?: string[];
+          likeCount?: number;
+          error?: string;
+          note?: string;
+        };
+        if (!res.ok || !data.success) {
+          showToast?.(data.note || data.error || "Couldn’t update like.", "error");
+          return;
+        }
+        const lb = Array.isArray(data.likedBy) ? data.likedBy.map(String) : [];
+        const lc = typeof data.likeCount === "number" ? data.likeCount : lb.length;
+        setPosts((prev) =>
+          prev.map((p) => (p.id === post.id ? { ...p, likedBy: lb, likesCount: lc } : p))
+        );
+        if (viewPostId === post.id) void reloadDetailPost();
+      } catch (e) {
+        console.error(e);
+        showToast?.("Couldn’t update like.", "error");
+      } finally {
+        if (likeInFlightRef.current === post.id) likeInFlightRef.current = null;
+        setLikeSavingPostId(null);
+      }
+    },
+    [fanId, creatorId, showToast, viewPostId, reloadDetailPost]
+  );
 
   const toggleComments = (postId: string) => {
     setExpandedComments((prev) => {
@@ -1586,13 +1631,26 @@ export const FanMemberFeed: React.FC<FanMemberFeedProps> = ({
                   <button
                     type="button"
                     className="feed-card-action-link"
-                    onClick={() => toggleLike(post.id)}
-                    style={likedPosts.has(post.id) ? { color: primary } : undefined}
+                    aria-pressed={!!fanId && (post.likedBy ?? []).includes(fanId)}
+                    disabled={!fanId || likeSavingPostId === post.id}
+                    onClick={() => void toggleLike(post)}
+                    style={
+                      fanId && (post.likedBy ?? []).includes(fanId) ? { color: primary } : undefined
+                    }
                   >
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill={likedPosts.has(post.id) ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2">
+                    <svg
+                      width="18"
+                      height="18"
+                      viewBox="0 0 24 24"
+                      fill={fanId && (post.likedBy ?? []).includes(fanId) ? "currentColor" : "none"}
+                      stroke="currentColor"
+                      strokeWidth="2"
+                    >
                       <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
                     </svg>
-                    {!(feedSettings?.hideLikeCounts || post.hideLikeCounts) && <span className="feed-card-action-count">{post.likesCount + (likedPosts.has(post.id) ? 1 : 0)}</span>}
+                    {!(feedSettings?.hideLikeCounts || post.hideLikeCounts) && (
+                      <span className="feed-card-action-count">{post.likesCount}</span>
+                    )}
                   </button>
                 )}
 

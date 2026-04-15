@@ -624,7 +624,7 @@ function FeedCard({
   const [composeEmojiPickerOpen, setComposeEmojiPickerOpen] = useState(false);
   const [composeEmojiSearch, setComposeEmojiSearch] = useState("");
   const [composeEmojiCategory, setComposeEmojiCategory] = useState<Emoji["category"]>(EMOJI_CATEGORIES[0].name);
-  const [composeEmojiPopoverClass, setComposeEmojiPopoverClass] = useState("feed-comments-modal-emoji-picker--above");
+  const [composeEmojiPickerFixedStyle, setComposeEmojiPickerFixedStyle] = useState<React.CSSProperties | null>(null);
   const commentInputRef = useRef<HTMLInputElement | null>(null);
   const composeEmojiPickerRef = useRef<HTMLDivElement | null>(null);
   const composeEmojiButtonRef = useRef<HTMLButtonElement | null>(null);
@@ -736,17 +736,50 @@ function FeedCard({
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [adminMenuOpen]);
 
-  useLayoutEffect(() => {
-    if (!composeEmojiPickerOpen || !composeFieldRef.current) return;
-    const POPOVER_H = 320;
-    const rect = composeFieldRef.current.getBoundingClientRect();
-    const spaceBelow = window.innerHeight - rect.bottom;
-    if (spaceBelow < POPOVER_H + 16) {
-      setComposeEmojiPopoverClass("feed-comments-modal-emoji-picker--above");
-    } else {
-      setComposeEmojiPopoverClass("feed-comments-modal-emoji-picker--below");
+  const updateComposeEmojiPickerPosition = useCallback(() => {
+    if (!composeEmojiPickerOpen || !composeFieldRef.current) {
+      setComposeEmojiPickerFixedStyle(null);
+      return;
     }
+    const rect = composeFieldRef.current.getBoundingClientRect();
+    const POPOVER_H = 300;
+    const pad = 8;
+    const w = Math.min(320, window.innerWidth - 2 * pad);
+    const left = Math.max(pad, Math.min(rect.left, window.innerWidth - w - pad));
+    const spaceBelow = window.innerHeight - rect.bottom - pad;
+    const spaceAbove = rect.top - pad;
+    const below = spaceBelow >= 160 || spaceBelow >= spaceAbove;
+    const top = below ? rect.bottom + 6 : Math.max(pad, rect.top - POPOVER_H - 6);
+    const maxH = Math.max(
+      120,
+      below ? Math.min(POPOVER_H, spaceBelow - 6) : Math.min(POPOVER_H, spaceAbove - 6)
+    );
+    setComposeEmojiPickerFixedStyle({
+      position: "fixed",
+      left,
+      top,
+      width: w,
+      maxHeight: maxH,
+      zIndex: 11000,
+      boxSizing: "border-box",
+    });
   }, [composeEmojiPickerOpen]);
+
+  useLayoutEffect(() => {
+    updateComposeEmojiPickerPosition();
+  }, [updateComposeEmojiPickerPosition]);
+
+  useEffect(() => {
+    if (!composeEmojiPickerOpen) return;
+    updateComposeEmojiPickerPosition();
+    const onMove = () => updateComposeEmojiPickerPosition();
+    window.addEventListener("scroll", onMove, true);
+    window.addEventListener("resize", onMove);
+    return () => {
+      window.removeEventListener("scroll", onMove, true);
+      window.removeEventListener("resize", onMove);
+    };
+  }, [composeEmojiPickerOpen, updateComposeEmojiPickerPosition]);
 
   useEffect(() => {
     if (!composeEmojiPickerOpen) return;
@@ -1591,65 +1624,6 @@ function FeedCard({
                           >
                             <EmojiIcon className="w-5 h-5" />
                           </button>
-                          {composeEmojiPickerOpen ? (
-                            <div
-                              ref={composeEmojiPickerRef}
-                              className={`feed-comments-modal-emoji-picker ${composeEmojiPopoverClass}`}
-                              role="dialog"
-                              aria-label="Emoji picker"
-                            >
-                              <div className="feed-comments-modal-emoji-picker-search">
-                                <input
-                                  type="text"
-                                  placeholder="Search emojis…"
-                                  value={composeEmojiSearch}
-                                  onChange={(e) => setComposeEmojiSearch(e.target.value)}
-                                  className="feed-comments-modal-emoji-picker-search-input"
-                                />
-                              </div>
-                              <div className="feed-comments-modal-emoji-picker-grid">
-                                {composeFilteredEmojis.map(({ emoji, description, imageUrl, insertText }) => (
-                                  <button
-                                    key={description}
-                                    type="button"
-                                    className="feed-comments-modal-emoji-picker-cell"
-                                    title={description}
-                                    aria-label={description}
-                                    onClick={() => insertComposeEmoji(insertText ?? emoji)}
-                                  >
-                                    {imageUrl ? (
-                                      <img
-                                        src={imageUrl}
-                                        alt={description}
-                                        className="feed-comments-modal-emoji-picker-img"
-                                      />
-                                    ) : (
-                                      emoji
-                                    )}
-                                  </button>
-                                ))}
-                              </div>
-                              <div className="feed-comments-modal-emoji-picker-cats">
-                                {EMOJI_CATEGORIES.map(({ name, icon }) => (
-                                  <button
-                                    key={name}
-                                    type="button"
-                                    className={`feed-comments-modal-emoji-picker-cat${
-                                      composeEmojiCategory === name && !composeEmojiSearch ? " active" : ""
-                                    }`}
-                                    title={name}
-                                    aria-label={name}
-                                    onClick={() => {
-                                      setComposeEmojiCategory(name);
-                                      setComposeEmojiSearch("");
-                                    }}
-                                  >
-                                    {feedModalEmojiCategoryIcons[icon]}
-                                  </button>
-                                ))}
-                              </div>
-                            </div>
-                          ) : null}
                         </div>
                       </div>
                       <button type="submit" className="feed-comments-modal-compose-send" disabled={modalCommentSaving || !modalComment.trim()}>
@@ -1663,6 +1637,69 @@ function FeedCard({
           </div>,
           document.body
         )}
+      {composeEmojiPickerOpen && composeEmojiPickerFixedStyle
+        ? createPortal(
+            <div
+              ref={composeEmojiPickerRef}
+              className="feed-comments-modal-emoji-picker feed-comments-modal-emoji-picker--fixed"
+              style={composeEmojiPickerFixedStyle}
+              role="dialog"
+              aria-label="Emoji picker"
+            >
+              <div className="feed-comments-modal-emoji-picker-search">
+                <input
+                  type="text"
+                  placeholder="Search emojis…"
+                  value={composeEmojiSearch}
+                  onChange={(e) => setComposeEmojiSearch(e.target.value)}
+                  className="feed-comments-modal-emoji-picker-search-input"
+                />
+              </div>
+              <div className="feed-comments-modal-emoji-picker-grid">
+                {composeFilteredEmojis.map(({ emoji, description, imageUrl, insertText }) => (
+                  <button
+                    key={description}
+                    type="button"
+                    className="feed-comments-modal-emoji-picker-cell"
+                    title={description}
+                    aria-label={description}
+                    onClick={() => insertComposeEmoji(insertText ?? emoji)}
+                  >
+                    {imageUrl ? (
+                      <img
+                        src={imageUrl}
+                        alt={description}
+                        className="feed-comments-modal-emoji-picker-img"
+                      />
+                    ) : (
+                      emoji
+                    )}
+                  </button>
+                ))}
+              </div>
+              <div className="feed-comments-modal-emoji-picker-cats">
+                {EMOJI_CATEGORIES.map(({ name, icon }) => (
+                  <button
+                    key={name}
+                    type="button"
+                    className={`feed-comments-modal-emoji-picker-cat${
+                      composeEmojiCategory === name && !composeEmojiSearch ? " active" : ""
+                    }`}
+                    title={name}
+                    aria-label={name}
+                    onClick={() => {
+                      setComposeEmojiCategory(name);
+                      setComposeEmojiSearch("");
+                    }}
+                  >
+                    {feedModalEmojiCategoryIcons[icon]}
+                  </button>
+                ))}
+              </div>
+            </div>,
+            document.body
+          )
+        : null}
     </article>
   );
 }
