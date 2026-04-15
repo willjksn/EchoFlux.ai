@@ -268,23 +268,61 @@ const PlayIcon = () => (
   </svg>
 );
 
-function MemberFeedGridVideoCover({ src }: { src: string }) {
+function MemberFeedGridVideoThumbnail({ src, hoverActive }: { src: string; hoverActive: boolean }) {
+  const videoRef = useRef<HTMLVideoElement | null>(null);
   const posterSeekDoneRef = useRef(false);
   const clean = src.split("#")[0]?.trim() || src;
+  const [hidePlayOverlay, setHidePlayOverlay] = useState(false);
+
   useEffect(() => {
     posterSeekDoneRef.current = false;
   }, [clean]);
+
+  useEffect(() => {
+    const v = videoRef.current;
+    if (!v) return;
+    let cancelled = false;
+    if (hoverActive) {
+      void v.play().then(() => {
+        if (!cancelled) setHidePlayOverlay(true);
+      }).catch(() => {});
+    } else {
+      v.pause();
+      setHidePlayOverlay(false);
+      try {
+        v.currentTime = 0;
+      } catch {
+        /* ignore */
+      }
+      posterSeekDoneRef.current = false;
+      tryFeedVideoPosterSeekOnce(v, posterSeekDoneRef);
+    }
+    return () => {
+      cancelled = true;
+    };
+  }, [hoverActive, clean]);
+
   return (
-    <video
-      src={clean}
-      muted
-      playsInline
-      preload="metadata"
-      {...feedVideoDownloadGuardProps}
-      onLoadedMetadata={(e) => {
-        tryFeedVideoPosterSeekOnce(e.currentTarget, posterSeekDoneRef);
-      }}
-    />
+    <>
+      <video
+        ref={videoRef}
+        src={clean}
+        muted
+        loop
+        playsInline
+        preload="metadata"
+        {...feedVideoDownloadGuardProps}
+        onLoadedMetadata={(e) => {
+          tryFeedVideoPosterSeekOnce(e.currentTarget, posterSeekDoneRef);
+        }}
+      />
+      <span
+        className={`feed-grid-video-overlay${hidePlayOverlay ? " feed-grid-video-overlay--hidden" : ""}`}
+        aria-hidden
+      >
+        <PlayIcon />
+      </span>
+    </>
   );
 }
 
@@ -1280,6 +1318,7 @@ export const FanMemberFeed: React.FC<FanMemberFeedProps> = ({
   const [tipLoading, setTipLoading] = useState(false);
   const [unlockingPostId, setUnlockingPostId] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<"feed" | "grid">("feed");
+  const [gridHoveredVideoPostId, setGridHoveredVideoPostId] = useState<string | null>(null);
   const { detailPost, detailLoading, reload: reloadDetailPost } = useMemberPostDetail(creatorId, viewPostId);
   const [fanPublicProfile, setFanPublicProfile] = useState<{ photoURL?: string; displayName?: string }>({});
 
@@ -1334,6 +1373,10 @@ export const FanMemberFeed: React.FC<FanMemberFeedProps> = ({
   useEffect(() => {
     fetchPosts();
   }, [fetchPosts]);
+
+  useEffect(() => {
+    if (viewMode !== "grid") setGridHoveredVideoPostId(null);
+  }, [viewMode]);
 
   useEffect(() => {
     if (!fanId || !db) {
@@ -1802,15 +1845,17 @@ export const FanMemberFeed: React.FC<FanMemberFeedProps> = ({
                     type="button"
                     className="feed-grid-item"
                     onClick={() => setViewPostId(post.id)}
+                    onMouseEnter={() => {
+                      if (coverIsVideo) setGridHoveredVideoPostId(post.id);
+                    }}
+                    onMouseLeave={() => setGridHoveredVideoPostId(null)}
                   >
                     {coverUrl ? (
                       coverIsVideo ? (
-                        <>
-                          <MemberFeedGridVideoCover src={coverUrl} />
-                          <span className="feed-grid-video-overlay" aria-hidden>
-                            <PlayIcon />
-                          </span>
-                        </>
+                        <MemberFeedGridVideoThumbnail
+                          src={coverUrl}
+                          hoverActive={gridHoveredVideoPostId === post.id}
+                        />
                       ) : (
                         <img src={coverUrl} alt="" loading="lazy" {...feedImageDownloadGuardProps} />
                       )
