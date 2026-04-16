@@ -1591,9 +1591,12 @@ type MemberFeedBucketKey = "fanPosts" | "creatorPosts" | "userPosts";
 
 function mergeMemberFeedBuckets(buckets: Record<MemberFeedBucketKey, Map<string, Post>>): Post[] {
   const final = new Map<string, Post>();
-  buckets.fanPosts.forEach((p, id) => final.set(id, p));
-  buckets.creatorPosts.forEach((p, id) => final.set(id, p));
+  // Same-ID docs can exist under legacy paths; Fan Hub composer writes canonical data to
+  // `creators/.../fanPosts` (e.g. `liveStreamPromo`). Apply buckets lowest → highest priority
+  // so fanPosts wins — matches FanHubFeed (user posts first, then fanPosts overwrites).
   buckets.userPosts.forEach((p, id) => final.set(id, p));
+  buckets.creatorPosts.forEach((p, id) => final.set(id, p));
+  buckets.fanPosts.forEach((p, id) => final.set(id, p));
   const list = Array.from(final.values());
   list.sort((a, b) => {
     if (a.pinned && !b.pinned) return -1;

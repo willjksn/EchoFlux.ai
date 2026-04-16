@@ -181,6 +181,23 @@ function formatRecordingElapsed(totalSec: number): string {
 // Empty - no demo data for new creators
 const DEMO_PURCHASES: Purchase[] = [];
 
+const PurchasesHelpIcon = () => (
+  <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden>
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth={2}
+      d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"
+    />
+  </svg>
+);
+
+const CloseIcon = () => (
+  <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden>
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+  </svg>
+);
+
 /**
  * Fan Hub → Purchases: store purchases with scheduling to calendar.
  * Shows pending purchases that need scheduling, and scheduled/completed ones.
@@ -197,6 +214,7 @@ export const FanHubPurchases: React.FC = () => {
   const [scheduleTime, setScheduleTime] = useState("12:00");
   const [savingId, setSavingId] = useState<string | null>(null);
   const [filterStatus, setFilterStatus] = useState<"all" | "pending" | "scheduled" | "completed" | "tips">("all");
+  const [showPurchasesHelpModal, setShowPurchasesHelpModal] = useState(false);
   const [deliveryEditingId, setDeliveryEditingId] = useState<string | null>(null);
   const [deliveryTypeDraft, setDeliveryTypeDraft] = useState<"video" | "image" | "audio" | "text">("text");
   const [deliveryTextDraft, setDeliveryTextDraft] = useState("");
@@ -1174,17 +1192,21 @@ export const FanHubPurchases: React.FC = () => {
   return (
     <div className="purchases-page">
       <header className="purchases-header">
-        <div>
+        <div className="purchases-header-copy">
           <h1 className="purchases-title">Purchases</h1>
-          <p className="purchases-subtitle">
-            Store purchases appear here. Set a date and time and click <strong>Schedule</strong> to add it to your{" "}
-            <a href="/calendar" className="purchases-link">calendar</a>. Fans are notified only when you schedule a{" "}
-            <strong>live video call</strong> or <strong>timed chat session</strong> (so you can meet at the same time).
-            They also get a second reminder about <strong>5 minutes before</strong> start. For video calls, use{" "}
-            <strong>Start video call</strong> on the purchase when it&apos;s time (same experience as instant calls).
-            For chat sessions, use <strong>Open messages</strong> to talk in DMs. Other treats stay calendar-only until
-            you deliver — fans are not pinged on the schedule date.
-          </p>
+          <div className="purchases-intro-head">
+            <p className="purchases-subtitle-lead">
+              Store orders and tips land here. Schedule sessions so they show on your calendar — fans get reminders for
+              live video and timed chat when you schedule.
+            </p>
+            <button
+              type="button"
+              onClick={() => setShowPurchasesHelpModal(true)}
+              className="purchases-how-it-works-btn"
+            >
+              How it works
+            </button>
+          </div>
         </div>
         <div className="purchases-header-actions">
           <button
@@ -1222,6 +1244,117 @@ export const FanHubPurchases: React.FC = () => {
           </button>
         </div>
       </header>
+
+      {showPurchasesHelpModal && (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4"
+          role="presentation"
+          onClick={() => setShowPurchasesHelpModal(false)}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="fanhub-purchases-help-title"
+            className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-lg max-h-[min(85vh,34rem)] flex flex-col border border-pink-100 dark:border-gray-700"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-3 p-4 border-b border-pink-100 dark:border-gray-700 bg-gradient-to-r from-pink-50/80 to-white dark:from-pink-950/30 dark:to-gray-800">
+              <div className="flex items-start gap-3 min-w-0">
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-pink-500/10 text-pink-600 dark:text-pink-300">
+                  <PurchasesHelpIcon />
+                </span>
+                <div>
+                  <h2 id="fanhub-purchases-help-title" className="text-lg font-semibold text-gray-900 dark:text-white">
+                    How purchases &amp; scheduling work
+                  </h2>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                    Fan Hub → Purchases
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowPurchasesHelpModal(false)}
+                className="p-2 text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition shrink-0"
+                aria-label="Close"
+              >
+                <CloseIcon />
+              </button>
+            </div>
+            <div className="overflow-y-auto p-4 space-y-4 text-sm text-gray-700 dark:text-gray-300">
+              <section>
+                <h3 className="text-xs font-semibold uppercase tracking-wide text-pink-600 dark:text-pink-400 mb-1.5">
+                  What appears here
+                </h3>
+                <p className="text-[13px] leading-relaxed text-gray-600 dark:text-gray-400">
+                  Treats and store orders from your fans show as rows — tips, memberships, unlocks, and session-style
+                  products. Use filters to focus on what needs action.
+                </p>
+              </section>
+              <section>
+                <h3 className="text-xs font-semibold uppercase tracking-wide text-pink-600 dark:text-pink-400 mb-1.5">
+                  Scheduling &amp; calendar
+                </h3>
+                <ul className="list-disc list-inside space-y-1 text-[13px] leading-relaxed text-gray-600 dark:text-gray-400">
+                  <li>
+                    Pick a <strong className="text-gray-800 dark:text-gray-200">date and time</strong>, then{" "}
+                    <strong className="text-gray-800 dark:text-gray-200">Schedule</strong> — it adds to your{" "}
+                    <a href="/calendar" className="text-pink-600 dark:text-pink-400 font-medium hover:underline">
+                      calendar
+                    </a>
+                    .
+                  </li>
+                </ul>
+              </section>
+              <section>
+                <h3 className="text-xs font-semibold uppercase tracking-wide text-pink-600 dark:text-pink-400 mb-1.5">
+                  When fans get notified
+                </h3>
+                <p className="text-[13px] leading-relaxed text-gray-600 dark:text-gray-400">
+                  Fans are notified when you schedule a <strong className="text-gray-800 dark:text-gray-200">live video call</strong>{" "}
+                  or <strong className="text-gray-800 dark:text-gray-200">timed chat session</strong> — so you can meet at the
+                  same time. They also get a reminder about <strong className="text-gray-800 dark:text-gray-200">5 minutes before</strong>{" "}
+                  start.
+                </p>
+              </section>
+              <section>
+                <h3 className="text-xs font-semibold uppercase tracking-wide text-pink-600 dark:text-pink-400 mb-1.5">
+                  At session time
+                </h3>
+                <ul className="list-disc list-inside space-y-1 text-[13px] leading-relaxed text-gray-600 dark:text-gray-400">
+                  <li>
+                    <strong className="text-gray-800 dark:text-gray-200">Video calls:</strong> use{" "}
+                    <strong className="text-gray-800 dark:text-gray-200">Start video call</strong> on the row (same flow as
+                    instant calls).
+                  </li>
+                  <li>
+                    <strong className="text-gray-800 dark:text-gray-200">Chat sessions:</strong> use{" "}
+                    <strong className="text-gray-800 dark:text-gray-200">Open messages</strong> to talk in DMs.
+                  </li>
+                </ul>
+              </section>
+              <section>
+                <h3 className="text-xs font-semibold uppercase tracking-wide text-pink-600 dark:text-pink-400 mb-1.5">
+                  Other treats
+                </h3>
+                <p className="text-[13px] leading-relaxed text-gray-600 dark:text-gray-400">
+                  Other products stay <strong className="text-gray-800 dark:text-gray-200">calendar-only</strong> for you until
+                  you deliver — fans are not pinged on the schedule date alone.
+                </p>
+              </section>
+            </div>
+            <div className="flex justify-end gap-2 p-4 border-t border-gray-200 dark:border-gray-700 bg-gray-50/80 dark:bg-gray-800/80 rounded-b-xl">
+              <button
+                type="button"
+                onClick={() => setShowPurchasesHelpModal(false)}
+                className="px-4 py-2 rounded-lg bg-gradient-to-r from-pink-500 to-rose-500 text-white text-sm font-semibold hover:from-pink-600 hover:to-rose-600 shadow-sm"
+              >
+                Got it
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Stats Bar */}
       <div className="purchases-stats">

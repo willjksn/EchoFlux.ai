@@ -6670,6 +6670,62 @@ button.treat-card:hover:not(:disabled) .treat-card-cta {
   color: #9ca3af;
 }
 
+.purchases-header-copy {
+  flex: 1;
+  min-width: 0;
+}
+
+.purchases-intro-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem 1rem;
+  margin-top: 0.35rem;
+}
+
+.purchases-subtitle-lead {
+  font-size: 0.9rem;
+  color: var(--text-muted, #6b7280);
+  margin: 0;
+  max-width: 42rem;
+  line-height: 1.45;
+  flex: 1;
+  min-width: min(100%, 18rem);
+}
+
+.dark .purchases-subtitle-lead {
+  color: #9ca3af;
+}
+
+.purchases-how-it-works-btn {
+  flex-shrink: 0;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--fan-primary, #c97082);
+  background: color-mix(in srgb, var(--fan-primary, #c97082) 10%, transparent);
+  border: 1px solid color-mix(in srgb, var(--fan-primary, #c97082) 28%, transparent);
+  border-radius: 0.5rem;
+  padding: 0.35rem 0.75rem;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.purchases-how-it-works-btn:hover {
+  background: color-mix(in srgb, var(--fan-primary, #c97082) 18%, transparent);
+  border-color: color-mix(in srgb, var(--fan-primary, #c97082) 45%, transparent);
+}
+
+.dark .purchases-how-it-works-btn {
+  color: color-mix(in srgb, var(--fan-primary, #f9a8c8) 90%, white);
+  background: color-mix(in srgb, var(--fan-primary, #c97082) 16%, transparent);
+  border-color: color-mix(in srgb, var(--fan-primary, #c97082) 35%, transparent);
+}
+
+.dark .purchases-how-it-works-btn:hover {
+  background: color-mix(in srgb, var(--fan-primary, #c97082) 26%, transparent);
+}
+
 .purchases-link {
   color: var(--fan-primary, #6366f1);
   text-decoration: none;

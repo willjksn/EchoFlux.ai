@@ -475,6 +475,7 @@ export const FanHubPosts: React.FC = () => {
   
   // Scheduling
   const [showScheduleModal, setShowScheduleModal] = useState(false);
+  const [showLiveStreamHelpModal, setShowLiveStreamHelpModal] = useState(false);
   const [scheduleDate, setScheduleDate] = useState("");
   const [scheduleTime, setScheduleTime] = useState("");
   
@@ -2194,11 +2195,31 @@ Write 2-4 sentences that are engaging and on-topic.`;
                 )}
               </div>
 
-              {/* Live stream promo */}
-              <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700">
+              {/* Live stream — compact panel + “How it works” */}
+              <div className="rounded-xl border border-pink-200/70 dark:border-pink-900/45 bg-gradient-to-br from-pink-50/90 via-white to-rose-50/50 dark:from-gray-800 dark:via-gray-800/95 dark:to-pink-950/25 p-4 shadow-sm ring-1 ring-pink-100/50 dark:ring-pink-900/20">
+                <div className="flex items-start justify-between gap-3 mb-2">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-pink-500/10 text-pink-600 dark:bg-pink-500/15 dark:text-pink-300">
+                      <VideoCamIcon />
+                    </span>
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-gray-900 dark:text-white">Live stream</p>
+                      <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">
+                        Adds a stream card to this post. Publish now — schedule the real start time below.
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowLiveStreamHelpModal(true)}
+                    className="shrink-0 text-xs font-medium text-pink-600 dark:text-pink-400 hover:text-pink-700 dark:hover:text-pink-300 underline-offset-2 hover:underline"
+                  >
+                    How it works
+                  </button>
+                </div>
                 <FanHubSwitchRow
                   labelId="fanhub-live-stream-label"
-                  label="Live stream promo"
+                  label="Turn on live stream for this post"
                   checked={liveStreamPromoEnabled}
                   onCheckedChange={(next) => {
                     setLiveStreamPromoEnabled(next);
@@ -2213,73 +2234,99 @@ Write 2-4 sentences that are engaging and on-topic.`;
                     }
                   }}
                 />
-                <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
-                  Adds a ticket card to this post. The post publishes now; set the real go-live time below.
-                </p>
                 {liveStreamPromoEnabled && (
-                  <div className="mt-3 space-y-3 border-t border-gray-100 dark:border-gray-700 pt-3">
+                  <div className="mt-3 space-y-3 border-t border-pink-100/80 dark:border-pink-900/30 pt-3">
                     <input
                       type="text"
                       value={liveStreamTitle}
                       onChange={(e) => setLiveStreamTitle(e.target.value)}
-                      placeholder="Stream title (shown on the card)"
-                      className="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
+                      placeholder="Stream title on the card"
+                      className="w-full px-3 py-2 border border-pink-200/80 dark:border-gray-600 rounded-lg bg-white/90 dark:bg-gray-900/50 text-gray-900 dark:text-white text-sm"
                     />
-                    <div>
-                      <label htmlFor="live-stream-start" className="text-xs text-gray-600 dark:text-gray-400 block mb-1">
-                        When you go live
-                      </label>
-                      <input
-                        id="live-stream-start"
-                        type="datetime-local"
-                        value={liveStreamStartLocal}
-                        onChange={(e) => setLiveStreamStartLocal(e.target.value)}
-                        className="w-full max-w-xs px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
-                      />
-                    </div>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="text-sm text-gray-600 dark:text-gray-400">Ticket (optional):</span>
-                      <div className="relative">
-                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">$</span>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label htmlFor="live-stream-start" className="text-[11px] font-medium text-gray-600 dark:text-gray-400 block mb-1">
+                          Go-live time
+                        </label>
                         <input
-                          type="number"
-                          min={0}
-                          step={0.01}
-                          value={liveStreamTicketUsd}
-                          onChange={(e) => setLiveStreamTicketUsd(e.target.value)}
-                          placeholder="0 = free"
-                          className="w-32 pl-7 pr-3 py-2 border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
+                          id="live-stream-start"
+                          type="datetime-local"
+                          value={liveStreamStartLocal}
+                          onChange={(e) => setLiveStreamStartLocal(e.target.value)}
+                          className="w-full px-3 py-2 border border-pink-200/80 dark:border-gray-600 rounded-lg bg-white/90 dark:bg-gray-900/50 text-gray-900 dark:text-white text-sm"
+                        />
+                      </div>
+                      <div>
+                        <label htmlFor="live-stream-ticket" className="text-[11px] font-medium text-gray-600 dark:text-gray-400 block mb-1">
+                          Ticket (USD, 0 = free)
+                        </label>
+                        <div className="relative">
+                          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm">$</span>
+                          <input
+                            id="live-stream-ticket"
+                            type="number"
+                            min={0}
+                            step={0.01}
+                            value={liveStreamTicketUsd}
+                            onChange={(e) => setLiveStreamTicketUsd(e.target.value)}
+                            placeholder="0"
+                            className="w-full pl-7 pr-3 py-2 border border-pink-200/80 dark:border-gray-600 rounded-lg bg-white/90 dark:bg-gray-900/50 text-gray-900 dark:text-white text-sm"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                    <div className="rounded-lg border border-pink-200/60 dark:border-gray-600 bg-white/70 dark:bg-gray-900/35 px-3 py-2.5">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0 flex-1 pr-2">
+                          <p className="text-sm font-medium text-gray-800 dark:text-gray-100">Paid members included</p>
+                          <p className="text-[11px] leading-snug text-gray-500 dark:text-gray-400 mt-1">
+                            Active subscribers to your page can watch without buying a ticket. Only applies when memberships
+                            and Stripe Connect are set up.
+                          </p>
+                        </div>
+                        <FanHubSwitch
+                          checked={liveStreamFreeForSubs}
+                          onCheckedChange={setLiveStreamFreeForSubs}
+                          aria-label="Paid members included without separate ticket"
                         />
                       </div>
                     </div>
-                    <FanHubSwitchRow
-                      labelId="fanhub-live-stream-subs-label"
-                      label="Subscribers skip ticket (when billing supports it)"
-                      checked={liveStreamFreeForSubs}
-                      onCheckedChange={setLiveStreamFreeForSubs}
-                    />
-                    <FanHubSwitchRow
-                      labelId="fanhub-live-stream-test-label"
-                      label="Test — hide from fan feed (rehearsal)"
-                      checked={liveStreamCreatorTestOnly}
-                      onCheckedChange={setLiveStreamCreatorTestOnly}
-                    />
-                    <p className="text-xs text-gray-500 dark:text-gray-400 -mt-1">
-                      Fans won&apos;t see this post, checkout, or the watch link. You still see it here and can go live with Daily.
-                    </p>
+                    <div className="rounded-lg border border-dashed border-gray-300 dark:border-gray-600 bg-gray-50/80 dark:bg-gray-900/30 px-3 py-2.5">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0 flex-1 pr-2">
+                          <p className="text-sm font-medium text-gray-800 dark:text-gray-100">Rehearsal (hide from fans)</p>
+                          <p className="text-[11px] leading-snug text-gray-500 dark:text-gray-400 mt-1">
+                            Hides this post from fans. You still see it here and can go live to test.
+                          </p>
+                        </div>
+                        <FanHubSwitch
+                          checked={liveStreamCreatorTestOnly}
+                          onCheckedChange={setLiveStreamCreatorTestOnly}
+                          aria-label="Rehearsal hide from fan feed"
+                        />
+                      </div>
+                    </div>
                     {liveStreamPromoEnabled && liveStreamEditStreamId ? (
-                      <div className="mt-3 space-y-2 border-t border-gray-100 dark:border-gray-700 pt-3">
-                        <p className="text-xs text-gray-500 dark:text-gray-400">
-                          Broadcast status:{" "}
-                          <span className="font-medium text-gray-700 dark:text-gray-300">
+                      <div className="rounded-lg border border-violet-200/70 dark:border-violet-900/40 bg-violet-50/50 dark:bg-violet-950/20 px-3 py-2.5 space-y-2">
+                        <div className="flex flex-wrap items-center gap-2 text-[11px] text-gray-600 dark:text-gray-300">
+                          <span className="font-medium text-gray-800 dark:text-gray-100">Broadcast</span>
+                          <span
+                            className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
+                              liveStreamComposerStatus === "live"
+                                ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300"
+                                : liveStreamComposerStatus === "ended"
+                                  ? "bg-gray-500/15 text-gray-600 dark:text-gray-400"
+                                  : "bg-amber-500/15 text-amber-800 dark:text-amber-200"
+                            }`}
+                          >
                             {liveStreamComposerStatus === "live"
                               ? "Live"
                               : liveStreamComposerStatus === "ended"
                                 ? "Ended"
-                                : "Not live"}
+                                : "Idle"}
                           </span>
-                          . Requires Daily.co (<code className="text-[10px]">DAILY_API_KEY</code>).
-                        </p>
+                          <span className="text-gray-400 dark:text-gray-500">· Daily.co</span>
+                        </div>
                         <div className="flex flex-wrap gap-2">
                           <button
                             type="button"
@@ -2308,8 +2355,8 @@ Write 2-4 sentences that are engaging and on-topic.`;
                         </div>
                       </div>
                     ) : liveStreamPromoEnabled ? (
-                      <p className="text-xs text-amber-600 dark:text-amber-400 mt-2">
-                        Save once to create the stream. Broadcast controls show on that post in your feed.
+                      <p className="text-[11px] text-amber-700 dark:text-amber-300/90 bg-amber-50/80 dark:bg-amber-950/30 border border-amber-200/60 dark:border-amber-900/40 rounded-lg px-2.5 py-2">
+                        Publish once to create the stream. Controls also appear on this post in your feed after save.
                       </p>
                     ) : null}
                   </div>
@@ -2679,6 +2726,95 @@ Write 2-4 sentences that are engaging and on-topic.`;
                 className="flex items-center gap-2 px-5 py-2 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-lg font-semibold disabled:opacity-50 hover:from-purple-600 hover:to-pink-600 transition"
               >
                 {publishing ? "Scheduling..." : "Schedule Post"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Live stream — creator help */}
+      {showLiveStreamHelpModal && (
+        <div
+          className="fixed inset-0 z-[62] flex items-center justify-center bg-black/50 p-4"
+          role="presentation"
+          onClick={() => setShowLiveStreamHelpModal(false)}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="fanhub-live-stream-help-title"
+            className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-lg max-h-[min(85vh,32rem)] flex flex-col border border-pink-100 dark:border-gray-700"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-3 p-4 border-b border-pink-100 dark:border-gray-700 bg-gradient-to-r from-pink-50/80 to-white dark:from-pink-950/30 dark:to-gray-800">
+              <div className="flex items-start gap-3 min-w-0">
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-pink-500/10 text-pink-600 dark:text-pink-300">
+                  <VideoCamIcon />
+                </span>
+                <div>
+                  <h3 id="fanhub-live-stream-help-title" className="text-lg font-semibold text-gray-900 dark:text-white">
+                    How live streams work
+                  </h3>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                    Quick reference for your Fan Hub broadcast.
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowLiveStreamHelpModal(false)}
+                className="p-2 text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition shrink-0"
+                aria-label="Close"
+              >
+                <CloseIcon />
+              </button>
+            </div>
+            <div className="overflow-y-auto p-4 space-y-4 text-sm text-gray-700 dark:text-gray-300">
+              <section>
+                <h4 className="text-xs font-semibold uppercase tracking-wide text-pink-600 dark:text-pink-400 mb-1.5">
+                  Publishing
+                </h4>
+                <ul className="list-disc list-inside space-y-1 text-[13px] leading-relaxed text-gray-600 dark:text-gray-400">
+                  <li>This post publishes to your feed now. The stream card shows your title and scheduled go-live time.</li>
+                  <li>Use <strong className="text-gray-800 dark:text-gray-200">Go live</strong> when you start (needs Daily.co on the server).</li>
+                </ul>
+              </section>
+              <section>
+                <h4 className="text-xs font-semibold uppercase tracking-wide text-pink-600 dark:text-pink-400 mb-1.5">
+                  Ticket price
+                </h4>
+                <ul className="list-disc list-inside space-y-1 text-[13px] leading-relaxed text-gray-600 dark:text-gray-400">
+                  <li>Set a dollar amount for a one-time ticket, or <strong className="text-gray-800 dark:text-gray-200">$0</strong> for a free show.</li>
+                  <li>Fans who pay get access to that event after checkout.</li>
+                </ul>
+              </section>
+              <section>
+                <h4 className="text-xs font-semibold uppercase tracking-wide text-pink-600 dark:text-pink-400 mb-1.5">
+                  Paid members included
+                </h4>
+                <p className="text-[13px] leading-relaxed text-gray-600 dark:text-gray-400">
+                  When this is on, fans with an <strong className="text-gray-800 dark:text-gray-200">active paid subscription</strong> to your
+                  page can watch <strong className="text-gray-800 dark:text-gray-200">without buying a ticket</strong>. It only applies if
+                  memberships and Stripe Connect are configured so subscriber status is recorded. If you only sell tickets or free entry,
+                  you can leave this off.
+                </p>
+              </section>
+              <section>
+                <h4 className="text-xs font-semibold uppercase tracking-wide text-pink-600 dark:text-pink-400 mb-1.5">
+                  Rehearsal
+                </h4>
+                <p className="text-[13px] leading-relaxed text-gray-600 dark:text-gray-400">
+                  Hides the post from fans so you can test. You still see it in your creator feed and can go live.
+                </p>
+              </section>
+            </div>
+            <div className="flex justify-end gap-2 p-4 border-t border-gray-200 dark:border-gray-700 bg-gray-50/80 dark:bg-gray-800/80 rounded-b-xl">
+              <button
+                type="button"
+                onClick={() => setShowLiveStreamHelpModal(false)}
+                className="px-4 py-2 rounded-lg bg-gradient-to-r from-pink-500 to-rose-500 text-white text-sm font-semibold hover:from-pink-600 hover:to-rose-600 shadow-sm"
+              >
+                Got it
               </button>
             </div>
           </div>
