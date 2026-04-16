@@ -27,7 +27,11 @@ import { inferIsVideoFromUrl, normalizePostMediaTypes } from "../src/lib/mediaUr
 import { getFeedGridCoverMedia } from "../src/lib/feedGridCover";
 import { ViewPostModalVideo } from "./ViewPostModalVideo";
 import { FeedVideoPlaybackErrorOverlay } from "./FeedVideoPlaybackError";
-import { feedCommentAuthorLabel, feedCommentAuthorInitial } from "../src/lib/feedCommentLabel";
+import {
+  fanMemberListLabel,
+  feedCommentAuthorLabel,
+  feedCommentAuthorInitial,
+} from "../src/lib/feedCommentLabel";
 import { renderTextWithCustomEmoji, type SjHeartEmojiAccessContext } from "../src/lib/customEmoji";
 import { EmojiIcon } from "./icons/UIIcons";
 import { useFanFeedCommentEmojiPicker } from "./fanFeedCommentEmojiPicker";
@@ -48,6 +52,43 @@ const feedVideoDownloadGuardProps = {
   controlsList: "nodownload noplaybackrate noremoteplayback" as const,
   onContextMenu: (e: React.MouseEvent<HTMLVideoElement>) => e.preventDefault(),
 };
+
+function pickUserDocPhotoUrl(d: Record<string, unknown> | undefined): string | undefined {
+  if (!d) return undefined;
+  for (const k of ["photoURL", "avatarUrl", "avatar", "photoUrl"] as const) {
+    const v = d[k];
+    if (typeof v === "string" && v.trim()) {
+      const u = v.trim();
+      if (u.startsWith("http") || u.startsWith("//") || u.startsWith("data:")) return u;
+    }
+  }
+  return undefined;
+}
+
+/** Avatar in “who liked” modal — photo with initial fallback. */
+function FanFeedLikerAvatar({ photoURL, label }: { photoURL?: string; label: string }) {
+  const [broken, setBroken] = useState(false);
+  const showImg = Boolean(photoURL && !broken);
+  return (
+    <span className="feed-likers-modal-card__avatar">
+      {showImg ? (
+        <img
+          src={photoURL}
+          alt=""
+          className="feed-likers-modal-card__avatar-img"
+          {...feedImageDownloadGuardProps}
+          loading="lazy"
+          decoding="async"
+          onError={() => setBroken(true)}
+        />
+      ) : (
+        <span className="feed-likers-modal-card__avatar-initial" aria-hidden>
+          {feedCommentAuthorInitial(label)}
+        </span>
+      )}
+    </span>
+  );
+}
 
 /** Themed multi-media count pill — tints border/background/shadow from creator storefront `theme.primary` */
 function normalizeThemePrimary(hex: string | undefined): string | undefined {
@@ -713,7 +754,7 @@ function FeedCard({
   const [adminMenuOpen, setAdminMenuOpen] = useState(false);
   const adminMenuRef = useRef<HTMLDivElement | null>(null);
   const [likersOpen, setLikersOpen] = useState(false);
-  const [likerRows, setLikerRows] = useState<{ uid: string; label: string }[]>([]);
+  const [likerRows, setLikerRows] = useState<{ uid: string; label: string; photoURL?: string }[]>([]);
   const [likersLoading, setLikersLoading] = useState(false);
 
   const inFeedCarouselClass = showMediaCarousel ? " fan-feed-media-carousel" : "";
@@ -735,10 +776,9 @@ function FeedCard({
           try {
             const snap = await getDoc(doc(db, "users", uid));
             const d = snap.data() as Record<string, unknown> | undefined;
-            const dn = typeof d?.displayName === "string" ? d.displayName.trim() : "";
-            const unRaw = typeof d?.username === "string" ? d.username.trim().replace(/^@/, "") : "";
-            const label = dn || (unRaw ? `@${unRaw}` : `User ${uid.slice(0, 8)}…`);
-            return { uid, label };
+            const label = fanMemberListLabel(d, uid);
+            const photoURL = pickUserDocPhotoUrl(d);
+            return { uid, label, ...(photoURL ? { photoURL } : {}) };
           } catch {
             return { uid, label: `User ${uid.slice(0, 8)}…` };
           }
@@ -1741,40 +1781,47 @@ function FeedCard({
         typeof document !== "undefined" &&
         createPortal(
           <div
-            className="feed-comments-modal-backdrop feed-comments-modal-backdrop--portal"
+            className="feed-comments-modal-backdrop feed-comments-modal-backdrop--portal feed-likers-modal-backdrop"
             role="presentation"
             onClick={() => setLikersOpen(false)}
           >
             <div
-              className="feed-comments-modal feed-comments-modal--stack feed-likers-modal"
+              className="feed-likers-modal-card"
               role="dialog"
               aria-modal="true"
               aria-labelledby={`feed-likers-modal-title-${post.id}`}
               onClick={(e) => e.stopPropagation()}
+              style={
+                viewPostLinkColor
+                  ? ({ "--fh-likers-accent": viewPostLinkColor } as React.CSSProperties)
+                  : undefined
+              }
             >
-              <div className="feed-comments-modal-head">
-                <p id={`feed-likers-modal-title-${post.id}`} className="feed-comments-modal-head-title">
+              <div className="feed-likers-modal-card__accent" aria-hidden />
+              <div className="feed-likers-modal-card__head">
+                <p id={`feed-likers-modal-title-${post.id}`} className="feed-likers-modal-card__title">
                   People who liked this
                 </p>
                 <button
                   type="button"
-                  className="feed-comments-modal-close"
+                  className="feed-likers-modal-card__close"
                   onClick={() => setLikersOpen(false)}
                   aria-label="Close"
                 >
                   ×
                 </button>
               </div>
-              <div className="feed-likers-modal-body">
+              <div className="feed-likers-modal-card__body">
                 {likersLoading ? (
-                  <p className="feed-likers-modal-empty">Loading…</p>
+                  <p className="feed-likers-modal-card__empty">Loading…</p>
                 ) : likerRows.length === 0 ? (
-                  <p className="feed-likers-modal-empty">No likers found.</p>
+                  <p className="feed-likers-modal-card__empty">No likers found.</p>
                 ) : (
-                  <ul className="feed-likers-modal-list">
+                  <ul className="feed-likers-modal-card__list">
                     {likerRows.map((row) => (
-                      <li key={row.uid} className="feed-likers-modal-item">
-                        {row.label}
+                      <li key={row.uid} className="feed-likers-modal-card__item">
+                        <FanFeedLikerAvatar photoURL={row.photoURL} label={row.label} />
+                        <span className="feed-likers-modal-card__item-label">{row.label}</span>
                       </li>
                     ))}
                   </ul>
