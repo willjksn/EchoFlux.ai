@@ -4,6 +4,7 @@ import { applyBrowserApiCors } from "./_browserApiCors.js";
 import { verifyAuth } from "./verifyAuth.js";
 import { getAdminDb } from "./_firebaseAdmin.js";
 import type { LiveStreamEventStatus } from "../types";
+import { userMayUseLiveStreaming } from "./_liveStreamAccess.js";
 
 /**
  * Creator live stream events (schedule + ticket metadata).
@@ -26,6 +27,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const creatorId = decoded.uid;
   const db = getAdminDb();
   const col = db.collection("creators").doc(creatorId).collection("liveStreams");
+
+  const userSnap = await db.collection("users").doc(creatorId).get();
+  const udata = userSnap.data() as { plan?: string; role?: string } | undefined;
+  if (!userMayUseLiveStreaming(udata?.plan, udata?.role)) {
+    return res.status(403).json({
+      error: "Live streams are available on Elite and Agency plans",
+      code: "LIVE_STREAM_PLAN_REQUIRED",
+    });
+  }
 
   if (req.method === "GET") {
     try {

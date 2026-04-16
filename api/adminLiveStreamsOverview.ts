@@ -1,3 +1,4 @@
+import type { Firestore } from "firebase-admin/firestore";
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { getAdminDb } from "./_firebaseAdmin.js";
 import { verifyAuth } from "./verifyAuth.js";
@@ -38,6 +39,68 @@ function orderCreatedAtMs(value: unknown): number {
 const STATUS_KEYS = ["draft", "scheduled", "live", "ended", "cancelled"] as const;
 
 /**
+ * Prefer @handle (storefront identity), then display name, then short uid.
+ * Returns labels and count of document reads performed (for cost estimate).
+ */
+async function resolveCreatorLabels(
+  db: Firestore,
+  ids: string[],
+): Promise<{ labels: Record<string, string>; profileDocReads: number }> {
+  const unique = [...new Set(ids.filter((x) => x.trim()))];
+  const out: Record<string, string> = {};
+  let profileDocReads = 0;
+  if (unique.length === 0) return { labels: out, profileDocReads: 0 };
+
+  const chunkSize = 30;
+  for (let i = 0; i < unique.length; i += chunkSize) {
+    const chunk = unique.slice(i, i + chunkSize);
+    profileDocReads += chunk.length;
+    const snaps = await db.getAll(...chunk.map((id) => db.collection("creators").doc(id)));
+    snaps.forEach((snap, j) => {
+      const id = chunk[j]!;
+      if (snap.exists) {
+        const cd = snap.data() as Record<string, unknown>;
+        const handle = typeof cd.handle === "string" ? cd.handle.trim().replace(/^@/, "") : "";
+        const dn = typeof cd.displayName === "string" ? cd.displayName.trim() : "";
+        out[id] = (handle ? `@${handle}` : "") || dn || "";
+      } else {
+        out[id] = "";
+      }
+    });
+  }
+
+  const missing = unique.filter((id) => !out[id]);
+  for (let i = 0; i < missing.length; i += chunkSize) {
+    const chunk = missing.slice(i, i + chunkSize);
+    profileDocReads += chunk.length;
+    const snaps = await db.getAll(...chunk.map((id) => db.collection("users").doc(id)));
+    snaps.forEach((snap, j) => {
+      const id = chunk[j]!;
+      if (snap.exists) {
+        const ud = snap.data() as Record<string, unknown>;
+        const dn = typeof ud.displayName === "string" ? ud.displayName.trim() : "";
+        const un = typeof ud.username === "string" ? ud.username.trim().replace(/^@/, "") : "";
+        out[id] = (un ? `@${un}` : "") || dn || "";
+      }
+      if (!out[id]) out[id] = `${id.slice(0, 8)}…`;
+    });
+  }
+
+  return { labels: out, profileDocReads };
+}
+
+/** US multi-region list price order of magnitude; indicative only (see Firebase console). */
+const FIRESTORE_DOC_READ_USD = 0.06 / 100_000;
+
+/** Same marginal $/participant-minute as `api/_videoUsageTracking` for Daily.co (indicative). */
+const DAILY_USD_PER_PARTICIPANT_MINUTE = 0.004;
+/** Rough broadcast model when we do not store per-session duration (admin estimate only). */
+const BROADCAST_GUESS_AVG_MINUTES = 42;
+const BROADCAST_GUESS_AVG_PARTICIPANTS = 5;
+/** Matches Fan Hub Stripe `application_fee` on checkouts (`createFanCheckoutSession`). */
+const FAN_HUB_PLATFORM_FEE_FRACTION = 0.1;
+
+/**
  * GET — Platform-wide snapshot of creators' `liveStreams` subcollections + live ticket orders (admin only).
  * Used by AdminDashboard to monitor fan live streams / Daily broadcast usage across creators.
  */
@@ -67,6 +130,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   try {
     const snap = await db.collectionGroup("liveStreams").limit(maxDocs).get();
+    const cutoff30d = Date.now() - 30 * 24 * 60 * 60 * 1000;
 
     const byStatus: Record<string, number> = {
       draft: 0,
@@ -77,10 +141,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       other: 0,
     };
     let withDailyRoom = 0;
+    /** Stream docs with a Daily room whose `updatedAt` falls in the last 30 days (proxy for recent broadcast activity). */
+    let streamsWithDailyRoomTouched30d = 0;
     const creatorsWithStreams = new Set<string>();
 
     type RecentRow = {
       creatorId: string;
+      /** Resolved from `creators` / `users` for admin display */
+      creatorLabel: string;
       streamId: string;
       title: string;
       status: string;
@@ -89,7 +157,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       scheduledStart?: string;
       updatedAtMs: number;
     };
-    const recentBuffer: RecentRow[] = [];
+    type RecentRowDraft = Omit<RecentRow, "creatorLabel">;
+    const recentBuffer: RecentRowDraft[] = [];
 
     snap.forEach((d) => {
       const creatorId = parseCreatorIdFromLiveStreamPath(d.ref.path);
@@ -114,6 +183,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           ? data.scheduledStart.trim()
           : undefined;
       const updatedAtMs = updatedAtToMs(data.updatedAt) || updatedAtToMs(data.createdAt);
+      if (room && updatedAtMs >= cutoff30d) streamsWithDailyRoomTouched30d += 1;
 
       recentBuffer.push({
         creatorId,
@@ -128,19 +198,28 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     });
 
     recentBuffer.sort((a, b) => b.updatedAtMs - a.updatedAtMs);
-    const recent = recentBuffer.slice(0, 25);
+    const recentSlice = recentBuffer.slice(0, 200);
+    const { labels: labelById, profileDocReads } = await resolveCreatorLabels(
+      db,
+      recentSlice.map((r) => r.creatorId),
+    );
+    const recent: RecentRow[] = recentSlice.map((r) => ({
+      ...r,
+      creatorLabel: labelById[r.creatorId] ?? `${r.creatorId.slice(0, 8)}…`,
+    }));
 
     let ticketsSold30d = 0;
     let ticketRevenueCents30d = 0;
-    const cutoff = Date.now() - 30 * 24 * 60 * 60 * 1000;
+    let orderDocsRead = 0;
     try {
       const ordersSnap = await db.collection("orders").where("type", "==", "live_stream_ticket").limit(5000).get();
+      orderDocsRead = ordersSnap.size;
       ordersSnap.forEach((docSnap) => {
         const row = docSnap.data() as Record<string, unknown>;
         const st = typeof row.status === "string" ? row.status.trim().toLowerCase() : "";
         if (st === "refunded") return;
         const ms = orderCreatedAtMs(row.createdAt);
-        if (ms < cutoff) return;
+        if (ms < cutoff30d) return;
         ticketsSold30d += 1;
         const cents =
           typeof row.amountCents === "number" && Number.isFinite(row.amountCents)
@@ -153,6 +232,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     const totalStreamsInSample = snap.size;
+    const estimatedFirestoreReads =
+      totalStreamsInSample + profileDocReads + orderDocsRead + 1; // +1 admin user doc at start
+    const estimatedFirestoreReadCostUsd = estimatedFirestoreReads * FIRESTORE_DOC_READ_USD;
+
+    /** Sum of `orders.amountCents` — gross fan checkout totals, not creator net or EchoFlux fee. */
+    const ticketGrossCents30d = ticketRevenueCents30d;
+    const echofluxCommissionEstimateCents30d = Math.round(ticketGrossCents30d * FAN_HUB_PLATFORM_FEE_FRACTION);
+    const estimatedLiveBroadcastParticipantMinutes =
+      streamsWithDailyRoomTouched30d * BROADCAST_GUESS_AVG_MINUTES * BROADCAST_GUESS_AVG_PARTICIPANTS;
+    const estimatedDailyLiveBroadcastCostUsd =
+      estimatedLiveBroadcastParticipantMinutes * DAILY_USD_PER_PARTICIPANT_MINUTE;
 
     return res.status(200).json({
       ok: true,
@@ -163,8 +253,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       withDailyRoom,
       uniqueCreatorsWithStreams: creatorsWithStreams.size,
       ticketsSold30d,
+      /** @deprecated use `ticketGrossCents30d` — same value; gross fan payments */
       ticketRevenueCents30d,
+      ticketGrossCents30d,
+      echofluxCommissionEstimateCents30d,
+      streamsWithDailyRoomTouched30d,
+      estimatedLiveBroadcastParticipantMinutes,
+      estimatedDailyLiveBroadcastCostUsd,
       recent,
+      estimatedFirestoreReads,
+      estimatedFirestoreReadCostUsd,
     });
   } catch (e) {
     console.error("adminLiveStreamsOverview:", e);

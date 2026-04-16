@@ -29,6 +29,15 @@ service cloud.firestore {
       return isAuthenticated() && request.auth.uid == userId;
     }
 
+    /** Live streams (Daily / tickets): Elite-equivalent + Agency; Admin bypass. */
+    function creatorLiveStreamPlanEligible() {
+      return exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && (
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'Admin'
+          || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.plan in ['Elite', 'Agency', 'OnlyFansStudio', 'CreatorElite']
+        );
+    }
+
     /** -------------------------------------------------------
      *  Helper: Sensitive fields on user docs
      *  -------------------------------------------------------
@@ -334,7 +343,8 @@ service cloud.firestore {
        * (local Vite + DEV_API_PROXY to an old deployment, or before rules deploy).
        */
       match /liveStreams/{streamId} {
-        allow read, write: if isOwner(creatorId);
+        allow read: if isOwner(creatorId);
+        allow create, update, delete: if isOwner(creatorId) && creatorLiveStreamPlanEligible();
       }
 
       /** Subscriber / member mirror under creator (Dashboard fan stats; writes via Admin / webhooks) */

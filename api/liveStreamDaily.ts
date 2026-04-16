@@ -11,6 +11,7 @@ import {
   createLiveStreamMeetingToken,
   isDailyConfigured,
 } from "./_dailyco.js";
+import { userMayUseLiveStreaming } from "./_liveStreamAccess.js";
 
 const TOKEN_DURATION_MIN = 360;
 
@@ -120,6 +121,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const uid = decoded.uid;
 
     if (action === "goLive" || action === "endLive") {
+      const hostSnap = await db.collection("users").doc(uid).get();
+      const hostData = hostSnap.data() as { plan?: string; role?: string } | undefined;
+      if (!userMayUseLiveStreaming(hostData?.plan, hostData?.role)) {
+        return res.status(403).json({
+          error: "Live streaming is available on Elite and Agency plans",
+          code: "LIVE_STREAM_PLAN_REQUIRED",
+        });
+      }
+
       const streamRef = db.collection("creators").doc(uid).collection("liveStreams").doc(streamId);
       const snap = await streamRef.get();
       if (!snap.exists) {
@@ -219,6 +229,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const freeForSubscribers = sdata.freeForSubscribers === true;
 
       const isHost = uid === creatorId;
+      if (isHost) {
+        const hostSnap = await db.collection("users").doc(uid).get();
+        const hostData = hostSnap.data() as { plan?: string; role?: string } | undefined;
+        if (!userMayUseLiveStreaming(hostData?.plan, hostData?.role)) {
+          return res.status(403).json({
+            error: "Live streaming is available on Elite and Agency plans",
+            code: "LIVE_STREAM_PLAN_REQUIRED",
+          });
+        }
+      }
+
       if (!isHost && sdata.creatorTestOnly === true) {
         return res.status(403).json({ error: "This broadcast is in creator test mode" });
       }

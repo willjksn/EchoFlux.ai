@@ -281,7 +281,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onGetSta
               </h2>
               <p className="mt-4 text-xl text-gray-600 dark:text-gray-300 max-w-3xl mx-auto">
                 Fans open your page on witme.io—you customize it, set pricing, and run memberships, tips, store, and DMs from
-                EchoFlux.
+                EchoFlux. Ticketed live broadcasts to your feed are included on Elite.
               </p>
             </div>
 
@@ -370,6 +370,17 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onGetSta
                 <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">Video Chat Sessions</h3>
                 <p className="text-gray-600 dark:text-gray-400">
                   Offer paid 1-on-1 video calls with fans. Perfect for coaching, Q&A sessions, or exclusive experiences.
+                </p>
+              </div>
+
+              {/* Live streams to feed — Elite */}
+              <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-lg border border-gray-100 dark:border-gray-700 hover:shadow-xl transition-shadow">
+                <div className="w-12 h-12 bg-fuchsia-100 dark:bg-fuchsia-900/50 rounded-xl flex items-center justify-center mb-4">
+                  <RocketIcon className="w-6 h-6 text-fuchsia-600 dark:text-fuchsia-400" />
+                </div>
+                <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">Live streams to your fans</h3>
+                <p className="text-gray-600 dark:text-gray-400">
+                  Schedule ticketed or free shows on your Fan Hub feed with a live broadcast. Included on Elite so we can keep infrastructure sustainable as you scale.
                 </p>
               </div>
 

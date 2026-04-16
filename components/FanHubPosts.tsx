@@ -40,7 +40,8 @@ import { useCreatorHandle } from "../src/hooks/useCreatorHandle";
 import { canUseSjHeartEmoji } from "../src/lib/customEmoji";
 import { maybeTrimVideoForCaption } from "../src/lib/videoCaptionClip";
 import { resolveApiUrl, DEV_API_404_USER_HINT } from "../src/lib/resolveApiUrl";
-import type { LiveStreamEventStatus } from "../types";
+import type { LiveStreamEventStatus, LiveStreamPromoOnPost } from "../types";
+import { hasLiveStreamAccess } from "../src/utils/planAccess";
 import { LiveStreamWatchRoom } from "./LiveStreamWatchRoom";
 
 const LIVE_STREAM_DOC_STATUSES: LiveStreamEventStatus[] = ["draft", "scheduled", "live", "ended", "cancelled"];
@@ -288,12 +289,13 @@ const FanHubSwitchRow: React.FC<{
   labelId: string;
   checked: boolean;
   onCheckedChange: (next: boolean) => void;
-}> = ({ label, labelId, checked, onCheckedChange }) => (
+  disabled?: boolean;
+}> = ({ label, labelId, checked, onCheckedChange, disabled }) => (
   <div className="flex items-center justify-between gap-3 min-w-0">
     <span id={labelId} className="text-sm text-gray-600 dark:text-gray-400">
       {label}
     </span>
-    <FanHubSwitch checked={checked} onCheckedChange={onCheckedChange} aria-labelledby={labelId} />
+    <FanHubSwitch checked={checked} onCheckedChange={onCheckedChange} disabled={disabled} aria-labelledby={labelId} />
   </div>
 );
 
@@ -374,7 +376,7 @@ async function resolveFanHubCaptionMedia(
 }
 
 export const FanHubPosts: React.FC = () => {
-  const { user, showToast } = useAppContext();
+  const { user, showToast, setActivePage } = useAppContext();
   const premiumTab = usePremiumStudioTab();
   const pendingFeedPostId = premiumTab?.pendingFeedPostId ?? null;
   const clearPendingFeedPostId = premiumTab?.clearPendingFeedPostId;
@@ -451,6 +453,11 @@ export const FanHubPosts: React.FC = () => {
   const [liveStreamComposerStatus, setLiveStreamComposerStatus] = useState<LiveStreamEventStatus | null>(null);
   const [liveStreamBroadcast, setLiveStreamBroadcast] = useState<{ streamId: string } | null>(null);
   const [liveStreamDailyBusy, setLiveStreamDailyBusy] = useState<false | "goLive" | "endLive">(false);
+  /** When Pro edits an existing live-stream post: keep promo payload without calling stream APIs */
+  const liveStreamPreserveRef = useRef<{
+    postKind: "live_stream_promo";
+    liveStreamPromo: LiveStreamPromoOnPost;
+  } | null>(null);
 
   // Text Overlay
   const [overlayEnabled, setOverlayEnabled] = useState(false);
@@ -481,6 +488,8 @@ export const FanHubPosts: React.FC = () => {
   
   const fileInputRef = useRef<HTMLInputElement>(null);
   const creatorId = user?.uid || user?.id;
+  const creatorCanLiveStream = hasLiveStreamAccess(user);
+  const liveStreamFieldsLocked = liveStreamPromoEnabled && !creatorCanLiveStream;
   const creatorHandleFromDoc = useCreatorHandle(creatorId);
   const includeSjHeartEmoji = canUseSjHeartEmoji({
     creatorHandle: creatorHandleFromDoc,
@@ -512,6 +521,10 @@ export const FanHubPosts: React.FC = () => {
 
   const runLiveStreamDaily = useCallback(
     async (action: "goLive" | "endLive", streamIdOverride?: string) => {
+      if (!hasLiveStreamAccess(user)) {
+        showToast?.("Live streaming is available on Elite.", "info");
+        return;
+      }
       const streamId = streamIdOverride ?? liveStreamEditStreamId;
       if (!streamId) return;
       const idToken = await auth.currentUser?.getIdToken();
@@ -557,7 +570,7 @@ export const FanHubPosts: React.FC = () => {
         setLiveStreamDailyBusy(false);
       }
     },
-    [liveStreamEditStreamId, showToast],
+    [liveStreamEditStreamId, showToast, user],
   );
 
   // Load vault items from the user's media library (My Vault - sidebar "Vault")
@@ -1281,6 +1294,13 @@ Write 2-4 sentences that are engaging and on-topic.`;
       }
     }
 
+    if (liveStreamPromoEnabled && !creatorCanLiveStream) {
+      if (!editingPostId || !liveStreamPreserveRef.current) {
+        showToast?.("Live stream posts require an Elite plan. Open Pricing from your account to upgrade.", "error");
+        return;
+      }
+    }
+
     if (!caption.trim() && media.length === 0) {
       showToast?.("Add a caption or media", "error");
       return;
@@ -1338,7 +1358,7 @@ Write 2-4 sentences that are engaging and on-topic.`;
       let streamPromoScheduledIso: string | undefined;
       let streamPromoTicketCents = 0;
 
-      if (liveStreamPromoEnabled) {
+      if (liveStreamPromoEnabled && creatorCanLiveStream) {
         streamPromoScheduledIso = new Date(liveStreamStartLocal).toISOString();
         const ticketRaw = liveStreamTicketUsd.trim();
         streamPromoTicketCents = 0;
@@ -1514,7 +1534,7 @@ Write 2-4 sentences that are engaging and on-topic.`;
         (postData as Record<string, unknown>).overlayItalic = overlayItalic;
       }
 
-      if (liveStreamPromoEnabled && streamIdForPost && streamPromoScheduledIso) {
+      if (liveStreamPromoEnabled && creatorCanLiveStream && streamIdForPost && streamPromoScheduledIso) {
         (postData as Record<string, unknown>).postKind = "live_stream_promo";
         (postData as Record<string, unknown>).liveStreamPromo = {
           streamId: streamIdForPost,
@@ -1525,6 +1545,9 @@ Write 2-4 sentences that are engaging and on-topic.`;
           creatorTestOnly: liveStreamCreatorTestOnly,
           ...(liveStreamFreeForSubs ? { freeForSubscribers: true } : {}),
         };
+      } else if (editingPostId && liveStreamPreserveRef.current) {
+        (postData as Record<string, unknown>).postKind = liveStreamPreserveRef.current.postKind;
+        (postData as Record<string, unknown>).liveStreamPromo = { ...liveStreamPreserveRef.current.liveStreamPromo };
       }
 
       // Save to Firestore (update existing when editing, otherwise create new)
@@ -1532,7 +1555,7 @@ Write 2-4 sentences that are engaging and on-topic.`;
         await setDoc(doc(db, "creators", creatorId, "fanPosts", editingPostId), postData, { merge: true });
       } else {
         const postRef = await addDoc(collection(db, "creators", creatorId, "fanPosts"), postData);
-        if (liveStreamPromoEnabled && streamIdForPost && !liveStreamEditStreamId) {
+        if (liveStreamPromoEnabled && creatorCanLiveStream && streamIdForPost && !liveStreamEditStreamId) {
           try {
             const linkRes = await fetch(resolveApiUrl("/api/liveStreams"), {
               method: "POST",
@@ -1652,6 +1675,7 @@ Write 2-4 sentences that are engaging and on-topic.`;
     setLiveStreamComposerStatus(null);
     setLiveStreamBroadcast(null);
     setLiveStreamDailyBusy(false);
+    liveStreamPreserveRef.current = null;
     setEditingPostId(null);
   };
 
@@ -1747,7 +1771,27 @@ Write 2-4 sentences that are engaging and on-topic.`;
       setLiveStreamComposerStatus(
         promo.streamStatus && allowed.includes(promo.streamStatus) ? promo.streamStatus : "scheduled",
       );
+      if (!hasLiveStreamAccess(user)) {
+        const ticketCents =
+          typeof promo.ticketCents === "number" && Number.isFinite(promo.ticketCents) ? Math.max(0, Math.round(promo.ticketCents)) : 0;
+        liveStreamPreserveRef.current = {
+          postKind: "live_stream_promo",
+          liveStreamPromo: {
+            streamId: promo.streamId,
+            title: (promo.title || "").trim(),
+            scheduledStart: typeof promo.scheduledStart === "string" ? promo.scheduledStart : "",
+            ticketCents,
+            streamStatus:
+              promo.streamStatus && allowed.includes(promo.streamStatus) ? promo.streamStatus : "scheduled",
+            creatorTestOnly: !!promo.creatorTestOnly,
+            ...(promo.freeForSubscribers ? { freeForSubscribers: true } : {}),
+          },
+        };
+      } else {
+        liveStreamPreserveRef.current = null;
+      }
     } else {
+      liveStreamPreserveRef.current = null;
       setLiveStreamPromoEnabled(false);
       setLiveStreamEditStreamId(null);
       setLiveStreamTitle("");
@@ -1759,7 +1803,7 @@ Write 2-4 sentences that are engaging and on-topic.`;
     }
     setEditingPostId(post.id);
     setShowComposer(true);
-  }, []);
+  }, [user]);
 
   if (!user) {
     return (
@@ -2195,173 +2239,223 @@ Write 2-4 sentences that are engaging and on-topic.`;
                 )}
               </div>
 
-              {/* Live stream — compact panel + “How it works” */}
-              <div className="rounded-xl border border-pink-200/70 dark:border-pink-900/45 bg-gradient-to-br from-pink-50/90 via-white to-rose-50/50 dark:from-gray-800 dark:via-gray-800/95 dark:to-pink-950/25 p-4 shadow-sm ring-1 ring-pink-100/50 dark:ring-pink-900/20">
-                <div className="flex items-start justify-between gap-3 mb-2">
-                  <div className="flex items-center gap-2 min-w-0">
-                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-pink-500/10 text-pink-600 dark:bg-pink-500/15 dark:text-pink-300">
-                      <VideoCamIcon />
-                    </span>
-                    <div className="min-w-0">
-                      <p className="text-sm font-semibold text-gray-900 dark:text-white">Live stream</p>
-                      <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">
-                        Adds a stream card to this post. Publish now — schedule the real start time below.
-                      </p>
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setShowLiveStreamHelpModal(true)}
-                    className="shrink-0 text-xs font-medium text-pink-600 dark:text-pink-400 hover:text-pink-700 dark:hover:text-pink-300 underline-offset-2 hover:underline"
-                  >
-                    How it works
-                  </button>
-                </div>
-                <FanHubSwitchRow
-                  labelId="fanhub-live-stream-label"
-                  label="Turn on live stream for this post"
-                  checked={liveStreamPromoEnabled}
-                  onCheckedChange={(next) => {
-                    setLiveStreamPromoEnabled(next);
-                    if (next) {
-                      setPollEnabled(false);
-                      setTipGoalEnabled(false);
-                      setOverlayEnabled(false);
-                      setLiveStreamComposerStatus("scheduled");
-                    } else {
-                      setLiveStreamComposerStatus(null);
-                      setLiveStreamCreatorTestOnly(false);
-                    }
-                  }}
-                />
-                {liveStreamPromoEnabled && (
-                  <div className="mt-3 space-y-3 border-t border-pink-100/80 dark:border-pink-900/30 pt-3">
-                    <input
-                      type="text"
-                      value={liveStreamTitle}
-                      onChange={(e) => setLiveStreamTitle(e.target.value)}
-                      placeholder="Stream title on the card"
-                      className="w-full px-3 py-2 border border-pink-200/80 dark:border-gray-600 rounded-lg bg-white/90 dark:bg-gray-900/50 text-gray-900 dark:text-white text-sm"
-                    />
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <div>
-                        <label htmlFor="live-stream-start" className="text-[11px] font-medium text-gray-600 dark:text-gray-400 block mb-1">
-                          Go-live time
-                        </label>
-                        <input
-                          id="live-stream-start"
-                          type="datetime-local"
-                          value={liveStreamStartLocal}
-                          onChange={(e) => setLiveStreamStartLocal(e.target.value)}
-                          className="w-full px-3 py-2 border border-pink-200/80 dark:border-gray-600 rounded-lg bg-white/90 dark:bg-gray-900/50 text-gray-900 dark:text-white text-sm"
-                        />
+              {/* Live stream — Elite; Pro sees upgrade + non-interactive control */}
+              {creatorCanLiveStream || liveStreamPromoEnabled ? (
+                <div className="rounded-xl border border-pink-200/70 dark:border-pink-900/45 bg-gradient-to-br from-pink-50/90 via-white to-rose-50/50 dark:from-gray-800 dark:via-gray-800/95 dark:to-pink-950/25 p-4 shadow-sm ring-1 ring-pink-100/50 dark:ring-pink-900/20">
+                  <div className="flex items-start justify-between gap-3 mb-2">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-pink-500/10 text-pink-600 dark:bg-pink-500/15 dark:text-pink-300">
+                        <VideoCamIcon />
+                      </span>
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-gray-900 dark:text-white">Live stream</p>
+                        <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">
+                          {creatorCanLiveStream
+                            ? "Adds a stream card to this post. Publish now — schedule the real start time below."
+                            : "Stream details are read-only on your plan. You can still edit caption and media; upgrade to Elite to change tickets or broadcast."}
+                        </p>
                       </div>
-                      <div>
-                        <label htmlFor="live-stream-ticket" className="text-[11px] font-medium text-gray-600 dark:text-gray-400 block mb-1">
-                          Ticket (USD, 0 = free)
-                        </label>
-                        <div className="relative">
-                          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm">$</span>
+                    </div>
+                    {creatorCanLiveStream ? (
+                      <button
+                        type="button"
+                        onClick={() => setShowLiveStreamHelpModal(true)}
+                        className="shrink-0 text-xs font-medium text-pink-600 dark:text-pink-400 hover:text-pink-700 dark:hover:text-pink-300 underline-offset-2 hover:underline"
+                      >
+                        How it works
+                      </button>
+                    ) : null}
+                  </div>
+                  {liveStreamFieldsLocked ? (
+                    <p className="text-[11px] text-amber-800 dark:text-amber-200/90 bg-amber-50/90 dark:bg-amber-950/35 border border-amber-200/70 dark:border-amber-900/45 rounded-lg px-2.5 py-2 mb-2">
+                      Upgrade to Elite to manage live stream settings. Saving keeps your existing stream link.
+                    </p>
+                  ) : null}
+                  <FanHubSwitchRow
+                    labelId="fanhub-live-stream-label"
+                    label="Turn on live stream for this post"
+                    checked={liveStreamPromoEnabled}
+                    disabled={liveStreamFieldsLocked}
+                    onCheckedChange={(next) => {
+                      if (liveStreamFieldsLocked) return;
+                      setLiveStreamPromoEnabled(next);
+                      if (next) {
+                        setPollEnabled(false);
+                        setTipGoalEnabled(false);
+                        setOverlayEnabled(false);
+                        setLiveStreamComposerStatus("scheduled");
+                      } else {
+                        setLiveStreamComposerStatus(null);
+                        setLiveStreamCreatorTestOnly(false);
+                      }
+                    }}
+                  />
+                  {liveStreamPromoEnabled && (
+                    <div className="mt-3 space-y-3 border-t border-pink-100/80 dark:border-pink-900/30 pt-3">
+                      <input
+                        type="text"
+                        value={liveStreamTitle}
+                        onChange={(e) => setLiveStreamTitle(e.target.value)}
+                        placeholder="Stream title on the card"
+                        disabled={liveStreamFieldsLocked}
+                        readOnly={liveStreamFieldsLocked}
+                        className="w-full px-3 py-2 border border-pink-200/80 dark:border-gray-600 rounded-lg bg-white/90 dark:bg-gray-900/50 text-gray-900 dark:text-white text-sm disabled:opacity-60"
+                      />
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                          <label htmlFor="live-stream-start" className="text-[11px] font-medium text-gray-600 dark:text-gray-400 block mb-1">
+                            Go-live time
+                          </label>
                           <input
-                            id="live-stream-ticket"
-                            type="number"
-                            min={0}
-                            step={0.01}
-                            value={liveStreamTicketUsd}
-                            onChange={(e) => setLiveStreamTicketUsd(e.target.value)}
-                            placeholder="0"
-                            className="w-full pl-7 pr-3 py-2 border border-pink-200/80 dark:border-gray-600 rounded-lg bg-white/90 dark:bg-gray-900/50 text-gray-900 dark:text-white text-sm"
+                            id="live-stream-start"
+                            type="datetime-local"
+                            value={liveStreamStartLocal}
+                            onChange={(e) => setLiveStreamStartLocal(e.target.value)}
+                            disabled={liveStreamFieldsLocked}
+                            readOnly={liveStreamFieldsLocked}
+                            className="w-full px-3 py-2 border border-pink-200/80 dark:border-gray-600 rounded-lg bg-white/90 dark:bg-gray-900/50 text-gray-900 dark:text-white text-sm disabled:opacity-60"
+                          />
+                        </div>
+                        <div>
+                          <label htmlFor="live-stream-ticket" className="text-[11px] font-medium text-gray-600 dark:text-gray-400 block mb-1">
+                            Ticket (USD, 0 = free)
+                          </label>
+                          <div className="relative">
+                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm">$</span>
+                            <input
+                              id="live-stream-ticket"
+                              type="number"
+                              min={0}
+                              step={0.01}
+                              value={liveStreamTicketUsd}
+                              onChange={(e) => setLiveStreamTicketUsd(e.target.value)}
+                              placeholder="0"
+                              disabled={liveStreamFieldsLocked}
+                              readOnly={liveStreamFieldsLocked}
+                              className="w-full pl-7 pr-3 py-2 border border-pink-200/80 dark:border-gray-600 rounded-lg bg-white/90 dark:bg-gray-900/50 text-gray-900 dark:text-white text-sm disabled:opacity-60"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                      <div className="rounded-lg border border-pink-200/60 dark:border-gray-600 bg-white/70 dark:bg-gray-900/35 px-3 py-2.5">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0 flex-1 pr-2">
+                            <p className="text-sm font-medium text-gray-800 dark:text-gray-100">Paid members included</p>
+                            <p className="text-[11px] leading-snug text-gray-500 dark:text-gray-400 mt-1">
+                              Active subscribers to your page can watch without buying a ticket. Only applies when memberships
+                              and Stripe Connect are set up.
+                            </p>
+                          </div>
+                          <FanHubSwitch
+                            checked={liveStreamFreeForSubs}
+                            onCheckedChange={setLiveStreamFreeForSubs}
+                            disabled={liveStreamFieldsLocked}
+                            aria-label="Paid members included without separate ticket"
                           />
                         </div>
                       </div>
-                    </div>
-                    <div className="rounded-lg border border-pink-200/60 dark:border-gray-600 bg-white/70 dark:bg-gray-900/35 px-3 py-2.5">
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0 flex-1 pr-2">
-                          <p className="text-sm font-medium text-gray-800 dark:text-gray-100">Paid members included</p>
-                          <p className="text-[11px] leading-snug text-gray-500 dark:text-gray-400 mt-1">
-                            Active subscribers to your page can watch without buying a ticket. Only applies when memberships
-                            and Stripe Connect are set up.
-                          </p>
+                      <div className="rounded-lg border border-dashed border-gray-300 dark:border-gray-600 bg-gray-50/80 dark:bg-gray-900/30 px-3 py-2.5">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0 flex-1 pr-2">
+                            <p className="text-sm font-medium text-gray-800 dark:text-gray-100">Rehearsal (hide from fans)</p>
+                            <p className="text-[11px] leading-snug text-gray-500 dark:text-gray-400 mt-1">
+                              Hides this post from fans. You still see it here and can go live to test.
+                            </p>
+                          </div>
+                          <FanHubSwitch
+                            checked={liveStreamCreatorTestOnly}
+                            onCheckedChange={setLiveStreamCreatorTestOnly}
+                            disabled={liveStreamFieldsLocked}
+                            aria-label="Rehearsal hide from fan feed"
+                          />
                         </div>
-                        <FanHubSwitch
-                          checked={liveStreamFreeForSubs}
-                          onCheckedChange={setLiveStreamFreeForSubs}
-                          aria-label="Paid members included without separate ticket"
-                        />
                       </div>
-                    </div>
-                    <div className="rounded-lg border border-dashed border-gray-300 dark:border-gray-600 bg-gray-50/80 dark:bg-gray-900/30 px-3 py-2.5">
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0 flex-1 pr-2">
-                          <p className="text-sm font-medium text-gray-800 dark:text-gray-100">Rehearsal (hide from fans)</p>
-                          <p className="text-[11px] leading-snug text-gray-500 dark:text-gray-400 mt-1">
-                            Hides this post from fans. You still see it here and can go live to test.
-                          </p>
-                        </div>
-                        <FanHubSwitch
-                          checked={liveStreamCreatorTestOnly}
-                          onCheckedChange={setLiveStreamCreatorTestOnly}
-                          aria-label="Rehearsal hide from fan feed"
-                        />
-                      </div>
-                    </div>
-                    {liveStreamPromoEnabled && liveStreamEditStreamId ? (
-                      <div className="rounded-lg border border-violet-200/70 dark:border-violet-900/40 bg-violet-50/50 dark:bg-violet-950/20 px-3 py-2.5 space-y-2">
-                        <div className="flex flex-wrap items-center gap-2 text-[11px] text-gray-600 dark:text-gray-300">
-                          <span className="font-medium text-gray-800 dark:text-gray-100">Broadcast</span>
-                          <span
-                            className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
-                              liveStreamComposerStatus === "live"
-                                ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300"
+                      {creatorCanLiveStream && liveStreamPromoEnabled && liveStreamEditStreamId ? (
+                        <div className="rounded-lg border border-violet-200/70 dark:border-violet-900/40 bg-violet-50/50 dark:bg-violet-950/20 px-3 py-2.5 space-y-2">
+                          <div className="flex flex-wrap items-center gap-2 text-[11px] text-gray-600 dark:text-gray-300">
+                            <span className="font-medium text-gray-800 dark:text-gray-100">Broadcast</span>
+                            <span
+                              className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
+                                liveStreamComposerStatus === "live"
+                                  ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300"
+                                  : liveStreamComposerStatus === "ended"
+                                    ? "bg-gray-500/15 text-gray-600 dark:text-gray-400"
+                                    : "bg-amber-500/15 text-amber-800 dark:text-amber-200"
+                              }`}
+                            >
+                              {liveStreamComposerStatus === "live"
+                                ? "Live"
                                 : liveStreamComposerStatus === "ended"
-                                  ? "bg-gray-500/15 text-gray-600 dark:text-gray-400"
-                                  : "bg-amber-500/15 text-amber-800 dark:text-amber-200"
-                            }`}
-                          >
-                            {liveStreamComposerStatus === "live"
-                              ? "Live"
-                              : liveStreamComposerStatus === "ended"
-                                ? "Ended"
-                                : "Idle"}
-                          </span>
-                          <span className="text-gray-400 dark:text-gray-500">· Daily.co</span>
+                                  ? "Ended"
+                                  : "Idle"}
+                            </span>
+                            <span className="text-gray-400 dark:text-gray-500">· Daily.co</span>
+                          </div>
+                          <div className="flex flex-wrap gap-2">
+                            <button
+                              type="button"
+                              disabled={!!liveStreamDailyBusy || liveStreamComposerStatus === "live"}
+                              onClick={() => void runLiveStreamDaily("goLive")}
+                              className="text-xs px-3 py-2 rounded-lg bg-violet-600 text-white hover:bg-violet-700 disabled:opacity-40"
+                            >
+                              {liveStreamDailyBusy === "goLive" ? "Starting…" : "Go live"}
+                            </button>
+                            <button
+                              type="button"
+                              disabled={!!liveStreamDailyBusy || liveStreamComposerStatus !== "live"}
+                              onClick={() => void runLiveStreamDaily("endLive")}
+                              className="text-xs px-3 py-2 rounded-lg bg-gray-700 text-white hover:bg-gray-600 disabled:opacity-40"
+                            >
+                              {liveStreamDailyBusy === "endLive" ? "Ending…" : "End stream"}
+                            </button>
+                            <button
+                              type="button"
+                              disabled={liveStreamComposerStatus !== "live"}
+                              onClick={() => setLiveStreamBroadcast({ streamId: liveStreamEditStreamId })}
+                              className="text-xs px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 text-gray-800 dark:text-gray-200 disabled:opacity-40"
+                            >
+                              Open broadcast (host)
+                            </button>
+                          </div>
                         </div>
-                        <div className="flex flex-wrap gap-2">
-                          <button
-                            type="button"
-                            disabled={!!liveStreamDailyBusy || liveStreamComposerStatus === "live"}
-                            onClick={() => void runLiveStreamDaily("goLive")}
-                            className="text-xs px-3 py-2 rounded-lg bg-violet-600 text-white hover:bg-violet-700 disabled:opacity-40"
-                          >
-                            {liveStreamDailyBusy === "goLive" ? "Starting…" : "Go live"}
-                          </button>
-                          <button
-                            type="button"
-                            disabled={!!liveStreamDailyBusy || liveStreamComposerStatus !== "live"}
-                            onClick={() => void runLiveStreamDaily("endLive")}
-                            className="text-xs px-3 py-2 rounded-lg bg-gray-700 text-white hover:bg-gray-600 disabled:opacity-40"
-                          >
-                            {liveStreamDailyBusy === "endLive" ? "Ending…" : "End stream"}
-                          </button>
-                          <button
-                            type="button"
-                            disabled={liveStreamComposerStatus !== "live"}
-                            onClick={() => setLiveStreamBroadcast({ streamId: liveStreamEditStreamId })}
-                            className="text-xs px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 text-gray-800 dark:text-gray-200 disabled:opacity-40"
-                          >
-                            Open broadcast (host)
-                          </button>
-                        </div>
-                      </div>
-                    ) : liveStreamPromoEnabled ? (
-                      <p className="text-[11px] text-amber-700 dark:text-amber-300/90 bg-amber-50/80 dark:bg-amber-950/30 border border-amber-200/60 dark:border-amber-900/40 rounded-lg px-2.5 py-2">
-                        Publish once to create the stream. Controls also appear on this post in your feed after save.
+                      ) : liveStreamPromoEnabled && creatorCanLiveStream ? (
+                        <p className="text-[11px] text-amber-700 dark:text-amber-300/90 bg-amber-50/80 dark:bg-amber-950/30 border border-amber-200/60 dark:border-amber-900/40 rounded-lg px-2.5 py-2">
+                          Publish once to create the stream. Controls also appear on this post in your feed after save.
+                        </p>
+                      ) : null}
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="rounded-xl border border-gray-200 dark:border-gray-600 bg-gray-50/90 dark:bg-gray-800/60 p-4 shadow-sm">
+                  <div className="flex items-start gap-2 min-w-0">
+                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gray-200/80 text-gray-500 dark:bg-gray-700 dark:text-gray-400">
+                      <VideoCamIcon />
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-semibold text-gray-900 dark:text-white">Live streams</p>
+                      <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">
+                        Ticketed live broadcasts on your fan page are included on Elite.
                       </p>
-                    ) : null}
+                      <div className="mt-3 flex flex-wrap items-center gap-2">
+                        <span
+                          className="inline-flex cursor-not-allowed select-none items-center rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-medium text-gray-400 opacity-80 dark:border-gray-600 dark:bg-gray-900"
+                          aria-disabled
+                        >
+                          Live stream (Elite)
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setActivePage("pricing")}
+                          className="text-xs font-medium text-pink-600 dark:text-pink-400 hover:underline"
+                        >
+                          View pricing
+                        </button>
+                      </div>
+                    </div>
                   </div>
-                )}
-              </div>
+                </div>
+              )}
 
               {/* ===== OPTIONAL FEATURES ===== */}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
@@ -2410,30 +2504,50 @@ Write 2-4 sentences that are engaging and on-topic.`;
                   <span className="text-xs font-medium">Overlay</span>
                 </button>
 
-                <button
-                  type="button"
-                  onClick={() => {
-                    const next = !liveStreamPromoEnabled;
-                    setLiveStreamPromoEnabled(next);
-                    if (next) {
-                      setPollEnabled(false);
-                      setTipGoalEnabled(false);
-                      setOverlayEnabled(false);
-                      setLiveStreamComposerStatus("scheduled");
-                    } else {
-                      setLiveStreamComposerStatus(null);
-                      setLiveStreamCreatorTestOnly(false);
-                    }
-                  }}
-                  className={`flex flex-col items-center gap-1 p-3 rounded-lg border-2 border-dashed transition ${
-                    liveStreamPromoEnabled
-                      ? "border-pink-400 bg-pink-50 dark:bg-pink-900/20 text-pink-600 dark:text-pink-400"
-                      : "border-gray-300 dark:border-gray-600 text-gray-500 dark:text-gray-400 hover:border-pink-400"
-                  }`}
-                >
-                  <VideoCamIcon />
-                  <span className="text-xs font-medium">Live</span>
-                </button>
+                {creatorCanLiveStream ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const next = !liveStreamPromoEnabled;
+                      setLiveStreamPromoEnabled(next);
+                      if (next) {
+                        setPollEnabled(false);
+                        setTipGoalEnabled(false);
+                        setOverlayEnabled(false);
+                        setLiveStreamComposerStatus("scheduled");
+                      } else {
+                        setLiveStreamComposerStatus(null);
+                        setLiveStreamCreatorTestOnly(false);
+                      }
+                    }}
+                    className={`flex flex-col items-center gap-1 p-3 rounded-lg border-2 border-dashed transition ${
+                      liveStreamPromoEnabled
+                        ? "border-pink-400 bg-pink-50 dark:bg-pink-900/20 text-pink-600 dark:text-pink-400"
+                        : "border-gray-300 dark:border-gray-600 text-gray-500 dark:text-gray-400 hover:border-pink-400"
+                    }`}
+                  >
+                    <VideoCamIcon />
+                    <span className="text-xs font-medium">Live</span>
+                  </button>
+                ) : liveStreamPromoEnabled ? (
+                  <div
+                    className="flex flex-col items-center gap-0.5 p-3 rounded-lg border-2 border-dashed border-pink-400/70 bg-pink-50/50 dark:bg-pink-900/15 text-pink-600 dark:text-pink-400 opacity-75 cursor-not-allowed select-none"
+                    title="Live stream editing requires Elite"
+                  >
+                    <VideoCamIcon />
+                    <span className="text-xs font-medium">Live</span>
+                    <span className="text-[10px] font-semibold text-amber-700 dark:text-amber-300">Elite</span>
+                  </div>
+                ) : (
+                  <div
+                    className="flex flex-col items-center gap-0.5 p-3 rounded-lg border-2 border-dashed border-gray-200 dark:border-gray-600 text-gray-400 dark:text-gray-500 cursor-not-allowed select-none opacity-80"
+                    title="Live streams are included on Elite"
+                  >
+                    <VideoCamIcon />
+                    <span className="text-xs font-medium">Live</span>
+                    <span className="text-[10px] font-semibold text-amber-700/90 dark:text-amber-400">Elite</span>
+                  </div>
+                )}
               </div>
 
               {/* Poll Editor */}

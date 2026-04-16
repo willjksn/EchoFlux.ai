@@ -44,6 +44,22 @@ function buildRequestsByModelRows(requestsByModel: Record<string, number>): [str
     return [...geminiRows, ...otherRows];
 }
 
+/** Admin live-stream table status column — matches Model Usage Analytics color language */
+const LIVE_STREAM_STATUS_BADGE: Record<string, string> = {
+    live: "bg-emerald-100 text-emerald-900 dark:bg-emerald-900/45 dark:text-emerald-100 ring-1 ring-emerald-300/60 dark:ring-emerald-600/50",
+    scheduled:
+        "bg-blue-100 text-blue-900 dark:bg-blue-900/45 dark:text-blue-100 ring-1 ring-blue-300/60 dark:ring-blue-600/50",
+    ended: "bg-slate-200 text-slate-800 dark:bg-slate-600/55 dark:text-slate-100 ring-1 ring-slate-300/50 dark:ring-slate-500/40",
+    cancelled: "bg-rose-100 text-rose-900 dark:bg-rose-900/40 dark:text-rose-100 ring-1 ring-rose-300/60 dark:ring-rose-700/40",
+    draft: "bg-amber-100 text-amber-950 dark:bg-amber-900/35 dark:text-amber-100 ring-1 ring-amber-300/50 dark:ring-amber-700/35",
+    other: "bg-violet-100 text-violet-900 dark:bg-violet-900/40 dark:text-violet-100 ring-1 ring-violet-300/60 dark:ring-violet-700/40",
+};
+
+function liveStreamStatusBadgeClass(status: string): string {
+    const k = status.trim().toLowerCase();
+    return LIVE_STREAM_STATUS_BADGE[k] ?? LIVE_STREAM_STATUS_BADGE.other!;
+}
+
 // Fallback sample stats so the admin overview is visible even if the analytics
 // API is unreachable locally. These reflect the deployment numbers the user described.
 const DEFAULT_MODEL_USAGE_STATS: ModelUsageStats = {
@@ -377,9 +393,22 @@ export const AdminDashboard: React.FC = () => {
         withDailyRoom: number;
         uniqueCreatorsWithStreams: number;
         ticketsSold30d: number;
+        /** Gross fan checkout totals (Stripe); same as ticketGrossCents30d */
         ticketRevenueCents30d: number;
+        ticketGrossCents30d?: number;
+        /** ~10% application fee typical for Fan Hub; not from Stripe fee field */
+        echofluxCommissionEstimateCents30d?: number;
+        streamsWithDailyRoomTouched30d?: number;
+        estimatedLiveBroadcastParticipantMinutes?: number;
+        /** Rough Daily.co cost for fan broadcasts (see API assumptions). */
+        estimatedDailyLiveBroadcastCostUsd?: number;
+        /** Indicative Firestore read count for this API request (for cost estimate). */
+        estimatedFirestoreReads?: number;
+        /** ~USD using standard Firestore read pricing; confirm in Google Cloud console. */
+        estimatedFirestoreReadCostUsd?: number;
         recent: Array<{
             creatorId: string;
+            creatorLabel?: string;
             streamId: string;
             title: string;
             status: string;
@@ -392,6 +421,16 @@ export const AdminDashboard: React.FC = () => {
     const [liveStreamsOverview, setLiveStreamsOverview] = useState<AdminLiveStreamsOverview | null>(null);
     const [liveStreamsOverviewLoading, setLiveStreamsOverviewLoading] = useState(false);
     const [liveStreamsOverviewError, setLiveStreamsOverviewError] = useState<string | null>(null);
+    const [liveStreamRecentMode, setLiveStreamRecentMode] = useState<"5" | "7" | "30" | "90">("5");
+
+    const liveStreamTableRows = useMemo(() => {
+        if (!liveStreamsOverview?.recent?.length) return [];
+        const rows = liveStreamsOverview.recent;
+        if (liveStreamRecentMode === "5") return rows.slice(0, 5);
+        const days = liveStreamRecentMode === "7" ? 7 : liveStreamRecentMode === "30" ? 30 : 90;
+        const cutoff = Date.now() - days * 86400000;
+        return rows.filter((r) => r.updatedAtMs >= cutoff);
+    }, [liveStreamsOverview?.recent, liveStreamRecentMode]);
     const [witmeOverview, setWitmeOverview] = useState<{ pageViews: number; uniqueVisitors: number; loading: boolean }>({
         pageViews: 0,
         uniqueVisitors: 0,
@@ -1811,110 +1850,273 @@ export const AdminDashboard: React.FC = () => {
 
                                 {/* Fan live streams + Daily broadcast (all creators) */}
                                 <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-600">
-                                    <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
-                                        Fan live streams (all creators)
-                                    </h4>
-                                    <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">
-                                        Firestore <span className="font-mono">creators/*/liveStreams/*</span> plus paid ticket orders (30d). Sampled cap for cost control — totals are exact within the sample.
-                                    </p>
-                                    {liveStreamsOverviewLoading ? (
-                                        <p className="text-xs text-gray-500 dark:text-gray-400">Loading platform live stream snapshot…</p>
-                                    ) : liveStreamsOverviewError ? (
-                                        <p className="text-xs text-red-600 dark:text-red-400">{liveStreamsOverviewError}</p>
-                                    ) : liveStreamsOverview ? (
-                                        <div className="space-y-3">
-                                            {liveStreamsOverview.sampleTruncated ? (
-                                                <p className="text-xs text-amber-700 dark:text-amber-300 rounded border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 px-2 py-1.5">
-                                                    Sample hit limit ({liveStreamsOverview.sampledDocs.toLocaleString()} / {liveStreamsOverview.sampleLimit.toLocaleString()} docs). Increase accuracy by raising query limit in API later if needed.
-                                                </p>
-                                            ) : null}
-                                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
-                                                <div className="rounded-lg border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-800/50 px-2 py-2">
-                                                    <span className="text-gray-500 dark:text-gray-400 block">Creators w/ streams</span>
-                                                    <span className="font-semibold text-gray-900 dark:text-white">
-                                                        {liveStreamsOverview.uniqueCreatorsWithStreams.toLocaleString()}
-                                                    </span>
-                                                </div>
-                                                <div className="rounded-lg border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-800/50 px-2 py-2">
-                                                    <span className="text-gray-500 dark:text-gray-400 block">Live now</span>
-                                                    <span className="font-semibold text-emerald-700 dark:text-emerald-300">
-                                                        {(liveStreamsOverview.byStatus?.live ?? 0).toLocaleString()}
-                                                    </span>
-                                                </div>
-                                                <div className="rounded-lg border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-800/50 px-2 py-2">
-                                                    <span className="text-gray-500 dark:text-gray-400 block">Daily room set</span>
-                                                    <span className="font-semibold text-cyan-700 dark:text-cyan-300">
-                                                        {liveStreamsOverview.withDailyRoom.toLocaleString()}
-                                                    </span>
-                                                </div>
-                                                <div className="rounded-lg border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-800/50 px-2 py-2">
-                                                    <span className="text-gray-500 dark:text-gray-400 block">Tickets sold (30d)</span>
-                                                    <span className="font-semibold text-gray-900 dark:text-white">
-                                                        {liveStreamsOverview.ticketsSold30d.toLocaleString()}
-                                                    </span>
-                                                </div>
-                                            </div>
-                                            <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-600 dark:text-gray-400">
-                                                <span>Scheduled: {(liveStreamsOverview.byStatus?.scheduled ?? 0).toLocaleString()}</span>
-                                                <span>Ended: {(liveStreamsOverview.byStatus?.ended ?? 0).toLocaleString()}</span>
-                                                <span>Cancelled: {(liveStreamsOverview.byStatus?.cancelled ?? 0).toLocaleString()}</span>
-                                                <span>Draft: {(liveStreamsOverview.byStatus?.draft ?? 0).toLocaleString()}</span>
-                                                {(liveStreamsOverview.byStatus?.other ?? 0) > 0 ? (
-                                                    <span>Other: {(liveStreamsOverview.byStatus?.other ?? 0).toLocaleString()}</span>
-                                                ) : null}
-                                            </div>
-                                            <p className="text-xs text-gray-500 dark:text-gray-400">
-                                                Ticket revenue (30d, non-refunded):{" "}
-                                                <span className="font-semibold text-gray-800 dark:text-gray-200">
-                                                    ${(liveStreamsOverview.ticketRevenueCents30d / 100).toFixed(2)}
+                                    <div className="rounded-xl border border-violet-200/90 dark:border-violet-800/45 bg-gradient-to-br from-violet-50/95 via-white to-indigo-50/75 dark:from-violet-950/30 dark:via-gray-900/50 dark:to-indigo-950/25 p-4 shadow-sm ring-1 ring-violet-100/60 dark:ring-violet-900/35">
+                                        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-3">
+                                            <div className="flex items-center gap-2 min-w-0">
+                                                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-violet-500/15 text-violet-600 dark:bg-violet-500/20 dark:text-violet-300 ring-1 ring-violet-300/40 dark:ring-violet-700/40">
+                                                    <VideoIcon className="w-4 h-4" />
                                                 </span>
-                                            </p>
-                                            {liveStreamsOverview.recent.length > 0 ? (
-                                                <div className="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-600">
-                                                    <table className="min-w-full text-xs text-left">
-                                                        <thead className="bg-gray-100 dark:bg-gray-700/80 text-gray-600 dark:text-gray-300">
-                                                            <tr>
-                                                                <th className="px-2 py-1.5 font-medium">Creator</th>
-                                                                <th className="px-2 py-1.5 font-medium">Stream</th>
-                                                                <th className="px-2 py-1.5 font-medium">Status</th>
-                                                                <th className="px-2 py-1.5 font-medium">Ticket</th>
-                                                                <th className="px-2 py-1.5 font-medium">Daily</th>
-                                                            </tr>
-                                                        </thead>
-                                                        <tbody className="divide-y divide-gray-200 dark:divide-gray-600">
-                                                            {liveStreamsOverview.recent.map((row) => (
-                                                                <tr key={`${row.creatorId}-${row.streamId}`} className="text-gray-800 dark:text-gray-200">
-                                                                    <td className="px-2 py-1.5 font-mono text-[10px] max-w-[120px] truncate" title={row.creatorId}>
-                                                                        {row.creatorId.slice(0, 8)}…
-                                                                    </td>
-                                                                    <td className="px-2 py-1.5 max-w-[200px]">
-                                                                        <span className="line-clamp-2" title={row.title}>
-                                                                            {row.title}
-                                                                        </span>
-                                                                    </td>
-                                                                    <td className="px-2 py-1.5 whitespace-nowrap">{row.status}</td>
-                                                                    <td className="px-2 py-1.5 whitespace-nowrap">
-                                                                        {row.ticketCents <= 0 ? "Free" : `$${(row.ticketCents / 100).toFixed(2)}`}
-                                                                    </td>
-                                                                    <td className="px-2 py-1.5 whitespace-nowrap">
-                                                                        {row.hasDailyRoom ? (
-                                                                            <span className="text-cyan-600 dark:text-cyan-400">Yes</span>
-                                                                        ) : (
-                                                                            <span className="text-gray-400">—</span>
-                                                                        )}
-                                                                    </td>
-                                                                </tr>
-                                                            ))}
-                                                        </tbody>
-                                                    </table>
+                                                <h4 className="text-sm font-semibold text-violet-950 dark:text-violet-100 tracking-tight">
+                                                    Fan live streams (all creators)
+                                                </h4>
+                                            </div>
+                                            {!liveStreamsOverviewLoading &&
+                                            !liveStreamsOverviewError &&
+                                            liveStreamsOverview &&
+                                            liveStreamsOverview.recent.length > 0 ? (
+                                                <div className="flex items-center gap-2 w-full sm:w-auto sm:shrink-0">
+                                                    <select
+                                                        value={liveStreamRecentMode}
+                                                        onChange={(e) =>
+                                                            setLiveStreamRecentMode(
+                                                                e.target.value as "5" | "7" | "30" | "90",
+                                                            )
+                                                        }
+                                                        className="px-3 py-2 border border-violet-300/80 dark:border-violet-600/70 rounded-md bg-white/95 dark:bg-gray-800/95 text-gray-900 dark:text-white text-sm w-full sm:w-auto min-w-[122px] shadow-sm focus:outline-none focus:ring-2 focus:ring-violet-400/50 dark:focus:ring-violet-500/40"
+                                                        aria-label="Recent streams time range"
+                                                    >
+                                                        <option value="5">Last 5</option>
+                                                        <option value="7">Last 7 days</option>
+                                                        <option value="30">Last 30 days</option>
+                                                        <option value="90">Last 90 days</option>
+                                                    </select>
                                                 </div>
-                                            ) : (
-                                                <p className="text-xs text-gray-500 dark:text-gray-400">No stream docs in sample.</p>
-                                            )}
+                                            ) : null}
                                         </div>
-                                    ) : (
-                                        <p className="text-xs text-gray-500 dark:text-gray-400">No data.</p>
-                                    )}
+                                        {liveStreamsOverviewLoading ? (
+                                            <p className="text-xs text-violet-700/80 dark:text-violet-300/90">Loading platform live stream snapshot…</p>
+                                        ) : liveStreamsOverviewError ? (
+                                            <p className="text-xs text-red-600 dark:text-red-400">{liveStreamsOverviewError}</p>
+                                        ) : liveStreamsOverview ? (
+                                            <div className="space-y-3">
+                                                {typeof liveStreamsOverview.estimatedFirestoreReads === "number" &&
+                                                typeof liveStreamsOverview.estimatedFirestoreReadCostUsd === "number" ? (
+                                                    <p className="text-xs text-slate-600 dark:text-slate-300 rounded-lg border border-slate-200/90 dark:border-slate-600/80 bg-white/70 dark:bg-gray-900/40 px-3 py-2 shadow-inner">
+                                                        Est. Firebase reads this refresh:{" "}
+                                                        <span className="font-semibold text-indigo-800 dark:text-indigo-200">
+                                                            {liveStreamsOverview.estimatedFirestoreReads.toLocaleString()} reads (~$
+                                                            {liveStreamsOverview.estimatedFirestoreReadCostUsd.toFixed(4)} USD)
+                                                        </span>
+                                                        . Indicative only — check Google Cloud billing for actuals. Broadcast video is billed in{" "}
+                                                        <a
+                                                            href="https://dashboard.daily.co/"
+                                                            target="_blank"
+                                                            rel="noopener noreferrer"
+                                                            className="font-medium text-violet-700 dark:text-violet-300 underline decoration-violet-400/70"
+                                                        >
+                                                            Daily.co
+                                                        </a>
+                                                        ; 1:1 chat is in the bar above.
+                                                    </p>
+                                                ) : null}
+                                                {liveStreamsOverview.sampleTruncated ? (
+                                                    <p className="text-xs text-amber-800 dark:text-amber-200 rounded-lg border border-amber-300/70 dark:border-amber-700/60 bg-amber-50 dark:bg-amber-950/35 px-3 py-2 ring-1 ring-amber-200/50 dark:ring-amber-800/40">
+                                                        Stream scan hit the max ({liveStreamsOverview.sampledDocs.toLocaleString()} / {liveStreamsOverview.sampleLimit.toLocaleString()} documents). Status breakdowns below may be incomplete until the limit is raised in the admin API.
+                                                    </p>
+                                                ) : null}
+                                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+                                                    <div className="p-3 rounded-lg border border-indigo-200/90 dark:border-indigo-700/50 bg-gradient-to-br from-indigo-50 to-indigo-100/90 dark:from-indigo-900/25 dark:to-indigo-800/15 shadow-sm">
+                                                        <span className="text-indigo-700/90 dark:text-indigo-300/95 block text-[11px] font-medium uppercase tracking-wide">
+                                                            Creators w/ streams
+                                                        </span>
+                                                        <span className="text-xl font-bold text-indigo-950 dark:text-indigo-50 tabular-nums">
+                                                            {liveStreamsOverview.uniqueCreatorsWithStreams.toLocaleString()}
+                                                        </span>
+                                                    </div>
+                                                    <div className="p-3 rounded-lg border border-emerald-200/90 dark:border-emerald-700/50 bg-gradient-to-br from-emerald-50 to-emerald-100/90 dark:from-emerald-900/25 dark:to-emerald-800/15 shadow-sm">
+                                                        <span className="text-emerald-800/90 dark:text-emerald-300/95 block text-[11px] font-medium uppercase tracking-wide">
+                                                            Live now
+                                                        </span>
+                                                        <span className="text-xl font-bold text-emerald-950 dark:text-emerald-50 tabular-nums">
+                                                            {(liveStreamsOverview.byStatus?.live ?? 0).toLocaleString()}
+                                                        </span>
+                                                    </div>
+                                                    <div
+                                                        className="p-3 rounded-lg border border-cyan-200/90 dark:border-cyan-700/50 bg-gradient-to-br from-cyan-50 to-cyan-100/90 dark:from-cyan-900/25 dark:to-cyan-800/15 shadow-sm"
+                                                        title="Streams that have a Daily.co broadcast room name saved (created when the host goes live)."
+                                                    >
+                                                        <span className="text-cyan-800/90 dark:text-cyan-300/95 block text-[11px] font-medium uppercase tracking-wide">
+                                                            Broadcast room (Daily.co)
+                                                        </span>
+                                                        <span className="text-xl font-bold text-cyan-950 dark:text-cyan-50 tabular-nums">
+                                                            {liveStreamsOverview.withDailyRoom.toLocaleString()}
+                                                        </span>
+                                                    </div>
+                                                    <div className="p-3 rounded-lg border border-amber-200/90 dark:border-amber-700/50 bg-gradient-to-br from-amber-50 to-amber-100/90 dark:from-amber-900/25 dark:to-amber-800/15 shadow-sm">
+                                                        <span className="text-amber-900/85 dark:text-amber-300/95 block text-[11px] font-medium uppercase tracking-wide">
+                                                            Tickets sold (30d)
+                                                        </span>
+                                                        <span className="text-xl font-bold text-amber-950 dark:text-amber-50 tabular-nums">
+                                                            {liveStreamsOverview.ticketsSold30d.toLocaleString()}
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                                <div className="flex flex-wrap gap-2 text-[11px]">
+                                                    <span className="inline-flex items-center rounded-full bg-blue-100/90 text-blue-900 dark:bg-blue-900/40 dark:text-blue-100 px-2.5 py-1 font-medium ring-1 ring-blue-200/70 dark:ring-blue-700/50">
+                                                        Scheduled {(liveStreamsOverview.byStatus?.scheduled ?? 0).toLocaleString()}
+                                                    </span>
+                                                    <span className="inline-flex items-center rounded-full bg-slate-200/90 text-slate-900 dark:bg-slate-600/45 dark:text-slate-100 px-2.5 py-1 font-medium ring-1 ring-slate-300/60 dark:ring-slate-500/40">
+                                                        Ended {(liveStreamsOverview.byStatus?.ended ?? 0).toLocaleString()}
+                                                    </span>
+                                                    <span className="inline-flex items-center rounded-full bg-rose-100/90 text-rose-900 dark:bg-rose-900/40 dark:text-rose-100 px-2.5 py-1 font-medium ring-1 ring-rose-200/70 dark:ring-rose-700/45">
+                                                        Cancelled {(liveStreamsOverview.byStatus?.cancelled ?? 0).toLocaleString()}
+                                                    </span>
+                                                    <span className="inline-flex items-center rounded-full bg-amber-100/90 text-amber-950 dark:bg-amber-900/35 dark:text-amber-100 px-2.5 py-1 font-medium ring-1 ring-amber-200/70 dark:ring-amber-700/40">
+                                                        Draft {(liveStreamsOverview.byStatus?.draft ?? 0).toLocaleString()}
+                                                    </span>
+                                                    {(liveStreamsOverview.byStatus?.other ?? 0) > 0 ? (
+                                                        <span className="inline-flex items-center rounded-full bg-violet-100/90 text-violet-900 dark:bg-violet-900/40 dark:text-violet-100 px-2.5 py-1 font-medium ring-1 ring-violet-200/70 dark:ring-violet-700/45">
+                                                            Other {(liveStreamsOverview.byStatus?.other ?? 0).toLocaleString()}
+                                                        </span>
+                                                    ) : null}
+                                                </div>
+                                                <div className="space-y-2">
+                                                    <div className="rounded-lg border border-amber-200/80 dark:border-amber-800/45 bg-gradient-to-r from-amber-50/90 to-yellow-50/70 dark:from-amber-950/30 dark:to-yellow-950/20 px-3 py-2 text-xs">
+                                                        <p className="text-amber-950 dark:text-amber-50">
+                                                            <span className="font-semibold text-amber-900/95 dark:text-amber-100/95">
+                                                                Gross ticket sales (30d, non-refunded):{" "}
+                                                            </span>
+                                                            <span className="font-bold tabular-nums">
+                                                                $
+                                                                {(
+                                                                    (liveStreamsOverview.ticketGrossCents30d ??
+                                                                        liveStreamsOverview.ticketRevenueCents30d) /
+                                                                    100
+                                                                ).toFixed(2)}
+                                                            </span>
+                                                        </p>
+                                                        <p className="text-[10px] text-amber-900/75 dark:text-amber-200/80 mt-1 leading-snug">
+                                                            Total charged to fans in Stripe — not creator payout or EchoFlux net.
+                                                        </p>
+                                                    </div>
+                                                    <div className="rounded-lg border border-purple-200/85 dark:border-purple-800/50 bg-gradient-to-r from-purple-50/95 to-violet-50/80 dark:from-purple-950/35 dark:to-violet-950/25 px-3 py-2 text-xs shadow-sm">
+                                                        <p className="text-purple-950 dark:text-purple-50">
+                                                            <span className="font-semibold text-purple-900/95 dark:text-purple-100/95">
+                                                                Est. EchoFlux share (~10%):{" "}
+                                                            </span>
+                                                            <span className="font-bold tabular-nums">
+                                                                $
+                                                                {(
+                                                                    (liveStreamsOverview.echofluxCommissionEstimateCents30d ??
+                                                                        Math.round(
+                                                                            (liveStreamsOverview.ticketGrossCents30d ??
+                                                                                liveStreamsOverview.ticketRevenueCents30d) *
+                                                                                0.1,
+                                                                        )) / 100
+                                                                ).toFixed(2)}
+                                                            </span>
+                                                        </p>
+                                                        <p className="text-[10px] text-purple-900/75 dark:text-purple-200/80 mt-1 leading-snug">
+                                                            Typical Fan Hub application fee on gross; actual Stripe fees can differ (e.g. platform-owner creators).
+                                                        </p>
+                                                    </div>
+                                                    <div className="rounded-lg border border-red-200/90 dark:border-red-800/55 bg-gradient-to-br from-red-50/95 to-rose-50/80 dark:from-red-950/35 dark:to-rose-950/25 px-3 py-2 text-xs shadow-sm ring-1 ring-red-100/50 dark:ring-red-900/35">
+                                                        <p className="text-red-950 dark:text-red-50">
+                                                            <span className="font-semibold text-red-900/95 dark:text-red-100/95">
+                                                                Est. Daily.co (fan live broadcasts, 30d):{" "}
+                                                            </span>
+                                                            <span className="font-bold tabular-nums">
+                                                                $
+                                                                {(liveStreamsOverview.estimatedDailyLiveBroadcastCostUsd ?? 0).toFixed(2)}
+                                                            </span>
+                                                        </p>
+                                                        <p className="text-[10px] text-red-900/80 dark:text-red-200/85 mt-1 leading-snug">
+                                                            Rough model:{" "}
+                                                            {typeof liveStreamsOverview.streamsWithDailyRoomTouched30d === "number"
+                                                                ? `${liveStreamsOverview.streamsWithDailyRoomTouched30d.toLocaleString()} stream doc(s) with a Daily room updated in the last 30d`
+                                                                : "stream docs with a Daily room in the sample"}
+                                                            , ~42 min × ~5 participants × $0.004/participant-min (same scale as video chat cost above). Not a bill — confirm in Daily.co.
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                                {liveStreamsOverview.recent.length > 0 ? (
+                                                    <>
+                                                        {liveStreamTableRows.length === 0 ? (
+                                                            <p className="text-xs text-violet-800/80 dark:text-violet-300/90 rounded-md border border-violet-200/60 dark:border-violet-800/40 bg-violet-50/50 dark:bg-violet-950/20 px-3 py-2">
+                                                                No streams in this range in the current sample.
+                                                            </p>
+                                                        ) : (
+                                                            <div className="overflow-x-auto max-h-80 overflow-y-auto rounded-xl border border-indigo-200/70 dark:border-indigo-800/50 shadow-md ring-1 ring-indigo-100/40 dark:ring-indigo-900/30">
+                                                                <table className="min-w-full text-xs text-left">
+                                                                    <thead className="sticky top-0 z-10 bg-gradient-to-r from-indigo-100 via-violet-100 to-indigo-100 dark:from-indigo-950/90 dark:via-violet-950/80 dark:to-indigo-950/90 text-indigo-950 dark:text-indigo-100 shadow-sm">
+                                                                        <tr>
+                                                                            <th className="px-3 py-2.5 font-semibold">Creator</th>
+                                                                            <th className="px-3 py-2.5 font-semibold">Stream</th>
+                                                                            <th className="px-3 py-2.5 font-semibold">Status</th>
+                                                                            <th className="px-3 py-2.5 font-semibold">Ticket</th>
+                                                                            <th
+                                                                                className="px-3 py-2.5 font-semibold max-w-[140px]"
+                                                                                title='Daily.co is our live video vendor. "Yes" means a broadcast room was created for this stream (fan watch + host camera).'
+                                                                            >
+                                                                                Daily.co room
+                                                                            </th>
+                                                                        </tr>
+                                                                    </thead>
+                                                                    <tbody className="divide-y divide-indigo-100/80 dark:divide-indigo-900/40">
+                                                                        {liveStreamTableRows.map((row, idx) => (
+                                                                            <tr
+                                                                                key={`${row.creatorId}-${row.streamId}`}
+                                                                                className={
+                                                                                    idx % 2 === 0
+                                                                                        ? "bg-white/90 dark:bg-gray-950/20 text-slate-800 dark:text-slate-100 hover:bg-indigo-50/90 dark:hover:bg-indigo-950/30 transition-colors"
+                                                                                        : "bg-violet-50/60 dark:bg-violet-950/15 text-slate-800 dark:text-slate-100 hover:bg-indigo-50/90 dark:hover:bg-indigo-950/30 transition-colors"
+                                                                                }
+                                                                            >
+                                                                                <td
+                                                                                    className="px-3 py-2 max-w-[220px] truncate font-medium text-indigo-950 dark:text-indigo-50"
+                                                                                    title={`${row.creatorLabel?.trim() ? row.creatorLabel : "Creator"}\nUID: ${row.creatorId}`}
+                                                                                >
+                                                                                    {row.creatorLabel?.trim()
+                                                                                        ? row.creatorLabel
+                                                                                        : `${row.creatorId.slice(0, 8)}…`}
+                                                                                </td>
+                                                                                <td className="px-3 py-2 max-w-[200px]">
+                                                                                    <span className="line-clamp-2 text-slate-700 dark:text-slate-200" title={row.title}>
+                                                                                        {row.title}
+                                                                                    </span>
+                                                                                </td>
+                                                                                <td className="px-3 py-2 whitespace-nowrap">
+                                                                                    <span
+                                                                                        className={`inline-flex px-2 py-0.5 rounded-full text-[10px] font-semibold capitalize ${liveStreamStatusBadgeClass(row.status)}`}
+                                                                                    >
+                                                                                        {row.status}
+                                                                                    </span>
+                                                                                </td>
+                                                                                <td className="px-3 py-2 whitespace-nowrap">
+                                                                                    {row.ticketCents <= 0 ? (
+                                                                                        <span className="inline-flex px-2 py-0.5 rounded-md text-[10px] font-bold bg-emerald-100 text-emerald-900 dark:bg-emerald-900/40 dark:text-emerald-100 ring-1 ring-emerald-300/50">
+                                                                                            Free
+                                                                                        </span>
+                                                                                    ) : (
+                                                                                        <span className="font-semibold text-violet-800 dark:text-violet-200 tabular-nums">
+                                                                                            ${(row.ticketCents / 100).toFixed(2)}
+                                                                                        </span>
+                                                                                    )}
+                                                                                </td>
+                                                                                <td className="px-3 py-2 whitespace-nowrap">
+                                                                                    {row.hasDailyRoom ? (
+                                                                                        <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold bg-cyan-100 text-cyan-950 dark:bg-cyan-900/45 dark:text-cyan-100 ring-1 ring-cyan-300/50 dark:ring-cyan-700/40">
+                                                                                            Yes
+                                                                                        </span>
+                                                                                    ) : (
+                                                                                        <span className="text-slate-400 dark:text-slate-500">—</span>
+                                                                                    )}
+                                                                                </td>
+                                                                            </tr>
+                                                                        ))}
+                                                                    </tbody>
+                                                                </table>
+                                                            </div>
+                                                        )}
+                                                    </>
+                                                ) : (
+                                                    <p className="text-xs text-violet-800/80 dark:text-violet-300/90">No stream docs in sample.</p>
+                                                )}
+                                            </div>
+                                        ) : (
+                                            <p className="text-xs text-violet-800/70 dark:text-violet-300/90">No data.</p>
+                                        )}
+                                    </div>
                                 </div>
                             </div>
                         </div>

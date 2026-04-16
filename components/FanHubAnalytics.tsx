@@ -11,6 +11,7 @@ import {
 } from "firebase/firestore";
 import { formatFanDisplayLabel } from "../src/lib/fanHubDisplay";
 import { inferIsAudioFromUrl, inferIsVideoFromUrl, normalizePostMediaTypes } from "../src/lib/mediaUrlInfer";
+import { hasLiveStreamAccess } from "../src/utils/planAccess";
 
 type DateRange = "7d" | "30d" | "90d" | "all";
 
@@ -82,6 +83,34 @@ interface EngagementStats {
   topComments: EngagementHighlight | null;
 }
 
+/** Creator-facing live stream business metrics (no infra cost / runaway signals). */
+interface LiveStreamBizMetrics {
+  ticketCount: number;
+  ticketGrossCents: number;
+  streamTotal: number;
+  /** Stream docs with createdAt or updatedAt in the selected date range */
+  streamsTouchedInRange: number;
+  live: number;
+  scheduled: number;
+  ended: number;
+  draft: number;
+  cancelled: number;
+  other: number;
+}
+
+const DEFAULT_LIVE_STREAM_BIZ: LiveStreamBizMetrics = {
+  ticketCount: 0,
+  ticketGrossCents: 0,
+  streamTotal: 0,
+  streamsTouchedInRange: 0,
+  live: 0,
+  scheduled: 0,
+  ended: 0,
+  draft: 0,
+  cancelled: 0,
+  other: 0,
+};
+
 const TrendUpIcon = () => (
   <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <polyline points="23 6 13.5 15.5 8.5 10.5 1 18" />
@@ -149,6 +178,13 @@ const RefreshIcon = () => (
   </svg>
 );
 
+const LiveStreamIcon = () => (
+  <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <polygon points="23 7 16 12 23 17 23 7" />
+    <rect x="1" y="5" width="15" height="14" rx="2" ry="2" />
+  </svg>
+);
+
 function formatCents(cents: number): string {
   return "$" + (cents / 100).toFixed(2);
 }
@@ -162,6 +198,86 @@ function getDateRangeStart(range: DateRange): Date | null {
   const now = new Date();
   const days = range === "7d" ? 7 : range === "30d" ? 30 : 90;
   return new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
+}
+
+function firestoreTimeToMs(v: unknown): number {
+  const d = parsePreferenceDate(v);
+  return d ? d.getTime() : 0;
+}
+
+function liveStreamTicketStatsFromOrders(orders: Array<Record<string, unknown>>): Pick<LiveStreamBizMetrics, "ticketCount" | "ticketGrossCents"> {
+  let ticketCount = 0;
+  let ticketGrossCents = 0;
+  for (const o of orders) {
+    const t = String(o.type ?? "").trim().toLowerCase();
+    if (t !== "live_stream_ticket") continue;
+    const st = String(o.status ?? "paid").trim().toLowerCase();
+    if (st === "refunded") continue;
+    ticketCount += 1;
+    const cents = o.amountCents;
+    ticketGrossCents += typeof cents === "number" && Number.isFinite(cents) ? Math.max(0, Math.round(cents)) : 0;
+  }
+  return { ticketCount, ticketGrossCents };
+}
+
+function bucketLiveStreamStatus(raw: unknown): "live" | "scheduled" | "ended" | "draft" | "cancelled" | "other" {
+  const s = String(raw ?? "scheduled").trim().toLowerCase();
+  if (s === "live") return "live";
+  if (s === "scheduled") return "scheduled";
+  if (s === "ended") return "ended";
+  if (s === "draft") return "draft";
+  if (s === "cancelled") return "cancelled";
+  return "other";
+}
+
+async function loadLiveStreamBizMetrics(
+  creatorUserId: string,
+  rangeStart: Date | null,
+  filteredOrders: Array<Record<string, unknown>>,
+): Promise<LiveStreamBizMetrics> {
+  const ticketStats = liveStreamTicketStatsFromOrders(filteredOrders);
+  const empty: LiveStreamBizMetrics = {
+    ...ticketStats,
+    streamTotal: 0,
+    streamsTouchedInRange: 0,
+    live: 0,
+    scheduled: 0,
+    ended: 0,
+    draft: 0,
+    cancelled: 0,
+    other: 0,
+  };
+  if (!db) return empty;
+
+  try {
+    const snap = await getDocs(collection(db, "creators", creatorUserId, "liveStreams"));
+    const rs = rangeStart ? rangeStart.getTime() : null;
+    let touched = 0;
+    const counts = { live: 0, scheduled: 0, ended: 0, draft: 0, cancelled: 0, other: 0 };
+    snap.forEach((docSnap) => {
+      const d = docSnap.data() as Record<string, unknown>;
+      const key = bucketLiveStreamStatus(d.status);
+      counts[key] += 1;
+      const created = firestoreTimeToMs(d.createdAt);
+      const updated = firestoreTimeToMs(d.updatedAt);
+      const touchMs = Math.max(created, updated);
+      if (rs == null || touchMs >= rs) touched += 1;
+    });
+    return {
+      ...ticketStats,
+      streamTotal: snap.size,
+      streamsTouchedInRange: touched,
+      live: counts.live,
+      scheduled: counts.scheduled,
+      ended: counts.ended,
+      draft: counts.draft,
+      cancelled: counts.cancelled,
+      other: counts.other,
+    };
+  } catch (e) {
+    console.warn("FanHubAnalytics: liveStreams read failed", e);
+    return empty;
+  }
 }
 
 function parsePreferenceDate(v: unknown): Date | null {
@@ -473,6 +589,7 @@ export const FanHubAnalytics: React.FC = () => {
   const [recentTransactions, setRecentTransactions] = useState<Transaction[]>([]);
   /** Orders in selected date range (for CSV export). */
   const [rangeOrders, setRangeOrders] = useState<Record<string, unknown>[]>([]);
+  const [liveStreamBiz, setLiveStreamBiz] = useState<LiveStreamBizMetrics>(DEFAULT_LIVE_STREAM_BIZ);
   const [monthlyRows, setMonthlyRows] = useState<MonthlyRow[]>([]);
   const [engagement, setEngagement] = useState<EngagementStats>({
     postsThisMonth: 0,
@@ -542,6 +659,17 @@ export const FanHubAnalytics: React.FC = () => {
         return orderDate >= startDate;
       });
       setRangeOrders(filteredOrders);
+
+      if (hasLiveStreamAccess(user)) {
+        const liveBiz = await loadLiveStreamBizMetrics(
+          creatorId,
+          startDate,
+          filteredOrders as Record<string, unknown>[],
+        );
+        setLiveStreamBiz(liveBiz);
+      } else {
+        setLiveStreamBiz(DEFAULT_LIVE_STREAM_BIZ);
+      }
 
       // Calculate revenue by type
       let tipsCents = 0;
@@ -767,7 +895,7 @@ export const FanHubAnalytics: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [creatorId, dateRange, showToast]);
+  }, [creatorId, dateRange, showToast, user]);
 
   useEffect(() => {
     loadAnalytics();
@@ -918,6 +1046,69 @@ export const FanHubAnalytics: React.FC = () => {
           />
         </div>
       </div>
+
+      {/* Live streams — Elite (and Agency); skips liveStreams subcollection reads on Pro */}
+      {hasLiveStreamAccess(user) ? (
+        <div>
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-2 flex items-center gap-2">
+            <LiveStreamIcon />
+            Live streams
+          </h2>
+          <p className="text-sm text-gray-500 dark:text-gray-400 mb-4 max-w-2xl">
+            Ticket sales use the date range above. Total streams is all-time; streams active in the period had a create or update during the selected range.
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <StatCard
+              title="Ticket gross"
+              value={formatCents(liveStreamBiz.ticketGrossCents)}
+              icon={<DollarIcon />}
+              subtitle="Non-refunded live stream tickets in period"
+              accentColor="indigo"
+            />
+            <StatCard
+              title="Tickets sold"
+              value={liveStreamBiz.ticketCount.toLocaleString()}
+              icon={<StarIcon />}
+              subtitle="Orders in selected period"
+              accentColor="purple"
+            />
+            <StatCard
+              title="Streams (total)"
+              value={liveStreamBiz.streamTotal.toLocaleString()}
+              icon={<LiveStreamIcon />}
+              subtitle="All stream rows in your hub"
+              accentColor="blue"
+            />
+            <StatCard
+              title="Streams (active in period)"
+              value={liveStreamBiz.streamsTouchedInRange.toLocaleString()}
+              icon={<LiveStreamIcon />}
+              subtitle={dateRange === "all" ? "Same as total (all time)" : "Created or updated in range"}
+              accentColor="green"
+            />
+          </div>
+          <div className="mt-4 flex flex-wrap gap-2">
+            {(
+              [
+                ["Live", liveStreamBiz.live],
+                ["Scheduled", liveStreamBiz.scheduled],
+                ["Ended", liveStreamBiz.ended],
+                ["Draft", liveStreamBiz.draft],
+                ["Cancelled", liveStreamBiz.cancelled],
+                ["Other", liveStreamBiz.other],
+              ] as const
+            ).map(([label, n]) => (
+              <span
+                key={label}
+                className="inline-flex items-center gap-1.5 rounded-full border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-800/80 px-3 py-1 text-xs text-gray-700 dark:text-gray-300"
+              >
+                <span className="font-medium">{label}</span>
+                <span className="tabular-nums text-gray-500 dark:text-gray-400">{n}</span>
+              </span>
+            ))}
+          </div>
+        </div>
+      ) : null}
 
       {/* Fan Metrics */}
       <div>

@@ -32,7 +32,8 @@ const creatorTiers = [
             '100 video chat minutes/month',
             'Basic analytics',
             'Stripe payouts (10% platform fee)',
-            'In-session & feed reply drafts (Elite unlocks)'
+            'In-session & feed reply drafts (Elite unlocks)',
+            'Live streams to your feed are Elite-only'
         ],
         isRecommended: false
     },
@@ -43,6 +44,7 @@ const creatorTiers = [
         description: 'For serious creators who want advanced tools and more video time.',
         features: [
             'Everything in Pro',
+            'Fan Hub live streams (tickets, broadcast) on witme.io',
             'Premium Studio tools',
             'Creator Identity Builder — guided brand profile for captions & strategy',
             'Advanced content planning',

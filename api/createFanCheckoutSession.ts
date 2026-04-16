@@ -4,6 +4,7 @@ import Stripe from "stripe";
 import { getPlatformStripe, checkoutSessionsCreate } from "./_stripeConnect.js";
 import { getAdminDb } from "./_firebaseAdmin.js";
 import { verifyAuth } from "./verifyAuth.js";
+import { userMayUseLiveStreaming } from "./_liveStreamAccess.js";
 import { isFanBlocked } from "./_fanDmHelpers.js";
 import { enforceRateLimit } from "./_rateLimit.js";
 import { applyBrowserApiCors } from "./_browserApiCors.js";
@@ -224,6 +225,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       isPlatformOwner?: boolean;
       platformOwner?: boolean;
       role?: string;
+      plan?: string;
       publicTreatsOnLanding?: boolean;
     } | undefined;
     const ownerDetectionData = {
@@ -514,6 +516,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // ==================== LIVE STREAM TICKET ====================
     if (type === "live_stream_ticket") {
+      if (!userMayUseLiveStreaming(creatorUserData?.plan, creatorUserData?.role)) {
+        return res.status(403).json({
+          error: "This creator is not offering paid live stream tickets on their current plan",
+          code: "LIVE_STREAM_PLAN_REQUIRED",
+        });
+      }
+
       const streamIdStr = String(streamId!).trim();
       if (!streamIdStr) {
         return res.status(400).json({ error: "streamId is required for live stream ticket checkout" });
