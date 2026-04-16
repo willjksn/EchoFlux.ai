@@ -4,6 +4,7 @@ import { getVerifyAuth, withErrorHandling } from "./_errorHandler.js";
 import { getAdminDb } from "./_firebaseAdmin.js";
 import { enforceRateLimit } from "./_rateLimit.js";
 import { applyBrowserApiCors } from "./_browserApiCors.js";
+import { sendCreatorHubNotification } from "./_fanNotifications.js";
 
 /** Toggle current user's like on a fan hub post (mirrors stored in creators/.../fanPosts, users/.../posts, creators/.../posts). */
 async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
@@ -94,6 +95,25 @@ async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
   const rootSnap = await rootPostRef.get();
   if (rootSnap.exists) {
     await rootPostRef.update({ likedBy: nextLikedBy, likeCount: nextLikedBy.length });
+  }
+
+  if (likedAfter && uid !== creatorIdStr) {
+    try {
+      const fanSnap = await db.collection("users").doc(uid).get();
+      const fd = fanSnap.data() || {};
+      const dn = typeof fd.displayName === "string" ? fd.displayName.trim() : "";
+      const un = typeof fd.username === "string" ? fd.username.trim().replace(/^@/, "") : "";
+      const fanName = dn || (un ? `@${un}` : "Someone");
+      await sendCreatorHubNotification({
+        creatorId: creatorIdStr,
+        type: "post_liked",
+        title: "New like on your post",
+        body: `${fanName} liked your post.`,
+        data: { postId: postIdStr, fanId: uid },
+      });
+    } catch (e) {
+      console.error("togglePostLike: sendCreatorHubNotification", e);
+    }
   }
 
   res.status(200).json({

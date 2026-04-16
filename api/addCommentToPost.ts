@@ -6,6 +6,7 @@ import { sanitizeForAI } from "./_inputSanitizer.js";
 import { getAdminDb } from "./_firebaseAdmin.js";
 import { enforceRateLimit } from "./_rateLimit.js";
 import { checkApiKeys } from "./_errorHandler.js";
+import { sendCreatorHubNotification } from "./_fanNotifications.js";
 
 type Comment = { username?: string; author?: string; text: string; hidden?: boolean; authorId?: string; isCreatorReply?: boolean };
 
@@ -196,6 +197,22 @@ async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
   const rootSnap = await rootPostRef.get();
   if (rootSnap.exists) {
     await rootPostRef.update({ comments: nextComments });
+  }
+
+  if (tokenUser.uid !== creatorIdStr) {
+    try {
+      const snippet =
+        text.length > 120 ? `${text.slice(0, 120)}…` : text;
+      await sendCreatorHubNotification({
+        creatorId: creatorIdStr,
+        type: "post_comment",
+        title: "New comment on your post",
+        body: `${fanComment.author}: ${snippet}`,
+        data: { postId: postIdStr, fanId: tokenUser.uid },
+      });
+    } catch (e) {
+      console.error("addCommentToPost: sendCreatorHubNotification", e);
+    }
   }
 
   res.status(200).json({ success: true, comments: nextComments });

@@ -56,9 +56,9 @@ export const Header: React.FC<HeaderProps> = ({ pageTitle }) => {
 
   const handleEchoFluxFirestoreNotificationNavigate = useCallback(
     (payload: FanHubNotificationNavigatePayload) => {
-      const { tab, threadId } = resolveFanHubNotificationTarget(payload.type, payload.data);
+      const { tab, threadId, postId } = resolveFanHubNotificationTarget(payload.type, payload.data);
       try {
-        sessionStorage.setItem(FAN_HUB_DEEPLINK_STORAGE_KEY, JSON.stringify({ tab, threadId }));
+        sessionStorage.setItem(FAN_HUB_DEEPLINK_STORAGE_KEY, JSON.stringify({ tab, threadId, postId }));
       } catch {
         /* ignore */
       }
