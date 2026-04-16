@@ -1724,7 +1724,7 @@ export const FanMemberFeed: React.FC<FanMemberFeedProps> = ({
 
     const attach = (key: MemberFeedBucketKey, path: [string, string, string]): Unsubscribe => {
       const postsRef = collection(db, path[0], path[1], path[2]);
-      const q = query(postsRef, orderBy("createdAt", "desc"), limit(30));
+      const q = query(postsRef, orderBy("createdAt", "desc"), limit(22));
       return onSnapshot(
         q,
         (snap) => {

@@ -141,37 +141,41 @@ function WitmeHeroVisualCollage({
     />
   );
 
+  const collageShell = (inner: React.ReactNode, shellClass = "") => (
+    <div
+      className={`mt-10 flex justify-center sm:mt-12 lg:mt-0 lg:justify-end lg:self-start ${shellClass}`.trim()}
+    >
+      {inner}
+    </div>
+  );
+
   if (items.length === 1) {
-    return (
-      <div className="mt-10 flex justify-center sm:mt-12 lg:mt-0 lg:justify-end">
-        <div className="w-full max-w-[14rem] sm:max-w-[16rem]">{wrapFrame(items[0], 0, "", "eager")}</div>
-      </div>
+    return collageShell(
+      <div className="w-full max-w-[14rem] sm:max-w-[16rem]">{wrapFrame(items[0], 0, "", "eager")}</div>
     );
   }
 
   if (items.length === 2) {
-    return (
-      <div className="mt-10 flex justify-center gap-4 sm:mt-12 lg:mt-0 lg:justify-end lg:pt-4">
+    return collageShell(
+      <div className="flex justify-center gap-4 lg:justify-end lg:pt-4">
         <div className="w-[42%] max-w-[9.5rem] translate-y-6 rotate-[-4deg] sm:max-w-[11rem]">{wrapFrame(items[0], 0, "", "eager")}</div>
         <div className="w-[42%] max-w-[9.5rem] -translate-y-2 rotate-[3deg] sm:max-w-[11rem]">{wrapFrame(items[1], 1, "", "lazy")}</div>
       </div>
     );
   }
 
-  return (
-    <div className="mt-10 flex justify-center max-sm:pb-16 sm:mt-12 sm:pb-0 lg:mt-0 lg:justify-end lg:pt-5">
-      {/* Mobile: third tile hangs lower (deeper negative bottom) to match desktop/tablet; extra pb avoids clipping. */}
-      <div className="relative h-[min(28rem,max(18rem,82vw))] w-full max-w-[19rem] overflow-visible sm:h-[28rem] sm:max-w-[21rem] lg:h-[30rem] lg:max-w-[24rem]">
-        {wrapFrame(items[0], 0, "absolute right-0 top-0 z-30 w-[58%] rotate-[2deg]", "eager")}
-        {wrapFrame(items[1], 1, "absolute left-0 top-[16%] z-20 w-[55%] -rotate-[2deg]", "lazy")}
-        {wrapFrame(
-          items[2],
-          2,
-          "absolute right-[8%] z-10 w-[50%] rotate-[1deg] bottom-[-1.35rem] sm:bottom-[-0.35rem]",
-          "lazy"
-        )}
-      </div>
-    </div>
+  return collageShell(
+    <div className="relative h-[min(24rem,max(16rem,78vw))] w-full max-w-[19rem] overflow-visible sm:h-[25rem] sm:max-w-[21rem] lg:h-[27rem] lg:max-w-[24rem]">
+      {wrapFrame(items[0], 0, "absolute right-0 top-0 z-30 w-[58%] rotate-[2deg]", "eager")}
+      {wrapFrame(items[1], 1, "absolute left-0 top-[16%] z-20 w-[55%] -rotate-[2deg]", "lazy")}
+      {wrapFrame(
+        items[2],
+        2,
+        "absolute right-[8%] z-10 w-[50%] rotate-[1deg] bottom-[-1.35rem] sm:bottom-[-0.35rem]",
+        "lazy"
+      )}
+    </div>,
+    "max-sm:pb-16 sm:pb-0 lg:pt-5"
   );
 }
 
@@ -189,7 +193,7 @@ export const WitmeHeroSection: React.FC<{
 
   return (
     <section className={`${sectionClass} pt-12 pb-16 sm:pt-20 sm:pb-20`} aria-labelledby="witme-hero-heading">
-      <div className="grid grid-cols-1 items-center gap-0 lg:grid-cols-[minmax(0,1fr)_minmax(16rem,26rem)] lg:gap-12 xl:gap-16">
+      <div className="grid grid-cols-1 items-start gap-0 lg:grid-cols-[minmax(0,1fr)_minmax(16rem,26rem)] lg:gap-12 xl:gap-16">
         <div className="max-w-3xl lg:max-w-none">
           <img src="/witme-wordmark.svg" alt="witme" className="h-12 w-auto sm:h-16" loading="eager" />
           <p className="mt-3 text-xs text-gray-400 sm:text-sm">

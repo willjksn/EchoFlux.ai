@@ -1,8 +1,8 @@
-import React, { useState, useEffect, useCallback, useRef, Fragment, useMemo } from "react";
+import React, { useState, useEffect, useLayoutEffect, useCallback, useRef, Fragment, useMemo } from "react";
 import { useAppContext } from "./AppContext";
 import { onAuthStateChanged } from "firebase/auth";
 import { auth, db } from "../firebaseConfig";
-import { collection, doc, getDoc, onSnapshot, orderBy, query } from "firebase/firestore";
+import { collection, doc, getDoc, onSnapshot, orderBy, query, limit } from "firebase/firestore";
 import type { FanDmThread, FanDmMessage } from "../types";
 import VideoCallRoom from "./VideoCallRoom";
 import { useAutosizeTextarea } from "../src/hooks/useAutosizeTextarea";
@@ -107,6 +107,23 @@ function threadIdForCreatorFan(creatorId: string, fanId: string): string {
   return [creatorId, fanId].sort().join("_");
 }
 
+/** Matches default `limit` on GET /api/fanDmMessages (cost control). */
+const FAN_HUB_DM_PAGE_LIMIT = 50;
+/** Caps Firestore listener reads for long threads (newest tail only). */
+const FAN_HUB_DM_REALTIME_TAIL = 320;
+
+/** Keep API-loaded older rows when realtime returns only the newest tail. */
+function mergeDmTailWithOlderPrepend(prev: FanDmMessage[], tailFromSnap: FanDmMessage[]): FanDmMessage[] {
+  const live = [...tailFromSnap].sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+  if (live.length === 0) return prev;
+  const liveIds = new Set(live.map((m) => m.id));
+  const oldestLive = live[0]?.createdAt ?? "";
+  const kept = prev.filter(
+    (m) => !liveIds.has(m.id) && oldestLive && m.createdAt.localeCompare(oldestLive) < 0
+  );
+  return [...kept, ...live].sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+}
+
 function sortCreatorDmThreads(list: FanDmThread[]): FanDmThread[] {
   return [...list].sort((a, b) => {
     const pA = a.creatorInboxPinned ? 1 : 0;
@@ -172,15 +189,19 @@ export const FanHubMessages: React.FC = () => {
   const [messagesLoading, setMessagesLoading] = useState(false);
   /** Set when /api/fanDmMessages fails (otherwise empty array looked like “no messages”). */
   const [messagesError, setMessagesError] = useState<string | null>(null);
+  const [hasMoreOlder, setHasMoreOlder] = useState(false);
+  const [loadingOlder, setLoadingOlder] = useState(false);
   const [reply, setReply] = useState("");
   const [pendingAttachments, setPendingAttachments] = useState<DmAttachmentItem[]>([]);
   const [pendingAttachmentUploading, setPendingAttachmentUploading] = useState(false);
   const [sending, setSending] = useState(false);
   const [deletingThreadId, setDeletingThreadId] = useState<string | null>(null);
   const [deletingMessageId, setDeletingMessageId] = useState<string | null>(null);
-  const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const messagesListRef = useRef<HTMLDivElement | null>(null);
   const autoStickToBottomRef = useRef(true);
+  /** After GET /api/fanDmMessages finishes, pin list scroll once (avoids scrollIntoView + wrong near-bottom on first paint). */
+  const fhDmScrollAfterApiLoadRef = useRef(false);
+  const replyComposerFocusedRef = useRef(false);
   const { ref: replyTextareaRef } = useAutosizeTextarea(reply);
   const [threadSearchQuery, setThreadSearchQuery] = useState("");
   const [listTab, setListTab] = useState<"all" | "requests">("all");
@@ -340,18 +361,25 @@ export const FanHubMessages: React.FC = () => {
 
   const fetchMessagesForThread = useCallback(
     async (
-      thread: FanDmThread
+      thread: FanDmThread,
+      opts?: { beforeCreatedAt?: string }
     ): Promise<{
       messages: FanDmMessage[];
       error: string | null;
       labels: { fan: string; creator: string } | null;
+      hasMoreOlder: boolean;
     }> => {
       const token = auth.currentUser ? await auth.currentUser.getIdToken() : null;
       try {
-        const res = await fetch(
-          `/api/fanDmMessages?threadId=${encodeURIComponent(thread.id)}`,
-          { headers: token ? { Authorization: `Bearer ${token}` } : {} }
-        );
+        const params = new URLSearchParams({
+          threadId: thread.id,
+          limit: String(FAN_HUB_DM_PAGE_LIMIT),
+        });
+        const bc = opts?.beforeCreatedAt?.trim();
+        if (bc) params.set("beforeCreatedAt", bc);
+        const res = await fetch(`/api/fanDmMessages?${params.toString()}`, {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        });
         const { json: data, plainTextHint } = await parseApiBody(res);
         if (!res.ok) {
           const err =
@@ -359,7 +387,7 @@ export const FanHubMessages: React.FC = () => {
             (typeof data.details === "string" ? data.details : null) ||
             plainTextHint ||
             `HTTP ${res.status}`;
-          return { messages: [], error: err, labels: null };
+          return { messages: [], error: err, labels: null, hasMoreOlder: false };
         }
         const rawLabels = data.labels as { fan?: unknown; creator?: unknown } | undefined;
         const labels =
@@ -368,37 +396,88 @@ export const FanHubMessages: React.FC = () => {
           typeof rawLabels.creator === "string"
             ? { fan: rawLabels.fan, creator: rawLabels.creator }
             : null; // creator inbox: API omits labels (uses thread list + profile)
+        const hasMoreOlder = data.hasMoreOlder === true;
         return {
           messages: Array.isArray(data.messages) ? (data.messages as FanDmMessage[]) : [],
           error: null,
           labels,
+          hasMoreOlder,
         };
       } catch (e) {
         return {
           messages: [],
           error: e instanceof Error ? e.message : "Network error",
           labels: null,
+          hasMoreOlder: false,
         };
       }
     },
     []
   );
 
+  const loadOlderMessages = useCallback(async () => {
+    if (!selectedThread || messages.length === 0 || !hasMoreOlder || loadingOlder || messagesLoading) return;
+    const oldest = messages[0]?.createdAt?.trim();
+    if (!oldest) return;
+    const listEl = messagesListRef.current;
+    const prevScrollHeight = listEl?.scrollHeight ?? 0;
+    const prevScrollTop = listEl?.scrollTop ?? 0;
+    setLoadingOlder(true);
+    try {
+      const { messages: chunk, error, hasMoreOlder: more } = await fetchMessagesForThread(selectedThread, {
+        beforeCreatedAt: oldest,
+      });
+      if (error) {
+        showToast?.(error, "error");
+        return;
+      }
+      if (chunk.length === 0) {
+        setHasMoreOlder(false);
+        return;
+      }
+      setMessages((prev) => {
+        const byId = new Map<string, FanDmMessage>();
+        for (const m of chunk) byId.set(m.id, m);
+        for (const m of prev) if (!byId.has(m.id)) byId.set(m.id, m);
+        return Array.from(byId.values()).sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+      });
+      setHasMoreOlder(!!more);
+      requestAnimationFrame(() => {
+        const el = messagesListRef.current;
+        if (!el) return;
+        el.scrollTop = el.scrollHeight - prevScrollHeight + prevScrollTop;
+      });
+    } finally {
+      setLoadingOlder(false);
+    }
+  }, [
+    selectedThread,
+    messages,
+    hasMoreOlder,
+    loadingOlder,
+    messagesLoading,
+    fetchMessagesForThread,
+    showToast,
+  ]);
+
   useEffect(() => {
     if (!selectedThread || !creatorId) {
       setMessages([]);
       setMessagesError(null);
       setMessageLabels(null);
+      setHasMoreOlder(false);
       return;
     }
     let cancelled = false;
     setMessagesLoading(true);
+    fhDmScrollAfterApiLoadRef.current = true;
     setMessagesError(null);
-    fetchMessagesForThread(selectedThread).then(({ messages: list, error, labels }) => {
+    fetchMessagesForThread(selectedThread).then(({ messages: list, error, labels, hasMoreOlder: more }) => {
       if (!cancelled) {
         setMessages(list);
         setMessagesError(error);
         setMessageLabels(labels);
+        setHasMoreOlder(!!more);
       }
     }).finally(() => {
       if (!cancelled) setMessagesLoading(false);
@@ -439,13 +518,14 @@ export const FanHubMessages: React.FC = () => {
 
       const q = query(
         collection(db, "fanDmThreads", selectedThread.id, "messages"),
-        orderBy("createdAt", "asc")
+        orderBy("createdAt", "desc"),
+        limit(FAN_HUB_DM_REALTIME_TAIL)
       );
 
       unsubSnap = onSnapshot(
         q,
         (snap) => {
-          const liveMessages = snap.docs.map((d) => {
+          const liveMessagesDesc = snap.docs.map((d) => {
             const data = d.data() as Record<string, unknown>;
             const att = firestoreDataToMessageAttachmentFields(data);
             return {
@@ -460,7 +540,7 @@ export const FanHubMessages: React.FC = () => {
               reportId: typeof data.reportId === "string" ? data.reportId : undefined,
             } as FanDmMessage;
           });
-          setMessages(liveMessages);
+          setMessages((prev) => mergeDmTailWithOlderPrepend(prev, liveMessagesDesc));
           setMessagesError(null);
         },
         (err) => {
@@ -543,11 +623,30 @@ export const FanHubMessages: React.FC = () => {
     };
   }, [threadRowMenuOpenId]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
+    if (!selectedThread) return;
     if (messagesLoading) return;
+    const listEl = messagesListRef.current;
+    if (!listEl) {
+      if (fhDmScrollAfterApiLoadRef.current) fhDmScrollAfterApiLoadRef.current = false;
+      return;
+    }
+    if (replyComposerFocusedRef.current) return;
+
+    if (fhDmScrollAfterApiLoadRef.current) {
+      fhDmScrollAfterApiLoadRef.current = false;
+      listEl.scrollTop = listEl.scrollHeight;
+      autoStickToBottomRef.current = true;
+      return;
+    }
+
     if (!autoStickToBottomRef.current) return;
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, messagesLoading, selectedThread?.id]);
+    if (!isNearBottom(listEl)) {
+      autoStickToBottomRef.current = false;
+      return;
+    }
+    listEl.scrollTop = listEl.scrollHeight;
+  }, [selectedThread?.id, messages, messagesLoading, isNearBottom]);
 
   useEffect(() => {
     autoStickToBottomRef.current = true;
@@ -591,14 +690,19 @@ export const FanHubMessages: React.FC = () => {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error((data as { error?: string }).error || "Failed to send");
-      const { messages: next, error: loadErr, labels: nextLabels } = await fetchMessagesForThread(selectedThread);
+      const { messages: next, error: loadErr, labels: nextLabels, hasMoreOlder: more } =
+        await fetchMessagesForThread(selectedThread);
       setMessages(next);
       setMessagesError(loadErr);
       setMessageLabels(nextLabels);
+      setHasMoreOlder(!!more);
       void fetchThreads();
       setPendingAttachments([]);
       autoStickToBottomRef.current = true;
-      requestAnimationFrame(() => messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }));
+      requestAnimationFrame(() => {
+        const el = messagesListRef.current;
+        if (el) el.scrollTop = el.scrollHeight;
+      });
       showToast?.("Sent", "success");
     } catch (e) {
       setReply(prevReply);
@@ -808,10 +912,12 @@ export const FanHubMessages: React.FC = () => {
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error((data as { error?: string }).error || "Failed to delete message");
       showToast?.("Message deleted", "success");
-      const { messages: next, error: loadErr, labels: nextLabels } = await fetchMessagesForThread(selectedThread);
+      const { messages: next, error: loadErr, labels: nextLabels, hasMoreOlder: more } =
+        await fetchMessagesForThread(selectedThread);
       setMessages(next);
       setMessagesError(loadErr);
       setMessageLabels(nextLabels);
+      setHasMoreOlder(!!more);
       void fetchThreads();
     } catch (e) {
       showToast?.(e instanceof Error ? e.message : "Failed to delete", "error");
@@ -1232,6 +1338,18 @@ export const FanHubMessages: React.FC = () => {
                   autoStickToBottomRef.current = isNearBottom(e.currentTarget);
                 }}
               >
+                {!messagesLoading && !messagesError && hasMoreOlder && messages.length > 0 ? (
+                  <div className="shrink-0 flex justify-center pb-1">
+                    <button
+                      type="button"
+                      className="text-xs font-medium text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white disabled:opacity-50"
+                      disabled={loadingOlder}
+                      onClick={() => void loadOlderMessages()}
+                    >
+                      {loadingOlder ? "Loading older…" : "Load older messages"}
+                    </button>
+                  </div>
+                ) : null}
                 {messagesLoading ? (
                   <p className="text-sm text-gray-500 dark:text-gray-400">Loading messages…</p>
                 ) : messagesError ? (
@@ -1342,7 +1460,7 @@ export const FanHubMessages: React.FC = () => {
                     );
                   })
                 )}
-                <div ref={messagesEndRef} aria-hidden />
+                <div aria-hidden className="shrink-0 h-px w-full" />
               </div>
               <div className="p-4 border-t border-gray-200 dark:border-gray-700 space-y-2">
                 {isRecordingVoice && voiceMeterStream ? (
@@ -1436,6 +1554,12 @@ export const FanHubMessages: React.FC = () => {
                   rows={1}
                   value={reply}
                   onChange={(e) => setReply(e.target.value)}
+                  onFocus={() => {
+                    replyComposerFocusedRef.current = true;
+                  }}
+                  onBlur={() => {
+                    replyComposerFocusedRef.current = false;
+                  }}
                   onKeyDown={(e) => {
                     if (e.key === "Enter" && !e.shiftKey) {
                       e.preventDefault();

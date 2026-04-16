@@ -1,32 +1,87 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, lazy, Suspense } from 'react';
 import { useAppContext } from './AppContext';
-import { CopyIcon, SparklesIcon, SettingsIcon, XMarkIcon, CheckCircleIcon, RefreshIcon } from './icons/UIIcons';
-import { OnlyFansContentBrain } from './OnlyFansContentBrain';
-import { ContentGapAnalysis } from './ContentGapAnalysis';
-import { OnlyFansRoleplay } from './OnlyFansRoleplay';
-import { CreatorIdentityBuilder } from './CreatorIdentityBuilder';
-import { OnlyFansStudioSettings } from './OnlyFansStudioSettings';
-import { OnlyFansExportHub } from './OnlyFansExportHub';
-import { OnlyFansCalendar } from './OnlyFansCalendar';
-import { OnlyFansMediaVault } from './OnlyFansMediaVault';
-import { OnlyFansGuides } from './OnlyFansGuides';
-import { OnlyFansAnalytics } from './OnlyFansAnalytics';
-import { OnlyFansFans } from './OnlyFansFans';
-import { FanHubAnalytics } from './FanHubAnalytics';
-import { FanHubMyPage } from './FanHubMyPage';
-import { FanHubPosts } from './FanHubPosts';
-import { TreatsStore } from './TreatsStore';
-import { FanHubMessages } from './FanHubMessages';
-import { FanHubPayouts } from './FanHubPayouts';
-import { FanHubPurchases } from './FanHubPurchases';
-import { FanHubUsers } from './FanHubUsers';
-import { OnlyFansSextingSession } from './OnlyFansSextingSession';
-import { LiveVideoChatManager } from './LiveVideoChatManager';
+import {
+    CopyIcon,
+    SparklesIcon,
+    SettingsIcon,
+    XMarkIcon,
+    CheckCircleIcon,
+    RefreshIcon,
+    UserIcon,
+} from './icons/UIIcons';
 import { ErrorBoundary } from './ErrorBoundary';
 import { usePremiumStudioTab } from './PremiumStudioLayout';
 import { auth, db } from '../firebaseConfig';
 import { addDoc, collection, getDocs, limit, orderBy, query, Timestamp, doc, getDoc, where, onSnapshot } from 'firebase/firestore';
-import { UserIcon } from './icons/UIIcons';
+
+const OnlyFansContentBrain = lazy(() =>
+    import('./OnlyFansContentBrain').then((m) => ({ default: m.OnlyFansContentBrain }))
+);
+const ContentGapAnalysis = lazy(() =>
+    import('./ContentGapAnalysis').then((m) => ({ default: m.ContentGapAnalysis }))
+);
+const OnlyFansRoleplay = lazy(() =>
+    import('./OnlyFansRoleplay').then((m) => ({ default: m.OnlyFansRoleplay }))
+);
+const CreatorIdentityBuilder = lazy(() =>
+    import('./CreatorIdentityBuilder').then((m) => ({ default: m.CreatorIdentityBuilder }))
+);
+const OnlyFansStudioSettings = lazy(() =>
+    import('./OnlyFansStudioSettings').then((m) => ({ default: m.OnlyFansStudioSettings }))
+);
+const OnlyFansExportHub = lazy(() =>
+    import('./OnlyFansExportHub').then((m) => ({ default: m.OnlyFansExportHub }))
+);
+const OnlyFansCalendar = lazy(() =>
+    import('./OnlyFansCalendar').then((m) => ({ default: m.OnlyFansCalendar }))
+);
+const OnlyFansMediaVault = lazy(() =>
+    import('./OnlyFansMediaVault').then((m) => ({ default: m.OnlyFansMediaVault }))
+);
+const OnlyFansGuides = lazy(() => import('./OnlyFansGuides').then((m) => ({ default: m.OnlyFansGuides })));
+const OnlyFansAnalytics = lazy(() =>
+    import('./OnlyFansAnalytics').then((m) => ({ default: m.OnlyFansAnalytics }))
+);
+const OnlyFansFans = lazy(() => import('./OnlyFansFans').then((m) => ({ default: m.OnlyFansFans })));
+const FanHubAnalytics = lazy(() =>
+    import('./FanHubAnalytics').then((m) => ({ default: m.FanHubAnalytics }))
+);
+const FanHubMyPage = lazy(() => import('./FanHubMyPage').then((m) => ({ default: m.FanHubMyPage })));
+const FanHubPosts = lazy(() => import('./FanHubPosts').then((m) => ({ default: m.FanHubPosts })));
+const TreatsStore = lazy(() => import('./TreatsStore').then((m) => ({ default: m.TreatsStore })));
+const FanHubMessages = lazy(() =>
+    import('./FanHubMessages').then((m) => ({ default: m.FanHubMessages }))
+);
+const FanHubPayouts = lazy(() =>
+    import('./FanHubPayouts').then((m) => ({ default: m.FanHubPayouts }))
+);
+const FanHubPurchases = lazy(() =>
+    import('./FanHubPurchases').then((m) => ({ default: m.FanHubPurchases }))
+);
+const FanHubUsers = lazy(() => import('./FanHubUsers').then((m) => ({ default: m.FanHubUsers })));
+const OnlyFansSextingSession = lazy(() =>
+    import('./OnlyFansSextingSession').then((m) => ({ default: m.OnlyFansSextingSession }))
+);
+const LiveVideoChatManager = lazy(() => import('./LiveVideoChatManager'));
+
+function studioPanelFallback(label: string) {
+    return (
+        <div className="min-h-[40vh] flex items-center justify-center p-8 text-sm text-gray-500 dark:text-gray-400">
+            <div className="text-center">
+                <div
+                    className="mx-auto mb-2 h-6 w-6 animate-spin rounded-full border-2 border-current border-t-transparent opacity-70"
+                    aria-hidden
+                />
+                <span>{label}</span>
+            </div>
+        </div>
+    );
+}
+
+function StudioSuspense({ label, children }: { label: string; children: React.ReactNode }) {
+    return <Suspense fallback={studioPanelFallback(label)}>{children}</Suspense>;
+}
+
 type ActiveView = 'dashboard' | 'contentBrain' | 'contentGaps' | 'roleplay' | 'calendar' | 'mediaVault' | 'export' | 'guides' | 'settings' | 'analytics' | 'fans';
 
 type TeaserPack = {
@@ -794,47 +849,103 @@ export const OnlyFansStudio: React.FC<{ mode?: 'studio' | 'fanHub' }> = ({ mode 
                 {content}
             </div>
         );
-        if (premiumTab.tab === 'myPage') return wrap(<FanHubMyPage />);
-        if (premiumTab.tab === 'posts') return wrap(<FanHubPosts />);
-        if (premiumTab.tab === 'treats') return wrap(<TreatsStore />);
-        if (premiumTab.tab === 'messages') return wrap(<FanHubMessages />);
-        if (premiumTab.tab === 'payouts') return wrap(<FanHubPayouts />);
-        if (premiumTab.tab === 'fans') return wrap(
-            <div className="max-w-7xl mx-auto">
-                <ErrorBoundary>
-                    <OnlyFansFans />
-                </ErrorBoundary>
-            </div>
-        );
-        if (premiumTab.tab === 'analytics') return wrap(
-            <div className="max-w-7xl mx-auto">
-                <ErrorBoundary>
-                    <FanHubAnalytics />
-                </ErrorBoundary>
-            </div>
-        );
-        if (premiumTab.tab === 'purchases') return wrap(<FanHubPurchases />);
-        if (premiumTab.tab === 'sessions') return wrap(
-            <div className="max-w-7xl mx-auto">
-                <ErrorBoundary>
-                    <OnlyFansSextingSession />
-                </ErrorBoundary>
-            </div>
-        );
-        if (premiumTab.tab === 'videoChats') return wrap(
-            <div className="max-w-7xl mx-auto">
-                <ErrorBoundary>
-                    <LiveVideoChatManager creatorId={user?.id || ''} />
-                </ErrorBoundary>
-            </div>
-        );
-        if (premiumTab.tab === 'users') return wrap(
-            <div className="w-full">
-                <ErrorBoundary>
-                    <FanHubUsers />
-                </ErrorBoundary>
-            </div>
-        );
+        if (premiumTab.tab === 'myPage') {
+            return wrap(
+                <StudioSuspense label="Loading My Page…">
+                    <FanHubMyPage />
+                </StudioSuspense>
+            );
+        }
+        if (premiumTab.tab === 'posts') {
+            return wrap(
+                <StudioSuspense label="Loading posts…">
+                    <FanHubPosts />
+                </StudioSuspense>
+            );
+        }
+        if (premiumTab.tab === 'treats') {
+            return wrap(
+                <StudioSuspense label="Loading store…">
+                    <TreatsStore />
+                </StudioSuspense>
+            );
+        }
+        if (premiumTab.tab === 'messages') {
+            return wrap(
+                <StudioSuspense label="Loading messages…">
+                    <FanHubMessages />
+                </StudioSuspense>
+            );
+        }
+        if (premiumTab.tab === 'payouts') {
+            return wrap(
+                <StudioSuspense label="Loading payouts…">
+                    <FanHubPayouts />
+                </StudioSuspense>
+            );
+        }
+        if (premiumTab.tab === 'fans') {
+            return wrap(
+                <div className="max-w-7xl mx-auto">
+                    <ErrorBoundary>
+                        <StudioSuspense label="Loading fans…">
+                            <OnlyFansFans />
+                        </StudioSuspense>
+                    </ErrorBoundary>
+                </div>
+            );
+        }
+        if (premiumTab.tab === 'analytics') {
+            return wrap(
+                <div className="max-w-7xl mx-auto">
+                    <ErrorBoundary>
+                        <StudioSuspense label="Loading analytics…">
+                            <FanHubAnalytics />
+                        </StudioSuspense>
+                    </ErrorBoundary>
+                </div>
+            );
+        }
+        if (premiumTab.tab === 'purchases') {
+            return wrap(
+                <StudioSuspense label="Loading purchases…">
+                    <FanHubPurchases />
+                </StudioSuspense>
+            );
+        }
+        if (premiumTab.tab === 'sessions') {
+            return wrap(
+                <div className="max-w-7xl mx-auto">
+                    <ErrorBoundary>
+                        <StudioSuspense label="Loading sessions…">
+                            <OnlyFansSextingSession />
+                        </StudioSuspense>
+                    </ErrorBoundary>
+                </div>
+            );
+        }
+        if (premiumTab.tab === 'videoChats') {
+            return wrap(
+                <div className="max-w-7xl mx-auto">
+                    <ErrorBoundary>
+                        <StudioSuspense label="Loading video chats…">
+                            <LiveVideoChatManager creatorId={user?.id || ''} />
+                        </StudioSuspense>
+                    </ErrorBoundary>
+                </div>
+            );
+        }
+        if (premiumTab.tab === 'users') {
+            return wrap(
+                <div className="w-full">
+                    <ErrorBoundary>
+                        <StudioSuspense label="Loading members…">
+                            <FanHubUsers />
+                        </StudioSuspense>
+                    </ErrorBoundary>
+                </div>
+            );
+        }
         return wrap(
             <div className="py-8 text-center" style={{ color: "var(--text-muted)" }}>
                 <p>Coming soon: {premiumTab.tab}</p>
@@ -850,7 +961,9 @@ export const OnlyFansStudio: React.FC<{ mode?: 'studio' | 'fanHub' }> = ({ mode 
             return (
                 <div className="max-w-7xl mx-auto">
                     <ErrorBoundary>
-                        <OnlyFansContentBrain key="ideas" initialTab="postIdeas" singleTabMode />
+                        <StudioSuspense label="Loading ideas…">
+                            <OnlyFansContentBrain key="ideas" initialTab="postIdeas" singleTabMode />
+                        </StudioSuspense>
                     </ErrorBoundary>
                 </div>
             );
@@ -860,7 +973,9 @@ export const OnlyFansStudio: React.FC<{ mode?: 'studio' | 'fanHub' }> = ({ mode 
             return (
                 <div className="max-w-7xl mx-auto">
                     <ErrorBoundary>
-                        <OnlyFansContentBrain key="drops" initialTab="monetizationPlanner" singleTabMode />
+                        <StudioSuspense label="Loading planner…">
+                            <OnlyFansContentBrain key="drops" initialTab="monetizationPlanner" singleTabMode />
+                        </StudioSuspense>
                     </ErrorBoundary>
                 </div>
             );
@@ -870,7 +985,9 @@ export const OnlyFansStudio: React.FC<{ mode?: 'studio' | 'fanHub' }> = ({ mode 
             return (
                 <div className="max-w-7xl mx-auto">
                     <ErrorBoundary>
-                        <OnlyFansContentBrain key="dmSession" initialTab="messaging" singleTabMode />
+                        <StudioSuspense label="Loading messaging tools…">
+                            <OnlyFansContentBrain key="dmSession" initialTab="messaging" singleTabMode />
+                        </StudioSuspense>
                     </ErrorBoundary>
                 </div>
             );
@@ -881,7 +998,9 @@ export const OnlyFansStudio: React.FC<{ mode?: 'studio' | 'fanHub' }> = ({ mode 
                 <div className="max-w-7xl mx-auto px-4 py-6">
                     <ErrorBoundary>
                         <div className="rounded-2xl bg-white dark:bg-gray-950 border border-gray-200 dark:border-gray-800 p-6 md:p-10 shadow-lg">
-                            <CreatorIdentityBuilder />
+                            <StudioSuspense label="Loading identity…">
+                                <CreatorIdentityBuilder />
+                            </StudioSuspense>
                         </div>
                     </ErrorBoundary>
                 </div>
@@ -1015,7 +1134,9 @@ export const OnlyFansStudio: React.FC<{ mode?: 'studio' | 'fanHub' }> = ({ mode 
                     ← Back to Premium Content Studio
                 </button>
                 <ErrorBoundary>
-                    <OnlyFansContentBrain key={contentBrainInitialTab} initialTab={contentBrainInitialTab} />
+                    <StudioSuspense label="Loading Content Brain…">
+                        <OnlyFansContentBrain key={contentBrainInitialTab} initialTab={contentBrainInitialTab} />
+                    </StudioSuspense>
                 </ErrorBoundary>
             </div>
         );
@@ -1037,7 +1158,9 @@ export const OnlyFansStudio: React.FC<{ mode?: 'studio' | 'fanHub' }> = ({ mode 
                     <p className="text-gray-600 dark:text-gray-400 mb-6 text-sm">
                         See what's missing in your content mix and get AI recommendations.
                     </p>
-                    <ContentGapAnalysis />
+                    <StudioSuspense label="Loading gap analysis…">
+                        <ContentGapAnalysis />
+                    </StudioSuspense>
                 </div>
             </div>
         );
@@ -1054,7 +1177,9 @@ export const OnlyFansStudio: React.FC<{ mode?: 'studio' | 'fanHub' }> = ({ mode 
                         ← Back to Premium Content Studio
                     </button>
                 </div>
-                <OnlyFansRoleplay />
+                <StudioSuspense label="Loading roleplay…">
+                    <OnlyFansRoleplay />
+                </StudioSuspense>
             </div>
         );
     }
@@ -1070,7 +1195,9 @@ export const OnlyFansStudio: React.FC<{ mode?: 'studio' | 'fanHub' }> = ({ mode 
                         ← Back to Premium Content Studio
                     </button>
                 </div>
-                <OnlyFansStudioSettings />
+                <StudioSuspense label="Loading settings…">
+                    <OnlyFansStudioSettings />
+                </StudioSuspense>
             </div>
         );
     }
@@ -1086,7 +1213,9 @@ export const OnlyFansStudio: React.FC<{ mode?: 'studio' | 'fanHub' }> = ({ mode 
                         ← Back to Premium Content Studio
                     </button>
                 </div>
-                <OnlyFansExportHub />
+                <StudioSuspense label="Loading export hub…">
+                    <OnlyFansExportHub />
+                </StudioSuspense>
             </div>
         );
     }
@@ -1102,7 +1231,9 @@ export const OnlyFansStudio: React.FC<{ mode?: 'studio' | 'fanHub' }> = ({ mode 
                         ← Back to Premium Content Studio
                     </button>
                 </div>
-                <OnlyFansCalendar onNavigateToContentBrain={() => openContentBrain('captions')} />
+                <StudioSuspense label="Loading calendar…">
+                    <OnlyFansCalendar onNavigateToContentBrain={() => openContentBrain('captions')} />
+                </StudioSuspense>
             </div>
         );
     }
@@ -1118,7 +1249,9 @@ export const OnlyFansStudio: React.FC<{ mode?: 'studio' | 'fanHub' }> = ({ mode 
                         ← Back to Premium Content Studio
                     </button>
                 </div>
-                <OnlyFansMediaVault />
+                <StudioSuspense label="Loading media vault…">
+                    <OnlyFansMediaVault />
+                </StudioSuspense>
             </div>
         );
     }
@@ -1134,7 +1267,9 @@ export const OnlyFansStudio: React.FC<{ mode?: 'studio' | 'fanHub' }> = ({ mode 
                         ← Back to Premium Content Studio
                     </button>
                 </div>
-                <OnlyFansGuides />
+                <StudioSuspense label="Loading guides…">
+                    <OnlyFansGuides />
+                </StudioSuspense>
             </div>
         );
     }
@@ -1151,7 +1286,9 @@ export const OnlyFansStudio: React.FC<{ mode?: 'studio' | 'fanHub' }> = ({ mode 
                     </button>
                 </div>
                 <ErrorBoundary>
-                    <OnlyFansAnalytics />
+                    <StudioSuspense label="Loading analytics…">
+                        <OnlyFansAnalytics />
+                    </StudioSuspense>
                 </ErrorBoundary>
             </div>
         );
@@ -1169,7 +1306,9 @@ export const OnlyFansStudio: React.FC<{ mode?: 'studio' | 'fanHub' }> = ({ mode 
                     </button>
                 </div>
                 <ErrorBoundary>
-                    <OnlyFansFans />
+                    <StudioSuspense label="Loading fans…">
+                        <OnlyFansFans />
+                    </StudioSuspense>
                 </ErrorBoundary>
             </div>
         );

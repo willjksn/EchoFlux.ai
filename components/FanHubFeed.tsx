@@ -1962,19 +1962,21 @@ export const FanHubFeed: React.FC<{
       
       try {
         const userQ = query(collection(db, "users", creatorId, "posts"), orderBy("createdAt", "desc"), limit(50));
-        const userSnap = await getDocs(userQ);
+        const fanQ = query(
+          collection(db, "creators", creatorId, "fanPosts"),
+          orderBy("createdAt", "desc"),
+          limit(50)
+        );
 
-        let fanSnap: Awaited<ReturnType<typeof getDocs>> | null = null;
-        try {
-          const fanQ = query(
-            collection(db, "creators", creatorId, "fanPosts"),
-            orderBy("createdAt", "desc"),
-            limit(50)
-          );
-          fanSnap = await getDocs(fanQ);
-        } catch (fanErr) {
-          console.warn("Fan Hub: fanPosts query failed (index may be missing):", fanErr);
-        }
+        const [userSnap, fanSnapResult] = await Promise.all([
+          getDocs(userQ),
+          getDocs(fanQ).catch((fanErr) => {
+            console.warn("Fan Hub: fanPosts query failed (index may be missing):", fanErr);
+            return null;
+          }),
+        ]);
+
+        const fanSnap = fanSnapResult;
 
         const byId = new Map<string, FeedPost>();
         userSnap.forEach((docSnap) => {

@@ -681,7 +681,7 @@ export interface FanDmMessage {
     senderId: string;   // creatorId or fanId
     content: string;
     createdAt: string;  // ISO
-    /** True when the recipient has opened the thread (see /api/fanDmMessages mark-as-read). */
+    /** Creator-sent: true in DB after fan read receipts persist (`POST /api/fanDmMarkRead`); GET may optimistically treat as read for the fan viewer. */
     read?: boolean;
     /** Optional media (Firebase Storage or CDN URL). */
     attachmentUrl?: string;

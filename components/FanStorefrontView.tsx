@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef, Fragment, useMemo } from "react";
+import React, { useState, useEffect, useLayoutEffect, useCallback, useRef, Fragment, useMemo } from "react";
 import { auth } from "../firebaseConfig";
 import {
   collection,
@@ -55,6 +55,7 @@ import {
   formatCreatorDmBubbleSecondaryLine,
 } from "../src/lib/fanHubDisplay";
 import { uploadFanDmAttachment, type DmAttachmentKind } from "../src/lib/dmMediaUpload";
+import { fanDmMarkReadAfterOpen } from "../src/lib/fanDmMarkReadClient";
 import {
   DM_MAX_ATTACHMENTS_PER_MESSAGE,
   attachmentsSignature,
@@ -1051,6 +1052,10 @@ function TipSection({
   );
 }
 
+/** Fan member hub purchases: first page size and API cap (see `/api/fanPurchases`). */
+const FAN_MEMBER_PURCHASES_PAGE = 80;
+const FAN_MEMBER_PURCHASES_MAX = 1000;
+
 export const FanStorefrontView: React.FC = () => {
   const { showToast, activePage, toast, isDarkMode } = useAppContext();
   const pathname = usePathname();
@@ -1099,6 +1104,9 @@ export const FanStorefrontView: React.FC = () => {
   const [treatsLoading, setTreatsLoading] = useState(false);
   const [fanPurchases, setFanPurchases] = useState<FanDeliveryPurchase[]>([]);
   const [fanPurchasesLoading, setFanPurchasesLoading] = useState(false);
+  const [fanPurchasesLoadingMore, setFanPurchasesLoadingMore] = useState(false);
+  const [fanPurchasesQueryLimit, setFanPurchasesQueryLimit] = useState(80);
+  const [fanPurchasesHasMore, setFanPurchasesHasMore] = useState(false);
   const memberPurchasesCompactStorageKey = useMemo(() => {
     const uid = fanAuthUid;
     const cid = creator?.creatorId;
@@ -1142,6 +1150,13 @@ export const FanStorefrontView: React.FC = () => {
   const [dmMessages, setDmMessages] = useState<FanDmMessage[]>([]);
   const [dmLabels, setDmLabels] = useState<{ fan: string; creator: string } | null>(null);
   const [dmLoading, setDmLoading] = useState(false);
+  /** Grows with “Load more” on DMs (fewer docs per open; cap matches `/api/fanDmMessages`). */
+  const [dmMessageLimit, setDmMessageLimit] = useState(50);
+  const [dmHasMoreOlder, setDmHasMoreOlder] = useState(false);
+  const [dmLoadingOlder, setDmLoadingOlder] = useState(false);
+  /** Avoid putting `dmMessageLimit` in `fetchDmThreadAndMessages` deps (would retrigger tab-open fetch and reset to 50). */
+  const dmMessageLimitRef = useRef(dmMessageLimit);
+  dmMessageLimitRef.current = dmMessageLimit;
   const [dmSending, setDmSending] = useState(false);
   const [dmInput, setDmInput] = useState("");
   /** Staged media: send only when the user clicks Send (not immediately after upload/record). */
@@ -1156,9 +1171,10 @@ export const FanStorefrontView: React.FC = () => {
       (dmLiveSession.status === "active" || dmLiveSession.status === "paused"),
     [dmLiveSession]
   );
-  const dmMessagesEndRef = useRef<HTMLDivElement | null>(null);
   const dmMessagesListRef = useRef<HTMLDivElement | null>(null);
   const dmAutoStickToBottomRef = useRef(true);
+  /** After foreground fetch the list mounts with scrollTop 0; `dmIsNearBottom` is false until we pin once. */
+  const dmScrollBottomAfterForegroundLoadRef = useRef(false);
   const dmComposerFocusedRef = useRef(false);
   const { ref: dmTextareaRef } = useAutosizeTextarea(dmInput);
   const dmFileInputRef = useRef<HTMLInputElement | null>(null);
@@ -2392,18 +2408,26 @@ export const FanStorefrontView: React.FC = () => {
     if ((activeTab === "treats" || activeTab === "purchases") && creator?.creatorId) fetchTreats();
   }, [activeTab, creator?.creatorId, fetchTreats]);
 
-  const fetchFanPurchases = useCallback(async () => {
-    if (!creator?.creatorId || !isLoggedIn) return;
-    setFanPurchasesLoading(true);
-    try {
-      const token = auth.currentUser ? await auth.currentUser.getIdToken() : null;
-      const url = `/api/fanPurchases?creatorId=${encodeURIComponent(creator.creatorId)}&limit=200`;
-      const res = await fetch(url, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
-      const data = await res.json().catch(() => ({} as { purchases?: FanDeliveryPurchase[]; error?: string }));
-      if (res.ok) {
-        setFanPurchases(Array.isArray(data.purchases) ? data.purchases : []);
-        return;
-      }
+  const fetchFanPurchases = useCallback(
+    async (limitNum: number, mode: "initial" | "more" = "initial") => {
+      if (!creator?.creatorId || !isLoggedIn) return;
+      const capped = Math.min(Math.max(limitNum, 10), FAN_MEMBER_PURCHASES_MAX);
+      if (mode === "initial") {
+        setFanPurchasesLoading(true);
+        setFanPurchasesHasMore(false);
+      } else setFanPurchasesLoadingMore(true);
+      try {
+        const token = auth.currentUser ? await auth.currentUser.getIdToken() : null;
+        const url = `/api/fanPurchases?creatorId=${encodeURIComponent(creator.creatorId)}&limit=${capped}`;
+        const res = await fetch(url, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+        const data = await res.json().catch(() => ({} as { purchases?: FanDeliveryPurchase[]; error?: string }));
+        if (res.ok) {
+          const list = Array.isArray(data.purchases) ? data.purchases : [];
+          setFanPurchases(list);
+          setFanPurchasesQueryLimit(capped);
+          setFanPurchasesHasMore(list.length >= capped && capped < FAN_MEMBER_PURCHASES_MAX);
+          return;
+        }
 
       // Local/dev fallback when API route is unavailable in current runtime.
       if ((res.status === 404 || res.status === 405) && auth.currentUser?.uid) {
@@ -2506,8 +2530,11 @@ export const FanStorefrontView: React.FC = () => {
               o.type === "tip" ||
               o.type === "subscription"
           )
-          .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
+          .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt))
+          .slice(0, capped);
         setFanPurchases(fallbackRows);
+        setFanPurchasesQueryLimit(capped);
+        setFanPurchasesHasMore(fallbackRows.length >= capped && capped < FAN_MEMBER_PURCHASES_MAX);
         return;
       }
 
@@ -2515,13 +2542,15 @@ export const FanStorefrontView: React.FC = () => {
     } catch (e) {
       showToast(e instanceof Error ? e.message : "Could not load purchases.", "error");
     } finally {
-      setFanPurchasesLoading(false);
+      if (mode === "initial") setFanPurchasesLoading(false);
+      else setFanPurchasesLoadingMore(false);
     }
-  }, [creator?.creatorId, isLoggedIn, showToast]);
+  },
+  [creator?.creatorId, isLoggedIn, showToast]);
 
   useEffect(() => {
     if (activeTab === "purchases" && isLoggedIn && creator?.creatorId) {
-      void fetchFanPurchases();
+      void fetchFanPurchases(FAN_MEMBER_PURCHASES_PAGE, "initial");
     }
   }, [activeTab, creator?.creatorId, fetchFanPurchases, isLoggedIn]);
 
@@ -3315,13 +3344,17 @@ export const FanStorefrontView: React.FC = () => {
     }
   }, [creator?.handle, fanDeleteConfirmInput, fanDeletePassword, showToast, closeFanDeleteModal]);
 
-  const fetchDmThreadAndMessages = useCallback(async (opts?: { silent?: boolean; threadId?: string }) => {
+  const fetchDmThreadAndMessages = useCallback(async (opts?: { silent?: boolean; threadId?: string; messageLimit?: number }) => {
     if (!creator?.creatorId || !auth.currentUser || activeTab !== "messages") return;
     const silent = opts?.silent === true;
+    const messageLimit = Math.min(Math.max(opts?.messageLimit ?? dmMessageLimitRef.current, 1), 200);
     const requestedThreadId = typeof opts?.threadId === "string" ? opts.threadId.trim() : "";
     // Silent refreshes should not invalidate an in-flight foreground load token.
     const gen = silent ? dmThreadFetchGen.current : ++dmThreadFetchGen.current;
-    if (!silent) setDmLoading(true);
+    if (!silent) {
+      setDmLoading(true);
+      dmScrollBottomAfterForegroundLoadRef.current = true;
+    }
     try {
       const token = await auth.currentUser.getIdToken(true);
       const cid = creator.creatorId;
@@ -3344,13 +3377,27 @@ export const FanStorefrontView: React.FC = () => {
       setDmThread(withCreator || null);
       if (withCreator) {
         const msgRes = await fetch(
-          `/api/fanDmMessages?threadId=${encodeURIComponent(withCreator.id)}`,
+          `/api/fanDmMessages?threadId=${encodeURIComponent(withCreator.id)}&limit=${messageLimit}`,
           { headers: { Authorization: `Bearer ${token}` } }
         );
         if (gen !== dmThreadFetchGen.current) return;
         const msgData = await msgRes.json().catch(() => ({}));
         const incomingMsgs = Array.isArray(msgData.messages) ? (msgData.messages as FanDmMessage[]) : [];
         setDmMessages((prev) => (fanDmMessagesEqualish(prev, incomingMsgs) ? prev : incomingMsgs));
+        if (msgRes.ok) {
+          setDmHasMoreOlder((msgData as { hasMoreOlder?: boolean }).hasMoreOlder === true);
+          if (typeof opts?.messageLimit === "number") setDmMessageLimit(messageLimit);
+          const responseFanId =
+            typeof (msgData as { fanId?: unknown }).fanId === "string"
+              ? (msgData as { fanId: string }).fanId.trim()
+              : undefined;
+          void fanDmMarkReadAfterOpen({
+            threadId: withCreator.id,
+            responseFanId,
+            authUid: auth.currentUser?.uid ?? null,
+            getIdToken: () => auth.currentUser!.getIdToken().then((t) => t || null),
+          });
+        }
         const raw = msgData.labels as { fan?: unknown; creator?: unknown } | undefined;
         const nextLabels =
           raw && typeof raw.fan === "string" && typeof raw.creator === "string"
@@ -3377,16 +3424,43 @@ export const FanStorefrontView: React.FC = () => {
     }
   }, [creator?.creatorId, activeTab, auth.currentUser?.uid]);
 
+  const loadMoreFanDmMessages = useCallback(async () => {
+    if (!dmHasMoreOlder || dmLoadingOlder) return;
+    if (dmMessages.length === 0) return;
+    const next = Math.min(dmMessageLimit + 50, 200);
+    if (next <= dmMessageLimit) return;
+    const listEl = dmMessagesListRef.current;
+    const prevScrollHeight = listEl?.scrollHeight ?? 0;
+    const prevScrollTop = listEl?.scrollTop ?? 0;
+    setDmLoadingOlder(true);
+    try {
+      await fetchDmThreadAndMessages({ silent: true, messageLimit: next });
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          const el = dmMessagesListRef.current;
+          if (!el || prevScrollHeight <= 0) return;
+          el.scrollTop = el.scrollHeight - prevScrollHeight + prevScrollTop;
+        });
+      });
+    } finally {
+      setDmLoadingOlder(false);
+    }
+  }, [dmHasMoreOlder, dmLoadingOlder, dmMessageLimit, dmMessages.length, fetchDmThreadAndMessages]);
+
   useEffect(() => {
     setDmThread(null);
     setDmMessages([]);
     setDmLabels(null);
     setDmLiveSession(null);
     setDmPreferredSessionId(null);
+    setDmMessageLimit(50);
+    setDmHasMoreOlder(false);
   }, [creator?.creatorId]);
 
   useEffect(() => {
-    if (activeTab === "messages" && creator?.creatorId && isLoggedIn) fetchDmThreadAndMessages();
+    if (activeTab === "messages" && creator?.creatorId && isLoggedIn) {
+      void fetchDmThreadAndMessages({ messageLimit: 50 });
+    }
   }, [activeTab, creator?.creatorId, isLoggedIn, fetchDmThreadAndMessages]);
 
   useEffect(() => {
@@ -3498,20 +3572,29 @@ export const FanStorefrontView: React.FC = () => {
     setDmPendingAttachmentUploading(false);
   }, [creator?.creatorId]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (activeTab !== "messages" || dmLoading) return;
     const listEl = dmMessagesListRef.current;
-    if (!listEl) return;
+    if (!listEl) {
+      if (dmScrollBottomAfterForegroundLoadRef.current) dmScrollBottomAfterForegroundLoadRef.current = false;
+      return;
+    }
     if (dmComposerFocusedRef.current) return;
+
+    if (dmScrollBottomAfterForegroundLoadRef.current) {
+      dmScrollBottomAfterForegroundLoadRef.current = false;
+      listEl.scrollTop = listEl.scrollHeight;
+      dmAutoStickToBottomRef.current = true;
+      return;
+    }
+
+    if (!dmAutoStickToBottomRef.current) return;
     if (!dmIsNearBottom(listEl)) {
       dmAutoStickToBottomRef.current = false;
       return;
     }
-    if (!dmAutoStickToBottomRef.current) return;
-    requestAnimationFrame(() => {
-      // Only adjust scroll on the DM list — scrollIntoView can scroll ancestor/page and feel like a "jump".
-      listEl.scrollTop = listEl.scrollHeight;
-    });
+    // Only adjust scroll on the DM list — scrollIntoView can scroll ancestor/page and feel like a "jump".
+    listEl.scrollTop = listEl.scrollHeight;
   }, [activeTab, dmMessages, dmLoading, dmIsNearBottom]);
 
   useEffect(() => {
@@ -5135,6 +5218,24 @@ export const FanStorefrontView: React.FC = () => {
                     ))}
                   </div>
                 )}
+                {isLoggedIn && fanPurchasesHasMore && fanPurchases.length > 0 ? (
+                  <div className="mt-6 flex justify-center px-2 pb-2">
+                    <button
+                      type="button"
+                      className="fan-member-treat-buy px-6 py-2.5 text-sm font-medium disabled:opacity-55"
+                      style={{ backgroundColor: primary }}
+                      disabled={fanPurchasesLoading || fanPurchasesLoadingMore}
+                      onClick={() =>
+                        void fetchFanPurchases(
+                          Math.min(fanPurchasesQueryLimit + FAN_MEMBER_PURCHASES_PAGE, FAN_MEMBER_PURCHASES_MAX),
+                          "more"
+                        )
+                      }
+                    >
+                      {fanPurchasesLoadingMore ? "Loading more…" : "Load more purchases"}
+                    </button>
+                  </div>
+                ) : null}
               </div>
             )}
             {activeTab === "messages" && !needsPaidUpgrade && (
@@ -5170,6 +5271,22 @@ export const FanStorefrontView: React.FC = () => {
                         dmAutoStickToBottomRef.current = dmIsNearBottom(e.currentTarget);
                       }}
                     >
+                      {dmMessages.length > 0 && (dmHasMoreOlder || dmLoadingOlder) ? (
+                        <div className="fan-member-dm-load-older">
+                          <button
+                            type="button"
+                            className="fan-member-dm-load-older__btn"
+                            disabled={dmLoadingOlder || !dmHasMoreOlder || dmMessageLimit >= 200}
+                            onClick={() => void loadMoreFanDmMessages()}
+                          >
+                            {dmLoadingOlder
+                              ? "Loading…"
+                              : dmHasMoreOlder && dmMessageLimit < 200
+                                ? "Load older messages"
+                                : "No more messages"}
+                          </button>
+                        </div>
+                      ) : null}
                       {dmMessages.length === 0 ? (
                         <p className="fan-member-messages-empty">No messages yet. Say hi below.</p>
                       ) : (
@@ -5255,7 +5372,7 @@ export const FanStorefrontView: React.FC = () => {
                           );
                         })
                       )}
-                      <div ref={dmMessagesEndRef} aria-hidden />
+                      <div aria-hidden className="shrink-0 h-px w-full" />
                     </div>
                     <div className="fan-member-messages-compose-wrap">
                       {dmRecordingVoice && dmVoiceMeterStream ? (

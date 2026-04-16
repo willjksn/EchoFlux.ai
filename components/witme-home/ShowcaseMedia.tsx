@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { WitmeShowcaseCreator } from "../../src/lib/witmeShowcase";
 import { parseObjectPositionPercentPair } from "../../src/lib/objectPositionPan";
 
@@ -60,7 +60,8 @@ export const ShowcaseMedia: React.FC<{
   const videoRef = useRef<HTMLVideoElement>(null);
   const imgRef = useRef<HTMLImageElement>(null);
   const readyOnce = useRef(false);
-  const [imgVisible, setImgVisible] = useState(false);
+  /** Eager hero images: avoid an empty tile flash before `onLoad` (lazy tiles still fade in). */
+  const [imgVisible, setImgVisible] = useState(() => imgLoading === "eager");
 
   const fireReady = useCallback(() => {
     if (readyOnce.current) return;
@@ -71,8 +72,8 @@ export const ShowcaseMedia: React.FC<{
 
   useEffect(() => {
     readyOnce.current = false;
-    setImgVisible(false);
-  }, [u, mediaKind]);
+    setImgVisible(imgLoading === "eager");
+  }, [u, mediaKind, imgLoading]);
 
   useEffect(() => {
     if (mediaKind !== "video" || !u) return;
@@ -84,7 +85,7 @@ export const ShowcaseMedia: React.FC<{
     return () => v.removeEventListener("loadeddata", onData);
   }, [mediaKind, u, fireReady]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (mediaKind === "video" || !u) return;
     const el = imgRef.current;
     if (el?.complete && el.naturalHeight > 0) fireReady();

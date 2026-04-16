@@ -9,12 +9,14 @@ import {
   query,
   orderBy,
   limit,
+  startAfter,
   setDoc,
   doc,
   getDoc,
   updateDoc,
   deleteField,
   type DocumentData,
+  type QueryDocumentSnapshot,
 } from "firebase/firestore";
 import { db, storage, auth } from "../firebaseConfig";
 import {
@@ -45,6 +47,9 @@ import { hasLiveStreamAccess } from "../src/utils/planAccess";
 import { LiveStreamWatchRoom } from "./LiveStreamWatchRoom";
 
 const LIVE_STREAM_DOC_STATUSES: LiveStreamEventStatus[] = ["draft", "scheduled", "live", "ended", "cancelled"];
+
+/** First vault modal page is small; “Load more” uses startAfter (same index as orderBy). */
+const FAN_HUB_VAULT_PAGE = 24;
 
 /** When /api/liveStreams returns 404 (route missing on proxy target), write the same shape as the API. */
 async function createLiveStreamDocClient(
@@ -418,6 +423,15 @@ export const FanHubPosts: React.FC = () => {
   const [showVault, setShowVault] = useState(false);
   const [vaultItems, setVaultItems] = useState<VaultItem[]>([]);
   const [loadingVault, setLoadingVault] = useState(false);
+  const [vaultLoadingMore, setVaultLoadingMore] = useState(false);
+  const [vaultHasMore, setVaultHasMore] = useState(false);
+  const vaultCursorRef = useRef<QueryDocumentSnapshot<DocumentData> | null>(null);
+  /** If false, index on uploadedAt may be missing — only first page (no startAfter). */
+  const vaultOrderSupportedRef = useRef(true);
+  const vaultGateRef = useRef({ hasMore: false, loadingMore: false, loading: false });
+  vaultGateRef.current.hasMore = vaultHasMore;
+  vaultGateRef.current.loadingMore = vaultLoadingMore;
+  vaultGateRef.current.loading = loadingVault;
   
   // Caption
   const [caption, setCaption] = useState("");
@@ -574,46 +588,81 @@ export const FanHubPosts: React.FC = () => {
   );
 
   // Load vault items from the user's media library (My Vault - sidebar "Vault")
-  const loadVault = useCallback(async () => {
-    if (!user?.id) return;
-    setLoadingVault(true);
-    try {
-      // Load from user's media_library (the main Vault in sidebar)
-      const vaultRef = collection(db, "users", user.id, "media_library");
-      const q = query(vaultRef, orderBy("uploadedAt", "desc"), limit(100));
-      const snapshot = await getDocs(q);
-      const items: VaultItem[] = [];
-      snapshot.forEach((docSnap) => {
-        const data = docSnap.data();
-        // Determine type from type field (stored as 'image' or 'video')
-        let mediaType: "image" | "video" | "audio" = "image";
-        if (data.type === "video") {
-          mediaType = "video";
-        } else if (data.type === "audio") {
-          mediaType = "audio";
+  const loadVault = useCallback(async (mode: "reset" | "more") => {
+      if (!user?.id) return;
+      if (mode === "more") {
+        const g = vaultGateRef.current;
+        if (!g.hasMore || g.loadingMore || g.loading) return;
+        if (!vaultOrderSupportedRef.current || !vaultCursorRef.current) return;
+      }
+      if (mode === "reset") {
+        vaultCursorRef.current = null;
+        vaultOrderSupportedRef.current = true;
+      }
+      if (mode === "more") setVaultLoadingMore(true);
+      else setLoadingVault(true);
+      try {
+        const vaultRef = collection(db, "users", user.id, "media_library");
+        const pageSize = FAN_HUB_VAULT_PAGE;
+        let snapshot;
+        if (vaultOrderSupportedRef.current) {
+          try {
+            const q =
+              mode === "more" && vaultCursorRef.current
+                ? query(vaultRef, orderBy("uploadedAt", "desc"), startAfter(vaultCursorRef.current), limit(pageSize))
+                : query(vaultRef, orderBy("uploadedAt", "desc"), limit(pageSize));
+            snapshot = await getDocs(q);
+          } catch (err) {
+            console.warn("FanHubPosts vault: ordered query failed", err);
+            if (mode === "more") {
+              showToast?.("Could not load more from vault. Close and reopen the picker, then try again.", "error");
+              return;
+            }
+            vaultOrderSupportedRef.current = false;
+            vaultCursorRef.current = null;
+            snapshot = await getDocs(query(vaultRef, limit(pageSize)));
+          }
+        } else {
+          snapshot = await getDocs(query(vaultRef, limit(pageSize)));
         }
-        
-        // Only add if we have a valid URL
-        if (data.url) {
-          items.push({
-            url: data.url,
-            path: data.storagePath || "",
-            name: data.name || docSnap.id,
-            type: mediaType,
-          });
+        const items: VaultItem[] = [];
+        snapshot.forEach((docSnap) => {
+          const data = docSnap.data();
+          let mediaType: "image" | "video" | "audio" = "image";
+          if (data.type === "video") {
+            mediaType = "video";
+          } else if (data.type === "audio") {
+            mediaType = "audio";
+          }
+          if (data.url) {
+            items.push({
+              url: data.url,
+              path: data.storagePath || "",
+              name: data.name || docSnap.id,
+              type: mediaType,
+            });
+          }
+        });
+        const docs = snapshot.docs;
+        if (vaultOrderSupportedRef.current && docs.length) {
+          vaultCursorRef.current = docs[docs.length - 1] ?? null;
+        } else if (mode === "reset") {
+          vaultCursorRef.current = null;
         }
-      });
-      setVaultItems(items);
-    } catch (error) {
-      console.error("Failed to load vault:", error);
-    } finally {
-      setLoadingVault(false);
-    }
-  }, [user?.id]);
+        const fullPage = docs.length === pageSize;
+        setVaultHasMore(vaultOrderSupportedRef.current && fullPage);
+        setVaultItems((prev) => (mode === "reset" ? items : [...prev, ...items]));
+      } catch (error) {
+        console.error("Failed to load vault:", error);
+      } finally {
+        if (mode === "more") setVaultLoadingMore(false);
+        else setLoadingVault(false);
+      }
+  }, [user?.id, showToast]);
 
   useEffect(() => {
     if (showVault) {
-      loadVault();
+      void loadVault("reset");
     }
   }, [showVault, loadVault]);
 
@@ -2973,16 +3022,22 @@ Write 2-4 sentences that are engaging and on-topic.`;
                 </div>
               ) : (
                 <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-3">
-                  {vaultItems.map((item, index) => (
+                  {vaultItems.map((item) => (
                     <button
-                      key={index}
+                      key={`${item.url}\0${item.path || item.name}`}
                       type="button"
                       onClick={() => addFromVault(item)}
-                      className="aspect-square rounded-lg overflow-hidden bg-gray-100 dark:bg-gray-700 hover:ring-2 hover:ring-pink-500 transition relative group"
+                      className="fh-vault-tile aspect-square rounded-lg overflow-hidden bg-gray-100 dark:bg-gray-700 hover:ring-2 hover:ring-pink-500 transition relative group"
                     >
                       {item.type === "video" ? (
                         <>
-                          <video src={item.url} className="w-full h-full object-cover" />
+                          <video
+                            src={item.url}
+                            className="w-full h-full object-cover"
+                            muted
+                            playsInline
+                            preload="metadata"
+                          />
                           <div className="absolute top-1 left-1 bg-black/60 text-white text-[10px] px-1.5 py-0.5 rounded flex items-center gap-0.5">
                             <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
                               <path d="M6.3 2.841A1.5 1.5 0 004 4.11V15.89a1.5 1.5 0 002.3 1.269l9.344-5.89a1.5 1.5 0 000-2.538L6.3 2.84z" />
@@ -3001,7 +3056,13 @@ Write 2-4 sentences that are engaging and on-topic.`;
                           />
                         </div>
                       ) : (
-                        <img src={item.url} alt={item.name} className="w-full h-full object-cover" />
+                        <img
+                          src={item.url}
+                          alt={item.name}
+                          className="w-full h-full object-cover"
+                          loading="lazy"
+                          decoding="async"
+                        />
                       )}
                       <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition flex items-center justify-center">
                         <span className="text-white opacity-0 group-hover:opacity-100 font-medium text-sm bg-pink-500 px-3 py-1 rounded-full shadow-lg">
@@ -3012,6 +3073,18 @@ Write 2-4 sentences that are engaging and on-topic.`;
                   ))}
                 </div>
               )}
+              {vaultItems.length > 0 && vaultHasMore ? (
+                <div className="flex justify-center pt-4 pb-1">
+                  <button
+                    type="button"
+                    disabled={vaultLoadingMore || loadingVault}
+                    onClick={() => void loadVault("more")}
+                    className="text-sm px-4 py-2 rounded-lg border border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-50"
+                  >
+                    {vaultLoadingMore ? "Loading…" : "Load more from vault"}
+                  </button>
+                </div>
+              ) : null}
             </div>
             <div className="p-3 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 text-center text-sm text-gray-500 dark:text-gray-400">
               Tip: Upload more media from <span className="font-medium text-pink-500">My Vault</span> in the sidebar

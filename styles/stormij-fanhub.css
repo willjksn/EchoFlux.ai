@@ -8464,6 +8464,37 @@ button.treat-card:hover:not(:disabled) .treat-card-cta {
   color: #9ca3af;
 }
 
+/* Fan storefront: load older DMs (matches purchases “Load more” affordance). */
+.stormij-theme .fan-member-dm-load-older {
+  display: flex;
+  justify-content: center;
+  padding: 0.35rem 0 0.55rem;
+  flex-shrink: 0;
+}
+.stormij-theme .fan-member-dm-load-older__btn {
+  font-size: 0.8125rem;
+  padding: 0.28rem 0.75rem;
+  border-radius: 999px;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  background: rgba(0, 0, 0, 0.04);
+  color: inherit;
+  cursor: pointer;
+}
+.stormij-theme .fan-member-dm-load-older__btn:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+.dark .stormij-theme:not(.stormij-theme--light) .fan-member-dm-load-older__btn {
+  border-color: rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+/* Vault grids: defer layout/paint for off-screen tiles (no extra network; lowers main-thread work). */
+.fh-vault-tile {
+  content-visibility: auto;
+  contain-intrinsic-size: 120px 120px;
+}
+
 /* Fan storefront member messages (fan’s view): --out = fan’s own (grey); --in = creator (brand primary).
    (Creator hub .fh-messages-hub uses the opposite mapping: out = creator, in = fan.) */
 .stormij-theme .fan-member-messages-list .fh-dm-chat-row--out .fh-dm-bubble {

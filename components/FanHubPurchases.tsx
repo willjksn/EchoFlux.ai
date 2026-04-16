@@ -8,10 +8,13 @@ import {
   query,
   orderBy,
   limit,
+  startAfter,
   where,
   doc,
   setDoc,
   type Timestamp,
+  type DocumentData,
+  type QueryDocumentSnapshot,
 } from "firebase/firestore";
 import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
 import { formatFanDisplayLabel } from "../src/lib/fanHubDisplay";
@@ -181,6 +184,8 @@ function formatRecordingElapsed(totalSec: number): string {
 // Empty - no demo data for new creators
 const DEMO_PURCHASES: Purchase[] = [];
 
+const PURCHASES_VAULT_PAGE = 24;
+
 const PurchasesHelpIcon = () => (
   <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden>
     <path
@@ -222,7 +227,15 @@ export const FanHubPurchases: React.FC = () => {
   const [deliveryUploading, setDeliveryUploading] = useState(false);
   const [deliveryVaultOpen, setDeliveryVaultOpen] = useState(false);
   const [deliveryVaultLoading, setDeliveryVaultLoading] = useState(false);
+  const [deliveryVaultLoadingMore, setDeliveryVaultLoadingMore] = useState(false);
+  const [deliveryVaultHasMore, setDeliveryVaultHasMore] = useState(false);
   const [deliveryVaultItems, setDeliveryVaultItems] = useState<VaultItem[]>([]);
+  const deliveryVaultCursorRef = useRef<QueryDocumentSnapshot<DocumentData> | null>(null);
+  const deliveryVaultOrderSupportedRef = useRef(true);
+  const deliveryVaultGateRef = useRef({ hasMore: false, loadingMore: false, loading: false });
+  deliveryVaultGateRef.current.hasMore = deliveryVaultHasMore;
+  deliveryVaultGateRef.current.loadingMore = deliveryVaultLoadingMore;
+  deliveryVaultGateRef.current.loading = deliveryVaultLoading;
   const [purchaseVideoSession, setPurchaseVideoSession] = useState<{ sessionId: string } | null>(null);
   const [startingVideoFromOrderId, setStartingVideoFromOrderId] = useState<string | null>(null);
   const [deliveryRecordingVoice, setDeliveryRecordingVoice] = useState(false);
@@ -396,47 +409,78 @@ export const FanHubPurchases: React.FC = () => {
     }
   }, [user?.id, showToast]);
 
-  const loadDeliveryVault = useCallback(async () => {
-    if (!user?.id) return;
-    setDeliveryVaultLoading(true);
-    try {
-      let snap;
+  const loadDeliveryVault = useCallback(
+    async (mode: "reset" | "more") => {
+      if (!user?.id) return;
+      if (mode === "more") {
+        const g = deliveryVaultGateRef.current;
+        if (!g.hasMore || g.loadingMore || g.loading) return;
+        if (!deliveryVaultOrderSupportedRef.current || !deliveryVaultCursorRef.current) return;
+      }
+      if (mode === "reset") {
+        deliveryVaultCursorRef.current = null;
+        deliveryVaultOrderSupportedRef.current = true;
+      }
+      if (mode === "more") setDeliveryVaultLoadingMore(true);
+      else setDeliveryVaultLoading(true);
       try {
-        const qOrd = query(
-          collection(db, "users", user.id, "media_library"),
-          orderBy("uploadedAt", "desc"),
-          limit(120)
-        );
-        snap = await getDocs(qOrd);
-      } catch {
-        const qPlain = query(collection(db, "users", user.id, "media_library"), limit(120));
-        snap = await getDocs(qPlain);
-      }
-      const items: VaultItem[] = [];
-      for (const d of snap.docs) {
-        const raw = d.data() as Record<string, unknown>;
-        if (typeof raw.url !== "string" || !raw.url.trim()) continue;
-        const t = inferVaultMediaType(raw, raw.url);
-        const ms = vaultUploadedAtMs(raw);
-        items.push({
-          url: raw.url,
-          name: typeof raw.name === "string" && raw.name.trim() ? raw.name : d.id,
-          type: t,
-          uploadedAt: ms ? new Date(ms).toISOString() : undefined,
+        const col = collection(db, "users", user.id, "media_library");
+        const pageSize = PURCHASES_VAULT_PAGE;
+        let snap;
+        if (deliveryVaultOrderSupportedRef.current) {
+          try {
+            const q =
+              mode === "more" && deliveryVaultCursorRef.current
+                ? query(col, orderBy("uploadedAt", "desc"), startAfter(deliveryVaultCursorRef.current), limit(pageSize))
+                : query(col, orderBy("uploadedAt", "desc"), limit(pageSize));
+            snap = await getDocs(q);
+          } catch {
+            if (mode === "more") {
+              showToast?.("Could not load more from vault. Close and reopen the picker, then try again.", "error");
+              return;
+            }
+            deliveryVaultOrderSupportedRef.current = false;
+            deliveryVaultCursorRef.current = null;
+            snap = await getDocs(query(col, limit(pageSize)));
+          }
+        } else {
+          snap = await getDocs(query(col, limit(pageSize)));
+        }
+        const items: VaultItem[] = [];
+        for (const d of snap.docs) {
+          const raw = d.data() as Record<string, unknown>;
+          if (typeof raw.url !== "string" || !raw.url.trim()) continue;
+          const t = inferVaultMediaType(raw, raw.url);
+          const ms = vaultUploadedAtMs(raw);
+          items.push({
+            url: raw.url,
+            name: typeof raw.name === "string" && raw.name.trim() ? raw.name : d.id,
+            type: t,
+            uploadedAt: ms ? new Date(ms).toISOString() : undefined,
+          });
+        }
+        items.sort((a, b) => {
+          const ta = a.uploadedAt ? new Date(a.uploadedAt).getTime() : 0;
+          const tb = b.uploadedAt ? new Date(b.uploadedAt).getTime() : 0;
+          return tb - ta;
         });
+        const docs = snap.docs;
+        if (deliveryVaultOrderSupportedRef.current && docs.length) {
+          deliveryVaultCursorRef.current = docs[docs.length - 1] ?? null;
+        } else if (mode === "reset") {
+          deliveryVaultCursorRef.current = null;
+        }
+        setDeliveryVaultHasMore(deliveryVaultOrderSupportedRef.current && docs.length === pageSize);
+        setDeliveryVaultItems((prev) => (mode === "reset" ? items : [...prev, ...items]));
+      } catch (e) {
+        showToast?.(e instanceof Error ? e.message : "Could not load Vault items.", "error");
+      } finally {
+        if (mode === "more") setDeliveryVaultLoadingMore(false);
+        else setDeliveryVaultLoading(false);
       }
-      items.sort((a, b) => {
-        const ta = a.uploadedAt ? new Date(a.uploadedAt).getTime() : 0;
-        const tb = b.uploadedAt ? new Date(b.uploadedAt).getTime() : 0;
-        return tb - ta;
-      });
-      setDeliveryVaultItems(items);
-    } catch (e) {
-      showToast?.(e instanceof Error ? e.message : "Could not load Vault items.", "error");
-    } finally {
-      setDeliveryVaultLoading(false);
-    }
-  }, [showToast, user?.id]);
+    },
+    [showToast, user?.id]
+  );
 
   useEffect(() => {
     fetchPurchases();
@@ -1685,11 +1729,11 @@ export const FanHubPurchases: React.FC = () => {
                             <button
                               type="button"
                               className="purchases-btn purchases-btn-secondary"
-                              disabled={deliveryUploading || deliveryVaultLoading}
+                              disabled={deliveryUploading || deliveryVaultLoading || deliveryVaultLoadingMore}
                               onClick={() => {
                                 const next = !deliveryVaultOpen;
                                 setDeliveryVaultOpen(next);
-                                if (next) void loadDeliveryVault();
+                                if (next) void loadDeliveryVault("reset");
                               }}
                             >
                               {deliveryVaultOpen ? "Hide vault" : deliveryVaultLoading ? "Loading…" : "Pick from vault"}
@@ -1820,7 +1864,7 @@ export const FanHubPurchases: React.FC = () => {
                               <button
                                 key={`${item.url}-${item.name}`}
                                 type="button"
-                                className="purchases-btn purchases-btn-secondary"
+                                className="purchases-btn purchases-btn-secondary fh-vault-tile"
                                 style={{ display: "block", textAlign: "left", minHeight: 90 }}
                                 onClick={() => {
                                   discardPendingDeliveryMedia();
@@ -1834,6 +1878,18 @@ export const FanHubPurchases: React.FC = () => {
                                 <div style={{ fontSize: 12, lineHeight: 1.3, wordBreak: "break-word" }}>{item.name}</div>
                               </button>
                             ))}
+                            {deliveryVaultHasMore ? (
+                              <div style={{ gridColumn: "1 / -1", display: "flex", justifyContent: "center", paddingTop: 6 }}>
+                                <button
+                                  type="button"
+                                  className="purchases-btn purchases-btn-secondary"
+                                  disabled={deliveryVaultLoadingMore || deliveryVaultLoading}
+                                  onClick={() => void loadDeliveryVault("more")}
+                                >
+                                  {deliveryVaultLoadingMore ? "Loading…" : "Load more from vault"}
+                                </button>
+                              </div>
+                            ) : null}
                           </div>
                         )}
                       </div>

@@ -138,6 +138,10 @@ export function formatRemainingAccessForFanRow(input: {
     if (input.cancelAtPeriodEnd) {
       const u = untilPhrase();
       if (u) return u;
+      /** Period already ended but doc can still say active + cancel_at_period_end until webhooks sync. */
+      if (endMs != null && endMs <= now) {
+        return `Expired on ${formatShortAccessDate(endMs)}`;
+      }
       if (canceledAtMs != null) {
         return `Cancelling — period end not synced (updated ${formatShortAccessDate(canceledAtMs)})`;
       }

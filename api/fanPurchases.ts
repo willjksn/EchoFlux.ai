@@ -99,27 +99,33 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     const authUid = decoded.uid;
     const email = typeof decoded.email === "string" ? decoded.email.trim().toLowerCase() : "";
-    const limitNum = Math.min(Math.max(parseInt(String(req.query.limit || "200"), 10) || 200, 20), 1000);
+    const limitNum = Math.min(Math.max(parseInt(String(req.query.limit || "80"), 10) || 80, 10), 1000);
     const docsById = new Map<string, FanPurchase>();
 
-    const byFanIdSnap = await db
+    const byFanIdPromise = db
       .collection("orders")
       .where("creatorId", "==", creatorId)
       .where("fanId", "==", authUid)
       .limit(limitNum)
       .get();
+
+    const byEmailPromise = email
+      ? db
+          .collection("orders")
+          .where("creatorId", "==", creatorId)
+          .where("fanEmail", "==", email)
+          .limit(limitNum)
+          .get()
+      : Promise.resolve(null);
+
+    const [byFanIdSnap, byEmailSnap] = await Promise.all([byFanIdPromise, byEmailPromise]);
+
     byFanIdSnap.docs.forEach((docSnap) => {
       const mapped = mapDocToPurchase(docSnap.id, docSnap.data() as Record<string, unknown>);
       docsById.set(docSnap.id, mapped);
     });
 
-    if (email) {
-      const byEmailSnap = await db
-        .collection("orders")
-        .where("creatorId", "==", creatorId)
-        .where("fanEmail", "==", email)
-        .limit(limitNum)
-        .get();
+    if (byEmailSnap) {
       byEmailSnap.docs.forEach((docSnap) => {
         const mapped = mapDocToPurchase(docSnap.id, docSnap.data() as Record<string, unknown>);
         docsById.set(docSnap.id, mapped);

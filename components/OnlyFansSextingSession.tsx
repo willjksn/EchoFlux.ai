@@ -13,6 +13,7 @@ import {
   safeUsernameForHandle,
 } from '../src/lib/fanHubDisplay';
 import { authUidFromFanDocId, parseCompoundFanDocumentId } from '../src/lib/compoundFanDocId';
+import { fanDmMarkReadAfterOpen } from '../src/lib/fanDmMarkReadClient';
 
 function usernameFromFanDoc(fd: Record<string, unknown>): string | null {
   const keys = ['username', 'memberUsername', 'handle', 'instagram_handle', 'instagramHandle'] as const;
@@ -644,6 +645,16 @@ export const OnlyFansSextingSession: React.FC = () => {
       const rows = Array.isArray((data as { messages?: Array<Record<string, unknown>> }).messages)
         ? (data as { messages: Array<Record<string, unknown>> }).messages
         : [];
+      const responseFanId =
+        typeof (data as { fanId?: unknown }).fanId === 'string'
+          ? (data as { fanId: string }).fanId.trim()
+          : undefined;
+      void fanDmMarkReadAfterOpen({
+        threadId: activeThreadId,
+        responseFanId,
+        authUid: auth.currentUser?.uid ?? null,
+        getIdToken: () => getToken().then((t) => t || null),
+      });
       const mapped: Message[] = rows.map((m) => ({
         id: typeof m.id === 'string' ? m.id : `msg-${Date.now()}`,
         senderId: typeof m.senderId === 'string' ? m.senderId : '',

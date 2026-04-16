@@ -1,5 +1,4 @@
-
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, lazy, Suspense } from 'react';
 import { useAppContext } from './components/AppContext';
 import { AuthProvider } from './components/contexts/AuthContext';
 import { UIProvider } from './components/contexts/UIContext';
@@ -7,12 +6,10 @@ import { DataProvider } from './components/contexts/DataContext';
 
 import { Sidebar } from './components/Sidebar';
 import { Header } from './components/Header';
-import { Dashboard } from './components/Dashboard';
 import { Analytics } from './components/Analytics';
 import { Settings } from './components/Settings';
 import { LandingPage } from './components/LandingPage';
 import { LoginModal } from './components/LoginModal';
-import { Compose } from './components/Compose';
 import { Team } from './components/Team';
 import { Opportunities } from './components/Opportunities';
 import { Profile } from './components/Profile';
@@ -23,10 +20,7 @@ import { FAQ } from './components/FAQ';
 import { Terms } from './components/Terms';
 import { Privacy } from './components/Privacy';
 import { DataDeletion } from './components/DataDeletion';
-import { AdminDashboard } from './components/AdminDashboard';
 import Automation from './components/Automation';
-import { Calendar } from './components/Calendar';
-import MediaLibrary from './components/MediaLibrary';
 import { EmailCenterPage } from './components/EmailCenterPage';
 import { CreatorOnboardingModal } from './components/CreatorOnboardingModal';
 import { PlanSelectorModal } from './components/PlanSelectorModal';
@@ -44,11 +38,9 @@ import { Pricing } from './components/Pricing';
 import { CRMSidebar } from './components/CRMSidebar';
 import { AdGenerator } from './components/AdGenerator';
 import { ErrorBoundary } from './components/ErrorBoundary';
-import { FanStorefrontView } from './components/FanStorefrontView';
 import { FanOnlyEchoFluxShell } from './components/FanOnlyEchoFluxShell';
 import { WitmeCreatorsApplyPage } from './components/WitmeCreatorsApplyPage';
 import { WitmeDiscoverPage, WitmeHomepage } from './components/WitmeHomepage';
-import { WitmePageManager } from './components/WitmePageManager';
 import {
   KNOWN_APP_ROUTES,
   ECHOFLUX_CREATOR_ELITE_INVITE_USD,
@@ -62,15 +54,44 @@ import { useOAuthReturnHandler } from './src/hooks/useOAuthReturnHandler';
 import { ResetPassword } from './components/ResetPassword';
 import { InviteRequiredPage } from './components/InviteRequiredPage';
 import { isInviteOnlyMode } from './src/utils/inviteOnly';
-import { lazy, Suspense } from 'react';
-import { PremiumStudioUpgrade } from './components/PremiumStudioUpgrade';
-import { PremiumStudioLayout } from './components/PremiumStudioLayout';
 import { WhatToPost } from './components/WhatToPost';
 
 // Lazy load heavy components for code splitting
 const Strategy = lazy(() => import('./components/Strategy').then(module => ({ default: module.Strategy })));
 const OnlyFansStudio = lazy(() => import('./components/OnlyFansStudio').then(module => ({ default: module.OnlyFansStudio })));
 const Autopilot = lazy(() => import('./components/Autopilot'));
+const Dashboard = lazy(() => import('./components/Dashboard').then((m) => ({ default: m.Dashboard })));
+const AdminDashboard = lazy(() => import('./components/AdminDashboard').then((m) => ({ default: m.AdminDashboard })));
+const FanStorefrontView = lazy(() =>
+  import('./components/FanStorefrontView').then((m) => ({ default: m.FanStorefrontView }))
+);
+const PremiumStudioLayout = lazy(() =>
+  import('./components/PremiumStudioLayout').then((m) => ({ default: m.PremiumStudioLayout }))
+);
+const PremiumStudioUpgrade = lazy(() =>
+  import('./components/PremiumStudioUpgrade').then((m) => ({ default: m.PremiumStudioUpgrade }))
+);
+const WitmePageManager = lazy(() => import('./components/WitmePageManager'));
+const Compose = lazy(() => import('./components/Compose').then((m) => ({ default: m.Compose })));
+const Calendar = lazy(() => import('./components/Calendar').then((m) => ({ default: m.Calendar })));
+const MediaLibrary = lazy(() => import('./components/MediaLibrary'));
+
+const RouteChunkFallback: React.FC<{ label?: string }> = ({ label = 'Loading…' }) => (
+  <div className="min-h-[50vh] flex items-center justify-center p-8 bg-gray-50 dark:bg-gray-900 text-gray-600 dark:text-gray-300">
+    <div className="text-center">
+      <div
+        className="mx-auto mb-3 h-8 w-8 animate-spin rounded-full border-2 border-current border-t-transparent opacity-70"
+        role="status"
+        aria-label={label}
+      />
+      <p className="text-sm">{label}</p>
+    </div>
+  </div>
+);
+
+const LazyBoundary: React.FC<{ label?: string; children: React.ReactNode }> = ({ label, children }) => (
+  <Suspense fallback={<RouteChunkFallback label={label} />}>{children}</Suspense>
+);
 
 const pageTitles: Record<Page, string> = {
     dashboard: 'Dashboard',
@@ -131,17 +152,37 @@ const MainContent: React.FC = () => {
 
     try {
         switch (activePage) {
-            case 'dashboard': return <Dashboard />;
+            case 'dashboard':
+                return (
+                    <LazyBoundary label="Loading dashboard…">
+                        <Dashboard />
+                    </LazyBoundary>
+                );
             case 'analytics': return (
                 <ErrorBoundary>
                     <Analytics />
                 </ErrorBoundary>
             );
             case 'settings': return <Settings />;
-            case 'compose': return <Compose />;
+            case 'compose':
+                return (
+                    <LazyBoundary label="Loading Compose…">
+                        <Compose />
+                    </LazyBoundary>
+                );
             // URL syncs to /compose/drafts; prop ensures Approvals shows on first paint
-            case 'approvals': return <Compose approvalsWorkflow />;
-            case 'calendar': return <Calendar />;
+            case 'approvals':
+                return (
+                    <LazyBoundary label="Loading approvals…">
+                        <Compose approvalsWorkflow />
+                    </LazyBoundary>
+                );
+            case 'calendar':
+                return (
+                    <LazyBoundary label="Loading calendar…">
+                        <Calendar />
+                    </LazyBoundary>
+                );
             case 'team': return <Team />;
             case 'opportunities': {
                 // Trends/Opportunities page has been integrated into What to Post
@@ -160,21 +201,32 @@ const MainContent: React.FC = () => {
             case 'terms': return <Terms />;
             case 'privacy': return <Privacy />;
             case 'dataDeletion': return <DataDeletion />;
-            case 'admin': return user?.role === 'Admin' ? <AdminDashboard /> : <Dashboard />;
+            case 'admin':
+                return (
+                    <LazyBoundary label={user?.role === 'Admin' ? 'Loading admin…' : 'Loading dashboard…'}>
+                        {user?.role === 'Admin' ? <AdminDashboard /> : <Dashboard />}
+                    </LazyBoundary>
+                );
             case 'automation': return <Automation />;
             case 'bio': {
                 const hasAccess = user?.plan === 'Elite' || user?.plan === 'Agency' || user?.plan === 'OnlyFansStudio';
-                if (!hasAccess) return <PremiumStudioUpgrade />;
+                if (!hasAccess) {
+                    return (
+                        <LazyBoundary label="Loading…">
+                            <PremiumStudioUpgrade />
+                        </LazyBoundary>
+                    );
+                }
                 // Only set default URL if no tab param already present
                 if (typeof window !== 'undefined' && !window.location.search.includes('tab=')) {
                     window.history.replaceState({}, '', '/studio?tab=myPage');
                 }
                 return (
-                    <Suspense fallback={<div className="p-6 text-center text-gray-500 dark:text-gray-400">Loading...</div>}>
+                    <LazyBoundary label="Loading Premium Studio…">
                         <PremiumStudioLayout>
                             <OnlyFansStudio />
                         </PremiumStudioLayout>
-                    </Suspense>
+                    </LazyBoundary>
                 );
             }
             case 'strategy': {
@@ -188,7 +240,12 @@ const MainContent: React.FC = () => {
                 return <WhatToPost onOpenAdvanced={() => setStrategyViewMode('advanced')} />;
             }
             case 'ads': return <AdGenerator />;
-            case 'mediaLibrary': return <MediaLibrary />;
+            case 'mediaLibrary':
+                return (
+                    <LazyBoundary label="Loading vault…">
+                        <MediaLibrary />
+                    </LazyBoundary>
+                );
             case 'autopilot': return (
                 <Suspense fallback={<div className="p-6 text-center text-gray-500 dark:text-gray-400">Loading Autopilot...</div>}>
                     <Autopilot />
@@ -197,35 +254,60 @@ const MainContent: React.FC = () => {
             case 'onlyfansStudio': {
                 const hasPremiumStudioAccess = user?.plan === 'Elite' || user?.plan === 'Agency' || user?.plan === 'OnlyFansStudio';
                 if (!hasPremiumStudioAccess) {
-                    return <PremiumStudioUpgrade />;
+                    return (
+                        <LazyBoundary label="Loading…">
+                            <PremiumStudioUpgrade />
+                        </LazyBoundary>
+                    );
                 }
                 return (
-                    <Suspense fallback={<div className="p-6 text-center text-gray-500 dark:text-gray-400">Loading Premium Studio...</div>}>
+                    <LazyBoundary label="Loading Premium Content Studio…">
                         <PremiumStudioLayout section="studio">
                             <OnlyFansStudio mode="studio" />
                         </PremiumStudioLayout>
-                    </Suspense>
+                    </LazyBoundary>
                 );
             }
             case 'emailCenter': return <EmailCenterPage />;
-            case 'premiumStudioUpgrade': return <PremiumStudioUpgrade />;
-            case 'witmePage': return user?.role === 'Admin' ? <WitmePageManager /> : <Dashboard />;
+            case 'premiumStudioUpgrade':
+                return (
+                    <LazyBoundary label="Loading…">
+                        <PremiumStudioUpgrade />
+                    </LazyBoundary>
+                );
+            case 'witmePage':
+                return (
+                    <LazyBoundary label="Loading…">
+                        {user?.role === 'Admin' ? <WitmePageManager /> : <Dashboard />}
+                    </LazyBoundary>
+                );
             case 'fanHub': {
                 const hasAccess = user?.plan === 'Elite' || user?.plan === 'Agency' || user?.plan === 'OnlyFansStudio';
-                if (!hasAccess) return <PremiumStudioUpgrade />;
+                if (!hasAccess) {
+                    return (
+                        <LazyBoundary label="Loading…">
+                            <PremiumStudioUpgrade />
+                        </LazyBoundary>
+                    );
+                }
                 // Only set default URL if no tab param already present
                 if (typeof window !== 'undefined' && !window.location.search.includes('tab=')) {
                     window.history.replaceState({}, '', '/fan?tab=myPage');
                 }
                 return (
-                    <Suspense fallback={<div className="p-6 text-center text-gray-500 dark:text-gray-400">Loading...</div>}>
+                    <LazyBoundary label="Loading Fan Hub…">
                         <PremiumStudioLayout section="fanHub">
                             <OnlyFansStudio mode="fanHub" />
                         </PremiumStudioLayout>
-                    </Suspense>
+                    </LazyBoundary>
                 );
             }
-            default: return <Dashboard />;
+            default:
+                return (
+                    <LazyBoundary label="Loading dashboard…">
+                        <Dashboard />
+                    </LazyBoundary>
+                );
         }
     } catch (error: any) {
         console.error('Error rendering MainContent:', error);
@@ -295,7 +377,11 @@ const AppContent: React.FC = () => {
     }
 
     if (isStorefrontPath) {
-        return <FanStorefrontView />;
+        return (
+            <LazyBoundary label="Loading…">
+                <FanStorefrontView />
+            </LazyBoundary>
+        );
     }
     
     // Check maintenance mode FIRST - before any other logic
