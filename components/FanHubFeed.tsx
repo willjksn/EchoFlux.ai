@@ -660,8 +660,51 @@ function FeedCard({
   const [feedVideoMediaHover, setFeedVideoMediaHover] = useState(false);
   const [adminMenuOpen, setAdminMenuOpen] = useState(false);
   const adminMenuRef = useRef<HTMLDivElement | null>(null);
+  const [likersOpen, setLikersOpen] = useState(false);
+  const [likerRows, setLikerRows] = useState<{ uid: string; label: string }[]>([]);
+  const [likersLoading, setLikersLoading] = useState(false);
 
   const inFeedCarouselClass = showMediaCarousel ? " fan-feed-media-carousel" : "";
+
+  useEffect(() => {
+    if (!likersOpen || !db) return;
+    const raw = Array.isArray(post.likedBy) ? post.likedBy : [];
+    const ids = [...new Set(raw.map((x) => String(x).trim()).filter(Boolean))].slice(0, 100);
+    if (ids.length === 0) {
+      setLikerRows([]);
+      setLikersLoading(false);
+      return;
+    }
+    setLikersLoading(true);
+    let cancelled = false;
+    void (async () => {
+      const rows = await Promise.all(
+        ids.map(async (uid) => {
+          try {
+            const snap = await getDoc(doc(db, "users", uid));
+            const d = snap.data() as Record<string, unknown> | undefined;
+            const dn = typeof d?.displayName === "string" ? d.displayName.trim() : "";
+            const unRaw = typeof d?.username === "string" ? d.username.trim().replace(/^@/, "") : "";
+            const label = dn || (unRaw ? `@${unRaw}` : `User ${uid.slice(0, 8)}…`);
+            return { uid, label };
+          } catch {
+            return { uid, label: `User ${uid.slice(0, 8)}…` };
+          }
+        })
+      );
+      if (!cancelled) {
+        setLikerRows(rows);
+        setLikersLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [likersOpen, post.likedBy, post.id]);
+
+  const likeCount = post.likeCount ?? 0;
+  const likersListAvailable = (post.likedBy?.length ?? 0) > 0;
+  const likeCountInteractive = Boolean(isAdminMode && likeCount > 0 && likersListAvailable);
 
   useEffect(() => {
     if (!commentsOpen) return;
@@ -1024,7 +1067,10 @@ function FeedCard({
   };
 
   return (
-    <article className={`feed-card${commentsOpen ? " comments-open" : ""}${!firstUrl ? " feed-card-text-only" : ""}${isAdminMode ? " feed-card-admin" : ""}${isDraft ? " feed-card-draft" : ""}${isScheduled ? " feed-card-scheduled" : ""}`}>
+    <article
+      data-feed-post-id={post.id}
+      className={`feed-card${commentsOpen ? " comments-open" : ""}${!firstUrl ? " feed-card-text-only" : ""}${isAdminMode ? " feed-card-admin" : ""}${isDraft ? " feed-card-draft" : ""}${isScheduled ? " feed-card-scheduled" : ""}`}
+    >
       <div className="feed-card-header">
         <div className="feed-card-avatar">
           {creatorAvatar ? (
@@ -1228,7 +1274,18 @@ function FeedCard({
               <HeartOutline />
               <HeartFilled />
             </button>
-            <span className="feed-card-action-count">{post.likeCount ?? 0}</span>
+            {likeCountInteractive ? (
+              <button
+                type="button"
+                className="feed-card-action-count feed-card-action-count--clickable"
+                onClick={() => setLikersOpen(true)}
+                aria-label={`${likeCount} likes — who liked`}
+              >
+                {likeCount}
+              </button>
+            ) : (
+              <span className="feed-card-action-count">{likeCount}</span>
+            )}
           </span>
           {!post.hideComments && (
             <button type="button" className="feed-card-action-group feed-card-action-link" aria-label="Comments" onClick={() => setCommentsOpen(true)}>
@@ -1345,7 +1402,18 @@ function FeedCard({
                 <HeartOutline />
                 <HeartFilled />
               </button>
-              <span className="feed-card-action-count">{post.likeCount ?? 0}</span>
+              {likeCountInteractive ? (
+                <button
+                  type="button"
+                  className="feed-card-action-count feed-card-action-count--clickable"
+                  onClick={() => setLikersOpen(true)}
+                  aria-label={`${likeCount} likes — who liked`}
+                >
+                  {likeCount}
+                </button>
+              ) : (
+                <span className="feed-card-action-count">{likeCount}</span>
+              )}
             </span>
             {!post.hideComments && (
               <button type="button" className="feed-card-action-group feed-card-action-link" aria-label="Comments" onClick={() => setCommentsOpen(true)}>
@@ -1582,6 +1650,53 @@ function FeedCard({
           </div>,
           document.body
         )}
+      {likersOpen &&
+        typeof document !== "undefined" &&
+        createPortal(
+          <div
+            className="feed-comments-modal-backdrop feed-comments-modal-backdrop--portal"
+            role="presentation"
+            onClick={() => setLikersOpen(false)}
+          >
+            <div
+              className="feed-comments-modal feed-comments-modal--stack feed-likers-modal"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby={`feed-likers-modal-title-${post.id}`}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="feed-comments-modal-head">
+                <p id={`feed-likers-modal-title-${post.id}`} className="feed-comments-modal-head-title">
+                  People who liked this
+                </p>
+                <button
+                  type="button"
+                  className="feed-comments-modal-close"
+                  onClick={() => setLikersOpen(false)}
+                  aria-label="Close"
+                >
+                  ×
+                </button>
+              </div>
+              <div className="feed-likers-modal-body">
+                {likersLoading ? (
+                  <p className="feed-likers-modal-empty">Loading…</p>
+                ) : likerRows.length === 0 ? (
+                  <p className="feed-likers-modal-empty">No likers found.</p>
+                ) : (
+                  <ul className="feed-likers-modal-list">
+                    {likerRows.map((row) => (
+                      <li key={row.uid} className="feed-likers-modal-item">
+                        {row.label}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            </div>
+          </div>,
+          document.body
+        )}
       {commentEmoji.emojiPickerPortal}
     </article>
   );
@@ -1590,7 +1705,15 @@ function FeedCard({
 export const FanHubFeed: React.FC<{
   isAdminMode?: boolean;
   onEditPostRequest?: (post: FeedPost) => void;
-}> = ({ isAdminMode = false, onEditPostRequest }) => {
+  /** From Fan Hub notification bell: scroll feed list to this post. */
+  deeplinkScrollToPostId?: string | null;
+  onDeeplinkScrollToPostConsumed?: () => void;
+}> = ({
+  isAdminMode = false,
+  onEditPostRequest,
+  deeplinkScrollToPostId = null,
+  onDeeplinkScrollToPostConsumed,
+}) => {
   const { user, setActivePage, showToast, openPaymentModal } = useAppContext();
   const [posts, setPosts] = useState<FeedPost[]>([]);
   const [loading, setLoading] = useState(true);
@@ -1603,6 +1726,24 @@ export const FanHubFeed: React.FC<{
   }, [viewMode]);
   const [openPostIdFromGrid, setOpenPostIdFromGrid] = useState<string | null>(null);
   const [returnToGridAfterPostId, setReturnToGridAfterPostId] = useState<string | null>(null);
+
+  useEffect(() => {
+    const raw = deeplinkScrollToPostId?.trim();
+    if (!raw || typeof document === "undefined") return;
+    setViewMode("feed");
+    const t = window.setTimeout(() => {
+      try {
+        const el = Array.from(document.querySelectorAll("[data-feed-post-id]")).find(
+          (node) => node.getAttribute("data-feed-post-id") === raw
+        );
+        el?.scrollIntoView({ behavior: "smooth", block: "center" });
+      } catch {
+        /* ignore */
+      }
+      onDeeplinkScrollToPostConsumed?.();
+    }, 120);
+    return () => window.clearTimeout(t);
+  }, [deeplinkScrollToPostId, onDeeplinkScrollToPostConsumed]);
   const [deletingPostId, setDeletingPostId] = useState<string | null>(null);
   const [feedSettings, setFeedSettings] = useState<FeedVisibilitySettings>({
     hideLikeCounts: false,

@@ -36,6 +36,9 @@ export type PremiumStudioTabContextValue = {
   pendingMessagesThreadId: string | null;
   clearPendingMessagesThreadId: () => void;
   openMessagesForThread: (threadId: string) => void;
+  /** Fan Hub Posts: scroll feed to this post id (from post like/comment notifications). */
+  pendingFeedPostId: string | null;
+  clearPendingFeedPostId: () => void;
   /**
    * Fan Hub only: same --fan-* tokens as the outer shell (includes preview theme).
    * Apply on tab content wrappers so nested UI (e.g. Chat Session) isn’t stuck on CSS fallbacks.
@@ -67,6 +70,8 @@ export const PremiumStudioLayout: React.FC<PremiumStudioLayoutProps> = ({ childr
   const [pendingFansTabSelection, setPendingFansTabSelection] = useState<PendingFansTabSelection | null>(null);
   const [pendingMessagesThreadId, setPendingMessagesThreadId] = useState<string | null>(null);
   const clearPendingMessagesThreadId = useCallback(() => setPendingMessagesThreadId(null), []);
+  const [pendingFeedPostId, setPendingFeedPostId] = useState<string | null>(null);
+  const clearPendingFeedPostId = useCallback(() => setPendingFeedPostId(null), []);
   const openMessagesForThread = useCallback(
     (threadId: string) => {
       if (!isFanHub) return;
@@ -101,10 +106,11 @@ export const PremiumStudioLayout: React.FC<PremiumStudioLayoutProps> = ({ childr
   const handleFanHubNotificationNavigate = useCallback(
     (payload: FanHubNotificationNavigatePayload) => {
       if (!isFanHub) return;
-      const { tab, threadId } = resolveFanHubNotificationTarget(payload.type, payload.data);
+      const { tab, threadId, postId } = resolveFanHubNotificationTarget(payload.type, payload.data);
       if (threadId) {
         openMessagesForThread(threadId);
       } else {
+        if (postId) setPendingFeedPostId(postId);
         setTab(tab);
       }
     },
@@ -118,14 +124,16 @@ export const PremiumStudioLayout: React.FC<PremiumStudioLayoutProps> = ({ childr
       const raw = sessionStorage.getItem(FAN_HUB_DEEPLINK_STORAGE_KEY);
       if (!raw) return;
       sessionStorage.removeItem(FAN_HUB_DEEPLINK_STORAGE_KEY);
-      const parsed = JSON.parse(raw) as { tab?: string; threadId?: string };
+      const parsed = JSON.parse(raw) as { tab?: string; threadId?: string; postId?: string };
       const tabId = typeof parsed.tab === 'string' ? parsed.tab.trim() : '';
       const threadId = typeof parsed.threadId === 'string' ? parsed.threadId.trim() : '';
+      const postId = typeof parsed.postId === 'string' ? parsed.postId.trim() : '';
       if (threadId) {
         setPendingMessagesThreadId(threadId);
         setTab('messages');
       } else if (tabId && (FAN_HUB_TAB_IDS as readonly string[]).includes(tabId)) {
         setTab(tabId);
+        if (postId) setPendingFeedPostId(postId);
       }
     } catch {
       try {
@@ -337,6 +345,8 @@ export const PremiumStudioLayout: React.FC<PremiumStudioLayoutProps> = ({ childr
           pendingMessagesThreadId: isFanHub ? pendingMessagesThreadId : null,
           clearPendingMessagesThreadId: isFanHub ? clearPendingMessagesThreadId : () => {},
           openMessagesForThread: isFanHub ? openMessagesForThread : () => {},
+          pendingFeedPostId: isFanHub ? pendingFeedPostId : null,
+          clearPendingFeedPostId: isFanHub ? clearPendingFeedPostId : () => {},
           fanHubCssVarBridge: isFanHub ? fanHubCssVarBridge : null,
         }}
       >

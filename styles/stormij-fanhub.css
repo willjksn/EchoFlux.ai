@@ -1408,6 +1408,55 @@
 .feed-card-action-count { font-size: 0.9rem; font-weight: 600; color: #374151; }
 .dark .feed-card-action-count { color: #e5e7eb; }
 
+button.feed-card-action-count--clickable {
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  font: inherit;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+button.feed-card-action-count--clickable:hover {
+  color: #111827;
+}
+.dark button.feed-card-action-count--clickable:hover {
+  color: #f9fafb;
+}
+
+.feed-likers-modal .feed-likers-modal-body {
+  padding: 0.75rem 1rem 1rem;
+  max-height: min(60vh, 20rem);
+  overflow-y: auto;
+}
+.feed-likers-modal-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.feed-likers-modal-item {
+  padding: 0.35rem 0;
+  font-size: 0.9rem;
+  color: #374151;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+}
+.dark .feed-likers-modal-item {
+  color: #e5e7eb;
+  border-bottom-color: rgba(255, 255, 255, 0.08);
+}
+.feed-likers-modal-item:last-child {
+  border-bottom: none;
+}
+.feed-likers-modal-empty {
+  margin: 0;
+  font-size: 0.875rem;
+  color: #6b7280;
+}
+.dark .feed-likers-modal-empty {
+  color: #9ca3af;
+}
+
 /* Like Button */
 .feed-card-action-btn {
   background: transparent;

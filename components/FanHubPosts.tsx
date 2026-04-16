@@ -20,6 +20,7 @@ import { AudioLevelMeter } from "./AudioLevelMeter";
 import { DmAudioPlayer } from "./DmAudioPlayer";
 import { RecordingDurationLabel } from "./RecordingDurationLabel";
 import { FanHubFeed, type FeedPost } from "./FanHubFeed";
+import { usePremiumStudioTab } from "./PremiumStudioLayout";
 import { EmojiButton } from "./EmojiPicker";
 import { useCreatorHandle } from "../src/hooks/useCreatorHandle";
 import { canUseSjHeartEmoji } from "../src/lib/customEmoji";
@@ -285,6 +286,18 @@ async function resolveFanHubCaptionMedia(
 
 export const FanHubPosts: React.FC = () => {
   const { user, showToast } = useAppContext();
+  const premiumTab = usePremiumStudioTab();
+  const pendingFeedPostId = premiumTab?.pendingFeedPostId ?? null;
+  const clearPendingFeedPostId = premiumTab?.clearPendingFeedPostId;
+  const [feedDeeplinkPostId, setFeedDeeplinkPostId] = useState<string | null>(null);
+
+  useEffect(() => {
+    const pid = pendingFeedPostId?.trim();
+    if (!pid) return;
+    setFeedDeeplinkPostId(pid);
+    clearPendingFeedPostId?.();
+  }, [pendingFeedPostId, clearPendingFeedPostId]);
+
   const [showComposer, setShowComposer] = useState(false);
   const [editingPostId, setEditingPostId] = useState<string | null>(null);
   
@@ -2229,8 +2242,15 @@ Write 2-4 sentences that are engaging and on-topic.`;
         </div>
       )}
 
-      {/* Feed Admin View */}
-      <FanHubFeed isAdminMode onEditPostRequest={openComposerForEdit} />
+      {/* Feed Admin View — min-w-0 avoids flex children expanding page width/height oddly */}
+      <div className="min-w-0">
+        <FanHubFeed
+          isAdminMode
+          onEditPostRequest={openComposerForEdit}
+          deeplinkScrollToPostId={feedDeeplinkPostId}
+          onDeeplinkScrollToPostConsumed={() => setFeedDeeplinkPostId(null)}
+        />
+      </div>
     </div>
   );
 };

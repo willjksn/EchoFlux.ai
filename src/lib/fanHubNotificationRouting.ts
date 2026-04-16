@@ -4,9 +4,13 @@ export const FAN_HUB_DEEPLINK_STORAGE_KEY = 'echoflux:fanhub-deeplink';
 export function resolveFanHubNotificationTarget(
   type: string,
   data: Record<string, string>
-): { tab: string; threadId?: string } {
+): { tab: string; threadId?: string; postId?: string } {
   const t = (type || '').trim();
   const d = data;
+  if (t === 'post_liked' || t === 'post_comment') {
+    const postId = d.postId?.trim();
+    return postId ? { tab: 'posts', postId } : { tab: 'posts' };
+  }
   if (t === 'new_message' && d.threadId?.trim()) {
     return { tab: 'messages', threadId: d.threadId.trim() };
   }
