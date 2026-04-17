@@ -1,7 +1,25 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
+import Stripe from "stripe";
 import { getPlatformStripe } from "./_stripeConnect.js";
 import { getAdminDb } from "./_firebaseAdmin.js";
 import { verifyAuth } from "./verifyAuth.js";
+
+/** Stripe often lowercases messages; match broadly so we return 503 + setupRequired instead of opaque 500s. */
+function isStripeConnectPlatformNotEnabledError(err: unknown): boolean {
+  const raw =
+    err instanceof Stripe.errors.StripeError
+      ? `${err.message} ${err.code ?? ""} ${(err as { doc_url?: string }).doc_url ?? ""}`
+      : err instanceof Error
+        ? err.message
+        : String(err);
+  const m = raw.toLowerCase();
+  if (m.includes("signed up for connect")) return true;
+  if (m.includes("sign up for connect")) return true;
+  if (m.includes("stripe connect") && (m.includes("enable") || m.includes("not enabled") || m.includes("must"))) return true;
+  if (m.includes("connect") && m.includes("platform") && (m.includes("not") || m.includes("enable"))) return true;
+  if (m.includes("connect") && m.includes("oauth")) return true;
+  return false;
+}
 
 /**
  * POST: Start or continue Stripe Connect Express onboarding for the authenticated creator.
@@ -77,16 +95,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   } catch (e: unknown) {
     console.error("stripeConnectOnboard error:", e);
     const msg = e instanceof Error ? e.message : "Onboarding failed";
-    
-    // Check for Connect not enabled error
-    if (msg.includes("signed up for Connect") || msg.includes("Connect")) {
-      return res.status(503).json({ 
-        error: "Stripe Connect not enabled", 
-        message: "The platform needs to enable Stripe Connect. Please contact support.",
-        setupRequired: true
+    const stripeCode = e instanceof Stripe.errors.StripeError ? e.code : undefined;
+
+    if (isStripeConnectPlatformNotEnabledError(e)) {
+      return res.status(503).json({
+        error: "Stripe Connect not enabled",
+        message: "The platform needs to enable Stripe Connect in the Stripe Dashboard (Products → Connect).",
+        setupRequired: true,
+        stripeCode: stripeCode ?? null,
       });
     }
-    
-    return res.status(500).json({ error: "Onboarding failed", message: msg });
+
+    return res.status(500).json({
+      error: "Onboarding failed",
+      message: msg,
+      stripeCode: stripeCode ?? null,
+    });
   }
 }
