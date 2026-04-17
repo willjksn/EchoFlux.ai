@@ -656,7 +656,7 @@ function FeedCard({
   openCommentsRequested?: boolean;
   onOpenCommentsRequestConsumed?: () => void;
   onCommentsOpenChange?: (isOpen: boolean) => void;
-  /** Creator feed: `https://witme.io/{handle}?preview=member` when handle is saved */
+  /** Creator feed: `/{handle}?preview=member` on current origin when handle is saved */
   creatorFanPreviewUrl?: string;
   /** Creator dashboard: inline Go live / End / Open broadcast on live-stream cards */
   liveStreamCreatorBroadcast?: Omit<LiveStreamCreatorBroadcastProps, "streamId">;
@@ -1918,11 +1918,12 @@ export const FanHubFeed: React.FC<{
     [creatorStorefront.handle, user?.role]
   );
 
-  /** Opens member-area preview on witme (same as My Page → Member preview). */
+  /** Same tab as My Page → Member preview: `/{handle}?preview=member` on this app origin (not hardcoded witme.io). */
   const creatorFanPreviewUrl = useMemo(() => {
     const h = creatorStorefront.handle?.trim().replace(/^@/, "") ?? "";
     if (!h || h === "preview") return undefined;
-    return `https://witme.io/${encodeURIComponent(h)}?preview=member`;
+    if (typeof window === "undefined") return undefined;
+    return `${window.location.origin}/${encodeURIComponent(h)}?preview=member`;
   }, [creatorStorefront.handle]);
 
   useEffect(() => {

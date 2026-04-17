@@ -1,5 +1,16 @@
 import type { StorefrontLandingContent } from "../../types";
 
+/** Fixed product copy for paid membership (not customizable — Stripe + cancel policy). */
+export const PAID_MEMBERSHIP_TRUST_LINE = "🔒 Secure payment via Stripe · ✓ Cancel anytime";
+
+/** Saved landing overrides sometimes contain placeholder text; treat as missing so we fall back to monthly price. */
+function isPlaceholderPricingLabel(s: string | undefined): boolean {
+  const t = s?.trim();
+  if (!t) return true;
+  if (/^[\?\s]+$/.test(t)) return true;
+  return false;
+}
+
 export type ResolvedPricingLandingCopy = {
   cardTitle: string;
   amountDisplay: string;
@@ -38,8 +49,12 @@ export function resolvePricingLandingCopy(
       ? (lc.pricingFreeTitle?.trim() || "Free membership")
       : (lc.pricingPaidTitle?.trim() || "Monthly membership"),
     amountDisplay: isFreeAccess
-      ? (lc.pricingFreeAmountLabel?.trim() || "Free")
-      : (lc.pricingPaidAmountLabel?.trim() || `$${monthlyPrice}`),
+      ? isPlaceholderPricingLabel(lc.pricingFreeAmountLabel)
+        ? "Free"
+        : lc.pricingFreeAmountLabel!.trim()
+      : isPlaceholderPricingLabel(lc.pricingPaidAmountLabel)
+        ? `$${monthlyPrice}`
+        : lc.pricingPaidAmountLabel!.trim(),
     bullets,
     ctaLoggedIn: isFreeAccess
       ? (lc.pricingCtaLoggedInFree?.trim() || "Join Free")
@@ -49,7 +64,7 @@ export function resolvePricingLandingCopy(
       : (lc.pricingCtaGuestPaid?.trim() || "Sign up to Subscribe"),
     trustLine: isFreeAccess
       ? (lc.pricingTrustLineFree?.trim() || "🎉 No payment required")
-      : (lc.pricingTrustLinePaid?.trim() || "🔒 Secure payment via Stripe · ✓ Cancel anytime"),
+      : PAID_MEMBERSHIP_TRUST_LINE,
     finalBannerPriceLine: lc.pricingFinalBannerPriceLine?.trim()
       ? lc.pricingFinalBannerPriceLine.trim()
       : isFreeAccess

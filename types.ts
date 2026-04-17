@@ -328,6 +328,11 @@ export interface StorefrontLandingContent {
     tipSectionSublineGuest?: string;
     /** Subline on member Tip tab only — no "no subscription" wording by default */
     tipSectionSublineMember?: string;
+    /**
+     * Shown after “Thank You!” on the member Tip tab footer. Any emoji or short text (e.g. 🙏, 🔥).
+     * Omit for default (💖). Empty string = hide.
+     */
+    tipSectionFooterEmoji?: string;
 }
 
 /** Legal pages configuration */

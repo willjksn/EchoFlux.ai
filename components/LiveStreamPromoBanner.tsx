@@ -156,25 +156,13 @@ export const LiveStreamPromoBanner: React.FC<{
             <span className="live-stream-promo-banner__creator-steps">{steps}</span>
           </p>
           <div className="live-stream-promo-banner__creator-secondary">
-            {creatorFanPreviewUrl ? (
-              <button
-                type="button"
-                className="live-stream-promo-banner__cta live-stream-promo-banner__cta--secondary-outline"
-                onClick={() => {
-                  const el = document.createElement("a");
-                  el.href = creatorFanPreviewUrl;
-                  el.target = "_blank";
-                  el.rel = "noopener noreferrer";
-                  document.body.appendChild(el);
-                  el.click();
-                  el.remove();
-                }}
-              >
-                Preview as fan
-              </button>
-            ) : (
+            {!creatorFanPreviewUrl ? (
               <p className="live-stream-promo-banner__creator-hint">
-                Save your witme handle on <strong>My Page</strong> to open a fan preview in a new tab.
+                Save your public handle on <strong>My Page</strong> to open the member preview link above.
+              </p>
+            ) : (
+              <p className="live-stream-promo-banner__creator-hint text-xs m-0">
+                Host controls below. Fan-facing copy matches the preview tab.
               </p>
             )}
           </div>
@@ -288,6 +276,25 @@ export const LiveStreamPromoBanner: React.FC<{
         </span>
         <span>{ticketLabel(promo)}</span>
       </p>
+      {variant === "creator" && creatorFanPreviewUrl ? (
+        <div className="live-stream-promo-banner__creator-preview-callout mb-3">
+          <button
+            type="button"
+            className="live-stream-promo-banner__cta live-stream-promo-banner__cta--secondary-outline w-full sm:w-auto text-sm"
+            onClick={() => {
+              const el = document.createElement("a");
+              el.href = creatorFanPreviewUrl;
+              el.target = "_blank";
+              el.rel = "noopener noreferrer";
+              document.body.appendChild(el);
+              el.click();
+              el.remove();
+            }}
+          >
+            Preview member view (fan feed)
+          </button>
+        </div>
+      ) : null}
       {cta}
       {fanJoinHint}
     </div>

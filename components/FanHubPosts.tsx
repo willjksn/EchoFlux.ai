@@ -2939,7 +2939,7 @@ Write 2-4 sentences that are engaging and on-topic.`;
                 </h4>
                 <ul className="list-disc list-inside space-y-1 text-[13px] leading-relaxed text-gray-600 dark:text-gray-400">
                   <li>This post publishes to your feed now. The stream card shows your title and scheduled go-live time.</li>
-                  <li>Use <strong className="text-gray-800 dark:text-gray-200">Go live</strong> when you start (needs Daily.co on the server).</li>
+                  <li>Use <strong className="text-gray-800 dark:text-gray-200">Go live</strong> when you start.</li>
                 </ul>
               </section>
               <section>

@@ -23,6 +23,12 @@
 
   --fan-accent: var(--fan-primary, #6366f1);
 
+  /* Treats Store panels use --stormij-*; define here so EchoFlux `html.dark` still resolves creator tokens
+     (previously only `.treats-fan-shell` set these, so headers/cards outside that subtree broke in dark mode). */
+  --stormij-pink: var(--fan-primary, #6366f1);
+  --stormij-text: var(--text);
+  --stormij-muted: var(--text-muted);
+
   background: transparent;
 }
 
@@ -2916,6 +2922,7 @@ button.feed-card-action-count--clickable:hover {
   margin: 0 0 0.5rem;
   letter-spacing: 0.02em;
   font-style: italic;
+  color: var(--text);
 }
 .stormij-theme .treats-subhead {
   color: var(--text-muted);
@@ -9459,5 +9466,81 @@ button.treat-card:hover:not(:disabled) .treat-card-cta {
 .dark .stormij-theme:not(.stormij-theme--light) .fh-live-session-active {
   background: color-mix(in srgb, var(--fan-primary) 22%, #1f2937);
   color: color-mix(in srgb, var(--fan-primary) 62%, #e2e8f0);
+}
+
+/*
+ * EchoFlux Fan Hub + html.dark: unscoped `.dark .treats-*` / Tailwind `dark:` rules (fixed grays, violet toggles)
+ * were winning over creator theme. Only Fan Hub uses `.stormij-theme` on the shell — restore tokens here.
+ */
+.dark .stormij-theme .treats-title {
+  color: var(--text) !important;
+}
+.dark .stormij-theme .treats-subhead {
+  color: var(--text-muted) !important;
+}
+.dark .stormij-theme .treats-view-btn {
+  background: color-mix(in srgb, var(--fan-primary) 12%, var(--fan-bg, #111827)) !important;
+  border-color: color-mix(in srgb, var(--fan-primary) 28%, var(--fan-border, #334155)) !important;
+  color: var(--text-muted) !important;
+}
+.dark .stormij-theme .treats-view-btn:hover {
+  border-color: var(--fan-primary) !important;
+  color: var(--text) !important;
+}
+.dark .stormij-theme .treats-view-btn.active {
+  background: var(--fan-primary) !important;
+  border-color: var(--fan-primary) !important;
+  color: #fff !important;
+}
+.dark .stormij-theme .treats-stormij-panel-title {
+  color: var(--text) !important;
+}
+.dark .stormij-theme .treats-stormij-panel-sub {
+  color: var(--text-muted) !important;
+}
+.dark .stormij-theme .treats-stormij-panel-state {
+  color: var(--text-muted) !important;
+}
+.dark .stormij-theme .treats-stormij-card-title {
+  color: var(--text) !important;
+}
+.dark .stormij-theme .treats-stormij-card-desc {
+  color: color-mix(in srgb, var(--text) 88%, transparent) !important;
+}
+.dark .stormij-theme .treats-stormij-card-stock {
+  color: var(--text-muted) !important;
+}
+.dark .stormij-theme .treats-section-title {
+  color: var(--text) !important;
+}
+.dark .stormij-theme .treats-scheduled-card-title {
+  color: var(--text) !important;
+}
+.dark .stormij-theme .treats-scheduled-card-meta {
+  color: var(--text-muted) !important;
+}
+.dark .stormij-theme .treats-loading,
+.dark .stormij-theme .treats-empty {
+  color: var(--text-muted) !important;
+}
+.dark .stormij-theme .treats-archive-toggle {
+  color: var(--text-muted) !important;
+}
+.dark .stormij-theme h1.text-gray-900.dark\:text-white,
+.dark .stormij-theme h2.text-gray-900.dark\:text-white,
+.dark .stormij-theme h3.text-gray-900.dark\:text-white {
+  color: var(--text) !important;
+}
+.dark .stormij-theme .text-gray-500.dark\:text-gray-400 {
+  color: var(--text-muted) !important;
+}
+.dark .stormij-theme .text-gray-600.dark\:text-gray-400 {
+  color: var(--text-muted) !important;
+}
+.dark .stormij-theme.fh-messages-hub .dark\:bg-gray-800 {
+  background-color: color-mix(in srgb, var(--fan-bg, #111827) 96%, var(--fan-border, #334155)) !important;
+}
+.dark .stormij-theme.fh-messages-hub .dark\:border-gray-700 {
+  border-color: color-mix(in srgb, var(--fan-primary) 22%, var(--fan-border, #334155)) !important;
 }
 

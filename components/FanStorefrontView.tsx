@@ -77,7 +77,7 @@ import { inferIsVideoFromUrl } from "../src/lib/mediaUrlInfer";
 import { FanHubNotificationBell, type FanHubNotificationNavigatePayload } from "./FanHubNotificationBell";
 import { getAvatarCropStyle } from "../src/lib/avatarCrop";
 import { resolveStoreCopy } from "../src/lib/storefrontStoreCopy";
-import { resolveTipSectionCopy } from "../src/lib/tipSectionCopy";
+import { resolveTipFooterEmoji, resolveTipSectionCopy } from "../src/lib/tipSectionCopy";
 import { normalizeMemberUsername, validateMemberUsernameFormat } from "../src/lib/memberUsername";
 import { mergeFanHubStorefrontTheme } from "../src/lib/mergeFanHubStorefrontTheme";
 import { normalizeHeroMediaForStorefront } from "../src/lib/storefrontHeroNormalize";
@@ -911,6 +911,8 @@ interface TipSectionProps {
   /** From My Page landing content — same heading as public landing; member-only subline (no “no subscription” default). */
   tipHeading: string;
   tipSubline: string;
+  /** After “Thank You!” — emoji or short text; null = hidden */
+  tipFooterEmoji: string | null;
   tipSelectedPreset: number | null;
   setTipSelectedPreset: (v: number | null) => void;
   tipCustomAmount: string;
@@ -926,6 +928,7 @@ function TipSection({
   primary,
   tipHeading,
   tipSubline,
+  tipFooterEmoji,
   tipSelectedPreset,
   setTipSelectedPreset,
   tipCustomAmount,
@@ -1046,7 +1049,7 @@ function TipSection({
       {/* Footer */}
       <div className="tip-footer-section">
         <p className="tip-thanks-text">Thank You!</p>
-        <span className="tip-heart-icon">💖</span>
+        {tipFooterEmoji ? <span className="tip-heart-icon">{tipFooterEmoji}</span> : null}
       </div>
     </div>
   );
@@ -3836,7 +3839,7 @@ export const FanStorefrontView: React.FC = () => {
   /** Staff/QA bypass from getFanEntitlement: always use full member hub (not purchase-only / paywall nav). */
   const hasPaidMembership = fanPageAdminBypass ? true : hasPaidMembershipBase;
   const paidPageUnsubscribed = fanPageAdminBypass ? false : paidPageUnsubscribedBase;
-  const needsPaidUpgrade = fanPageAdminBypass ? false : needsPaidUpgradeBase;
+  const needsPaidUpgrade = fanPageAdminBypass || previewMember ? false : needsPaidUpgradeBase;
   const purchaseOnlyAccess = fanPageAdminBypass ? false : purchaseOnlyAccessBase;
   const hasAccessByCurrentMembership = fanPageAdminBypass
     ? true
@@ -3849,7 +3852,8 @@ export const FanStorefrontView: React.FC = () => {
     creatorRequiresPaidMembership &&
     creator?.monetization?.freeAccessEnabled !== true &&
     hasMemberAreaAccess;
-  const canViewFeed = fanPageAdminBypass || !creatorRequiresPaidMembership || hasPaidMembership;
+  const canViewFeed =
+    fanPageAdminBypass || previewMember || !creatorRequiresPaidMembership || hasPaidMembership;
   const showLanding = previewMember
     ? false
     : forceCreatorPreviewLanding || !isLoggedIn || !hasMemberAreaAccess;
@@ -4012,7 +4016,11 @@ export const FanStorefrontView: React.FC = () => {
         return;
       }
     }
-    if ((purchaseOnlyAccess || paidPageUnsubscribed) && !["tip", "purchases", "profile"].includes(activeTab)) {
+    if (
+      !previewMember &&
+      (purchaseOnlyAccess || paidPageUnsubscribed) &&
+      !["tip", "purchases", "profile"].includes(activeTab)
+    ) {
       setActiveTab("purchases");
       if (creator?.handle?.trim()) {
         applyFanStorefrontMemberUrl("purchases", { showLanding: false, creatorHandle: creator.handle });
@@ -4234,6 +4242,7 @@ export const FanStorefrontView: React.FC = () => {
     : (landingContent?.boundaryLines ?? []).filter((l) => String(l).trim());
   const showMemberGuidelines = !!(memberGuidelinesIntro || memberGuidelinesLines.length > 0);
   const tipMemberCopy = resolveTipSectionCopy(landingContent, "member");
+  const tipFooterEmojiResolved = resolveTipFooterEmoji(landingContent);
   const avatarCropStyle: React.CSSProperties = getAvatarCropStyle(creator.avatarObjectPosition);
   const creatorDmPrimary = formatCreatorDmBubblePrimaryLine(displayName, creator.handle);
   const creatorDmSecondary = formatCreatorDmBubbleSecondaryLine(displayName, creator.handle);
@@ -4273,10 +4282,11 @@ export const FanStorefrontView: React.FC = () => {
     return "Welcome to this member hub";
   })();
   // Nav tabs: order from sectionsOrder, filtered by sections; hide Messages when chat disabled.
+  /** `?preview=member` — show full shell like a subscribed member (ignore purchase-only / paywall nav). */
   const baseMemberTabKeys = (sectionsOrder || ["feed", "treats", "tip", "messages", "about"])
     .filter((key) => key !== "saved" && (sections as Record<string, boolean>)?.[key] !== false)
-    .filter((key) => key !== "messages" || chatEnabled)
-    .filter((key) => !purchaseOnlyAccess || key === "treats" || key === "tip");
+    .filter((key) => key !== "messages" || chatEnabled || previewMember)
+    .filter((key) => previewMember || !purchaseOnlyAccess || key === "treats" || key === "tip");
   const memberTabKeys = (() => {
     const keys = [...baseMemberTabKeys];
     if (!keys.includes("purchases")) {
@@ -4284,7 +4294,7 @@ export const FanStorefrontView: React.FC = () => {
       const insertAt = treatsIdx >= 0 ? treatsIdx + 1 : keys.length;
       keys.splice(insertAt, 0, "purchases");
     }
-    if (purchaseOnlyAccess || paidPageUnsubscribed) {
+    if (!previewMember && (purchaseOnlyAccess || paidPageUnsubscribed)) {
       const out: string[] = [];
       if (keys.includes("purchases")) out.push("purchases");
       if (keys.includes("tip")) out.push("tip");
@@ -4995,6 +5005,7 @@ export const FanStorefrontView: React.FC = () => {
                 unlockedLiveStreamIds={unlockedLiveStreamIds}
                 liveStreamPaidMemberTicketSkip={subscribed && membershipType === "paid"}
                 fanPageAdminBypass={fanPageAdminBypass}
+                previewMember={previewMember}
                 onOpenSaved={() => setActiveTabWithUrl("saved")}
                 tipsEnabled={creator.sections?.tip !== false}
                 tipHeading={tipMemberCopy.heading}
@@ -5015,10 +5026,12 @@ export const FanStorefrontView: React.FC = () => {
                 unlockedLiveStreamIds={unlockedLiveStreamIds}
                 liveStreamPaidMemberTicketSkip={subscribed && membershipType === "paid"}
                 fanPageAdminBypass={fanPageAdminBypass}
+                previewMember={previewMember}
                 onBackToFeed={() => setActiveTabWithUrl("feed")}
               />
             )}
-            {activeTab === "treats" && !paidPageUnsubscribed && !purchaseOnlyAccess && (
+            {activeTab === "treats" &&
+              (previewMember || (!paidPageUnsubscribed && !purchaseOnlyAccess)) && (
               <div className="fan-member-treats">
                 <div className="fan-member-store-header">
                   <h2 className="fan-member-store-title">
@@ -5509,6 +5522,7 @@ export const FanStorefrontView: React.FC = () => {
                 primary={primary}
                 tipHeading={tipMemberCopy.heading}
                 tipSubline={tipMemberCopy.subline}
+                tipFooterEmoji={tipFooterEmojiResolved}
                 tipSelectedPreset={tipSelectedPreset}
                 setTipSelectedPreset={setTipSelectedPreset}
                 tipCustomAmount={tipCustomAmount}

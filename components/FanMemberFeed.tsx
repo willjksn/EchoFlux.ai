@@ -483,6 +483,8 @@ interface FanMemberFeedProps {
   liveStreamPaidMemberTicketSkip?: boolean;
   /** Server-granted QA access: show all locked media as unlocked (see FAN_PAGE_ADMIN_MEMBER_* env). */
   fanPageAdminBypass?: boolean;
+  /** `?preview=member`: show creator-test live promo posts like Fan Hub admin preview (not real fans). */
+  previewMember?: boolean;
   /** Optional member-header shortcut to open Saved tab. */
   onOpenSaved?: () => void;
   /** When false, hide the feed “Send tip” control (creator disabled Tips section). */
@@ -1028,7 +1030,11 @@ function FanMemberPostMedia({
 }
 
 /** Same storage paths as FanHubFeed: creators fanPosts, creators posts, users/{creatorId}/posts (+ demo IDs). */
-async function fetchMemberPostById(creatorId: string, postId: string): Promise<Post | null> {
+async function fetchMemberPostById(
+  creatorId: string,
+  postId: string,
+  opts?: { allowCreatorTestLivePromos?: boolean },
+): Promise<Post | null> {
   if (!db) return null;
   const demo = DEMO_POSTS.find((p) => p.id === postId);
   if (demo) return demo;
@@ -1040,7 +1046,7 @@ async function fetchMemberPostById(creatorId: string, postId: string): Promise<P
   for (const ref of refs) {
     const snap = await getDoc(ref);
     if (snap.exists()) {
-      const p = postFromFirestore(snap);
+      const p = postFromFirestore(snap, opts);
       if (p) return p;
     }
   }
@@ -1619,11 +1625,13 @@ export const FanMemberFeed: React.FC<FanMemberFeedProps> = ({
   unlockedLiveStreamIds: unlockedLiveStreamIdsProp = [],
   liveStreamPaidMemberTicketSkip = false,
   fanPageAdminBypass = false,
+  previewMember = false,
   onOpenSaved,
   tipsEnabled = true,
   tipHeading = "Support this creator",
   tipSubline = "Choose an amount to send support.",
 }) => {
+  const allowCreatorTestLivePromos = fanPageAdminBypass || previewMember;
   const { showToast, user } = useAppContext();
   const sjHeartEmojiCtx = useMemo<SjHeartEmojiAccessContext>(
     () => ({
@@ -1660,7 +1668,7 @@ export const FanMemberFeed: React.FC<FanMemberFeedProps> = ({
   const [viewMode, setViewMode] = useState<"feed" | "grid">("feed");
   const [gridHoveredVideoPostId, setGridHoveredVideoPostId] = useState<string | null>(null);
   const { detailPost, detailLoading, reload: reloadDetailPost } = useMemberPostDetail(creatorId, viewPostId, {
-    allowCreatorTestLivePromos: fanPageAdminBypass,
+    allowCreatorTestLivePromos,
   });
   const [fanPublicProfile, setFanPublicProfile] = useState<{ photoURL?: string; displayName?: string }>({});
 
@@ -1702,12 +1710,12 @@ export const FanMemberFeed: React.FC<FanMemberFeedProps> = ({
   const rebalanceMemberFeed = useCallback(() => {
     const list = mergeMemberFeedBuckets(feedBucketsRef.current);
     if (list.length === 0) {
-      setPosts(DEMO_POSTS);
+      setPosts(previewMember ? [] : DEMO_POSTS);
     } else {
       setPosts(list);
     }
     setLoading(false);
-  }, []);
+  }, [previewMember]);
 
   useEffect(() => {
     if (!creatorId || !db) {
@@ -1730,7 +1738,7 @@ export const FanMemberFeed: React.FC<FanMemberFeedProps> = ({
         (snap) => {
           const m = new Map<string, Post>();
           snap.docs.forEach((d) => {
-            const p = postFromFirestore(d, { allowCreatorTestLivePromos: fanPageAdminBypass });
+            const p = postFromFirestore(d, { allowCreatorTestLivePromos });
             if (p) m.set(p.id, p);
           });
           feedBucketsRef.current[key] = m;
@@ -1752,7 +1760,7 @@ export const FanMemberFeed: React.FC<FanMemberFeedProps> = ({
     return () => {
       unsubs.forEach((u) => u());
     };
-  }, [creatorId, rebalanceMemberFeed, fanPageAdminBypass]);
+  }, [creatorId, rebalanceMemberFeed, allowCreatorTestLivePromos]);
 
   useEffect(() => {
     if (viewMode !== "grid") setGridHoveredVideoPostId(null);
@@ -2405,6 +2413,7 @@ interface FanMemberSavedProps {
   unlockedLiveStreamIds?: string[];
   liveStreamPaidMemberTicketSkip?: boolean;
   fanPageAdminBypass?: boolean;
+  previewMember?: boolean;
   /** Navigate back to the home feed from the Saved tab. */
   onBackToFeed: () => void;
 }
@@ -2422,8 +2431,10 @@ export const FanMemberSaved: React.FC<FanMemberSavedProps> = ({
   unlockedLiveStreamIds: unlockedLiveStreamIdsSaved = [],
   liveStreamPaidMemberTicketSkip = false,
   fanPageAdminBypass = false,
+  previewMember = false,
   onBackToFeed,
 }) => {
+  const allowCreatorTestLivePromosSaved = fanPageAdminBypass || previewMember;
   const { showToast: showToastSaved, user: userSaved } = useAppContext();
   const sjHeartEmojiCtxSaved = useMemo<SjHeartEmojiAccessContext>(
     () => ({
@@ -2482,7 +2493,7 @@ export const FanMemberSaved: React.FC<FanMemberSavedProps> = ({
   const [viewPostId, setViewPostId] = useState<string | null>(null);
   const [commentDraft, setCommentDraft] = useState<Record<string, string>>({});
   const { detailPost, detailLoading, reload: reloadDetailPost } = useMemberPostDetail(creatorId, viewPostId, {
-    allowCreatorTestLivePromos: fanPageAdminBypass,
+    allowCreatorTestLivePromos: allowCreatorTestLivePromosSaved,
   });
   const [fanPublicProfile, setFanPublicProfile] = useState<{ photoURL?: string; displayName?: string }>({});
   const [expandedInlineCommentKeys, setExpandedInlineCommentKeys] = useState<Set<string>>(new Set());
@@ -2566,7 +2577,11 @@ export const FanMemberSaved: React.FC<FanMemberSavedProps> = ({
           setLoading(false);
           return;
         }
-        return Promise.all(ids.map((postId) => fetchMemberPostById(creatorId, postId))).then((resolved) => {
+        return Promise.all(
+          ids.map((postId) =>
+            fetchMemberPostById(creatorId, postId, { allowCreatorTestLivePromos: allowCreatorTestLivePromosSaved }),
+          ),
+        ).then((resolved) => {
           if (cancelled) return;
           const list = resolved.filter((p): p is Post => p != null);
           list.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
@@ -2580,7 +2595,7 @@ export const FanMemberSaved: React.FC<FanMemberSavedProps> = ({
         if (!cancelled) setLoading(false);
       });
     return () => { cancelled = true; };
-  }, [fanId, creatorId]);
+  }, [fanId, creatorId, allowCreatorTestLivePromosSaved]);
 
   const savedPostsWatchKey = useMemo(
     () =>
@@ -2607,7 +2622,7 @@ export const FanMemberSaved: React.FC<FanMemberSavedProps> = ({
         const dref = doc(db, ...(segs as [string, ...string[]]));
         unsubs.push(
           onSnapshot(dref, (snap) => {
-            const next = postFromFirestore(snap, { allowCreatorTestLivePromos: fanPageAdminBypass });
+            const next = postFromFirestore(snap, { allowCreatorTestLivePromos: allowCreatorTestLivePromosSaved });
             if (!next) return;
             setPosts((prev) => prev.map((row) => (row.id === id ? next : row)));
           }),
@@ -2617,7 +2632,7 @@ export const FanMemberSaved: React.FC<FanMemberSavedProps> = ({
       }
     }
     return () => unsubs.forEach((u) => u());
-  }, [creatorId, savedPostsWatchKey, fanPageAdminBypass]);
+  }, [creatorId, savedPostsWatchKey, allowCreatorTestLivePromosSaved]);
 
   if (!fanId) {
     return (

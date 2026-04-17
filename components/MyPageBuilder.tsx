@@ -655,6 +655,7 @@ export const MyPageBuilder: React.FC = () => {
   const [builderGuestTreatModalOpen, setBuilderGuestTreatModalOpen] = useState(false);
   const [builderLandingTreatsProducts, setBuilderLandingTreatsProducts] = useState<TreatProduct[]>([]);
   const [builderLandingTreatsLoading, setBuilderLandingTreatsLoading] = useState(false);
+  const [monthlySubscriptionInput, setMonthlySubscriptionInput] = useState("");
 
   const includeSjHeartEmoji = useMemo(
     () => canUseSjHeartEmoji({ creatorHandle: draft.handle, viewerIsAdmin: user?.role === "Admin" }),
@@ -849,6 +850,15 @@ export const MyPageBuilder: React.FC = () => {
     const gridCount = (draft.heroMedia ?? []).filter((m) => m.size !== "fullBackground").length;
     setPreviewFocusPhotoSlot((s) => (gridCount > 0 && s >= gridCount ? 0 : s));
   }, [draft.heroMedia]);
+
+  useEffect(() => {
+    const c = draft.monetization?.monthlyPrice;
+    if (c != null && !Number.isNaN(c)) {
+      setMonthlySubscriptionInput((c / 100).toFixed(2));
+    } else {
+      setMonthlySubscriptionInput("");
+    }
+  }, [draft.monetization?.monthlyPrice]);
 
   // Framing tools are landing-only (pan avatar, pan bg, photo focus). Clear when leaving Landing preview.
   useEffect(() => {
@@ -1180,7 +1190,10 @@ export const MyPageBuilder: React.FC = () => {
         sectionsOrder: draft.sectionsOrder,
         spicyMode: draft.spicyMode,
         rules: draft.rules,
-        monetization: draft.monetization,
+        monetization: {
+          ...DEFAULT_MONETIZATION,
+          ...draft.monetization,
+        },
         textStyles: draft.textStyles,
         onboardingStatus: draft.onboardingStatus,
         publicTreatsOnLanding: draft.publicTreatsOnLanding === true,
@@ -1391,12 +1404,13 @@ export const MyPageBuilder: React.FC = () => {
 
   // Helper to update landing content (merge only — do not spread full defaults or other fields reset)
   const updateLandingContent = <K extends keyof StorefrontLandingContent>(field: K, value: StorefrontLandingContent[K]) => {
-    updateDraft({
+    setDraft((prev) => ({
+      ...prev,
       landingContent: {
-        ...(draft.landingContent ?? DEFAULT_LANDING_CONTENT),
+        ...(prev.landingContent ?? DEFAULT_LANDING_CONTENT),
         [field]: value,
       },
-    });
+    }));
   };
 
   const setPerksExtraMode = useCallback((mode: LandingSectionBodyMode) => {
@@ -1511,7 +1525,23 @@ export const MyPageBuilder: React.FC = () => {
     handleCleanForCheck.length <= 20 &&
     /^[a-z0-9_]+$/.test(handleCleanForCheck);
 
-  const storefrontPreviewConfig = useMemo(() => buildStorefrontPreviewConfig(draft), [draft]);
+  const storefrontPreviewConfig = useMemo(() => {
+    const base = buildStorefrontPreviewConfig(draft);
+    if (draft.monetization?.freeAccessEnabled === true) return base;
+    const raw = monthlySubscriptionInput.trim().replace(/,/g, "");
+    if (raw === "") return base;
+    const dollars = parseFloat(raw);
+    if (Number.isNaN(dollars) || dollars < 0) return base;
+    const cents = Math.round(dollars * 100);
+    return {
+      ...base,
+      monetization: {
+        ...DEFAULT_MONETIZATION,
+        ...base.monetization,
+        monthlyPrice: cents,
+      },
+    };
+  }, [draft, monthlySubscriptionInput]);
 
   /** Landing tab: mirror live guest-treat card vs “sign up for store” using draft toggles (open Live for real checkout). */
   const storefrontLandingLivePreview = useMemo((): StorefrontPreviewLiveLanding | undefined => {
@@ -2574,14 +2604,233 @@ export const MyPageBuilder: React.FC = () => {
                   </div>
                 </div>
               </div>
+            </div>
+          </CollapsibleSection>
 
-              {/* Store copy — member tab, landing promo, guest checkout */}
-              <div className="pt-6 mt-6 border-t border-gray-200 dark:border-gray-600">
-                <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-200 mb-3">Store &amp; guest checkout (copy)</h3>
+          {/* Sections */}
+          <CollapsibleSection title="Member Sections">
+            <div className="space-y-3 pt-4">
+              <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
+                Toggle what appears in the Fan Hub. <strong>Monetization</strong> below lines up with the next preview blocks: membership pricing, then store promo, then tips.
+              </p>
+              {([
+                { key: "feed", label: "Feed", desc: "Posts and updates" },
+                { key: "treats", label: "Store", desc: "Products, video calls, chat sessions" },
+                { key: "tip", label: "Tip", desc: "One-time tips from fans" },
+                { key: "messages", label: "Messages", desc: "Direct messages with fans" },
+                { key: "about", label: "About / Boundaries", desc: "Your bio and rules" },
+              ] as const).map(({ key, label, desc }) => (
+                <label key={key} className="flex items-center justify-between gap-3 cursor-pointer group">
+                  <div>
+                    <span className="text-sm text-gray-700 dark:text-gray-300">{label}</span>
+                    <p className="text-xs text-gray-400 dark:text-gray-500">{desc}</p>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={draft.sections?.[key] ?? true}
+                    onChange={(e) => {
+                      const v = e.target.checked;
+                      setDraft((prev) => {
+                        const nextSections = { ...DEFAULT_SECTIONS, ...(prev.sections || {}), [key]: v };
+                        if (key === "treats" && !v) {
+                          return {
+                            ...prev,
+                            sections: { ...nextSections, treats: false },
+                            publicTreatsOnLanding: false,
+                          };
+                        }
+                        return {
+                          ...prev,
+                          sections: nextSections,
+                        };
+                      });
+                    }}
+                    className="rounded border-gray-300 dark:border-gray-600 text-primary-600"
+                  />
+                </label>
+              ))}
+              <label className="flex items-center justify-between gap-3 cursor-pointer group pt-2 border-t border-gray-200 dark:border-gray-600">
+                <div>
+                  <span className="text-sm text-gray-700 dark:text-gray-300">Guest checkout on landing</span>
+                  <p className="text-xs text-gray-400 dark:text-gray-500">
+                    The store promo already shows on your landing when Store is enabled. Enable this to let visitors buy without signing in (Stripe collects email).
+                  </p>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={draft.publicTreatsOnLanding === true}
+                  disabled={draft.sections?.treats === false}
+                  onChange={(e) => updateDraft({ publicTreatsOnLanding: e.target.checked })}
+                  className="rounded border-gray-300 dark:border-gray-600 text-primary-600 disabled:opacity-40"
+                />
+              </label>
+            </div>
+          </CollapsibleSection>
+
+          {/* Monetization */}
+          <CollapsibleSection title="Monetization">
+            <div className="space-y-4 pt-4">
+              <p className="text-xs text-gray-500 dark:text-gray-400 -mt-1 mb-1">
+                Matches the landing preview top-to-bottom after your content: <strong>price</strong> → <strong>membership copy</strong> → <strong>store card</strong> → <strong>tips</strong>.
+              </p>
+              {/* Free Access Toggle */}
+              <div className="p-3 rounded-lg bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 border border-green-200 dark:border-green-800">
+                <label className="flex items-center gap-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={draft.monetization?.freeAccessEnabled ?? false}
+                    onChange={(e) => updateDraft({ monetization: { ...draft.monetization, ...DEFAULT_MONETIZATION, freeAccessEnabled: e.target.checked } })}
+                    className="w-5 h-5 rounded border-green-400 dark:border-green-600 text-green-600 focus:ring-green-500"
+                  />
+                  <div>
+                    <span className="text-sm font-medium text-gray-900 dark:text-white">Free Access</span>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                      Let fans join for free. You can still sell from your store, tips, and unlockable content.
+                    </p>
+                  </div>
+                </label>
+              </div>
+
+              {!draft.monetization?.freeAccessEnabled && (
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+                    Monthly subscription price (USD)
+                  </label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 dark:text-gray-400 font-medium">
+                      $
+                    </span>
+                    <input
+                      type="text"
+                      inputMode="decimal"
+                      placeholder="0.00"
+                      value={monthlySubscriptionInput}
+                      onChange={(e) => setMonthlySubscriptionInput(e.target.value)}
+                      onBlur={() => {
+                        const raw = monthlySubscriptionInput.trim();
+                        const revertCents =
+                          draft.monetization?.monthlyPrice ??
+                          DEFAULT_MONETIZATION.monthlyPrice ??
+                          999;
+                        if (raw === "") {
+                          setMonthlySubscriptionInput((revertCents / 100).toFixed(2));
+                          return;
+                        }
+                        const dollars = parseFloat(raw.replace(/,/g, ""));
+                        if (Number.isNaN(dollars) || dollars < 0) {
+                          setMonthlySubscriptionInput((revertCents / 100).toFixed(2));
+                          return;
+                        }
+                        const cents = Math.round(dollars * 100);
+                        updateDraft({
+                          monetization: {
+                            ...draft.monetization,
+                            ...DEFAULT_MONETIZATION,
+                            monthlyPrice: cents,
+                          },
+                        });
+                        setMonthlySubscriptionInput((cents / 100).toFixed(2));
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          (e.target as HTMLInputElement).blur();
+                        }
+                      }}
+                      className="w-full pl-7 pr-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                    />
+                  </div>
+                  <p className="text-xs text-gray-400 mt-1">What fans pay each month for membership (before platform fees).</p>
+                </div>
+              )}
+
+              {!draft.monetization?.freeAccessEnabled && (
+                <div className="pt-3 border-t border-gray-200 dark:border-gray-700 space-y-3">
+                  <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-200">Membership card (landing preview)</h3>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                    Same block as the <strong>pricing</strong> section in the preview: price, checkmarks, button, trust line.
+                  </p>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Checkmark lines (one per line)</label>
+                    <textarea
+                      rows={3}
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
+                      placeholder={"Exclusive content\nCancel anytime"}
+                      value={(draft.landingContent?.pricingCardBullets ?? []).join("\n")}
+                      onChange={(e) => {
+                        const raw = e.target.value;
+                        const lines = raw.length === 0 ? [] : raw.split("\n");
+                        const hasContent = lines.some((l) => String(l).trim());
+                        updateDraft({
+                          landingContent: {
+                            ...draft.landingContent,
+                            pricingCardBullets: hasContent ? lines : undefined,
+                          },
+                        });
+                      }}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Primary button label (My Page preview)</label>
+                    <input
+                      type="text"
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
+                      placeholder="Join - $9.99/mo"
+                      value={draft.landingContent?.pricingCtaLoggedInPaid ?? ""}
+                      onChange={(e) =>
+                        updateDraft({
+                          landingContent: {
+                            ...draft.landingContent,
+                            pricingCtaLoggedInPaid: e.target.value.trim() ? e.target.value : undefined,
+                          },
+                        })
+                      }
+                    />
+                  </div>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                    Trust line under the button is fixed: secure Stripe checkout and cancel anytime.
+                  </p>
+                </div>
+              )}
+
+              <div className="pt-3 border-t border-gray-200 dark:border-gray-700">
+                <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-200 mb-1">Store &amp; guest checkout (copy)</h3>
                 <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
-                  Name your store, landing teaser, and guest checkout wording. Fan Hub → <strong>Store</strong> tab stays the generic label; fans see your custom name on the store itself.
+                  Order matches the preview: <strong>store promo</strong> sits under the membership card; member hub copy is below.
                 </p>
                 <div className="space-y-3">
+                  <p className="text-xs font-semibold text-gray-700 dark:text-gray-300">Landing — store card (below membership pricing)</p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 -mt-2 mb-1">
+                    The card with the sparkle line, title, blurb, and &quot;Open store&quot; — edit text here if it shows wrong characters in preview, switch Theme → Global font to one that supports your language.
+                  </p>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Card title</label>
+                    <input
+                      type="text"
+                      value={draft.landingContent?.publicStoreCardTitle ?? DEFAULT_LANDING_CONTENT.publicStoreCardTitle}
+                      onChange={(e) => updateLandingContent("publicStoreCardTitle", e.target.value)}
+                      className="w-full px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Card description</label>
+                    <textarea
+                      value={draft.landingContent?.publicStoreCardDescription ?? DEFAULT_LANDING_CONTENT.publicStoreCardDescription}
+                      onChange={(e) => updateLandingContent("publicStoreCardDescription", e.target.value)}
+                      rows={3}
+                      className="w-full px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Open-store button (count may be added in preview)</label>
+                    <input
+                      type="text"
+                      value={draft.landingContent?.publicStoreOpenCtaLabel ?? DEFAULT_LANDING_CONTENT.publicStoreOpenCtaLabel}
+                      onChange={(e) => updateLandingContent("publicStoreOpenCtaLabel", e.target.value)}
+                      className="w-full px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                    />
+                  </div>
+
+                  <p className="text-xs font-semibold text-gray-700 dark:text-gray-300 pt-4 border-t border-gray-200 dark:border-gray-600">Member Hub — store tab</p>
                   <div>
                     <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Store name (member tab + store header)</label>
                     <input
@@ -2621,7 +2870,7 @@ export const MyPageBuilder: React.FC = () => {
                       />
                     </div>
                   </div>
-                  <p className="text-xs font-medium text-gray-600 dark:text-gray-300 pt-2">Public landing — teaser (when guest store is on)</p>
+                  <p className="text-xs font-medium text-gray-600 dark:text-gray-300 pt-2">Optional landing teaser (when guest store is on)</p>
                   <div>
                     <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Headline</label>
                     <input
@@ -2649,34 +2898,6 @@ export const MyPageBuilder: React.FC = () => {
                       className="w-full px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                     />
                   </div>
-                  <p className="text-xs font-medium text-gray-600 dark:text-gray-300 pt-2">Guest checkout card on landing</p>
-                  <div>
-                    <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Card title</label>
-                    <input
-                      type="text"
-                      value={draft.landingContent?.publicStoreCardTitle ?? DEFAULT_LANDING_CONTENT.publicStoreCardTitle}
-                      onChange={(e) => updateLandingContent("publicStoreCardTitle", e.target.value)}
-                      className="w-full px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Card description</label>
-                    <textarea
-                      value={draft.landingContent?.publicStoreCardDescription ?? DEFAULT_LANDING_CONTENT.publicStoreCardDescription}
-                      onChange={(e) => updateLandingContent("publicStoreCardDescription", e.target.value)}
-                      rows={3}
-                      className="w-full px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Open-store button (count may be added)</label>
-                    <input
-                      type="text"
-                      value={draft.landingContent?.publicStoreOpenCtaLabel ?? DEFAULT_LANDING_CONTENT.publicStoreOpenCtaLabel}
-                      onChange={(e) => updateLandingContent("publicStoreOpenCtaLabel", e.target.value)}
-                      className="w-full px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                    />
-                  </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
                       <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Modal title</label>
@@ -2699,6 +2920,128 @@ export const MyPageBuilder: React.FC = () => {
                   </div>
                 </div>
               </div>
+
+              <div className="pt-3 border-t border-gray-200 dark:border-gray-700">
+                <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-200 mb-2">Tips (landing + member)</h3>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">
+                  Same heading everywhere. Guest line = public landing tip block; member line = Fan Hub <strong>Tip</strong> tab only (use <strong>Member</strong> preview → Tip to see it).
+                </p>
+                <div className="space-y-2">
+                  <input
+                    type="text"
+                    className="w-full px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                    placeholder="Section heading"
+                    value={draft.landingContent?.tipSectionHeading ?? ""}
+                    onChange={(e) => updateLandingContent("tipSectionHeading", e.target.value)}
+                  />
+                  <div className="grid sm:grid-cols-2 gap-2">
+                    <div>
+                      <label className="block text-[10px] font-medium text-gray-500 dark:text-gray-400 mb-0.5">Guest (landing)</label>
+                      <input
+                        type="text"
+                        className="w-full px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                        placeholder="One-time tip — no subscription"
+                        value={draft.landingContent?.tipSectionSublineGuest ?? ""}
+                        onChange={(e) => updateLandingContent("tipSectionSublineGuest", e.target.value)}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-medium text-gray-500 dark:text-gray-400 mb-0.5">Member (Tip tab)</label>
+                      <input
+                        type="text"
+                        className="w-full px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                        placeholder="No minimum — send what you like."
+                        value={draft.landingContent?.tipSectionSublineMember ?? ""}
+                        onChange={(e) => updateLandingContent("tipSectionSublineMember", e.target.value)}
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="flex items-center gap-2 cursor-pointer text-sm text-gray-700 dark:text-gray-300">
+                      <input
+                        type="checkbox"
+                        className="rounded border-gray-300 dark:border-gray-600 text-primary-600"
+                        checked={draft.landingContent?.tipSectionFooterEmoji !== ""}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            updateLandingContent("tipSectionFooterEmoji", undefined);
+                          } else {
+                            updateLandingContent("tipSectionFooterEmoji", "");
+                          }
+                        }}
+                      />
+                      Show icon after “Thank You!” on the Tip tab
+                    </label>
+                    {draft.landingContent?.tipSectionFooterEmoji !== "" ? (
+                      <div>
+                        <label className="block text-[10px] font-medium text-gray-500 dark:text-gray-400 mb-0.5">
+                          Icon or text (default if left empty: 💖)
+                        </label>
+                        <input
+                          type="text"
+                          className="w-full max-w-xs px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                          placeholder="e.g. 🙏 🔥 ✨"
+                          value={
+                            draft.landingContent?.tipSectionFooterEmoji === undefined
+                              ? ""
+                              : (draft.landingContent.tipSectionFooterEmoji ?? "")
+                          }
+                          onChange={(e) => {
+                            const v = e.target.value;
+                            if (v.trim() === "") {
+                              updateLandingContent("tipSectionFooterEmoji", undefined);
+                            } else {
+                              updateLandingContent(
+                                "tipSectionFooterEmoji",
+                                Array.from(v).slice(0, 32).join(""),
+                              );
+                            }
+                          }}
+                        />
+                      </div>
+                    ) : null}
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap gap-4">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={draft.monetization?.tipsEnabled ?? true}
+                    onChange={(e) => updateDraft({ monetization: { ...draft.monetization, ...DEFAULT_MONETIZATION, tipsEnabled: e.target.checked } })}
+                    className="rounded border-gray-300 dark:border-gray-600 text-primary-600"
+                  />
+                  <span className="text-sm text-gray-700 dark:text-gray-300">Tips</span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={draft.monetization?.chatEnabled ?? true}
+                    onChange={(e) => updateDraft({ monetization: { ...draft.monetization, ...DEFAULT_MONETIZATION, chatEnabled: e.target.checked } })}
+                    className="rounded border-gray-300 dark:border-gray-600 text-primary-600"
+                  />
+                  <span className="text-sm text-gray-700 dark:text-gray-300">Chat</span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={draft.monetization?.videoEnabled ?? true}
+                    onChange={(e) => updateDraft({ monetization: { ...draft.monetization, ...DEFAULT_MONETIZATION, videoEnabled: e.target.checked } })}
+                    className="rounded border-gray-300 dark:border-gray-600 text-primary-600"
+                  />
+                  <span className="text-sm text-gray-700 dark:text-gray-300">Video in DMs</span>
+                </label>
+              </div>
+              <p className="text-xs text-gray-500 dark:text-gray-400">
+                <strong>Tips</strong> — tip section on the <em>public</em> landing only.{" "}
+                <strong>Chat</strong> — member hub <strong>Messages</strong> tab (turn off to hide it).{" "}
+                <strong>Video in DMs</strong> — video <em>file</em> attachments in messages only (not live 1:1 or livestream; see{" "}
+                <code className="text-[11px]">docs/LIVE_VIDEO_AND_STREAMS.md</code>). Off = photos only; existing video messages still play.
+              </p>
+              {(saved as Record<string, unknown>).stripeConnectAccountId == null && (
+                <p className="text-xs text-amber-600 dark:text-amber-400">Connect Stripe in Payouts to receive payments.</p>
+              )}
             </div>
           </CollapsibleSection>
 
@@ -2865,455 +3208,7 @@ export const MyPageBuilder: React.FC = () => {
             </div>
           </CollapsibleSection>
 
-          {/* Sections */}
-          <CollapsibleSection title="Member Sections">
-            <div className="space-y-3 pt-4">
-              <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">Toggle what sections appear on your member page.</p>
-              {([
-                { key: "feed", label: "Feed", desc: "Posts and updates" },
-                { key: "treats", label: "Store", desc: "Products, video calls, chat sessions" },
-                { key: "tip", label: "Tip", desc: "One-time tips from fans" },
-                { key: "messages", label: "Messages", desc: "Direct messages with fans" },
-                { key: "about", label: "About / Boundaries", desc: "Your bio and rules" },
-              ] as const).map(({ key, label, desc }) => (
-                <label key={key} className="flex items-center justify-between gap-3 cursor-pointer group">
-                  <div>
-                    <span className="text-sm text-gray-700 dark:text-gray-300">{label}</span>
-                    <p className="text-xs text-gray-400 dark:text-gray-500">{desc}</p>
-                  </div>
-                  <input
-                    type="checkbox"
-                    checked={draft.sections?.[key] ?? true}
-                    onChange={(e) => {
-                      const v = e.target.checked;
-                      setDraft((prev) => {
-                        const nextSections = { ...DEFAULT_SECTIONS, ...(prev.sections || {}), [key]: v };
-                        if (key === "treats" && !v) {
-                          return {
-                            ...prev,
-                            sections: { ...nextSections, treats: false },
-                            publicTreatsOnLanding: false,
-                          };
-                        }
-                        return {
-                          ...prev,
-                          sections: nextSections,
-                        };
-                      });
-                    }}
-                    className="rounded border-gray-300 dark:border-gray-600 text-primary-600"
-                  />
-                </label>
-              ))}
-              <label className="flex items-center justify-between gap-3 cursor-pointer group pt-2 border-t border-gray-200 dark:border-gray-600">
-                <div>
-                  <span className="text-sm text-gray-700 dark:text-gray-300">Guest checkout on landing</span>
-                  <p className="text-xs text-gray-400 dark:text-gray-500">
-                    The store promo already shows on your landing when Store is enabled. Enable this to let visitors buy without signing in (Stripe collects email).
-                  </p>
-                </div>
-                <input
-                  type="checkbox"
-                  checked={draft.publicTreatsOnLanding === true}
-                  disabled={draft.sections?.treats === false}
-                  onChange={(e) => updateDraft({ publicTreatsOnLanding: e.target.checked })}
-                  className="rounded border-gray-300 dark:border-gray-600 text-primary-600 disabled:opacity-40"
-                />
-              </label>
-            </div>
-          </CollapsibleSection>
 
-          {/* Monetization */}
-          <CollapsibleSection title="Monetization">
-            <div className="space-y-4 pt-4">
-              {/* Free Access Toggle */}
-              <div className="p-3 rounded-lg bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 border border-green-200 dark:border-green-800">
-                <label className="flex items-center gap-3 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={draft.monetization?.freeAccessEnabled ?? false}
-                    onChange={(e) => updateDraft({ monetization: { ...draft.monetization, ...DEFAULT_MONETIZATION, freeAccessEnabled: e.target.checked } })}
-                    className="w-5 h-5 rounded border-green-400 dark:border-green-600 text-green-600 focus:ring-green-500"
-                  />
-                  <div>
-                    <span className="text-sm font-medium text-gray-900 dark:text-white">Free Access</span>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">
-                      Let fans join for free. You can still sell from your store, tips, and unlockable content.
-                    </p>
-                  </div>
-                </label>
-              </div>
-              
-              {/* Monthly Price - only show if not free access */}
-              {!draft.monetization?.freeAccessEnabled && (
-                <div>
-                  <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Monthly subscription price</label>
-                  <div className="relative">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 dark:text-gray-400 font-medium">$</span>
-                    <input
-                      type="text"
-                      inputMode="decimal"
-                      placeholder="9.99"
-                      defaultValue={((draft.monetization?.monthlyPrice ?? DEFAULT_MONETIZATION.monthlyPrice) / 100).toFixed(2)}
-                      onBlur={(e) => {
-                        const dollars = parseFloat(e.target.value) || 0;
-                        const cents = Math.round(dollars * 100);
-                        updateDraft({ monetization: { ...draft.monetization, ...DEFAULT_MONETIZATION, monthlyPrice: cents } });
-                        e.target.value = (cents / 100).toFixed(2);
-                      }}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') {
-                          (e.target as HTMLInputElement).blur();
-                        }
-                      }}
-                      className="w-full pl-7 pr-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                    />
-                  </div>
-                  <p className="text-xs text-gray-400 mt-1">per month</p>
-                </div>
-              )}
-
-              <div className="pt-3 border-t border-gray-200 dark:border-gray-700 space-y-3">
-                <p className="text-xs font-medium text-gray-600 dark:text-gray-300">Public landing — membership card</p>
-                <p className="text-xs text-gray-500 dark:text-gray-400">
-                  Override the pricing section and bottom “Join” banner. Empty fields use smart defaults (free vs paid). The large price still uses your monthly price above unless you type a custom label.
-                </p>
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <div>
-                    <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Card title when paid</label>
-                    <input
-                      type="text"
-                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
-                      placeholder="Monthly membership"
-                      value={draft.landingContent?.pricingPaidTitle ?? ""}
-                      onChange={(e) =>
-                        updateDraft({
-                          landingContent: {
-                            ...draft.landingContent,
-                            pricingPaidTitle: e.target.value.trim() ? e.target.value : undefined,
-                          },
-                        })
-                      }
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Card title when free access</label>
-                    <input
-                      type="text"
-                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
-                      placeholder="Free membership"
-                      value={draft.landingContent?.pricingFreeTitle ?? ""}
-                      onChange={(e) =>
-                        updateDraft({
-                          landingContent: {
-                            ...draft.landingContent,
-                            pricingFreeTitle: e.target.value.trim() ? e.target.value : undefined,
-                          },
-                        })
-                      }
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Price line when paid</label>
-                    <input
-                      type="text"
-                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
-                      placeholder={`$${((draft.monetization?.monthlyPrice ?? DEFAULT_MONETIZATION.monthlyPrice) / 100).toFixed(2)}`}
-                      value={draft.landingContent?.pricingPaidAmountLabel ?? ""}
-                      onChange={(e) =>
-                        updateDraft({
-                          landingContent: {
-                            ...draft.landingContent,
-                            pricingPaidAmountLabel: e.target.value.trim() ? e.target.value : undefined,
-                          },
-                        })
-                      }
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Price line when free</label>
-                    <input
-                      type="text"
-                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
-                      placeholder="Free"
-                      value={draft.landingContent?.pricingFreeAmountLabel ?? ""}
-                      onChange={(e) =>
-                        updateDraft({
-                          landingContent: {
-                            ...draft.landingContent,
-                            pricingFreeAmountLabel: e.target.value.trim() ? e.target.value : undefined,
-                          },
-                        })
-                      }
-                    />
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
-                    Membership card bullets (one per line — always shown with ✓ on the landing)
-                  </label>
-                  <textarea
-                    rows={3}
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
-                    placeholder={"Paid default:\nExclusive content\nCancel anytime\n\nFree default:\nMember perks & updates\nJoin instantly"}
-                    value={(draft.landingContent?.pricingCardBullets ?? []).join("\n")}
-                    onChange={(e) => {
-                      const raw = e.target.value;
-                      const lines = raw.length === 0 ? [] : raw.split("\n");
-                      const hasContent = lines.some((l) => String(l).trim());
-                      updateDraft({
-                        landingContent: {
-                          ...draft.landingContent,
-                          pricingCardBullets: hasContent ? lines : undefined,
-                        },
-                      });
-                    }}
-                  />
-                </div>
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <div>
-                    <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Button — signed in, paid</label>
-                    <input
-                      type="text"
-                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
-                      placeholder="Join - $9.99/mo"
-                      value={draft.landingContent?.pricingCtaLoggedInPaid ?? ""}
-                      onChange={(e) =>
-                        updateDraft({
-                          landingContent: {
-                            ...draft.landingContent,
-                            pricingCtaLoggedInPaid: e.target.value.trim() ? e.target.value : undefined,
-                          },
-                        })
-                      }
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Button — signed in, free</label>
-                    <input
-                      type="text"
-                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
-                      placeholder="Join Free"
-                      value={draft.landingContent?.pricingCtaLoggedInFree ?? ""}
-                      onChange={(e) =>
-                        updateDraft({
-                          landingContent: {
-                            ...draft.landingContent,
-                            pricingCtaLoggedInFree: e.target.value.trim() ? e.target.value : undefined,
-                          },
-                        })
-                      }
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Button — guest, paid</label>
-                    <input
-                      type="text"
-                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
-                      placeholder="Sign up to Subscribe"
-                      value={draft.landingContent?.pricingCtaGuestPaid ?? ""}
-                      onChange={(e) =>
-                        updateDraft({
-                          landingContent: {
-                            ...draft.landingContent,
-                            pricingCtaGuestPaid: e.target.value.trim() ? e.target.value : undefined,
-                          },
-                        })
-                      }
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Button — guest, free</label>
-                    <input
-                      type="text"
-                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
-                      placeholder="Sign up to Join Free"
-                      value={draft.landingContent?.pricingCtaGuestFree ?? ""}
-                      onChange={(e) =>
-                        updateDraft({
-                          landingContent: {
-                            ...draft.landingContent,
-                            pricingCtaGuestFree: e.target.value.trim() ? e.target.value : undefined,
-                          },
-                        })
-                      }
-                    />
-                  </div>
-                </div>
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <div>
-                    <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Trust line when paid</label>
-                    <input
-                      type="text"
-                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
-                      placeholder="🔒 Secure payment · Cancel anytime"
-                      value={draft.landingContent?.pricingTrustLinePaid ?? ""}
-                      onChange={(e) =>
-                        updateDraft({
-                          landingContent: {
-                            ...draft.landingContent,
-                            pricingTrustLinePaid: e.target.value.trim() ? e.target.value : undefined,
-                          },
-                        })
-                      }
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Trust line when free</label>
-                    <input
-                      type="text"
-                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
-                      placeholder="🎉 No payment required"
-                      value={draft.landingContent?.pricingTrustLineFree ?? ""}
-                      onChange={(e) =>
-                        updateDraft({
-                          landingContent: {
-                            ...draft.landingContent,
-                            pricingTrustLineFree: e.target.value.trim() ? e.target.value : undefined,
-                          },
-                        })
-                      }
-                    />
-                  </div>
-                </div>
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <div>
-                    <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Bottom banner — main line</label>
-                    <input
-                      type="text"
-                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
-                      placeholder="Free to join / $9.99/month"
-                      value={draft.landingContent?.pricingFinalBannerPriceLine ?? ""}
-                      onChange={(e) =>
-                        updateDraft({
-                          landingContent: {
-                            ...draft.landingContent,
-                            pricingFinalBannerPriceLine: e.target.value.trim() ? e.target.value : undefined,
-                          },
-                        })
-                      }
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Bottom banner — subline</label>
-                    <input
-                      type="text"
-                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
-                      placeholder="Exclusive access."
-                      value={draft.landingContent?.pricingFinalBannerSubline ?? ""}
-                      onChange={(e) =>
-                        updateDraft({
-                          landingContent: {
-                            ...draft.landingContent,
-                            pricingFinalBannerSubline: e.target.value.trim() ? e.target.value : undefined,
-                          },
-                        })
-                      }
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <div className="pt-3 border-t border-gray-200 dark:border-gray-700 space-y-3">
-                <p className="text-xs font-medium text-gray-600 dark:text-gray-300">Tip section (landing + member Tip tab)</p>
-                <p className="text-xs text-gray-500 dark:text-gray-400">
-                  The <strong>heading</strong> appears on your public landing tip block and on the member hub Tip tab. The <strong>guest subline</strong> only shows on the public page (e.g. “no subscription”). The <strong>member subline</strong> only shows after someone has joined — it never uses the guest line unless you type the same text in both.
-                </p>
-                <div>
-                  <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Heading (shared)</label>
-                  <input
-                    type="text"
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
-                    placeholder="Want to show love?"
-                    value={draft.landingContent?.tipSectionHeading ?? ""}
-                    onChange={(e) =>
-                      updateDraft({
-                        landingContent: {
-                          ...draft.landingContent,
-                          tipSectionHeading: e.target.value.trim() ? e.target.value : undefined,
-                        },
-                      })
-                    }
-                  />
-                </div>
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <div>
-                    <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Subline — public landing only</label>
-                    <input
-                      type="text"
-                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
-                      placeholder="One-time tip — no subscription"
-                      value={draft.landingContent?.tipSectionSublineGuest ?? ""}
-                      onChange={(e) =>
-                        updateDraft({
-                          landingContent: {
-                            ...draft.landingContent,
-                            tipSectionSublineGuest: e.target.value.trim() ? e.target.value : undefined,
-                          },
-                        })
-                      }
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Subline — member Tip tab only</label>
-                    <input
-                      type="text"
-                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
-                      placeholder="No minimum — send what you like."
-                      value={draft.landingContent?.tipSectionSublineMember ?? ""}
-                      onChange={(e) =>
-                        updateDraft({
-                          landingContent: {
-                            ...draft.landingContent,
-                            tipSectionSublineMember: e.target.value.trim() ? e.target.value : undefined,
-                          },
-                        })
-                      }
-                    />
-                  </div>
-                </div>
-              </div>
-              
-              <div className="flex flex-wrap gap-4">
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={draft.monetization?.tipsEnabled ?? true}
-                    onChange={(e) => updateDraft({ monetization: { ...draft.monetization, ...DEFAULT_MONETIZATION, tipsEnabled: e.target.checked } })}
-                    className="rounded border-gray-300 dark:border-gray-600 text-primary-600"
-                  />
-                  <span className="text-sm text-gray-700 dark:text-gray-300">Tips</span>
-                </label>
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={draft.monetization?.chatEnabled ?? true}
-                    onChange={(e) => updateDraft({ monetization: { ...draft.monetization, ...DEFAULT_MONETIZATION, chatEnabled: e.target.checked } })}
-                    className="rounded border-gray-300 dark:border-gray-600 text-primary-600"
-                  />
-                  <span className="text-sm text-gray-700 dark:text-gray-300">Chat</span>
-                </label>
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={draft.monetization?.videoEnabled ?? true}
-                    onChange={(e) => updateDraft({ monetization: { ...draft.monetization, ...DEFAULT_MONETIZATION, videoEnabled: e.target.checked } })}
-                    className="rounded border-gray-300 dark:border-gray-600 text-primary-600"
-                  />
-                  <span className="text-sm text-gray-700 dark:text-gray-300">Video in DMs</span>
-                </label>
-              </div>
-              <p className="text-xs text-gray-500 dark:text-gray-400">
-                <strong>Tips</strong> — tip section on the <em>public</em> landing only.{" "}
-                <strong>Chat</strong> — member hub <strong>Messages</strong> tab (turn off to hide it).{" "}
-                <strong>Video in DMs</strong> — video <em>file</em> attachments in messages only (not live 1:1 or livestream; see{" "}
-                <code className="text-[11px]">docs/LIVE_VIDEO_AND_STREAMS.md</code>). Off = photos only; existing video messages still play.
-              </p>
-              {(saved as Record<string, unknown>).stripeConnectAccountId == null && (
-                <p className="text-xs text-amber-600 dark:text-amber-400">Connect Stripe in Payouts to receive payments.</p>
-              )}
-            </div>
-          </CollapsibleSection>
 
           {/* Legal */}
           <CollapsibleSection title="Terms & Privacy">
@@ -3520,6 +3415,7 @@ export const MyPageBuilder: React.FC = () => {
               config={storefrontPreviewConfig}
               previewMode={previewMode}
               liveLanding={storefrontLandingLivePreview}
+              memberPreviewFullTabs
               previewFraming={{ tool: previewFramingTool, focusPhotoSlot: previewFocusPhotoSlot }}
               onHeroMediaItemPatch={(index, patch) => {
                 setDraft((prev) => {

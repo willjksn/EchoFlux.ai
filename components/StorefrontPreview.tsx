@@ -59,7 +59,7 @@ import {
 } from "./useUnreadNewMessageNotifications";
 import { resolveStoreCopy } from "../src/lib/storefrontStoreCopy";
 import { resolvePricingLandingCopy } from "../src/lib/pricingLandingCopy";
-import { resolveTipSectionCopy } from "../src/lib/tipSectionCopy";
+import { resolveTipFooterEmoji, resolveTipSectionCopy } from "../src/lib/tipSectionCopy";
 import { normalizeHeroMediaForStorefront } from "../src/lib/storefrontHeroNormalize";
 import { WitmeHeaderLogo } from "./WitmeHeaderLogo";
 import { renderTextWithCustomEmoji, type SjHeartEmojiAccessContext } from "../src/lib/customEmoji";
@@ -211,6 +211,11 @@ export interface StorefrontPreviewProps {
   onAvatarObjectPositionChange?: (objectPosition: string) => void;
   /** Public fan page: wire buttons to FanAuth + Stripe (My Page preview stays dummy). */
   liveLanding?: StorefrontPreviewLiveLanding;
+  /**
+   * My Page builder only: show the full member tab strip (Home, Store, Tip, Messages, About)
+   * so creators see what paying members see, even if Messages is toggled off in settings.
+   */
+  memberPreviewFullTabs?: boolean;
 }
 
 // Neutral theme defaults - creators should customize
@@ -422,6 +427,7 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
   onHeroMediaItemPatch,
   onAvatarObjectPositionChange,
   liveLanding,
+  memberPreviewFullTabs = false,
 }) => {
   const [activeTab, setActiveTab] = useState<string>("home");
   /** Member Home/Feed preview: same list↔grid toggle as live FanMemberFeed + FanHubFeed */
@@ -530,9 +536,13 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
   const sections = config.sections ?? { feed: true, treats: true, tip: true, messages: true, about: true };
   const sectionsOrder = config.sectionsOrder ?? DEFAULT_SECTION_ORDER;
   const chatEnabledPreview = config.monetization?.chatEnabled !== false;
-  const memberTabs = sectionsOrder
-    .filter((key) => key !== "saved" && (sections as Record<string, boolean>)?.[key] !== false)
-    .filter((key) => key !== "messages" || chatEnabledPreview);
+  const memberTabs = useMemo(() => {
+    const base = sectionsOrder.filter(
+      (key) => key !== "saved" && (sections as Record<string, boolean>)?.[key] !== false
+    );
+    if (memberPreviewFullTabs) return base;
+    return base.filter((key) => key !== "messages" || chatEnabledPreview);
+  }, [memberPreviewFullTabs, sections, sectionsOrder, chatEnabledPreview]);
   const { user, showToast } = useAppContext();
 
   const sjHeartEmojiCtx: SjHeartEmojiAccessContext = useMemo(
@@ -745,6 +755,7 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
   });
   const tipLandingPreview = resolveTipSectionCopy(landingContent, "landing");
   const tipMemberPreview = resolveTipSectionCopy(landingContent, "member");
+  const tipFooterEmojiPreview = resolveTipFooterEmoji(landingContent);
 
   const patchHeroItem = useCallback(
     (index: number, patch: Partial<StorefrontHeroMediaItem>) => {
@@ -2392,6 +2403,15 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
                   style={{ padding: "1rem 1.25rem 1.5rem" }}
                 >
                   <span style={{ fontSize: "0.95rem", fontWeight: 600, color: textColor }}>Thank You!</span>
+                  {tipFooterEmojiPreview ? (
+                    <span
+                      className="tip-heart-icon"
+                      style={{ fontSize: "1.35rem", lineHeight: 1 }}
+                      aria-hidden
+                    >
+                      {tipFooterEmojiPreview}
+                    </span>
+                  ) : null}
                   {avatar ? (
                     <img 
                       src={avatar} 
