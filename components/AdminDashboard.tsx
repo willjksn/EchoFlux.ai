@@ -18,7 +18,7 @@ import { TeamIcon, DollarSignIcon, UserPlusIcon, ArrowUpCircleIcon, ImageIcon, V
 import { db, auth } from '../firebaseConfig';
 import { collection, query, orderBy, onSnapshot, setDoc, doc, getDoc, deleteField, getDocs } from 'firebase/firestore';
 import { useAppContext } from './AppContext';
-import { defaultSettings } from '../constants';
+import { defaultSettings, ECHOFLUX_CREATOR_ELITE_INVITE_USD, ECHOFLUX_CREATOR_PRO_INVITE_USD } from '../constants';
 import { getModelUsageAnalytics, type ModelUsageStats } from '../src/services/modelUsageService';
 import { hasActiveStripeEchofluxSubscription } from '../src/lib/echofluxStripeMrr';
 import { safeUsernameForHandle } from '../src/lib/fanHubDisplay';
@@ -192,6 +192,8 @@ const planColorMap: Record<PlanKey, string> = {
     Growth: 'bg-sky-100 text-sky-800 dark:bg-sky-900/50 dark:text-sky-200',
     Starter: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/50 dark:text-yellow-200',
     OnlyFansStudio: 'bg-pink-100 text-pink-800 dark:bg-pink-900/50 dark:text-pink-200',
+    CreatorPro: 'bg-green-100 text-green-900 dark:bg-green-900/40 dark:text-green-100 ring-1 ring-green-400/40',
+    CreatorElite: 'bg-purple-100 text-purple-900 dark:bg-purple-900/40 dark:text-purple-100 ring-1 ring-purple-400/40',
 };
 
 const planPrices: Record<PlanKey, number> = { 
@@ -203,6 +205,9 @@ const planPrices: Record<PlanKey, number> = {
     'Growth': 249, 
     'Starter': 99,
     'OnlyFansStudio': 79,
+    /** Invite-only Stripe prices (monthly); mirrors `ECHOFLUX_*_INVITE_USD` in constants.ts */
+    CreatorPro: ECHOFLUX_CREATOR_PRO_INVITE_USD,
+    CreatorElite: ECHOFLUX_CREATOR_ELITE_INVITE_USD,
 };
 function normalizeAdminCreatorGroupKey(raw: string | null | undefined): string {
     const id = String(raw || "").trim();
@@ -1085,7 +1090,18 @@ export const AdminDashboard: React.FC = () => {
         const thirtyDaysAgo = new Date();
         thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
-        const distribution: Record<PlanKey, number> = { Free: 0, Caption: 0, Pro: 0, Elite: 0, Agency: 0, Growth: 0, Starter: 0, OnlyFansStudio: 0 };
+        const distribution: Record<PlanKey, number> = {
+            Free: 0,
+            Caption: 0,
+            Pro: 0,
+            Elite: 0,
+            Agency: 0,
+            Growth: 0,
+            Starter: 0,
+            OnlyFansStudio: 0,
+            CreatorPro: 0,
+            CreatorElite: 0,
+        };
         
         users.forEach(user => {
             // Hide Agency, Starter, Growth, Caption, Free, and OnlyFansStudio plans from display

@@ -12,7 +12,13 @@ import { LiveVideoChatManager } from './LiveVideoChatManager';
 import { FeedbackSurveyModal, type FeedbackMilestone } from './FeedbackSurveyModal';
 import { CustomFeedbackFormModal } from './CustomFeedbackFormModal';
 import { isInviteOnlyMode } from '../src/utils/inviteOnly';
-import { ECHOFLUX_ELITE_MONTHLY_USD, ECHOFLUX_PRO_MONTHLY_USD, OFFLINE_MODE } from '../constants';
+import {
+  ECHOFLUX_CREATOR_ELITE_INVITE_USD,
+  ECHOFLUX_CREATOR_PRO_INVITE_USD,
+  ECHOFLUX_ELITE_MONTHLY_USD,
+  ECHOFLUX_PRO_MONTHLY_USD,
+  OFFLINE_MODE,
+} from '../constants';
 import { hasActiveStripeEchofluxSubscription } from '../src/lib/echofluxStripeMrr';
 
 const platformFilterIcons: { [key in Platform]: React.ReactNode } = {
@@ -831,8 +837,8 @@ export const Dashboard: React.FC = () => {
           const hasFuturePeriodEnd = Number.isFinite(periodEndMs) && periodEndMs > Date.now();
           // Paying Users should be currently paid active subscriptions only (not trialing).
           const isCurrentlyPaying = stripeMrrEligible && stripeStatus === 'active' && hasFuturePeriodEnd;
-          if (plan === 'Pro' && isCurrentlyPaying) proCount++;
-          else if (plan === 'Elite' && isCurrentlyPaying) eliteCount++;
+          if ((plan === 'Pro' || plan === 'CreatorPro') && isCurrentlyPaying) proCount++;
+          else if ((plan === 'Elite' || plan === 'CreatorElite' || plan === 'OnlyFansStudio') && isCurrentlyPaying) eliteCount++;
           // Keep command-center MRR strict to avoid stale Stripe rows without a valid period end.
           const isStrictStripeMrrEligible =
             stripeMrrEligible &&
@@ -847,6 +853,8 @@ export const Dashboard: React.FC = () => {
               Growth: 249,
               Starter: 99,
               OnlyFansStudio: 79,
+              CreatorPro: ECHOFLUX_CREATOR_PRO_INVITE_USD,
+              CreatorElite: ECHOFLUX_CREATOR_ELITE_INVITE_USD,
             };
             stripeActiveMrrUsd += planMrrByPlan[plan] || 0;
           }
@@ -3183,12 +3191,15 @@ export const Dashboard: React.FC = () => {
                 </div>
               </div>
 
-              {/* Plan Breakdown */}
+              {/* Plan breakdown — Pro / Elite tiers only (invite-priced subs roll into these counts; no separate Creator rows) */}
               <div>
-                <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Plan breakdown (Stripe active / trialing)</h4>
+                <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Plan breakdown (Stripe active paying)</h4>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
+                  Pro tier and Elite tier counts (includes invite-priced subscriptions in the same bar).
+                </p>
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
-                    <span className="text-sm text-gray-600 dark:text-gray-400">Pro (${ECHOFLUX_PRO_MONTHLY_USD}/mo)</span>
+                    <span className="text-sm text-gray-600 dark:text-gray-400">Pro tier</span>
                     <div className="flex items-center gap-3">
                       <div className="w-24 bg-gray-200 dark:bg-gray-700 rounded-full h-2">
                         <div 
@@ -3202,7 +3213,7 @@ export const Dashboard: React.FC = () => {
                     </div>
                   </div>
                   <div className="flex items-center justify-between">
-                    <span className="text-sm text-gray-600 dark:text-gray-400">Elite (${ECHOFLUX_ELITE_MONTHLY_USD}/mo)</span>
+                    <span className="text-sm text-gray-600 dark:text-gray-400">Elite tier</span>
                     <div className="flex items-center gap-3">
                       <div className="w-24 bg-gray-200 dark:bg-gray-700 rounded-full h-2">
                         <div 
@@ -3218,17 +3229,17 @@ export const Dashboard: React.FC = () => {
                 </div>
               </div>
 
-              {/* Revenue Potential */}
+              {/* Revenue — use summed Stripe MRR (mixed list + invite rates), not Pro×$29 + Elite×$59 */}
               <div className="p-4 bg-gradient-to-r from-primary-50 to-purple-50 dark:from-primary-900/20 dark:to-purple-900/20 rounded-lg border border-primary-200 dark:border-primary-700">
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm font-medium text-gray-700 dark:text-gray-300">Monthly subscription revenue (Stripe)</p>
                     <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                      {userEngagementData.conversionFunnel.pro} paying Pro × ${ECHOFLUX_PRO_MONTHLY_USD} + {userEngagementData.conversionFunnel.elite} paying Elite × ${ECHOFLUX_ELITE_MONTHLY_USD}
+                      Sum of per-plan MRR (list price + invite tiers). Same total as Subscription MRR above.
                     </p>
                   </div>
                   <p className="text-2xl font-bold text-primary-600 dark:text-primary-400">
-                    ${((userEngagementData.conversionFunnel.pro * ECHOFLUX_PRO_MONTHLY_USD) + (userEngagementData.conversionFunnel.elite * ECHOFLUX_ELITE_MONTHLY_USD)).toLocaleString()}
+                    ${userEngagementData.stripeActiveMrrUsd.toLocaleString()}
                   </p>
                 </div>
               </div>
