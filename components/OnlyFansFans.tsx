@@ -5,6 +5,7 @@ import { UserIcon, SearchIcon, StarIcon, SparklesIcon, TrashIcon, EditIcon, Plus
 import { auth, db } from '../firebaseConfig';
 import { collection, getDocs, doc, getDoc, setDoc, deleteDoc, updateDoc, query, orderBy, limit, Timestamp, where } from 'firebase/firestore';
 import { fanHubListLabel, safeUsernameForHandle } from '../src/lib/fanHubDisplay';
+import { isHubMembershipAccessExpired, pickLatestMemberAccessEnd } from '../src/lib/memberAccessEnd';
 
 function usernameFromFanDoc(fd: Record<string, unknown>): string | null {
   const keys = ['username', 'memberUsername', 'handle', 'instagram_handle', 'instagramHandle'] as const;
@@ -21,6 +22,23 @@ function normDisplayLabel(s: string): string {
   return s.trim().toLowerCase().replace(/\s+/g, ' ');
 }
 
+function subscriptionStatusFromFanDoc(fd: Record<string, unknown>): string | null {
+  const s = fd.subscriptionStatus ?? fd.subscription_status;
+  return typeof s === 'string' && s.trim() ? s.trim() : null;
+}
+
+function parseCancelAtPeriodEndFromFanDoc(d: Record<string, unknown>): boolean {
+  const raw = d.cancelAtPeriodEnd ?? d.cancel_at_period_end;
+  if (raw === true) return true;
+  if (raw === false || raw == null) return false;
+  if (typeof raw === 'string') {
+    const t = raw.trim().toLowerCase();
+    return t === 'true' || t === '1' || t === 'yes';
+  }
+  if (typeof raw === 'number') return raw === 1;
+  return false;
+}
+
 function fanInitialsFromName(name: string): string {
   const parts = name.trim().split(/\s+/).filter(Boolean);
   if (parts.length === 0) return '?';
@@ -33,10 +51,13 @@ function FanGridAvatar({
   avatarUrl,
   name,
   sizeClass = 'w-12 h-12',
+  muted = false,
 }: {
   avatarUrl?: string | null;
   name: string;
   sizeClass?: string;
+  /** Paid membership ended (Stripe mirror): soften avatar to match greyed card. */
+  muted?: boolean;
 }) {
   const [failed, setFailed] = useState(false);
   const url = typeof avatarUrl === 'string' ? avatarUrl.trim() : '';
@@ -45,7 +66,7 @@ function FanGridAvatar({
     <div
       className={`flex-shrink-0 rounded-full overflow-hidden flex items-center justify-center text-sm font-semibold ${sizeClass} ${
         showImg ? 'bg-gray-200 dark:bg-gray-600' : 'bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300'
-      }`}
+      } ${muted ? 'opacity-80 grayscale' : ''}`}
     >
       {showImg ? (
         <img
@@ -106,6 +127,8 @@ interface Fan {
     name: string;
     /** From creators/.../fans.avatarUrl or users/{fanId}.avatar / photoURL */
     avatarUrl?: string | null;
+    /** From creators/.../fans subscription mirror: paid period ended (grey card; fan row kept for renewals). */
+    hubMembershipExpired?: boolean;
     preferences: {
         preferredTone?: 'soft' | 'dominant' | 'playful' | 'dirty' | 'Bold';
         favoriteSessionType?: string;
@@ -471,6 +494,7 @@ export const OnlyFansFans: React.FC = () => {
                                 : null;
                         let email: string | null = typeof data.email === 'string' ? data.email : null;
                         let avatarUrl: string | null = null;
+                        let hubMembershipExpired = false;
 
                         try {
                             const [uSnap, fSnap] = await Promise.all([
@@ -479,6 +503,11 @@ export const OnlyFansFans: React.FC = () => {
                             ]);
                             if (fSnap.exists()) {
                                 const fd = fSnap.data() as Record<string, unknown>;
+                                hubMembershipExpired = isHubMembershipAccessExpired({
+                                    subscriptionStatus: subscriptionStatusFromFanDoc(fd),
+                                    cancelAtPeriodEnd: parseCancelAtPeriodEndFromFanDoc(fd),
+                                    accessEnd: pickLatestMemberAccessEnd(fd),
+                                });
                                 const fromFan = usernameFromFanDoc(fd);
                                 if (fromFan) username = fromFan;
                                 if (!displayName && typeof fd.displayName === 'string' && fd.displayName.trim()) {
@@ -522,6 +551,7 @@ export const OnlyFansFans: React.FC = () => {
                             id: fanId,
                             name: listName,
                             avatarUrl: avatarUrl || prefAvatar || undefined,
+                            hubMembershipExpired,
                             preferences: {
                                 ...data,
                                 spendingLevel:
@@ -879,7 +909,8 @@ export const OnlyFansFans: React.FC = () => {
         return filtered;
     };
 
-    const getTierColor = (tier?: string) => {
+    const getTierColor = (tier?: string, accessExpired?: boolean) => {
+        if (accessExpired) return 'bg-gray-500 dark:bg-gray-600';
         switch (tier) {
             case 'Paid': return 'bg-blue-500 dark:bg-blue-600';
             case 'Free': return 'bg-gray-500 dark:bg-gray-600';
@@ -1201,22 +1232,34 @@ export const OnlyFansFans: React.FC = () => {
                         filteredFans.map((fan) => {
                             const prefs = fan.preferences;
                             const isSelected = selectedFan?.id === fan.id;
+                            const accessExpired = fan.hubMembershipExpired === true;
 
                             return (
                                 <div
                                     key={fan.id}
                                     onClick={() => setSelectedFan(fan)}
+                                    title={
+                                        accessExpired
+                                            ? 'Paid membership ended. Card stays for history; it updates if they resubscribe.'
+                                            : undefined
+                                    }
                                     className={`relative p-4 rounded-lg border-2 cursor-pointer transition-all hover:shadow-lg ${
                                         isSelected
-                                            ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/20'
-                                            : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 hover:border-primary-300 dark:hover:border-primary-700'
+                                            ? accessExpired
+                                                ? 'border-primary-400/80 bg-primary-50/70 dark:bg-primary-900/15 opacity-95 grayscale-[0.35]'
+                                                : 'border-primary-500 bg-primary-50 dark:bg-primary-900/20'
+                                            : accessExpired
+                                              ? 'border-gray-300 dark:border-gray-600 bg-gray-50/95 dark:bg-gray-900/70 opacity-[0.92] grayscale-[0.4] hover:border-gray-400 dark:hover:border-gray-500'
+                                              : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 hover:border-primary-300 dark:hover:border-primary-700'
                                     }`}
                                 >
                                     {/* Action Buttons - Top Right */}
                                     <div className="absolute top-2 right-2 flex gap-1 z-10">
-                                        {prefs.subscriptionTier && (
-                                            <span className={`px-2 py-1 text-xs font-semibold text-white rounded-full ${getTierColor(prefs.subscriptionTier)}`}>
-                                                {prefs.subscriptionTier}
+                                        {(accessExpired || prefs.subscriptionTier) && (
+                                            <span
+                                                className={`px-2 py-1 text-xs font-semibold text-white rounded-full ${getTierColor(prefs.subscriptionTier, accessExpired)}`}
+                                            >
+                                                {accessExpired ? 'Expired' : prefs.subscriptionTier}
                                             </span>
                                         )}
                                         <button
@@ -1243,7 +1286,7 @@ export const OnlyFansFans: React.FC = () => {
                                     </div>
 
                                     <div className="flex items-start gap-3">
-                                        <FanGridAvatar avatarUrl={fan.avatarUrl} name={fan.name} />
+                                        <FanGridAvatar avatarUrl={fan.avatarUrl} name={fan.name} muted={accessExpired} />
 
                                         {/* Fan Info */}
                                         <div className="flex-1 min-w-0">
@@ -1411,13 +1454,21 @@ export const OnlyFansFans: React.FC = () => {
 
             {/* Selected Fan Details Panel */}
             {selectedFan && viewMode === 'grid' && (
-                <div ref={fanDetailsPanelRef} className="mt-6 bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
+                <div
+                    ref={fanDetailsPanelRef}
+                    className={`mt-6 rounded-lg shadow-md p-6 ${
+                        selectedFan.hubMembershipExpired
+                            ? 'border border-gray-300 dark:border-gray-600 bg-gray-50/90 dark:bg-gray-900/50'
+                            : 'bg-white dark:bg-gray-800'
+                    }`}
+                >
                     <div className="flex items-center justify-between mb-4 gap-3">
                         <div className="flex items-center gap-3 min-w-0">
                             <FanGridAvatar
                                 avatarUrl={selectedFan.avatarUrl}
                                 name={selectedFan.name}
                                 sizeClass="w-14 h-14 text-base"
+                                muted={selectedFan.hubMembershipExpired === true}
                             />
                             <h2 className="text-xl font-semibold text-gray-900 dark:text-white truncate">
                                 Fan Details: {selectedFan.name}
@@ -1430,6 +1481,13 @@ export const OnlyFansFans: React.FC = () => {
                             Close
                         </button>
                     </div>
+
+                    {selectedFan.hubMembershipExpired ? (
+                        <p className="mb-4 rounded-lg border border-gray-200 bg-gray-100/80 px-3 py-2 text-sm text-gray-700 dark:border-gray-600 dark:bg-gray-800/80 dark:text-gray-300">
+                            Paid membership has ended for this fan (per your hub billing data). They are not removed so
+                            history stays intact and the card will return to normal if they renew.
+                        </p>
+                    ) : null}
 
                     {/* Notes Section */}
                     <div className="mb-4">

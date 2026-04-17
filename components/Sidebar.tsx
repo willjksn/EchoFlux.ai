@@ -2,6 +2,7 @@ import React from 'react';
 import { Page } from '../types';
 import { DashboardIcon, SettingsIcon, LogoIcon, ComposeIcon, AdminIcon, CalendarIcon, TargetIcon, SparklesIcon, ImageIcon, HeartIcon, GlobeIcon } from './icons/UIIcons';
 import { useAppContext } from './AppContext';
+import { hasFanHubStudioRouteAccess, hasPremiumStudioRouteAccess } from '../src/utils/planAccess';
 
 interface NavItemProps {
   page: Page;
@@ -44,9 +45,9 @@ export const Sidebar: React.FC = () => {
   const isBusiness = user.userType === 'Business';
   const autopilotLabel = isBusiness ? 'Marketing Manager' : 'AI Autopilot';
 
-  // Premium Studio: one nav item for Pro/Elite/Agency. Pro -> upgrade screen; Elite/Agency/OnlyFansStudio -> full studio.
-  const hasFanHubAccess = ['Pro', 'Elite', 'Agency'].includes(user.plan);
-  const hasPremiumStudioAccess = user.plan === 'Elite' || user.plan === 'Agency' || user.plan === 'OnlyFansStudio';
+  // Premium Studio: Pro/CreatorPro -> upgrade screen; Elite/CreatorElite/OFS/Agency -> full studio. Fan Hub: all paid creator tiers above.
+  const hasFanHubAccess = hasFanHubStudioRouteAccess(user);
+  const hasPremiumStudioAccess = hasPremiumStudioRouteAccess(user);
 
   const allNavItems: (Omit<NavItemProps, 'page' | 'label'> & { page: Page | 'admin', label: string })[] = [
     // MAIN
@@ -75,7 +76,7 @@ export const Sidebar: React.FC = () => {
           case 'admin':
               return user.role === 'Admin';
           case 'calendar':
-              return user.plan !== 'Free' && ['Pro', 'Elite', 'Agency'].includes(user.plan);
+              return hasFanHubStudioRouteAccess(user);
           case 'onlyfansStudio':
               return hasPremiumStudioAccess;
           case 'premiumStudioUpgrade':

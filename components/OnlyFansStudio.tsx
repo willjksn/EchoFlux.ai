@@ -11,6 +11,7 @@ import {
 } from './icons/UIIcons';
 import { ErrorBoundary } from './ErrorBoundary';
 import { usePremiumStudioTab } from './PremiumStudioLayout';
+import { hasPremiumStudioRouteAccess } from '../src/utils/planAccess';
 import { auth, db } from '../firebaseConfig';
 import { addDoc, collection, getDocs, limit, orderBy, query, Timestamp, doc, getDoc, where, onSnapshot } from 'firebase/firestore';
 
@@ -133,8 +134,8 @@ export const OnlyFansStudio: React.FC<{ mode?: 'studio' | 'fanHub' }> = ({ mode 
 
     const premiumTab = usePremiumStudioTab();
 
-    // Check if user has access (OnlyFansStudio, Elite, or Agency plan)
-    const hasAccess = user?.plan === 'OnlyFansStudio' || user?.plan === 'Elite' || user?.plan === 'Agency';
+    // Elite-equivalent plans including CreatorElite invite + legacy OnlyFansStudio
+    const hasAccess = hasPremiumStudioRouteAccess(user);
 
     const openContentBrain = (tab: 'captions' | 'weeklyPlan' | 'trends' = 'captions') => {
         setContentBrainInitialTab(tab);

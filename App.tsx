@@ -26,6 +26,7 @@ import { CreatorOnboardingModal } from './components/CreatorOnboardingModal';
 import { PlanSelectorModal } from './components/PlanSelectorModal';
 import { MaintenancePage } from './components/MaintenancePage';
 import { isMaintenanceMode, getAllowedEmail, canBypassMaintenance } from './src/utils/maintenance';
+import { hasFanHubStudioRouteAccess, hasPremiumStudioRouteAccess } from './src/utils/planAccess';
 import { InteractiveTour } from './components/InteractiveTour';
 import { PaymentModal } from './components/PaymentModal';
 import { Toast } from './components/Toast';
@@ -209,7 +210,7 @@ const MainContent: React.FC = () => {
                 );
             case 'automation': return <Automation />;
             case 'bio': {
-                const hasAccess = user?.plan === 'Elite' || user?.plan === 'Agency' || user?.plan === 'OnlyFansStudio';
+                const hasAccess = hasPremiumStudioRouteAccess(user);
                 if (!hasAccess) {
                     return (
                         <LazyBoundary label="Loading…">
@@ -252,7 +253,7 @@ const MainContent: React.FC = () => {
                 </Suspense>
             );
             case 'onlyfansStudio': {
-                const hasPremiumStudioAccess = user?.plan === 'Elite' || user?.plan === 'Agency' || user?.plan === 'OnlyFansStudio';
+                const hasPremiumStudioAccess = hasPremiumStudioRouteAccess(user);
                 if (!hasPremiumStudioAccess) {
                     return (
                         <LazyBoundary label="Loading…">
@@ -282,7 +283,7 @@ const MainContent: React.FC = () => {
                     </LazyBoundary>
                 );
             case 'fanHub': {
-                const hasAccess = user?.plan === 'Elite' || user?.plan === 'Agency' || user?.plan === 'OnlyFansStudio';
+                const hasAccess = hasFanHubStudioRouteAccess(user);
                 if (!hasAccess) {
                     return (
                         <LazyBoundary label="Loading…">

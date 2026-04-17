@@ -152,3 +152,28 @@ export function formatRemainingAccessForFanRow(input: {
 
   return "—";
 }
+
+/**
+ * True when Stripe-mirrored fan doc shows paid access has ended (aligns with User Management “Expired on …”).
+ * Used for UI such as greyed fan cards; does not delete or hide the fan record.
+ */
+export function isHubMembershipAccessExpired(input: {
+  subscriptionStatus: string | null | undefined;
+  cancelAtPeriodEnd: boolean;
+  accessEnd: Date | null;
+}): boolean {
+  const st = String(input.subscriptionStatus || "").toLowerCase();
+  const now = Date.now();
+  const endMs =
+    input.accessEnd && Number.isFinite(input.accessEnd.getTime())
+      ? input.accessEnd.getTime()
+      : null;
+
+  if (st === "canceled" || st === "cancelled") {
+    return endMs != null && endMs <= now;
+  }
+  if (st === "active" || st === "trialing") {
+    return input.cancelAtPeriodEnd === true && endMs != null && endMs <= now;
+  }
+  return false;
+}
