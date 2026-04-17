@@ -289,7 +289,8 @@ export const Profile: React.FC = () => {
                 
                 await storageFunctions.uploadBytes(storageRef, file, { contentType: file.type });
                 const downloadURL = await storageFunctions.getDownloadURL(storageRef);
-                
+                e.target.value = '';
+
                 // Update user with Firebase URL (persists across sessions)
                 const updatedUser = {
                     ...editableUser,
@@ -386,6 +387,12 @@ export const Profile: React.FC = () => {
     useEffect(() => {
         calculateStorageUsage();
     }, [user?.id]);
+
+    useEffect(() => {
+        if (user && !isEditing) {
+            setEditableUser(user);
+        }
+    }, [user, isEditing]);
 
     const storagePercentage = storageUsage.total > 0 && storageUsage.total !== Infinity 
         ? (storageUsage.used / storageUsage.total) * 100 
@@ -519,6 +526,7 @@ export const Profile: React.FC = () => {
                                         onPointerCancel={panHere ? onProfileAvatarPanPointerUp : undefined}
                                     >
                                         <img
+                                            key={profileAvatarSrc}
                                             src={profileAvatarSrc}
                                             alt="Profile"
                                             className="w-full h-full pointer-events-none select-none"

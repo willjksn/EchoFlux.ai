@@ -1044,8 +1044,10 @@ const AppContent: React.FC = () => {
     }, [isAuthenticated, user, isFinalizingCheckout, setUser, showToast]);
 
     const handleOnboardingComplete = async (opts?: { openFanHub?: boolean }) => {
+        // Merge only onboarding completion — do not spread `user` from this closure or we can
+        // overwrite niche/audience/creator fields the modal just wrote with stale state.
         if (user) {
-            await setUser({ ...user, hasCompletedOnboarding: true });
+            await setUser({ id: user.id, hasCompletedOnboarding: true });
         }
         setOnboardingStep('none');
         try {

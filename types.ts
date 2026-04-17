@@ -826,6 +826,10 @@ export interface User {
   businessGoal?: string;
   niche?: string;
   audience?: string;
+  /** Primary onboarding goal (free text); stored on user doc for AI/settings context */
+  creatorGoal?: string;
+  /** Creator profile line from onboarding / Settings (e.g. Female, Male) */
+  creatorGender?: string;
   hasCompletedOnboarding?: boolean;
   hasAutopilot?: boolean; 
   notifications: {

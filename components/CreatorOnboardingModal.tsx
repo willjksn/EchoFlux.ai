@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { useAppContext } from './AppContext';
 import { auth, db } from '../firebaseConfig';
 import { doc, setDoc } from 'firebase/firestore';
@@ -15,8 +15,9 @@ export const CreatorOnboardingModal: React.FC<CreatorOnboardingModalProps> = ({ 
     const [step, setStep] = useState(1);
     const [niche, setNiche] = useState(user?.niche || '');
     const [audience, setAudience] = useState(user?.audience || '');
-    const [creatorGender, setCreatorGender] = useState((user as { creatorGender?: string })?.creatorGender || '');
-    const [goal, setGoal] = useState('');
+    const [creatorGender, setCreatorGender] = useState(user?.creatorGender || '');
+    const [goal, setGoal] = useState(user?.creatorGoal || '');
+    const openFanHubAfterOnboardingRef = useRef(false);
     const [fanHubHandle, setFanHubHandle] = useState('');
     const [fanHubPresetId, setFanHubPresetId] = useState('default');
     const [fanHubPrimaryColor, setFanHubPrimaryColor] = useState(FAN_HUB_THEME_PRESETS[0].theme.primary);
@@ -121,8 +122,17 @@ export const CreatorOnboardingModal: React.FC<CreatorOnboardingModalProps> = ({ 
             const data = await res.json().catch(() => ({}));
             if (!res.ok) throw new Error((data as { message?: string }).message || 'Save failed');
             await persistCreatorProfile();
-            if (user) await setUser({ ...user, niche, audience, hasCompletedOnboarding: true });
-            onComplete({ openFanHub: true });
+            if (user) {
+                await setUser({
+                    id: user.id,
+                    niche,
+                    audience,
+                    creatorGoal: goal.trim() || undefined,
+                    creatorGender: creatorGender || undefined,
+                });
+            }
+            openFanHubAfterOnboardingRef.current = true;
+            setStep(9);
         } catch (e) {
             setHandleCheckMessage(e instanceof Error ? e.message : 'Failed to save');
         } finally {
@@ -133,17 +143,30 @@ export const CreatorOnboardingModal: React.FC<CreatorOnboardingModalProps> = ({ 
     const handleSaveAndComplete = async () => {
         await persistFanHubThemeSelection({ handle: fanHubHandle });
         await persistCreatorProfile();
+        const openFanHub = openFanHubAfterOnboardingRef.current;
+        openFanHubAfterOnboardingRef.current = false;
         if (user) {
-            await setUser({ ...user, niche, audience, hasCompletedOnboarding: true });
+            await setUser({
+                id: user.id,
+                niche,
+                audience,
+                creatorGoal: goal.trim() || undefined,
+                creatorGender: creatorGender || undefined,
+                hasCompletedOnboarding: true,
+            });
         }
-        onComplete();
+        onComplete({ openFanHub: openFanHub || undefined });
     };
 
-    const handleNext = () => {
+    const handleNext = async () => {
+        if (!canProceed()) return;
+        if (step >= 2 && step <= 7) {
+            await persistCreatorProfile();
+        }
         if (step < totalSteps) {
-            setStep(prev => prev + 1);
+            setStep((prev) => prev + 1);
         } else {
-            handleSaveAndComplete();
+            await handleSaveAndComplete();
         }
     };
 
@@ -154,18 +177,28 @@ export const CreatorOnboardingModal: React.FC<CreatorOnboardingModalProps> = ({ 
                 niche,
                 audience,
                 creatorGender: creatorGender || undefined,
+                creatorGoal: goal.trim() || undefined,
                 updatedAt: new Date().toISOString(),
             }, { merge: true });
         } catch (e) {
             console.error('Failed to persist creator profile:', e);
         }
-    }, [user?.id, niche, audience, creatorGender]);
+    }, [user?.id, niche, audience, creatorGender, goal]);
 
     const handleSkipFanHubSetup = async () => {
         await persistFanHubThemeSelection({ handle: fanHubHandle });
         await persistCreatorProfile();
-        if (user) setUser({ ...user, niche, audience, hasCompletedOnboarding: true });
-        onComplete();
+        if (user) {
+            await setUser({
+                id: user.id,
+                niche,
+                audience,
+                creatorGoal: goal.trim() || undefined,
+                creatorGender: creatorGender || undefined,
+            });
+        }
+        openFanHubAfterOnboardingRef.current = false;
+        setStep(9);
     };
 
     const handleBack = () => {
@@ -619,7 +652,7 @@ export const CreatorOnboardingModal: React.FC<CreatorOnboardingModalProps> = ({ 
                                 disabled={fanHubSaving}
                                 className="w-full px-4 py-2.5 bg-primary-600 text-white font-semibold rounded-lg hover:bg-primary-700 disabled:opacity-50"
                             >
-                                {fanHubSaving ? 'Saving…' : 'Save & go to Fan Hub'}
+                                {fanHubSaving ? 'Saving…' : 'Save & continue'}
                             </button>
                         )}
                         <button
@@ -809,15 +842,16 @@ export const CreatorOnboardingModal: React.FC<CreatorOnboardingModalProps> = ({ 
                     ) : (
                         <div></div>
                     )}
-                    <div className="flex items-center gap-2">
-                        {Array.from({ length: totalSteps }, (_, i) => (
+                    <div className="flex flex-col items-center gap-1 min-w-0 flex-1 justify-center px-2">
+                        <span className="text-xs text-gray-500 dark:text-gray-400 tabular-nums whitespace-nowrap">
+                            Step {step} of {totalSteps}
+                        </span>
+                        <div className="w-full max-w-[160px] h-1.5 rounded-full bg-gray-200 dark:bg-gray-600 overflow-hidden">
                             <div
-                                key={i}
-                                className={`w-2 h-2 rounded-full transition-colors ${
-                                    i + 1 === step ? 'bg-primary-500' : i + 1 < step ? 'bg-primary-300 dark:bg-primary-700' : 'bg-gray-300 dark:bg-gray-600'
-                                }`}
+                                className="h-full rounded-full bg-primary-500 transition-[width] duration-200"
+                                style={{ width: `${Math.min(100, (step / totalSteps) * 100)}%` }}
                             />
-                        ))}
+                        </div>
                     </div>
                     {step === fanHubSetupStep ? (
                         <button
