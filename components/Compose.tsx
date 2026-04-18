@@ -4172,7 +4172,7 @@ const CaptionGenerator: React.FC = () => {
             </div>
           </div>
           <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
-            These settings apply to all new caption generations. You can also customize tone in Settings → AI Training.
+            These settings apply to all new caption generations. You can also customize tone in Settings → Profile & AI.
           </p>
         </div>
       )}

@@ -817,7 +817,7 @@ export const WhatToPost: React.FC<WhatToPostProps> = ({ onOpenAdvanced }) => {
                       Settings as the main voice. Tone and style sliders are ignored when they conflict.
                       {!user.settings?.creatorPersonality?.trim() ? (
                         <span className="block mt-1 text-amber-600 dark:text-amber-400">
-                          Add Personality Override text in Settings → AI Training to enable this.
+                          Add Personality Override text in Settings → Profile & AI to enable this.
                         </span>
                       ) : null}
                     </span>

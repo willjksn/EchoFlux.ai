@@ -515,7 +515,7 @@ export const CreatorOnboardingModal: React.FC<CreatorOnboardingModalProps> = ({ 
                         />
                         <FeatureCard 
                             icon={<SettingsIcon />}
-                            title="Settings → AI Training"
+                            title="Settings → Profile & AI"
                             description="Customize your AI's personality and tone to match your brand voice."
                         />
                     </div>
@@ -684,8 +684,8 @@ export const CreatorOnboardingModal: React.FC<CreatorOnboardingModalProps> = ({ 
                     <div className="p-4 bg-purple-50 dark:bg-purple-900/20 rounded-lg border border-purple-100 dark:border-purple-800 mb-4">
                         <p className="text-sm text-purple-800 dark:text-purple-200">
                             Complete the <strong>Creator Identity Builder</strong> in Premium Studio when you have a few minutes. You
-                            can pause anytime — progress is saved. You can also open it later from{' '}
-                            <strong className="whitespace-nowrap">Settings → General</strong> above Creator Profile.
+                            can pause anytime — progress is saved. You                             can also open it later under <strong>Creator Profile</strong> on{' '}
+                            <strong className="whitespace-nowrap">Settings → Profile &amp; AI</strong>.
                         </p>
                     </div>
                     <ul className="text-sm text-gray-600 dark:text-gray-300 space-y-2 mb-4 list-disc list-inside">
@@ -786,7 +786,7 @@ export const CreatorOnboardingModal: React.FC<CreatorOnboardingModalProps> = ({ 
                             </li>
                             <li className="flex items-start gap-2">
                                 <span className="bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300 rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold flex-shrink-0">3</span>
-                                <span>Go to <strong>Settings → AI Training</strong> to personalize your AI</span>
+                                <span>Go to <strong>Settings → Profile &amp; AI</strong> to personalize your AI</span>
                             </li>
                             <li className="flex items-start gap-2">
                                 <span className="bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300 rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold flex-shrink-0">4</span>

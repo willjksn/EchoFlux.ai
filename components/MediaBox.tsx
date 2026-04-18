@@ -1027,7 +1027,7 @@ ${contextLines || 'None'}
               } ${!creatorPersonality ? 'opacity-40 cursor-not-allowed' : ''}`}
               title={
                 !creatorPersonality
-                  ? 'Add Personality Override text in Settings (AI Training) to enable'
+                  ? 'Add Personality Override text in Settings (Profile & AI) to enable'
                   : 'Apply saved Personality Override for this generation'
               }
             >

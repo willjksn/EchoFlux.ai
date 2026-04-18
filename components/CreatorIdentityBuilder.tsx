@@ -506,7 +506,7 @@ export const CreatorIdentityBuilder: React.FC = () => {
         <div className="rounded-2xl border border-gray-200/90 bg-white p-6 dark:border-slate-700/80 dark:bg-slate-900/50">
           <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-1">EchoFlux & studio defaults</h2>
           <p className="text-sm text-gray-600 dark:text-slate-400 mb-4 leading-relaxed">
-            Apply to EchoFlux updates Settings → AI Training → Personality Override with your brand statement and summary (turn
+            Apply to EchoFlux updates Settings → Profile & AI → Personality Override with your brand statement and summary (turn
             on Personality Override in Compose or Strategy to use it). It also saves niche, content-pillar, and voice-baseline
             fields for EchoFlux. Apply to Premium Content Studio writes identity defaults used by Premium Studio flows.
           </p>

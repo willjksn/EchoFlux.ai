@@ -435,8 +435,8 @@ export const getTourStepsForPlan = (user: User): TourStep[] => {
     steps.push({
         elementId: 'tour-step-5-ai-training-tab',
         page: 'settings',
-        title: 'AI Training',
-        content: 'Set your AI Personality and Personality Override text so captions and plans sound like you. Elite: complete Creator Identity for default brand direction.',
+        title: 'Profile & AI',
+        content: 'Set Creator Profile, tone sliders, and Personality Override in one place. Elite: use Creator Identity for your default brand direction.',
         position: 'bottom',
     });
 

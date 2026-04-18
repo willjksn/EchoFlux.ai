@@ -1444,7 +1444,7 @@ export const Strategy: React.FC<{ onBackToSimple?: () => void }> = ({ onBackToSi
                             Choose a <span className="font-medium text-gray-800 dark:text-gray-200">Primary Goal</span> below, then fill in <span className="font-medium text-gray-800 dark:text-gray-200">at least one</span> of:{' '}
                             <span className="font-medium text-gray-800 dark:text-gray-200">Post ideas</span>,{' '}
                             <span className="font-medium text-gray-800 dark:text-gray-200">Target audience</span>, turn on{' '}
-                            <span className="font-medium text-gray-800 dark:text-gray-200">Personality Override</span> (needs text in Settings → AI Training), or complete{' '}
+                            <span className="font-medium text-gray-800 dark:text-gray-200">Personality Override</span> (needs text in Settings → Profile & AI), or complete{' '}
                             <span className="font-medium text-gray-800 dark:text-gray-200">Creator Identity</span> (Elite).
                             {isCreatorIdentityPlanClient(user?.plan) && hasCreatorIdentityProfile && (
                                 <span className="block text-xs text-primary-600 dark:text-primary-300 mt-1">
@@ -1710,7 +1710,7 @@ Return only the rewritten context description.
                                 : useFavoriteHashtags
                                 ? 'AI will use your favorite hashtags when generating strategies.'
                                 : 'Enable toggles above to include Personality Override or hashtags in AI-generated strategies.'}
-                            {!settings.creatorPersonality && !settings.favoriteHashtags && ' Add them in Settings → AI Training to enable.'}
+                            {!settings.creatorPersonality && !settings.favoriteHashtags && ' Add them in Settings → Profile & AI to enable.'}
                         </p>
                     </div>
                 </div>

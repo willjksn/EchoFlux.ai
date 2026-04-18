@@ -12,6 +12,7 @@ import {
 import { ErrorBoundary } from './ErrorBoundary';
 import { usePremiumStudioTab } from './PremiumStudioLayout';
 import { hasPremiumStudioRouteAccess } from '../src/utils/planAccess';
+import { isCreatorIdentityPlanClient } from '../src/lib/creatorIdentity/planGate';
 import { auth, db } from '../firebaseConfig';
 import { addDoc, collection, getDocs, limit, orderBy, query, Timestamp, doc, getDoc, where, onSnapshot } from 'firebase/firestore';
 
@@ -155,6 +156,24 @@ export const OnlyFansStudio: React.FC<{ mode?: 'studio' | 'fanHub' }> = ({ mode 
             }
         })();
     }, [hasAccess, user?.id, user?.plan]);
+
+    /** Persona tab is Elite-only; Admins on non-Elite plans could otherwise open /studio?tab=persona and load a broken builder. */
+    useEffect(() => {
+        if (!hasAccess) return;
+        if (mode !== 'studio' || !premiumTab) return;
+        if (premiumTab.tab !== 'persona') return;
+        if (isCreatorIdentityPlanClient(user?.plan)) return;
+        premiumTab.setTab('ideas');
+        try {
+            const u = new URL(window.location.href);
+            if (u.pathname === '/studio' && u.searchParams.get('tab') === 'persona') {
+                u.searchParams.set('tab', 'ideas');
+                window.history.replaceState({}, '', `${u.pathname}${u.search}`);
+            }
+        } catch {
+            /* ignore */
+        }
+    }, [hasAccess, mode, premiumTab, user?.plan]);
 
     async function loadRecentTeaserPacks() {
         if (!user?.id) return;
@@ -993,8 +1012,33 @@ export const OnlyFansStudio: React.FC<{ mode?: 'studio' | 'fanHub' }> = ({ mode 
                 </div>
             );
         }
-        // Creator Identity Builder (Elite-tier Premium Studio)
+        // Creator Identity Builder (Elite-tier only — not every Premium Studio entitlement)
         if (studioTab === 'persona') {
+            if (!isCreatorIdentityPlanClient(user?.plan)) {
+                return (
+                    <div className="max-w-lg mx-auto px-4 py-12 text-center">
+                        <p className="text-sm text-gray-700 dark:text-gray-300">
+                            Creator Identity Builder is included with Elite. Open Ideas and other Premium Studio tools from the tabs above.
+                        </p>
+                        <button
+                            type="button"
+                            onClick={() => {
+                                premiumTab.setTab('ideas');
+                                try {
+                                    const u = new URL(window.location.href);
+                                    u.searchParams.set('tab', 'ideas');
+                                    window.history.replaceState({}, '', `${u.pathname}${u.search}`);
+                                } catch {
+                                    /* ignore */
+                                }
+                            }}
+                            className="mt-4 px-4 py-2 rounded-lg bg-primary-600 text-white text-sm font-medium hover:bg-primary-700"
+                        >
+                            Go to Ideas
+                        </button>
+                    </div>
+                );
+            }
             return (
                 <div className="max-w-7xl mx-auto px-4 py-6">
                     <ErrorBoundary>
@@ -1081,7 +1125,7 @@ export const OnlyFansStudio: React.FC<{ mode?: 'studio' | 'fanHub' }> = ({ mode 
                                 </div>
                             </div>
                             <div className="flex flex-wrap gap-2">
-                                <button onClick={() => setUseCreatorPersonalityTeaserPack(prev => !prev)} disabled={!creatorPersonality} className={`px-3 py-2 rounded-md text-sm font-medium transition-colors flex items-center justify-center gap-2 ${useCreatorPersonalityTeaserPack ? 'bg-primary-600 text-white hover:bg-primary-700' : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'} ${!creatorPersonality ? 'opacity-50 cursor-not-allowed' : ''}`} title={!creatorPersonality ? 'Add Personality Override text in Settings → AI Training to enable' : undefined}>
+                                <button onClick={() => setUseCreatorPersonalityTeaserPack(prev => !prev)} disabled={!creatorPersonality} className={`px-3 py-2 rounded-md text-sm font-medium transition-colors flex items-center justify-center gap-2 ${useCreatorPersonalityTeaserPack ? 'bg-primary-600 text-white hover:bg-primary-700' : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'} ${!creatorPersonality ? 'opacity-50 cursor-not-allowed' : ''}`} title={!creatorPersonality ? 'Add Personality Override text in Settings → Profile & AI to enable' : undefined}>
                                     <SparklesIcon className="w-4 h-4" /> Personality Override
                                 </button>
                             </div>
@@ -1465,7 +1509,7 @@ export const OnlyFansStudio: React.FC<{ mode?: 'studio' | 'fanHub' }> = ({ mode 
                                             ? 'bg-primary-600 text-white hover:bg-primary-700'
                                             : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
                                     } ${!creatorPersonality ? 'opacity-50 cursor-not-allowed' : ''}`}
-                                    title={!creatorPersonality ? 'Add Personality Override text in Settings → AI Training to enable' : undefined}
+                                    title={!creatorPersonality ? 'Add Personality Override text in Settings → Profile & AI to enable' : undefined}
                                 >
                                     <SparklesIcon className="w-4 h-4" />
                                     Personality Override

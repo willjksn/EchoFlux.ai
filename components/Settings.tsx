@@ -13,6 +13,7 @@ import { connectSocialAccount, disconnectSocialAccount } from '../src/services/s
 import { startXOAuth1Authorization } from '../src/lib/startXOAuth1Authorization';
 import { PLATFORM_CAPABILITIES, hasCapability, getCapabilityDescription, getCapability, isFullySupported } from '../src/services/platformCapabilities';
 import { isCreatorIdentityPlanClient } from '../src/lib/creatorIdentity/planGate';
+import { hasPremiumStudioRouteAccess } from '../src/utils/planAccess';
 
 interface SettingsProps {}
 
@@ -238,10 +239,19 @@ export const Settings: React.FC = () => {
     }, [user?.id, user?.plan]);
 
     const openCreatorIdentityBuilder = useCallback(() => {
+        if (!isCreatorIdentityPlanClient(user?.plan)) {
+            showToast?.('Creator Identity Builder is included with Elite.', 'info');
+            return;
+        }
+        if (!hasPremiumStudioRouteAccess(user)) {
+            showToast?.('Upgrade to Elite to use Premium Studio and Creator Identity.', 'info');
+            setActivePage('premiumStudioUpgrade');
+            return;
+        }
         setActivePage('onlyfansStudio');
         window.history.pushState({}, '', '/studio?tab=persona');
         window.dispatchEvent(new PopStateEvent('popstate'));
-    }, [setActivePage]);
+    }, [setActivePage, showToast, user]);
 
     // Video minutes state
     const [videoQuota, setVideoQuota] = useState<{
@@ -904,7 +914,7 @@ export const Settings: React.FC = () => {
     const tabs: { id: SettingsTab; label: string; icon: React.ReactNode }[] = [
       { id: 'general', label: 'General', icon: <SettingsIcon /> },
       { id: 'connections', label: 'Connections', icon: <LinkIcon /> },
-      { id: 'ai-training', label: 'AI Training', icon: <SparklesIcon /> },
+      { id: 'ai-training', label: 'Profile & AI', icon: <SparklesIcon /> },
       { id: 'billing', label: 'Billing', icon: <CreditCardIcon /> },
     ];
 
@@ -1012,38 +1022,57 @@ export const Settings: React.FC = () => {
                                 </>
                             )}
                         </SettingsSection>
-                        {isCreatorIdentityPlanClient(user?.plan) && (
-                            <div className="rounded-xl border border-primary-200/80 dark:border-primary-800/50 bg-gradient-to-r from-primary-50/90 to-white dark:from-primary-950/40 dark:to-gray-800/80 px-4 py-3 shadow-sm">
-                                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
-                                    <div className="min-w-0 space-y-1">
-                                        <p className="text-sm font-semibold text-gray-900 dark:text-white">
-                                            Creator Identity{' '}
-                                            <span className="font-medium text-primary-700 dark:text-primary-300">(Elite)</span>
-                                        </p>
-                                        <p className="text-xs text-gray-600 dark:text-gray-400">
-                                            Your saved identity is the default brand baseline for captions and strategy. Open the full
-                                            builder in Premium Studio anytime.
-                                        </p>
-                                        {identitySummaryElite ? (
-                                            <p className="text-xs text-gray-700 dark:text-gray-300 line-clamp-2">{identitySummaryElite}</p>
-                                        ) : null}
-                                    </div>
-                                    <button
-                                        type="button"
-                                        onClick={openCreatorIdentityBuilder}
-                                        className="shrink-0 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-primary-700"
-                                    >
-                                        Open Creator Identity
-                                    </button>
-                                </div>
-                            </div>
+                        {/* Account Type section hidden in AI Content Studio mode */}
+                        {false && (
+                          <SettingsSection title="Account Type">
+                              <div className="space-y-3">
+                                  <div className="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+                                      <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Current Account Type</p>
+                                      <p className="text-lg font-bold text-primary-600 dark:text-primary-400">
+                                          {user.userType === 'Business' ? 'Business' : user.userType === 'Creator' ? 'Creator' : 'Not Set'}
+                                      </p>
+                                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                          Your plan: <span className="font-semibold">{user.plan}</span>
+                                      </p>
+                                  </div>
+                                  {user.userType === 'Business' && (
+                                      <button 
+                                          onClick={handleSwitchToCreator} 
+                                          className="w-full px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 transition-colors text-sm font-medium"
+                                      >
+                                          Switch to Creator Mode
+                                      </button>
+                                  )}
+                                  {user.userType === 'Creator' && (
+                                      <button 
+                                          onClick={handleSwitchToBusiness} 
+                                          className="w-full px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 transition-colors text-sm font-medium"
+                                      >
+                                          Switch to Business Mode
+                                      </button>
+                                  )}
+                              </div>
+                          </SettingsSection>
                         )}
+                        <SettingsSection title="Advanced">
+                            <button onClick={handleRestartOnboarding} className="px-4 py-2 bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300 rounded-md hover:bg-red-200 transition-colors text-sm font-medium">
+                                Restart Onboarding
+                            </button>
+                            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">This will reset your workspace settings and allow you to choose between Creator or Business mode again.</p>
+                        </SettingsSection>
+                    </>
+                )}
+                
+                {activeTab === 'ai-training' && (
+                    <>
+                        <p className="text-sm text-gray-600 dark:text-gray-400 -mt-2 mb-2">
+                            Your profile, brand baseline (Elite), tone sliders, and Personality Override live here so you don&apos;t have to jump between tabs.
+                        </p>
                         <SettingsSection title="Creator Profile">
                             <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
                                 Help the AI generate content that matches you and appeals to your audience.
                             </p>
-                            
-                            {/* Content Focus (also set during onboarding) */}
+
                             <div className="mb-4">
                                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                                     Content Focus
@@ -1059,8 +1088,7 @@ export const Settings: React.FC = () => {
                                     Helps AI tailor content ideas and suggestions to your brand.
                                 </p>
                             </div>
-                            
-                            {/* Creator Type & Target Audience */}
+
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
@@ -1112,96 +1140,9 @@ export const Settings: React.FC = () => {
                                 </button>
                             </div>
                         </SettingsSection>
-                        {/* Account Type section hidden in AI Content Studio mode */}
-                        {false && (
-                          <SettingsSection title="Account Type">
-                              <div className="space-y-3">
-                                  <div className="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
-                                      <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Current Account Type</p>
-                                      <p className="text-lg font-bold text-primary-600 dark:text-primary-400">
-                                          {user.userType === 'Business' ? 'Business' : user.userType === 'Creator' ? 'Creator' : 'Not Set'}
-                                      </p>
-                                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                                          Your plan: <span className="font-semibold">{user.plan}</span>
-                                      </p>
-                                  </div>
-                                  {user.userType === 'Business' && (
-                                      <button 
-                                          onClick={handleSwitchToCreator} 
-                                          className="w-full px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 transition-colors text-sm font-medium"
-                                      >
-                                          Switch to Creator Mode
-                                      </button>
-                                  )}
-                                  {user.userType === 'Creator' && (
-                                      <button 
-                                          onClick={handleSwitchToBusiness} 
-                                          className="w-full px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 transition-colors text-sm font-medium"
-                                      >
-                                          Switch to Business Mode
-                                      </button>
-                                  )}
-                              </div>
-                          </SettingsSection>
-                        )}
-                        <SettingsSection title="Advanced">
-                            <button onClick={handleRestartOnboarding} className="px-4 py-2 bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300 rounded-md hover:bg-red-200 transition-colors text-sm font-medium">
-                                Restart Onboarding
-                            </button>
-                            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">This will reset your workspace settings and allow you to choose between Creator or Business mode again.</p>
-                        </SettingsSection>
-                    </>
-                )}
-                
-                {activeTab === 'ai-training' && (
-                    <>
-                        <SettingsSection title="AI Personality & Tone">
-                            <ToneSlider label="Formality" value={settings.tone.formality} onChange={(val) => updateToneSetting('formality', val)} description="Low for casual & slang, high for formal & professional."/>
-                            <ToneSlider label="Humor" value={settings.tone.humor} onChange={(val) => updateToneSetting('humor', val)} description="Low for serious, high for witty & funny replies."/>
-                            <ToneSlider label="Empathy" value={settings.tone.empathy} onChange={(val) => updateToneSetting('empathy', val)} description="Low for direct, high for supportive & understanding."/>
-                            <ToneSlider label="Emoji Usage 😊" value={settings.tone.emojiLevel ?? 50} onChange={(val) => updateToneSetting('emojiLevel', val)} description="Low for no emojis, high for emoji-heavy captions & chat replies."/>
-                            <ToneSlider 
-                                label="Profanity 🤬" 
-                                value={settings.tone.profanity ?? 0} 
-                                onChange={(val) => updateToneSetting('profanity', val)} 
-                                description="Low for clean language, high for casual swearing in captions & chat."
-                            />
-                            
-                            {user && (user.plan === 'Free' || user.plan === 'Caption' || user.plan === 'Pro' || user.plan === 'Elite' || user.plan === 'Agency' || user.role === 'Admin' || !user.plan) && (
-                                <>
-                                    <hr className="border-gray-200 dark:border-gray-700 my-4" />
-                                    <ToneSlider 
-                                        label="Spiciness 🌶️" 
-                                        value={settings.tone.spiciness || 0} 
-                                        onChange={(val) => updateToneSetting('spiciness', val)} 
-                                        description="Control the level of bold or edgy language."
-                                    />
-                                </>
-                            )}
-                        </SettingsSection>
 
                         <SettingsSection title="Personality Override">
                             <div className="space-y-4">
-                                {isCreatorIdentityPlanClient(user?.plan) && (
-                                    <div className="rounded-lg border border-primary-200 dark:border-primary-900/40 bg-primary-50/90 dark:bg-primary-950/30 p-4 space-y-2">
-                                        <p className="text-sm font-medium text-gray-900 dark:text-white">Creator Identity (Elite)</p>
-                                        <p className="text-xs text-gray-600 dark:text-gray-400">
-                                            Your Creator Identity powers your default brand direction in EchoFlux and witme.io. Open the
-                                            builder from Premium Studio (Creator Identity tab), or use the shortcut above Creator Profile
-                                            on the General settings tab.
-                                        </p>
-                                        {identitySummaryElite && (
-                                            <p className="text-xs text-gray-700 dark:text-gray-300 line-clamp-4">{identitySummaryElite}</p>
-                                        )}
-                                        <button
-                                            type="button"
-                                            onClick={openCreatorIdentityBuilder}
-                                            className="text-sm font-medium text-primary-700 dark:text-primary-300 hover:underline"
-                                        >
-                                            Open Creator Identity Builder
-                                        </button>
-                                    </div>
-                                )}
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                                         Personality Override (saved text)
@@ -1295,6 +1236,57 @@ Return only the rewritten personality description.
                                     </p>
                                 </div>
                             </div>
+                        </SettingsSection>
+
+                        {isCreatorIdentityPlanClient(user?.plan) && (
+                            <div className="rounded-xl border border-primary-200/80 dark:border-primary-800/50 bg-gradient-to-r from-primary-50/90 to-white dark:from-primary-950/40 dark:to-gray-800/80 px-4 py-3 shadow-sm">
+                                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+                                    <div className="min-w-0 space-y-1">
+                                        <p className="text-sm font-semibold text-gray-900 dark:text-white">
+                                            Creator Identity{' '}
+                                            <span className="font-medium text-primary-700 dark:text-primary-300">(Elite)</span>
+                                        </p>
+                                        <p className="text-xs text-gray-600 dark:text-gray-400">
+                                            Your saved identity is the default brand baseline for captions and strategy. Open the full
+                                            builder in Premium Studio anytime.
+                                        </p>
+                                        {identitySummaryElite ? (
+                                            <p className="text-xs text-gray-700 dark:text-gray-300 line-clamp-2">{identitySummaryElite}</p>
+                                        ) : null}
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={openCreatorIdentityBuilder}
+                                        className="shrink-0 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-primary-700"
+                                    >
+                                        Open Creator Identity
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+                        <SettingsSection title="AI Personality & Tone">
+                            <ToneSlider label="Formality" value={settings.tone.formality} onChange={(val) => updateToneSetting('formality', val)} description="Low for casual & slang, high for formal & professional."/>
+                            <ToneSlider label="Humor" value={settings.tone.humor} onChange={(val) => updateToneSetting('humor', val)} description="Low for serious, high for witty & funny replies."/>
+                            <ToneSlider label="Empathy" value={settings.tone.empathy} onChange={(val) => updateToneSetting('empathy', val)} description="Low for direct, high for supportive & understanding."/>
+                            <ToneSlider label="Emoji Usage 😊" value={settings.tone.emojiLevel ?? 50} onChange={(val) => updateToneSetting('emojiLevel', val)} description="Low for no emojis, high for emoji-heavy captions & chat replies."/>
+                            <ToneSlider 
+                                label="Profanity 🤬" 
+                                value={settings.tone.profanity ?? 0} 
+                                onChange={(val) => updateToneSetting('profanity', val)} 
+                                description="Low for clean language, high for casual swearing in captions & chat."
+                            />
+                            
+                            {user && (user.plan === 'Free' || user.plan === 'Caption' || user.plan === 'Pro' || user.plan === 'Elite' || user.plan === 'Agency' || user.role === 'Admin' || !user.plan) && (
+                                <>
+                                    <hr className="border-gray-200 dark:border-gray-700 my-4" />
+                                    <ToneSlider 
+                                        label="Spiciness 🌶️" 
+                                        value={settings.tone.spiciness || 0} 
+                                        onChange={(val) => updateToneSetting('spiciness', val)} 
+                                        description="Control the level of bold or edgy language."
+                                    />
+                                </>
+                            )}
                         </SettingsSection>
 
                         {/* Voice Clones section hidden in AI Content Studio mode */}

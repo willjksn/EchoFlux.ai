@@ -1946,7 +1946,7 @@ Return only the rewritten context.
                                             ? 'bg-primary-600 text-white hover:bg-primary-700'
                                             : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
                                     } ${!creatorPersonality ? 'opacity-50 cursor-not-allowed' : ''}`}
-                                    title={!creatorPersonality ? 'Add a creator personality in Settings → AI Training to enable' : undefined}
+                                    title={!creatorPersonality ? 'Add a creator personality in Settings → Profile & AI to enable' : undefined}
                                 >
                                     <SparklesIcon className="w-4 h-4" />
                                     Personality
@@ -2252,7 +2252,7 @@ Return only the rewritten persona description.
                                             ? 'bg-primary-600 text-white hover:bg-primary-700'
                                             : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
                                     } ${!creatorPersonality ? 'opacity-50 cursor-not-allowed' : ''}`}
-                                    title={!creatorPersonality ? 'Add a creator personality in Settings → AI Training to enable' : undefined}
+                                    title={!creatorPersonality ? 'Add a creator personality in Settings → Profile & AI to enable' : undefined}
                                 >
                                     <SparklesIcon className="w-4 h-4" />
                                     Personality
@@ -2498,7 +2498,7 @@ Return only the rewritten request.
                                             ? 'bg-primary-600 text-white hover:bg-primary-700'
                                             : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
                                     } ${!creatorPersonality ? 'opacity-50 cursor-not-allowed' : ''}`}
-                                    title={!creatorPersonality ? 'Add a creator personality in Settings → AI Training to enable' : undefined}
+                                    title={!creatorPersonality ? 'Add a creator personality in Settings → Profile & AI to enable' : undefined}
                                 >
                                     <SparklesIcon className="w-4 h-4" />
                                     Personality
@@ -2644,7 +2644,7 @@ Return only the rewritten request.
                                             ? 'bg-primary-600 text-white hover:bg-primary-700'
                                             : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
                                     } ${!creatorPersonality ? 'opacity-50 cursor-not-allowed' : ''}`}
-                                    title={!creatorPersonality ? 'Add a creator personality in Settings → AI Training to enable' : undefined}
+                                    title={!creatorPersonality ? 'Add a creator personality in Settings → Profile & AI to enable' : undefined}
                                 >
                                     <SparklesIcon className="w-4 h-4" />
                                     Personality
@@ -2878,7 +2878,7 @@ Return only the rewritten request.
                                             ? 'bg-primary-600 text-white hover:bg-primary-700'
                                             : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
                                     } ${!creatorPersonality ? 'opacity-50 cursor-not-allowed' : ''}`}
-                                    title={!creatorPersonality ? 'Add a creator personality in Settings → AI Training to enable' : undefined}
+                                    title={!creatorPersonality ? 'Add a creator personality in Settings → Profile & AI to enable' : undefined}
                                 >
                                     <SparklesIcon className="w-4 h-4" />
                                     Personality

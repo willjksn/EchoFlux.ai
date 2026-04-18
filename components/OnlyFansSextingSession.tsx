@@ -1174,9 +1174,9 @@ export const OnlyFansSextingSession: React.FC = () => {
                 </div>
           {useCreatorPersonality && creatorPersonality && (
             <div className="chat-session-personality-content">
-              <label className="chat-session-label">Creator personality (from AI Training)</label>
+              <label className="chat-session-label">Creator personality (from Profile &amp; AI)</label>
               <div className="chat-session-personality-preview">
-                {creatorPersonality || 'No personality set. Add one in AI Training for consistent voice across chat, captions, and prompts.'}
+                {creatorPersonality || 'No personality set. Add one under Settings → Profile & AI for consistent voice across chat, captions, and prompts.'}
                             </div>
                         </div>
                     )}
