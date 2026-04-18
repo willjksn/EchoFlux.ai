@@ -4,8 +4,14 @@ import { getPlatformStripe } from "./_stripeConnect.js";
 import { getAdminDb } from "./_firebaseAdmin.js";
 import { verifyAuth } from "./verifyAuth.js";
 
-/** Stripe often lowercases messages; match broadly so we return 503 + setupRequired instead of opaque 500s. */
-function isStripeConnectPlatformNotEnabledError(err: unknown): boolean {
+const MSG_CONNECT_ENABLE =
+  "The platform needs to enable Stripe Connect in the Stripe Dashboard (Products → Connect).";
+
+/**
+ * If Stripe rejected the request because the platform account still needs Connect setup,
+ * return a user-facing message; otherwise null (caller may return 500 with raw Stripe text).
+ */
+function getStripeConnectSetupRequiredMessage(err: unknown): string | null {
   const raw =
     err instanceof Stripe.errors.StripeError
       ? `${err.message} ${err.code ?? ""} ${(err as { doc_url?: string }).doc_url ?? ""}`
@@ -13,12 +19,34 @@ function isStripeConnectPlatformNotEnabledError(err: unknown): boolean {
         ? err.message
         : String(err);
   const m = raw.toLowerCase();
-  if (m.includes("signed up for connect")) return true;
-  if (m.includes("sign up for connect")) return true;
-  if (m.includes("stripe connect") && (m.includes("enable") || m.includes("not enabled") || m.includes("must"))) return true;
-  if (m.includes("connect") && m.includes("platform") && (m.includes("not") || m.includes("enable"))) return true;
-  if (m.includes("connect") && m.includes("oauth")) return true;
-  return false;
+
+  // Platform must complete Connect platform profile (losses / responsibilities) before creating accounts
+  if (
+    m.includes("managing losses") ||
+    m.includes("platform-profile") ||
+    m.includes("platform profile") ||
+    (m.includes("responsibilities") && m.includes("connected accounts"))
+  ) {
+    return (
+      "Finish your Stripe Connect platform profile first: Dashboard → Settings → Connect → Platform profile " +
+      "(review responsibilities for connected accounts / losses), save, then try Connect again."
+    );
+  }
+
+  if (m.includes("signed up for connect") || m.includes("sign up for connect")) {
+    return MSG_CONNECT_ENABLE;
+  }
+  if (m.includes("stripe connect") && (m.includes("enable") || m.includes("not enabled") || m.includes("must"))) {
+    return MSG_CONNECT_ENABLE;
+  }
+  if (m.includes("connect") && m.includes("platform") && (m.includes("not") || m.includes("enable"))) {
+    return MSG_CONNECT_ENABLE;
+  }
+  if (m.includes("connect") && m.includes("oauth")) {
+    return MSG_CONNECT_ENABLE;
+  }
+
+  return null;
 }
 
 /**
@@ -97,10 +125,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const msg = e instanceof Error ? e.message : "Onboarding failed";
     const stripeCode = e instanceof Stripe.errors.StripeError ? e.code : undefined;
 
-    if (isStripeConnectPlatformNotEnabledError(e)) {
+    const setupMessage = getStripeConnectSetupRequiredMessage(e);
+    if (setupMessage) {
       return res.status(503).json({
-        error: "Stripe Connect not enabled",
-        message: "The platform needs to enable Stripe Connect in the Stripe Dashboard (Products → Connect).",
+        error: "Stripe Connect setup required",
+        message: setupMessage,
         setupRequired: true,
         stripeCode: stripeCode ?? null,
       });

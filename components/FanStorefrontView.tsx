@@ -1344,35 +1344,6 @@ export const FanStorefrontView: React.FC = () => {
     void clearNewMessageNotificationBadge(uid, creator.creatorId);
   }, [activeTab, creator?.creatorId]);
 
-  /** Chat off → Messages tab hidden; leave tab if user was on Messages */
-  useEffect(() => {
-    if (!creator?.creatorId) return;
-    const chatOn = creator.monetization?.chatEnabled !== false;
-    if (chatOn || activeTab !== "messages") return;
-    const order = creator.sectionsOrder || ["feed", "treats", "tip", "messages", "about"];
-    const sec = creator.sections ?? {};
-    const next =
-      order.find(
-        (key) =>
-          key !== "saved" &&
-          key !== "messages" &&
-          key !== "about" &&
-          (sec as Record<string, boolean>)[key] !== false
-      ) ?? "feed";
-    const nextTab = next as FanStorefrontMemberTab;
-    setActiveTab(nextTab);
-    if (creator?.handle?.trim()) {
-      applyFanStorefrontMemberUrl(nextTab, { showLanding: false, creatorHandle: creator.handle });
-    }
-  }, [
-    creator?.creatorId,
-    creator?.handle,
-    creator?.monetization?.chatEnabled,
-    creator?.sectionsOrder,
-    creator?.sections,
-    activeTab,
-  ]);
-
   useEffect(() => {
     const parsed = parseHandleFromPath();
     setLegalSubpage(parsed.subpage);
@@ -3673,7 +3644,6 @@ export const FanStorefrontView: React.FC = () => {
     const files = Array.from(e.target.files || []);
     e.target.value = "";
     if (!files.length || !auth.currentUser) return;
-    const videoOn = creator?.monetization?.videoEnabled !== false;
     const room = DM_MAX_ATTACHMENTS_PER_MESSAGE - dmPendingAttachments.length;
     if (room <= 0) {
       showToast?.(`You can add up to ${DM_MAX_ATTACHMENTS_PER_MESSAGE} files per message.`, "info");
@@ -3683,13 +3653,7 @@ export const FanStorefrontView: React.FC = () => {
     if (slice.length < files.length) {
       showToast?.(`Only ${room} more file(s) allowed this message (max ${DM_MAX_ATTACHMENTS_PER_MESSAGE}).`, "info");
     }
-    const allowed = slice.filter((file) => {
-      if (!videoOn && file.type.startsWith("video/")) {
-        showToast?.("This creator doesn’t accept video attachments in DMs.", "info");
-        return false;
-      }
-      return true;
-    });
+    const allowed = slice;
     if (!allowed.length) return;
     setDmPendingAttachmentUploading(true);
     try {
@@ -4218,8 +4182,6 @@ export const FanStorefrontView: React.FC = () => {
     : "";
   const memberAvatar = auth.currentUser?.photoURL || creatorAvatar || "";
   const memberAvatarInitial = (auth.currentUser?.displayName || auth.currentUser?.email || "U").trim().charAt(0).toUpperCase();
-  const chatEnabled = monetization?.chatEnabled !== false;
-  const videoEnabled = monetization?.videoEnabled !== false;
   const storeCopy = resolveStoreCopy(landingContent);
   const memberStoreSubtitleText = (() => {
     const raw = (storeCopy.memberStoreSubtitle || "").trim();
@@ -4281,11 +4243,10 @@ export const FanStorefrontView: React.FC = () => {
     if (h) return `Welcome to @${h}'s member hub`;
     return "Welcome to this member hub";
   })();
-  // Nav tabs: order from sectionsOrder, filtered by sections; hide Messages when chat disabled.
+  // Nav tabs: order from sectionsOrder, filtered by sections (Messages always available when section is on).
   /** `?preview=member` — show full shell like a subscribed member (ignore purchase-only / paywall nav). */
   const baseMemberTabKeys = (sectionsOrder || ["feed", "treats", "tip", "messages", "about"])
     .filter((key) => key !== "saved" && (sections as Record<string, boolean>)?.[key] !== false)
-    .filter((key) => key !== "messages" || chatEnabled || previewMember)
     .filter((key) => previewMember || !purchaseOnlyAccess || key === "treats" || key === "tip");
   const memberTabKeys = (() => {
     const keys = [...baseMemberTabKeys];
@@ -5439,7 +5400,7 @@ export const FanStorefrontView: React.FC = () => {
                       <input
                         ref={dmFileInputRef}
                         type="file"
-                        accept={videoEnabled ? "image/*,video/*" : "image/*"}
+                        accept="image/*,video/*"
                         multiple
                         className="hidden"
                         onChange={onDmFileSelected}
@@ -5448,8 +5409,8 @@ export const FanStorefrontView: React.FC = () => {
                         <button
                           type="button"
                           className="fh-dm-compose-icon"
-                          title={videoEnabled ? "Photos or videos (multiple)" : "Photos (multiple)"}
-                          aria-label={videoEnabled ? "Upload photos or videos" : "Upload photos"}
+                          title="Photos or videos (multiple)"
+                          aria-label="Upload photos or videos"
                           disabled={
                             dmSending ||
                             fanBanned ||

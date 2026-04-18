@@ -39,20 +39,43 @@ function pick(lc: StorefrontLandingContent | null | undefined, key: keyof Storef
   return t;
 }
 
-/** Merge creator landing content with defaults for all store-related strings. */
+/**
+ * Merge creator landing content with defaults. Title, subtitle, and open-store CTA are unified:
+ * the first non-empty among the legacy fields wins, then the same strings are used for the member
+ * hub store, landing store card, and optional landing promo so creators don’t maintain three copies.
+ */
 export function resolveStoreCopy(lc?: StorefrontLandingContent | null): ResolvedStoreCopy {
+  const title =
+    pick(lc, "memberStoreTitle") ||
+    pick(lc, "storeLandingHeadline") ||
+    pick(lc, "publicStoreCardTitle") ||
+    DEFAULTS.memberStoreTitle;
+
+  const subtitle =
+    pick(lc, "memberStoreSubtitle") ||
+    pick(lc, "storeLandingDescription") ||
+    pick(lc, "publicStoreCardDescription") ||
+    DEFAULTS.memberStoreSubtitle;
+
+  const openCta =
+    pick(lc, "publicStoreOpenCtaLabel") ||
+    pick(lc, "storeLandingCtaLabel") ||
+    DEFAULTS.publicStoreOpenCtaLabel;
+
+  const modalTitle = pick(lc, "publicStoreModalTitle") || title;
+
   return {
-    memberStoreTitle: pick(lc, "memberStoreTitle") || DEFAULTS.memberStoreTitle,
-    memberStoreSubtitle: pick(lc, "memberStoreSubtitle") || DEFAULTS.memberStoreSubtitle,
+    memberStoreTitle: title,
+    memberStoreSubtitle: subtitle,
     memberStoreEmptyMessage: pick(lc, "memberStoreEmptyMessage") || DEFAULTS.memberStoreEmptyMessage,
     memberStoreLoadingMessage: pick(lc, "memberStoreLoadingMessage") || DEFAULTS.memberStoreLoadingMessage,
-    storeLandingHeadline: pick(lc, "storeLandingHeadline") || DEFAULTS.storeLandingHeadline,
-    storeLandingDescription: pick(lc, "storeLandingDescription") || DEFAULTS.storeLandingDescription,
-    storeLandingCtaLabel: pick(lc, "storeLandingCtaLabel") || DEFAULTS.storeLandingCtaLabel,
-    publicStoreCardTitle: pick(lc, "publicStoreCardTitle") || DEFAULTS.publicStoreCardTitle,
-    publicStoreCardDescription: pick(lc, "publicStoreCardDescription") || DEFAULTS.publicStoreCardDescription,
-    publicStoreOpenCtaLabel: pick(lc, "publicStoreOpenCtaLabel") || DEFAULTS.publicStoreOpenCtaLabel,
-    publicStoreModalTitle: pick(lc, "publicStoreModalTitle") || DEFAULTS.publicStoreModalTitle,
+    storeLandingHeadline: title,
+    storeLandingDescription: subtitle,
+    storeLandingCtaLabel: openCta,
+    publicStoreCardTitle: title,
+    publicStoreCardDescription: subtitle,
+    publicStoreOpenCtaLabel: openCta,
+    publicStoreModalTitle: modalTitle,
     publicStoreModalEmptyMessage:
       pick(lc, "publicStoreModalEmptyMessage") || DEFAULTS.publicStoreModalEmptyMessage,
   };

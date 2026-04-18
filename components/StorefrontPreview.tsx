@@ -211,11 +211,6 @@ export interface StorefrontPreviewProps {
   onAvatarObjectPositionChange?: (objectPosition: string) => void;
   /** Public fan page: wire buttons to FanAuth + Stripe (My Page preview stays dummy). */
   liveLanding?: StorefrontPreviewLiveLanding;
-  /**
-   * My Page builder only: show the full member tab strip (Home, Store, Tip, Messages, About)
-   * so creators see what paying members see, even if Messages is toggled off in settings.
-   */
-  memberPreviewFullTabs?: boolean;
 }
 
 // Neutral theme defaults - creators should customize
@@ -427,7 +422,6 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
   onHeroMediaItemPatch,
   onAvatarObjectPositionChange,
   liveLanding,
-  memberPreviewFullTabs = false,
 }) => {
   const [activeTab, setActiveTab] = useState<string>("home");
   /** Member Home/Feed preview: same list↔grid toggle as live FanMemberFeed + FanHubFeed */
@@ -535,14 +529,11 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
   // Member nav tabs from sections/sectionsOrder (Saved hidden in preview — only on live storefront)
   const sections = config.sections ?? { feed: true, treats: true, tip: true, messages: true, about: true };
   const sectionsOrder = config.sectionsOrder ?? DEFAULT_SECTION_ORDER;
-  const chatEnabledPreview = config.monetization?.chatEnabled !== false;
   const memberTabs = useMemo(() => {
-    const base = sectionsOrder.filter(
+    return sectionsOrder.filter(
       (key) => key !== "saved" && (sections as Record<string, boolean>)?.[key] !== false
     );
-    if (memberPreviewFullTabs) return base;
-    return base.filter((key) => key !== "messages" || chatEnabledPreview);
-  }, [memberPreviewFullTabs, sections, sectionsOrder, chatEnabledPreview]);
+  }, [sections, sectionsOrder]);
   const { user, showToast } = useAppContext();
 
   const sjHeartEmojiCtx: SjHeartEmojiAccessContext = useMemo(

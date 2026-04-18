@@ -94,15 +94,14 @@ const DEFAULT_LANDING_CONTENT: StorefrontLandingContent = {
   boundaryTitle: "Community Guidelines",
   boundaryText: "This is demo guideline text. Replace with your own policy and expectations.",
   memberStoreTitle: "Store",
-  memberStoreSubtitle: "Demo member store subtitle text.",
+  memberStoreSubtitle: "Demo public store description text.",
   memberStoreEmptyMessage: "Nothing listed here yet.",
   memberStoreLoadingMessage: "Loading…",
-  storeLandingHeadline: "Demo store headline",
-  storeLandingDescription: "Demo store description text.",
+  storeLandingHeadline: "Store",
+  storeLandingDescription: "Demo public store description text.",
   storeLandingCtaLabel: "Open store",
   publicStoreCardTitle: "Store",
-  publicStoreCardDescription:
-    "Demo public store description text.",
+  publicStoreCardDescription: "Demo public store description text.",
   publicStoreOpenCtaLabel: "Open store",
   publicStoreModalTitle: "Store",
   publicStoreModalEmptyMessage: "Nothing available right now.",
@@ -1193,6 +1192,8 @@ export const MyPageBuilder: React.FC = () => {
         monetization: {
           ...DEFAULT_MONETIZATION,
           ...draft.monetization,
+          chatEnabled: true,
+          videoEnabled: true,
         },
         textStyles: draft.textStyles,
         onboardingStatus: draft.onboardingStatus,
@@ -1413,6 +1414,41 @@ export const MyPageBuilder: React.FC = () => {
     }));
   };
 
+  const updateUnifiedStoreTitle = (value: string) => {
+    setDraft((prev) => ({
+      ...prev,
+      landingContent: {
+        ...(prev.landingContent ?? DEFAULT_LANDING_CONTENT),
+        memberStoreTitle: value,
+        storeLandingHeadline: value,
+        publicStoreCardTitle: value,
+      },
+    }));
+  };
+
+  const updateUnifiedStoreSubtitle = (value: string) => {
+    setDraft((prev) => ({
+      ...prev,
+      landingContent: {
+        ...(prev.landingContent ?? DEFAULT_LANDING_CONTENT),
+        memberStoreSubtitle: value,
+        storeLandingDescription: value,
+        publicStoreCardDescription: value,
+      },
+    }));
+  };
+
+  const updateUnifiedStoreOpenCta = (value: string) => {
+    setDraft((prev) => ({
+      ...prev,
+      landingContent: {
+        ...(prev.landingContent ?? DEFAULT_LANDING_CONTENT),
+        publicStoreOpenCtaLabel: value,
+        storeLandingCtaLabel: value,
+      },
+    }));
+  };
+
   const setPerksExtraMode = useCallback((mode: LandingSectionBodyMode) => {
     setDraft((prev) => {
       const lc = { ...(prev.landingContent ?? DEFAULT_LANDING_CONTENT) };
@@ -1595,6 +1631,22 @@ export const MyPageBuilder: React.FC = () => {
   );
   const builderGuestTreatPrimary =
     storefrontPreviewConfig.theme?.primary || DEFAULT_THEME.primary;
+
+  const lcDraftForStore = draft.landingContent ?? DEFAULT_LANDING_CONTENT;
+  const unifiedStoreTitleDraft =
+    (typeof lcDraftForStore.memberStoreTitle === "string" && lcDraftForStore.memberStoreTitle.trim()) ||
+    (typeof lcDraftForStore.storeLandingHeadline === "string" && lcDraftForStore.storeLandingHeadline.trim()) ||
+    (typeof lcDraftForStore.publicStoreCardTitle === "string" && lcDraftForStore.publicStoreCardTitle.trim()) ||
+    "";
+  const unifiedStoreSubtitleDraft =
+    (typeof lcDraftForStore.memberStoreSubtitle === "string" && lcDraftForStore.memberStoreSubtitle.trim()) ||
+    (typeof lcDraftForStore.storeLandingDescription === "string" && lcDraftForStore.storeLandingDescription.trim()) ||
+    (typeof lcDraftForStore.publicStoreCardDescription === "string" && lcDraftForStore.publicStoreCardDescription.trim()) ||
+    "";
+  const unifiedStoreOpenCtaDraft =
+    (typeof lcDraftForStore.publicStoreOpenCtaLabel === "string" && lcDraftForStore.publicStoreOpenCtaLabel.trim()) ||
+    (typeof lcDraftForStore.storeLandingCtaLabel === "string" && lcDraftForStore.storeLandingCtaLabel.trim()) ||
+    "";
 
   if (loading) {
     return (
@@ -2793,60 +2845,39 @@ export const MyPageBuilder: React.FC = () => {
               )}
 
               <div className="pt-3 border-t border-gray-200 dark:border-gray-700">
-                <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-200 mb-1">Store &amp; guest checkout (copy)</h3>
+                <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-200 mb-1">Store (landing + member hub)</h3>
                 <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
-                  Order matches the preview: <strong>store promo</strong> sits under the membership card; member hub copy is below.
+                  One set of text for the public store card, the optional landing promo under pricing, and the member hub <strong>Store</strong> tab header — they stay in sync automatically. If characters look wrong in preview, try Theme → Global font.
                 </p>
                 <div className="space-y-3">
-                  <p className="text-xs font-semibold text-gray-700 dark:text-gray-300">Landing — store card (below membership pricing)</p>
-                  <p className="text-xs text-gray-500 dark:text-gray-400 -mt-2 mb-1">
-                    The card with the sparkle line, title, blurb, and &quot;Open store&quot; — edit text here if it shows wrong characters in preview, switch Theme → Global font to one that supports your language.
-                  </p>
                   <div>
-                    <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Card title</label>
+                    <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Store title</label>
                     <input
                       type="text"
-                      value={draft.landingContent?.publicStoreCardTitle ?? DEFAULT_LANDING_CONTENT.publicStoreCardTitle}
-                      onChange={(e) => updateLandingContent("publicStoreCardTitle", e.target.value)}
+                      value={unifiedStoreTitleDraft}
+                      onChange={(e) => updateUnifiedStoreTitle(e.target.value)}
+                      placeholder="e.g. Store, Treats, Shop"
                       className="w-full px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Card description</label>
+                    <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Store description</label>
                     <textarea
-                      value={draft.landingContent?.publicStoreCardDescription ?? DEFAULT_LANDING_CONTENT.publicStoreCardDescription}
-                      onChange={(e) => updateLandingContent("publicStoreCardDescription", e.target.value)}
+                      value={unifiedStoreSubtitleDraft}
+                      onChange={(e) => updateUnifiedStoreSubtitle(e.target.value)}
                       rows={3}
                       className="w-full px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Open-store button (count may be added in preview)</label>
+                    <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+                      Open store button (guest landing; count may be appended in preview)
+                    </label>
                     <input
                       type="text"
-                      value={draft.landingContent?.publicStoreOpenCtaLabel ?? DEFAULT_LANDING_CONTENT.publicStoreOpenCtaLabel}
-                      onChange={(e) => updateLandingContent("publicStoreOpenCtaLabel", e.target.value)}
-                      className="w-full px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                    />
-                  </div>
-
-                  <p className="text-xs font-semibold text-gray-700 dark:text-gray-300 pt-4 border-t border-gray-200 dark:border-gray-600">Member Hub — store tab</p>
-                  <div>
-                    <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Store name (member tab + store header)</label>
-                    <input
-                      type="text"
-                      value={draft.landingContent?.memberStoreTitle ?? DEFAULT_LANDING_CONTENT.memberStoreTitle}
-                      onChange={(e) => updateLandingContent("memberStoreTitle", e.target.value)}
-                      placeholder="e.g. Shop, Extras, Merch"
-                      className="w-full px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Store subtitle</label>
-                    <textarea
-                      value={draft.landingContent?.memberStoreSubtitle ?? DEFAULT_LANDING_CONTENT.memberStoreSubtitle}
-                      onChange={(e) => updateLandingContent("memberStoreSubtitle", e.target.value)}
-                      rows={2}
+                      value={unifiedStoreOpenCtaDraft}
+                      onChange={(e) => updateUnifiedStoreOpenCta(e.target.value)}
+                      placeholder="Open store"
                       className="w-full px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                     />
                   </div>
@@ -2861,7 +2892,7 @@ export const MyPageBuilder: React.FC = () => {
                       />
                     </div>
                     <div>
-                      <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Empty store message</label>
+                      <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Empty store (member hub)</label>
                       <input
                         type="text"
                         value={draft.landingContent?.memberStoreEmptyMessage ?? DEFAULT_LANDING_CONTENT.memberStoreEmptyMessage}
@@ -2870,46 +2901,21 @@ export const MyPageBuilder: React.FC = () => {
                       />
                     </div>
                   </div>
-                  <p className="text-xs font-medium text-gray-600 dark:text-gray-300 pt-2">Optional landing teaser (when guest store is on)</p>
-                  <div>
-                    <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Headline</label>
-                    <input
-                      type="text"
-                      value={draft.landingContent?.storeLandingHeadline ?? DEFAULT_LANDING_CONTENT.storeLandingHeadline}
-                      onChange={(e) => updateLandingContent("storeLandingHeadline", e.target.value)}
-                      className="w-full px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Description</label>
-                    <textarea
-                      value={draft.landingContent?.storeLandingDescription ?? DEFAULT_LANDING_CONTENT.storeLandingDescription}
-                      onChange={(e) => updateLandingContent("storeLandingDescription", e.target.value)}
-                      rows={2}
-                      className="w-full px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Button label</label>
-                    <input
-                      type="text"
-                      value={draft.landingContent?.storeLandingCtaLabel ?? DEFAULT_LANDING_CONTENT.storeLandingCtaLabel}
-                      onChange={(e) => updateLandingContent("storeLandingCtaLabel", e.target.value)}
-                      className="w-full px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                    />
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
                     <div>
-                      <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Modal title</label>
+                      <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+                        Guest store modal title <span className="font-normal text-gray-400">(optional; defaults to store title)</span>
+                      </label>
                       <input
                         type="text"
-                        value={draft.landingContent?.publicStoreModalTitle ?? DEFAULT_LANDING_CONTENT.publicStoreModalTitle}
+                        value={draft.landingContent?.publicStoreModalTitle ?? ""}
                         onChange={(e) => updateLandingContent("publicStoreModalTitle", e.target.value)}
+                        placeholder="Leave blank to use store title"
                         className="w-full px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                       />
                     </div>
                     <div>
-                      <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Modal — empty list</label>
+                      <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Guest modal — empty list</label>
                       <input
                         type="text"
                         value={draft.landingContent?.publicStoreModalEmptyMessage ?? DEFAULT_LANDING_CONTENT.publicStoreModalEmptyMessage}
@@ -3014,30 +3020,10 @@ export const MyPageBuilder: React.FC = () => {
                   />
                   <span className="text-sm text-gray-700 dark:text-gray-300">Tips</span>
                 </label>
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={draft.monetization?.chatEnabled ?? true}
-                    onChange={(e) => updateDraft({ monetization: { ...draft.monetization, ...DEFAULT_MONETIZATION, chatEnabled: e.target.checked } })}
-                    className="rounded border-gray-300 dark:border-gray-600 text-primary-600"
-                  />
-                  <span className="text-sm text-gray-700 dark:text-gray-300">Chat</span>
-                </label>
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={draft.monetization?.videoEnabled ?? true}
-                    onChange={(e) => updateDraft({ monetization: { ...draft.monetization, ...DEFAULT_MONETIZATION, videoEnabled: e.target.checked } })}
-                    className="rounded border-gray-300 dark:border-gray-600 text-primary-600"
-                  />
-                  <span className="text-sm text-gray-700 dark:text-gray-300">Video in DMs</span>
-                </label>
               </div>
               <p className="text-xs text-gray-500 dark:text-gray-400">
-                <strong>Tips</strong> — tip section on the <em>public</em> landing only.{" "}
-                <strong>Chat</strong> — member hub <strong>Messages</strong> tab (turn off to hide it).{" "}
-                <strong>Video in DMs</strong> — video <em>file</em> attachments in messages only (not live 1:1 or livestream; see{" "}
-                <code className="text-[11px]">docs/LIVE_VIDEO_AND_STREAMS.md</code>). Off = photos only; existing video messages still play.
+                <strong>Tips</strong> — tip section on the <em>public</em> landing only. Member <strong>Messages</strong> and video
+                file attachments in DMs are always available for members.
               </p>
               {(saved as Record<string, unknown>).stripeConnectAccountId == null && (
                 <p className="text-xs text-amber-600 dark:text-amber-400">Connect Stripe in Payouts to receive payments.</p>
@@ -3415,7 +3401,6 @@ export const MyPageBuilder: React.FC = () => {
               config={storefrontPreviewConfig}
               previewMode={previewMode}
               liveLanding={storefrontLandingLivePreview}
-              memberPreviewFullTabs
               previewFraming={{ tool: previewFramingTool, focusPhotoSlot: previewFocusPhotoSlot }}
               onHeroMediaItemPatch={(index, patch) => {
                 setDraft((prev) => {
