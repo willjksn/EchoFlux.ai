@@ -36,15 +36,16 @@ function getStripeConnectSetupRequiredMessage(err: unknown): string | null {
   if (m.includes("signed up for connect") || m.includes("sign up for connect")) {
     return MSG_CONNECT_ENABLE;
   }
-  if (m.includes("stripe connect") && (m.includes("enable") || m.includes("not enabled") || m.includes("must"))) {
+  if (
+    m.includes("stripe connect") &&
+    (m.includes("not enabled") ||
+      m.includes("enable stripe connect") ||
+      m.includes("must enable") ||
+      m.includes("has not enabled"))
+  ) {
     return MSG_CONNECT_ENABLE;
   }
-  if (m.includes("connect") && m.includes("platform") && (m.includes("not") || m.includes("enable"))) {
-    return MSG_CONNECT_ENABLE;
-  }
-  if (m.includes("connect") && m.includes("oauth")) {
-    return MSG_CONNECT_ENABLE;
-  }
+  // Avoid broad "connect + platform" matches that mis-label unrelated Stripe errors.
 
   return null;
 }
@@ -124,6 +125,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     console.error("stripeConnectOnboard error:", e);
     const msg = e instanceof Error ? e.message : "Onboarding failed";
     const stripeCode = e instanceof Stripe.errors.StripeError ? e.code : undefined;
+    const stripeRawMessage =
+      e instanceof Stripe.errors.StripeError ? e.message : e instanceof Error ? e.message : String(e);
 
     const setupMessage = getStripeConnectSetupRequiredMessage(e);
     if (setupMessage) {
@@ -132,6 +135,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         message: setupMessage,
         setupRequired: true,
         stripeCode: stripeCode ?? null,
+        /** Original Stripe text — use this if Dashboard shows Connect OK but API still fails (wrong key, mode, or platform profile). */
+        stripeRawMessage,
       });
     }
 
@@ -139,6 +144,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       error: "Onboarding failed",
       message: msg,
       stripeCode: stripeCode ?? null,
+      stripeRawMessage,
     });
   }
 }

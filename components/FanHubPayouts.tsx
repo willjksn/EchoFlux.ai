@@ -72,12 +72,14 @@ export const FanHubPayouts: React.FC = () => {
       }
 
       if (data.setupRequired) {
-        showToast?.(
+        const friendly =
           typeof data.message === "string" && data.message.trim()
             ? data.message
-            : "Stripe Connect is not enabled for this Stripe account yet. In the Dashboard open Products → Connect (or Settings → Connect) and complete setup, then try again.",
-          "error",
-        );
+            : "Stripe Connect is not enabled for this Stripe account yet. In the Dashboard open Products → Connect (or Settings → Connect) and complete setup, then try again.";
+        showToast?.(friendly, "error");
+        if (typeof data.stripeRawMessage === "string" && data.stripeRawMessage.trim()) {
+          console.error("[stripeConnectOnboard] Stripe said:", data.stripeRawMessage, "code:", data.stripeCode);
+        }
         return;
       }
 
@@ -88,6 +90,9 @@ export const FanHubPayouts: React.FC = () => {
             ? data.error
             : "Failed to start Connect onboarding";
       showToast?.(detail, "error");
+      if (typeof data.stripeRawMessage === "string" && data.stripeRawMessage.trim()) {
+        console.error("[stripeConnectOnboard] Stripe said:", data.stripeRawMessage, "code:", data.stripeCode);
+      }
     } catch {
       showToast?.("Failed to start Connect", "error");
     } finally {
