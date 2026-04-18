@@ -4,6 +4,11 @@ import { useAppContext } from "./AppContext";
 import { auth, db } from "../firebaseConfig";
 import { resolveApiUrl } from "../src/lib/resolveApiUrl";
 
+/** Stripe Docs — linked from Payouts so creators know what to enter and what fans see. */
+const STRIPE_DOCS_STATEMENT_DESCRIPTORS =
+  "https://docs.stripe.com/get-started/account/statement-descriptors";
+const STRIPE_DOCS_CONNECT_ONBOARDING = "https://docs.stripe.com/connect/onboarding";
+
 export interface StripeConnectStatus {
   stripeConnectAccountId: string | null;
   chargesEnabled: boolean;
@@ -233,6 +238,19 @@ export const FanHubPayouts: React.FC = () => {
               <p className="text-sm text-green-900/90 dark:text-green-200/90 m-0 mb-3">
                 Stripe shows <strong>charges</strong> and <strong>payouts</strong> active. Fans can subscribe, tip, and buy from your store.
               </p>
+              <p className="text-xs text-green-900/85 dark:text-green-200/80 m-0 mb-3 leading-relaxed">
+                Tip: what fans see on statements is usually your Stripe <strong>statement descriptor</strong> or public
+                charge name. In the Stripe Dashboard, keep it aligned with your EchoFlux <strong>@handle</strong> or
+                brand so payments are easy to recognize.{" "}
+                <a
+                  href={STRIPE_DOCS_STATEMENT_DESCRIPTORS}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="font-medium text-green-800 dark:text-green-200 underline underline-offset-2 hover:text-green-950 dark:hover:text-green-50"
+                >
+                  Learn more (Stripe)
+                </a>
+              </p>
               <ul className="text-sm text-green-900 dark:text-green-100 space-y-1.5 m-0 mb-4 list-none p-0">
                 <li className="flex items-center gap-2 font-medium">
                   <span className="text-green-600 dark:text-green-400">✓</span>
@@ -282,6 +300,44 @@ export const FanHubPayouts: React.FC = () => {
           <p className="text-xs text-amber-800/80 dark:text-amber-300/80 m-0 mb-4">
             If Stripe shows a sign-in to Express instead of setup steps, open the link in a private/incognito window, or sign in with the same email as your EchoFlux account.
           </p>
+          <div
+            className="mb-4 rounded-lg border border-amber-200/90 dark:border-amber-800/70 bg-white/70 dark:bg-gray-950/40 px-3 py-2.5"
+            role="note"
+          >
+            <p className="text-xs font-semibold text-amber-950 dark:text-amber-100 m-0 mb-1.5">
+              Legal name vs. what fans see on their card
+            </p>
+            <p className="text-xs text-amber-900/90 dark:text-amber-200/85 m-0 leading-relaxed">
+              Enter your <strong>real legal name</strong> wherever Stripe asks for identity or tax details—that is
+              required for verification. The line fans see on bank or card statements usually comes from your{" "}
+              <strong>statement descriptor</strong> or <strong>public business / charge description</strong> in Stripe,
+              which you can set during onboarding or later in the Stripe Dashboard; use something that matches your
+              EchoFlux <strong>@handle</strong> or stage name so charges look familiar. If you pick{" "}
+              <strong>Individual</strong>, you may not see a separate “DBA” step—that is common; business or sole
+              proprietor accounts often surface a trade or business name. Follow Stripe’s in-flow labels for where to
+              set the customer-facing name.
+            </p>
+            <p className="text-xs text-amber-900/90 dark:text-amber-200/85 m-0 mt-2 leading-relaxed">
+              <span className="font-semibold text-amber-950 dark:text-amber-100">Learn more:</span>{" "}
+              <a
+                href={STRIPE_DOCS_CONNECT_ONBOARDING}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-medium text-amber-900 dark:text-amber-200 underline underline-offset-2 hover:text-amber-950 dark:hover:text-amber-50"
+              >
+                Connect onboarding (what to expect)
+              </a>
+              {" · "}
+              <a
+                href={STRIPE_DOCS_STATEMENT_DESCRIPTORS}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-medium text-amber-900 dark:text-amber-200 underline underline-offset-2 hover:text-amber-950 dark:hover:text-amber-50"
+              >
+                Statement descriptors (what fans see)
+              </a>
+            </p>
+          </div>
           <div className="flex flex-wrap items-center gap-3">
             <button
               type="button"

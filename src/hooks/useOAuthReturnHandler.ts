@@ -6,6 +6,8 @@ type Args = {
   showToast: (message: string, type: 'success' | 'error' | 'info') => void;
   socialAccounts: Record<Platform, SocialAccount | null> | undefined;
   isAuthLoading: boolean;
+  /** Fan-only shells (storefront / witme discover / apply) skip creator OAuth return handling. */
+  skip?: boolean;
 };
 
 /**
@@ -16,10 +18,12 @@ export function useOAuthReturnHandler({
   showToast,
   socialAccounts,
   isAuthLoading,
+  skip = false,
 }: Args): void {
   const handledKeyRef = useRef<string | null>(null);
 
   useEffect(() => {
+    if (skip) return;
     if (typeof window === 'undefined') return;
     if (isAuthLoading) return;
 
@@ -131,5 +135,5 @@ export function useOAuthReturnHandler({
       showToast(errorMsg, 'error');
       stripParams();
     }
-  }, [showToast, socialAccounts, isAuthLoading]);
+  }, [showToast, socialAccounts, isAuthLoading, skip]);
 }

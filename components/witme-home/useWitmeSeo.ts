@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { applyWitmeTabIcons } from "../../src/lib/witmeTabIcons";
 
 const upsertMetaTag = (selector: string, attrs: Record<string, string>, content: string) => {
   let el = document.head.querySelector(selector) as HTMLMetaElement | null;
@@ -8,16 +9,6 @@ const upsertMetaTag = (selector: string, attrs: Record<string, string>, content:
     document.head.appendChild(el);
   }
   el.setAttribute("content", content);
-};
-
-const upsertLinkTag = (selector: string, attrs: Record<string, string>, href: string) => {
-  let el = document.head.querySelector(selector) as HTMLLinkElement | null;
-  if (!el) {
-    el = document.createElement("link");
-    Object.entries(attrs).forEach(([k, v]) => el!.setAttribute(k, v));
-    document.head.appendChild(el);
-  }
-  el.setAttribute("href", href);
 };
 
 export function useWitmeSeo(opts: {
@@ -44,9 +35,7 @@ export function useWitmeSeo(opts: {
     upsertMetaTag('meta[name="twitter:title"]', { name: "twitter:title" }, opts.title);
     upsertMetaTag('meta[name="twitter:description"]', { name: "twitter:description" }, opts.description);
     upsertMetaTag('meta[name="twitter:image"]', { name: "twitter:image" }, ogImage);
-    upsertLinkTag('link[rel="icon"][type="image/png"][sizes="32x32"]', { rel: "icon", type: "image/png", sizes: "32x32" }, "/witme-favicon.png");
-    upsertLinkTag('link[rel="icon"][type="image/png"][sizes="192x192"]', { rel: "icon", type: "image/png", sizes: "192x192" }, "/witme-favicon.png");
-    upsertLinkTag('link[rel="apple-touch-icon"]', { rel: "apple-touch-icon" }, "/witme-favicon.png");
+    applyWitmeTabIcons();
 
     let canonical = document.head.querySelector('link[rel="canonical"]') as HTMLLinkElement | null;
     if (!canonical) {

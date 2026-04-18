@@ -369,29 +369,20 @@ const AppContent: React.FC = () => {
                 isStorefrontMemberSubpathPlain ||
                 isStorefrontLegacyMemberSubpath));
 
-    if (isWitmeDiscoverPath) {
-        return <WitmeDiscoverPage />;
-    }
+    /**
+     * These routes used to return before the hooks below, which broke the Rules of Hooks when
+     * navigating (e.g. witme.io/ → witme.io/handle). Hooks always run; effects no-op via guards.
+     */
+    const fanOnlyEarlyExitShell = isStorefrontPath || isWitmeDiscoverPath || isCreatorsApplyPath;
+    const echofluxUrlSyncSuppressed = isWitmeSurface || isStorefrontPath;
 
-    if (isCreatorsApplyPath) {
-        return <WitmeCreatorsApplyPage />;
-    }
-
-    if (isStorefrontPath) {
-        return (
-            <LazyBoundary label="Loading…">
-                <FanStorefrontView />
-            </LazyBoundary>
-        );
-    }
-    
     // Check maintenance mode FIRST - before any other logic
     const maintenanceEnabled = isMaintenanceMode();
     const allowedEmail = getAllowedEmail();
 
     const { isAuthenticated, isAuthLoading, user, setUser, activePage, setActivePage, startTour, isTourActive, toast, showToast, isCRMOpen, setPricingView, handleLogout, selectedPlan, setSelectedPlan, openPaymentModal, isPaymentModalOpen, socialAccounts, creatorAppAccess, refreshCreatorAppAccess } = appContext;
 
-    useOAuthReturnHandler({ showToast, socialAccounts, isAuthLoading });
+    useOAuthReturnHandler({ showToast, socialAccounts, isAuthLoading, skip: fanOnlyEarlyExitShell });
     
     const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
     const [loginModalInitialView, setLoginModalInitialView] = useState<'login' | 'signup'>('login');
@@ -403,6 +394,7 @@ const AppContent: React.FC = () => {
 
     // Fan storefront "Log in" / "Sign up" → /?login=1 or /?signup=1 — open modal once auth is ready
     useEffect(() => {
+        if (fanOnlyEarlyExitShell) return;
         if (typeof window === 'undefined') return;
         if (isAuthLoading) return;
         const params = new URLSearchParams(window.location.search);
@@ -446,6 +438,7 @@ const AppContent: React.FC = () => {
 
     // Check for checkout transition loading overlay
     useEffect(() => {
+        if (fanOnlyEarlyExitShell) return;
         // Show loading overlay if we're in a checkout transition
         const checkoutTransition = typeof window !== 'undefined' ? localStorage.getItem('checkoutTransition') : null;
         if (checkoutTransition === 'true') {
@@ -464,6 +457,7 @@ const AppContent: React.FC = () => {
 
     // Clear checkout transition flag when payment modal opens
     useEffect(() => {
+        if (fanOnlyEarlyExitShell) return;
         if (isPaymentModalOpen && showCheckoutTransition) {
             try {
                 localStorage.removeItem('checkoutTransition');
@@ -474,6 +468,7 @@ const AppContent: React.FC = () => {
 
     // Auto-bypass maintenance for whitelisted users
     useEffect(() => {
+        if (fanOnlyEarlyExitShell) return;
         if (isAuthenticated && user) {
             const canBypass = canBypassMaintenance(user.email);
             if (canBypass) {
@@ -485,7 +480,7 @@ const AppContent: React.FC = () => {
     // Safety: if a user becomes unauthenticated while on an authenticated route (e.g. sign out, token expiry),
     // ensure the browser URL doesn't stay stuck on /dashboard while we render the public landing UI.
     useEffect(() => {
-        if (isWitmeSurface) return;
+        if (echofluxUrlSyncSuppressed) return;
         if (typeof window === 'undefined') return;
         if (isAuthLoading) return;
         if (isAuthenticated) return;
@@ -531,11 +526,12 @@ const AppContent: React.FC = () => {
         if (isProtectedRoute) {
             window.history.replaceState({}, '', '/');
         }
-    }, [isAuthenticated, isAuthLoading, isWitmeSurface]);
+    }, [isAuthenticated, isAuthLoading, echofluxUrlSyncSuppressed]);
 
     // If invite-granted access expired, route user to Pricing to upgrade (Stripe flow remains unchanged).
     const hasShownExpiredToastRef = useRef(false);
     useEffect(() => {
+        if (fanOnlyEarlyExitShell) return;
         if (!isAuthenticated || !user) {
             hasShownExpiredToastRef.current = false;
             return;
@@ -556,7 +552,7 @@ const AppContent: React.FC = () => {
     // Only sync from URL to activePage on initial load or browser navigation (back/forward)
     // NOTE: For authenticated users, UIContext handles URL syncing, so we only do this for unauthenticated users
     useEffect(() => {
-        if (isWitmeSurface) return;
+        if (echofluxUrlSyncSuppressed) return;
         // Skip URL syncing for authenticated users - UIContext handles it
         if (isAuthenticated) return;
         
@@ -604,13 +600,13 @@ const AppContent: React.FC = () => {
         return () => {
             window.removeEventListener('popstate', syncUrlToPage);
         };
-    }, [isAuthenticated, setActivePage, isWitmeSurface]); // Only run when auth state changes, not when activePage changes
+    }, [isAuthenticated, setActivePage, echofluxUrlSyncSuppressed]); // Only run when auth state changes, not when activePage changes
 
     // Update URL when page changes (for privacy policy, terms, etc.)
     // NOTE: For authenticated users, UIContext handles URL syncing, so we only do this for unauthenticated users
     // or for pages that UIContext doesn't handle (public pages)
     useEffect(() => {
-        if (isWitmeSurface) return;
+        if (echofluxUrlSyncSuppressed) return;
         // Skip URL syncing for authenticated users - UIContext handles it
         if (isAuthenticated) return;
         
@@ -628,10 +624,10 @@ const AppContent: React.FC = () => {
         if (path && window.location.pathname !== path) {
             window.history.pushState({}, '', path);
         }
-    }, [activePage, isAuthenticated, isWitmeSurface]);
+    }, [activePage, isAuthenticated, echofluxUrlSyncSuppressed]);
 
     useEffect(() => {
-        if (isWitmeSurface) return;
+        if (echofluxUrlSyncSuppressed) return;
         // Capture referral code from URL (e.g., ?ref=CODE)
         const urlParams = new URLSearchParams(window.location.search);
         const referralCode = urlParams.get('ref');
@@ -886,9 +882,10 @@ const AppContent: React.FC = () => {
             // Not authenticated and no pending signup - clear onboarding
             setOnboardingStep('none');
         }
-    }, [isAuthenticated, user, setUser, selectedPlan, openPaymentModal, isWitmeSurface]);
+    }, [isAuthenticated, user, setUser, selectedPlan, openPaymentModal, echofluxUrlSyncSuppressed]);
 
     useEffect(() => {
+        if (fanOnlyEarlyExitShell) return;
         // Finalize Stripe checkout after redirect:
         // - works even if auth/user becomes available after redirect
         // - applies the correct plan immediately (no "Free confirm" modal)
@@ -1109,6 +1106,7 @@ const AppContent: React.FC = () => {
 
     // Auto-bypass maintenance for whitelisted users (must happen before maintenance check)
     useEffect(() => {
+        if (fanOnlyEarlyExitShell) return;
         if (isAuthenticated && user) {
             const userCanBypass = canBypassMaintenance(user.email);
             if (userCanBypass && !bypassMaintenance) {
@@ -1116,6 +1114,22 @@ const AppContent: React.FC = () => {
             }
         }
     }, [isAuthenticated, user, bypassMaintenance]);
+
+    if (isWitmeDiscoverPath) {
+        return <WitmeDiscoverPage />;
+    }
+
+    if (isCreatorsApplyPath) {
+        return <WitmeCreatorsApplyPage />;
+    }
+
+    if (isStorefrontPath) {
+        return (
+            <LazyBoundary label="Loading…">
+                <FanStorefrontView />
+            </LazyBoundary>
+        );
+    }
 
     // Calculate if user can bypass maintenance
     // If user is authenticated and whitelisted, they can bypass

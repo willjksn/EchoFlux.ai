@@ -28,6 +28,14 @@ export const STOREFRONT_CONTENT_POLICY = {
  */
 export const FAN_STOREFRONT_SIGNUP_SESSION_KEY = 'echofluxFanStorefrontSignup';
 
+/**
+ * sessionStorage key: returning from Stripe Checkout cancel suppresses auto-redirect to checkout until the fan
+ * taps Subscribe again. FanStorefrontView sets this when it strips `checkout_cancel` / legacy `paywall` from the URL.
+ */
+export function fanStorefrontSkipAutoSubscribeKey(creatorId: string): string {
+  return `echofluxFanSkipAutoSubscribe:${creatorId}`;
+}
+
 /** EchoFlux creator subscriptions: monthly USD and fixed annual totals (match Stripe yearly prices). */
 export const ECHOFLUX_PRO_MONTHLY_USD = 29;
 export const ECHOFLUX_ELITE_MONTHLY_USD = 59;

@@ -40,7 +40,12 @@ import { FanLandingPage } from "./FanLandingPage";
 import { FanAuthModal } from "./FanAuthModal";
 import { FanMemberFeed, FanMemberSaved, fetchFanMemberPostForPurchases } from "./FanMemberFeed";
 import { MemberUsernameGateModal } from "./MemberUsernameGateModal";
-import { DEFAULT_PRIVACY_POLICY, DEFAULT_TERMS_OF_SERVICE, KNOWN_APP_ROUTES } from "../constants";
+import {
+  DEFAULT_PRIVACY_POLICY,
+  DEFAULT_TERMS_OF_SERVICE,
+  KNOWN_APP_ROUTES,
+  fanStorefrontSkipAutoSubscribeKey,
+} from "../constants";
 import { useAutosizeTextarea } from "../src/hooks/useAutosizeTextarea";
 import {
   useUnreadNewMessageNotificationCount,
@@ -91,6 +96,11 @@ import VideoCallRoom from "./VideoCallRoom";
 import { readFanCheckoutFetchResult, FAN_TIP_CHECKOUT_SUCCESS_QS } from "../src/lib/fanCheckoutResponse";
 import { WitmeHeaderLogo } from "./WitmeHeaderLogo";
 import { formatFanStorefrontDocumentTitle, getFanFacingSiteTitle } from "../src/lib/fanFacingSiteTitle";
+import {
+  applyWitmeTabIcons,
+  isWitmePublicSiteHostname,
+  restoreEchoFluxTabIcons,
+} from "../src/lib/witmeTabIcons";
 import { creatorIdFirestoreQueryVariants, normalizeCreatorId } from "../src/lib/creatorIdNormalize";
 
 /** Ensure member-store products have usable Firestore ids (avoids every row showing “Processing…” when id is missing or duplicated). */
@@ -1341,6 +1351,19 @@ export const FanStorefrontView: React.FC = () => {
   }, [creator, error, handle, legalSubpage]);
 
   useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (isWitmePublicSiteHostname(window.location.hostname)) {
+      applyWitmeTabIcons();
+    }
+    return () => {
+      if (typeof window === "undefined") return;
+      if (!isWitmePublicSiteHostname(window.location.hostname)) {
+        restoreEchoFluxTabIcons();
+      }
+    };
+  }, []);
+
+  useEffect(() => {
     const uid = auth.currentUser?.uid;
     if (activeTab !== "messages" || !uid || !creator?.creatorId) return;
     void clearNewMessageNotificationBadge(uid, creator.creatorId);
@@ -2216,6 +2239,31 @@ export const FanStorefrontView: React.FC = () => {
     );
   }, [creator?.creatorId, isLoggedIn, refetchMemberEntitlement]);
 
+  /**
+   * Stripe Checkout cancel URL: strip `checkout_cancel` / legacy `paywall` from the address bar (fans should not
+   * see “paywall” in the URL) and remember suppress auto-checkout until they choose Subscribe again.
+   */
+  useLayoutEffect(() => {
+    if (typeof window === "undefined" || !creator?.creatorId?.trim()) return;
+    const params = new URLSearchParams(window.location.search);
+    const legacyPaywall = params.get("paywall") === "1";
+    const checkoutCancel = params.get("checkout_cancel") === "1";
+    if (!legacyPaywall && !checkoutCancel) return;
+    try {
+      sessionStorage.setItem(fanStorefrontSkipAutoSubscribeKey(creator.creatorId), "1");
+    } catch {
+      /* ignore */
+    }
+    params.delete("paywall");
+    params.delete("checkout_cancel");
+    const qs = params.toString();
+    window.history.replaceState(
+      null,
+      "",
+      window.location.pathname + (qs ? `?${qs}` : "") + (window.location.hash || "")
+    );
+  }, [creator?.creatorId]);
+
   /** Member checkout return: apply Firestore same as webhook when session_id is present (webhook delay). */
   useEffect(() => {
     if (typeof window === "undefined" || !creator?.creatorId || !isLoggedIn || !auth.currentUser) return;
@@ -2727,6 +2775,11 @@ export const FanStorefrontView: React.FC = () => {
       setFanAuthOpen(true);
       return false;
     }
+    try {
+      sessionStorage.removeItem(fanStorefrontSkipAutoSubscribeKey(creator.creatorId));
+    } catch {
+      /* ignore */
+    }
     if (isAuto) {
       autoSubscribeRedirectingRef.current = true;
     }
@@ -2744,7 +2797,7 @@ export const FanStorefrontView: React.FC = () => {
       const cancelUrl = currentUrl
         ? (() => {
             const u = new URL(currentUrl.toString());
-            u.searchParams.set("paywall", "1");
+            u.searchParams.set("checkout_cancel", "1");
             return buildPublicCheckoutUrl(u.pathname, u.search, u.hash);
           })()
         : undefined;
@@ -4007,9 +4060,14 @@ export const FanStorefrontView: React.FC = () => {
         applyFanStorefrontMemberUrl("purchases", { showLanding: false, creatorHandle: creator.handle });
       }
     }
-    if (typeof window !== "undefined") {
-      const params = new URLSearchParams(window.location.search);
-      if (params.get("paywall") === "1") return;
+    if (typeof window !== "undefined" && creator?.creatorId?.trim()) {
+      try {
+        if (sessionStorage.getItem(fanStorefrontSkipAutoSubscribeKey(creator.creatorId)) === "1") {
+          return;
+        }
+      } catch {
+        /* ignore */
+      }
     }
     if (autoSubscribeRedirectingRef.current) return;
     void startSubscriptionCheckout({ auto: true });
@@ -4023,6 +4081,7 @@ export const FanStorefrontView: React.FC = () => {
     paidPageUnsubscribed,
     activeTab,
     creator?.handle,
+    creator?.creatorId,
   ]);
   useEffect(() => {
     if (typeof window === "undefined" || showLanding) return;
@@ -4146,6 +4205,38 @@ export const FanStorefrontView: React.FC = () => {
     },
     [creator?.creatorId, creator?.handle, joinFanVideoSession, showLanding, fetchDmThreadAndMessages]
   );
+
+  /** Fan signed in — sync hub URL/state; does not close FanAuthModal (used before Stripe continuation step). */
+  const syncFanAuthSessionToHub = useCallback(() => {
+    if (!creator) return;
+    setIsLoggedIn(true);
+    if (creator.monetization?.freeAccessEnabled === true) {
+      const nextTab: FanStorefrontMemberTab = "feed";
+      setActiveTab(nextTab);
+      if (typeof window !== "undefined" && creator.handle?.trim()) {
+        applyFanStorefrontMemberUrl(nextTab, {
+          showLanding: false,
+          creatorHandle: creator.handle,
+          stripSearchKeys: ["landing", "login", "signup"],
+        });
+      }
+      setSubscribed(true);
+      setMembershipType("free");
+      return;
+    }
+    fanAuthPendingHubNavRef.current = true;
+    if (typeof window !== "undefined" && creator.handle?.trim()) {
+      const parsed = parseHandleFromPath();
+      const fromPath = parsed.memberNavSlug ? memberPathSlugToTab(parsed.memberNavSlug) : null;
+      const nextTab: FanStorefrontMemberTab = fromPath ?? "feed";
+      setActiveTab(nextTab);
+      applyFanStorefrontMemberUrl(nextTab, {
+        showLanding: false,
+        creatorHandle: creator.handle,
+        stripSearchKeys: ["landing", "login", "signup"],
+      });
+    }
+  }, [creator]);
 
   if (loading) {
     const loadingPrimary = creator?.theme?.primary || defaultPrimary;
@@ -4314,38 +4405,6 @@ export const FanStorefrontView: React.FC = () => {
   // not the creator's existing session state.
   // Do not force guest CTAs for normal fan sessions just because `?landing=1` is present.
   const showGuestAuthCtasOnLanding = isViewingOwnStorefront && forcePublicLanding;
-
-  /** Fan signed in — sync hub URL/state; does not close FanAuthModal (used before Stripe continuation step). */
-  const syncFanAuthSessionToHub = useCallback(() => {
-    if (!creator) return;
-    setIsLoggedIn(true);
-    if (creator.monetization?.freeAccessEnabled === true) {
-      const nextTab: FanStorefrontMemberTab = "feed";
-      setActiveTab(nextTab);
-      if (typeof window !== "undefined" && creator.handle?.trim()) {
-        applyFanStorefrontMemberUrl(nextTab, {
-          showLanding: false,
-          creatorHandle: creator.handle,
-          stripSearchKeys: ["landing", "login", "signup"],
-        });
-      }
-      setSubscribed(true);
-      setMembershipType("free");
-      return;
-    }
-    fanAuthPendingHubNavRef.current = true;
-    if (typeof window !== "undefined" && creator.handle?.trim()) {
-      const parsed = parseHandleFromPath();
-      const fromPath = parsed.memberNavSlug ? memberPathSlugToTab(parsed.memberNavSlug) : null;
-      const nextTab: FanStorefrontMemberTab = fromPath ?? "feed";
-      setActiveTab(nextTab);
-      applyFanStorefrontMemberUrl(nextTab, {
-        showLanding: false,
-        creatorHandle: creator.handle,
-        stripSearchKeys: ["landing", "login", "signup"],
-      });
-    }
-  }, [creator]);
 
   // Render legal pages (Terms/Privacy) if subpage is set
   if (legalSubpage) {
