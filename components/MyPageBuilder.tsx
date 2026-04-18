@@ -28,6 +28,7 @@ import { UserIcon, ImageIcon, GlobeIcon } from "./icons/UIIcons";
 import { EmojiButton } from "./EmojiPicker";
 import { canUseSjHeartEmoji } from "../src/lib/customEmoji";
 import { creatorIdFirestoreQueryVariants, normalizeCreatorId } from "../src/lib/creatorIdNormalize";
+import { FAN_HUB_STOREFRONT_THEME_SAVED_EVENT } from "../src/hooks/useCreatorFanHubTheme";
 
 const DEFAULT_SECTIONS: NonNullable<CreatorStorefrontSettings["sections"]> = {
   feed: true,
@@ -113,6 +114,25 @@ const DEFAULT_LEGAL: StorefrontLegal = {
   privacyText: "",
   privacyLastUpdated: "",
 };
+
+/** If Firestore has no presetId, infer default vs custom so preset chips and mergeFanHubStorefrontTheme stay aligned. */
+function normalizeThemePresetId(
+  theme: NonNullable<CreatorStorefrontSettings["theme"]>,
+): NonNullable<CreatorStorefrontSettings["theme"]> {
+  if (typeof theme.presetId === "string" && theme.presetId.trim()) return theme;
+  const d = DEFAULT_THEME;
+  const norm = (s: string | undefined) => (s ?? "").trim().toLowerCase();
+  const diverges =
+    norm(theme.primary) !== norm(d.primary) ||
+    norm(theme.background) !== norm(d.background) ||
+    norm(theme.text) !== norm(d.text) ||
+    norm(theme.textMuted) !== norm(d.textMuted) ||
+    norm(theme.border) !== norm(d.border) ||
+    norm(theme.accentHover) !== norm(d.accentHover) ||
+    norm(theme.fontFamily).replace(/\s+/g, " ") !== norm(d.fontFamily).replace(/\s+/g, " ");
+  return { ...theme, presetId: diverges ? "custom" : "default" };
+}
+
 const FAN_HUB_PREVIEW_THEME_STORAGE_KEY = "echoflux:fanhub-preview-theme";
 const FAN_HUB_PREVIEW_THEME_EVENT = "echoflux:fanhub-preview-theme-changed";
 
@@ -672,17 +692,9 @@ export const MyPageBuilder: React.FC = () => {
     }
   }, [draft.theme]);
 
-  useEffect(() => {
-    return () => {
-      if (typeof window === "undefined") return;
-      try {
-        window.sessionStorage.removeItem(FAN_HUB_PREVIEW_THEME_STORAGE_KEY);
-        window.dispatchEvent(new Event(FAN_HUB_PREVIEW_THEME_EVENT));
-      } catch {
-        // Ignore cleanup storage errors.
-      }
-    };
-  }, []);
+  // Do not clear FAN_HUB_PREVIEW_THEME on unmount: switching Fan Hub tabs unmounts My Page but the same
+  // creator should keep seeing their saved (or in-draft) theme on Posts, Store, etc. Clearing here forced
+  // PremiumStudioLayout back to a stale useCreatorFanHubTheme snapshot.
 
   const heroGridSlotCount = useMemo(
     () => (draft.heroMedia ?? []).filter((m) => m.size !== "fullBackground").length,
@@ -897,7 +909,9 @@ export const MyPageBuilder: React.FC = () => {
         socialLinks: data.socialLinks ? { ...DEFAULT_SOCIAL_LINKS, ...data.socialLinks } : { ...DEFAULT_SOCIAL_LINKS },
         landingContent: data.landingContent ? { ...DEFAULT_LANDING_CONTENT, ...data.landingContent } : { ...DEFAULT_LANDING_CONTENT },
         legal: data.legal ? { ...DEFAULT_LEGAL, ...data.legal } : { ...DEFAULT_LEGAL },
-        theme: data.theme ? { ...DEFAULT_THEME, ...data.theme } : { ...DEFAULT_THEME },
+        theme: normalizeThemePresetId(
+          data.theme ? { ...DEFAULT_THEME, ...data.theme } : { ...DEFAULT_THEME },
+        ),
         heroLayout: data.heroLayout ?? "default",
         sections: data.sections ? { ...DEFAULT_SECTIONS, ...data.sections } : { ...DEFAULT_SECTIONS },
         sectionsOrder: data.sectionsOrder ?? DEFAULT_SECTIONS_ORDER,
@@ -1077,10 +1091,12 @@ export const MyPageBuilder: React.FC = () => {
 
   /** Update theme without clobbering other theme fields (uses latest state) */
   const updateTheme = useCallback((patch: Partial<NonNullable<CreatorStorefrontSettings["theme"]>>) => {
-    setDraft((prev) => ({
-      ...prev,
-      theme: { ...DEFAULT_THEME, ...prev.theme, ...patch },
-    }));
+    setDraft((prev) => {
+      const merged = { ...DEFAULT_THEME, ...prev.theme, ...patch };
+      // Manual edits are not the named preset anymore; avoids wrong preset merge + wrong tab highlight.
+      const theme = patch.presetId !== undefined ? merged : { ...merged, presetId: "custom" };
+      return { ...prev, theme };
+    });
   }, []);
 
   const updateTextStyle = useCallback((field: keyof NonNullable<CreatorStorefrontSettings['textStyles']>, style: TextStyle) => {
@@ -1243,6 +1259,11 @@ export const MyPageBuilder: React.FC = () => {
           setSaved(updated);
           setDraft(updated);
           setHandleInput(updated.handle ?? "");
+          try {
+            window.dispatchEvent(new Event(FAN_HUB_STOREFRONT_THEME_SAVED_EVENT));
+          } catch {
+            /* ignore */
+          }
           return;
         }
         throw new Error((data as { message?: string }).message || `Save failed (${res.status})`);
@@ -1263,6 +1284,11 @@ export const MyPageBuilder: React.FC = () => {
       setSaved(updated);
       setDraft(updated);
       setHandleInput(updated.handle ?? "");
+      try {
+        window.dispatchEvent(new Event(FAN_HUB_STOREFRONT_THEME_SAVED_EVENT));
+      } catch {
+        /* ignore */
+      }
       showToast?.("Changes saved", "success");
     } catch (e) {
       console.error("[MyPageBuilder] Save error:", e);
@@ -3042,14 +3068,26 @@ export const MyPageBuilder: React.FC = () => {
                     <button
                       key={preset.id}
                       type="button"
-                      onClick={() => updateTheme({ ...preset.theme, presetId: preset.id })}
+                      onClick={() =>
+                        preset.id === "custom"
+                          ? updateTheme({ presetId: "custom" })
+                          : updateTheme({ ...preset.theme, presetId: preset.id })
+                      }
                       className={`flex flex-col items-center gap-1 p-2 rounded-lg border-2 text-left transition-colors ${
                         (draft.theme?.presetId ?? "default") === preset.id
                           ? "border-primary-500 bg-primary-50 dark:bg-primary-900/20"
                           : "border-gray-200 dark:border-gray-600 hover:border-gray-300 dark:hover:border-gray-500"
                       }`}
                     >
-                      <span className="w-8 h-8 rounded-full border border-gray-300 dark:border-gray-600 flex-shrink-0" style={{ backgroundColor: preset.theme.primary }} />
+                      <span
+                        className="w-8 h-8 rounded-full border border-gray-300 dark:border-gray-600 flex-shrink-0"
+                        style={{
+                          backgroundColor:
+                            preset.id === "custom"
+                              ? draft.theme?.primary || DEFAULT_THEME.primary
+                              : preset.theme.primary,
+                        }}
+                      />
                       <span className="text-xs font-medium text-gray-900 dark:text-white truncate w-full text-center">{preset.name}</span>
                     </button>
                   ))}

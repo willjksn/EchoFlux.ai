@@ -19,6 +19,9 @@ export type CreatorFanHubTheme = typeof DEFAULT_FAN_HUB_THEME;
 
 const FAN_HUB_THEME_SESSION_PREFIX = "echoflux:fanhub-theme-v1:";
 
+/** Fire after My Page save so Fan Hub shell refetches theme (keeps tabs in sync with Firestore). */
+export const FAN_HUB_STOREFRONT_THEME_SAVED_EVENT = "echoflux:fanhub-storefront-theme-saved";
+
 function readCachedTheme(creatorId: string): CreatorFanHubTheme | null {
   if (typeof window === "undefined") return null;
   try {
@@ -75,11 +78,11 @@ export function useCreatorFanHubTheme(creatorId: string | undefined): CreatorFan
       setTheme(DEFAULT_FAN_HUB_THEME);
       return;
     }
-    const cached = readCachedTheme(creatorId);
-    if (cached) setTheme(cached);
-
     let cancelled = false;
-    (async () => {
+
+    const loadFromFirestore = async () => {
+      const cached = readCachedTheme(creatorId);
+      if (cached) setTheme(cached);
       try {
         const snap = await getDoc(doc(db, "creators", creatorId));
         if (cancelled) return;
@@ -92,11 +95,18 @@ export function useCreatorFanHubTheme(creatorId: string | undefined): CreatorFan
         setTheme(next);
         writeCachedTheme(creatorId, next);
       } catch {
-        if (!cancelled && !cached) setTheme(DEFAULT_FAN_HUB_THEME);
+        if (!cancelled && !readCachedTheme(creatorId)) setTheme(DEFAULT_FAN_HUB_THEME);
       }
-    })();
+    };
+
+    void loadFromFirestore();
+    const onSaved = () => {
+      void loadFromFirestore();
+    };
+    window.addEventListener(FAN_HUB_STOREFRONT_THEME_SAVED_EVENT, onSaved);
     return () => {
       cancelled = true;
+      window.removeEventListener(FAN_HUB_STOREFRONT_THEME_SAVED_EVENT, onSaved);
     };
   }, [creatorId]);
 

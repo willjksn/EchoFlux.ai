@@ -8,7 +8,9 @@ import { FAN_HUB_THEME_PRESETS } from "./fanHubThemePresets";
 export function mergeFanHubStorefrontTheme(raw: Record<string, unknown> | undefined): Record<string, string> {
   const stored = raw && typeof raw === "object" ? raw : {};
   const pid = typeof stored.presetId === "string" ? stored.presetId.trim() : "";
-  const preset = FAN_HUB_THEME_PRESETS.find((p) => p.id === pid);
+  // "custom" = colors edited manually; do not layer a preset underneath (fixes wrong colors on other Fan Hub tabs).
+  const preset =
+    pid && pid !== "custom" ? FAN_HUB_THEME_PRESETS.find((p) => p.id === pid) : undefined;
   const out: Record<string, string> = {};
   if (preset?.theme) {
     for (const [k, v] of Object.entries(preset.theme)) {

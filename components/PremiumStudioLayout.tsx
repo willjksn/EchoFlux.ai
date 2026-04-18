@@ -18,6 +18,18 @@ import { useCreatorLiveChatSessionsCount } from './useCreatorLiveChatSessionsCou
 const FAN_HUB_PREVIEW_THEME_STORAGE_KEY = 'echoflux:fanhub-preview-theme';
 const FAN_HUB_PREVIEW_THEME_EVENT = 'echoflux:fanhub-preview-theme-changed';
 
+/** Use storefront background luminance — not EchoFlux app dark mode — so Fan Hub tabs match My Page colors. */
+function fanHubThemeBackgroundIsDark(backgroundHex: string): boolean {
+  const h = backgroundHex.trim();
+  const m = /^#([a-fA-F0-9]{6})$/i.exec(h);
+  if (!m) return false;
+  const r = parseInt(m[1].slice(0, 2), 16) / 255;
+  const g = parseInt(m[1].slice(2, 4), 16) / 255;
+  const b = parseInt(m[1].slice(4, 6), 16) / 255;
+  const l = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  return l < 0.45;
+}
+
 /** Pending selection when jumping from Messages (or elsewhere) to Fans tab. */
 export type PendingFansTabSelection = {
   fanId: string;
@@ -171,7 +183,7 @@ export const PremiumStudioLayout: React.FC<PremiumStudioLayoutProps> = ({ childr
   const creatorId = isFanHub ? auth.currentUser?.uid : undefined;
   const fanTheme = useCreatorFanHubTheme(creatorId);
   const [previewTheme, setPreviewTheme] = useState<Partial<typeof fanTheme> | null>(null);
-  const { isDarkMode, showToast } = useUI();
+  const { showToast } = useUI();
   useEffect(() => {
     if (!isFanHub || typeof window === 'undefined') {
       setPreviewTheme(null);
@@ -199,6 +211,11 @@ export const PremiumStudioLayout: React.FC<PremiumStudioLayoutProps> = ({ childr
     [fanTheme, previewTheme]
   );
 
+  const fanHubSurfaceIsDark = useMemo(
+    () => fanHubThemeBackgroundIsDark(effectiveFanTheme.background),
+    [effectiveFanTheme.background]
+  );
+
   const fanHubCssVarBridge = useMemo((): React.CSSProperties | null => {
     if (!isFanHub) return null;
     const { primary, background, text, textMuted, border, accentHover, fontFamily } = effectiveFanTheme;
@@ -209,19 +226,6 @@ export const PremiumStudioLayout: React.FC<PremiumStudioLayoutProps> = ({ childr
       '--fan-accent-hover': accentHover,
       ...sans,
     } as React.CSSProperties;
-    if (isDarkMode) {
-      const bg2 = '#111827';
-      const ink = '#f1f5f9';
-      const muted = '#94a3b8';
-      const edge = '#334155';
-      return {
-        ...baseTokens,
-        '--fan-bg': bg2,
-        '--fan-text': ink,
-        '--fan-text-muted': muted,
-        '--fan-border': edge,
-      };
-    }
     return {
       ...baseTokens,
       '--fan-bg': background,
@@ -229,29 +233,18 @@ export const PremiumStudioLayout: React.FC<PremiumStudioLayoutProps> = ({ childr
       '--fan-text-muted': textMuted,
       '--fan-border': border,
     };
-  }, [isFanHub, effectiveFanTheme, isDarkMode]);
+  }, [isFanHub, effectiveFanTheme]);
 
   const fanHubShellStyle = useMemo((): React.CSSProperties => {
     if (!isFanHub || !fanHubCssVarBridge) return {};
     const { background, text, fontFamily } = effectiveFanTheme;
-    if (isDarkMode) {
-      const bg = '#0f172a';
-      const bg2 = '#111827';
-      const ink = '#f1f5f9';
-      return {
-        ...fanHubCssVarBridge,
-        background: `linear-gradient(180deg, ${bg} 0%, ${bg2} 40%, ${bg2} 100%)`,
-        color: ink,
-        ...(fontFamily ? { fontFamily } : {}),
-      };
-    }
     return {
       ...fanHubCssVarBridge,
       background,
       color: text,
       ...(fontFamily ? { fontFamily } : {}),
     };
-  }, [isFanHub, isDarkMode, effectiveFanTheme, fanHubCssVarBridge]);
+  }, [isFanHub, effectiveFanTheme, fanHubCssVarBridge]);
 
   const inner = (
     <>
@@ -261,7 +254,11 @@ export const PremiumStudioLayout: React.FC<PremiumStudioLayoutProps> = ({ childr
         }`}
         style={
           isFanHub
-            ? { borderColor: isDarkMode ? `${effectiveFanTheme.primary}40` : `${effectiveFanTheme.primary}33` }
+            ? {
+                borderColor: fanHubSurfaceIsDark
+                  ? `${effectiveFanTheme.primary}40`
+                  : `${effectiveFanTheme.primary}33`,
+              }
             : undefined
         }
       >
@@ -285,7 +282,7 @@ export const PremiumStudioLayout: React.FC<PremiumStudioLayoutProps> = ({ childr
                 isFanHub
                   ? tab === id
                     ? { backgroundColor: effectiveFanTheme.primary, color: '#fff' }
-                    : isDarkMode
+                    : fanHubSurfaceIsDark
                       ? {
                           backgroundColor: `color-mix(in srgb, ${effectiveFanTheme.primary} 12%, #1e293b)`,
                           color: '#e2e8f0',
@@ -327,7 +324,7 @@ export const PremiumStudioLayout: React.FC<PremiumStudioLayoutProps> = ({ childr
         {isFanHub ? (
           <FanHubNotificationBell
             accentColor={effectiveFanTheme.primary}
-            iconColor={isDarkMode ? '#e2e8f0' : effectiveFanTheme.text}
+            iconColor={fanHubSurfaceIsDark ? '#e2e8f0' : effectiveFanTheme.text}
             className="shrink-0"
             onNavigate={handleFanHubNotificationNavigate}
             hidden={suppressFanHubDmNotifications}
@@ -361,7 +358,7 @@ export const PremiumStudioLayout: React.FC<PremiumStudioLayoutProps> = ({ childr
         className="stormij-theme -m-6 min-h-full p-6 rounded-xl shadow-sm border border-black/5 dark:border-slate-600/60"
         style={{
           ...fanHubShellStyle,
-          borderColor: isDarkMode
+          borderColor: fanHubSurfaceIsDark
             ? `color-mix(in srgb, ${effectiveFanTheme.primary} 32%, #334155)`
             : `${effectiveFanTheme.primary}22`,
         }}

@@ -4,7 +4,8 @@ import { FAN_HUB_THEME_PRESETS } from "./_fanHubThemePresets.js";
 export function mergeFanHubStorefrontTheme(raw: Record<string, unknown> | undefined): Record<string, string> {
   const stored = raw && typeof raw === "object" ? raw : {};
   const pid = typeof stored.presetId === "string" ? stored.presetId.trim() : "";
-  const preset = FAN_HUB_THEME_PRESETS.find((p) => p.id === pid);
+  const preset =
+    pid && pid !== "custom" ? FAN_HUB_THEME_PRESETS.find((p) => p.id === pid) : undefined;
   const out: Record<string, string> = {};
   if (preset?.theme) {
     for (const [k, v] of Object.entries(preset.theme)) {
