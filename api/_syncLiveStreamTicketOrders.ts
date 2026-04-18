@@ -31,8 +31,10 @@ export async function syncLiveStreamTicketOrdersForStream(
   const streamRef = db.collection("creators").doc(cid).collection("liveStreams").doc(sid);
   const streamSnap = await streamRef.get();
 
+  const STALE_MS = 6 * 60 * 60 * 1000;
   let status: string;
   let parts: ReturnType<typeof schedulePartsFromIso> | null;
+  let scheduledStartMs: number | null = null;
   if (!streamSnap.exists) {
     /** Stream doc removed after the event (or rare bad state) — still close out ticket rows. */
     status = "ended";
@@ -42,6 +44,18 @@ export async function syncLiveStreamTicketOrdersForStream(
     status = String(s.status ?? "scheduled").trim().toLowerCase();
     const scheduledStartRaw = typeof s.scheduledStart === "string" ? s.scheduledStart.trim() : "";
     parts = scheduledStartRaw ? schedulePartsFromIso(scheduledStartRaw) : null;
+    if (scheduledStartRaw) {
+      const t = Date.parse(scheduledStartRaw);
+      if (Number.isFinite(t)) scheduledStartMs = t;
+    }
+  }
+
+  /** Stuck `live` / `scheduled` after go-live + grace → complete ticket orders (matches Purchases + Calendar UI). */
+  let effectiveOrderStatus = status;
+  if (status !== "cancelled" && status !== "ended") {
+    if (scheduledStartMs != null && Date.now() > scheduledStartMs + STALE_MS) {
+      effectiveOrderStatus = "ended";
+    }
   }
 
   let docs: QueryDocumentSnapshot[];
@@ -82,7 +96,7 @@ export async function syncLiveStreamTicketOrdersForStream(
 
     const patch: Record<string, unknown> = {};
 
-    if (status === "ended") {
+    if (effectiveOrderStatus === "ended") {
       if (data.deliveryStatus !== "delivered") patch.deliveryStatus = "delivered";
       if (data.scheduleStatus !== "completed") patch.scheduleStatus = "completed";
       if (!data.deliveredAt) patch.deliveredAt = nowIso;

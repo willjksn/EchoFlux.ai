@@ -262,6 +262,34 @@ async function enrichLiveStreamTicketOrdersFromStreamDocs(
       row.scheduledTime = parts.time;
     }
   }
+
+  /** Stuck `live` / `scheduled` tickets after go-live time + grace → show completed (matches client calendar). */
+  const STALE_MS = 6 * 60 * 60 * 1000;
+  for (const row of orderRows) {
+    if (row.type !== "live_stream_ticket") continue;
+    if (row.scheduleStatus === "cancelled") continue;
+    if (row.deliveryStatus === "delivered" && row.scheduleStatus === "completed") continue;
+
+    let startMs: number | null = null;
+    const sid = typeof row.streamId === "string" ? row.streamId.trim() : "";
+    const iso = sid ? scheduledStartByStreamId.get(sid) : undefined;
+    if (iso) {
+      const t = Date.parse(iso);
+      if (Number.isFinite(t)) startMs = t;
+    }
+    if (startMs == null && row.scheduledDate && row.scheduledTime) {
+      const [y, m, d] = row.scheduledDate.split("-").map(Number);
+      const [hh, mm] = row.scheduledTime.split(":").map(Number);
+      if ([y, m, d].every((n) => Number.isFinite(n))) {
+        startMs = Date.UTC(y, (m ?? 1) - 1, d ?? 1, Number.isFinite(hh) ? hh : 0, Number.isFinite(mm) ? mm : 0, 0, 0);
+      }
+    }
+    if (startMs != null && Number.isFinite(startMs) && Date.now() > startMs + STALE_MS) {
+      row.deliveryStatus = "delivered";
+      row.scheduleStatus = "completed";
+      if (!row.deliveredAt) row.deliveredAt = new Date(startMs + STALE_MS).toISOString();
+    }
+  }
 }
 
 /**

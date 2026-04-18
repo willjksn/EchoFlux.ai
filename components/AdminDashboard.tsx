@@ -16,7 +16,7 @@ import { WaitlistManager } from './WaitlistManager';
 import { EmailCenterPage } from './EmailCenterPage';
 import { TeamIcon, DollarSignIcon, UserPlusIcon, ArrowUpCircleIcon, ImageIcon, VideoIcon, LockIcon, TrendingIcon, TrashIcon, HeartIcon, StarIcon, ChatIcon, GlobeIcon, SparklesIcon } from './icons/UIIcons';
 import { db, auth } from '../firebaseConfig';
-import { collection, query, orderBy, onSnapshot, setDoc, doc, getDoc, deleteField, getDocs } from 'firebase/firestore';
+import { collection, query, orderBy, onSnapshot, setDoc, doc, getDoc, deleteField, getDocs, limit } from 'firebase/firestore';
 import { useAppContext } from './AppContext';
 import { defaultSettings, ECHOFLUX_CREATOR_ELITE_INVITE_USD, ECHOFLUX_CREATOR_PRO_INVITE_USD } from '../constants';
 import { getModelUsageAnalytics, type ModelUsageStats } from '../src/services/modelUsageService';
@@ -366,6 +366,12 @@ export const AdminDashboard: React.FC = () => {
     const [fanHubMembershipsByFanId, setFanHubMembershipsByFanId] = useState<Record<string, FanMembershipLink[]>>({});
     const [fanHubMemberProfilesByFanId, setFanHubMemberProfilesByFanId] = useState<Record<string, FanHubMemberProfile>>({});
     const [showFanHubMembersSection, setShowFanHubMembersSection] = useState(true);
+    /** Admin: expandable `creators/{creatorId}/fans` roster (EchoFlux workspace creators, including dual Fan Hub members). */
+    const [adminCreatorRosterOpen, setAdminCreatorRosterOpen] = useState<Record<string, boolean>>({});
+    const [adminCreatorRosters, setAdminCreatorRosters] = useState<
+        Record<string, Array<{ id: string; email: string; displayName: string; subscriptionStatus: string | null; totalSpentCents: number }>>
+    >({});
+    const [adminCreatorRosterLoading, setAdminCreatorRosterLoading] = useState<Record<string, boolean>>({});
     const [fanHubRevenueDays, setFanHubRevenueDays] = useState<number>(30);
     const [showAllFanHubTransactions, setShowAllFanHubTransactions] = useState(false);
 
@@ -904,31 +910,159 @@ export const AdminDashboard: React.FC = () => {
             hasActiveStripeEchofluxSubscription(user)
         );
     }, [creatorIds]);
-    
+
+    const fetchCreatorHubRoster = useCallback(
+        async (creatorId: string) => {
+            const id = creatorId.trim();
+            if (!id) return;
+            setAdminCreatorRosterLoading((p) => ({ ...p, [id]: true }));
+            try {
+                const snap = await getDocs(query(collection(db, 'creators', id, 'fans'), limit(500)));
+                const rows: Array<{
+                    id: string;
+                    email: string;
+                    displayName: string;
+                    subscriptionStatus: string | null;
+                    totalSpentCents: number;
+                }> = [];
+                snap.forEach((d) => {
+                    const x = d.data() as Record<string, unknown>;
+                    rows.push({
+                        id: d.id,
+                        email: typeof x.email === 'string' && x.email.trim() ? x.email : '—',
+                        displayName:
+                            (typeof x.displayName === 'string' && x.displayName.trim() && x.displayName) ||
+                            (typeof x.fanName === 'string' && x.fanName.trim() && x.fanName) ||
+                            '—',
+                        subscriptionStatus: typeof x.subscriptionStatus === 'string' ? x.subscriptionStatus : null,
+                        totalSpentCents:
+                            typeof x.totalSpentCents === 'number' && Number.isFinite(x.totalSpentCents)
+                                ? Math.max(0, Math.round(x.totalSpentCents))
+                                : 0,
+                    });
+                });
+                rows.sort((a, b) => b.totalSpentCents - a.totalSpentCents);
+                setAdminCreatorRosters((p) => ({ ...p, [id]: rows }));
+            } catch (e) {
+                console.error('Admin creator hub roster', id, e);
+                showToast?.('Could not load My Page members for this creator.', 'error');
+            } finally {
+                setAdminCreatorRosterLoading((p) => ({ ...p, [id]: false }));
+            }
+        },
+        [showToast],
+    );
+
+    const toggleCreatorHubMembers = useCallback(
+        (creatorId: string) => {
+            const id = creatorId.trim();
+            if (!id) return;
+            setAdminCreatorRosterOpen((p) => {
+                const opening = !p[id];
+                if (opening) void fetchCreatorHubRoster(id);
+                return { ...p, [id]: opening };
+            });
+        },
+        [fetchCreatorHubRoster],
+    );
+
+    const renderCreatorHubRosterBlock = (hubUser: User, colSpan: number) => {
+        if (!isEchofluxWorkspaceUser(hubUser)) return null;
+        const id = hubUser.id;
+        const open = !!adminCreatorRosterOpen[id];
+        const loading = !!adminCreatorRosterLoading[id];
+        const rows = adminCreatorRosters[id] ?? [];
+        const countLabel = rows.length > 0 ? ` (${rows.length})` : '';
+        return (
+            <tr className="border-b border-gray-200 dark:border-gray-700 bg-slate-50/60 dark:bg-slate-900/25">
+                <td colSpan={colSpan} className="p-2 pl-8">
+                    <button
+                        type="button"
+                        onClick={() => toggleCreatorHubMembers(id)}
+                        className="text-xs font-semibold text-indigo-600 dark:text-indigo-300 hover:underline"
+                    >
+                        {open ? 'Hide My Page members' : 'Show My Page members'}
+                        {open || rows.length > 0 ? countLabel : ''}
+                    </button>
+                    {open ? (
+                        <div className="mt-2 border-t border-dashed border-gray-200 dark:border-gray-600 pt-2">
+                            {loading ? (
+                                <p className="text-xs text-gray-500 dark:text-gray-400">Loading…</p>
+                            ) : rows.length === 0 ? (
+                                <p className="text-xs text-gray-500 dark:text-gray-400">
+                                    No fan docs under <code className="text-[10px]">creators/{id}/fans</code> yet.
+                                </p>
+                            ) : (
+                                <div className="overflow-x-auto max-h-64 overflow-y-auto rounded-lg border border-gray-200 dark:border-gray-600">
+                                    <table className="w-full text-left text-xs min-w-[520px]">
+                                        <thead className="bg-gray-100 dark:bg-gray-800 sticky top-0">
+                                            <tr>
+                                                <th className="p-2 font-semibold text-gray-600 dark:text-gray-300">Member</th>
+                                                <th className="p-2 font-semibold text-gray-600 dark:text-gray-300">Email</th>
+                                                <th className="p-2 font-semibold text-gray-600 dark:text-gray-300">Subscription</th>
+                                                <th className="p-2 font-semibold text-gray-600 dark:text-gray-300">Lifetime spend</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {rows.map((r) => (
+                                                <tr key={r.id} className="border-t border-gray-100 dark:border-gray-700">
+                                                    <td className="p-2 text-gray-900 dark:text-white">{r.displayName}</td>
+                                                    <td className="p-2 text-gray-600 dark:text-gray-300 font-mono">{r.email}</td>
+                                                    <td className="p-2 text-gray-600 dark:text-gray-300">
+                                                        {r.subscriptionStatus ?? '—'}
+                                                    </td>
+                                                    <td className="p-2 text-gray-600 dark:text-gray-300">
+                                                        ${(r.totalSpentCents / 100).toFixed(2)}
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            )}
+                        </div>
+                    ) : null}
+                </td>
+            </tr>
+        );
+    };
+
     const filteredUsers = useMemo(() => {
-        const filtered = users.filter(user => {
+        const filtered = users.filter((user) => {
             const matchesSearch =
                 user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                 user.email.toLowerCase().includes(searchTerm.toLowerCase());
             if (!matchesSearch) return false;
-            if (userOriginFilter === 'all') return true;
-            if (userOriginFilter === 'fan_hub') return hasFanHubMembership(user);
-            // EchoFlux filter should show creator-workspace users only (not fan-only members).
-            return isEchofluxWorkspaceUser(user) && !hasFanHubMembership(user);
+            if (userOriginFilter === 'all') {
+                return (
+                    user.role === 'Admin' ||
+                    isEchofluxWorkspaceUser(user) ||
+                    hasFanHubMembership(user)
+                );
+            }
+            if (userOriginFilter === 'fan_hub') {
+                if (creatorIds.size > 0) {
+                    return creatorIds.has(user.id);
+                }
+                // Creators index failed to load (e.g. rules not deployed) — show Fan Hub–related users instead of an empty page.
+                return hasFanHubMembership(user) || isEchofluxWorkspaceUser(user);
+            }
+            // EchoFlux: every workspace / subscription account (including creators who also subscribe on Fan Hub).
+            return isEchofluxWorkspaceUser(user);
         });
-        
+
         // Separate admins from regular users
-        const adminUsers = filtered.filter(user => user.role === 'Admin');
-        const regularUsers = filtered.filter(user => user.role !== 'Admin');
-        
+        const adminUsers = filtered.filter((user) => user.role === 'Admin');
+        const regularUsers = filtered.filter((user) => user.role !== 'Admin');
+
         // Sort admins by email (to find wil_jackson@icloud.com first)
         adminUsers.sort((a, b) => a.email.localeCompare(b.email));
         // Sort regular users by signup date (newest first)
         regularUsers.sort((a, b) => new Date(b.signupDate).getTime() - new Date(a.signupDate).getTime());
-        
+
         // Return admins first, then regular users
         return [...adminUsers, ...regularUsers];
-    }, [users, searchTerm, userOriginFilter, hasFanHubMembership, isEchofluxWorkspaceUser]);
+    }, [users, searchTerm, userOriginFilter, hasFanHubMembership, isEchofluxWorkspaceUser, creatorIds]);
 
     const filteredFanHubTransactions = useMemo(() => {
         if (!fanHubRevenue.recentTransactions.length) return [];
@@ -2317,24 +2451,35 @@ export const AdminDashboard: React.FC = () => {
                         </thead>
                         <tbody>
                             {(() => {
-                                const visibleUsers = paginatedUsers.filter(user => 
-                                    user.plan !== 'Agency' && 
-                                    user.plan !== 'Starter' && 
-                                    user.plan !== 'Growth' && 
-                                    user.plan !== 'Caption'
+                                // Admins are often on legacy "Agency" plan; still show them in User Management (they sort first in filteredUsers).
+                                const visibleUsers = paginatedUsers.filter(
+                                    (user) =>
+                                        user.role === 'Admin' ||
+                                        (user.plan !== 'Agency' &&
+                                            user.plan !== 'Starter' &&
+                                            user.plan !== 'Growth' &&
+                                            user.plan !== 'Caption'),
                                 );
                                 
-                                // Separate admins, Fan Hub members, and regular EchoFlux users
+                                const showEchofluxSection = userOriginFilter === 'all' || userOriginFilter === 'echoflux';
+                                const showFanConsumersSection = userOriginFilter === 'all';
+                                const showCreatorsMyPageSection = userOriginFilter === 'fan_hub';
+
+                                // Separate admins, Fan Hub consumers (All tab only), and EchoFlux workspace users
                                 const adminUsers = visibleUsers.filter(user => user.role === 'Admin');
                                 const nonAdminUsers = visibleUsers.filter(user => user.role !== 'Admin');
-                                // Keep sectioning logic aligned with the strict filter logic above.
-                                // Non-workspace users should never appear under the EchoFlux section.
-                                const fanHubUsers = nonAdminUsers.filter(
-                                    (user) => hasFanHubMembership(user) || !isEchofluxWorkspaceUser(user)
-                                );
-                                const echofluxUsers = nonAdminUsers.filter(
-                                    (user) => isEchofluxWorkspaceUser(user) && !hasFanHubMembership(user)
-                                );
+                                // EchoFlux block: all workspace accounts (not split by Fan Hub consumer status).
+                                const echofluxUsers = nonAdminUsers.filter((user) => isEchofluxWorkspaceUser(user));
+                                // Fan Hub block on "All": people with a synced Fan Hub membership as a fan (may overlap EchoFlux rows).
+                                const fanHubUsers = nonAdminUsers.filter((user) => hasFanHubMembership(user));
+                                // Fan Hub tab: non-admin rows are already creator-only from filteredUsers; list them with rosters.
+                                const myPageCreatorUsers = showCreatorsMyPageSection
+                                    ? creatorIds.size > 0
+                                        ? nonAdminUsers.filter((user) => creatorIds.has(user.id))
+                                        : nonAdminUsers.filter(
+                                              (user) => isEchofluxWorkspaceUser(user) || hasFanHubMembership(user),
+                                          )
+                                    : [];
                                 
                                 // Find wil_jackson@icloud.com in current page
                                 const wilJacksonUser = visibleUsers.find(user => user.email === 'wil_jackson@icloud.com');
@@ -2433,6 +2578,7 @@ export const AdminDashboard: React.FC = () => {
                                                                     </div>
                                                                 </td>
                                                             </tr>
+                                                            {creatorIds.has(user.id) ? renderCreatorHubRosterBlock(user, 6) : null}
                                                             {/* Totals row after wil_jackson@icloud.com if they're an admin */}
                                                             {isWilJackson && (
                                                                 <TotalsRow />
@@ -2453,9 +2599,81 @@ export const AdminDashboard: React.FC = () => {
                                                 )}
                                             </>
                                         )}
+
+                                        {/* Fan Hub tab: My Page creators with member rosters */}
+                                        {showCreatorsMyPageSection && myPageCreatorUsers.length > 0 && (
+                                            <>
+                                                <tr>
+                                                    <td colSpan={6} className="p-2 border-t-2 border-cyan-300 dark:border-cyan-700 bg-cyan-50/40 dark:bg-cyan-900/15">
+                                                        <div className="text-xs text-cyan-800 dark:text-cyan-200 font-semibold tracking-wide text-center">
+                                                            MY PAGE CREATORS (show members per creator)
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                                {myPageCreatorUsers.map((user) => {
+                                                    const isWilJackson = user.email === 'wil_jackson@icloud.com';
+                                                    return (
+                                                        <React.Fragment key={`fanhub-creator-${user.id}`}>
+                                                            <tr className="border-b border-gray-200 dark:border-gray-700">
+                                                                <td className="p-3">
+                                                                    <div className="flex items-center space-x-3">
+                                                                        <img src={user.avatar} alt={user.name} className="w-10 h-10 rounded-full" />
+                                                                        <div>
+                                                                            <p className="font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                                                                                {user.name}
+                                                                                {getUserOriginBadge(user)}
+                                                                            </p>
+                                                                            <p className="text-sm text-gray-500 dark:text-gray-400">{user.email}</p>
+                                                                        </div>
+                                                                    </div>
+                                                                </td>
+                                                                <td className="p-3">
+                                                                    <span className={`px-3 py-1 text-xs font-semibold rounded-full ${planColorMap[getPlanKey(user.plan)]}`}>
+                                                                        {user.plan}
+                                                                    </span>
+                                                                </td>
+                                                                <td className="p-3 text-sm text-gray-600 dark:text-gray-300">
+                                                                    {new Date(user.signupDate).toLocaleDateString()}
+                                                                </td>
+                                                                <td className="p-3 text-sm text-gray-600 dark:text-gray-300">
+                                                                    {formatStorage(userStorageMap[user.id] ?? user.storageUsed ?? 0, getStorageLimit(user.plan))}
+                                                                </td>
+                                                                <td className="p-3 font-mono text-gray-600 dark:text-gray-300">
+                                                                    {(() => {
+                                                                        const used = adminCaptionUsedThisMonth(user);
+                                                                        const limit = adminCaptionMonthlyLimit(user.plan);
+                                                                        return limit > 0 ? `${used}/${limit}` : `${used}`;
+                                                                    })()}
+                                                                </td>
+                                                                <td className="p-3">
+                                                                    <div className="flex gap-2">
+                                                                        <button onClick={() => setEditingUser(user)} className="px-3 py-1 text-sm font-medium text-primary-600 dark:text-primary-400 hover:bg-primary-50 dark:hover:bg-primary-900/30 rounded-md">
+                                                                            Manage
+                                                                        </button>
+                                                                        <button onClick={() => setGrantingRewardToUser(user)} className="px-3 py-1 text-sm font-medium text-purple-600 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-900/30 rounded-md">
+                                                                            Grant Reward
+                                                                        </button>
+                                                                        <button
+                                                                            onClick={() => handleDeleteUser(user)}
+                                                                            className="px-3 py-1 text-sm font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-md flex items-center gap-1"
+                                                                            title="Delete User"
+                                                                        >
+                                                                            <TrashIcon className="w-4 h-4" />
+                                                                            Delete
+                                                                        </button>
+                                                                    </div>
+                                                                </td>
+                                                            </tr>
+                                                            {renderCreatorHubRosterBlock(user, 6)}
+                                                            {isWilJackson && <TotalsRow />}
+                                                        </React.Fragment>
+                                                    );
+                                                })}
+                                            </>
+                                        )}
                                         
                                         {/* EchoFlux Users Section */}
-                                        {echofluxUsers.length > 0 && (
+                                        {showEchofluxSection && echofluxUsers.length > 0 && (
                                             <>
                                                 <tr>
                                                     <td colSpan={6} className="p-2 border-t-2 border-gray-300 dark:border-gray-600">
@@ -2520,6 +2738,7 @@ export const AdminDashboard: React.FC = () => {
                                                                     </div>
                                                                 </td>
                                                             </tr>
+                                                            {renderCreatorHubRosterBlock(user, 6)}
                                                             {/* Totals row after wil_jackson@icloud.com if they're a regular user */}
                                                             {isWilJackson && (
                                                                 <TotalsRow />
@@ -2530,8 +2749,8 @@ export const AdminDashboard: React.FC = () => {
                                             </>
                                         )}
 
-                                        {/* Fan Hub members: one row per EchoFlux user; creator chips are deduped (no per-creator sub-tables). */}
-                                        {fanHubUsers.length > 0 && (
+                                        {/* All tab only: Fan Hub consumers (memberships as fans); creators with rosters use the Fan Hub tab. */}
+                                        {showFanConsumersSection && fanHubUsers.length > 0 && (
                                             <>
                                                 <tr className="bg-cyan-50/60 dark:bg-cyan-900/20">
                                                     <td colSpan={6} className="p-3 border-t-2 border-cyan-300 dark:border-cyan-700">
@@ -2639,7 +2858,8 @@ export const AdminDashboard: React.FC = () => {
                                                                                     {dedupedRows.map((row) => {
                                                                                         const hubChips = membershipChipsForDisplay(row.memberships);
                                                                                         return (
-                                                                                        <tr key={`fanhub-deduped-${row.user.id}`} className="border-t border-cyan-100 dark:border-cyan-900/30">
+                                                                                        <React.Fragment key={`fanhub-deduped-${row.user.id}`}>
+                                                                                        <tr className="border-t border-cyan-100 dark:border-cyan-900/30">
                                                                                             <td className="p-3">
                                                                                                 <div className="flex items-center space-x-3">
                                                                                                     <img
@@ -2697,6 +2917,8 @@ export const AdminDashboard: React.FC = () => {
                                                                                                 </div>
                                                                                             </td>
                                                                                         </tr>
+                                                                                        {renderCreatorHubRosterBlock(row.user, 6)}
+                                                                                        </React.Fragment>
                                                                                         );
                                                                                     })}
                                                                                     {unassigned.map((user) => (

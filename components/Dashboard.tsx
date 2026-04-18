@@ -87,7 +87,13 @@ export const Dashboard: React.FC = () => {
   const [fanHubStats, setFanHubStats] = useState<{
     newMembers: number;
     totalMembers: number;
-    recentActivity: Array<{ id: string; type: 'signup' | 'tip' | 'unlock' | 'purchase'; userName: string; amount?: number; timestamp: Date }>;
+    recentActivity: Array<{
+      id: string;
+      type: 'signup' | 'tip' | 'unlock' | 'purchase' | 'subscription' | 'live_stream_ticket';
+      userName: string;
+      amount?: number;
+      timestamp: Date;
+    }>;
     topPosts: Array<{ id: string; caption: string; likes: number; comments: number; mediaUrl?: string }>;
     weeklyRevenue: number;
     monthlyRevenue: number;
@@ -144,14 +150,17 @@ export const Dashboard: React.FC = () => {
         const recentFans = recentFansSnap.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }));
 
         const token = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
-        let orders: Array<{
+        type DashboardOrderRow = {
           id: string;
           type?: string;
           amountCents?: number;
           createdAt: string;
           fanEmail?: string | null;
           fanName?: string | null;
-        }> = [];
+          fanId?: string;
+        };
+
+        let orders: DashboardOrderRow[] = [];
         if (token) {
           const ordersRes = await fetch('/api/creatorOrders?limit=100', {
             headers: { Authorization: `Bearer ${token}` },
@@ -162,49 +171,102 @@ export const Dashboard: React.FC = () => {
           }
         }
 
-        let weeklyRevCents = 0;
-        let monthlyRevCents = 0;
-        const recentActivity: typeof fanHubStats.recentActivity = [];
-
         const normalizeOrderType = (order: {
           type?: string;
           productType?: string;
           tipHandle?: string | null;
-        }): 'tip' | 'unlock' | 'subscription' | 'purchase' => {
+        }): 'tip' | 'unlock' | 'subscription' | 'purchase' | 'live_stream_ticket' => {
           const raw = String(order.type ?? order.productType ?? '').trim().toLowerCase();
           if (raw === 'tip') return 'tip';
           if (raw === 'unlock' || raw === 'unlock_media' || raw === 'post_unlock') return 'unlock';
           if (raw === 'subscription') return 'subscription';
+          if (raw === 'live_stream_ticket') return 'live_stream_ticket';
           if (typeof order.tipHandle === 'string' && order.tipHandle.trim()) return 'tip';
           return 'purchase';
         };
 
-        orders.forEach((order) => {
+        /** Drop legacy `purchases` mirror rows when a real `orders` doc matches same fan + amount (~same time). */
+        const dedupeOrdersForDashboard = (list: DashboardOrderRow[]): DashboardOrderRow[] => {
+          const nonLegacy = list.filter((o) => !o.id.startsWith('legacy_purchase_'));
+          const legacy = list.filter((o) => o.id.startsWith('legacy_purchase_'));
+          const WINDOW_MS = 2 * 60 * 60 * 1000;
+          const keptLegacy: DashboardOrderRow[] = [];
+          for (const leg of legacy) {
+            const legTime = new Date(leg.createdAt).getTime();
+            const legCents = typeof leg.amountCents === 'number' ? leg.amountCents : 0;
+            const legFanId = (leg.fanId || '').trim();
+            const legEmail = (leg.fanEmail || '').trim().toLowerCase();
+            const hasCovering = nonLegacy.some((m) => {
+              if ((typeof m.amountCents === 'number' ? m.amountCents : 0) !== legCents) return false;
+              const mFanId = (m.fanId || '').trim();
+              const mEmail = (m.fanEmail || '').trim().toLowerCase();
+              const fanMatch =
+                (legFanId && mFanId && legFanId === mFanId) ||
+                (legEmail && mEmail && legEmail === mEmail);
+              if (!fanMatch) return false;
+              return Math.abs(new Date(m.createdAt).getTime() - legTime) < WINDOW_MS;
+            });
+            if (!hasCovering) keptLegacy.push(leg);
+          }
+          return [...nonLegacy, ...keptLegacy].sort(
+            (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+          );
+        };
+
+        const ordersDeduped = dedupeOrdersForDashboard(orders);
+
+        let weeklyRevCents = 0;
+        let monthlyRevCents = 0;
+        const recentActivity: typeof fanHubStats.recentActivity = [];
+
+        const activityFingerprint = (
+          normalizedType: ReturnType<typeof normalizeOrderType>,
+          fanKey: string,
+          cents: number,
+          orderDate: Date,
+        ): string => {
+          const bucket = Math.floor(orderDate.getTime() / 1000);
+          return `${normalizedType}|${fanKey}|${cents}|${bucket}`;
+        };
+        const seenActivityPrints = new Set<string>();
+
+        ordersDeduped.forEach((order) => {
           const orderDate = new Date(order.createdAt);
           if (Number.isNaN(orderDate.getTime())) return;
           const cents = typeof order.amountCents === 'number' ? order.amountCents : 0;
-          const normalizedType = normalizeOrderType(order as { type?: string; productType?: string; tipHandle?: string | null });
+          const normalizedType = normalizeOrderType(order);
 
           if (orderDate >= weekAgo) weeklyRevCents += cents;
           if (orderDate >= monthAgo) monthlyRevCents += cents;
 
-          if (recentActivity.length < 5) {
-            let activityType: 'tip' | 'unlock' | 'purchase' = 'purchase';
-            if (normalizedType === 'tip') activityType = 'tip';
-            else if (normalizedType === 'unlock') activityType = 'unlock';
+          if (recentActivity.length >= 5) return;
 
-            const label =
-              (typeof order.fanName === 'string' && order.fanName.trim()) ||
-              (typeof order.fanEmail === 'string' && order.fanEmail.trim()) ||
-              'Anonymous';
-            recentActivity.push({
-              id: order.id,
-              type: activityType,
-              userName: label,
-              amount: cents / 100,
-              timestamp: orderDate,
-            });
-          }
+          const label =
+            (typeof order.fanName === 'string' && order.fanName.trim()) ||
+            (typeof order.fanEmail === 'string' && order.fanEmail.trim()) ||
+            'Anonymous';
+          const fanKey =
+            (typeof order.fanId === 'string' && order.fanId.trim().toLowerCase()) ||
+            (typeof order.fanEmail === 'string' && order.fanEmail.trim().toLowerCase()) ||
+            label.toLowerCase();
+
+          const print = activityFingerprint(normalizedType, fanKey, cents, orderDate);
+          if (seenActivityPrints.has(print)) return;
+          seenActivityPrints.add(print);
+
+          let activityType: (typeof recentActivity)[number]['type'] = 'purchase';
+          if (normalizedType === 'tip') activityType = 'tip';
+          else if (normalizedType === 'unlock') activityType = 'unlock';
+          else if (normalizedType === 'subscription') activityType = 'subscription';
+          else if (normalizedType === 'live_stream_ticket') activityType = 'live_stream_ticket';
+
+          recentActivity.push({
+            id: order.id,
+            type: activityType,
+            userName: label,
+            amount: cents / 100,
+            timestamp: orderDate,
+          });
         });
 
         recentFans.slice(0, 3).forEach((fan: any) => {
@@ -1543,18 +1605,26 @@ export const Dashboard: React.FC = () => {
                       <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white ${
                         activity.type === 'signup' ? 'bg-green-500' :
                         activity.type === 'tip' ? 'bg-yellow-500' :
-                        activity.type === 'unlock' ? 'bg-purple-500' : 'bg-pink-500'
+                        activity.type === 'unlock' ? 'bg-purple-500' :
+                        activity.type === 'subscription' ? 'bg-indigo-500' :
+                        activity.type === 'live_stream_ticket' ? 'bg-cyan-600' :
+                        'bg-pink-500'
                       }`}>
                         {activity.type === 'signup' && <UserIcon className="w-4 h-4" />}
                         {activity.type === 'tip' && <DollarSignIcon className="w-4 h-4" />}
                         {activity.type === 'unlock' && <StarIcon className="w-4 h-4" />}
                         {activity.type === 'purchase' && <HeartIcon className="w-4 h-4" />}
+                        {activity.type === 'subscription' && <HeartIcon className="w-4 h-4" />}
+                        {activity.type === 'live_stream_ticket' && <HeartIcon className="w-4 h-4" />}
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
                           {activity.type === 'signup' ? 'New member joined' :
                            activity.type === 'tip' ? `Tip received` :
-                           activity.type === 'unlock' ? 'Content unlocked' : 'Store purchase'}
+                           activity.type === 'unlock' ? 'Content unlocked' :
+                           activity.type === 'subscription' ? 'Membership' :
+                           activity.type === 'live_stream_ticket' ? 'Live stream ticket' :
+                           'Store purchase'}
                         </p>
                         <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
                           {activity.userName.includes('@') ? activity.userName.split('@')[0] : activity.userName}

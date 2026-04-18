@@ -291,7 +291,8 @@ service cloud.firestore {
      *  - Public storefront reads for fans: other paths / APIs
      *  ------------------------------------------------------- */
     match /creators/{creatorId} {
-      allow read: if isAuthenticated() && request.auth.uid == creatorId;
+      // Owner: My Page / storefront. Admin: list creator ids + storefront ops (User Management Fan Hub tab).
+      allow read: if isAuthenticated() && (request.auth.uid == creatorId || isAdmin());
 
       allow create: if isOwner(creatorId);
       allow update: if isOwner(creatorId);
@@ -315,9 +316,9 @@ service cloud.firestore {
         allow update, delete: if isOwner(creatorId);
       }
 
-      /** Stripe / entitlements mirror — creator manages; fan reads own doc */
+      /** Stripe / entitlements mirror — creator manages; fan reads own doc; Admin reads for User Management roster */
       match /fans/{fanId} {
-        allow read: if isOwner(creatorId) || (isAuthenticated() && request.auth.uid == fanId);
+        allow read: if isOwner(creatorId) || (isAuthenticated() && request.auth.uid == fanId) || isAdmin();
         allow create, update, delete: if isOwner(creatorId);
       }
 

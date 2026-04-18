@@ -41,6 +41,19 @@ function isoFromLiveStreamScheduledStart(v: unknown): string | null {
     return null;
 }
 
+/** If scheduled start + grace has passed, treat stuck `live` / `scheduled` streams as ended in the UI. */
+const LIVE_STREAM_STALE_UI_MS = 6 * 60 * 60 * 1000;
+
+function effectiveLiveStreamStatusForUi(statusRaw: string, dateISO: string | null | undefined): string {
+    const st = String(statusRaw ?? '').trim().toLowerCase();
+    if (st === 'ended' || st === 'cancelled') return st;
+    if (!dateISO) return st || 'scheduled';
+    const startMs = Date.parse(dateISO);
+    if (!Number.isFinite(startMs)) return st || 'scheduled';
+    if (Date.now() > startMs + LIVE_STREAM_STALE_UI_MS) return 'ended';
+    return st || 'scheduled';
+}
+
 export const Calendar: React.FC = () => {
     const { calendarEvents, setActivePage, posts, user, showToast, updatePost, addCalendarEvent, deletePost, socialAccounts } = useAppContext();
     const [currentDate, setCurrentDate] = useState(new Date());
@@ -330,16 +343,17 @@ export const Calendar: React.FC = () => {
 
         const liveStreamCalendarEvents: CalendarEvent[] = liveStreamScheduleEvents.map((s) => {
             const prefix = s.creatorTestOnly ? '🧪 ' : '';
+            const effectiveStatus = effectiveLiveStreamStatusForUi(s.status, s.dateISO);
             return {
                 id: `livestream-${s.streamId}`,
                 title: `${prefix}${s.title}`,
                 date: s.dateISO,
                 type: 'Post',
                 platform: 'My Page' as Platform,
-                status: s.status === 'live' ? ('Published' as const) : ('Scheduled' as const),
+                status: effectiveStatus === 'live' ? ('Published' as const) : ('Scheduled' as const),
                 liveStreamEvent: true,
                 liveStreamId: s.streamId,
-                liveStreamStatus: s.status,
+                liveStreamStatus: effectiveStatus,
                 liveStreamTicketCents: s.ticketCents,
                 liveStreamTestOnly: s.creatorTestOnly,
                 ...(s.description ? { liveStreamDescription: s.description } : {}),
@@ -802,6 +816,7 @@ export const Calendar: React.FC = () => {
                             } else if (isLiveStream) {
                                 const st = String((evt as any).liveStreamStatus || '').toLowerCase();
                                 const isLive = st === 'live';
+                                const isEnded = st === 'ended' || st === 'cancelled';
                                 colors = isLive
                                     ? {
                                           bg: 'bg-gradient-to-r from-rose-50 to-red-50 dark:from-rose-900/30 dark:to-red-900/30',
@@ -809,12 +824,19 @@ export const Calendar: React.FC = () => {
                                           dot: 'bg-rose-500 dark:bg-rose-400',
                                           text: 'text-rose-800 dark:text-rose-200',
                                       }
-                                    : {
-                                          bg: 'bg-gradient-to-r from-sky-50 to-cyan-50 dark:from-sky-900/30 dark:to-cyan-900/30',
-                                          border: 'border-l-4 border-sky-500 dark:border-sky-400',
-                                          dot: 'bg-sky-500 dark:bg-sky-400',
-                                          text: 'text-sky-800 dark:text-sky-200',
-                                      };
+                                    : isEnded
+                                      ? {
+                                            bg: 'bg-gradient-to-r from-emerald-50 to-green-50 dark:from-emerald-900/30 dark:to-green-900/30',
+                                            border: 'border-l-4 border-emerald-500 dark:border-emerald-400',
+                                            dot: 'bg-emerald-500 dark:bg-emerald-400',
+                                            text: 'text-emerald-800 dark:text-emerald-200',
+                                        }
+                                      : {
+                                            bg: 'bg-gradient-to-r from-sky-50 to-cyan-50 dark:from-sky-900/30 dark:to-cyan-900/30',
+                                            border: 'border-l-4 border-sky-500 dark:border-sky-400',
+                                            dot: 'bg-sky-500 dark:bg-sky-400',
+                                            text: 'text-sky-800 dark:text-sky-200',
+                                        };
                             } else {
                                 colors = statusColors[evt.status] || statusColors.Draft;
                             }
@@ -1053,9 +1075,12 @@ export const Calendar: React.FC = () => {
                                                         ? 'DELIVERED PURCHASE'
                                                         : 'SCHEDULED PURCHASE'
                                                     : isLiveStream
-                                                      ? String((evt as any).liveStreamStatus || '').toLowerCase() === 'live'
-                                                          ? 'LIVE STREAM'
-                                                          : 'SCHEDULED LIVE'
+                                                      ? (() => {
+                                                            const lst = String((evt as any).liveStreamStatus || '').toLowerCase();
+                                                            if (lst === 'live') return 'LIVE STREAM';
+                                                            if (lst === 'ended' || lst === 'cancelled') return 'ENDED LIVE';
+                                                            return 'SCHEDULED LIVE';
+                                                        })()
                                                       : evt.type}
                                             </span>
                                         </div>
@@ -1579,9 +1604,12 @@ export const Calendar: React.FC = () => {
                                             {selectedIsPurchase
                                                 ? (selectedPurchaseStatus === 'delivered' ? 'Delivered Purchase' : 'Scheduled Purchase')
                                                 : selectedIsLiveStream
-                                                  ? String((selectedEvent.event as any).liveStreamStatus || '').toLowerCase() === 'live'
-                                                      ? 'Live stream (on air)'
-                                                      : 'Fan Hub live stream'
+                                                  ? (() => {
+                                                        const lst = String((selectedEvent.event as any).liveStreamStatus || '').toLowerCase();
+                                                        if (lst === 'live') return 'Live stream (on air)';
+                                                        if (lst === 'ended' || lst === 'cancelled') return 'Live stream (ended)';
+                                                        return 'Fan Hub live stream';
+                                                    })()
                                                   : selectedEvent.post?.status === 'Published'
                                                     ? 'Published Post Preview'
                                                     : 'Scheduled Post Preview'}
@@ -1590,7 +1618,11 @@ export const Calendar: React.FC = () => {
                                             {selectedIsPurchase
                                                 ? `Fan Hub • ${((selectedEvent.event as any).deliveryType || 'purchase').toString()}`
                                                 : selectedIsLiveStream
-                                                  ? `My Page • ${String((selectedEvent.event as any).liveStreamStatus || 'scheduled')}`
+                                                  ? (() => {
+                                                        const lst = String((selectedEvent.event as any).liveStreamStatus || '').toLowerCase();
+                                                        if (lst === 'ended' || lst === 'cancelled') return 'My Page • Completed';
+                                                        return `My Page • ${lst || 'scheduled'}`;
+                                                    })()
                                                   : `${selectedEvent.event.platform} • ${selectedEvent.event.type}`}
                                         </p>
                                     </div>
@@ -1718,15 +1750,45 @@ export const Calendar: React.FC = () => {
                                     </div>
                                 </div>
                             ) : selectedIsLiveStream ? (
-                                <div className="mb-4 p-4 rounded-lg border bg-sky-50 dark:bg-sky-900/20 border-sky-200 dark:border-sky-800">
+                                <div
+                                    className={`mb-4 p-4 rounded-lg border ${
+                                        (() => {
+                                            const lst = String((selectedEvent.event as any).liveStreamStatus || '').toLowerCase();
+                                            return lst === 'ended' || lst === 'cancelled'
+                                                ? 'bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-800'
+                                                : 'bg-sky-50 dark:bg-sky-900/20 border-sky-200 dark:border-sky-800';
+                                        })()
+                                    }`}
+                                >
                                     <div className="flex flex-col gap-2">
                                         <div className="flex flex-wrap items-center gap-2">
-                                            <span className="text-sm font-semibold text-sky-800 dark:text-sky-200">
-                                                {String((selectedEvent.event as any).liveStreamStatus || '').toLowerCase() === 'live'
-                                                    ? 'Started (scheduled start was):'
-                                                    : 'Goes live:'}
+                                            <span
+                                                className={`text-sm font-semibold ${
+                                                    (() => {
+                                                        const lst = String((selectedEvent.event as any).liveStreamStatus || '').toLowerCase();
+                                                        return lst === 'ended' || lst === 'cancelled'
+                                                            ? 'text-emerald-800 dark:text-emerald-200'
+                                                            : 'text-sky-800 dark:text-sky-200';
+                                                    })()
+                                                }`}
+                                            >
+                                                {(() => {
+                                                    const lst = String((selectedEvent.event as any).liveStreamStatus || '').toLowerCase();
+                                                    if (lst === 'live') return 'Started (scheduled start was):';
+                                                    if (lst === 'ended' || lst === 'cancelled') return 'Was scheduled for:';
+                                                    return 'Goes live:';
+                                                })()}
                                             </span>
-                                            <span className="text-sm text-sky-700 dark:text-sky-300">
+                                            <span
+                                                className={`text-sm ${
+                                                    (() => {
+                                                        const lst = String((selectedEvent.event as any).liveStreamStatus || '').toLowerCase();
+                                                        return lst === 'ended' || lst === 'cancelled'
+                                                            ? 'text-emerald-700 dark:text-emerald-300'
+                                                            : 'text-sky-700 dark:text-sky-300';
+                                                    })()
+                                                }`}
+                                            >
                                                 {new Date(selectedEvent.event.date).toLocaleString([], {
                                                     weekday: 'long',
                                                     year: 'numeric',
@@ -1738,10 +1800,24 @@ export const Calendar: React.FC = () => {
                                                 })}
                                             </span>
                                         </div>
-                                        <p className="text-xs text-sky-800/90 dark:text-sky-200/90">
+                                        <p
+                                            className={`text-xs ${
+                                                (() => {
+                                                    const lst = String((selectedEvent.event as any).liveStreamStatus || '').toLowerCase();
+                                                    return lst === 'ended' || lst === 'cancelled'
+                                                        ? 'text-emerald-800/90 dark:text-emerald-200/90'
+                                                        : 'text-sky-800/90 dark:text-sky-200/90';
+                                                })()
+                                            }`}
+                                        >
                                             Status:{' '}
                                             <span className="font-medium">
-                                                {String((selectedEvent.event as any).liveStreamStatus || 'scheduled')}
+                                                {(() => {
+                                                    const lst = String((selectedEvent.event as any).liveStreamStatus || '').toLowerCase();
+                                                    if (lst === 'ended') return 'completed';
+                                                    if (lst === 'cancelled') return 'cancelled';
+                                                    return String((selectedEvent.event as any).liveStreamStatus || 'scheduled');
+                                                })()}
                                             </span>
                                             {typeof (selectedEvent.event as any).liveStreamTicketCents === 'number' &&
                                             (selectedEvent.event as any).liveStreamTicketCents > 0 ? (

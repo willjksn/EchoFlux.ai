@@ -114,6 +114,47 @@ function isLiveStreamTicketPurchase(p: Purchase): boolean {
   return (p.orderType || "").trim().toLowerCase() === "live_stream_ticket";
 }
 
+/** Past scheduled start + grace: treat ticket as fulfilled if Firestore still says pending/scheduled/live-synced. */
+const LIVE_STREAM_TICKET_STALE_AFTER_MS = 6 * 60 * 60 * 1000;
+
+function utcMsFromOrderScheduleParts(dateStr: string | null, timeStr: string | null): number | null {
+  if (!dateStr || !timeStr?.trim()) return null;
+  const [y, m, d] = dateStr.split("-").map(Number);
+  const [hh, mm] = timeStr.split(":").map(Number);
+  if (![y, m, d].every((n) => Number.isFinite(n))) return null;
+  const ms = Date.UTC(y, (m ?? 1) - 1, d ?? 1, Number.isFinite(hh) ? hh : 0, Number.isFinite(mm) ? mm : 0, 0, 0);
+  return Number.isFinite(ms) ? ms : null;
+}
+
+function liveStreamTicketPurchaseEffective(p: Purchase): {
+  scheduleStatus: ScheduleStatus;
+  deliveryStatus: "pending" | "delivered";
+} {
+  if (!isLiveStreamTicketPurchase(p)) {
+    return { scheduleStatus: p.scheduleStatus, deliveryStatus: p.deliveryStatus };
+  }
+  if (p.scheduleStatus === "cancelled") {
+    return { scheduleStatus: p.scheduleStatus, deliveryStatus: p.deliveryStatus };
+  }
+  if (p.scheduleStatus === "completed" || p.deliveryStatus === "delivered") {
+    return { scheduleStatus: p.scheduleStatus, deliveryStatus: p.deliveryStatus };
+  }
+  const ms = utcMsFromOrderScheduleParts(p.scheduledDate, p.scheduledTime);
+  if (ms != null && Date.now() > ms + LIVE_STREAM_TICKET_STALE_AFTER_MS) {
+    return { scheduleStatus: "completed", deliveryStatus: "delivered" };
+  }
+  return { scheduleStatus: p.scheduleStatus, deliveryStatus: p.deliveryStatus };
+}
+
+function purchaseEffectiveForUi(p: Purchase): {
+  scheduleStatus: ScheduleStatus;
+  deliveryStatus: "pending" | "delivered";
+} {
+  const ls = liveStreamTicketPurchaseEffective(p);
+  if (isLiveStreamTicketPurchase(p)) return ls;
+  return { scheduleStatus: p.scheduleStatus, deliveryStatus: p.deliveryStatus };
+}
+
 /** Compact list row — mirrors member “Your purchases” minimize view. */
 function creatorPurchaseTypeLabel(p: Purchase): string {
   if (isTipPurchase(p)) return "Tip";
@@ -125,18 +166,19 @@ function creatorPurchaseTypeLabel(p: Purchase): string {
 }
 
 function creatorPurchaseStatusLine(p: Purchase): string {
+  const eff = purchaseEffectiveForUi(p);
   if (isTipPurchase(p)) return "Tip received";
   if (isSubscriptionPurchase(p)) return "Subscription payment";
   if (isLiveStreamTicketPurchase(p)) {
-    if (p.deliveryStatus === "delivered" || p.scheduleStatus === "completed") return "Delivered";
-    if (p.scheduleStatus === "scheduled") return "Scheduled";
-    if (p.scheduleStatus === "cancelled") return "Cancelled";
-    if (p.scheduleStatus === "pending") return "Pending";
+    if (eff.deliveryStatus === "delivered" || eff.scheduleStatus === "completed") return "Delivered";
+    if (eff.scheduleStatus === "scheduled") return "Scheduled";
+    if (eff.scheduleStatus === "cancelled") return "Cancelled";
+    if (eff.scheduleStatus === "pending") return "Pending";
   }
-  if (p.deliveryStatus === "delivered") return "Delivered";
-  if (p.scheduleStatus === "pending") return "Needs scheduling";
-  if (p.scheduleStatus === "scheduled") return "Scheduled";
-  if (p.scheduleStatus === "completed") return "Completed";
+  if (eff.deliveryStatus === "delivered") return "Delivered";
+  if (eff.scheduleStatus === "pending") return "Needs scheduling";
+  if (eff.scheduleStatus === "scheduled") return "Scheduled";
+  if (eff.scheduleStatus === "completed") return "Completed";
   return "—";
 }
 
@@ -1193,7 +1235,8 @@ export const FanHubPurchases: React.FC = () => {
         const tipPurchase = isTipPurchase(p);
         const subscriptionPurchase = isSubscriptionPurchase(p);
         const nonDeliverablePurchase = tipPurchase || subscriptionPurchase;
-        return nonDeliverablePurchase || p.scheduleStatus === "completed" || p.deliveryStatus === "delivered";
+        const pe = purchaseEffectiveForUi(p);
+        return nonDeliverablePurchase || pe.scheduleStatus === "completed" || pe.deliveryStatus === "delivered";
       })
       .map((p) => p.id);
     if (targetIds.length === 0) {
@@ -1217,12 +1260,12 @@ export const FanHubPurchases: React.FC = () => {
     if (!showHidden && hiddenPurchaseIds.has(p.id)) return false;
     if (filterStatus === "all") return true;
     if (filterStatus === "tips") return isTipPurchase(p);
-    return p.scheduleStatus === filterStatus;
+    return purchaseEffectiveForUi(p).scheduleStatus === filterStatus;
   });
 
   const hiddenCount = purchases.filter((p) => hiddenPurchaseIds.has(p.id)).length;
-  const pendingCount = purchases.filter((p) => p.scheduleStatus === "pending").length;
-  const scheduledCount = purchases.filter((p) => p.scheduleStatus === "scheduled").length;
+  const pendingCount = purchases.filter((p) => purchaseEffectiveForUi(p).scheduleStatus === "pending").length;
+  const scheduledCount = purchases.filter((p) => purchaseEffectiveForUi(p).scheduleStatus === "scheduled").length;
   const tipsCount = purchases.filter((p) => isTipPurchase(p)).length;
 
   if (!user?.id) {
@@ -1481,10 +1524,11 @@ export const FanHubPurchases: React.FC = () => {
             const nonDeliverablePurchase = tipPurchase || subscriptionPurchase;
             /** Live stream tickets are fulfilled when the event ends — hide manual deliver / schedule controls. */
             const skipManualFulfillment = nonDeliverablePurchase || liveStreamTicketPurchase;
-            const isDelivered = p.deliveryStatus === "delivered";
-            const isPending = p.scheduleStatus === "pending" && !isDelivered;
-            const isScheduled = p.scheduleStatus === "scheduled";
-            const isCompleted = p.scheduleStatus === "completed";
+            const eff = purchaseEffectiveForUi(p);
+            const isDelivered = eff.deliveryStatus === "delivered";
+            const isPending = eff.scheduleStatus === "pending" && !isDelivered;
+            const isScheduled = eff.scheduleStatus === "scheduled";
+            const isCompleted = eff.scheduleStatus === "completed";
             const isEditing = editingId === p.id;
 
             const cardClassName = `purchases-card ${isPending ? "purchases-card-pending" : ""} ${isCompleted ? "purchases-card-completed" : ""} ${isDelivered ? "purchases-card-delivered" : ""}`;
@@ -1524,7 +1568,13 @@ export const FanHubPurchases: React.FC = () => {
                       </span>
                     )}
                     {liveStreamTicketPurchase && (
-                      <span className="purchases-status-badge purchases-status-scheduled">Live stream ticket</span>
+                      <span
+                        className={`purchases-status-badge ${
+                          isDelivered || isCompleted ? "purchases-status-completed" : "purchases-status-scheduled"
+                        }`}
+                      >
+                        {isDelivered || isCompleted ? "Live stream (completed)" : "Live stream ticket"}
+                      </span>
                     )}
                     {!nonDeliverablePurchase && (isScheduled || isDelivered) && (p.scheduledDate || p.deliveredAt) && (
                       <div className="purchases-scheduled-info">
