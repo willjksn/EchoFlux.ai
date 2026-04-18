@@ -44,6 +44,7 @@ import {
   FacebookIcon
 } from './icons/PlatformIcons';
 import { useAppContext } from './AppContext';
+import { hasCalendarAccess } from '../src/utils/planAccess';
 import { MediaLibraryItem } from '../types';
 import { db } from '../firebaseConfig';
 import { collection, getDocs, query, orderBy, setDoc, doc, addDoc, Timestamp, deleteDoc } from 'firebase/firestore';
@@ -174,7 +175,7 @@ export const MediaBox: React.FC<MediaBoxProps> = ({
   onToggleHashtags,
   creatorIdentityActive = false,
 }) => {
-  const { user, setUser, showToast, setActivePage } = useAppContext();
+  const { user, setUser, showToast, setActivePage, socialAccounts } = useAppContext();
   const creatorHandleFromDoc = useCreatorHandle(user?.id);
   const allowSjHeartEmoji = canUseSjHeartEmoji({
     creatorHandle: creatorHandleFromDoc,
@@ -759,6 +760,8 @@ ${contextLines || 'None'}
   const platformsToPost = (Object.keys(mediaItem.selectedPlatforms || {}) as Platform[]).filter(
     p => mediaItem.selectedPlatforms?.[p]
   );
+  const xSelected = platformsToPost.includes('X');
+  const xConnected = !!socialAccounts?.X?.connected;
 
   return (
     <div className={`bg-white dark:bg-gray-900 rounded-2xl shadow-lg overflow-hidden transition-all w-full border border-gray-200 dark:border-gray-700 ${
@@ -1721,7 +1724,27 @@ ${contextLines || 'None'}
         )}
       </div>
 
-
+      {user?.plan !== 'Free' && hasCalendarAccess(user) && platformsToPost.length > 0 && (
+        <div className="mb-3 p-2.5 rounded-lg border border-amber-200/80 dark:border-amber-800/60 bg-amber-50/80 dark:bg-amber-900/20">
+          <label className="flex items-start gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              className="mt-0.5 rounded border-gray-300 dark:border-gray-600 text-primary-600 focus:ring-primary-500"
+              checked={mediaItem.autoPublishAtSchedule !== false}
+              onChange={(e) => onUpdate(index, { autoPublishAtSchedule: e.target.checked })}
+            />
+            <span className="text-xs text-gray-800 dark:text-gray-200">
+              <span className="font-medium block">Auto-post at scheduled time</span>
+              <span className="text-[10px] text-gray-600 dark:text-gray-400 block mt-0.5 leading-snug">
+                When scheduled, we can publish for you at that time if X is among your selected platforms and X is connected in Settings. Other networks still use Publish Now or manual posting.
+                {xSelected && !xConnected ? (
+                  <span className="block mt-1 text-amber-800 dark:text-amber-200">Connect X in Settings to enable automatic posting.</span>
+                ) : null}
+              </span>
+            </span>
+          </label>
+        </div>
+      )}
 
       {/* Preview Button - Always visible if media exists */}
       {mediaItem.previewUrl && (

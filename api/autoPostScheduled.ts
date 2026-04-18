@@ -80,6 +80,10 @@ export default async function handler(
 
       totalProcessed++;
 
+      if (post.autoPublishAtSchedule !== true) {
+        continue;
+      }
+
       const platforms: string[] = Array.isArray(post.platforms) ? post.platforms : [];
       const hasX = platforms.some((p) => p === "X" || p === "Twitter");
       if (!hasX) {

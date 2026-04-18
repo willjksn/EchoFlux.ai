@@ -620,6 +620,7 @@ const CaptionGenerator: React.FC = () => {
             type: item.type || 'image',
             mimeType: item.mimeType || '',
             scheduledDate: item.scheduledDate || null,
+            autoPublishAtSchedule: item.autoPublishAtSchedule === true,
             selectedMusic: item.selectedMusic || null,
             musicNote: item.musicNote || null,
             instagramPostType: item.instagramPostType || null,
@@ -706,6 +707,7 @@ const CaptionGenerator: React.FC = () => {
               return acc;
             }, { ...emptyPlatforms }) || { ...emptyPlatforms },
             scheduledDate: draftPost.scheduledDate || undefined,
+            autoPublishAtSchedule: draftPost.autoPublishAtSchedule === true ? true : undefined,
             additionalImages: additionalImages,
             ...(instagramPostType ? { instagramPostType } : {}),
           };
@@ -939,6 +941,7 @@ const CaptionGenerator: React.FC = () => {
               type: data.type || 'image',
               mimeType: data.mimeType || '',
               scheduledDate: data.scheduledDate || undefined,
+              autoPublishAtSchedule: data.autoPublishAtSchedule === true ? true : undefined,
               selectedMusic: data.selectedMusic || undefined,
               musicNote: data.musicNote || undefined,
               data: '', // Don't load base64 data
@@ -3206,6 +3209,12 @@ const CaptionGenerator: React.FC = () => {
           timestamp: new Date().toISOString(), // Add timestamp for Firestore ordering
         } as Post & { timestamp: string };
 
+        if (status === 'Scheduled') {
+          newPost.autoPublishAtSchedule = item.autoPublishAtSchedule !== false;
+        } else if (item.autoPublishAtSchedule === true) {
+          newPost.autoPublishAtSchedule = true;
+        }
+
         const safePost = JSON.parse(JSON.stringify(newPost));
         await setDoc(doc(db, 'users', user.id, 'posts', postId), safePost);
 
@@ -3248,8 +3257,13 @@ const CaptionGenerator: React.FC = () => {
           setActivePage('calendar');
         }
       } else {
-        showToast('Saved to Drafts!', 'success');
-        setActivePage('approvals');
+        if (!hasCalendarAccess(user)) {
+          showToast('Upgrade to Pro or Elite to save drafts to your calendar', 'info');
+          setActivePage('pricing');
+        } else {
+          showToast('Draft saved to your calendar.', 'success');
+          setActivePage('calendar');
+        }
       }
       
       // Refresh posts in context

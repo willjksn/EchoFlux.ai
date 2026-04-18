@@ -13,7 +13,7 @@ export const About: React.FC = () => {
                  </div>
                 <h2 className="mt-4 text-3xl font-bold text-gray-900 dark:text-white">EchoFlux studio + witme.io for fans</h2>
                     <p className="mt-2 text-lg text-gray-500 dark:text-gray-400">
-                      Run your business in EchoFlux.ai. Fans discover you on witme.io—the link you put in your bio.
+                      Run your business in EchoFlux.ai. Fans connect with you on witme.io—the link you put in your bio.
                     </p>
             </div>
 
@@ -27,9 +27,9 @@ export const About: React.FC = () => {
                     <ul className="list-disc pl-5 space-y-2">
                         <li><strong>AI Content Generation:</strong> Upload images or videos, set your goal and tone, and let AI automatically generate engaging captions and relevant hashtags tailored to your content and target platforms. Perfect for busy creators who need to maintain a consistent presence.</li>
                         <li><strong>Central Command:</strong> A unified dashboard that surfaces what matters—your upcoming schedule, key priorities, and focus areas—so you never feel lost in the noise.</li>
-                        <li><strong>Plan My Week:</strong> Stop guessing what to post. Plan My Week builds multi-week content roadmaps with image and video ideas tailored to your niche and goals. Upload media directly to roadmap items and place them on your schedule for planned publishing.</li>
+                        <li><strong>What to Post:</strong> Stop guessing what to post. What to Post builds multi-week content roadmaps with image and video ideas tailored to your niche and goals. Upload media directly to roadmap items and place them on your schedule for planned publishing.</li>
                         <li><strong>My Vault:</strong> Upload and organize images and videos in your personal vault. Reuse assets across posts, select from vault when writing captions, and keep your content organized for maximum efficiency.</li>
-                        <li><strong>Premium Content Studio (Elite users):</strong> An end-to-end workspace for captions, plans, schedules, and media—optimized for premium creator platforms so you can plan, generate, and publish faster.</li>
+                        <li><strong>Premium Studio (Elite users):</strong> An end-to-end workspace for captions, plans, schedules, and media—optimized for premium creator platforms so you can plan, generate, and publish faster.</li>
                         <li><strong>Visual Planning:</strong> A beautiful calendar view that lets you preview, edit, and manage all your scheduled content. Click any post to preview, edit date/time/platforms, or delete—all in one place.</li>
                         <li>
                           <strong>witme.io fan pages:</strong> Your public storefront URL is on witme.io (e.g. witme.io/yourname). Fans

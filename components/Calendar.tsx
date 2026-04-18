@@ -43,6 +43,7 @@ export const Calendar: React.FC = () => {
     const [isSaving, setIsSaving] = useState(false);
     const [isPublishing, setIsPublishing] = useState(false);
     const [isRunningScheduledPosts, setIsRunningScheduledPosts] = useState(false);
+    const [autoPublishUpdating, setAutoPublishUpdating] = useState(false);
     const [exportPreview, setExportPreview] = useState<{ post: Post; event: CalendarEvent } | null>(null);
     
     // Reminder state
@@ -970,6 +971,36 @@ export const Calendar: React.FC = () => {
         return content.match(hashtagRegex) || [];
     };
 
+    const openPostInCompose = (post: Post) => {
+        const payload = {
+            id: post.id,
+            content: post.content,
+            mediaUrl: post.mediaUrl,
+            mediaUrls: post.mediaUrls,
+            mediaType: post.mediaType,
+            platforms: post.platforms,
+            scheduledDate: post.scheduledDate,
+            postGoal: (post as Post & { postGoal?: string }).postGoal,
+            postTone: (post as Post & { postTone?: string }).postTone,
+            instagramPostType: (post as Post & { instagramPostType?: string }).instagramPostType,
+            autoPublishAtSchedule: post.autoPublishAtSchedule,
+        };
+        try {
+            sessionStorage.setItem('draftPostToEdit', JSON.stringify(payload));
+        } catch {
+            try {
+                localStorage.setItem('draftPostToEdit', JSON.stringify(payload));
+            } catch (e) {
+                console.error('Failed to store draft handoff', e);
+                showToast('Could not open Create Post. Try again.', 'error');
+                return;
+            }
+        }
+        setSelectedEvent(null);
+        setActivePage('compose');
+        showToast('Opening Create Post…', 'success');
+    };
+
     // Handle save edits (date/time, platform, goal, and tone)
     const handleSaveEdit = async () => {
         if (!selectedEvent || !user) return;
@@ -998,6 +1029,7 @@ export const Calendar: React.FC = () => {
                     platforms: [regeneratePlatform], // Update to selected platform
                     postGoal: regenerateGoal, // Update goal from regenerate section
                     postTone: regenerateTone, // Update tone from regenerate section
+                    autoPublishAtSchedule: selectedEvent.post.autoPublishAtSchedule,
                 } as Post & { postGoal: string; postTone: string };
                 await updatePost(updatedPost);
             }
@@ -1020,6 +1052,7 @@ export const Calendar: React.FC = () => {
                     platforms: [regeneratePlatform],
                     postGoal: regenerateGoal,
                     postTone: regenerateTone,
+                    autoPublishAtSchedule: selectedEvent.post.autoPublishAtSchedule,
                 } as Post & { postGoal: string; postTone: string } : null,
             });
 
@@ -1442,6 +1475,13 @@ export const Calendar: React.FC = () => {
                                             </button>
                                             {(selectedEvent.post?.status === 'Draft' || selectedEvent.post?.status === 'Scheduled') && (
                                                 <>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => selectedEvent.post && openPostInCompose(selectedEvent.post)}
+                                                        className="px-4 py-2 text-sm font-medium text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-900/30 border border-indigo-200 dark:border-indigo-800 rounded-lg hover:bg-indigo-100 dark:hover:bg-indigo-900/50 transition-colors"
+                                                    >
+                                                        Edit in Create Post
+                                                    </button>
                                                     {/* Auto-publish to social platforms */}
                                                     {selectedEvent.post?.status === 'Scheduled' && (
                                                         <button
@@ -1597,6 +1637,57 @@ export const Calendar: React.FC = () => {
                                             </span>
                                         </div>
                                     )}
+                                </div>
+                            )}
+
+                            {!isEditing && !selectedIsPurchase && selectedEvent.post?.status === 'Scheduled' && (
+                                <div className="mb-4 p-3 rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20">
+                                    <label className="flex items-start gap-3 cursor-pointer">
+                                        <input
+                                            type="checkbox"
+                                            className="mt-1 rounded border-gray-300 dark:border-gray-600 text-amber-600 focus:ring-amber-500"
+                                            checked={selectedEvent.post.autoPublishAtSchedule === true}
+                                            disabled={autoPublishUpdating || OFFLINE_MODE}
+                                            onChange={async (e) => {
+                                                if (!selectedEvent.post || !user) return;
+                                                setAutoPublishUpdating(true);
+                                                try {
+                                                    const next: Post = {
+                                                        ...selectedEvent.post,
+                                                        autoPublishAtSchedule: e.target.checked,
+                                                    };
+                                                    await updatePost(next);
+                                                    setSelectedEvent((se) =>
+                                                        se && se.post ? { ...se, post: next } : se
+                                                    );
+                                                    showToast(
+                                                        e.target.checked
+                                                            ? 'Auto-post at schedule time is on for this post.'
+                                                            : 'Auto-post is off; use Publish Now or post manually.',
+                                                        'success'
+                                                    );
+                                                } catch (err) {
+                                                    console.error(err);
+                                                    showToast('Could not update auto-post setting.', 'error');
+                                                } finally {
+                                                    setAutoPublishUpdating(false);
+                                                }
+                                            }}
+                                        />
+                                        <div>
+                                            <span className="text-sm font-semibold text-amber-900 dark:text-amber-100">
+                                                Auto-post when due
+                                            </span>
+                                            <p className="text-xs text-amber-800/90 dark:text-amber-200/90 mt-1 leading-snug">
+                                                At the scheduled time, publishes automatically when X is in this post and your X account is connected. Other platforms: use Publish Now or post manually.
+                                                {selectedEvent.post.platforms?.includes('X') && !socialAccounts?.X?.connected ? (
+                                                    <span className="block mt-1 font-medium">
+                                                        Connect X in Settings for automatic posting.
+                                                    </span>
+                                                ) : null}
+                                            </p>
+                                        </div>
+                                    </label>
                                 </div>
                             )}
 

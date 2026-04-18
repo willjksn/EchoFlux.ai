@@ -1087,6 +1087,8 @@ export interface MediaItemState {
     results: CaptionResult[];
     captionText: string;
     scheduledDate?: string; // Individual schedule date for this item
+    /** When true and post is Scheduled, server cron may publish at scheduled time (X supported today). */
+    autoPublishAtSchedule?: boolean;
     postGoal: string; // Individual goal for this post
     postTone: string; // Individual tone for this post
     selectedPlatforms: Record<Platform, boolean>; // Individual platform selection per box
@@ -1159,6 +1161,8 @@ export interface Post {
     status: ApprovalStatus;
     author: { name: string; avatar: string };
     scheduledDate?: string;
+    /** If true, scheduled posts are eligible for automatic publishing at `scheduledDate` when the account is connected (see auto-post cron). */
+    autoPublishAtSchedule?: boolean;
     timestamp?: string;
     createdAt?: string;
     updatedAt?: string;

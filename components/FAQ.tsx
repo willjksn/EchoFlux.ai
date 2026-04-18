@@ -19,7 +19,7 @@ const faqData = [
     },
     {
         question: "How do EchoFlux, Fan Hub, and witme fit together?",
-        answer: "EchoFlux is where you work. Fan Hub is the fan experience you configure inside EchoFlux. witme.io is often the link you give fans so they open that experience in a simple, trusted destination. Same account and settings—three layers of the same product, not three disconnected tools."
+        answer: "EchoFlux is the creator app you log into: content tools, calendar, settings, and everything you use to run your business. Fan Hub is the fan-facing side of that same product—the storefront and community tools you turn on (subscriptions, store, tips, DMs, sessions, and more). You configure Fan Hub entirely inside EchoFlux. witme.io is simply where your public fan page lives on the web; fans usually open witme.io/yourhandle from your bio and see exactly what you’ve enabled in Fan Hub. One account, one product—not three separate services."
     },
     {
         question: "What platforms can I plan content for?",
@@ -27,23 +27,23 @@ const faqData = [
     },
     {
         question: "What is AI Content Generation?",
-        answer: "Upload your images or videos, set your goal and tone, and our AI generates captions and relevant hashtags tailored to your content and target platforms. You can save the result as a draft and plan it in your calendar, then copy/export and post manually on your socials."
+        answer: "Upload your images or videos, set your goal and tone, and our AI generates captions and relevant hashtags tailored to your content and target platforms. You can save as a draft, add it to your calendar, then publish when you're ready—or turn on auto-post so it goes live at the scheduled time when your account is connected (X, Instagram, and Facebook are supported; you can still copy/export or post manually anytime)."
     },
     {
-        question: "How does Plan My Week work?",
-        answer: "Tell us your niche and goals, and it builds a multi-week content roadmap with post ideas. Upload media directly to roadmap items, and it adds them as planned content on your schedule so you always know what to post next."
+        question: "How does What to Post work?",
+        answer: "Tell us your niche and goals, and What to Post builds a multi-week content roadmap with post ideas. Upload media directly to roadmap items, and it adds them as planned content on your schedule so you always know what to post next."
     },
     {
         question: "Can I replace Linktree with EchoFlux?",
-        answer: "Yes. Our Bio Link Page gives you a branded mobile page with optional email capture so you can grow owned audience directly from Instagram or TikTok. For a full fan storefront (memberships, store, tips, messages), point people to your page on witme.io—powered by what you run in Fan Hub."
+        answer: "Yes. Use your witme.io link (for example witme.io/yourhandle) in your bio. Fans land on your Fan Hub page—one place to subscribe, tip, shop, and message, based on what you turn on in EchoFlux—instead of a generic link-in-bio that only lists buttons."
     },
     {
         question: "Do you have an AI assistant or chatbot?",
         answer: "Yes. EchoFlux.ai includes an in-app chatbot to help with planning workflows and how to use the app."
     },
     {
-        question: "Can I use EchoFlux.ai without connecting social accounts?",
-        answer: "Yes. EchoFlux.ai is currently designed as an AI Content Studio & Campaign Planner—you generate content and organize everything in a calendar, then copy/export and post to your social platforms manually. Direct posting and deeper analytics are planned for a future version."
+        question: "Do I need to connect Instagram, X, or Facebook to use EchoFlux?",
+        answer: "No. Fan Hub, witme.io, AI captions, your calendar, and What to Post all work without linking social accounts—you can plan content and run your fan business from EchoFlux either way. Connect X, Instagram, or Facebook when you want in-app publishing: Publish Now or scheduled auto-post at the time you set (where you've enabled auto-post). You can still copy/export and post manually whenever you prefer."
     },
     {
         question: "What happens after the 7-day trial?",
