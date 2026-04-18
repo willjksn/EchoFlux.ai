@@ -2,7 +2,8 @@
  * Browser tab / PWA icons: witme.io fan surfaces use Witme artwork; EchoFlux studio uses /logo.svg.
  */
 
-const WITME_TAB_ICON = "/witme-favicon.png";
+/** Bump ?v when replacing `public/witme-favicon.png` so clients drop stale cache. */
+const WITME_TAB_ICON = "/witme-favicon.png?v=3";
 const ECHOFLUX_ICON_SVG = "/logo.svg";
 const ECHOFLUX_ICON_PNG = "/logo.png";
 
