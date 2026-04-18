@@ -2716,13 +2716,13 @@ export const FanStorefrontView: React.FC = () => {
     }
   };
 
-  const startSubscriptionCheckout = async (opts?: { auto?: boolean }) => {
+  const startSubscriptionCheckout = async (opts?: { auto?: boolean }): Promise<boolean> => {
     const isAuto = opts?.auto === true;
     if (!creator?.creatorId || !auth.currentUser) {
-      if (isAuto) return;
+      if (isAuto) return false;
       setFanAuthView("login");
       setFanAuthOpen(true);
-      return;
+      return false;
     }
     if (isAuto) {
       autoSubscribeRedirectingRef.current = true;
@@ -2761,10 +2761,17 @@ export const FanStorefrontView: React.FC = () => {
       const { ok, url, error } = await readFanCheckoutFetchResult(res);
       if (!ok || !url) throw new Error(error || "Checkout failed");
       window.location.href = url;
+      return true;
     } catch (e) {
       if (!isAuto) {
         showToast(e instanceof Error ? e.message : "Could not open checkout.", "error");
+      } else {
+        showToast(
+          e instanceof Error ? e.message : "Could not open checkout. Tap Join to try again.",
+          "info",
+        );
       }
+      return false;
     } finally {
       setSubscribing(false);
       if (isAuto) {
@@ -4463,6 +4470,11 @@ export const FanStorefrontView: React.FC = () => {
           <FanAuthModal
             isOpen={fanAuthOpen}
             onClose={() => setFanAuthOpen(false)}
+            onSignupContinue={
+              creator.monetization?.freeAccessEnabled === true
+                ? undefined
+                : async () => startSubscriptionCheckout({ auto: true })
+            }
             onSuccess={() => {
               setIsLoggedIn(true);
               setFanAuthOpen(false);

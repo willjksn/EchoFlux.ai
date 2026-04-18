@@ -1336,7 +1336,7 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
               >
                 {landingContent.perksText}
               </p>
-              {live?.bio ? (
+              {sections.about !== false && live?.bio ? (
                 <p
                   className={`leading-relaxed mb-2 ${live ? "text-base" : "text-sm"}`}
                   style={getTextStyleCSS(textStyles.bio, { fontSize: landingCardBodyFs, color: landingPageMutedStrong, fontFamily: globalFont })}

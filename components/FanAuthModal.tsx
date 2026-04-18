@@ -10,6 +10,7 @@ import {
   signInWithPopup,
   GoogleAuthProvider,
   fetchSignInMethodsForEmail,
+  getAdditionalUserInfo,
 } from "firebase/auth";
 import type { FanAuthBranding } from "../types";
 import { useAppContext } from "./AppContext";
@@ -92,6 +93,11 @@ export type FanAuthModalProps = {
   isOpen: boolean;
   onClose: () => void;
   onSuccess?: () => void;
+  /**
+   * Paid storefronts: after a **new** account (email signup or first-time Google on signup tab).
+   * Return true when redirecting to Stripe so the default hub navigation is skipped.
+   */
+  onSignupContinue?: () => boolean | void | Promise<boolean | void>;
   initialView: "login" | "signup";
   creatorId: string;
   displayName: string;
@@ -110,6 +116,7 @@ export const FanAuthModal: React.FC<FanAuthModalProps> = ({
   isOpen,
   onClose,
   onSuccess,
+  onSignupContinue,
   initialView,
   creatorId,
   displayName,
@@ -307,6 +314,13 @@ export const FanAuthModal: React.FC<FanAuthModalProps> = ({
       await updateProfile(cred.user, { displayName: fullName.trim() });
       await tryJoinFreeMembershipIfEnabled();
       showToast?.("Account created!", "success");
+      if (onSignupContinue) {
+        const redirected = await onSignupContinue();
+        if (redirected === true) {
+          onClose();
+          return;
+        }
+      }
       onSuccess?.();
       onClose();
     } catch (ex: unknown) {
@@ -396,9 +410,23 @@ export const FanAuthModal: React.FC<FanAuthModalProps> = ({
         }
       }
       const provider = new GoogleAuthProvider();
-      await signInWithPopup(auth, provider);
+      const result = await signInWithPopup(auth, provider);
       if (freeAccessEnabled) {
         await tryJoinFreeMembershipIfEnabled();
+      }
+      if (mode === "signup" && onSignupContinue) {
+        const extra = getAdditionalUserInfo(result);
+        if (extra?.isNewUser) {
+          showToast?.("Account created!", "success");
+          const redirected = await onSignupContinue();
+          if (redirected === true) {
+            onClose();
+            return;
+          }
+          onSuccess?.();
+          onClose();
+          return;
+        }
       }
       showToast?.("You're in!", "success");
       onSuccess?.();

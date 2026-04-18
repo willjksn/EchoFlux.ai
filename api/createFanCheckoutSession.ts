@@ -286,12 +286,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // For platform owners: create session on platform (no Stripe-Account header).
     // For regular creators: act as connected account. Never pass `{}` as 2nd arg — stripe-node rejects it.
     const connectIdForCheckout = isPlatformOwner ? null : connectAccountId;
-    const displayName =
-      creatorData?.displayName ||
-      creatorData?.handle ||
-      creatorUserData?.displayName ||
-      creatorUserData?.handle ||
-      "Creator";
+    /** Fan-facing checkout copy: prefer public @handle so legal / wallet names from Stripe Connect are not repeated on the line item. */
+    const handleRaw =
+      (typeof creatorData?.handle === "string" ? creatorData.handle : "") ||
+      (typeof creatorUserData?.handle === "string" ? creatorUserData.handle : "");
+    const normalizedHandle = handleRaw.replace(/^@/, "").trim().toLowerCase();
+    const fanFacingCreatorLabel = normalizedHandle
+      ? `@${normalizedHandle}`
+      : (
+          (creatorData?.displayName ||
+            creatorUserData?.displayName ||
+            creatorData?.handle ||
+            creatorUserData?.handle ||
+            "Creator") as string
+        )
+          .trim() || "Creator";
 
     // ==================== SUBSCRIPTION ====================
     if (type === "subscription") {
@@ -305,8 +314,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             price_data: {
               currency: "usd",
               product_data: {
-                name: `Subscribe to ${displayName}`,
-                description: `Monthly subscription to ${displayName}`,
+                name: normalizedHandle ? `Monthly membership — @${normalizedHandle}` : `Subscribe to ${fanFacingCreatorLabel}`,
+                description: normalizedHandle
+                  ? `Recurring membership for @${normalizedHandle}`
+                  : `Monthly subscription to ${fanFacingCreatorLabel}`,
               },
               unit_amount: subAmountCents,
               recurring: { interval: "month" },
@@ -472,7 +483,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return res.status(400).json({ error: "You already unlocked this post" });
       }
 
-      const unlockLineTitle = `Unlock post — ${displayName}`;
+      const unlockLineTitle = `Unlock post — ${fanFacingCreatorLabel}`;
 
       const unlockSessionParams: Stripe.Checkout.SessionCreateParams = {
         mode: "payment",
@@ -617,7 +628,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             price_data: {
               currency: "usd",
               product_data: {
-                name: `Tip for ${displayName}`,
+                name: `Tip for ${fanFacingCreatorLabel}`,
                 description: `One-time tip from ${tipperName}`,
               },
               unit_amount: tipAmountCents,

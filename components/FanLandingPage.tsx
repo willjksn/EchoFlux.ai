@@ -69,6 +69,13 @@ interface FanLandingPageProps {
       boundaryText?: TextStyle;
     };
     fanAuthBranding?: CreatorStorefrontSettings["fanAuthBranding"];
+    sections?: {
+      feed?: boolean;
+      treats?: boolean;
+      tip?: boolean;
+      messages?: boolean;
+      about?: boolean;
+    };
   };
   onSubscribe: () => void;
   onJoinFree?: () => void;
@@ -139,11 +146,11 @@ function buildStorefrontConfig(
     rules: creator.rules,
     monetization: creator.monetization,
     sections: {
-      feed: true,
-      treats: sectionsTreatsEnabled,
-      tip: true,
-      messages: true,
-      about: true,
+      feed: creator.sections?.feed !== false,
+      treats: sectionsTreatsEnabled && creator.sections?.treats !== false,
+      tip: creator.sections?.tip !== false,
+      messages: creator.sections?.messages !== false,
+      about: creator.sections?.about !== false,
     },
     publicTreatsOnLanding,
     fanAuthBranding: creator.fanAuthBranding,
