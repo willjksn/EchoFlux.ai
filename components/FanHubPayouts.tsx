@@ -279,6 +279,9 @@ export const FanHubPayouts: React.FC = () => {
           <p className="text-xs text-amber-800 dark:text-amber-300/90 m-0 mb-4">
             A 10% platform fee is deducted from each fan transaction. Stripe also charges processing fees.
           </p>
+          <p className="text-xs text-amber-800/80 dark:text-amber-300/80 m-0 mb-4">
+            If Stripe shows a sign-in to Express instead of setup steps, open the link in a private/incognito window, or sign in with the same email as your EchoFlux account.
+          </p>
           <div className="flex flex-wrap items-center gap-3">
             <button
               type="button"

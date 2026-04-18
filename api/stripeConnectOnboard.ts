@@ -65,6 +65,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (!decoded?.uid) {
     return res.status(401).json({ error: "Unauthorized" });
   }
+  const creatorId = decoded.uid;
+  const creatorEmail =
+    typeof decoded.email === "string" && decoded.email.includes("@")
+      ? decoded.email.trim().toLowerCase()
+      : undefined;
 
   const stripe = getPlatformStripe();
   if (!stripe) {
@@ -87,7 +92,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   try {
     const db = getAdminDb();
-    const creatorId = decoded.uid;
     const creatorRef = db.collection("creators").doc(creatorId);
     const creatorSnap = await creatorRef.get();
     const data = creatorSnap.data() as { stripeConnectAccountId?: string } | undefined;
@@ -97,6 +101,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const account = await stripe.accounts.create({
         type: "express",
         country: "US",
+        ...(creatorEmail ? { email: creatorEmail } : {}),
+        metadata: { echoflux_creator_id: creatorId },
         capabilities: {
           card_payments: { requested: true },
           transfers: { requested: true },
@@ -107,6 +113,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         { stripeConnectAccountId: accountId, updatedAt: new Date().toISOString() },
         { merge: true }
       );
+    } else if (creatorEmail) {
+      try {
+        const existing = await stripe.accounts.retrieve(accountId);
+        if (!existing.email && !existing.business_profile?.support_email) {
+          await stripe.accounts.update(accountId, { email: creatorEmail });
+        }
+      } catch {
+        /* continue — link creation may still work */
+      }
     }
 
     const link = await stripe.accountLinks.create({
@@ -114,6 +129,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       refresh_url: refreshUrl,
       return_url: returnUrl,
       type: "account_onboarding",
+      collection_options: {
+        fields: "eventually_due",
+      },
     });
 
     if (!link.url) {
