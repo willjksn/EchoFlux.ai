@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useCallback } from "react";
+import { doc, updateDoc, deleteField } from "firebase/firestore";
 import { useAppContext } from "./AppContext";
-import { auth } from "../firebaseConfig";
+import { auth, db } from "../firebaseConfig";
+import { resolveApiUrl } from "../src/lib/resolveApiUrl";
 
 export interface StripeConnectStatus {
   stripeConnectAccountId: string | null;
@@ -8,6 +10,8 @@ export interface StripeConnectStatus {
   payoutsEnabled: boolean;
   detailsSubmitted: boolean;
   isPlatformOwner?: boolean;
+  /** True when Stripe returns missing/inaccessible account for the saved ID (e.g. deleted in Stripe). */
+  reconnectRequired?: boolean;
 }
 
 export const FanHubPayouts: React.FC = () => {
@@ -15,12 +19,13 @@ export const FanHubPayouts: React.FC = () => {
   const [status, setStatus] = useState<StripeConnectStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [connecting, setConnecting] = useState(false);
+  const [resetting, setResetting] = useState(false);
 
   const fetchStatus = useCallback(async () => {
     setLoading(true);
     try {
       const token = auth.currentUser ? await auth.currentUser.getIdToken() : null;
-      const res = await fetch("/api/stripeConnectStatus", {
+      const res = await fetch(resolveApiUrl("/api/stripeConnectStatus"), {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
       const data = await res.json().catch(() => ({}));
@@ -30,6 +35,7 @@ export const FanHubPayouts: React.FC = () => {
         payoutsEnabled: !!data.payoutsEnabled,
         detailsSubmitted: !!data.detailsSubmitted,
         isPlatformOwner: !!data.isPlatformOwner,
+        reconnectRequired: !!data.reconnectRequired,
       });
     } catch {
       setStatus(null);
@@ -57,7 +63,7 @@ export const FanHubPayouts: React.FC = () => {
     setConnecting(true);
     try {
       const token = auth.currentUser ? await auth.currentUser.getIdToken() : null;
-      const res = await fetch("/api/stripeConnectOnboard", {
+      const res = await fetch(resolveApiUrl("/api/stripeConnectOnboard"), {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -97,6 +103,73 @@ export const FanHubPayouts: React.FC = () => {
       showToast?.("Failed to start Connect", "error");
     } finally {
       setConnecting(false);
+    }
+  };
+
+  const handleResetSavedAccount = async () => {
+    if (
+      !window.confirm(
+        "Remove the saved Stripe Connect account from EchoFlux? Use this if the account was deleted in Stripe or you want a fresh connection. Fan checkout will not work until you connect again.",
+      )
+    ) {
+      return;
+    }
+    setResetting(true);
+    try {
+      const user = auth.currentUser;
+      if (!user?.uid) {
+        showToast?.("Sign in to reset Connect.", "error");
+        return;
+      }
+      const uid = user.uid;
+      const token = await user.getIdToken();
+      const res = await fetch(resolveApiUrl("/api/stripeConnectReset"), {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({}),
+      });
+      const data = await res.json().catch(() => ({}));
+
+      if (res.ok) {
+        showToast?.("Saved Stripe account cleared. You can connect again.", "success");
+        await fetchStatus();
+        return;
+      }
+
+      // Local Vite often proxies /api to an older deploy without this route — Firestore rules allow the owner to clear these fields.
+      if (res.status === 404) {
+        try {
+          await updateDoc(doc(db, "creators", uid), {
+            stripeConnectAccountId: deleteField(),
+            stripeAccountId: deleteField(),
+            connectedStripeAccountId: deleteField(),
+            "stripe.connectAccountId": deleteField(),
+            updatedAt: new Date().toISOString(),
+          });
+          showToast?.("Saved Stripe account cleared. You can connect again.", "success");
+          await fetchStatus();
+          return;
+        } catch (e) {
+          console.error("stripeConnectReset Firestore fallback:", e);
+          showToast?.(
+            "Could not reach the reset API (404). Deploy the latest app or run npm run dev:vercel, or try again after a moment.",
+            "error",
+          );
+          return;
+        }
+      }
+
+      showToast?.(
+        typeof data.message === "string" ? data.message : data.error || "Could not reset Connect",
+        "error",
+      );
+    } catch {
+      showToast?.("Could not reset Connect", "error");
+    } finally {
+      setResetting(false);
     }
   };
 
@@ -272,7 +345,13 @@ export const FanHubPayouts: React.FC = () => {
 
         {!isPlatformOwner && hasAccount && (
           <>
-            <div className="flex items-center gap-2 text-gray-700 dark:text-gray-300">
+            {status?.reconnectRequired && (
+              <p className="text-sm text-amber-800 dark:text-amber-200 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 rounded-lg p-3 m-0">
+                Stripe no longer recognizes this saved account (it may have been deleted). Remove it below, then use{" "}
+                <strong>Connect Stripe</strong> to link a new account.
+              </p>
+            )}
+            <div className="flex flex-wrap items-center gap-2 text-gray-700 dark:text-gray-300">
               <span className="font-medium">Stripe account</span>
               <span className="text-sm text-gray-500 dark:text-gray-400 font-mono">
                 {status!.stripeConnectAccountId!.slice(0, 14)}…
@@ -308,16 +387,26 @@ export const FanHubPayouts: React.FC = () => {
                 </span>
               </li>
             </ul>
-            {!paymentsReady && (
+            <div className="flex flex-wrap items-center gap-2">
+              {!paymentsReady && (
+                <button
+                  type="button"
+                  onClick={() => void handleConnect()}
+                  disabled={connecting}
+                  className="px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50"
+                >
+                  {connecting ? "Opening…" : "Open Stripe to complete setup"}
+                </button>
+              )}
               <button
                 type="button"
-                onClick={() => void handleConnect()}
-                disabled={connecting}
-                className="px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50"
+                onClick={() => void handleResetSavedAccount()}
+                disabled={resetting || connecting}
+                className="px-4 py-2 rounded-lg border border-red-300 dark:border-red-800 text-red-700 dark:text-red-300 hover:bg-red-50 dark:hover:bg-red-950/40 disabled:opacity-50 text-sm"
               >
-                {connecting ? "Opening…" : "Open Stripe to complete setup"}
+                {resetting ? "Removing…" : "Remove saved account & start over"}
               </button>
-            )}
+            </div>
           </>
         )}
 
