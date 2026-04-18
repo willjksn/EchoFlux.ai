@@ -24,7 +24,7 @@ export interface StorefrontPreviewLiveLanding {
   homeHref?: string;
   termsHref: string;
   privacyHref: string;
-  /** Shown under perks copy (e.g. bio). */
+  /** About-tab intro for fans (above boundaries); not shown on the main landing perks block. */
   bio?: string;
   tipHandle: string;
   onTipHandleChange: (v: string) => void;
@@ -1336,14 +1336,6 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
               >
                 {landingContent.perksText}
               </p>
-              {sections.about !== false && live?.bio ? (
-                <p
-                  className={`leading-relaxed mb-2 ${live ? "text-base" : "text-sm"}`}
-                  style={getTextStyleCSS(textStyles.bio, { fontSize: landingCardBodyFs, color: landingPageMutedStrong, fontFamily: globalFont })}
-                >
-                  {live.bio}
-                </p>
-              ) : null}
               {(() => {
                 const perksMode = landingContent.perksExtraMode ?? "bullets";
                 const perksParaTrim = String(landingContent.perksParagraph ?? "").trim();
@@ -1695,7 +1687,7 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
                             if (live.isFreeAccess) live.onJoinFree?.();
                             else live.onSubscribe();
                           } else if (live.isFreeAccess) live.onOpenSignup();
-                          else live.onOpenLogin();
+                          else live.onOpenSignup();
                         }
                       : undefined
                   }

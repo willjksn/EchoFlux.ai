@@ -1798,18 +1798,21 @@ export const MyPageBuilder: React.FC = () => {
               </div>
               <div>
                 <div className="flex items-center justify-between mb-1">
-                  <label className="block text-xs font-medium text-gray-500 dark:text-gray-400">Bio</label>
+                  <label className="block text-xs font-medium text-gray-500 dark:text-gray-400">About page intro</label>
                   <TextStyleControls
                     style={draft.textStyles?.bio}
                     onChange={(style) => updateTextStyle('bio', style)}
                     defaultSize="sm"
                   />
                 </div>
+                <p className="text-[11px] text-gray-400 dark:text-gray-500 mb-1">
+                  Shown only on the About tab in the fan hub (above your boundaries / guidelines). Not on the main landing page.
+                </p>
                 <div className="relative">
                   <textarea
                     value={draft.bio ?? ""}
                     onChange={(e) => updateDraft({ bio: e.target.value })}
-                    placeholder="Short bio for your storefront"
+                    placeholder="Short intro for About — fans see this with your boundaries"
                     rows={2}
                     maxLength={500}
                     className="w-full px-3 py-2 pr-12 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"

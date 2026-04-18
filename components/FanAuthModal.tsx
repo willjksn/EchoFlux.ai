@@ -94,10 +94,20 @@ export type FanAuthModalProps = {
   onClose: () => void;
   onSuccess?: () => void;
   /**
+   * Called when the user is signed in but the modal may stay open (e.g. paid “finish joining” before Stripe).
+   * Parent should update hub session state without closing the modal.
+   */
+  onAuthSessionReady?: () => void;
+  /**
    * Paid storefronts: after a **new** account (email signup or first-time Google on signup tab).
    * Return true when redirecting to Stripe so the default hub navigation is skipped.
    */
   onSignupContinue?: () => boolean | void | Promise<boolean | void>;
+  /**
+   * Paid storefronts: fan is already signed in (e.g. tapped Subscribe) — open the signup-style step
+   * (name + terms) then `onSignupContinue` → Stripe.
+   */
+  startPaidMembershipDetailsStep?: boolean;
   initialView: "login" | "signup";
   creatorId: string;
   displayName: string;
@@ -116,7 +126,9 @@ export const FanAuthModal: React.FC<FanAuthModalProps> = ({
   isOpen,
   onClose,
   onSuccess,
+  onAuthSessionReady,
   onSignupContinue,
+  startPaidMembershipDetailsStep = false,
   initialView,
   creatorId,
   displayName,
@@ -144,18 +156,47 @@ export const FanAuthModal: React.FC<FanAuthModalProps> = ({
   const [formError, setFormError] = useState<string>("");
   const [forgotOpen, setForgotOpen] = useState(false);
   const [forgotEmail, setForgotEmail] = useState("");
+  /** Paid hub: after log in (or opening while already signed in), collect name + terms before Stripe. */
+  const [paidMembershipDetailsStep, setPaidMembershipDetailsStep] = useState(false);
 
   useEffect(() => {
-    if (!isOpen) return;
-    setMode(initialView);
+    if (!isOpen) {
+      setPaidMembershipDetailsStep(false);
+      return;
+    }
+    setForgotOpen(false);
     setFieldErrors({});
     setFormError("");
-    setForgotOpen(false);
-  }, [initialView, isOpen]);
+    if (
+      startPaidMembershipDetailsStep &&
+      !freeAccessEnabled &&
+      onSignupContinue &&
+      auth.currentUser
+    ) {
+      setPaidMembershipDetailsStep(true);
+      setMode("signup");
+      const u = auth.currentUser;
+      setEmail(u.email || "");
+      setFullName(u.displayName?.trim() || "");
+      setPassword("");
+      setConfirmPassword("");
+      setAcceptedTerms(false);
+    } else {
+      setPaidMembershipDetailsStep(false);
+      setMode(initialView);
+    }
+    // Intentionally omit `onSignupContinue` — parent often passes an inline lambda; including it would
+    // reset the modal on every FanStorefrontView re-render while open.
+  }, [isOpen, initialView, startPaidMembershipDetailsStep, freeAccessEnabled]);
 
   const community =
     branding?.communityName?.trim() ||
     `${displayName || "This creator"}'s member area`;
+
+  /** Paid pages: signing in is not the same as an active membership — avoid implying they're "in" the hub. */
+  const fanLoginToastMessage = freeAccessEnabled
+    ? "You're in!"
+    : "Signed in. Tap Join to finish subscribing and unlock this page.";
 
   const primary = branding?.primaryColor ?? themePrimary ?? BUILTIN_DEFAULT_PRIMARY;
   const accentText = branding?.accentTextColor ?? themeText ?? DEFAULT_FAN_AUTH_ACCENT;
@@ -219,6 +260,65 @@ export const FanAuthModal: React.FC<FanAuthModalProps> = ({
     }
   };
 
+  /**
+   * Paid storefront after log in / returning Google user:
+   * - Active paid → close modal (hub already synced via onAuthSessionReady).
+   * - Legacy free member (creator switched to paid) → Stripe checkout immediately.
+   * - Otherwise → “finish joining” form then checkout.
+   */
+  const beginPaidMembershipDetailsAfterLogin = async () => {
+    const u = auth.currentUser;
+    if (!u || freeAccessEnabled || !onSignupContinue) {
+      showToast?.(fanLoginToastMessage, freeAccessEnabled ? "success" : "info");
+      onSuccess?.();
+      onClose();
+      return;
+    }
+    if (onAuthSessionReady) {
+      onAuthSessionReady();
+    } else {
+      onSuccess?.();
+    }
+    try {
+      const token = await u.getIdToken();
+      const res = await fetch(
+        `/api/getFanEntitlement?creatorId=${encodeURIComponent(creatorId)}`,
+        { headers: { Authorization: `Bearer ${token}` } },
+      );
+      const ent = await res.json().catch(() => ({}));
+      const mt = (ent as { membershipType?: "free" | "paid" | null }).membershipType ?? null;
+      const sub = !!(ent as { subscribed?: boolean }).subscribed;
+      if (mt === "paid" && sub) {
+        showToast?.("You're in!", "success");
+        onClose();
+        return;
+      }
+      if (sub && mt === "free") {
+        showToast?.("This membership is now paid. Taking you to secure checkout…", "info");
+        const redirected = await onSignupContinue();
+        if (redirected === true) {
+          onClose();
+          return;
+        }
+        onClose();
+        return;
+      }
+    } catch {
+      /* fall through to finish-joining step */
+    }
+    setPaidMembershipDetailsStep(true);
+    setMode("signup");
+    setEmail(u.email || "");
+    setFullName(u.displayName?.trim() || "");
+    setPassword("");
+    setConfirmPassword("");
+    setAcceptedTerms(false);
+    setFieldErrors({});
+    setFormError("");
+    setForgotOpen(false);
+    showToast?.("Confirm your details below, then continue to secure checkout.", "info");
+  };
+
   const handleEmailAuth = async (e: React.FormEvent) => {
     e.preventDefault();
     setFieldErrors({});
@@ -241,9 +341,52 @@ export const FanAuthModal: React.FC<FanAuthModalProps> = ({
         await signInWithEmailAndPassword(auth, email.trim(), password);
         if (freeAccessEnabled) {
           await tryJoinFreeMembershipIfEnabled();
+          showToast?.(fanLoginToastMessage, "success");
+          onSuccess?.();
+          onClose();
+          return;
         }
-        showToast?.("You're in!", "success");
+        if (onSignupContinue) {
+          await beginPaidMembershipDetailsAfterLogin();
+          return;
+        }
+        showToast?.(fanLoginToastMessage, "info");
         onSuccess?.();
+        onClose();
+        return;
+      }
+
+      // Paid “finish joining” step (already authenticated)
+      if (paidMembershipDetailsStep) {
+        const err: Record<string, string> = {};
+        if (!fullName.trim() || fullName.trim().length < 2) {
+          err.fullName = "Enter your name (2+ characters).";
+        }
+        if (!acceptedTerms) err.terms = "Accept the Terms and Privacy Policy to continue.";
+        if (Object.keys(err).length) {
+          setFieldErrors(err);
+          const first = err.fullName || err.terms || "Please fix the highlighted fields.";
+          setFormError(first);
+          showToast?.(first, "error");
+          return;
+        }
+        if (auth.currentUser && fullName.trim()) {
+          try {
+            await updateProfile(auth.currentUser, { displayName: fullName.trim() });
+          } catch {
+            /* non-fatal */
+          }
+        }
+        if (!onSignupContinue) {
+          showToast?.("Checkout is unavailable right now. Please try again later.", "error");
+          onClose();
+          return;
+        }
+        const redirected = await onSignupContinue();
+        if (redirected === true) {
+          onClose();
+          return;
+        }
         onClose();
         return;
       }
@@ -279,8 +422,16 @@ export const FanAuthModal: React.FC<FanAuthModalProps> = ({
             await signInWithEmailAndPassword(auth, email.trim(), password);
             if (freeAccessEnabled) {
               await tryJoinFreeMembershipIfEnabled();
+              showToast?.("Welcome back! We signed you in to continue.", "success");
+              onSuccess?.();
+              onClose();
+              return;
             }
-            showToast?.("Welcome back! We signed you in to continue.", "success");
+            if (onSignupContinue) {
+              await beginPaidMembershipDetailsAfterLogin();
+              return;
+            }
+            showToast?.("Signed in. Tap Join to subscribe if you haven't finished checkout yet.", "info");
             onSuccess?.();
             onClose();
             return;
@@ -332,8 +483,16 @@ export const FanAuthModal: React.FC<FanAuthModalProps> = ({
           await signInWithEmailAndPassword(auth, email.trim(), password);
           if (freeAccessEnabled) {
             await tryJoinFreeMembershipIfEnabled();
+            showToast?.("Welcome back! We signed you in to continue.", "success");
+            onSuccess?.();
+            onClose();
+            return;
           }
-          showToast?.("Welcome back! We signed you in to continue.", "success");
+          if (onSignupContinue) {
+            await beginPaidMembershipDetailsAfterLogin();
+            return;
+          }
+          showToast?.("Signed in. Tap Join to subscribe if you haven't finished checkout yet.", "info");
           onSuccess?.();
           onClose();
           return;
@@ -428,7 +587,11 @@ export const FanAuthModal: React.FC<FanAuthModalProps> = ({
           return;
         }
       }
-      showToast?.("You're in!", "success");
+      if (!freeAccessEnabled && onSignupContinue) {
+        await beginPaidMembershipDetailsAfterLogin();
+        return;
+      }
+      showToast?.(fanLoginToastMessage, freeAccessEnabled ? "success" : "info");
       onSuccess?.();
       onClose();
     } catch (ex: unknown) {
@@ -512,13 +675,21 @@ export const FanAuthModal: React.FC<FanAuthModalProps> = ({
           </div>
         ) : null}
         <h1 id="fan-auth-title" className="fan-auth-title" style={{ color: accentText }}>
-          {mode === "login" ? loginTitle : signupTitle}
+          {paidMembershipDetailsStep ? "Finish joining" : mode === "login" ? loginTitle : signupTitle}
         </h1>
         <p className="fan-auth-subtitle" style={{ color: `${accentText}aa` }}>
-          {mode === "login" ? loginSubtitle : signupSubtitle}
+          {paidMembershipDetailsStep
+            ? "Confirm your name and accept the terms to open secure checkout."
+            : mode === "login"
+              ? loginSubtitle
+              : signupSubtitle}
         </p>
 
-        <div className="fan-auth-tabs">
+        <div
+          className="fan-auth-tabs"
+          style={paidMembershipDetailsStep ? { opacity: 0.45, pointerEvents: "none" } : undefined}
+          aria-hidden={paidMembershipDetailsStep}
+        >
           <button
             type="button"
             className={`fan-auth-tab ${mode === "login" ? "fan-auth-tab--active" : ""}`}
@@ -581,7 +752,7 @@ export const FanAuthModal: React.FC<FanAuthModalProps> = ({
         ) : (
           <form className="fan-auth-form" onSubmit={handleEmailAuth}>
             {formError ? <p className="fan-auth-err">{formError}</p> : null}
-            {mode === "signup" && (
+            {(mode === "signup" || paidMembershipDetailsStep) && (
               <>
                 <label className="fan-auth-label" style={{ color: accentText }}>
                   Full Name
@@ -606,30 +777,36 @@ export const FanAuthModal: React.FC<FanAuthModalProps> = ({
               onChange={(e) => setEmail(e.target.value)}
               placeholder="you@example.com"
               autoComplete="email"
+              readOnly={paidMembershipDetailsStep}
+              style={paidMembershipDetailsStep ? { opacity: 0.85 } : undefined}
             />
             {fieldErrors.email && <p className="fan-auth-err">{fieldErrors.email}</p>}
-            <label className="fan-auth-label" style={{ color: accentText }}>
-              Password
-            </label>
-            <div className="fan-auth-password-row">
-              <input
-                className="fan-auth-input fan-auth-input--grow"
-                type={showPassword ? "text" : "password"}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="Password"
-                autoComplete={mode === "login" ? "current-password" : "new-password"}
-              />
-              <button
-                type="button"
-                className="fan-auth-show"
-                onClick={() => setShowPassword((s) => !s)}
-              >
-                {showPassword ? "Hide" : "Show"}
-              </button>
-            </div>
-            {fieldErrors.password && <p className="fan-auth-err">{fieldErrors.password}</p>}
-            {mode === "signup" && (
+            {!paidMembershipDetailsStep && (
+              <>
+                <label className="fan-auth-label" style={{ color: accentText }}>
+                  Password
+                </label>
+                <div className="fan-auth-password-row">
+                  <input
+                    className="fan-auth-input fan-auth-input--grow"
+                    type={showPassword ? "text" : "password"}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="Password"
+                    autoComplete={mode === "login" ? "current-password" : "new-password"}
+                  />
+                  <button
+                    type="button"
+                    className="fan-auth-show"
+                    onClick={() => setShowPassword((s) => !s)}
+                  >
+                    {showPassword ? "Hide" : "Show"}
+                  </button>
+                </div>
+                {fieldErrors.password && <p className="fan-auth-err">{fieldErrors.password}</p>}
+              </>
+            )}
+            {mode === "signup" && !paidMembershipDetailsStep && (
               <>
                 <label className="fan-auth-label" style={{ color: accentText }}>
                   Confirm Password
@@ -654,12 +831,12 @@ export const FanAuthModal: React.FC<FanAuthModalProps> = ({
                 {fieldErrors.confirmPassword && <p className="fan-auth-err">{fieldErrors.confirmPassword}</p>}
               </>
             )}
-            {mode === "login" && (
+            {mode === "login" && !paidMembershipDetailsStep && (
               <button type="button" className="fan-auth-text-btn fan-auth-forgot-link" onClick={() => setForgotOpen(true)}>
                 Forgot password?
               </button>
             )}
-            {mode === "signup" && (
+            {(mode === "signup" || paidMembershipDetailsStep) && (
               <label className="fan-auth-check-row">
                 <input
                   type="checkbox"
@@ -686,9 +863,17 @@ export const FanAuthModal: React.FC<FanAuthModalProps> = ({
               style={{ background: `linear-gradient(180deg, ${gradTop} 0%, ${primary} 100%)` }}
               disabled={loading}
             >
-              {loading ? "Please wait…" : mode === "login" ? "Log In" : "Sign Up"}
+              {loading
+                ? "Please wait…"
+                : paidMembershipDetailsStep
+                  ? "Continue to checkout"
+                  : mode === "login"
+                    ? "Log In"
+                    : "Sign Up"}
             </button>
 
+            {!paidMembershipDetailsStep && (
+              <>
             <div className="fan-auth-divider">
               <span>or</span>
             </div>
@@ -718,6 +903,8 @@ export const FanAuthModal: React.FC<FanAuthModalProps> = ({
               </svg>
               Continue with Google
             </button>
+              </>
+            )}
           </form>
         )}
       </div>

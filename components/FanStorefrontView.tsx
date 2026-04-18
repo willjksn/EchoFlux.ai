@@ -1149,6 +1149,8 @@ export const FanStorefrontView: React.FC = () => {
   const [joiningFree, setJoiningFree] = useState(false);
   const [fanAuthOpen, setFanAuthOpen] = useState(false);
   const [fanAuthView, setFanAuthView] = useState<"login" | "signup">("login");
+  /** Paid landing: user is already signed in — open auth on the “finish joining” step before Stripe. */
+  const [fanAuthPaidDetailsStep, setFanAuthPaidDetailsStep] = useState(false);
   const [dmThread, setDmThread] = useState<FanDmThread | null>(null);
   const [dmMessages, setDmMessages] = useState<FanDmMessage[]>([]);
   const [dmLabels, setDmLabels] = useState<{ fan: string; creator: string } | null>(null);
@@ -2720,7 +2722,8 @@ export const FanStorefrontView: React.FC = () => {
     const isAuto = opts?.auto === true;
     if (!creator?.creatorId || !auth.currentUser) {
       if (isAuto) return false;
-      setFanAuthView("login");
+      setFanAuthPaidDetailsStep(false);
+      setFanAuthView("signup");
       setFanAuthOpen(true);
       return false;
     }
@@ -2781,11 +2784,18 @@ export const FanStorefrontView: React.FC = () => {
   };
 
   const handleSubscribe = async () => {
+    if (creator?.monetization?.freeAccessEnabled !== true && auth.currentUser) {
+      setFanAuthPaidDetailsStep(true);
+      setFanAuthView("signup");
+      setFanAuthOpen(true);
+      return;
+    }
     await startSubscriptionCheckout();
   };
 
   const handleJoinFree = async () => {
     if (!creator?.creatorId || !auth.currentUser) {
+      setFanAuthPaidDetailsStep(false);
       setFanAuthView("signup");
       setFanAuthOpen(true);
       return;
@@ -4305,6 +4315,38 @@ export const FanStorefrontView: React.FC = () => {
   // Do not force guest CTAs for normal fan sessions just because `?landing=1` is present.
   const showGuestAuthCtasOnLanding = isViewingOwnStorefront && forcePublicLanding;
 
+  /** Fan signed in — sync hub URL/state; does not close FanAuthModal (used before Stripe continuation step). */
+  const syncFanAuthSessionToHub = useCallback(() => {
+    if (!creator) return;
+    setIsLoggedIn(true);
+    if (creator.monetization?.freeAccessEnabled === true) {
+      const nextTab: FanStorefrontMemberTab = "feed";
+      setActiveTab(nextTab);
+      if (typeof window !== "undefined" && creator.handle?.trim()) {
+        applyFanStorefrontMemberUrl(nextTab, {
+          showLanding: false,
+          creatorHandle: creator.handle,
+          stripSearchKeys: ["landing", "login", "signup"],
+        });
+      }
+      setSubscribed(true);
+      setMembershipType("free");
+      return;
+    }
+    fanAuthPendingHubNavRef.current = true;
+    if (typeof window !== "undefined" && creator.handle?.trim()) {
+      const parsed = parseHandleFromPath();
+      const fromPath = parsed.memberNavSlug ? memberPathSlugToTab(parsed.memberNavSlug) : null;
+      const nextTab: FanStorefrontMemberTab = fromPath ?? "feed";
+      setActiveTab(nextTab);
+      applyFanStorefrontMemberUrl(nextTab, {
+        showLanding: false,
+        creatorHandle: creator.handle,
+        stripSearchKeys: ["landing", "login", "signup"],
+      });
+    }
+  }, [creator]);
+
   // Render legal pages (Terms/Privacy) if subpage is set
   if (legalSubpage) {
     const legalText = legalSubpage === "terms" 
@@ -4448,6 +4490,7 @@ export const FanStorefrontView: React.FC = () => {
           onJoinFree={handleJoinFree}
           onOpenFanAuth={(view) => {
             setFanAuthView(view);
+            setFanAuthPaidDetailsStep(false);
             setFanAuthOpen(true);
           }}
           subscribing={subscribing}
@@ -4469,42 +4512,21 @@ export const FanStorefrontView: React.FC = () => {
         {fanAuthOpen && (
           <FanAuthModal
             isOpen={fanAuthOpen}
-            onClose={() => setFanAuthOpen(false)}
+            onClose={() => {
+              setFanAuthOpen(false);
+              setFanAuthPaidDetailsStep(false);
+            }}
             onSignupContinue={
               creator.monetization?.freeAccessEnabled === true
                 ? undefined
                 : async () => startSubscriptionCheckout({ auto: true })
             }
+            startPaidMembershipDetailsStep={fanAuthPaidDetailsStep}
+            onAuthSessionReady={syncFanAuthSessionToHub}
             onSuccess={() => {
-              setIsLoggedIn(true);
+              syncFanAuthSessionToHub();
               setFanAuthOpen(false);
-              if (creator.monetization?.freeAccessEnabled === true) {
-                const nextTab: FanStorefrontMemberTab = "feed";
-                setActiveTab(nextTab);
-                if (typeof window !== "undefined" && creator.handle?.trim()) {
-                  applyFanStorefrontMemberUrl(nextTab, {
-                    showLanding: false,
-                    creatorHandle: creator.handle,
-                    stripSearchKeys: ["landing", "login", "signup"],
-                  });
-                }
-                setSubscribed(true);
-                setMembershipType("free");
-                return;
-              }
-              // Paid creators: resolve Home vs Purchases after getFanEntitlement (expired / free tier → store + tip only).
-              fanAuthPendingHubNavRef.current = true;
-              if (typeof window !== "undefined" && creator.handle?.trim()) {
-                const parsed = parseHandleFromPath();
-                const fromPath = parsed.memberNavSlug ? memberPathSlugToTab(parsed.memberNavSlug) : null;
-                const nextTab: FanStorefrontMemberTab = fromPath ?? "feed";
-                setActiveTab(nextTab);
-                applyFanStorefrontMemberUrl(nextTab, {
-                  showLanding: false,
-                  creatorHandle: creator.handle,
-                  stripSearchKeys: ["landing", "login", "signup"],
-                });
-              }
+              setFanAuthPaidDetailsStep(false);
             }}
             initialView={fanAuthView}
             creatorId={creator.creatorId}
