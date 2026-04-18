@@ -29,6 +29,7 @@ import { EmojiButton } from "./EmojiPicker";
 import { canUseSjHeartEmoji } from "../src/lib/customEmoji";
 import { creatorIdFirestoreQueryVariants, normalizeCreatorId } from "../src/lib/creatorIdNormalize";
 import { FAN_HUB_STOREFRONT_THEME_SAVED_EVENT } from "../src/hooks/useCreatorFanHubTheme";
+import { deriveFanHubThemeFromPrimary } from "../src/lib/fanHubThemeFromPrimary";
 
 const DEFAULT_SECTIONS: NonNullable<CreatorStorefrontSettings["sections"]> = {
   feed: true,
@@ -1092,7 +1093,13 @@ export const MyPageBuilder: React.FC = () => {
   /** Update theme without clobbering other theme fields (uses latest state) */
   const updateTheme = useCallback((patch: Partial<NonNullable<CreatorStorefrontSettings["theme"]>>) => {
     setDraft((prev) => {
-      const merged = { ...DEFAULT_THEME, ...prev.theme, ...patch };
+      let merged = { ...DEFAULT_THEME, ...prev.theme, ...patch };
+      const applyingNamedPreset =
+        typeof patch.presetId === "string" && patch.presetId !== "" && patch.presetId !== "custom";
+      if (!applyingNamedPreset && typeof patch.primary === "string") {
+        const derived = deriveFanHubThemeFromPrimary(patch.primary);
+        if (derived) merged = { ...merged, ...derived };
+      }
       // Manual edits are not the named preset anymore; avoids wrong preset merge + wrong tab highlight.
       const theme = patch.presetId !== undefined ? merged : { ...merged, presetId: "custom" };
       return { ...prev, theme };
@@ -3110,7 +3117,9 @@ export const MyPageBuilder: React.FC = () => {
               <div className="grid grid-cols-3 gap-4">
                 <div className="min-h-[72px] flex flex-col">
                   <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-0.5" title="Main brand and accent color">Primary</label>
-                  <p className="text-[10px] text-gray-400 dark:text-gray-500 mb-1.5">Buttons, links & accents</p>
+                  <p className="text-[10px] text-gray-400 dark:text-gray-500 mb-1.5">
+                    Buttons, links & accents — choosing a color fills hover, background, text, and borders to match
+                  </p>
                   <div className="flex items-center gap-2 mt-auto">
                     <input
                       type="color"

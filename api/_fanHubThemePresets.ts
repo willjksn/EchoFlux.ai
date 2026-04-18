@@ -12,6 +12,8 @@ export const FAN_HUB_THEME_PRESETS: FanHubThemePreset[] = [
   { id: "forest", name: "Forest", theme: { primary: "#22c55e", background: "#f0fdf4", text: "#14532d", textMuted: "#166534", fontFamily: "Inter, sans-serif" } },
   { id: "minimal-dark", name: "Minimal Dark", theme: { primary: "#a78bfa", background: "#1c1917", text: "#fafaf9", textMuted: "#a8a29e", fontFamily: "Inter, sans-serif" } },
   { id: "sunset", name: "Sunset", theme: { primary: "#f97316", background: "#fff7ed", text: "#431407", textMuted: "#9a3412", fontFamily: "Lato, sans-serif" } },
+  { id: "lavender", name: "Lavender", theme: { primary: "#7c3aed", background: "#f5f3ff", text: "#1e1b4b", textMuted: "#5b21b6", fontFamily: "Inter, sans-serif" } },
+  { id: "slate", name: "Slate", theme: { primary: "#475569", background: "#f8fafc", text: "#0f172a", textMuted: "#64748b", fontFamily: "Inter, sans-serif" } },
   {
     id: "custom",
     name: "Custom",
