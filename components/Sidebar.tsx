@@ -3,17 +3,23 @@ import { Page } from '../types';
 import { DashboardIcon, SettingsIcon, LogoIcon, ComposeIcon, AdminIcon, CalendarIcon, TargetIcon, SparklesIcon, ImageIcon, HeartIcon, GlobeIcon } from './icons/UIIcons';
 import { useAppContext } from './AppContext';
 import { hasFanHubStudioRouteAccess, hasPremiumStudioRouteAccess } from '../src/utils/planAccess';
+import { useFanHubCreatorNotificationsUnread } from '../src/hooks/useFanHubCreatorNotificationsUnread';
 
 interface NavItemProps {
   page: Page;
   icon: React.ReactNode;
   label: string;
   tourId?: string;
+  /** Fan Hub: unread in-app notifications while creator is elsewhere in EchoFlux */
+  badgeCount?: number;
 }
 
-const NavItem: React.FC<NavItemProps> = ({ page, icon, label, tourId }) => {
+const NavItem: React.FC<NavItemProps> = ({ page, icon, label, tourId, badgeCount }) => {
   const { activePage, setActivePage, setIsSidebarOpen } = useAppContext();
-  
+  const showBadge = typeof badgeCount === 'number' && badgeCount > 0;
+  const badgeLabel =
+    badgeCount != null && badgeCount > 9 ? '9+' : badgeCount != null && badgeCount > 0 ? String(badgeCount) : '';
+
   return (
     <li id={tourId}>
       <button
@@ -22,14 +28,27 @@ const NavItem: React.FC<NavItemProps> = ({ page, icon, label, tourId }) => {
           setActivePage(page);
           setIsSidebarOpen(false);
         }}
-        className={`w-full text-left flex items-center p-3 my-1 rounded-lg transition-colors ${
+        className={`w-full text-left flex items-center gap-2 p-3 my-1 rounded-lg transition-colors ${
           activePage === page
             ? 'bg-primary-500 text-white'
             : 'text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'
         }`}
+        aria-label={showBadge ? `${label}, ${badgeCount} unread Fan Hub notifications` : undefined}
       >
-        {icon}
-        <span className="ml-3 font-medium">{label}</span>
+        <span className="shrink-0">{icon}</span>
+        <span className="ml-1 font-medium flex-1 min-w-0">{label}</span>
+        {showBadge ? (
+          <span
+            className={`shrink-0 min-w-[1.25rem] h-5 px-1 rounded-full text-[10px] font-bold leading-none flex items-center justify-center ${
+              activePage === page
+                ? 'bg-white/25 text-white ring-1 ring-white/40'
+                : 'bg-red-500 text-white'
+            }`}
+            aria-hidden
+          >
+            {badgeLabel}
+          </span>
+        ) : null}
       </button>
     </li>
   );
@@ -48,6 +67,10 @@ export const Sidebar: React.FC = () => {
   // Premium Studio: Pro/CreatorPro -> upgrade screen; Elite/CreatorElite/OFS/Agency -> full studio. Fan Hub: all paid creator tiers above.
   const hasFanHubAccess = hasFanHubStudioRouteAccess(user);
   const hasPremiumStudioAccess = hasPremiumStudioRouteAccess(user);
+  const trackFanHubSidebarBadge = hasFanHubAccess || hasPremiumStudioAccess;
+  const fanHubUnreadCount = useFanHubCreatorNotificationsUnread(trackFanHubSidebarBadge);
+  const fanHubSidebarBadge =
+    trackFanHubSidebarBadge && activePage !== 'fanHub' ? fanHubUnreadCount : 0;
 
   const allNavItems: (Omit<NavItemProps, 'page' | 'label'> & { page: Page | 'admin', label: string })[] = [
     // MAIN
@@ -111,7 +134,13 @@ export const Sidebar: React.FC = () => {
         </div>
         <nav className="p-4 flex-grow overflow-y-auto custom-scrollbar">
           <ul>
-            {navItems.map(item => <NavItem key={item.page} {...item} />)}
+            {navItems.map((item) => (
+              <NavItem
+                key={item.page}
+                {...item}
+                badgeCount={item.page === 'fanHub' ? fanHubSidebarBadge : undefined}
+              />
+            ))}
           </ul>
         </nav>
         <div className="p-2.5 border-t border-gray-200 dark:border-gray-700 flex-shrink-0 bg-gray-50 dark:bg-gray-900/50">

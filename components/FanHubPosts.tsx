@@ -48,6 +48,21 @@ import { LiveStreamWatchRoom } from "./LiveStreamWatchRoom";
 
 const LIVE_STREAM_DOC_STATUSES: LiveStreamEventStatus[] = ["draft", "scheduled", "live", "ended", "cancelled"];
 
+/** After Firestore client fallback for liveStreams, align ticket orders via Admin (scheduled / delivered). */
+async function syncLiveStreamTicketOrdersAfterClientFallback(token: string, streamId: string): Promise<void> {
+  const sid = streamId.trim();
+  if (!sid) return;
+  try {
+    await fetch(resolveApiUrl("/api/syncLiveStreamTicketOrders"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ streamId: sid }),
+    });
+  } catch {
+    /* non-fatal */
+  }
+}
+
 /** First vault modal page is small; “Load more” uses startAfter (same index as orderBy). */
 const FAN_HUB_VAULT_PAGE = 24;
 
@@ -1453,6 +1468,7 @@ Write 2-4 sentences that are engaging and on-topic.`;
                 creatorTestOnly: liveStreamCreatorTestOnly,
                 ...(caption.trim() ? { description: caption.trim() } : {}),
               });
+              void syncLiveStreamTicketOrdersAfterClientFallback(token, liveStreamEditStreamId);
             } else {
               throw new Error(errBody.error || "Could not update stream");
             }
@@ -1485,6 +1501,7 @@ Write 2-4 sentences that are engaging and on-topic.`;
                 creatorTestOnly: liveStreamCreatorTestOnly,
                 ...(caption.trim() ? { description: caption.trim() } : {}),
               });
+              if (streamIdForPost) void syncLiveStreamTicketOrdersAfterClientFallback(token, streamIdForPost);
             } else {
               throw new Error(data.error || "Could not create stream");
             }
@@ -1624,6 +1641,7 @@ Write 2-4 sentences that are engaging and on-topic.`;
                 promoPostId: postRef.id,
                 creatorTestOnly: liveStreamCreatorTestOnly,
               });
+              void syncLiveStreamTicketOrdersAfterClientFallback(token, streamIdForPost);
             } else if (!linkRes.ok) {
               console.warn("liveStreams promoPostId link:", linkRes.status);
             }

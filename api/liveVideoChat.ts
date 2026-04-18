@@ -473,7 +473,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const creatorId = body.creatorId as string;
         const fanId = body.fanId as string;
         const fanDisplayName = body.fanDisplayName as string | undefined;
-        const durationMinutes = (body.durationMinutes as number) || 15;
+        const rawMins = Number((body as { durationMinutes?: unknown }).durationMinutes);
+        const durationMinutes = Number.isFinite(rawMins)
+          ? Math.max(1, Math.min(240, Math.round(rawMins)))
+          : 15;
 
         if (!creatorId || !fanId) {
           return res.status(400).json({ error: "creatorId and fanId required" });

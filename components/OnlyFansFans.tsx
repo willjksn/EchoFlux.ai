@@ -4,7 +4,8 @@ import { usePremiumStudioTab, type PendingFansTabSelection } from './PremiumStud
 import { UserIcon, SearchIcon, StarIcon, SparklesIcon, TrashIcon, EditIcon, PlusIcon, XMarkIcon } from './icons/UIIcons';
 import { auth, db } from '../firebaseConfig';
 import { collection, getDocs, doc, getDoc, setDoc, deleteDoc, updateDoc, query, orderBy, limit, Timestamp, where } from 'firebase/firestore';
-import { fanHubListLabel, safeUsernameForHandle } from '../src/lib/fanHubDisplay';
+import { fanHubListLabel, initialsFromFanLabel, safeUsernameForHandle } from '../src/lib/fanHubDisplay';
+import { buildCreatorImageUrlSet, fanAvatarUrlOrUndefined } from '../src/lib/fanAvatar';
 import { isHubMembershipAccessExpired, pickLatestMemberAccessEnd } from '../src/lib/memberAccessEnd';
 
 function usernameFromFanDoc(fd: Record<string, unknown>): string | null {
@@ -39,13 +40,6 @@ function parseCancelAtPeriodEndFromFanDoc(d: Record<string, unknown>): boolean {
   return false;
 }
 
-function fanInitialsFromName(name: string): string {
-  const parts = name.trim().split(/\s+/).filter(Boolean);
-  if (parts.length === 0) return '?';
-  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
-  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
-}
-
 /** Fan Hub grid / detail: photo from Firestore when available */
 function FanGridAvatar({
   avatarUrl,
@@ -76,7 +70,7 @@ function FanGridAvatar({
           onError={() => setFailed(true)}
         />
       ) : (
-        fanInitialsFromName(name)
+        initialsFromFanLabel(name)
       )}
     </div>
   );
@@ -477,6 +471,20 @@ export const OnlyFansFans: React.FC = () => {
         if (!user?.id) return;
         setIsLoading(true);
         try {
+            let creatorImageUrls = new Set<string>();
+            try {
+                const [creatorUserSnap, creatorDocSnap] = await Promise.all([
+                    getDoc(doc(db, 'users', user.id)),
+                    getDoc(doc(db, 'creators', user.id)),
+                ]);
+                creatorImageUrls = buildCreatorImageUrlSet(
+                    creatorUserSnap.exists() ? (creatorUserSnap.data() as Record<string, unknown>) : undefined,
+                    creatorDocSnap.exists() ? (creatorDocSnap.data() as Record<string, unknown>) : undefined
+                );
+            } catch {
+                creatorImageUrls = new Set();
+            }
+
             const fansSnap = await getDocs(collection(db, 'users', user.id, 'onlyfans_fan_preferences'));
             const docs = fansSnap.docs;
             const CHUNK = 25;
@@ -497,43 +505,63 @@ export const OnlyFansFans: React.FC = () => {
                         let hubMembershipExpired = false;
 
                         try {
-                            const [uSnap, fSnap] = await Promise.all([
-                                getDoc(doc(db, 'users', fanId)),
-                                getDoc(doc(db, 'creators', user.id, 'fans', fanId)),
-                            ]);
-                            if (fSnap.exists()) {
-                                const fd = fSnap.data() as Record<string, unknown>;
-                                hubMembershipExpired = isHubMembershipAccessExpired({
-                                    subscriptionStatus: subscriptionStatusFromFanDoc(fd),
-                                    cancelAtPeriodEnd: parseCancelAtPeriodEndFromFanDoc(fd),
-                                    accessEnd: pickLatestMemberAccessEnd(fd),
-                                });
-                                const fromFan = usernameFromFanDoc(fd);
-                                if (fromFan) username = fromFan;
-                                if (!displayName && typeof fd.displayName === 'string' && fd.displayName.trim()) {
-                                    displayName = fd.displayName.trim();
+                            if (fanId !== user.id) {
+                                const [uSnap, fSnap] = await Promise.all([
+                                    getDoc(doc(db, 'users', fanId)),
+                                    getDoc(doc(db, 'creators', user.id, 'fans', fanId)),
+                                ]);
+                                if (fSnap.exists()) {
+                                    const fd = fSnap.data() as Record<string, unknown>;
+                                    hubMembershipExpired = isHubMembershipAccessExpired({
+                                        subscriptionStatus: subscriptionStatusFromFanDoc(fd),
+                                        cancelAtPeriodEnd: parseCancelAtPeriodEndFromFanDoc(fd),
+                                        accessEnd: pickLatestMemberAccessEnd(fd),
+                                    });
+                                    const fromFan = usernameFromFanDoc(fd);
+                                    if (fromFan) username = fromFan;
+                                    if (!displayName && typeof fd.displayName === 'string' && fd.displayName.trim()) {
+                                        displayName = fd.displayName.trim();
+                                    }
+                                    if (!email && typeof fd.email === 'string' && fd.email) email = fd.email;
+                                    const fAv =
+                                        (typeof fd.avatarUrl === 'string' && fd.avatarUrl.trim()) ||
+                                        (typeof fd.photoURL === 'string' && fd.photoURL.trim()) ||
+                                        (typeof fd.photoUrl === 'string' && fd.photoUrl.trim()) ||
+                                        '';
+                                    if (fAv) {
+                                        const cleaned = fanAvatarUrlOrUndefined(fAv, {
+                                            fanAuthUid: fanId,
+                                            creatorId: user.id,
+                                            creatorImageUrls,
+                                        });
+                                        if (cleaned) avatarUrl = cleaned;
+                                    }
                                 }
-                                if (!email && typeof fd.email === 'string' && fd.email) email = fd.email;
-                                const fAv = fd.avatarUrl ?? fd.photoUrl;
-                                if (typeof fAv === 'string' && fAv.trim()) avatarUrl = fAv.trim();
-                            }
-                            if (uSnap.exists()) {
-                                const ud = uSnap.data() as Record<string, unknown>;
-                                const uu =
-                                    typeof ud.username === 'string' && ud.username.trim()
-                                        ? safeUsernameForHandle(ud.username)
-                                        : null;
-                                if (uu) username = uu;
-                                if (!displayName && typeof ud.displayName === 'string' && ud.displayName.trim()) {
-                                    displayName = ud.displayName.trim();
+                                if (uSnap.exists()) {
+                                    const ud = uSnap.data() as Record<string, unknown>;
+                                    const uu =
+                                        typeof ud.username === 'string' && ud.username.trim()
+                                            ? safeUsernameForHandle(ud.username)
+                                            : null;
+                                    if (uu) username = uu;
+                                    if (!displayName && typeof ud.displayName === 'string' && ud.displayName.trim()) {
+                                        displayName = ud.displayName.trim();
+                                    }
+                                    if (!email && typeof ud.email === 'string' && ud.email) email = ud.email;
+                                    const uAv =
+                                        (typeof ud.avatar === 'string' && ud.avatar.trim()) ||
+                                        (typeof ud.photoURL === 'string' && ud.photoURL.trim()) ||
+                                        (typeof ud.photoUrl === 'string' && ud.photoUrl.trim()) ||
+                                        '';
+                                    if (uAv) {
+                                        const cleaned = fanAvatarUrlOrUndefined(uAv, {
+                                            fanAuthUid: fanId,
+                                            creatorId: user.id,
+                                            creatorImageUrls,
+                                        });
+                                        if (cleaned) avatarUrl = cleaned;
+                                    }
                                 }
-                                if (!email && typeof ud.email === 'string' && ud.email) email = ud.email;
-                                const uAv =
-                                    (typeof ud.avatar === 'string' && ud.avatar.trim()) ||
-                                    (typeof ud.photoURL === 'string' && ud.photoURL.trim()) ||
-                                    (typeof ud.photoUrl === 'string' && ud.photoUrl.trim()) ||
-                                    '';
-                                if (uAv) avatarUrl = uAv;
                             }
                         } catch (e) {
                             console.warn('OnlyFansFans: enrich fan row', fanId, e);
@@ -542,15 +570,21 @@ export const OnlyFansFans: React.FC = () => {
                         const prefName = typeof data.name === 'string' ? data.name : null;
                         const listName = fanHubListLabel(username, displayName, email, prefName);
 
-                        const prefAvatar =
+                        const prefAvatarRaw =
                             typeof (data as { avatarUrl?: unknown }).avatarUrl === 'string'
                                 ? (data as { avatarUrl: string }).avatarUrl.trim()
                                 : '';
 
+                        const resolvedAvatar = fanAvatarUrlOrUndefined(avatarUrl || prefAvatarRaw || null, {
+                            fanAuthUid: fanId,
+                            creatorId: user.id,
+                            creatorImageUrls,
+                        });
+
                         return {
                             id: fanId,
                             name: listName,
-                            avatarUrl: avatarUrl || prefAvatar || undefined,
+                            avatarUrl: resolvedAvatar,
                             hubMembershipExpired,
                             preferences: {
                                 ...data,

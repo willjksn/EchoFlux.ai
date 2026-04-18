@@ -2,7 +2,7 @@ import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { getAdminDb } from "./_firebaseAdmin.js";
 import { verifyAuth } from "./verifyAuth.js";
 
-type FanPurchaseType = "product" | "post_unlock" | "unlock" | "tip" | "subscription";
+type FanPurchaseType = "product" | "post_unlock" | "unlock" | "tip" | "subscription" | "live_stream_ticket";
 
 type FanPurchase = {
   id: string;
@@ -13,10 +13,15 @@ type FanPurchase = {
   productId: string | null;
   /** Feed post id for `post_unlock` orders (Stripe checkout). */
   postId?: string | null;
+  /** Paid live stream checkout — matches `liveStreams` doc. */
+  streamId?: string | null;
   productTitle?: string;
   amountCents: number;
   status: string;
   createdAt: string;
+  scheduleStatus?: "pending" | "scheduled" | "completed" | "cancelled";
+  scheduledDate?: string | null;
+  scheduledTime?: string | null;
   deliveryStatus?: "pending" | "delivered";
   deliveryType?: "video" | "image" | "audio" | "text" | "link" | null;
   deliveryText?: string | null;
@@ -32,6 +37,7 @@ function normalizePurchaseType(d: Record<string, unknown>): FanPurchaseType {
   if (typeof d.tipHandle === "string" && d.tipHandle.trim()) return "tip";
   if (rawType === "post_unlock" || rawProductType === "post_unlock") return "post_unlock";
   if (rawType === "unlock" || rawProductType === "unlock") return "unlock";
+  if (rawType === "live_stream_ticket" || rawProductType === "live_stream_ticket") return "live_stream_ticket";
   return "product";
 }
 
@@ -57,6 +63,16 @@ function mapDocToPurchase(id: string, d: Record<string, unknown>): FanPurchase {
   const isNonDeliverable = normalizedType === "tip" || normalizedType === "subscription";
   const deliveryStatus = isNonDeliverable ? undefined : (d.deliveryStatus === "delivered" ? "delivered" : "pending");
   const postIdRaw = typeof d.postId === "string" ? d.postId.trim() : "";
+  const streamIdRaw = typeof d.streamId === "string" ? d.streamId.trim() : "";
+  const schedRaw = typeof d.scheduleStatus === "string" ? d.scheduleStatus.trim().toLowerCase() : "";
+  let scheduleStatus: FanPurchase["scheduleStatus"] | undefined;
+  if (!isNonDeliverable) {
+    if (schedRaw === "scheduled" || schedRaw === "pending" || schedRaw === "completed" || schedRaw === "cancelled") {
+      scheduleStatus = schedRaw as FanPurchase["scheduleStatus"];
+    } else {
+      scheduleStatus = "pending";
+    }
+  }
   return {
     id,
     creatorId: String(d.creatorId || ""),
@@ -65,10 +81,14 @@ function mapDocToPurchase(id: string, d: Record<string, unknown>): FanPurchase {
     type: normalizedType,
     productId: typeof d.productId === "string" ? d.productId : null,
     postId: postIdRaw || null,
+    streamId: streamIdRaw || null,
     productTitle: typeof d.productTitle === "string" ? d.productTitle : undefined,
     amountCents: Number.isFinite(Number(d.amountCents)) ? Math.max(0, Math.round(Number(d.amountCents))) : 0,
     status: typeof d.status === "string" ? d.status : "paid",
     createdAt: createdMs > 0 ? new Date(createdMs).toISOString() : new Date(0).toISOString(),
+    scheduleStatus: isNonDeliverable ? undefined : scheduleStatus,
+    scheduledDate: isNonDeliverable ? undefined : (typeof d.scheduledDate === "string" ? d.scheduledDate : null),
+    scheduledTime: isNonDeliverable ? undefined : (typeof d.scheduledTime === "string" ? d.scheduledTime : null),
     deliveryStatus,
     deliveryType:
       d.deliveryType === "video" ||
@@ -134,7 +154,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const purchases = Array.from(docsById.values())
       .filter((o) => o.status !== "refunded")
-      .filter((o) => o.type === "product" || o.type === "post_unlock" || o.type === "unlock" || o.type === "subscription" || o.type === "tip")
+      .filter(
+        (o) =>
+          o.type === "product" ||
+          o.type === "post_unlock" ||
+          o.type === "unlock" ||
+          o.type === "subscription" ||
+          o.type === "tip" ||
+          o.type === "live_stream_ticket"
+      )
       .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt))
       .slice(0, limitNum);
 

@@ -328,9 +328,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (u.length >= 3 && /^[a-z0-9_]+$/.test(u)) {
       memberUsername = u;
     }
-    // Require username only once fan membership access exists (free or paid).
-    // This prevents forcing @username before paid checkout completes.
-    if (subscribed && !memberUsername) {
+    // Require username once the fan has any member-area access (subscription or purchase unlocks).
+    // This prevents forcing @username before checkout completes while still covering purchase-only fans.
+    if ((subscribed || limitedMemberAccess) && !memberUsername) {
       memberUsernameRequired = true;
     }
 

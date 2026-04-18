@@ -107,6 +107,16 @@ const PhoneIcon = () => (
 
 const TERMINAL_VIDEO_STATUSES = new Set(["completed", "declined", "cancelled", "expired"]);
 
+/** Instant-call duration: server applies quota; Daily room exp scales with minutes. */
+const INSTANT_DURATION_MIN = 1;
+const INSTANT_DURATION_MAX = 240;
+const INSTANT_DURATION_PRESETS = [5, 10, 15, 30, 45, 60] as const;
+
+function clampInstantDurationMinutes(n: number): number {
+  if (!Number.isFinite(n)) return 15;
+  return Math.max(INSTANT_DURATION_MIN, Math.min(INSTANT_DURATION_MAX, Math.round(n)));
+}
+
 export const LiveVideoChatManager: React.FC<LiveVideoChatManagerProps> = ({
   creatorId,
   compact = false,
@@ -224,26 +234,23 @@ export const LiveVideoChatManager: React.FC<LiveVideoChatManagerProps> = ({
       .finally(() => setFansLoading(false));
   }, [creatorId]);
 
-  // Close fan dropdown on outside click
+  // Close fan dropdown on outside click (click avoids racing option mousedown/focus in some browsers)
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent | TouchEvent) => {
       if (fanDropdownRef.current && !fanDropdownRef.current.contains(e.target as Node)) {
         setFanDropdownOpen(false);
       }
     };
-    document.addEventListener("mousedown", handleClickOutside);
-    document.addEventListener("touchstart", handleClickOutside);
+    document.addEventListener("click", handleClickOutside, true);
     return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
-      document.removeEventListener("touchstart", handleClickOutside);
+      document.removeEventListener("click", handleClickOutside, true);
     };
   }, []);
 
-  // Focus search input when dropdown opens
+  // Focus search input when dropdown opens (do not clear query — preserves selection label and filter text)
   useEffect(() => {
     if (fanDropdownOpen) {
-      setFanSearchQuery("");
-      fanSearchInputRef.current?.focus();
+      queueMicrotask(() => fanSearchInputRef.current?.focus());
     }
   }, [fanDropdownOpen]);
 
@@ -403,9 +410,11 @@ export const LiveVideoChatManager: React.FC<LiveVideoChatManagerProps> = ({
     if (fan) {
       setInstantCallFanId(fan.id);
       setInstantCallFanName(fan.plainMoniker || fan.email || fan.id);
+      setFanSearchQuery(fan.listLabel || fan.email || fan.id);
     } else {
       setInstantCallFanId("");
       setInstantCallFanName("");
+      setFanSearchQuery("");
     }
     setFanDropdownOpen(false);
   }, []);
@@ -436,6 +445,9 @@ export const LiveVideoChatManager: React.FC<LiveVideoChatManagerProps> = ({
       return;
     }
 
+    const mins = clampInstantDurationMinutes(instantCallDuration);
+    if (mins !== instantCallDuration) setInstantCallDuration(mins);
+
     setStartingInstantCall(true);
     try {
       const token = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
@@ -451,7 +463,7 @@ export const LiveVideoChatManager: React.FC<LiveVideoChatManagerProps> = ({
           creatorId,
           fanId: instantCallFanId.trim(),
           fanDisplayName: instantCallFanName.trim() || instantCallFanId.trim(),
-          durationMinutes: instantCallDuration,
+          durationMinutes: mins,
         }),
       });
 
@@ -467,7 +479,7 @@ export const LiveVideoChatManager: React.FC<LiveVideoChatManagerProps> = ({
         fanId: instantCallFanId.trim(),
         fanDisplayName: instantCallFanName.trim() || undefined,
         productId: "instant_call",
-        durationMinutes: instantCallDuration,
+        durationMinutes: mins,
         minutesUsed: 0,
         amountPaidCents: 0,
         creatorEarningsCents: 0,
@@ -651,7 +663,15 @@ export const LiveVideoChatManager: React.FC<LiveVideoChatManagerProps> = ({
           
           {/* Start Instant Call Button */}
           <button
-            onClick={() => setShowInstantCallModal(true)}
+            type="button"
+            onClick={() => {
+              setInstantCallFanId("");
+              setInstantCallFanName("");
+              setFanSearchQuery("");
+              setFanDropdownOpen(false);
+              setInstantCallDuration(15);
+              setShowInstantCallModal(true);
+            }}
             className="fh-live-gradient-btn flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition shadow-md"
           >
             <PhoneIcon />
@@ -771,7 +791,11 @@ export const LiveVideoChatManager: React.FC<LiveVideoChatManagerProps> = ({
                   </h3>
                 </div>
                 <button
-                  onClick={() => setShowInstantCallModal(false)}
+                  type="button"
+                  onClick={() => {
+                    setShowInstantCallModal(false);
+                    setFanDropdownOpen(false);
+                  }}
                   className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
                 >
                   <XIcon />
@@ -783,16 +807,23 @@ export const LiveVideoChatManager: React.FC<LiveVideoChatManagerProps> = ({
               {/* Fan Search Input with Autocomplete */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  Search Fan *
+                  Fan *
                 </label>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">
+                  Open the list to pick a fan, or type to narrow by name, @handle, or email.
+                </p>
                 <div className="relative" ref={fanDropdownRef}>
                   <div className="relative">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none">
                       <SearchIcon />
                     </span>
                     <input
                       ref={fanSearchInputRef}
                       type="text"
+                      role="combobox"
+                      aria-expanded={fanDropdownOpen}
+                      aria-controls="live-video-fan-listbox"
+                      aria-autocomplete="list"
                       value={fanSearchQuery}
                       onChange={(e) => {
                         setFanSearchQuery(e.target.value);
@@ -804,7 +835,7 @@ export const LiveVideoChatManager: React.FC<LiveVideoChatManagerProps> = ({
                         }
                       }}
                       onFocus={() => setFanDropdownOpen(true)}
-                      placeholder={fansLoading ? "Loading fans..." : "Start typing fan name or email..."}
+                      placeholder={fansLoading ? "Loading fans..." : "Search or choose from the list…"}
                       disabled={fansLoading}
                       className="w-full pl-10 pr-10 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white fh-live-input transition"
                       autoComplete="off"
@@ -825,43 +856,61 @@ export const LiveVideoChatManager: React.FC<LiveVideoChatManagerProps> = ({
                     )}
                   </div>
 
-                  {/* Autocomplete dropdown - shows when typing */}
-                  {fanDropdownOpen && fanSearchQuery.trim() && (
-                    <div className="absolute z-50 w-full mt-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg shadow-lg overflow-hidden">
-                      <ul className="max-h-48 overflow-y-auto">
-                        {filteredFans.length === 0 ? (
-                          <li className="px-4 py-3 text-sm text-gray-500 dark:text-gray-400 text-center">
-                            No fans found matching "{fanSearchQuery}"
-                          </li>
-                        ) : (
-                          filteredFans.slice(0, 10).map((fan) => (
-                            <li key={fan.id}>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  handleSelectFan(fan);
-                                  setFanSearchQuery(fan.listLabel || fan.email || fan.id);
-                                }}
-                                className="w-full text-left px-4 py-3 fh-live-dropdown-item transition flex items-center gap-3"
-                              >
-                                <div className="w-10 h-10 fh-live-fan-chip-avatar text-sm flex-shrink-0">
-                                  {(fan.listLabel || fan.email || "?")[0].toUpperCase()}
-                                </div>
-                                <div className="min-w-0 flex-1">
-                                  <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
-                                    {fan.listLabel}
-                                  </p>
-                                  {fan.email && (
-                                    <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
-                                      {fan.email}
-                                    </p>
-                                  )}
-                                </div>
-                              </button>
+                  {/* Combobox list: full roster when query empty; filtered as you type */}
+                  {fanDropdownOpen && (
+                    <div
+                      id="live-video-fan-listbox"
+                      role="listbox"
+                      className="absolute z-[100] w-full mt-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg shadow-lg overflow-hidden"
+                    >
+                      {fansLoading ? (
+                        <div className="px-4 py-3 text-sm text-gray-500 dark:text-gray-400">Loading fans…</div>
+                      ) : fans.length === 0 ? (
+                        <div className="px-4 py-3 text-sm text-gray-500 dark:text-gray-400">
+                          No fans in your list yet.
+                        </div>
+                      ) : (
+                        <ul className="max-h-60 overflow-y-auto overscroll-contain">
+                          {filteredFans.length === 0 ? (
+                            <li className="px-4 py-3 text-sm text-gray-500 dark:text-gray-400 text-center">
+                              No fans match &quot;{fanSearchQuery.trim()}&quot;
                             </li>
-                          ))
-                        )}
-                      </ul>
+                          ) : (
+                            filteredFans.slice(0, 80).map((fan) => (
+                              <li key={fan.id} role="presentation">
+                                <button
+                                  type="button"
+                                  role="option"
+                                  aria-selected={instantCallFanId === fan.id}
+                                  onMouseDown={(e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                  }}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleSelectFan(fan);
+                                  }}
+                                  className="w-full text-left px-4 py-3 fh-live-dropdown-item transition flex items-center gap-3 cursor-pointer select-none"
+                                >
+                                  <div className="w-10 h-10 fh-live-fan-chip-avatar text-sm flex-shrink-0">
+                                    {(fan.listLabel || fan.email || "?")[0].toUpperCase()}
+                                  </div>
+                                  <div className="min-w-0 flex-1">
+                                    <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
+                                      {fan.listLabel}
+                                    </p>
+                                    {fan.email && (
+                                      <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                                        {fan.email}
+                                      </p>
+                                    )}
+                                  </div>
+                                </button>
+                              </li>
+                            ))
+                          )}
+                        </ul>
+                      )}
                     </div>
                   )}
                 </div>
@@ -906,21 +955,52 @@ export const LiveVideoChatManager: React.FC<LiveVideoChatManagerProps> = ({
               )}
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  Duration
-                </label>
-                <select
-                  value={instantCallDuration}
-                  onChange={(e) => setInstantCallDuration(Number(e.target.value))}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white fh-live-input"
+                <label
+                  htmlFor="instant-call-duration-minutes"
+                  className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
                 >
-                  <option value={5}>5 minutes</option>
-                  <option value={10}>10 minutes</option>
-                  <option value={15}>15 minutes</option>
-                  <option value={30}>30 minutes</option>
-                  <option value={45}>45 minutes</option>
-                  <option value={60}>60 minutes</option>
-                </select>
+                  Duration (minutes)
+                </label>
+                <input
+                  id="instant-call-duration-minutes"
+                  type="number"
+                  inputMode="numeric"
+                  min={INSTANT_DURATION_MIN}
+                  max={INSTANT_DURATION_MAX}
+                  step={1}
+                  value={instantCallDuration}
+                  onChange={(e) => {
+                    const raw = e.target.value;
+                    if (raw === "") return;
+                    const n = Number(raw);
+                    if (!Number.isFinite(n)) return;
+                    setInstantCallDuration(clampInstantDurationMinutes(n));
+                  }}
+                  onBlur={() => setInstantCallDuration((d) => clampInstantDurationMinutes(d))}
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white fh-live-input"
+                />
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  Between {INSTANT_DURATION_MIN} and {INSTANT_DURATION_MAX} minutes (quota still applies).
+                </p>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  <span className="text-xs text-gray-500 dark:text-gray-400 w-full sm:w-auto sm:mr-1 self-center">
+                    Quick:
+                  </span>
+                  {INSTANT_DURATION_PRESETS.map((m) => (
+                    <button
+                      key={m}
+                      type="button"
+                      onClick={() => setInstantCallDuration(m)}
+                      className={`px-2.5 py-1 text-xs font-medium rounded-lg border transition ${
+                        instantCallDuration === m
+                          ? "fh-live-filter-active border-transparent"
+                          : "border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/80"
+                      }`}
+                    >
+                      {m}m
+                    </button>
+                  ))}
+                </div>
               </div>
 
               {quota && !quota.monthlyMinutesLimit && (
@@ -933,12 +1013,17 @@ export const LiveVideoChatManager: React.FC<LiveVideoChatManagerProps> = ({
 
             <div className="p-6 border-t border-gray-200 dark:border-gray-700 flex gap-3">
               <button
-                onClick={() => setShowInstantCallModal(false)}
+                type="button"
+                onClick={() => {
+                  setShowInstantCallModal(false);
+                  setFanDropdownOpen(false);
+                }}
                 className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition font-medium"
               >
                 Cancel
               </button>
               <button
+                type="button"
                 onClick={handleStartInstantCall}
                 disabled={startingInstantCall || !instantCallFanId.trim()}
                 className="fh-live-gradient-btn flex-1 px-4 py-2 rounded-lg transition font-medium disabled:opacity-50 flex items-center justify-center gap-2"

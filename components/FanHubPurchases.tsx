@@ -110,18 +110,29 @@ function isSubscriptionPurchase(p: Purchase): boolean {
   );
 }
 
+function isLiveStreamTicketPurchase(p: Purchase): boolean {
+  return (p.orderType || "").trim().toLowerCase() === "live_stream_ticket";
+}
+
 /** Compact list row — mirrors member “Your purchases” minimize view. */
 function creatorPurchaseTypeLabel(p: Purchase): string {
   if (isTipPurchase(p)) return "Tip";
   if (isSubscriptionPurchase(p)) return "Membership";
   const t = (p.orderType || "").trim().toLowerCase();
   if (t === "post_unlock") return "Feed unlock";
+  if (t === "live_stream_ticket") return "Live stream";
   return "Product";
 }
 
 function creatorPurchaseStatusLine(p: Purchase): string {
   if (isTipPurchase(p)) return "Tip received";
   if (isSubscriptionPurchase(p)) return "Subscription payment";
+  if (isLiveStreamTicketPurchase(p)) {
+    if (p.deliveryStatus === "delivered" || p.scheduleStatus === "completed") return "Delivered";
+    if (p.scheduleStatus === "scheduled") return "Scheduled";
+    if (p.scheduleStatus === "cancelled") return "Cancelled";
+    if (p.scheduleStatus === "pending") return "Pending";
+  }
   if (p.deliveryStatus === "delivered") return "Delivered";
   if (p.scheduleStatus === "pending") return "Needs scheduling";
   if (p.scheduleStatus === "scheduled") return "Scheduled";
@@ -1466,7 +1477,10 @@ export const FanHubPurchases: React.FC = () => {
           filteredPurchases.map((p) => {
             const tipPurchase = isTipPurchase(p);
             const subscriptionPurchase = isSubscriptionPurchase(p);
+            const liveStreamTicketPurchase = isLiveStreamTicketPurchase(p);
             const nonDeliverablePurchase = tipPurchase || subscriptionPurchase;
+            /** Live stream tickets are fulfilled when the event ends — hide manual deliver / schedule controls. */
+            const skipManualFulfillment = nonDeliverablePurchase || liveStreamTicketPurchase;
             const isDelivered = p.deliveryStatus === "delivered";
             const isPending = p.scheduleStatus === "pending" && !isDelivered;
             const isScheduled = p.scheduleStatus === "scheduled";
@@ -1509,6 +1523,9 @@ export const FanHubPurchases: React.FC = () => {
                         Subscription payment
                       </span>
                     )}
+                    {liveStreamTicketPurchase && (
+                      <span className="purchases-status-badge purchases-status-scheduled">Live stream ticket</span>
+                    )}
                     {!nonDeliverablePurchase && (isScheduled || isDelivered) && (p.scheduledDate || p.deliveredAt) && (
                       <div className="purchases-scheduled-info">
                         {!isDelivered ? (
@@ -1543,7 +1560,7 @@ export const FanHubPurchases: React.FC = () => {
                   >
                     {hiddenPurchaseIds.has(p.id) ? "Unhide" : "Hide"}
                   </button>
-                  {!nonDeliverablePurchase && !isEditing && !isCompleted && (
+                  {!skipManualFulfillment && !isEditing && !isCompleted && (
                     <>
                       {isScheduled && (
                         <>
@@ -1597,7 +1614,7 @@ export const FanHubPurchases: React.FC = () => {
                       )}
                     </>
                   )}
-                  {!nonDeliverablePurchase && !isEditing && (
+                  {!skipManualFulfillment && !isEditing && (
                     <button
                       type="button"
                       className="purchases-btn purchases-btn-primary"

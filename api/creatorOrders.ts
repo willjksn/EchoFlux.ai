@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import type { QueryDocumentSnapshot } from "firebase-admin/firestore";
+import type { Firestore, QueryDocumentSnapshot } from "firebase-admin/firestore";
 import { getAdminDb } from "./_firebaseAdmin.js";
 import { verifyAuth } from "./verifyAuth.js";
 
@@ -24,6 +24,8 @@ export type CreatorOrder = {
   deliveryUrl?: string | null;
   deliveredAt?: string | null;
   deliveredBy?: string | null;
+  /** Live stream ticket checkout metadata (`orders.streamId`). */
+  streamId?: string | null;
 };
 
 function hasPlatformAdminAccess(userData: Record<string, unknown> | undefined): boolean {
@@ -136,6 +138,7 @@ function mapDocToOrder(docSnap: QueryDocumentSnapshot): CreatorOrder {
     if (direct > 0) return direct;
     return toLegacyAmountCents(d.amount);
   })();
+  const streamIdRaw = typeof d.streamId === "string" ? d.streamId.trim() : "";
   return {
     id: docSnap.id,
     creatorId: (d.creatorId as string) ?? "",
@@ -164,7 +167,101 @@ function mapDocToOrder(docSnap: QueryDocumentSnapshot): CreatorOrder {
     deliveryUrl: typeof d.deliveryUrl === "string" ? d.deliveryUrl : null,
     deliveredAt: typeof d.deliveredAt === "string" ? d.deliveredAt : null,
     deliveredBy: typeof d.deliveredBy === "string" ? d.deliveredBy : null,
+    streamId: streamIdRaw || null,
   };
+}
+
+/** UTC date/time parts for purchases UI — mirrors api/_syncLiveStreamTicketOrders.ts */
+function schedulePartsFromIso(scheduledStart: string): { date: string; time: string } | null {
+  const t = Date.parse(scheduledStart);
+  if (!Number.isFinite(t)) return null;
+  const d = new Date(t);
+  const y = d.getUTCFullYear();
+  const m = String(d.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(d.getUTCDate()).padStart(2, "0");
+  const hh = String(d.getUTCHours()).padStart(2, "0");
+  const mm = String(d.getUTCMinutes()).padStart(2, "0");
+  return { date: `${y}-${m}-${day}`, time: `${hh}:${mm}` };
+}
+
+/**
+ * Align `live_stream_ticket` rows with `creators/{creatorId}/liveStreams/{streamId}` so Purchases
+ * matches fan-facing state when `syncLiveStreamTicketOrdersForStream` did not run or the stream doc was removed.
+ */
+async function enrichLiveStreamTicketOrdersFromStreamDocs(
+  db: Firestore,
+  creatorId: string,
+  orderRows: Array<CreatorOrder & { __createdAtMs: number }>,
+): Promise<void> {
+  const streamIds = new Set<string>();
+  for (const row of orderRows) {
+    if (row.type !== "live_stream_ticket") continue;
+    const sid = typeof row.streamId === "string" ? row.streamId.trim() : "";
+    if (sid) streamIds.add(sid);
+  }
+  if (streamIds.size === 0) return;
+
+  const ids = [...streamIds];
+  const statusByStreamId = new Map<string, string>();
+  const scheduledStartByStreamId = new Map<string, string>();
+
+  for (let i = 0; i < ids.length; i += 100) {
+    const chunk = ids.slice(i, i + 100);
+    const refs = chunk.map((sid) => db.collection("creators").doc(creatorId).collection("liveStreams").doc(sid));
+    const snaps = await db.getAll(...refs);
+    for (let j = 0; j < chunk.length; j++) {
+      const sid = chunk[j];
+      const snap = snaps[j];
+      if (!snap.exists) {
+        statusByStreamId.set(sid, "__missing__");
+        continue;
+      }
+      const s = snap.data() as Record<string, unknown>;
+      statusByStreamId.set(sid, String(s.status ?? "scheduled").trim().toLowerCase());
+      const ss = typeof s.scheduledStart === "string" ? s.scheduledStart.trim() : "";
+      if (ss) scheduledStartByStreamId.set(sid, ss);
+    }
+  }
+
+  for (const row of orderRows) {
+    if (row.type !== "live_stream_ticket") continue;
+    const sid = typeof row.streamId === "string" ? row.streamId.trim() : "";
+    if (!sid) continue;
+    const st = statusByStreamId.get(sid);
+    if (!st) continue;
+
+    const alreadyDone =
+      row.scheduleStatus === "completed" ||
+      row.scheduleStatus === "cancelled" ||
+      row.deliveryStatus === "delivered";
+
+    if (st === "ended" || st === "__missing__") {
+      if (row.scheduleStatus === "cancelled") continue;
+      if (row.deliveryStatus !== "delivered") row.deliveryStatus = "delivered";
+      if (row.scheduleStatus !== "completed") row.scheduleStatus = "completed";
+      if (!row.deliveredAt) row.deliveredAt = row.createdAt;
+      const startIso = scheduledStartByStreamId.get(sid);
+      const parts = startIso ? schedulePartsFromIso(startIso) : null;
+      if (parts) {
+        if (!row.scheduledDate) row.scheduledDate = parts.date;
+        if (!row.scheduledTime) row.scheduledTime = parts.time;
+      }
+      continue;
+    }
+
+    if (st === "cancelled") {
+      if (row.scheduleStatus !== "cancelled") row.scheduleStatus = "cancelled";
+      continue;
+    }
+
+    const startIso = scheduledStartByStreamId.get(sid);
+    const parts = startIso ? schedulePartsFromIso(startIso) : null;
+    if (parts && (st === "scheduled" || st === "live" || st === "draft") && !alreadyDone) {
+      row.scheduleStatus = "scheduled";
+      row.scheduledDate = parts.date;
+      row.scheduledTime = parts.time;
+    }
+  }
 }
 
 /**
@@ -234,6 +331,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         __createdAtMs: createdAtToMs(row.createdAt),
       };
     });
+
+    try {
+      await enrichLiveStreamTicketOrdersFromStreamDocs(db, creatorIdToQuery, orderRows);
+    } catch (enrichErr: unknown) {
+      console.warn(
+        "creatorOrders: live stream ticket enrich skipped:",
+        enrichErr instanceof Error ? enrichErr.message : enrichErr,
+      );
+    }
 
     const earliestPurchaseAtByFanId: Record<string, string> = {};
     const earliestPurchaseAtByFanEmail: Record<string, string> = {};

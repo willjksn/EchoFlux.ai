@@ -1701,6 +1701,18 @@ export const FanMemberFeed: React.FC<FanMemberFeedProps> = ({
     });
   }, []);
 
+  useEffect(() => {
+    if (!liveStreamWatch) return;
+    const st = posts
+      .find((p) => p.liveStreamPromo?.streamId === liveStreamWatch.streamId)
+      ?.liveStreamPromo?.streamStatus?.trim()
+      .toLowerCase();
+    if (st === "ended" || st === "cancelled") {
+      setLiveStreamWatch(null);
+      showToast?.("The live stream has ended.", "info");
+    }
+  }, [posts, liveStreamWatch, showToast]);
+
   const feedBucketsRef = useRef<Record<MemberFeedBucketKey, Map<string, Post>>>({
     fanPosts: new Map(),
     creatorPosts: new Map(),
@@ -2457,6 +2469,19 @@ export const FanMemberSaved: React.FC<FanMemberSavedProps> = ({
       title: promo.title?.trim() || "Live stream",
     });
   }, []);
+
+  useEffect(() => {
+    if (!liveStreamWatchSaved) return;
+    const st = posts
+      .find((p) => p.liveStreamPromo?.streamId === liveStreamWatchSaved.streamId)
+      ?.liveStreamPromo?.streamStatus?.trim()
+      .toLowerCase();
+    if (st === "ended" || st === "cancelled") {
+      setLiveStreamWatchSaved(null);
+      showToastSaved?.("The live stream has ended.", "info");
+    }
+  }, [posts, liveStreamWatchSaved, showToastSaved]);
+
   const handleLiveStreamTicketSaved = useCallback(
     async (streamId: string) => {
       if (!creatorId || liveStreamCheckoutStreamIdSaved) return;

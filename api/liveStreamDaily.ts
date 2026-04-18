@@ -12,6 +12,8 @@ import {
   isDailyConfigured,
 } from "./_dailyco.js";
 import { userMayUseLiveStreaming } from "./_liveStreamAccess.js";
+import { fanHubListLabelFromInput, safeUsernameForHandle } from "../src/lib/fanHubDisplay.js";
+import { syncLiveStreamTicketOrdersForStream } from "./_syncLiveStreamTicketOrders.js";
 
 const TOKEN_DURATION_MIN = 360;
 
@@ -29,6 +31,38 @@ async function isPaidSubscriber(db: Firestore, creatorId: string, fanId: string)
     .get();
   if (!snap.exists) return false;
   return isPaidLikeStatus(snap.data()?.status);
+}
+
+/**
+ * Denormalized `liveStreamPromo.streamStatus` on feed posts must match `liveStreams.status`
+ * so fans see Watch live / On air toggle off when the host ends the broadcast.
+ * Updates every matching doc (handles missing `promoPostId` on the stream doc or failed one-off syncs).
+ */
+async function syncLiveStreamPromoStatusOnPostCollections(
+  db: Firestore,
+  creatorId: string,
+  streamId: string,
+  streamStatus: "live" | "ended"
+): Promise<void> {
+  const paths: ReadonlyArray<readonly [string, string, string]> = [
+    ["creators", creatorId, "fanPosts"],
+    ["creators", creatorId, "posts"],
+    ["users", creatorId, "posts"],
+  ];
+  const patch: Record<string, unknown> = {
+    "liveStreamPromo.streamStatus": streamStatus,
+    updatedAt: FieldValue.serverTimestamp(),
+  };
+  for (const segs of paths) {
+    try {
+      const col = db.collection(segs[0]).doc(segs[1]).collection(segs[2]);
+      const snap = await col.where("liveStreamPromo.streamId", "==", streamId).limit(25).get();
+      if (snap.empty) continue;
+      await Promise.all(snap.docs.map((d) => d.ref.update(patch)));
+    } catch (e) {
+      console.warn("liveStreamDaily: syncLiveStreamPromoStatusOnPostCollections", segs.join("/"), e);
+    }
+  }
 }
 
 async function fanCanWatchStream(
@@ -50,11 +84,51 @@ async function fanCanWatchStream(
   return false;
 }
 
-function displayNameFromDecoded(decoded: { name?: string; email?: string }, uid: string): string {
+/**
+ * Daily.co `user_name`: prefer EchoFlux @handle / username from Firestore, not Auth full name.
+ * Host: users.username → creators.handle → then display name / JWT.
+ * Fan: users.username → then same fallbacks as Fan Hub lists (display name, etc.).
+ */
+async function dailyParticipantDisplayName(
+  db: Firestore,
+  uid: string,
+  decoded: { name?: string; email?: string },
+  isHost: boolean
+): Promise<string> {
+  const userSnap = await db.collection("users").doc(uid).get();
+  const u = userSnap.exists
+    ? (userSnap.data() as { username?: string; displayName?: string; name?: string; email?: string })
+    : {};
+  const email =
+    (typeof u.email === "string" && u.email.trim() ? u.email.trim() : "") ||
+    (typeof decoded.email === "string" ? decoded.email.trim() : "") ||
+    undefined;
+
+  const handle = safeUsernameForHandle(typeof u.username === "string" ? u.username : null);
+  if (handle) return `@${handle}`.slice(0, 80);
+
+  if (isHost) {
+    const creatorSnap = await db.collection("creators").doc(uid).get();
+    const c = creatorSnap.exists ? (creatorSnap.data() as { handle?: string }) : undefined;
+    const raw = typeof c?.handle === "string" ? c.handle.replace(/^@/, "").trim().toLowerCase() : "";
+    if (raw) return `@${raw}`.slice(0, 80);
+  }
+
+  const rest = fanHubListLabelFromInput(
+    {
+      username: typeof u.username === "string" ? u.username : null,
+      displayName: typeof u.displayName === "string" ? u.displayName : null,
+      email: email ?? null,
+      name: typeof u.name === "string" ? u.name : null,
+    },
+    { fallback: "" }
+  );
+  if (rest && rest !== "Member") return rest.slice(0, 80);
+
   const n = typeof decoded.name === "string" ? decoded.name.trim() : "";
   if (n) return n.slice(0, 80);
-  const e = typeof decoded.email === "string" ? decoded.email.trim() : "";
-  if (e) return e.split("@")[0]!.slice(0, 80);
+  const e = email || "";
+  if (e.includes("@")) return e.split("@")[0]!.slice(0, 80);
   return `guest-${uid.slice(0, 8)}`;
 }
 
@@ -154,20 +228,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           updatedAt: FieldValue.serverTimestamp(),
         });
 
-        const promoPostId = typeof sdata.promoPostId === "string" ? sdata.promoPostId.trim() : "";
-        if (promoPostId) {
-          await db
-            .collection("creators")
-            .doc(uid)
-            .collection("fanPosts")
-            .doc(promoPostId)
-            .update({
-              "liveStreamPromo.streamStatus": "live",
-              updatedAt: FieldValue.serverTimestamp(),
-            })
-            .catch(() => {
-              /* promo doc may be missing or field path unsupported in older rules — non-fatal */
-            });
+        await syncLiveStreamPromoStatusOnPostCollections(db, uid, streamId, "live");
+
+        try {
+          await syncLiveStreamTicketOrdersForStream(db, uid, streamId);
+        } catch (e) {
+          console.warn("syncLiveStreamTicketOrdersForStream (goLive):", e);
         }
 
         return res.status(200).json({ ok: true, roomUrl, roomName });
@@ -178,18 +244,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         status: "ended",
         updatedAt: FieldValue.serverTimestamp(),
       });
-      const promoPostId = typeof sdata.promoPostId === "string" ? sdata.promoPostId.trim() : "";
-      if (promoPostId) {
-        await db
-          .collection("creators")
-          .doc(uid)
-          .collection("fanPosts")
-          .doc(promoPostId)
-          .update({
-            "liveStreamPromo.streamStatus": "ended",
-            updatedAt: FieldValue.serverTimestamp(),
-          })
-          .catch(() => {});
+      await syncLiveStreamPromoStatusOnPostCollections(db, uid, streamId, "ended");
+      try {
+        await syncLiveStreamTicketOrdersForStream(db, uid, streamId);
+      } catch (e) {
+        console.warn("syncLiveStreamTicketOrdersForStream (endLive):", e);
       }
       return res.status(200).json({ ok: true });
     }
@@ -253,7 +312,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         }
       }
 
-      const userName = displayNameFromDecoded(decoded, uid);
+      const userName = await dailyParticipantDisplayName(db, uid, decoded, isHost);
       const role = isHost ? "presenter" : "viewer";
       const token = await createLiveStreamMeetingToken(roomName, uid, userName, role, TOKEN_DURATION_MIN);
 

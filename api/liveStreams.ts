@@ -5,6 +5,7 @@ import { verifyAuth } from "./verifyAuth.js";
 import { getAdminDb } from "./_firebaseAdmin.js";
 import type { LiveStreamEventStatus } from "../types";
 import { userMayUseLiveStreaming } from "./_liveStreamAccess.js";
+import { syncLiveStreamTicketOrdersForStream } from "./_syncLiveStreamTicketOrders.js";
 
 /**
  * Creator live stream events (schedule + ticket metadata).
@@ -102,6 +103,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       };
 
       const ref = await col.add(doc);
+      try {
+        await syncLiveStreamTicketOrdersForStream(db, creatorId, ref.id);
+      } catch (e) {
+        console.warn("syncLiveStreamTicketOrdersForStream (liveStreams create):", e);
+      }
       return res.status(201).json({ streamId: ref.id, ok: true });
     }
 
@@ -141,6 +147,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
 
       await ref.update(patch);
+      try {
+        await syncLiveStreamTicketOrdersForStream(db, creatorId, streamId);
+      } catch (e) {
+        console.warn("syncLiveStreamTicketOrdersForStream (liveStreams update):", e);
+      }
       return res.status(200).json({ ok: true });
     }
 

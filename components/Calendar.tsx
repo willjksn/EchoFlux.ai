@@ -27,6 +27,20 @@ const platformIcons: Record<Platform, React.ReactNode> = {
 
 const daysOfWeek = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
+/** Normalize `liveStreams.scheduledStart` (ISO string or Firestore Timestamp) for calendar sorting. */
+function isoFromLiveStreamScheduledStart(v: unknown): string | null {
+    if (v == null) return null;
+    if (typeof v === 'string' && v.trim()) {
+        const t = Date.parse(v.trim());
+        return Number.isFinite(t) ? new Date(t).toISOString() : null;
+    }
+    if (typeof v === 'object' && v !== null && 'toDate' in v && typeof (v as { toDate: () => Date }).toDate === 'function') {
+        const d = (v as { toDate: () => Date }).toDate();
+        return Number.isFinite(d.getTime()) ? d.toISOString() : null;
+    }
+    return null;
+}
+
 export const Calendar: React.FC = () => {
     const { calendarEvents, setActivePage, posts, user, showToast, updatePost, addCalendarEvent, deletePost, socialAccounts } = useAppContext();
     const [currentDate, setCurrentDate] = useState(new Date());
@@ -68,6 +82,18 @@ export const Calendar: React.FC = () => {
         deliveryUrl?: string | null;
         deliveryText?: string | null;
       }>
+    >([]);
+
+    const [liveStreamScheduleEvents, setLiveStreamScheduleEvents] = useState<
+        Array<{
+            streamId: string;
+            title: string;
+            dateISO: string;
+            status: string;
+            ticketCents: number;
+            creatorTestOnly: boolean;
+            description?: string;
+        }>
     >([]);
 
     // Calendar is Pro+ (or Admin). Free plan should not access any calendar features.
@@ -179,6 +205,58 @@ export const Calendar: React.FC = () => {
         return () => unsubscribe();
     }, [user?.id]);
 
+    // Fan Hub scheduled / live broadcasts (`creators/{uid}/liveStreams`) — updates when scheduled or rescheduled.
+    useEffect(() => {
+        if (!user?.id) {
+            setLiveStreamScheduleEvents([]);
+            return;
+        }
+        const colRef = collection(db, 'creators', user.id, 'liveStreams');
+        const unsubscribe = onSnapshot(
+            colRef,
+            (snapshot) => {
+                const next: Array<{
+                    streamId: string;
+                    title: string;
+                    dateISO: string;
+                    status: string;
+                    ticketCents: number;
+                    creatorTestOnly: boolean;
+                    description?: string;
+                }> = [];
+                snapshot.forEach((docSnap) => {
+                    const d = docSnap.data() as Record<string, unknown>;
+                    const status = typeof d.status === 'string' ? d.status.trim().toLowerCase() : '';
+                    if (status === 'ended' || status === 'cancelled') return;
+                    const dateISO = isoFromLiveStreamScheduledStart(d.scheduledStart);
+                    if (!dateISO) return;
+                    const titleRaw = typeof d.title === 'string' ? d.title.trim() : '';
+                    const title = titleRaw || 'Live stream';
+                    const ticketCents =
+                        typeof d.ticketCents === 'number' && Number.isFinite(d.ticketCents)
+                            ? Math.max(0, Math.round(d.ticketCents))
+                            : 0;
+                    const desc =
+                        typeof d.description === 'string' && d.description.trim() ? d.description.trim() : undefined;
+                    next.push({
+                        streamId: docSnap.id,
+                        title,
+                        dateISO,
+                        status: status || 'scheduled',
+                        ticketCents,
+                        creatorTestOnly: d.creatorTestOnly === true,
+                        ...(desc ? { description: desc } : {}),
+                    });
+                });
+                setLiveStreamScheduleEvents(next);
+            },
+            (error) => {
+                console.error('Error loading Fan Hub live stream schedule:', error);
+            }
+        );
+        return () => unsubscribe();
+    }, [user?.id]);
+
     // Calendar should ONLY show posts with scheduledDate (Scheduled or Published status)
     // Derive events directly from Posts, not from separate calendar_events collection
     // Also include reminders
@@ -230,20 +308,59 @@ export const Calendar: React.FC = () => {
                 }
             }
         }
+
+        const purchaseCalendarEvents: CalendarEvent[] = purchaseEvents.map((p) => ({
+            id: `purchase-${p.id}`,
+            title: p.title,
+            date: p.date,
+            type: p.deliveryType === 'video' ? 'Reel' : 'Post',
+            platform: 'My Page' as Platform,
+            status: 'Scheduled',
+            thumbnail: (p.deliveryType === 'video' || p.deliveryType === 'image') && p.deliveryUrl ? p.deliveryUrl : undefined,
+            reminderType: 'treat',
+            purchaseEvent: true,
+            purchaseId: p.treatPurchaseId,
+            purchaseStatus: p.treatStatus || 'scheduled',
+            fanName: p.fanName,
+            fanEmail: p.fanEmail,
+            deliveryType: p.deliveryType || null,
+            deliveryUrl: p.deliveryUrl || null,
+            deliveryText: p.deliveryText || null,
+        } as any));
+
+        const liveStreamCalendarEvents: CalendarEvent[] = liveStreamScheduleEvents.map((s) => {
+            const prefix = s.creatorTestOnly ? '🧪 ' : '';
+            return {
+                id: `livestream-${s.streamId}`,
+                title: `${prefix}${s.title}`,
+                date: s.dateISO,
+                type: 'Post',
+                platform: 'My Page' as Platform,
+                status: s.status === 'live' ? ('Published' as const) : ('Scheduled' as const),
+                liveStreamEvent: true,
+                liveStreamId: s.streamId,
+                liveStreamStatus: s.status,
+                liveStreamTicketCents: s.ticketCents,
+                liveStreamTestOnly: s.creatorTestOnly,
+                ...(s.description ? { liveStreamDescription: s.description } : {}),
+            } as any;
+        });
         
         if (!posts || !Array.isArray(posts)) {
-            // If no posts, still return reminders
-            return reminders.map(reminder => ({
+            const reminderEvents: CalendarEvent[] = reminders.map(reminder => ({
                 id: `reminder-${reminder.id}`,
                 title: reminder.title,
                 date: reminder.date,
                 type: 'Reminder' as any,
-                platform: 'Instagram' as Platform, // Placeholder, won't be used
+                platform: 'Instagram' as Platform,
                 status: 'Scheduled' as const,
                 reminderType: reminder.reminderType,
                 reminderDescription: reminder.description,
-                thumbnail: undefined, // Reminders don't have thumbnails
-            }));
+                thumbnail: undefined,
+            } as any));
+            return [...reminderEvents, ...purchaseCalendarEvents, ...liveStreamCalendarEvents].sort(
+                (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
+            );
         }
         
         // Get all posts that have scheduledDate (Scheduled, Published, or Draft)
@@ -441,28 +558,9 @@ export const Calendar: React.FC = () => {
             reminderDescription: reminder.description,
             thumbnail: undefined, // Reminders don't have thumbnails
         } as any));
-
-        const purchaseCalendarEvents: CalendarEvent[] = purchaseEvents.map((p) => ({
-            id: `purchase-${p.id}`,
-            title: p.title,
-            date: p.date,
-            type: p.deliveryType === 'video' ? 'Reel' : 'Post',
-            platform: 'My Page' as Platform,
-            status: 'Scheduled',
-            thumbnail: (p.deliveryType === 'video' || p.deliveryType === 'image') && p.deliveryUrl ? p.deliveryUrl : undefined,
-            reminderType: 'treat',
-            purchaseEvent: true,
-            purchaseId: p.treatPurchaseId,
-            purchaseStatus: p.treatStatus || 'scheduled',
-            fanName: p.fanName,
-            fanEmail: p.fanEmail,
-            deliveryType: p.deliveryType || null,
-            deliveryUrl: p.deliveryUrl || null,
-            deliveryText: p.deliveryText || null,
-        } as any));
         
         // Combine and sort by date
-        const allEvents = [...filteredPostEvents, ...reminderEvents, ...purchaseCalendarEvents].sort((a, b) => 
+        const allEvents = [...filteredPostEvents, ...reminderEvents, ...purchaseCalendarEvents, ...liveStreamCalendarEvents].sort((a, b) => 
             new Date(a.date).getTime() - new Date(b.date).getTime()
         );
         
@@ -496,7 +594,7 @@ export const Calendar: React.FC = () => {
         }
         
         return allEvents;
-    }, [calendarEvents, posts, reminders, purchaseEvents, currentDate]);
+    }, [calendarEvents, posts, reminders, purchaseEvents, liveStreamScheduleEvents, currentDate]);
 
     // Auto-select event from dashboard navigation
     useEffect(() => {
@@ -640,7 +738,9 @@ export const Calendar: React.FC = () => {
                             
                             // Check if this is a purchase event or regular reminder.
                             const isPurchase = evt.id.startsWith('purchase-') || !!(evt as any).purchaseEvent;
-                            const isReminder = !isPurchase && (evt.id.startsWith('reminder-') || (evt as any).reminderType);
+                            const isLiveStream = evt.id.startsWith('livestream-') || !!(evt as any).liveStreamEvent;
+                            const isReminder =
+                                !isPurchase && !isLiveStream && (evt.id.startsWith('reminder-') || (evt as any).reminderType);
                             
                             const statusColors: Record<'Published' | 'Scheduled' | 'Draft' | 'In Review', {
                                 bg: string;
@@ -699,6 +799,22 @@ export const Calendar: React.FC = () => {
                                         dot: 'bg-purple-500 dark:bg-purple-400',
                                         text: 'text-purple-700 dark:text-purple-300',
                                     };
+                            } else if (isLiveStream) {
+                                const st = String((evt as any).liveStreamStatus || '').toLowerCase();
+                                const isLive = st === 'live';
+                                colors = isLive
+                                    ? {
+                                          bg: 'bg-gradient-to-r from-rose-50 to-red-50 dark:from-rose-900/30 dark:to-red-900/30',
+                                          border: 'border-l-4 border-rose-500 dark:border-rose-400',
+                                          dot: 'bg-rose-500 dark:bg-rose-400',
+                                          text: 'text-rose-800 dark:text-rose-200',
+                                      }
+                                    : {
+                                          bg: 'bg-gradient-to-r from-sky-50 to-cyan-50 dark:from-sky-900/30 dark:to-cyan-900/30',
+                                          border: 'border-l-4 border-sky-500 dark:border-sky-400',
+                                          dot: 'bg-sky-500 dark:bg-sky-400',
+                                          text: 'text-sky-800 dark:text-sky-200',
+                                      };
                             } else {
                                 colors = statusColors[evt.status] || statusColors.Draft;
                             }
@@ -750,6 +866,12 @@ export const Calendar: React.FC = () => {
                                     return;
                                 }
                                 if (isPurchase) {
+                                    setIsEditing(false);
+                                    setIsRegenerating(false);
+                                    setSelectedEvent({ event: evt, post: null });
+                                    return;
+                                }
+                                if (isLiveStream) {
                                     setIsEditing(false);
                                     setIsRegenerating(false);
                                     setSelectedEvent({ event: evt, post: null });
@@ -907,6 +1029,8 @@ export const Calendar: React.FC = () => {
                                             <span className="text-sm sm:text-xs">
                                                 {(evt as any).reminderType === 'shoot' ? '🎬' : '📤'}
                                             </span>
+                                        ) : isLiveStream ? (
+                                            <span className="text-sm sm:text-xs">📡</span>
                                         ) : isPurchase ? (
                                             <span className="text-sm sm:text-xs">
                                                 {(evt as any).deliveryType === 'video' ? '🎬' : (evt as any).deliveryType === 'audio' ? '🎧' : (evt as any).deliveryType === 'image' ? '🖼️' : '🎁'}
@@ -928,7 +1052,11 @@ export const Calendar: React.FC = () => {
                                                     ? String((evt as any).purchaseStatus || 'scheduled') === 'delivered'
                                                         ? 'DELIVERED PURCHASE'
                                                         : 'SCHEDULED PURCHASE'
-                                                    : evt.type}
+                                                    : isLiveStream
+                                                      ? String((evt as any).liveStreamStatus || '').toLowerCase() === 'live'
+                                                          ? 'LIVE STREAM'
+                                                          : 'SCHEDULED LIVE'
+                                                      : evt.type}
                                             </span>
                                         </div>
                                     )}
@@ -1422,7 +1550,10 @@ export const Calendar: React.FC = () => {
 
     const selectedIsPurchase = !!selectedEvent && (selectedEvent.event.id.startsWith('purchase-') || !!(selectedEvent.event as any).purchaseEvent);
     const selectedPurchaseStatus = selectedIsPurchase ? String((selectedEvent?.event as any)?.purchaseStatus || 'scheduled') : 'scheduled';
-
+    const selectedIsLiveStream =
+        !!selectedEvent &&
+        (selectedEvent.event.id.startsWith('livestream-') || !!(selectedEvent.event as any).liveStreamEvent);
+    const selectedSkipsPostEditor = selectedIsPurchase || selectedIsLiveStream;
 
     return (
         <div className="p-6 bg-gray-50 dark:bg-gray-900 min-h-full">
@@ -1437,6 +1568,8 @@ export const Calendar: React.FC = () => {
                                     <div className="p-2 bg-primary-100 dark:bg-primary-900/30 rounded-lg">
                                         {selectedIsPurchase ? (
                                             <span className="text-lg">🎁</span>
+                                        ) : selectedIsLiveStream ? (
+                                            <span className="text-lg">📡</span>
                                         ) : (
                                             platformIcons[selectedEvent.event.platform]
                                         )}
@@ -1445,17 +1578,25 @@ export const Calendar: React.FC = () => {
                                         <h3 className="text-xl font-bold text-gray-900 dark:text-white">
                                             {selectedIsPurchase
                                                 ? (selectedPurchaseStatus === 'delivered' ? 'Delivered Purchase' : 'Scheduled Purchase')
-                                                : (selectedEvent.post?.status === 'Published' ? 'Published Post Preview' : 'Scheduled Post Preview')}
+                                                : selectedIsLiveStream
+                                                  ? String((selectedEvent.event as any).liveStreamStatus || '').toLowerCase() === 'live'
+                                                      ? 'Live stream (on air)'
+                                                      : 'Fan Hub live stream'
+                                                  : selectedEvent.post?.status === 'Published'
+                                                    ? 'Published Post Preview'
+                                                    : 'Scheduled Post Preview'}
                                         </h3>
                                         <p className="text-sm text-gray-500 dark:text-gray-400">
                                             {selectedIsPurchase
                                                 ? `Fan Hub • ${((selectedEvent.event as any).deliveryType || 'purchase').toString()}`
-                                                : `${selectedEvent.event.platform} • ${selectedEvent.event.type}`}
+                                                : selectedIsLiveStream
+                                                  ? `My Page • ${String((selectedEvent.event as any).liveStreamStatus || 'scheduled')}`
+                                                  : `${selectedEvent.event.platform} • ${selectedEvent.event.type}`}
                                         </p>
                                     </div>
                                 </div>
                                 <div className="flex items-center gap-2">
-                                    {!isEditing && !selectedIsPurchase && (
+                                    {!isEditing && !selectedSkipsPostEditor && (
                                         <>
                                             <button
                                                 onClick={() => {
@@ -1576,6 +1717,59 @@ export const Calendar: React.FC = () => {
                                         </span>
                                     </div>
                                 </div>
+                            ) : selectedIsLiveStream ? (
+                                <div className="mb-4 p-4 rounded-lg border bg-sky-50 dark:bg-sky-900/20 border-sky-200 dark:border-sky-800">
+                                    <div className="flex flex-col gap-2">
+                                        <div className="flex flex-wrap items-center gap-2">
+                                            <span className="text-sm font-semibold text-sky-800 dark:text-sky-200">
+                                                {String((selectedEvent.event as any).liveStreamStatus || '').toLowerCase() === 'live'
+                                                    ? 'Started (scheduled start was):'
+                                                    : 'Goes live:'}
+                                            </span>
+                                            <span className="text-sm text-sky-700 dark:text-sky-300">
+                                                {new Date(selectedEvent.event.date).toLocaleString([], {
+                                                    weekday: 'long',
+                                                    year: 'numeric',
+                                                    month: 'long',
+                                                    day: 'numeric',
+                                                    hour: 'numeric',
+                                                    minute: '2-digit',
+                                                    hour12: true,
+                                                })}
+                                            </span>
+                                        </div>
+                                        <p className="text-xs text-sky-800/90 dark:text-sky-200/90">
+                                            Status:{' '}
+                                            <span className="font-medium">
+                                                {String((selectedEvent.event as any).liveStreamStatus || 'scheduled')}
+                                            </span>
+                                            {typeof (selectedEvent.event as any).liveStreamTicketCents === 'number' &&
+                                            (selectedEvent.event as any).liveStreamTicketCents > 0 ? (
+                                                <span className="ml-2">
+                                                    · Ticket: $
+                                                    {(
+                                                        (selectedEvent.event as any).liveStreamTicketCents / 100
+                                                    ).toFixed(2)}
+                                                </span>
+                                            ) : null}
+                                        </p>
+                                        {(selectedEvent.event as any).liveStreamTestOnly ? (
+                                            <p className="text-xs text-amber-800 dark:text-amber-200">
+                                                Test-only stream (hidden from fans until you turn that off in Fan Hub).
+                                            </p>
+                                        ) : null}
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setSelectedEvent(null);
+                                                setActivePage('fanHub');
+                                            }}
+                                            className="mt-1 self-start px-3 py-1.5 text-sm font-medium rounded-lg bg-sky-600 text-white hover:bg-sky-700 dark:bg-sky-500 dark:hover:bg-sky-400"
+                                        >
+                                            Open Fan Hub
+                                        </button>
+                                    </div>
+                                </div>
                             ) : selectedEvent.post?.status === 'Published' ? (
                                 <div className="mb-4 p-4 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
                                     <div className="flex items-center gap-2">
@@ -1640,7 +1834,7 @@ export const Calendar: React.FC = () => {
                                 </div>
                             )}
 
-                            {!isEditing && !selectedIsPurchase && selectedEvent.post?.status === 'Scheduled' && (
+                            {!isEditing && !selectedSkipsPostEditor && selectedEvent.post?.status === 'Scheduled' && (
                                 <div className="mb-4 p-3 rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20">
                                     <label className="flex items-start gap-3 cursor-pointer">
                                         <input
@@ -1717,13 +1911,25 @@ export const Calendar: React.FC = () => {
                             )}
 
                             {/* Caption */}
-                            {(selectedEvent.post?.content || (selectedIsPurchase && (selectedEvent.event as any).deliveryText)) && (
+                            {(selectedEvent.post?.content ||
+                                (selectedIsPurchase && (selectedEvent.event as any).deliveryText) ||
+                                (selectedIsLiveStream &&
+                                    typeof (selectedEvent.event as any).liveStreamDescription === 'string' &&
+                                    (selectedEvent.event as any).liveStreamDescription.trim())) && (
                                 <div className="mb-4">
                                     <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
-                                        {selectedIsPurchase ? 'Delivery note:' : 'Caption:'}
+                                        {selectedIsPurchase
+                                            ? 'Delivery note:'
+                                            : selectedIsLiveStream
+                                              ? 'Description:'
+                                              : 'Caption:'}
                                     </h4>
                                     <p className="text-gray-900 dark:text-white whitespace-pre-wrap bg-gray-50 dark:bg-gray-700/50 p-4 rounded-lg">
-                                        {(selectedIsPurchase ? (selectedEvent.event as any).deliveryText : selectedEvent.post?.content) || ''}
+                                        {(selectedIsPurchase
+                                            ? (selectedEvent.event as any).deliveryText
+                                            : selectedIsLiveStream
+                                              ? (selectedEvent.event as any).liveStreamDescription
+                                              : selectedEvent.post?.content) || ''}
                                     </p>
                                 </div>
                             )}
@@ -1750,6 +1956,7 @@ export const Calendar: React.FC = () => {
                             )}
 
                             {/* Platforms - Display Only when not editing, Editable when editing */}
+                            {!selectedIsLiveStream ? (
                             <div className="mb-4">
                                 <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Platform:</h4>
                                 {isEditing ? (
@@ -1798,6 +2005,7 @@ export const Calendar: React.FC = () => {
                                     </div>
                                 )}
                             </div>
+                            ) : null}
 
                             {/* Regenerate Captions Section - Only in Edit Mode */}
                             {isEditing && (

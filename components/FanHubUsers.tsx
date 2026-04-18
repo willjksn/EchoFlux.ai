@@ -10,6 +10,7 @@ import {
 } from "../src/lib/fanHubDisplay";
 import { pickLatestMemberAccessEnd, formatRemainingAccessForFanRow } from "../src/lib/memberAccessEnd";
 import { authUidFromFanDocId, parseCompoundFanDocumentId } from "../src/lib/compoundFanDocId";
+import { buildCreatorImageUrlSet, fanAvatarUrlOrUndefined } from "../src/lib/fanAvatar";
 
 type UserRole = "admin" | "member" | "tipper" | "treat_buyer";
 
@@ -26,7 +27,7 @@ interface FanUser {
   /** Earliest known: fan subscribedAt / first order / users.signupDate — null if unknown */
   signupDate: Date | null;
   remainingAccess: "Active" | "Expired" | "Cancelled" | string;
-  /** All-time: fans.totalSpentCents baseline + sum of all orders (migrated Stormij orders keep old dates; this still counts) */
+  /** All-time spend: max(sum of paid orders in Hub, fans.totalSpentCents). Orders and fan doc both reflect webhooks — we do not add them together. */
   lifetimeSpendCents: number;
   lifetimeStorePurchasesCents: number;
   lifetimeTipsCents: number;
@@ -127,15 +128,6 @@ function getMonthYear(date: Date): string {
   return date.toLocaleDateString("en-US", { month: "long", year: "numeric" });
 }
 
-function getInitials(name: string): string {
-  return name
-    .split(" ")
-    .map((n) => n[0])
-    .join("")
-    .toUpperCase()
-    .slice(0, 2);
-}
-
 /** Plan / access pill: semantic colors (not creator accent) */
 function planStatusBadgeClass(label: string): string | null {
   const s = label.trim().toLowerCase();
@@ -182,6 +174,39 @@ function getAvatarColor(name: string): string {
   ];
   const index = name.charCodeAt(0) % colors.length;
   return colors[index];
+}
+
+/** Fan Hub user table / modal: member photo when safe, else initials (never creator leak — URLs filtered upstream). */
+function FanTableAvatar({
+  name,
+  avatarUrl,
+  sizeClass = "w-8 h-8",
+  textClass = "text-xs",
+}: {
+  name: string;
+  avatarUrl?: string;
+  sizeClass?: string;
+  textClass?: string;
+}) {
+  const [failed, setFailed] = useState(false);
+  const url = typeof avatarUrl === "string" && avatarUrl.trim() && !failed ? avatarUrl.trim() : "";
+  if (url) {
+    return (
+      <img
+        src={url}
+        alt=""
+        className={`${sizeClass} rounded-full object-cover shrink-0`}
+        onError={() => setFailed(true)}
+      />
+    );
+  }
+  return (
+    <div
+      className={`${sizeClass} shrink-0 rounded-full flex items-center justify-center text-white font-semibold ${textClass} ${getAvatarColor(name)}`}
+    >
+      {initialsFromFanLabel(name)}
+    </div>
+  );
 }
 
 export const FanHubUsers: React.FC = () => {
@@ -279,7 +304,10 @@ export const FanHubUsers: React.FC = () => {
         tips: number;
         unlocks: number;
         treats: number;
+        /** Sum of order amounts only (tips + unlocks + treats); not fans.totalSpentCents */
         total: number;
+        /** `creators/.../fans/{id}.totalSpentCents` — used when orders are missing or undercounted */
+        fanDocBaselineCents: number;
         mtdTips: number;
         mtdUnlocks: number;
         mtdTreats: number;
@@ -295,6 +323,20 @@ export const FanHubUsers: React.FC = () => {
         /** From users/{uid}.signupDate when fan doc has no timeline */
         profileSignupAt?: Date | null;
       }>();
+
+      let creatorImageUrls = new Set<string>();
+      try {
+        const [creatorUserSnap, creatorDocSnap] = await Promise.all([
+          getDoc(doc(db, "users", creatorId)),
+          getDoc(doc(db, "creators", creatorId)),
+        ]);
+        creatorImageUrls = buildCreatorImageUrlSet(
+          creatorUserSnap.exists() ? (creatorUserSnap.data() as Record<string, unknown>) : undefined,
+          creatorDocSnap.exists() ? (creatorDocSnap.data() as Record<string, unknown>) : undefined
+        );
+      } catch {
+        creatorImageUrls = new Set();
+      }
 
       // First, fetch from creators/{creatorId}/fans collection (Stripe subscribers and purchasers)
       // Note: Do not use orderBy("createdAt") here — Firestore omits docs missing that field, so migrated
@@ -359,10 +401,18 @@ export const FanHubUsers: React.FC = () => {
             mtdTips: 0,
             mtdUnlocks: 0,
             mtdTreats: 0,
-            total: data.totalSpentCents || 0,
+            total: 0,
+            fanDocBaselineCents:
+              typeof data.totalSpentCents === "number" && Number.isFinite(data.totalSpentCents)
+                ? Math.max(0, Math.round(data.totalSpentCents))
+                : 0,
             lastActive: firestoreDate(data.lastPaymentAt) ?? subscribedAt,
             firstOrder: subscribedAt,
-            avatarUrl: data.avatarUrl || undefined,
+            avatarUrl:
+              (typeof data.avatarUrl === "string" ? data.avatarUrl.trim() : "") ||
+              (typeof data.photoURL === "string" ? data.photoURL.trim() : "") ||
+              (typeof data.photoUrl === "string" ? data.photoUrl.trim() : "") ||
+              undefined,
             cancelAtPeriodEnd: parseCancelAtPeriodEndFromDoc(data as Record<string, unknown>),
             canceledAt: firestoreDate(data.canceledAt),
             subscriptionCurrentPeriodEnd,
@@ -395,6 +445,7 @@ export const FanHubUsers: React.FC = () => {
           mtdUnlocks: 0,
           mtdTreats: 0,
           total: 0,
+          fanDocBaselineCents: 0,
           lastActive: null,
           firstOrder: null,
           profileSignupAt: null as Date | null,
@@ -464,6 +515,7 @@ export const FanHubUsers: React.FC = () => {
               mtdUnlocks: 0,
               mtdTreats: 0,
               total: 0,
+              fanDocBaselineCents: 0,
               lastActive: subscribedAt,
               firstOrder: subscribedAt,
               cancelAtPeriodEnd: parseCancelAtPeriodEndFromDoc(data as Record<string, unknown>),
@@ -512,6 +564,7 @@ export const FanHubUsers: React.FC = () => {
               mtdUnlocks: 0,
               mtdTreats: 0,
               total: 0,
+              fanDocBaselineCents: 0,
               lastActive: createdAt,
               firstOrder: createdAt,
               profileSignupAt: createdAt,
@@ -540,6 +593,7 @@ export const FanHubUsers: React.FC = () => {
           base.mtdTips += o.mtdTips;
           base.mtdTreats += o.mtdTreats;
           base.mtdUnlocks += o.mtdUnlocks;
+          base.fanDocBaselineCents = Math.max(base.fanDocBaselineCents ?? 0, o.fanDocBaselineCents ?? 0);
           if (!base.email && o.email) base.email = o.email;
           if (!base.displayName && o.displayName) base.displayName = o.displayName;
           if (!base.username && o.username) base.username = o.username;
@@ -678,6 +732,7 @@ export const FanHubUsers: React.FC = () => {
               const userDocIds = Array.from(new Set([fanId, authUid].filter((x) => x.length > 0)));
               let u: Record<string, unknown> | null = null;
               for (const uid of userDocIds) {
+                if (uid === creatorId) continue;
                 const uSnap = await getDoc(doc(db, "users", uid));
                 if (uSnap.exists()) {
                   u = uSnap.data() as Record<string, unknown>;
@@ -714,11 +769,28 @@ export const FanHubUsers: React.FC = () => {
                   entry.profileSignupAt = userDocCreated;
                 }
               }
+              const uAv =
+                (typeof u.avatar === "string" && u.avatar.trim()) ||
+                (typeof u.photoURL === "string" && u.photoURL.trim()) ||
+                (typeof u.photoUrl === "string" && u.photoUrl.trim()) ||
+                "";
+              if (uAv) {
+                entry.avatarUrl = uAv;
+              }
             } catch {
               /* ignore */
             }
           })
         );
+      }
+
+      for (const row of userMap.values()) {
+        const uid = authUidFromFanDocId(row.id);
+        row.avatarUrl = fanAvatarUrlOrUndefined(row.avatarUrl ?? null, {
+          fanAuthUid: uid,
+          creatorId,
+          creatorImageUrls,
+        });
       }
 
       // Convert to FanUser array
@@ -771,6 +843,16 @@ export const FanHubUsers: React.FC = () => {
           remainingAccess = "Inactive";
         }
 
+        const mtdTips = data.mtdTips ?? 0;
+        const mtdTreats = data.mtdTreats ?? 0;
+        const mtdUnlocks = data.mtdUnlocks ?? 0;
+        const tips = data.tips ?? 0;
+        const treats = data.treats ?? 0;
+        const unlocks = data.unlocks ?? 0;
+        const tipsTreatsUnlocksSum = tips + treats + unlocks;
+        const baselineCents = data.fanDocBaselineCents ?? 0;
+        const lifetimeSpendCents = Math.max(tipsTreatsUnlocksSum, baselineCents);
+
         const stPlan = (data.subscriptionStatus || "").toLowerCase();
         /** Badge: treat as scheduled cancel if flag is set OR remaining-access copy implies it (handles stale client reads). */
         const cancelScheduled =
@@ -787,19 +869,9 @@ export const FanHubUsers: React.FC = () => {
           plan = "Cancelled";
         } else if (stPlan === "past_due") {
           plan = "Past Due";
-        } else if (data.total > 0) {
+        } else if (tipsTreatsUnlocksSum > 0 || baselineCents > 0) {
           plan = "Purchaser";
         }
-
-        const mtdTips = data.mtdTips ?? 0;
-        const mtdTreats = data.mtdTreats ?? 0;
-        const mtdUnlocks = data.mtdUnlocks ?? 0;
-        const tips = data.tips ?? 0;
-        const treats = data.treats ?? 0;
-        const unlocks = data.unlocks ?? 0;
-        const totalTracked = data.total ?? 0;
-        const lifetimeFromOrders = tips + treats + unlocks;
-        const lifetimeSpendCents = Math.max(totalTracked, lifetimeFromOrders);
         const signupDate =
           earlierDate(earlierDate(data.subscribedAt, data.firstOrder), data.profileSignupAt ?? null) ??
           data.subscribedAt ??
@@ -1292,9 +1364,7 @@ export const FanHubUsers: React.FC = () => {
     <tr className="hover:bg-gray-50 dark:hover:bg-gray-800/40 transition-colors">
       <td className="px-4 py-3">
         <div className="flex items-center gap-3">
-          <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-semibold ${getAvatarColor(fanUser.name)}`}>
-            {initialsFromFanLabel(fanUser.name)}
-          </div>
+          <FanTableAvatar name={fanUser.name} avatarUrl={fanUser.avatarUrl} />
           <div>
             <div className="flex items-center gap-2">
               <span className="font-medium text-gray-900 dark:text-white">{fanUser.name}</span>
@@ -1760,9 +1830,12 @@ export const FanHubUsers: React.FC = () => {
             <div className="p-5 space-y-6 max-h-[70vh] overflow-y-auto">
               {/* User Info */}
               <div className="flex items-center gap-4">
-                <div className={`w-14 h-14 rounded-full flex items-center justify-center text-white text-lg font-semibold ${getAvatarColor(selectedUser.name)}`}>
-                  {getInitials(selectedUser.name)}
-                </div>
+                <FanTableAvatar
+                  name={selectedUser.name}
+                  avatarUrl={selectedUser.avatarUrl}
+                  sizeClass="w-14 h-14"
+                  textClass="text-lg"
+                />
                 <div>
                   <h4 className="text-lg font-semibold text-gray-900 dark:text-white">{selectedUser.name}</h4>
                   <p className="text-sm text-gray-500 dark:text-gray-400">{selectedUser.email}</p>

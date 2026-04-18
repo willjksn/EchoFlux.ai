@@ -11,6 +11,7 @@ import {
 } from './_syncFanHubFanPreference.js';
 import { mergeGuestTreatPurchasesIntoUid } from './_mergeGuestFanPurchases.js';
 import { sendCreatorHubNotification } from './_fanNotifications.js';
+import { syncLiveStreamTicketOrdersForStream } from './_syncLiveStreamTicketOrders.js';
 
 // Check STRIPE_USE_TEST_MODE toggle first, then select appropriate key
 // Set STRIPE_USE_TEST_MODE=true in Vercel to use test mode, false or unset for live mode
@@ -647,6 +648,21 @@ export async function processFanHubCheckoutSessionCompleted(
     const paymentIntentId = typeof session.payment_intent === 'string' ? session.payment_intent : (session.payment_intent as Stripe.PaymentIntent)?.id;
     const amountTotal = session.amount_total ?? 0;
 
+    let streamTitleForOrder: string | undefined;
+    try {
+      const streamSnap = await db
+        .collection('creators')
+        .doc(creatorId)
+        .collection('liveStreams')
+        .doc(ticketStreamId)
+        .get();
+      const t = streamSnap.data()?.title;
+      if (typeof t === 'string' && t.trim()) streamTitleForOrder = t.trim();
+    } catch {
+      /* ignore */
+    }
+    const productTitle = streamTitleForOrder ? `Live stream: ${streamTitleForOrder}` : 'Live stream ticket';
+
     const orderRef = db.collection('orders').doc(session.id);
     await orderRef.set({
       creatorId,
@@ -655,6 +671,7 @@ export async function processFanHubCheckoutSessionCompleted(
       postId: null,
       productId: null,
       type: 'live_stream_ticket',
+      productTitle,
       stripeSessionId: session.id,
       stripePaymentIntentId: paymentIntentId || null,
       amountCents: amountTotal,
@@ -718,6 +735,32 @@ export async function processFanHubCheckoutSessionCompleted(
     const totalOrders = (stats?.totalOrders ?? 0) + 1;
     await statsRef.set({ totalRevenueCents: totalRevenue, totalOrders, updatedAt: now }, { merge: true });
     console.log(`Fan hub: live_stream_ticket checkout creator=${creatorId} fan=${fanId} stream=${ticketStreamId}`);
+
+    try {
+      await syncLiveStreamTicketOrdersForStream(db, creatorId, ticketStreamId);
+    } catch (e) {
+      console.warn('syncLiveStreamTicketOrdersForStream (live_stream_ticket checkout):', e);
+    }
+
+    try {
+      const itemLabel = streamTitleForOrder || 'Live stream';
+      const amountLabel = (amountTotal / 100).toFixed(2);
+      const buyerLabel = (fanName && String(fanName).trim()) || fanEmail || 'A fan';
+      await sendCreatorHubNotification({
+        creatorId,
+        type: 'creator_new_purchase',
+        title: 'New live stream ticket',
+        body: `${buyerLabel} bought a ticket for ${itemLabel} ($${amountLabel}).`,
+        data: {
+          orderId: session.id,
+          streamId: ticketStreamId,
+          destination: 'purchases',
+        },
+      });
+    } catch (e) {
+      console.warn('sendCreatorHubNotification (live_stream_ticket):', e);
+    }
+
     return true;
   }
 

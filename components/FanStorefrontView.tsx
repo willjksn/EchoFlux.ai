@@ -334,7 +334,13 @@ type SupportMessage = {
   createdAt?: string;
 };
 
-type FanDeliveryPurchaseType = "product" | "post_unlock" | "unlock" | "tip" | "subscription";
+type FanDeliveryPurchaseType =
+  | "product"
+  | "post_unlock"
+  | "unlock"
+  | "tip"
+  | "subscription"
+  | "live_stream_ticket";
 
 type FanDeliveryPurchase = {
   id: string;
@@ -345,10 +351,14 @@ type FanDeliveryPurchase = {
   productId: string | null;
   /** Feed post id for paid feed unlocks (`post_unlock`). */
   postId?: string | null;
+  streamId?: string | null;
   productTitle?: string;
   amountCents: number;
   status: string;
   createdAt: string;
+  scheduleStatus?: "pending" | "scheduled" | "completed" | "cancelled";
+  scheduledDate?: string | null;
+  scheduledTime?: string | null;
   deliveryStatus?: "pending" | "delivered";
   deliveryType?: "video" | "image" | "audio" | "text" | "link" | null;
   deliveryText?: string | null;
@@ -398,7 +408,29 @@ function normalizeFanPurchaseType(raw: Record<string, unknown>): FanDeliveryPurc
   if (typeof raw.tipHandle === "string" && raw.tipHandle.trim()) return "tip";
   if (type === "post_unlock" || productType === "post_unlock") return "post_unlock";
   if (type === "unlock" || productType === "unlock") return "unlock";
+  if (type === "live_stream_ticket" || productType === "live_stream_ticket") return "live_stream_ticket";
   return "product";
+}
+
+function fanOrderScheduleFields(
+  normalizedType: FanDeliveryPurchaseType,
+  raw: Record<string, unknown>
+): Pick<FanDeliveryPurchase, "scheduleStatus" | "scheduledDate" | "scheduledTime"> {
+  if (normalizedType === "tip" || normalizedType === "subscription") {
+    return {};
+  }
+  const schedRaw = typeof raw.scheduleStatus === "string" ? raw.scheduleStatus.trim().toLowerCase() : "";
+  let scheduleStatus: NonNullable<FanDeliveryPurchase["scheduleStatus"]>;
+  if (schedRaw === "scheduled" || schedRaw === "pending" || schedRaw === "completed" || schedRaw === "cancelled") {
+    scheduleStatus = schedRaw;
+  } else {
+    scheduleStatus = "pending";
+  }
+  return {
+    scheduleStatus,
+    scheduledDate: typeof raw.scheduledDate === "string" ? raw.scheduledDate : null,
+    scheduledTime: typeof raw.scheduledTime === "string" ? raw.scheduledTime : null,
+  };
 }
 
 function toIsoFromUnknownDate(v: unknown): string {
@@ -517,14 +549,23 @@ function FanPurchaseUnlockedPostBlock({
 }
 
 function fanPurchaseTypeLabel(o: FanDeliveryPurchase): string {
-  return o.type === "post_unlock" ? "Feed unlock" : (o.type || "product").replace(/_/g, " ");
+  if (o.type === "post_unlock") return "Feed unlock";
+  if (o.type === "live_stream_ticket") return "Live stream ticket";
+  return (o.type || "product").replace(/_/g, " ");
 }
 
 function fanPurchaseRowStatus(o: FanDeliveryPurchase): string {
   if (o.type === "tip") return "Tip paid";
   if (o.type === "subscription") return "Membership active";
   if (o.type === "post_unlock") return "Unlocked";
+  if (o.scheduleStatus === "cancelled") return "Cancelled";
+  if (o.type === "live_stream_ticket") {
+    if (o.deliveryStatus === "delivered" || o.scheduleStatus === "completed") return "Delivered";
+    if (o.scheduleStatus === "scheduled") return "Scheduled";
+    return "Pending";
+  }
   if (o.deliveryStatus === "delivered") return "Delivered";
+  if (o.scheduleStatus === "scheduled") return "Scheduled";
   return "Pending";
 }
 
@@ -567,6 +608,8 @@ function FanMemberPurchaseItemBody({
             </button>
           )}
         </>
+      ) : o.type === "live_stream_ticket" ? (
+        <span className="fan-member-treat-owned">{fanPurchaseRowStatus(o)}</span>
       ) : o.deliveryStatus === "delivered" ? (
         <>
           <span className="fan-member-treat-owned">Delivered</span>
@@ -2170,43 +2213,50 @@ export const FanStorefrontView: React.FC = () => {
 
   const refetchMemberEntitlement = useCallback(async () => {
     if (!creator?.creatorId || !auth.currentUser) return;
-    const token = await auth.currentUser.getIdToken(true);
-    const res = await fetch(
-      `/api/getFanEntitlement?creatorId=${encodeURIComponent(creator.creatorId)}`,
-      { headers: { Authorization: `Bearer ${token}` } }
-    );
-    const data = await res.json().catch(() => ({}));
-    const nextUnlockedProducts = Array.isArray((data as { unlockedProductIds?: string[] }).unlockedProductIds)
-      ? (data as { unlockedProductIds: string[] }).unlockedProductIds
-      : [];
-    const nextUnlockedPosts =
-      Array.isArray((data as { unlockedFanPostIds?: string[] }).unlockedFanPostIds)
-        ? (data as { unlockedFanPostIds: string[] }).unlockedFanPostIds
+    const gen = ++entitlementFetchGen.current;
+    try {
+      const token = await auth.currentUser.getIdToken(true);
+      const res = await fetch(
+        `/api/getFanEntitlement?creatorId=${encodeURIComponent(creator.creatorId)}`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      const data = await res.json().catch(() => ({}));
+      if (gen !== entitlementFetchGen.current) return;
+      if (!res.ok) return;
+      const nextUnlockedProducts = Array.isArray((data as { unlockedProductIds?: string[] }).unlockedProductIds)
+        ? (data as { unlockedProductIds: string[] }).unlockedProductIds
         : [];
-    const nextUnlockedStreams =
-      Array.isArray((data as { unlockedLiveStreamIds?: string[] }).unlockedLiveStreamIds)
-        ? (data as { unlockedLiveStreamIds: string[] }).unlockedLiveStreamIds
-        : [];
-    setSubscribed(!!(data as { subscribed?: boolean }).subscribed);
-    setMembershipType(
-      ((data as { membershipType?: "free" | "paid" | null }).membershipType ?? null) as "free" | "paid" | null
-    );
-    setBilledSubscriptionPriceCents(
-      typeof (data as { billedSubscriptionPriceCents?: unknown }).billedSubscriptionPriceCents === "number"
-        ? Math.max(0, Math.round((data as { billedSubscriptionPriceCents: number }).billedSubscriptionPriceCents))
-        : null
-    );
-    setMemberUsernameRequired(!!(data as { memberUsernameRequired?: boolean }).memberUsernameRequired);
-    setUnlockedProductIds(nextUnlockedProducts);
-    setUnlockedFanPostIds(nextUnlockedPosts);
-    setUnlockedLiveStreamIds(nextUnlockedStreams);
-    setLimitedMemberAccess(
-      !!(data as { limitedMemberAccess?: boolean }).limitedMemberAccess ||
-        nextUnlockedProducts.length > 0 ||
-        nextUnlockedPosts.length > 0 ||
-        nextUnlockedStreams.length > 0
-    );
-    setFanPageAdminBypass(!!(data as { fanPageAdminBypass?: boolean }).fanPageAdminBypass);
+      const nextUnlockedPosts =
+        Array.isArray((data as { unlockedFanPostIds?: string[] }).unlockedFanPostIds)
+          ? (data as { unlockedFanPostIds: string[] }).unlockedFanPostIds
+          : [];
+      const nextUnlockedStreams =
+        Array.isArray((data as { unlockedLiveStreamIds?: string[] }).unlockedLiveStreamIds)
+          ? (data as { unlockedLiveStreamIds: string[] }).unlockedLiveStreamIds
+          : [];
+      setSubscribed(!!(data as { subscribed?: boolean }).subscribed);
+      setMembershipType(
+        ((data as { membershipType?: "free" | "paid" | null }).membershipType ?? null) as "free" | "paid" | null
+      );
+      setBilledSubscriptionPriceCents(
+        typeof (data as { billedSubscriptionPriceCents?: unknown }).billedSubscriptionPriceCents === "number"
+          ? Math.max(0, Math.round((data as { billedSubscriptionPriceCents: number }).billedSubscriptionPriceCents))
+          : null
+      );
+      setMemberUsernameRequired(!!(data as { memberUsernameRequired?: boolean }).memberUsernameRequired);
+      setUnlockedProductIds(nextUnlockedProducts);
+      setUnlockedFanPostIds(nextUnlockedPosts);
+      setUnlockedLiveStreamIds(nextUnlockedStreams);
+      setLimitedMemberAccess(
+        !!(data as { limitedMemberAccess?: boolean }).limitedMemberAccess ||
+          nextUnlockedProducts.length > 0 ||
+          nextUnlockedPosts.length > 0 ||
+          nextUnlockedStreams.length > 0
+      );
+      setFanPageAdminBypass(!!(data as { fanPageAdminBypass?: boolean }).fanPageAdminBypass);
+    } catch {
+      /* keep prior entitlement on transient failures */
+    }
   }, [creator?.creatorId]);
 
   useEffect(() => {
@@ -2478,10 +2528,12 @@ export const FanStorefrontView: React.FC = () => {
             type: normalizedType,
             productId: typeof raw.productId === "string" ? raw.productId : null,
             postId: postIdFromOrder || null,
+            streamId: typeof raw.streamId === "string" ? raw.streamId.trim() || null : null,
             productTitle: typeof raw.productTitle === "string" ? raw.productTitle : undefined,
             amountCents: Number.isFinite(Number(raw.amountCents)) ? Math.max(0, Math.round(Number(raw.amountCents))) : 0,
             status: typeof raw.status === "string" ? raw.status : "paid",
             createdAt: toIsoFromUnknownDate(raw.createdAt),
+            ...fanOrderScheduleFields(normalizedType, raw),
             deliveryStatus:
               normalizedType === "tip" || normalizedType === "subscription"
                 ? undefined
@@ -2520,12 +2572,14 @@ export const FanStorefrontView: React.FC = () => {
               type: normalizedType,
               productId: typeof raw.productId === "string" ? raw.productId : null,
               postId: postIdFromOrderEmail || null,
+              streamId: typeof raw.streamId === "string" ? raw.streamId.trim() || null : null,
               productTitle: typeof raw.productTitle === "string" ? raw.productTitle : undefined,
               amountCents: Number.isFinite(Number(raw.amountCents))
                 ? Math.max(0, Math.round(Number(raw.amountCents)))
                 : 0,
               status: typeof raw.status === "string" ? raw.status : "paid",
               createdAt: toIsoFromUnknownDate(raw.createdAt),
+              ...fanOrderScheduleFields(normalizedType, raw),
               deliveryStatus:
                 normalizedType === "tip" || normalizedType === "subscription"
                   ? undefined
@@ -2552,7 +2606,8 @@ export const FanStorefrontView: React.FC = () => {
               o.type === "unlock" ||
               o.type === "post_unlock" ||
               o.type === "tip" ||
-              o.type === "subscription"
+              o.type === "subscription" ||
+              o.type === "live_stream_ticket"
           )
           .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt))
           .slice(0, capped);
@@ -4288,8 +4343,25 @@ export const FanStorefrontView: React.FC = () => {
   const creatorAvatar = creatorAvatarRaw
     ? normalizeFirebaseStorageObjectPath(creatorAvatarRaw) || creatorAvatarRaw
     : "";
-  const memberAvatar = auth.currentUser?.photoURL || creatorAvatar || "";
-  const memberAvatarInitial = (auth.currentUser?.displayName || auth.currentUser?.email || "U").trim().charAt(0).toUpperCase();
+  /** Never fall back to creator storefront avatar — that showed the creator on the member menu when the fan had no photo. */
+  const memberAvatar =
+    (typeof profileDraft.photoURL === "string" && profileDraft.photoURL.trim()) ||
+    (auth.currentUser?.photoURL || "").trim() ||
+    "";
+  const memberAvatarInitial = (() => {
+    const fn = (profileDraft.firstName || "").trim();
+    const ln = (profileDraft.lastName || "").trim();
+    if (fn && ln) return (fn[0]! + ln[0]!).toUpperCase();
+    if (fn) return fn.slice(0, 2).toUpperCase();
+    const dn = (auth.currentUser?.displayName || "").trim();
+    if (dn) {
+      const parts = dn.split(/\s+/).filter(Boolean);
+      if (parts.length >= 2) return (parts[0]![0]! + parts[parts.length - 1]![0]!).toUpperCase();
+      return dn.slice(0, 2).toUpperCase();
+    }
+    const em = (auth.currentUser?.email || "U").trim();
+    return em.charAt(0).toUpperCase();
+  })();
   const storeCopy = resolveStoreCopy(landingContent);
   const memberStoreSubtitleText = (() => {
     const raw = (storeCopy.memberStoreSubtitle || "").trim();
@@ -4584,6 +4656,7 @@ export const FanStorefrontView: React.FC = () => {
             onAuthSessionReady={syncFanAuthSessionToHub}
             onSuccess={() => {
               syncFanAuthSessionToHub();
+              void refetchMemberEntitlement();
               setFanAuthOpen(false);
               setFanAuthPaidDetailsStep(false);
             }}
@@ -4599,6 +4672,18 @@ export const FanStorefrontView: React.FC = () => {
             termsHref={storefrontTermsPath}
             privacyHref={storefrontPrivacyPath}
             freeAccessEnabled={creator.monetization?.freeAccessEnabled === true}
+          />
+        )}
+        {memberUsernameRequired && creator && !previewMember && isLoggedIn && !isViewingOwnStorefront && (
+          <MemberUsernameGateModal
+            creatorId={creator.creatorId}
+            creatorDisplayName={displayName}
+            primaryColor={primary}
+            textColor={theme?.text}
+            onComplete={() => {
+              setMemberUsernameRequired(false);
+              void refetchMemberEntitlement();
+            }}
           />
         )}
         {toast && <Toast message={toast.message} type={toast.type} />}

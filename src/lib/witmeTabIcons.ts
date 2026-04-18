@@ -3,7 +3,7 @@
  */
 
 /** Bump ?v when replacing `public/witme-favicon.png` so clients drop stale cache. */
-const WITME_TAB_ICON = "/witme-favicon.png?v=3";
+const WITME_TAB_ICON = "/witme-favicon.png?v=4";
 const ECHOFLUX_ICON_SVG = "/logo.svg";
 const ECHOFLUX_ICON_PNG = "/logo.png";
 

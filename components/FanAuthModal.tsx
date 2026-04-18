@@ -239,8 +239,8 @@ export const FanAuthModal: React.FC<FanAuthModalProps> = ({
   };
 
   /** Free pages: create fans/{uid} after auth so entitlement + username gate work. Username is set in MemberUsernameGateModal. */
-  const tryJoinFreeMembershipIfEnabled = async () => {
-    if (!freeAccessEnabled || !auth.currentUser) return;
+  const tryJoinFreeMembershipIfEnabled = async (): Promise<boolean> => {
+    if (!freeAccessEnabled || !auth.currentUser) return true;
     try {
       const token = await auth.currentUser.getIdToken(true);
       const join = await fetch("/api/joinFreeMembership", {
@@ -253,10 +253,12 @@ export const FanAuthModal: React.FC<FanAuthModalProps> = ({
         const joinErr = (joinData as { error?: string }).error || "Signed in, but couldn't auto-join free membership yet.";
         setFormError(joinErr);
         showToast?.(joinErr, "info");
-        return;
+        return false;
       }
+      return true;
     } catch {
       showToast?.("Signed in, but membership sync is temporarily unavailable.", "info");
+      return false;
     }
   };
 
@@ -340,7 +342,8 @@ export const FanAuthModal: React.FC<FanAuthModalProps> = ({
         }
         await signInWithEmailAndPassword(auth, email.trim(), password);
         if (freeAccessEnabled) {
-          await tryJoinFreeMembershipIfEnabled();
+          const joined = await tryJoinFreeMembershipIfEnabled();
+          if (!joined) return;
           showToast?.(fanLoginToastMessage, "success");
           onSuccess?.();
           onClose();
@@ -421,7 +424,8 @@ export const FanAuthModal: React.FC<FanAuthModalProps> = ({
           try {
             await signInWithEmailAndPassword(auth, email.trim(), password);
             if (freeAccessEnabled) {
-              await tryJoinFreeMembershipIfEnabled();
+              const joined = await tryJoinFreeMembershipIfEnabled();
+              if (!joined) return;
               showToast?.("Welcome back! We signed you in to continue.", "success");
               onSuccess?.();
               onClose();
@@ -463,7 +467,8 @@ export const FanAuthModal: React.FC<FanAuthModalProps> = ({
         throw createErr;
       }
       await updateProfile(cred.user, { displayName: fullName.trim() });
-      await tryJoinFreeMembershipIfEnabled();
+      const joinedAfterSignup = await tryJoinFreeMembershipIfEnabled();
+      if (!joinedAfterSignup) return;
       showToast?.("Account created!", "success");
       if (onSignupContinue) {
         const redirected = await onSignupContinue();
@@ -482,7 +487,8 @@ export const FanAuthModal: React.FC<FanAuthModalProps> = ({
         try {
           await signInWithEmailAndPassword(auth, email.trim(), password);
           if (freeAccessEnabled) {
-            await tryJoinFreeMembershipIfEnabled();
+            const joined = await tryJoinFreeMembershipIfEnabled();
+            if (!joined) return;
             showToast?.("Welcome back! We signed you in to continue.", "success");
             onSuccess?.();
             onClose();
@@ -571,7 +577,17 @@ export const FanAuthModal: React.FC<FanAuthModalProps> = ({
       const provider = new GoogleAuthProvider();
       const result = await signInWithPopup(auth, provider);
       if (freeAccessEnabled) {
-        await tryJoinFreeMembershipIfEnabled();
+        const joined = await tryJoinFreeMembershipIfEnabled();
+        if (!joined) {
+          if (mode === "signup") {
+            try {
+              sessionStorage.removeItem(FAN_STOREFRONT_SIGNUP_SESSION_KEY);
+            } catch {
+              /* ignore */
+            }
+          }
+          return;
+        }
       }
       if (mode === "signup" && onSignupContinue) {
         const extra = getAdditionalUserInfo(result);
