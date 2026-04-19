@@ -14,7 +14,7 @@ import {
     type FanPurchaseIdentity,
 } from '../src/lib/fanHubFanPurchaseIdentity';
 import { buildCreatorImageUrlSet, fanAvatarUrlOrUndefined } from '../src/lib/fanAvatar';
-import { isHubMembershipAccessExpired, pickLatestMemberAccessEnd } from '../src/lib/memberAccessEnd';
+import { isHubMembershipAccessExpired, parseDateLike, pickLatestMemberAccessEnd } from '../src/lib/memberAccessEnd';
 
 function usernameFromFanDoc(fd: Record<string, unknown>): string | null {
   const keys = ['username', 'memberUsername', 'handle', 'instagram_handle', 'instagramHandle'] as const;
@@ -559,16 +559,31 @@ export const OnlyFansFans: React.FC = () => {
 
                         try {
                             if (fanId !== user.id) {
-                                const [uSnap, fSnap] = await Promise.all([
-                                    getDoc(doc(db, 'users', fanId)),
-                                    getDoc(doc(db, 'creators', user.id, 'fans', fanId)),
-                                ]);
-                                if (fSnap.exists()) {
+                                const prefEmailNorm =
+                                    typeof data.email === 'string' && data.email.trim()
+                                        ? data.email.trim().toLowerCase()
+                                        : '';
+                                const fanDocCandidates = [fanId];
+                                if (prefEmailNorm && !fanDocCandidates.includes(prefEmailNorm)) {
+                                    fanDocCandidates.push(prefEmailNorm);
+                                }
+
+                                const uSnap = await getDoc(doc(db, 'users', fanId));
+                                let fSnap: Awaited<ReturnType<typeof getDoc>> | null = null;
+                                for (const cand of fanDocCandidates) {
+                                    const s = await getDoc(doc(db, 'creators', user.id, 'fans', cand));
+                                    if (s.exists()) {
+                                        fSnap = s;
+                                        break;
+                                    }
+                                }
+                                if (fSnap?.exists()) {
                                     const fd = fSnap.data() as Record<string, unknown>;
                                     hubMembershipExpired = isHubMembershipAccessExpired({
                                         subscriptionStatus: subscriptionStatusFromFanDoc(fd),
                                         cancelAtPeriodEnd: parseCancelAtPeriodEndFromFanDoc(fd),
                                         accessEnd: pickLatestMemberAccessEnd(fd),
+                                        canceledAt: parseDateLike(fd.canceledAt),
                                     });
                                     const fromFan = usernameFromFanDoc(fd);
                                     if (fromFan) username = fromFan;

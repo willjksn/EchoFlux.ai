@@ -161,6 +161,8 @@ export function isHubMembershipAccessExpired(input: {
   subscriptionStatus: string | null | undefined;
   cancelAtPeriodEnd: boolean;
   accessEnd: Date | null;
+  /** Fan doc `canceledAt` from webhooks when period end is missing or stale */
+  canceledAt?: Date | null;
 }): boolean {
   const st = String(input.subscriptionStatus || "").toLowerCase();
   const now = Date.now();
@@ -168,9 +170,17 @@ export function isHubMembershipAccessExpired(input: {
     input.accessEnd && Number.isFinite(input.accessEnd.getTime())
       ? input.accessEnd.getTime()
       : null;
+  const canceledAtMs =
+    input.canceledAt && Number.isFinite(input.canceledAt.getTime())
+      ? input.canceledAt.getTime()
+      : null;
+
+  if (st === "expired" || st === "unpaid") return true;
 
   if (st === "canceled" || st === "cancelled") {
-    return endMs != null && endMs <= now;
+    if (endMs != null) return endMs <= now;
+    if (canceledAtMs != null) return canceledAtMs <= now;
+    return true;
   }
   if (st === "active" || st === "trialing") {
     return input.cancelAtPeriodEnd === true && endMs != null && endMs <= now;
