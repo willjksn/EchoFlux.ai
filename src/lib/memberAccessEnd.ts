@@ -175,7 +175,7 @@ export function isHubMembershipAccessExpired(input: {
       ? input.canceledAt.getTime()
       : null;
 
-  if (st === "expired" || st === "unpaid") return true;
+  if (st === "expired" || st === "unpaid" || st === "incomplete_expired") return true;
 
   if (st === "canceled" || st === "cancelled") {
     if (endMs != null) return endMs <= now;
