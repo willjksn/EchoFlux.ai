@@ -1,6 +1,7 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { verifyAuth } from "./verifyAuth.js";
 import { getAdminDb } from "./_firebaseAdmin.js";
+import { hasPlatformAdminAccess } from "./_platformAdminAccess.js";
 
 /**
  * Delete an invite code (admin only).
@@ -15,7 +16,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const db = getAdminDb();
     const adminDoc = await db.collection("users").doc(user.uid).get();
     const adminData = adminDoc.data();
-    if (adminData?.role !== "Admin") return res.status(403).json({ error: "Admin access required" });
+    if (!hasPlatformAdminAccess(adminData as Record<string, unknown> | undefined))
+      return res.status(403).json({ error: "Admin access required" });
 
     const { code } = (req.body || {}) as { code?: string };
     if (!code || typeof code !== "string" || !code.trim()) return res.status(400).json({ error: "code is required" });

@@ -1,6 +1,7 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { verifyAuth } from "./verifyAuth.js";
 import { getAdminDb } from "./_firebaseAdmin.js";
+import { hasPlatformAdminAccess } from "./_platformAdminAccess.js";
 import { sendEmail, isMailerConfigured } from "./_mailer.js";
 import { logEmailHistory } from "./_emailHistory.js";
 

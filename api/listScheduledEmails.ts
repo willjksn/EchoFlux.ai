@@ -1,6 +1,7 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { verifyAuth } from "./verifyAuth.js";
 import { getAdminDb } from "./_firebaseAdmin.js";
+import { hasPlatformAdminAccess } from "./_platformAdminAccess.js";
 
 /**
  * List scheduled emails (admin only)
@@ -13,7 +14,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const db = getAdminDb();
   const adminDoc = await db.collection("users").doc(admin.uid).get();
-  if ((adminDoc.data() as any)?.role !== "Admin") return res.status(403).json({ error: "Admin access required" });
+  if (!hasPlatformAdminAccess(adminDoc.data() as Record<string, unknown> | undefined)) return res.status(403).json({ error: "Admin access required" });
 
   try {
     const snap = await db.collection("scheduled_emails").orderBy("sendAt", "desc").limit(200).get();

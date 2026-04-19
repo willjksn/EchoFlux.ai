@@ -2,6 +2,7 @@ import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { verifyAuth } from "./verifyAuth.js";
 import { getAdminDb } from "./_firebaseAdmin.js";
 import { applyBrowserApiCors } from "./_browserApiCors.js";
+import { hasPlatformAdminAccess } from "./_platformAdminAccess.js";
 
 function sanitizeAlertIds(body: unknown): string[] {
   if (!body || typeof body !== "object") return [];
@@ -35,8 +36,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
     }
 
     const userDoc = await db.collection("users").doc(user.uid).get();
-    const role = userDoc.exists ? String((userDoc.data() as { role?: string })?.role || "") : "";
-    if (role !== "Admin") {
+    if (!hasPlatformAdminAccess(userDoc.data() as Record<string, unknown> | undefined)) {
       res.status(403).json({ error: "Admin access required" });
       return;
     }

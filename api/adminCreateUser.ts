@@ -1,6 +1,7 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { withErrorHandling, getVerifyAuth } from "./_errorHandler.js";
 import { getAdminDb, getAdminApp } from "./_firebaseAdmin.js";
+import { hasPlatformAdminAccess } from "./_platformAdminAccess.js";
 import { sendEmail } from "./_mailer.js";
 
 const PLATFORMS = ["Instagram", "TikTok", "X", "Threads", "YouTube", "LinkedIn", "Facebook", "Pinterest"] as const;
@@ -83,7 +84,7 @@ async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
   const adminDoc = await db.collection("users").doc(adminUser.uid).get();
   const adminData = adminDoc.data();
 
-  if (adminData?.role !== "Admin") {
+  if (!hasPlatformAdminAccess(adminData as Record<string, unknown> | undefined)) {
     res.status(403).json({ error: "Admin access required" });
     return;
   }

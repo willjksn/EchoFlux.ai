@@ -1,6 +1,7 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { verifyAuth } from "./verifyAuth.js";
 import { getAdminDb } from "./_firebaseAdmin.js";
+import { hasPlatformAdminAccess } from "./_platformAdminAccess.js";
 
 type TicketStatus = "open" | "done";
 
@@ -12,8 +13,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const db = getAdminDb();
   const userSnap = await db.collection("users").doc(authUser.uid).get();
-  const role = (userSnap.data() as { role?: string } | undefined)?.role;
-  if (role !== "Admin") return res.status(403).json({ error: "Admin access required" });
+  if (!hasPlatformAdminAccess(userSnap.data() as Record<string, unknown> | undefined)) return res.status(403).json({ error: "Admin access required" });
 
   const { ticketId, status } = (req.body || {}) as { ticketId?: string; status?: TicketStatus };
   if (!ticketId || typeof ticketId !== "string") return res.status(400).json({ error: "ticketId is required" });

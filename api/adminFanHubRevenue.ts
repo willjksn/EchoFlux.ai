@@ -1,6 +1,7 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import type { QueryDocumentSnapshot } from "firebase-admin/firestore";
 import { getAdminDb } from "./_firebaseAdmin.js";
+import { hasPlatformAdminAccess } from "./_platformAdminAccess.js";
 import { verifyAuth } from "./verifyAuth.js";
 
 function hasPlatformAdminAccess(userData: Record<string, unknown> | undefined): boolean {

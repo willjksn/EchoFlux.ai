@@ -1,6 +1,8 @@
 // api/generateGrowthStrategy.ts
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { checkApiKeys, getVerifyAuth, getModelRouter, withErrorHandling } from "./_errorHandler.js";
+import { getAdminDb } from "./_firebaseAdmin.js";
+import { hasPlatformAdminAccess } from "./_platformAdminAccess.js";
 
 async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
   if (req.method !== "POST") {
@@ -23,7 +25,13 @@ async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
     return;
   }
 
-  if (!user || user.role !== 'Admin') {
+  if (!user?.uid) {
+    res.status(401).json({ success: false, error: "Unauthorized", strategy: null });
+    return;
+  }
+  const dbGrowth = getAdminDb();
+  const growthUserSnap = await dbGrowth.collection("users").doc(user.uid).get();
+  if (!hasPlatformAdminAccess(growthUserSnap.data() as Record<string, unknown> | undefined)) {
     res.status(403).json({ error: "Forbidden" });
     return;
   }

@@ -1,6 +1,7 @@
 // api/adminGetBillingEvents.ts
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { getAdminDb } from "./_firebaseAdmin.js";
+import { hasPlatformAdminAccess } from "./_platformAdminAccess.js";
 import { checkApiKeys, getVerifyAuth, withErrorHandling } from "./_errorHandler.js";
 
 /**
@@ -44,7 +45,7 @@ async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
   }
 
   const adminSnap = await db.collection("users").doc(authUser.uid).get();
-  if (!adminSnap.exists || (adminSnap.data() as { role?: string } | undefined)?.role !== "Admin") {
+  if (!adminSnap.exists || !hasPlatformAdminAccess(adminSnap.data() as Record<string, unknown> | undefined)) {
     res.status(403).json({ error: "Forbidden" });
     return;
   }

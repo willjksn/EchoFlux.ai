@@ -1,5 +1,6 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { getAdminDb } from "./_firebaseAdmin.js";
+import { hasPlatformAdminAccess } from "./_platformAdminAccess.js";
 import { verifyAuth } from "./verifyAuth.js";
 
 type EventDoc = {
@@ -35,8 +36,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
 
   const db = getAdminDb();
   const userSnap = await db.collection("users").doc(authUser.uid).get();
-  const role = (userSnap.data() as { role?: string } | undefined)?.role;
-  if (role !== "Admin") {
+  if (!hasPlatformAdminAccess(userSnap.data() as Record<string, unknown> | undefined)) {
     res.status(403).json({ error: "Admin access required" });
     return;
   }

@@ -1,6 +1,7 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { withErrorHandling, getVerifyAuth } from "./_errorHandler.js";
 import { getAdminDb } from "./_firebaseAdmin.js";
+import { hasPlatformAdminAccess } from "./_platformAdminAccess.js";
 
 type RewardType = "extra_generations" | "free_month" | "storage_boost";
 
@@ -20,7 +21,7 @@ async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
   const db = getAdminDb();
   const adminDoc = await db.collection("users").doc(adminUser.uid).get();
   const adminData = adminDoc.data();
-  if (adminData?.role !== "Admin") {
+  if (!hasPlatformAdminAccess(adminData as Record<string, unknown> | undefined)) {
     res.status(403).json({ error: "Admin access required" });
     return;
   }
@@ -75,7 +76,7 @@ async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
   for (const doc of usersSnap.docs) {
     const data = doc.data() as any;
     // Skip admins
-    if (data?.role === "Admin") continue;
+    if (hasPlatformAdminAccess(data as Record<string, unknown> | undefined)) continue;
 
     const updates: any = {};
     switch (parsedRewardType) {

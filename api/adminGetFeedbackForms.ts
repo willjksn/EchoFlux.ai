@@ -1,6 +1,7 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { verifyAuth } from "./verifyAuth.js";
 import { getAdminDb } from "./_firebaseAdmin.js";
+import { hasPlatformAdminAccess } from "./_platformAdminAccess.js";
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== "GET") return res.status(405).json({ error: "Method not allowed" });
@@ -13,7 +14,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const userDoc = await db.collection("users").doc(authed.uid).get();
   const userData = userDoc.exists ? (userDoc.data() as any) : null;
   
-  if (userData?.role !== "Admin") {
+  if (!hasPlatformAdminAccess(userData as Record<string, unknown> | undefined)) {
     return res.status(403).json({ error: "Admin access required" });
   }
 
