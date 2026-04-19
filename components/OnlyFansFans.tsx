@@ -563,7 +563,16 @@ export const OnlyFansFans: React.FC = () => {
                                     typeof data.email === 'string' && data.email.trim()
                                         ? data.email.trim().toLowerCase()
                                         : '';
-                                /** Match User Management / `fans` keys: plain uid, compound `uid-email@…`, or email-only legacy. */
+                                const uSnap = await getDoc(doc(db, 'users', fanId));
+                                const profileEmailNorm =
+                                    uSnap.exists() &&
+                                    typeof (uSnap.data() as Record<string, unknown>).email === 'string'
+                                        ? String((uSnap.data() as Record<string, unknown>).email)
+                                              .trim()
+                                              .toLowerCase()
+                                        : '';
+
+                                /** Match User Management / `fans` keys: plain uid, compound `uid-email@…`, email-only, Stormij `…-udi:uid`, plus any row whose `email` matches pref or profile (query). */
                                 const fanDocCandidates: string[] = [];
                                 const pushFanDocCand = (c: string) => {
                                     const t = c.trim();
@@ -572,14 +581,29 @@ export const OnlyFansFans: React.FC = () => {
                                 const authUidForFan = authUidFromFanDocId(fanId);
                                 pushFanDocCand(fanId);
                                 if (authUidForFan !== fanId) pushFanDocCand(authUidForFan);
-                                if (prefEmailNorm) {
-                                    pushFanDocCand(prefEmailNorm);
-                                    if (authUidForFan && prefEmailNorm.includes('@')) {
-                                        pushFanDocCand(`${authUidForFan}-${prefEmailNorm}`);
+                                const emailNorms = new Set<string>();
+                                if (prefEmailNorm) emailNorms.add(prefEmailNorm);
+                                if (profileEmailNorm) emailNorms.add(profileEmailNorm);
+                                for (const em of emailNorms) {
+                                    pushFanDocCand(em);
+                                    if (authUidForFan && em.includes('@')) {
+                                        pushFanDocCand(`${authUidForFan}-${em}`);
                                     }
                                 }
 
-                                const uSnap = await getDoc(doc(db, 'users', fanId));
+                                const emailsForFanQuery = [...emailNorms].filter(Boolean).slice(0, 10);
+                                if (emailsForFanQuery.length > 0) {
+                                    try {
+                                        const fanColl = collection(db, 'creators', user.id, 'fans');
+                                        const mailSnap = await getDocs(
+                                            query(fanColl, where('email', 'in', emailsForFanQuery), limit(20))
+                                        );
+                                        mailSnap.forEach((d) => pushFanDocCand(d.id));
+                                    } catch (qErr) {
+                                        console.warn('OnlyFansFans: fans email lookup', fanId, qErr);
+                                    }
+                                }
+
                                 let fSnap: Awaited<ReturnType<typeof getDoc>> | null = null;
                                 for (const cand of fanDocCandidates) {
                                     const s = await getDoc(doc(db, 'creators', user.id, 'fans', cand));
