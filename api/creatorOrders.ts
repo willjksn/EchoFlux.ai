@@ -15,6 +15,8 @@ export type CreatorOrder = {
   productTitle?: string;
   fanName?: string | null;
   fanEmail?: string;
+  /** After guest→member merge (`mergeGuestTreatPurchasesIntoUid`), original `guest_*` fan id. */
+  linkedFromGuestFanId?: string | null;
   scheduleStatus?: string;
   scheduledDate?: string | null;
   scheduledTime?: string | null;
@@ -139,6 +141,10 @@ function mapDocToOrder(docSnap: QueryDocumentSnapshot): CreatorOrder {
     return toLegacyAmountCents(d.amount);
   })();
   const streamIdRaw = typeof d.streamId === "string" ? d.streamId.trim() : "";
+  const linkedGuest =
+    typeof d.linkedFromGuestFanId === "string" && d.linkedFromGuestFanId.trim()
+      ? d.linkedFromGuestFanId.trim()
+      : null;
   return {
     id: docSnap.id,
     creatorId: (d.creatorId as string) ?? "",
@@ -151,6 +157,7 @@ function mapDocToOrder(docSnap: QueryDocumentSnapshot): CreatorOrder {
     productTitle: (d.productTitle as string) ?? (d.productId as string) ?? undefined,
     fanName: (d.fanName as string) ?? (d.tipHandle as string) ?? null,
     fanEmail: typeof d.fanEmail === "string" && d.fanEmail.trim() ? d.fanEmail.trim() : undefined,
+    linkedFromGuestFanId: linkedGuest,
     scheduleStatus: isNonDeliverable ? "completed" : ((d.scheduleStatus as string) || "pending"),
     scheduledDate: isNonDeliverable ? null : ((d.scheduledDate as string) ?? null),
     scheduledTime: isNonDeliverable ? null : ((d.scheduledTime as string) ?? null),

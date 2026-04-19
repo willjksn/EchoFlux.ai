@@ -3,8 +3,16 @@ import { useAppContext } from './AppContext';
 import { usePremiumStudioTab, type PendingFansTabSelection } from './PremiumStudioLayout';
 import { UserIcon, SearchIcon, StarIcon, SparklesIcon, TrashIcon, EditIcon, PlusIcon, XMarkIcon } from './icons/UIIcons';
 import { auth, db } from '../firebaseConfig';
-import { collection, getDocs, doc, getDoc, setDoc, deleteDoc, updateDoc, query, orderBy, limit, Timestamp, where } from 'firebase/firestore';
+import { collection, getDocs, doc, getDoc, setDoc, deleteDoc, deleteField, updateDoc, query, orderBy, limit, Timestamp, where } from 'firebase/firestore';
 import { fanHubListLabel, initialsFromFanLabel, safeUsernameForHandle } from '../src/lib/fanHubDisplay';
+import { authUidFromFanDocId } from '../src/lib/compoundFanDocId';
+import {
+    buildFanPurchaseIdentity,
+    calendarEventMatchesFanPurchaseIdentity,
+    onlyfansCalendarEventIsCustomOrStore,
+    orderMatchesFanPurchaseIdentity,
+    type FanPurchaseIdentity,
+} from '../src/lib/fanHubFanPurchaseIdentity';
 import { buildCreatorImageUrlSet, fanAvatarUrlOrUndefined } from '../src/lib/fanAvatar';
 import { isHubMembershipAccessExpired, pickLatestMemberAccessEnd } from '../src/lib/memberAccessEnd';
 
@@ -302,9 +310,9 @@ export const OnlyFansFans: React.FC = () => {
     const orderScheduleToCustomStatus = (
         s: string | undefined
     ): 'ordered' | 'in-progress' | 'delivered' | 'cancelled' => {
-        const x = (s || 'pending').toLowerCase();
-        if (x === 'completed') return 'delivered';
-        if (x === 'scheduled') return 'in-progress';
+        const x = (s || 'pending').toLowerCase().replace(/\s+/g, '_');
+        if (x === 'completed' || x === 'delivered') return 'delivered';
+        if (x === 'scheduled' || x === 'confirmed' || x === 'in_progress') return 'in-progress';
         if (x === 'cancelled') return 'cancelled';
         return 'ordered';
     };
@@ -330,24 +338,54 @@ export const OnlyFansFans: React.FC = () => {
         return 'other';
     };
 
-    function fanOrderMatchesFan(
-        o: { fanId: string; fanEmail?: string },
-        fanId: string,
-        fanEmailNorm: string | null
-    ): boolean {
-        if (o.fanId === fanId) return true;
-        if (fanEmailNorm && o.fanEmail && o.fanEmail.trim().toLowerCase() === fanEmailNorm) return true;
-        if (fanEmailNorm && typeof o.fanId === 'string' && o.fanId.includes('@')) {
-            if (o.fanId.trim().toLowerCase() === fanEmailNorm) return true;
+    /**
+     * Resolve emails + all fan id aliases (compound uid, guest_${cus}, etc.) — shared rules in
+     * `src/lib/fanHubFanPurchaseIdentity.ts` so new creators/edge cases don’t need one-off UI patches.
+     */
+    async function loadFanPurchaseIdentityForCard(
+        fanDocId: string,
+        prefEmail: string | null | undefined,
+        creatorId: string
+    ): Promise<FanPurchaseIdentity> {
+        let userEmail: string | null = null;
+        let fanRowEmail: string | null = null;
+        let stripeCustomerId: string | null = null;
+        if (fanDocId && fanDocId !== creatorId) {
+            const authUid = authUidFromFanDocId(fanDocId);
+            try {
+                const [uSnap, fSnap] = await Promise.all([
+                    getDoc(doc(db, 'users', authUid)),
+                    getDoc(doc(db, 'creators', creatorId, 'fans', fanDocId)),
+                ]);
+                if (uSnap.exists()) {
+                    const u = uSnap.data() as Record<string, unknown>;
+                    if (typeof u.email === 'string' && u.email.trim()) userEmail = u.email.trim();
+                }
+                if (fSnap.exists()) {
+                    const f = fSnap.data() as Record<string, unknown>;
+                    if (typeof f.email === 'string' && f.email.trim()) fanRowEmail = f.email.trim();
+                    if (typeof f.stripeCustomerId === 'string' && f.stripeCustomerId.trim()) {
+                        stripeCustomerId = f.stripeCustomerId.trim();
+                    }
+                }
+            } catch {
+                /* ignore */
+            }
         }
-        return false;
+        return buildFanPurchaseIdentity({
+            fanUid: fanDocId,
+            prefEmail,
+            userEmail,
+            fanRowEmail,
+            stripeCustomerId,
+        });
     }
 
     // Calendar custom events + Fan Hub store product orders (same data as User Management / Purchases)
     const loadCustomContent = async (fanId: string, fanEmail?: string | null) => {
         if (!user?.id) return;
         setIsLoadingCustomContent(true);
-        const fanEmailNorm = typeof fanEmail === 'string' && fanEmail.trim() ? fanEmail.trim().toLowerCase() : null;
+        const purchaseIdentity = await loadFanPurchaseIdentityForCard(fanId, fanEmail, user.id);
         try {
             const eventsSnap = await getDocs(collection(db, 'users', user.id, 'onlyfans_calendar_events'));
             const calendarItems = eventsSnap.docs
@@ -360,15 +398,28 @@ export const OnlyFansFans: React.FC = () => {
                 })
                 .filter(
                     (event: Record<string, unknown>) =>
-                        event.contentType === 'custom' && event.fanId === fanId
+                        onlyfansCalendarEventIsCustomOrStore(event) &&
+                        calendarEventMatchesFanPurchaseIdentity(event, purchaseIdentity)
                 )
                 .map((event: Record<string, unknown> & { id: string }) => ({
                     id: event.id,
                     title: (event.title as string) || '',
                     description: (event.description as string) || '',
                     date: (event.date as string) || '',
-                    status:
-                        (event.customStatus as 'ordered' | 'in-progress' | 'delivered' | 'cancelled') || 'ordered',
+                    status: (() => {
+                        const cs = event.customStatus;
+                        if (
+                            cs === 'ordered' ||
+                            cs === 'in-progress' ||
+                            cs === 'delivered' ||
+                            cs === 'cancelled'
+                        ) {
+                            return cs;
+                        }
+                        return orderScheduleToCustomStatus(
+                            typeof event.treatStatus === 'string' ? event.treatStatus : undefined
+                        );
+                    })(),
                     source: 'calendar' as const,
                     deliveryType:
                         event.deliveryType === 'video' ||
@@ -390,7 +441,7 @@ export const OnlyFansFans: React.FC = () => {
             let orderItems: typeof calendarItems = [];
             try {
                 const token = auth.currentUser ? await auth.currentUser.getIdToken() : null;
-                const res = await fetch('/api/creatorOrders?limit=500', {
+                const res = await fetch('/api/creatorOrders?limit=1000', {
                     headers: token ? { Authorization: `Bearer ${token}` } : {},
                 });
                 if (res.ok) {
@@ -399,6 +450,8 @@ export const OnlyFansFans: React.FC = () => {
                             id: string;
                             fanId: string;
                             fanEmail?: string;
+                            fanName?: string | null;
+                            linkedFromGuestFanId?: string | null;
                             type: string;
                             productTitle?: string;
                             amountCents: number;
@@ -417,9 +470,9 @@ export const OnlyFansFans: React.FC = () => {
                     orderItems = orders
                         .filter(
                             (o) =>
-                                o.type === 'product' &&
+                                (o.type === 'product' || o.type === 'live_stream_ticket') &&
                                 o.status !== 'refunded' &&
-                                fanOrderMatchesFan(o, fanId, fanEmailNorm)
+                                orderMatchesFanPurchaseIdentity(o, purchaseIdentity)
                         )
                         .map((o) => {
                             const parts: string[] = [];

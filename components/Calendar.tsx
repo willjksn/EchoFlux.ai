@@ -5,7 +5,7 @@ import { InstagramIcon, TikTokIcon, XIcon, ThreadsIcon, YouTubeIcon, LinkedInIco
 import { PlusIcon, SparklesIcon, XMarkIcon, TrashIcon, DownloadIcon, CheckCircleIcon, CopyIcon, SendIcon } from './icons/UIIcons';
 import { useAppContext } from './AppContext';
 import { db, auth } from '../firebaseConfig';
-import { doc, setDoc, deleteDoc, collection, query, orderBy, onSnapshot, getDocs } from 'firebase/firestore';
+import { doc, setDoc, deleteDoc, deleteField, updateDoc, collection, query, orderBy, onSnapshot, getDocs } from 'firebase/firestore';
 import { hasCapability } from '../src/services/platformCapabilities';
 import { generateCaptions } from '../src/services/geminiService';
 import { UpgradePrompt } from './UpgradePrompt';
@@ -55,7 +55,7 @@ function effectiveLiveStreamStatusForUi(statusRaw: string, dateISO: string | nul
 }
 
 export const Calendar: React.FC = () => {
-    const { calendarEvents, setActivePage, posts, user, showToast, updatePost, addCalendarEvent, deletePost, socialAccounts } = useAppContext();
+    const { calendarEvents, setActivePage, posts, setPosts, user, showToast, updatePost, addCalendarEvent, socialAccounts } = useAppContext();
     const [currentDate, setCurrentDate] = useState(new Date());
     const [selectedEvent, setSelectedEvent] = useState<{ event: CalendarEvent; post: Post | null } | null>(null);
     const [isEditing, setIsEditing] = useState(false);
@@ -239,6 +239,7 @@ export const Calendar: React.FC = () => {
                 }> = [];
                 snapshot.forEach((docSnap) => {
                     const d = docSnap.data() as Record<string, unknown>;
+                    if (d.hiddenFromMainCalendar === true) return;
                     const status = typeof d.status === 'string' ? d.status.trim().toLowerCase() : '';
                     if (status === 'ended' || status === 'cancelled') return;
                     const dateISO = isoFromLiveStreamScheduledStart(d.scheduledStart);
@@ -665,6 +666,136 @@ export const Calendar: React.FC = () => {
         );
     };
 
+    const resolvePostIdFromCalendarEvent = (evt: CalendarEvent): string | null => {
+        if (evt.id.startsWith('post-')) {
+            const withoutPrefix = evt.id.replace('post-', '');
+            const parts = withoutPrefix.split('-');
+            if (parts.length >= 3) {
+                return parts.slice(0, -2).join('-');
+            }
+            return parts[0] ?? null;
+        }
+        if (evt.id.startsWith('cal-')) {
+            const parts = evt.id.replace('cal-', '').split('-');
+            return parts[0] ?? null;
+        }
+        return null;
+    };
+
+    /** Clears schedule on the post and legacy calendar_event docs — does not delete the post. */
+    const removePostFromMainCalendar = async (post: Post, calendarEventId: string) => {
+        if (!user) throw new Error('Not signed in');
+
+        await setDoc(
+            doc(db, 'users', user.id, 'posts', post.id),
+            { scheduledDate: deleteField(), autoPublishAtSchedule: false },
+            { merge: true }
+        );
+
+        setPosts((prev) =>
+            prev.map((p) =>
+                p.id === post.id ? { ...p, scheduledDate: undefined, autoPublishAtSchedule: false } : p
+            )
+        );
+
+        try {
+            const matchingEvents = calendarEvents.filter((evt) => evt.id.includes(post.id));
+            for (const ce of matchingEvents) {
+                await deleteDoc(doc(db, 'users', user.id, 'calendar_events', ce.id));
+            }
+        } catch (calendarDeleteError) {
+            console.error('Failed to delete related calendar events:', calendarDeleteError);
+        }
+
+        try {
+            await deleteDoc(doc(db, 'users', user.id, 'calendar_events', calendarEventId));
+        } catch {
+            // Derived-only row or missing doc
+        }
+    };
+
+    const handleDeleteCalendarGridItem = async (
+        e: React.MouseEvent,
+        evt: CalendarEvent,
+        associatedPost: Post | null | undefined
+    ) => {
+        e.stopPropagation();
+        e.preventDefault();
+        if (!user) return;
+
+        const isPurchase = evt.id.startsWith('purchase-') || !!(evt as any).purchaseEvent;
+        const isLiveStream = evt.id.startsWith('livestream-') || !!(evt as any).liveStreamEvent;
+        const isReminder =
+            !isPurchase && !isLiveStream && (evt.id.startsWith('reminder-') || !!(evt as any).reminderType);
+
+        try {
+            if (isReminder) {
+                const reminderDocId = evt.id.startsWith('reminder-') ? evt.id.slice('reminder-'.length) : evt.id;
+                if (!window.confirm('Delete this reminder?')) return;
+                await deleteDoc(doc(db, 'users', user.id, 'calendar_events', reminderDocId));
+                showToast('Reminder deleted', 'success');
+                if (selectedEvent?.event.id === evt.id) setSelectedEvent(null);
+                return;
+            }
+
+            if (isPurchase) {
+                const purchaseDocId = evt.id.startsWith('purchase-')
+                    ? evt.id.slice('purchase-'.length)
+                    : String((evt as any).id || '');
+                if (!purchaseDocId) {
+                    showToast('Could not remove this purchase event.', 'error');
+                    return;
+                }
+                if (!window.confirm('Remove this from your main calendar only? Purchases and Fan Hub are unchanged.')) return;
+                await deleteDoc(doc(db, 'users', user.id, 'onlyfans_calendar_events', purchaseDocId));
+                showToast('Removed from calendar', 'success');
+                if (selectedEvent?.event.id === evt.id) setSelectedEvent(null);
+                return;
+            }
+
+            if (isLiveStream) {
+                const streamId = (evt as any).liveStreamId as string | undefined;
+                if (!streamId) {
+                    showToast('Could not update: missing stream id', 'error');
+                    return;
+                }
+                if (
+                    !window.confirm(
+                        'Hide this live stream from your main calendar only? Fan Hub, tickets, and the event itself are unchanged.'
+                    )
+                )
+                    return;
+                await updateDoc(doc(db, 'creators', user.id, 'liveStreams', streamId), {
+                    hiddenFromMainCalendar: true,
+                });
+                showToast('Live stream hidden from calendar', 'success');
+                if (selectedEvent?.event.id === evt.id) setSelectedEvent(null);
+                return;
+            }
+
+            const postId = associatedPost?.id || resolvePostIdFromCalendarEvent(evt);
+            const post = postId ? associatedPost ?? posts?.find((p) => p.id === postId) : null;
+            if (!postId || !post) {
+                showToast('Could not remove: no post linked to this event.', 'error');
+                return;
+            }
+            if (
+                !window.confirm(
+                    'Remove this from your main calendar? The post is not deleted and stays in Create Post / your content.'
+                )
+            )
+                return;
+
+            await removePostFromMainCalendar(post, evt.id);
+
+            showToast('Removed from calendar', 'success');
+            if (selectedEvent?.event.id === evt.id) setSelectedEvent(null);
+        } catch (error) {
+            console.error('Failed to delete calendar item:', error);
+            showToast('Failed to delete. Please try again.', 'error');
+        }
+    };
+
     const renderCalendarGrid = () => {
         const grid = [];
         let dayCounter = 1;
@@ -950,7 +1081,7 @@ export const Calendar: React.FC = () => {
                             return (
                                 <div 
                                     key={evt.id} 
-                                    className={`flex flex-col p-2.5 sm:p-2 md:p-2 rounded-lg text-xs sm:text-xs md:text-xs shadow-sm cursor-pointer hover:shadow-md hover:scale-[1.02] transition-all ${colors.bg} ${colors.border} relative min-h-[65px] sm:min-h-[50px]`}
+                                    className={`flex flex-col p-2.5 sm:p-2 md:p-2 rounded-lg text-xs sm:text-xs md:text-xs shadow-sm cursor-pointer hover:shadow-md hover:scale-[1.02] transition-all ${colors.bg} ${colors.border} relative min-h-[65px] sm:min-h-[50px] pr-7`}
                                     onClick={(e) => {
                                         e.stopPropagation();
                                         handleEventClick();
@@ -958,6 +1089,15 @@ export const Calendar: React.FC = () => {
                                     title={`${evt.title} - ${new Date(evt.date).toLocaleString()}`}
                                     style={{ pointerEvents: 'auto' }}
                                 >
+                                    <button
+                                        type="button"
+                                        aria-label="Remove from calendar"
+                                        title="Remove from calendar (does not delete content or purchases)"
+                                        className="absolute top-1 right-1 z-20 p-1 rounded-md bg-white/95 dark:bg-gray-900/95 text-red-600 dark:text-red-400 shadow-sm border border-red-200/80 dark:border-red-900/60 opacity-90 hover:opacity-100 active:opacity-100 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-red-400/80 touch-manipulation"
+                                        onClick={(e) => handleDeleteCalendarGridItem(e, evt, associatedPost ?? null)}
+                                    >
+                                        <TrashIcon className="w-3.5 h-3.5 sm:w-3 sm:h-3" />
+                                    </button>
                                     <div 
                                         className="flex justify-between items-center mb-1.5 sm:mb-1 gap-1"
                                         style={{ pointerEvents: 'none' }}
@@ -1440,56 +1580,25 @@ export const Calendar: React.FC = () => {
         }
     };
 
-    // Handle delete post
+    // Remove post from this calendar only (does not delete the post document)
     const handleDeletePost = async () => {
-        if (!selectedEvent || !user) return;
-        
-        if (!window.confirm('Are you sure you want to delete this scheduled post?')) {
+        if (!selectedEvent || !user || !selectedEvent.post?.id) return;
+
+        if (
+            !window.confirm(
+                'Remove this from your main calendar? The post is not deleted and stays in Create Post / your content.'
+            )
+        ) {
             return;
         }
 
         try {
-            const postId = selectedEvent.post?.id;
-            
-            // Delete the post from Firestore
-            if (postId) {
-                await deletePost(postId);
-            }
-            
-            // Also remove any calendar events tied to this post so Dashboard/upcoming stays in sync
-            if (user && postId) {
-                try {
-                    const matchingEvents = calendarEvents.filter(evt => evt.id.includes(postId));
-                    for (const evt of matchingEvents) {
-                        await deleteDoc(doc(db, 'users', user.id, 'calendar_events', evt.id));
-                    }
-                } catch (calendarDeleteError) {
-                    console.error('Failed to delete related calendar events:', calendarDeleteError);
-                }
-            }
-
-            // Delete the calendar event from Firestore (if it exists as a separate document)
-            try {
-                const eventDocRef = doc(db, 'users', user.id, 'calendar_events', selectedEvent.event.id);
-                await deleteDoc(eventDocRef);
-            } catch (eventError) {
-                // Calendar event might not exist as separate document (it's derived from posts)
-                // This is fine, just log it
-                console.log('Calendar event not found as separate document (expected if using post-based events)');
-            }
-
-            // Close the modal
+            await removePostFromMainCalendar(selectedEvent.post, selectedEvent.event.id);
             setSelectedEvent(null);
-            
-            // Show success message
-            showToast('Post deleted successfully!', 'success');
-            
-            // Note: The UI will automatically update because:
-            // 1. deletePost updates the posts state in DataContext
-            // 2. filteredEvents is derived from posts, so it will automatically refresh
+            showToast('Removed from calendar', 'success');
         } catch (error) {
-            console.error('Failed to delete post:', error);
-            showToast('Failed to delete post. Please try again.', 'error');
+            console.error('Failed to remove post from calendar:', error);
+            showToast('Failed to remove from calendar. Please try again.', 'error');
         }
     };
 
@@ -2156,7 +2265,7 @@ export const Calendar: React.FC = () => {
                                         className="px-4 py-2 text-sm font-medium text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/50 transition-colors disabled:opacity-50 flex items-center gap-2"
                                     >
                                         <TrashIcon className="w-4 h-4" />
-                                        Delete Post
+                                        Remove from calendar
                                     </button>
                                     <div className="flex items-center gap-3">
                                         <button

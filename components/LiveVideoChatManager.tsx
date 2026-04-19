@@ -134,6 +134,8 @@ export const LiveVideoChatManager: React.FC<LiveVideoChatManagerProps> = ({
   const [instantCallFanId, setInstantCallFanId] = useState("");
   const [instantCallFanName, setInstantCallFanName] = useState("");
   const [instantCallDuration, setInstantCallDuration] = useState(15);
+  /** Draft string so the duration field can be cleared while typing (controlled number alone cannot). */
+  const [instantCallDurationInput, setInstantCallDurationInput] = useState("15");
   const [startingInstantCall, setStartingInstantCall] = useState(false);
   
   // Fan selector state
@@ -167,6 +169,13 @@ export const LiveVideoChatManager: React.FC<LiveVideoChatManagerProps> = ({
     
     fetchQuota();
   }, [creatorId]);
+
+  useEffect(() => {
+    if (!showInstantCallModal) return;
+    const c = clampInstantDurationMinutes(instantCallDuration);
+    setInstantCallDuration(c);
+    setInstantCallDurationInput(String(c));
+  }, [showInstantCallModal]);
 
   // Load fans from creators/{id}/fans and merge users/{fanId} so @username shows (same rules as DM member list)
   useEffect(() => {
@@ -445,8 +454,10 @@ export const LiveVideoChatManager: React.FC<LiveVideoChatManagerProps> = ({
       return;
     }
 
-    const mins = clampInstantDurationMinutes(instantCallDuration);
-    if (mins !== instantCallDuration) setInstantCallDuration(mins);
+    const parsed = parseInt(instantCallDurationInput.trim(), 10);
+    const mins = clampInstantDurationMinutes(Number.isFinite(parsed) ? parsed : instantCallDuration);
+    setInstantCallDuration(mins);
+    setInstantCallDurationInput(String(mins));
 
     setStartingInstantCall(true);
     try {
@@ -501,7 +512,7 @@ export const LiveVideoChatManager: React.FC<LiveVideoChatManagerProps> = ({
     } finally {
       setStartingInstantCall(false);
     }
-  }, [creatorId, instantCallFanId, instantCallFanName, instantCallDuration, showToast]);
+  }, [creatorId, instantCallFanId, instantCallFanName, instantCallDuration, instantCallDurationInput, showToast]);
 
   const filteredSessions = sessions.filter((s) => {
     if (filter === "all") return true;
@@ -587,11 +598,17 @@ export const LiveVideoChatManager: React.FC<LiveVideoChatManagerProps> = ({
     );
   }
 
-  // Calculate quota info
-  const totalAvailable = quota ? quota.monthlyMinutesLimit + quota.bonusMinutes : 500;
-  const remaining = quota ? totalAvailable - quota.minutesUsedThisMonth : 500;
-  const usagePercent = quota && totalAvailable > 0 ? Math.min(100, (quota.minutesUsedThisMonth / totalAvailable) * 100) : 0;
-  const isUnlimited = quota?.monthlyMinutesLimit === -1;
+  // Calculate quota info (guard missing fields from API / partial docs)
+  const quotaLimit =
+    quota && typeof quota.monthlyMinutesLimit === "number" ? quota.monthlyMinutesLimit : 0;
+  const quotaBonus = quota && typeof quota.bonusMinutes === "number" ? quota.bonusMinutes : 0;
+  const quotaUsed =
+    quota && typeof quota.minutesUsedThisMonth === "number" ? quota.minutesUsedThisMonth : 0;
+  const isUnlimited = quota != null && quotaLimit === -1;
+  const totalAvailable = quota == null || isUnlimited ? 0 : quotaLimit + quotaBonus;
+  const remaining = quota == null || isUnlimited ? 0 : Math.max(0, totalAvailable - quotaUsed);
+  const usagePercent =
+    quota && !isUnlimited && totalAvailable > 0 ? Math.min(100, (quotaUsed / totalAvailable) * 100) : 0;
 
   // Full view
   return (
@@ -627,7 +644,7 @@ export const LiveVideoChatManager: React.FC<LiveVideoChatManagerProps> = ({
                 />
               </div>
               <p className="text-xs text-gray-400 mt-1">
-                {quota.minutesUsedThisMonth} / {totalAvailable} min used
+                {quotaUsed} / {totalAvailable} min used
               </p>
             </div>
           )}
@@ -963,20 +980,28 @@ export const LiveVideoChatManager: React.FC<LiveVideoChatManagerProps> = ({
                 </label>
                 <input
                   id="instant-call-duration-minutes"
-                  type="number"
+                  type="text"
                   inputMode="numeric"
-                  min={INSTANT_DURATION_MIN}
-                  max={INSTANT_DURATION_MAX}
-                  step={1}
-                  value={instantCallDuration}
+                  autoComplete="off"
+                  pattern="[0-9]*"
+                  value={instantCallDurationInput}
                   onChange={(e) => {
                     const raw = e.target.value;
-                    if (raw === "") return;
+                    if (raw === "") {
+                      setInstantCallDurationInput("");
+                      return;
+                    }
+                    if (!/^\d+$/.test(raw)) return;
+                    setInstantCallDurationInput(raw);
                     const n = Number(raw);
-                    if (!Number.isFinite(n)) return;
-                    setInstantCallDuration(clampInstantDurationMinutes(n));
+                    if (Number.isFinite(n)) setInstantCallDuration(clampInstantDurationMinutes(n));
                   }}
-                  onBlur={() => setInstantCallDuration((d) => clampInstantDurationMinutes(d))}
+                  onBlur={() => {
+                    const n = parseInt(instantCallDurationInput.trim(), 10);
+                    const c = clampInstantDurationMinutes(Number.isFinite(n) ? n : instantCallDuration);
+                    setInstantCallDuration(c);
+                    setInstantCallDurationInput(String(c));
+                  }}
                   className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white fh-live-input"
                 />
                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
@@ -990,7 +1015,10 @@ export const LiveVideoChatManager: React.FC<LiveVideoChatManagerProps> = ({
                     <button
                       key={m}
                       type="button"
-                      onClick={() => setInstantCallDuration(m)}
+                      onClick={() => {
+                        setInstantCallDuration(m);
+                        setInstantCallDurationInput(String(m));
+                      }}
                       className={`px-2.5 py-1 text-xs font-medium rounded-lg border transition ${
                         instantCallDuration === m
                           ? "fh-live-filter-active border-transparent"
@@ -1003,10 +1031,13 @@ export const LiveVideoChatManager: React.FC<LiveVideoChatManagerProps> = ({
                 </div>
               </div>
 
-              {quota && !quota.monthlyMinutesLimit && (
+              {quota && !isUnlimited && (
                 <p className="text-sm text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 p-3 rounded-lg">
-                  ⚡ This will use {instantCallDuration} minutes from your quota.
-                  You have <strong>{Math.max(0, quota.monthlyMinutesLimit + quota.bonusMinutes - quota.minutesUsedThisMonth)}</strong> minutes remaining.
+                  ⚡ This will use{" "}
+                  <strong>{clampInstantDurationMinutes(instantCallDuration)}</strong>{" "}
+                  {clampInstantDurationMinutes(instantCallDuration) === 1 ? "minute" : "minutes"} from your
+                  quota. You have <strong>{remaining}</strong>{" "}
+                  {remaining === 1 ? "minute" : "minutes"} remaining.
                 </p>
               )}
             </div>

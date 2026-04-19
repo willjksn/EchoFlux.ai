@@ -319,6 +319,96 @@ function membershipChipsForDisplay(links: FanMembershipLink[]): FanMembershipLin
     return [];
 }
 
+/** Dedupe Fan Hub membership links by creator (same rules as Fan Buyer Summary table). */
+function dedupeFanMembershipLinksByCreator(links: FanMembershipLink[]): FanMembershipLink[] {
+    const dedupedByCreator = new Map<string, FanMembershipLink>();
+    links.forEach((membership) => {
+        const normalizedCreatorId = normalizeAdminCreatorGroupKey(membership.creatorId);
+        const key =
+            normalizedCreatorId ||
+            (membership.creatorHandle ? `handle:${membership.creatorHandle}` : "") ||
+            `name:${(membership.creatorName || "").trim().toLowerCase()}`;
+        const existing = dedupedByCreator.get(key);
+        if (!existing) {
+            dedupedByCreator.set(key, {
+                ...membership,
+                creatorId: normalizedCreatorId || membership.creatorId,
+            });
+            return;
+        }
+        const chosen =
+            fanMembershipStatusRank(membership.status) > fanMembershipStatusRank(existing.status) ? membership : existing;
+        dedupedByCreator.set(key, {
+            ...chosen,
+            creatorId: normalizedCreatorId || chosen.creatorId,
+            purchaseCount: Math.max(existing.purchaseCount || 0, membership.purchaseCount || 0),
+            purchasesCents: Math.max(existing.purchasesCents || 0, membership.purchasesCents || 0),
+            tipCount: Math.max(existing.tipCount || 0, membership.tipCount || 0),
+            tipsCents: Math.max(existing.tipsCents || 0, membership.tipsCents || 0),
+            totalSpentCents: Math.max(existing.totalSpentCents || 0, membership.totalSpentCents || 0),
+            subscriptionPriceCents: Math.max(
+                existing.subscriptionPriceCents || 0,
+                membership.subscriptionPriceCents || 0,
+            ),
+        });
+    });
+    return Array.from(dedupedByCreator.values());
+}
+
+function aggregateBuyerRowFromMemberships(memberships: FanMembershipLink[]) {
+    return {
+        purchaseCount: memberships.reduce((acc, m) => acc + (m.purchaseCount || 0), 0),
+        purchasesCents: memberships.reduce((acc, m) => acc + (m.purchasesCents || 0), 0),
+        tipCount: memberships.reduce((acc, m) => acc + (m.tipCount || 0), 0),
+        tipsCents: memberships.reduce((acc, m) => acc + (m.tipsCents || 0), 0),
+    };
+}
+
+function placeholderUserForFanBuyerSummary(fanKey: string, profile: FanHubMemberProfile | undefined): User {
+    const email =
+        (profile?.email && profile.email.trim().toLowerCase()) ||
+        (fanKey.includes("@") ? fanKey.trim().toLowerCase() : "");
+    const name =
+        (profile?.displayName && profile.displayName.trim()) ||
+        adminUserDisplayLabel({
+            name: "",
+            email: email || undefined,
+            username: profile?.username ?? undefined,
+            handle: profile?.username ?? undefined,
+            memberUsername: profile?.username ?? undefined,
+        });
+    const id = `fanhub-summary:${fanKey.replace(/[^a-zA-Z0-9@._-]/g, "_")}`;
+    return {
+        id,
+        name: name || fanKey,
+        email: email || "—",
+        avatar: `https://picsum.photos/seed/${encodeURIComponent(id)}/100/100`,
+        bio: "",
+        plan: null,
+        role: "User",
+        signupDate: new Date(0).toISOString(),
+        notifications: { newMessages: true, weeklySummary: false, trendAlerts: false },
+        monthlyCaptionGenerationsUsed: 0,
+        monthlyImageGenerationsUsed: 0,
+        monthlyVideoGenerationsUsed: 0,
+        storageUsed: 0,
+        storageLimit: 0,
+        mediaLibrary: [],
+        settings: defaultSettings,
+        accountOrigin: "fan_hub",
+    };
+}
+
+type FanBuyerSummaryRowState = {
+    user: User;
+    memberships: FanMembershipLink[];
+    directoryOnly: boolean;
+    purchaseCount: number;
+    purchasesCents: number;
+    tipCount: number;
+    tipsCents: number;
+};
+
 const ADMIN_ROSTER_UID_RE = /^[A-Za-z0-9]{20,36}$/;
 
 type CreatorHubRosterRow = {
@@ -408,6 +498,21 @@ function augmentCreatorHubRosterRows(
     return Array.from(byDedupe.values()).sort((a, b) => b.totalSpentCents - a.totalSpentCents);
 }
 
+type CreatorStorefrontDiagnosticPayload = {
+    success: boolean;
+    generatedAt?: string;
+    creatorsScanned?: number;
+    duplicateHandles?: Array<{ normalizedHandle: string; creatorIds: string[]; displayNames: Array<string | null> }>;
+    creatorsWithoutUsersDoc?: { total: number; sampleIds: string[]; truncated: boolean };
+    creatorHandlesScanned?: number;
+    creatorHandlesIssues?: Array<
+        | { kind: 'missing_creator'; handleKey: string; creatorId: string }
+        | { kind: 'handle_mismatch'; handleKey: string; creatorId: string; creatorDocHandle: string }
+    >;
+    creatorHandlesIssuesTruncated?: boolean;
+    error?: string;
+};
+
 export const AdminDashboard: React.FC = () => {
     const { user: currentUser, showToast, setActivePage } = useAppContext();
     const [users, setUsers] = useState<User[]>([]);
@@ -431,7 +536,9 @@ export const AdminDashboard: React.FC = () => {
     const [currentPage, setCurrentPage] = useState<number>(1);
     const usersPerPage = 20;
     const [showAddUserModal, setShowAddUserModal] = useState(false);
-    
+    const [creatorStorefrontDiag, setCreatorStorefrontDiag] = useState<CreatorStorefrontDiagnosticPayload | null>(null);
+    const [creatorStorefrontDiagLoading, setCreatorStorefrontDiagLoading] = useState(false);
+
     // Fan Hub Revenue State
     const [fanHubRevenue, setFanHubRevenue] = useState<{
         totalRevenue: number;
@@ -1003,6 +1110,179 @@ export const AdminDashboard: React.FC = () => {
         );
     }, [creatorIds]);
 
+    /** Every fan in adminFanHubMemberships plus directory fan_hub accounts (not limited to users in the paginated table). */
+    const fanBuyerSummaryBundle = useMemo((): { rows: FanBuyerSummaryRowState[]; unassigned: User[] } => {
+        if (userMgmtView !== 'workspace' || !userMgmtShowFanSummary) {
+            return { rows: [], unassigned: [] };
+        }
+
+        const q = searchTerm.trim().toLowerCase();
+        const matchesText = (parts: Array<string | null | undefined>) => {
+            if (!q) return true;
+            return parts.some((p) => typeof p === 'string' && p.toLowerCase().includes(q));
+        };
+
+        const passesWorkspaceDirectory = (u: User) => isEchofluxWorkspaceUser(u) || hasFanHubMembership(u);
+
+        const userById = new Map(users.map((u) => [u.id, u] as const));
+        const userByEmail = new Map(
+            users.filter((x) => x.email).map((x) => [x.email.trim().toLowerCase(), x] as const),
+        );
+
+        const resolveUserForFanKey = (fanKey: string, profile: FanHubMemberProfile | undefined): User | null => {
+            const direct = userById.get(fanKey);
+            if (direct) return direct;
+            if (fanKey.includes('@')) {
+                const byEm = userByEmail.get(fanKey.trim().toLowerCase());
+                if (byEm) return byEm;
+            }
+            const pe = profile?.email?.trim().toLowerCase();
+            if (pe) return userByEmail.get(pe) ?? null;
+            return null;
+        };
+
+        const rowMap = new Map<string, FanBuyerSummaryRowState>();
+
+        const upsertRow = (dedupeKey: string, candidateUser: User, rawLinks: FanMembershipLink[]) => {
+            const prev = rowMap.get(dedupeKey);
+            const combinedRaw = prev ? [...prev.memberships, ...rawLinks] : rawLinks;
+            const memberships = dedupeFanMembershipLinksByCreator(combinedRaw);
+            const agg = aggregateBuyerRowFromMemberships(memberships);
+            let user: User;
+            if (prev) {
+                const prevPh = prev.user.id.startsWith('fanhub-summary:');
+                const candPh = candidateUser.id.startsWith('fanhub-summary:');
+                if (!candPh) user = candidateUser;
+                else if (!prevPh) user = prev.user;
+                else user = candidateUser;
+            } else {
+                user = candidateUser;
+            }
+            rowMap.set(dedupeKey, {
+                user,
+                memberships,
+                directoryOnly: user.id.startsWith('fanhub-summary:'),
+                ...agg,
+            });
+        };
+
+        for (const fanKey of Object.keys(fanHubMembershipsByFanId)) {
+            const rawLinks = fanHubMembershipsByFanId[fanKey];
+            if (!Array.isArray(rawLinks) || rawLinks.length === 0) continue;
+
+            const profile =
+                fanHubMemberProfilesByFanId[fanKey] ||
+                (fanKey.includes('@') ? fanHubMemberProfilesByFanId[fanKey.trim().toLowerCase()] : undefined);
+
+            const resolved = resolveUserForFanKey(fanKey, profile);
+            if (resolved?.role === 'Admin') continue;
+
+            if (
+                !matchesText([
+                    fanKey,
+                    profile?.displayName,
+                    profile?.email,
+                    profile?.username,
+                    resolved?.name,
+                    resolved?.email,
+                ])
+            )
+                continue;
+
+            const dedupeKey = resolved ? resolved.id : `orphan:${fanKey}`;
+            const candidateUser = resolved ?? placeholderUserForFanBuyerSummary(fanKey, profile);
+            upsertRow(dedupeKey, candidateUser, rawLinks);
+        }
+
+        for (const u of users) {
+            if (u.role === 'Admin') continue;
+            if (!passesWorkspaceDirectory(u)) continue;
+            if (!matchesText([u.name, u.email])) continue;
+            const rawLinks = getFanHubMembershipsForUser(u);
+            if (rawLinks.length === 0) continue;
+            if (rowMap.has(u.id)) {
+                const prev = rowMap.get(u.id)!;
+                const memberships = dedupeFanMembershipLinksByCreator([...prev.memberships, ...rawLinks]);
+                const agg = aggregateBuyerRowFromMemberships(memberships);
+                rowMap.set(u.id, {
+                    user: u,
+                    memberships,
+                    directoryOnly: false,
+                    ...agg,
+                });
+                continue;
+            }
+            const memberships = dedupeFanMembershipLinksByCreator(rawLinks);
+            rowMap.set(u.id, {
+                user: u,
+                memberships,
+                directoryOnly: false,
+                ...aggregateBuyerRowFromMemberships(memberships),
+            });
+        }
+
+        const realEmails = new Set(
+            [...rowMap.values()]
+                .filter((r) => !r.directoryOnly && r.user.email && r.user.email !== '—')
+                .map((r) => r.user.email.trim().toLowerCase()),
+        );
+        for (const [k, row] of [...rowMap.entries()]) {
+            if (!k.startsWith('orphan:')) continue;
+            const em = row.user.email?.trim().toLowerCase();
+            if (em && em !== '—' && realEmails.has(em)) rowMap.delete(k);
+        }
+
+        const unassigned: User[] = [];
+        for (const u of users) {
+            if (u.role === 'Admin') continue;
+            if (!passesWorkspaceDirectory(u)) continue;
+            if (!matchesText([u.name, u.email])) continue;
+            if (u.accountOrigin !== 'fan_hub') continue;
+            if (getFanHubMembershipsForUser(u).length > 0) continue;
+            if (rowMap.has(u.id)) continue;
+            unassigned.push(u);
+        }
+        unassigned.sort((a, b) => a.name.localeCompare(b.name));
+
+        const rows = [...rowMap.values()].sort((a, b) => a.user.name.localeCompare(b.user.name));
+        return { rows, unassigned };
+    }, [
+        userMgmtView,
+        userMgmtShowFanSummary,
+        users,
+        searchTerm,
+        fanHubMembershipsByFanId,
+        fanHubMemberProfilesByFanId,
+        getFanHubMembershipsForUser,
+        hasFanHubMembership,
+        isEchofluxWorkspaceUser,
+    ]);
+
+    const runCreatorStorefrontDiagnostics = useCallback(async () => {
+        setCreatorStorefrontDiagLoading(true);
+        try {
+            const token = await auth.currentUser?.getIdToken(true);
+            if (!token) {
+                showToast?.('Sign in again to run diagnostics.', 'error');
+                return;
+            }
+            const res = await fetch('/api/adminCreatorStorefrontDiagnostics', {
+                headers: { Authorization: `Bearer ${token}` },
+            });
+            const data = (await res.json().catch(() => ({}))) as CreatorStorefrontDiagnosticPayload;
+            if (!res.ok) {
+                throw new Error((data as { error?: string }).error || res.statusText || 'Request failed');
+            }
+            setCreatorStorefrontDiag(data);
+        } catch (e) {
+            console.error('adminCreatorStorefrontDiagnostics', e);
+            showToast?.((e as Error).message || 'Diagnostics failed', 'error');
+            setCreatorStorefrontDiag(null);
+        } finally {
+            setCreatorStorefrontDiagLoading(false);
+        }
+    }, [showToast]);
+
     const fetchCreatorHubRoster = useCallback(
         async (creatorId: string) => {
             const id = creatorId.trim();
@@ -1436,8 +1716,9 @@ export const AdminDashboard: React.FC = () => {
         'Plan Upgrade': <ArrowUpCircleIcon />,
     };
 
-    const getUserOriginBadge = (user: User) => {
-        if (user.accountOrigin === 'fan_hub') {
+    /** Optional: mark Fan Buyer Summary rows where Firestore `accountOrigin` is still `echoflux` but the fan has storefront memberships. */
+    const getUserOriginBadge = (user: User, opts?: { fanHubConsumerInSummary?: boolean }) => {
+        if (user.accountOrigin === 'fan_hub' || opts?.fanHubConsumerInSummary) {
             return (
                 <span className="text-[10px] bg-cyan-600 text-white dark:bg-cyan-500 dark:text-white px-2 py-0.5 rounded-full font-semibold tracking-wide">
                     FAN HUB
@@ -2621,6 +2902,114 @@ export const AdminDashboard: React.FC = () => {
                             </div>
                         </div>
                     </div>
+                    <div className="rounded-lg border border-amber-200/90 dark:border-amber-800/50 bg-amber-50/50 dark:bg-amber-950/25 px-4 py-3">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                            <div>
+                                <p className="text-xs font-semibold text-amber-900 dark:text-amber-100 uppercase tracking-wide">
+                                    Storefront creator health
+                                </p>
+                                <p className="text-[11px] text-amber-800/90 dark:text-amber-200/85 mt-0.5 max-w-2xl">
+                                    Admin-only scan: duplicate <code className="text-[10px]">creators/</code> handles,{' '}
+                                    <code className="text-[10px]">creators/</code> docs without a matching{' '}
+                                    <code className="text-[10px]">users/</code> id, and{' '}
+                                    <code className="text-[10px]">creatorHandles</code> drift. Use this when fans split across
+                                    multiple creator roots.
+                                </p>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => void runCreatorStorefrontDiagnostics()}
+                                disabled={creatorStorefrontDiagLoading}
+                                className="shrink-0 px-3 py-1.5 text-xs font-semibold rounded-md bg-amber-700 text-white hover:bg-amber-800 disabled:opacity-50 dark:bg-amber-800 dark:hover:bg-amber-700"
+                            >
+                                {creatorStorefrontDiagLoading ? 'Scanning…' : 'Run scan'}
+                            </button>
+                        </div>
+                        {creatorStorefrontDiag?.success ? (
+                            <div className="mt-3 space-y-3 text-xs text-amber-950 dark:text-amber-50 border-t border-amber-200/70 dark:border-amber-800/50 pt-3">
+                                <p className="text-[10px] text-amber-800/80 dark:text-amber-200/75">
+                                    Scanned {creatorStorefrontDiag.creatorsScanned ?? 0} creator docs ·{' '}
+                                    {creatorStorefrontDiag.generatedAt
+                                        ? new Date(creatorStorefrontDiag.generatedAt).toLocaleString()
+                                        : ''}
+                                </p>
+                                {(creatorStorefrontDiag.duplicateHandles?.length ?? 0) > 0 ? (
+                                    <div>
+                                        <p className="font-semibold text-amber-900 dark:text-amber-100 mb-1">
+                                            Duplicate handle on multiple creator docs ({creatorStorefrontDiag.duplicateHandles?.length})
+                                        </p>
+                                        <ul className="list-disc pl-4 space-y-1.5 text-[11px]">
+                                            {creatorStorefrontDiag.duplicateHandles!.map((d) => (
+                                                <li key={d.normalizedHandle}>
+                                                    <span className="font-mono">@{d.normalizedHandle}</span> →{' '}
+                                                    {d.creatorIds.map((id, i) => (
+                                                        <span key={id}>
+                                                            {i > 0 ? ', ' : ''}
+                                                            <code className="text-[10px] bg-amber-100/80 dark:bg-amber-900/40 px-1 rounded">
+                                                                {id}
+                                                            </code>
+                                                            {d.displayNames[i] ? ` (${d.displayNames[i]})` : ''}
+                                                        </span>
+                                                    ))}
+                                                </li>
+                                            ))}
+                                        </ul>
+                                    </div>
+                                ) : (
+                                    <p className="text-[11px] text-amber-800/85 dark:text-amber-200/80">
+                                        No duplicate handles across creator documents.
+                                    </p>
+                                )}
+                                <div>
+                                    <p className="font-semibold text-amber-900 dark:text-amber-100 mb-1">
+                                        Creators doc without matching{' '}
+                                        <code className="text-[10px]">users/</code> id
+                                    </p>
+                                    <p className="text-[11px] text-amber-800/90 dark:text-amber-200/85">
+                                        {(creatorStorefrontDiag.creatorsWithoutUsersDoc?.total ?? 0) === 0
+                                            ? 'None — every creators/ doc id has a users/ doc.'
+                                            : `${creatorStorefrontDiag.creatorsWithoutUsersDoc?.total} doc(s); legacy roots often explain split fan trees.`}
+                                    </p>
+                                    {(creatorStorefrontDiag.creatorsWithoutUsersDoc?.sampleIds?.length ?? 0) > 0 ? (
+                                        <p className="mt-1 font-mono text-[10px] break-all text-amber-900/90 dark:text-amber-100/90">
+                                            {creatorStorefrontDiag.creatorsWithoutUsersDoc!.sampleIds.join(', ')}
+                                            {creatorStorefrontDiag.creatorsWithoutUsersDoc?.truncated ? ' …' : ''}
+                                        </p>
+                                    ) : null}
+                                </div>
+                                <div>
+                                    <p className="font-semibold text-amber-900 dark:text-amber-100 mb-1">
+                                        creatorHandles index ({creatorStorefrontDiag.creatorHandlesScanned ?? 0} rows
+                                        {creatorStorefrontDiag.creatorHandlesIssuesTruncated ? ', capped' : ''})
+                                    </p>
+                                    {(creatorStorefrontDiag.creatorHandlesIssues?.length ?? 0) === 0 ? (
+                                        <p className="text-[11px] text-amber-800/85 dark:text-amber-200/80">
+                                            No missing targets or handle mismatches in the sample.
+                                        </p>
+                                    ) : (
+                                        <ul className="list-disc pl-4 space-y-1 text-[11px] max-h-40 overflow-y-auto">
+                                            {creatorStorefrontDiag.creatorHandlesIssues!.slice(0, 25).map((issue, idx) => (
+                                                <li key={`${issue.kind}-${issue.handleKey}-${idx}`}>
+                                                    {issue.kind === 'missing_creator' ? (
+                                                        <>
+                                                            <span className="font-mono">{issue.handleKey}</span>: missing{' '}
+                                                            <code className="text-[10px]">creators/{issue.creatorId || '∅'}</code>
+                                                        </>
+                                                    ) : (
+                                                        <>
+                                                            <span className="font-mono">{issue.handleKey}</span> →{' '}
+                                                            <code className="text-[10px]">{issue.creatorId}</code> but doc.handle is{' '}
+                                                            <code className="text-[10px]">{issue.creatorDocHandle}</code>
+                                                        </>
+                                                    )}
+                                                </li>
+                                            ))}
+                                        </ul>
+                                    )}
+                                </div>
+                            </div>
+                        ) : null}
+                    </div>
                 </div>
                 <div className="overflow-x-auto">
                      {isLoading ? (
@@ -2668,11 +3057,6 @@ export const AdminDashboard: React.FC = () => {
                                         if (a.role === 'Admin') return a.email.localeCompare(b.email);
                                         return new Date(b.signupDate).getTime() - new Date(a.signupDate).getTime();
                                     });
-                                // Fan buyers for the summary table: use filteredUsers (all pages), not paginated visibleUsers —
-                                // otherwise only buyers on the current page appear.
-                                const fanHubUsers = filteredUsers
-                                    .filter((user) => user.role !== 'Admin')
-                                    .filter((user) => hasFanHubMembership(user));
                                 // Fan Hub tab: non-admin rows are already creator-only from filteredUsers; list them with rosters.
                                 const myPageCreatorUsers = showCreatorsMyPageSection
                                     ? creatorIds.size > 0
@@ -3031,7 +3415,8 @@ export const AdminDashboard: React.FC = () => {
                                         )}
 
                                         {/* All tab only: Fan Hub consumers (memberships as fans); creators with rosters use the Fan Hub tab. */}
-                                        {showFanConsumersSection && fanHubUsers.length > 0 && (
+                                        {showFanConsumersSection &&
+                                            (fanBuyerSummaryBundle.rows.length > 0 || fanBuyerSummaryBundle.unassigned.length > 0) && (
                                             <>
                                                 <tr className="bg-cyan-50/60 dark:bg-cyan-900/20">
                                                     <td colSpan={6} className="p-3 border-t-2 border-cyan-300 dark:border-cyan-700">
@@ -3050,75 +3435,11 @@ export const AdminDashboard: React.FC = () => {
                                                     </td>
                                                 </tr>
                                                 {showFanHubMembersSection ? (() => {
-                                                    const unassigned: Array<User> = [];
-                                                    const dedupedRows: Array<{
-                                                        user: User;
-                                                        memberships: FanMembershipLink[];
-                                                        purchaseCount: number;
-                                                        purchasesCents: number;
-                                                        tipCount: number;
-                                                        tipsCents: number;
-                                                    }> = [];
-
                                                     const fanHubProfileFor = (u: User) =>
                                                         fanHubMemberProfilesByFanId[u.id] ||
                                                         (u.email
                                                             ? fanHubMemberProfilesByFanId[u.email.trim().toLowerCase()]
                                                             : undefined);
-
-                                                    fanHubUsers.forEach((user) => {
-                                                        const membershipsRaw = getFanHubMembershipsForUser(user);
-                                                        if (membershipsRaw.length === 0) {
-                                                            unassigned.push(user);
-                                                            return;
-                                                        }
-                                                        // Normalize + dedupe memberships by creator so one creator section renders once.
-                                                        const dedupedMembershipsByCreator = new Map<string, FanMembershipLink>();
-                                                        membershipsRaw.forEach((membership) => {
-                                                            const normalizedCreatorId = normalizeAdminCreatorGroupKey(membership.creatorId);
-                                                            const key =
-                                                                normalizedCreatorId ||
-                                                                (membership.creatorHandle ? `handle:${membership.creatorHandle}` : "") ||
-                                                                `name:${(membership.creatorName || "").trim().toLowerCase()}`;
-                                                            const existing = dedupedMembershipsByCreator.get(key);
-                                                            if (!existing) {
-                                                                dedupedMembershipsByCreator.set(key, {
-                                                                    ...membership,
-                                                                    creatorId: normalizedCreatorId || membership.creatorId,
-                                                                });
-                                                                return;
-                                                            }
-                                                            const chosen =
-                                                                fanMembershipStatusRank(membership.status) > fanMembershipStatusRank(existing.status)
-                                                                    ? membership
-                                                                    : existing;
-                                                            dedupedMembershipsByCreator.set(key, {
-                                                                ...chosen,
-                                                                creatorId: normalizedCreatorId || chosen.creatorId,
-                                                                purchaseCount: Math.max(existing.purchaseCount || 0, membership.purchaseCount || 0),
-                                                                purchasesCents: Math.max(existing.purchasesCents || 0, membership.purchasesCents || 0),
-                                                                tipCount: Math.max(existing.tipCount || 0, membership.tipCount || 0),
-                                                                tipsCents: Math.max(existing.tipsCents || 0, membership.tipsCents || 0),
-                                                                totalSpentCents: Math.max(existing.totalSpentCents || 0, membership.totalSpentCents || 0),
-                                                                subscriptionPriceCents: Math.max(
-                                                                    existing.subscriptionPriceCents || 0,
-                                                                    membership.subscriptionPriceCents || 0
-                                                                ),
-                                                            });
-                                                        });
-                                                        const memberships = Array.from(dedupedMembershipsByCreator.values());
-                                                        dedupedRows.push({
-                                                            user,
-                                                            memberships,
-                                                            purchaseCount: memberships.reduce((acc: number, m: FanMembershipLink) => acc + (m.purchaseCount || 0), 0),
-                                                            purchasesCents: memberships.reduce((acc: number, m: FanMembershipLink) => acc + (m.purchasesCents || 0), 0),
-                                                            tipCount: memberships.reduce((acc: number, m: FanMembershipLink) => acc + (m.tipCount || 0), 0),
-                                                            tipsCents: memberships.reduce((acc: number, m: FanMembershipLink) => acc + (m.tipsCents || 0), 0),
-                                                        });
-                                                    });
-
-                                                    dedupedRows.sort((a, b) => a.user.name.localeCompare(b.user.name));
-                                                    unassigned.sort((a, b) => a.name.localeCompare(b.name));
 
                                                     return (
                                                                 <tr>
@@ -3136,7 +3457,7 @@ export const AdminDashboard: React.FC = () => {
                                                                                     </tr>
                                                                                 </thead>
                                                                                 <tbody>
-                                                                                    {dedupedRows.map((row) => {
+                                                                                    {fanBuyerSummaryBundle.rows.map((row) => {
                                                                                         const hubChips = membershipChipsForDisplay(row.memberships);
                                                                                         return (
                                                                                         <React.Fragment key={`fanhub-deduped-${row.user.id}`}>
@@ -3151,9 +3472,16 @@ export const AdminDashboard: React.FC = () => {
                                                                                                     <div>
                                                                                                         <p className="font-bold text-gray-900 dark:text-white flex items-center gap-2">
                                                                                                             {fanHubMemberTableLabel(row.user, fanHubProfileFor(row.user))}
-                                                                                                            {getUserOriginBadge(row.user)}
+                                                                                                            {getUserOriginBadge(row.user, {
+                                                                                                                fanHubConsumerInSummary: row.memberships.length > 0,
+                                                                                                            })}
                                                                                                         </p>
                                                                                                         <p className="text-sm text-gray-500 dark:text-gray-400">{row.user.email}</p>
+                                                                                                        {row.directoryOnly ? (
+                                                                                                            <p className="text-[11px] text-cyan-800/90 dark:text-cyan-200/90">
+                                                                                                                Storefront index only (no matching row in users directory).
+                                                                                                            </p>
+                                                                                                        ) : null}
                                                                                                     </div>
                                                                                                 </div>
                                                                                             </td>
@@ -3183,26 +3511,32 @@ export const AdminDashboard: React.FC = () => {
                                                                                                 {row.tipCount} · {formatUsdFromCents(row.tipsCents)}
                                                                                             </td>
                                                                                             <td className="p-3">
-                                                                                                <div className="flex gap-2">
-                                                                                                    <button onClick={() => setEditingUser(row.user)} className="px-3 py-1 text-sm font-medium text-cyan-700 dark:text-cyan-300 hover:bg-cyan-50 dark:hover:bg-cyan-900/30 rounded-md">
-                                                                                                        Manage
-                                                                                                    </button>
-                                                                                                    <button
-                                                                                                        onClick={() => handleDeleteUser(row.user)}
-                                                                                                        className="px-3 py-1 text-sm font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-md flex items-center gap-1"
-                                                                                                        title="Delete User"
-                                                                                                    >
-                                                                                                        <TrashIcon className="w-4 h-4" />
-                                                                                                        Delete
-                                                                                                    </button>
-                                                                                                </div>
+                                                                                                {row.directoryOnly ? (
+                                                                                                    <span className="text-[11px] text-gray-500 dark:text-gray-400">
+                                                                                                        Manage/Delete require a users/ account.
+                                                                                                    </span>
+                                                                                                ) : (
+                                                                                                    <div className="flex gap-2">
+                                                                                                        <button onClick={() => setEditingUser(row.user)} className="px-3 py-1 text-sm font-medium text-cyan-700 dark:text-cyan-300 hover:bg-cyan-50 dark:hover:bg-cyan-900/30 rounded-md">
+                                                                                                            Manage
+                                                                                                        </button>
+                                                                                                        <button
+                                                                                                            onClick={() => handleDeleteUser(row.user)}
+                                                                                                            className="px-3 py-1 text-sm font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-md flex items-center gap-1"
+                                                                                                            title="Delete User"
+                                                                                                        >
+                                                                                                            <TrashIcon className="w-4 h-4" />
+                                                                                                            Delete
+                                                                                                        </button>
+                                                                                                    </div>
+                                                                                                )}
                                                                                             </td>
                                                                                         </tr>
                                                                                         {renderCreatorHubRosterBlock(row.user, 6)}
                                                                                         </React.Fragment>
                                                                                         );
                                                                                     })}
-                                                                                    {unassigned.map((user) => (
+                                                                                    {fanBuyerSummaryBundle.unassigned.map((user) => (
                                                                                         <tr key={`fanhub-unassigned-${user.id}`} className="border-t border-cyan-100 dark:border-cyan-900/30 bg-amber-50/30 dark:bg-amber-900/10">
                                                                                             <td className="p-3">
                                                                                                 <div className="flex items-center space-x-3">
@@ -3214,7 +3548,7 @@ export const AdminDashboard: React.FC = () => {
                                                                                                     <div>
                                                                                                         <p className="font-bold text-gray-900 dark:text-white flex items-center gap-2">
                                                                                                             {fanHubMemberTableLabel(user, fanHubProfileFor(user))}
-                                                                                                            {getUserOriginBadge(user)}
+                                                                                                            {getUserOriginBadge(user, { fanHubConsumerInSummary: true })}
                                                                                                         </p>
                                                                                                         <p className="text-sm text-gray-500 dark:text-gray-400">{user.email}</p>
                                                                                                         <p className="text-[11px] text-amber-800 dark:text-amber-200">
