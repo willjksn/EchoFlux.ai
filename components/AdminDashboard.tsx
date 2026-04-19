@@ -227,6 +227,14 @@ function fanMembershipStatusRank(status: string | null | undefined): number {
     return 0;
 }
 
+/** Mirrors `ACTIVE_STATUSES` in `api/adminFanHubMemberships.ts` (paid/free access–like rows). */
+const ADMIN_FAN_SUB_ACTIVE_STATUSES = new Set(["active", "trialing", "free", "past_due"]);
+
+function adminFanHubSubscriptionRowIsActive(m: { status: string }): boolean {
+    const s = String(m.status || "").toLowerCase().trim();
+    return ADMIN_FAN_SUB_ACTIVE_STATUSES.has(s);
+}
+
 type FanMembershipLink = {
     creatorId: string;
     creatorName: string;
@@ -3578,6 +3586,15 @@ export const AdminDashboard: React.FC = () => {
                                                                                 <tbody>
                                                                                     {fanBuyerSummaryBundle.rows.map((row) => {
                                                                                         const hubChips = membershipChipsForDisplay(row.memberships);
+                                                                                        const activeSubCount = hubChips.filter(adminFanHubSubscriptionRowIsActive).length;
+                                                                                        const subscriptionsSummary =
+                                                                                            hubChips.length === 0
+                                                                                                ? "—"
+                                                                                                : activeSubCount === 0
+                                                                                                  ? `${hubChips.length} ended`
+                                                                                                  : activeSubCount === hubChips.length
+                                                                                                    ? `${activeSubCount} active`
+                                                                                                    : `${activeSubCount} active · ${hubChips.length - activeSubCount} ended`;
                                                                                         return (
                                                                                         <React.Fragment key={`fanhub-deduped-${row.user.id}`}>
                                                                                         <tr className="border-t border-cyan-100 dark:border-cyan-900/30">
@@ -3614,7 +3631,12 @@ export const AdminDashboard: React.FC = () => {
                                                                                                         {hubChips.map((m) => (
                                                                                                             <span
                                                                                                                 key={`chip-${row.user.id}-${normalizeAdminCreatorGroupKey(m.creatorId) || m.creatorHandle || m.creatorName || "x"}`}
-                                                                                                                className="px-2 py-0.5 rounded-full text-[11px] bg-cyan-100 text-cyan-700 dark:bg-cyan-900/40 dark:text-cyan-200"
+                                                                                                                title={String(m.status || "").trim() || "—"}
+                                                                                                                className={`px-2 py-0.5 rounded-full text-[11px] ${
+                                                                                                                    adminFanHubSubscriptionRowIsActive(m)
+                                                                                                                        ? "bg-cyan-100 text-cyan-700 dark:bg-cyan-900/40 dark:text-cyan-200"
+                                                                                                                        : "bg-slate-200/90 text-slate-700 dark:bg-slate-600/50 dark:text-slate-200"
+                                                                                                                }`}
                                                                                                             >
                                                                                                                 {m.creatorName}
                                                                                                             </span>
@@ -3623,7 +3645,7 @@ export const AdminDashboard: React.FC = () => {
                                                                                                 )}
                                                                                             </td>
                                                                                             <td className="p-3 text-sm text-gray-700 dark:text-gray-300">
-                                                                                                {hubChips.length} active
+                                                                                                {subscriptionsSummary}
                                                                                             </td>
                                                                                             <td className="p-3 text-sm text-gray-700 dark:text-gray-300">
                                                                                                 {row.purchaseCount} · {formatUsdFromCents(row.purchasesCents)}
