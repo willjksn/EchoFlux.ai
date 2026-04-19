@@ -8,11 +8,6 @@ import { OFFLINE_MODE } from '../constants';
 import { ReportProblemModal } from './ReportProblemModal';
 import { ShareReviewModal } from './ShareReviewModal';
 import { getAvatarCropStyle } from '../src/lib/avatarCrop';
-import { FanHubNotificationBell, type FanHubNotificationNavigatePayload } from './FanHubNotificationBell';
-import {
-  FAN_HUB_DEEPLINK_STORAGE_KEY,
-  resolveFanHubNotificationTarget,
-} from '../src/lib/fanHubNotificationRouting';
 import { resolveApiUrl } from '../src/lib/resolveApiUrl';
 import {
   dismissUsageNotificationId,
@@ -60,20 +55,6 @@ export const Header: React.FC<HeaderProps> = ({ pageTitle }) => {
 
   const hasUnreadNotifications = useMemo(() => visibleNotifications.some(n => !n.read), [visibleNotifications]);
   const showShareReviewInMenu = activePage !== 'fanHub';
-  const showEchoFluxFanActivityBell = activePage !== 'fanHub';
-
-  const handleEchoFluxFirestoreNotificationNavigate = useCallback(
-    (payload: FanHubNotificationNavigatePayload) => {
-      const { tab, threadId, postId } = resolveFanHubNotificationTarget(payload.type, payload.data);
-      try {
-        sessionStorage.setItem(FAN_HUB_DEEPLINK_STORAGE_KEY, JSON.stringify({ tab, threadId, postId }));
-      } catch {
-        /* ignore */
-      }
-      setActivePage('fanHub');
-    },
-    [setActivePage]
-  );
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -316,15 +297,6 @@ export const Header: React.FC<HeaderProps> = ({ pageTitle }) => {
           >
             {isDarkMode ? <SunIcon /> : <MoonIcon />}
           </button>
-          {showEchoFluxFanActivityBell ? (
-            <FanHubNotificationBell
-              accentColor="#2563eb"
-              iconColor={isDarkMode ? '#e5e7eb' : '#374151'}
-              className="shrink-0"
-              onNavigate={handleEchoFluxFirestoreNotificationNavigate}
-              showToast={showToast}
-            />
-          ) : null}
           <div className="relative" ref={notificationsRef}>
             <button
               onClick={handleToggleNotifications}
