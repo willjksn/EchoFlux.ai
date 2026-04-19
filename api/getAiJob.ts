@@ -1,6 +1,7 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { verifyAuth } from "./verifyAuth.js";
 import { getAdminDb } from "./_firebaseAdmin.js";
+import { hasPlatformAdminAccess } from "./_platformAdminAccess.js";
+import { verifyAuth } from "./verifyAuth.js";
 
 export default async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
   if (req.method !== "GET") {
@@ -29,9 +30,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
     }
 
     const data = doc.data();
-    if (data?.userId !== authUser.uid && authUser.role !== "Admin") {
-      res.status(403).json({ error: "Forbidden" });
-      return;
+    const isOwner = data?.userId === authUser.uid;
+    if (!isOwner) {
+      const userSnap = await db.collection("users").doc(authUser.uid).get();
+      const me = userSnap.data() as Record<string, unknown> | undefined;
+      if (!hasPlatformAdminAccess(me)) {
+        res.status(403).json({ error: "Forbidden" });
+        return;
+      }
     }
 
     res.status(200).json({

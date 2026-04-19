@@ -1,6 +1,7 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { requireCronAuth } from "./_cronAuth.js";
 import { getAdminDb } from "./_firebaseAdmin.js";
+import { hasPlatformAdminAccess } from "./_platformAdminAccess.js";
 import { verifyAuth } from "./verifyAuth.js";
 import { publishXPost } from "./platforms/x/publish.js";
 
@@ -24,7 +25,9 @@ export default async function handler(
     if (user) {
       const db = getAdminDb();
       const userDoc = await db.collection("users").doc(user.uid).get();
-      if (userDoc.data()?.role === "Admin") isAdminAuth = true;
+      if (hasPlatformAdminAccess(userDoc.data() as Record<string, unknown> | undefined)) {
+        isAdminAuth = true;
+      }
     }
   }
   if (!isCronAuth && !isAdminAuth) {

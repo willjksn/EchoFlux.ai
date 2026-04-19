@@ -1,7 +1,8 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { requireCronAuth } from "./_cronAuth.js";
-import { verifyAuth } from "./verifyAuth.js";
 import { getAdminDb } from "./_firebaseAdmin.js";
+import { hasPlatformAdminAccess } from "./_platformAdminAccess.js";
+import { verifyAuth } from "./verifyAuth.js";
 import { processScheduledReminders } from "./_fanNotifications.js";
 
 /**
@@ -21,7 +22,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
     if (user) {
       const db = getAdminDb();
       const userDoc = await db.collection("users").doc(user.uid).get();
-      if (userDoc.data()?.role === "Admin") isAdminAuth = true;
+      if (hasPlatformAdminAccess(userDoc.data() as Record<string, unknown> | undefined)) {
+        isAdminAuth = true;
+      }
     }
   }
   if (!isCronAuth && !isAdminAuth) {

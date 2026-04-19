@@ -34,7 +34,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
     return;
   }
 
-  // Require cron auth (manual smoke test via CRON_SECRET, or Vercel cron markers)
+  // Require cron auth (Bearer CRON_SECRET from Vercel when set; preview/local may use Vercel cron headers if secret unset)
   if (!requireCronAuth(req)) {
     res.status(401).json({ error: "Unauthorized" });
     return;

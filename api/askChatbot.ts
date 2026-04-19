@@ -2,8 +2,10 @@ import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { checkApiKeys, getVerifyAuth, withErrorHandling } from "./_errorHandler.js";
 import { APP_KNOWLEDGE } from "./appKnowledge.js";
-import { enforceRateLimit } from "./_rateLimit.js";
+import { getAdminDb } from "./_firebaseAdmin.js";
 import { sanitizeForAI } from "./_inputSanitizer.js";
+import { hasPlatformAdminAccess } from "./_platformAdminAccess.js";
+import { enforceRateLimit } from "./_rateLimit.js";
 
 async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
   if (req.method !== "POST") {
@@ -67,17 +69,14 @@ async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
     return;
   }
 
-  // Check if user is admin
   let isAdmin = false;
   try {
-    const { getAdminDb } = await import("./_firebaseAdmin.js");
     const db = getAdminDb();
     const userDoc = await db.collection("users").doc(user.uid).get();
-    const userData = userDoc.exists ? (userDoc.data() as any) : null;
-    isAdmin = userData?.role === "Admin";
+    const userData = userDoc.exists ? (userDoc.data() as Record<string, unknown>) : undefined;
+    isAdmin = hasPlatformAdminAccess(userData);
   } catch (error) {
     console.error("Failed to check admin status:", error);
-    // Continue with non-admin access if check fails
   }
 
   // Filter knowledge base based on admin status
