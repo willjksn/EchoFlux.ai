@@ -319,6 +319,95 @@ function membershipChipsForDisplay(links: FanMembershipLink[]): FanMembershipLin
     return [];
 }
 
+const ADMIN_ROSTER_UID_RE = /^[A-Za-z0-9]{20,36}$/;
+
+type CreatorHubRosterRow = {
+    id: string;
+    email: string;
+    displayName: string;
+    subscriptionStatus: string | null;
+    totalSpentCents: number;
+};
+
+/**
+ * Add fans from adminFanHubMemberships so the expandable roster stays aligned with the Fan Buyer Summary
+ * when Firestore fan docs are missing or keyed differently than the membership index.
+ */
+function augmentCreatorHubRosterRows(
+    apiRows: CreatorHubRosterRow[],
+    creatorUserId: string,
+    membershipsByFan: Record<string, FanMembershipLink[]>,
+    profilesByFan: Record<string, FanHubMemberProfile>,
+    directoryUsers: User[],
+): CreatorHubRosterRow[] {
+    const normCreator = normalizeAdminCreatorGroupKey(creatorUserId);
+    if (!normCreator) return apiRows;
+
+    const byDedupe = new Map<string, CreatorHubRosterRow>();
+
+    const dedupeKeyForRow = (r: CreatorHubRosterRow): string => {
+        const em = r.email.trim().toLowerCase();
+        if (ADMIN_ROSTER_UID_RE.test(r.id)) return `uid:${r.id}`;
+        if (em && em !== "—") return `email:${em}`;
+        return `id:${r.id}`;
+    };
+
+    const upsertRow = (r: CreatorHubRosterRow) => {
+        const k = dedupeKeyForRow(r);
+        const prev = byDedupe.get(k);
+        if (!prev) {
+            byDedupe.set(k, { ...r });
+            return;
+        }
+        if (prev.email === "—" && r.email !== "—") prev.email = r.email;
+        if ((prev.displayName === "—" || !prev.displayName) && r.displayName !== "—") prev.displayName = r.displayName;
+        if (!prev.subscriptionStatus && r.subscriptionStatus) prev.subscriptionStatus = r.subscriptionStatus;
+        prev.totalSpentCents = Math.max(prev.totalSpentCents, r.totalSpentCents);
+        if (ADMIN_ROSTER_UID_RE.test(r.id) && !ADMIN_ROSTER_UID_RE.test(prev.id)) prev.id = r.id;
+    };
+
+    for (const r of apiRows) upsertRow(r);
+
+    for (const [fanKey, links] of Object.entries(membershipsByFan)) {
+        if (!Array.isArray(links) || links.length === 0) continue;
+        const forCreator = links.filter((m) => normalizeAdminCreatorGroupKey(m.creatorId) === normCreator);
+        if (forCreator.length === 0) continue;
+
+        const fk = fanKey.trim();
+        const profile =
+            profilesByFan[fk] || (fk.includes("@") ? profilesByFan[fk.toLowerCase()] : undefined);
+        const userMatch = directoryUsers.find(
+            (u) => u.id === fk || (fk.includes("@") && u.email.trim().toLowerCase() === fk.toLowerCase()),
+        );
+
+        const best = [...forCreator].sort(
+            (a, b) => fanMembershipStatusRank(b.status) - fanMembershipStatusRank(a.status),
+        )[0];
+        const spent = forCreator.reduce((max, m) => Math.max(max, m.totalSpentCents ?? 0), 0);
+
+        const email =
+            (profile?.email && profile.email.trim().toLowerCase()) ||
+            (fk.includes("@") ? fk.toLowerCase() : "") ||
+            userMatch?.email?.trim().toLowerCase() ||
+            "—";
+        const displayName =
+            (profile?.displayName && profile.displayName.trim()) ||
+            (userMatch?.name && userMatch.name.trim()) ||
+            (email !== "—" ? email.split("@")[0] : "—");
+        const rowId = ADMIN_ROSTER_UID_RE.test(fk) ? fk : email !== "—" ? email : `key:${fk}`;
+
+        upsertRow({
+            id: rowId,
+            email: email || "—",
+            displayName: displayName || "—",
+            subscriptionStatus: best?.status ?? null,
+            totalSpentCents: spent,
+        });
+    }
+
+    return Array.from(byDedupe.values()).sort((a, b) => b.totalSpentCents - a.totalSpentCents);
+}
+
 export const AdminDashboard: React.FC = () => {
     const { user: currentUser, showToast, setActivePage } = useAppContext();
     const [users, setUsers] = useState<User[]>([]);
@@ -634,7 +723,7 @@ export const AdminDashboard: React.FC = () => {
             try {
                 const token = await auth.currentUser?.getIdToken(true);
                 if (!token) return;
-                const res = await fetch('/api/adminFanHubMemberships?activeOnly=1', {
+                const res = await fetch('/api/adminFanHubMemberships?activeOnly=0', {
                     headers: { Authorization: `Bearer ${token}` },
                 });
                 if (!res.ok) {
@@ -986,7 +1075,14 @@ export const AdminDashboard: React.FC = () => {
         const id = hubUser.id;
         const open = !!adminCreatorRosterOpen[id];
         const loading = !!adminCreatorRosterLoading[id];
-        const rows = adminCreatorRosters[id] ?? [];
+        const apiRows = adminCreatorRosters[id] ?? [];
+        const rows = augmentCreatorHubRosterRows(
+            apiRows,
+            id,
+            fanHubMembershipsByFanId,
+            fanHubMemberProfilesByFanId,
+            users,
+        );
         const countLabel = rows.length > 0 ? ` (${rows.length})` : '';
         return (
             <tr className="border-b border-gray-200 dark:border-gray-700 bg-slate-50/60 dark:bg-slate-900/25">
@@ -1005,7 +1101,9 @@ export const AdminDashboard: React.FC = () => {
                                 <p className="text-xs text-gray-500 dark:text-gray-400">Loading…</p>
                             ) : rows.length === 0 ? (
                                 <p className="text-xs text-gray-500 dark:text-gray-400">
-                                    No fan docs under <code className="text-[10px]">creators/{id}/fans</code> yet.
+                                    No My Page members found for this creator (no rows under{' '}
+                                    <code className="text-[10px]">creators/{id}/fans</code> and no matching Fan Hub
+                                    memberships in the admin index).
                                 </p>
                             ) : (
                                 <div className="overflow-x-auto max-h-72 overflow-y-auto rounded-xl border border-gray-200/90 bg-white/80 shadow-sm dark:border-gray-600 dark:bg-gray-900/40">
@@ -2570,8 +2668,11 @@ export const AdminDashboard: React.FC = () => {
                                         if (a.role === 'Admin') return a.email.localeCompare(b.email);
                                         return new Date(b.signupDate).getTime() - new Date(a.signupDate).getTime();
                                     });
-                                // Fan Hub block on "All": people with a synced Fan Hub membership as a fan (may overlap EchoFlux rows).
-                                const fanHubUsers = nonAdminUsers.filter((user) => hasFanHubMembership(user));
+                                // Fan buyers for the summary table: use filteredUsers (all pages), not paginated visibleUsers —
+                                // otherwise only buyers on the current page appear.
+                                const fanHubUsers = filteredUsers
+                                    .filter((user) => user.role !== 'Admin')
+                                    .filter((user) => hasFanHubMembership(user));
                                 // Fan Hub tab: non-admin rows are already creator-only from filteredUsers; list them with rosters.
                                 const myPageCreatorUsers = showCreatorsMyPageSection
                                     ? creatorIds.size > 0

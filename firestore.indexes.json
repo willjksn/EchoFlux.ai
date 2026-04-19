@@ -109,6 +109,11 @@
         { "fieldPath": "scheduledFor", "order": "ASCENDING" },
         { "fieldPath": "__name__", "order": "ASCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "fans",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [{ "fieldPath": "creatorId", "order": "ASCENDING" }]
     }
   ],
   "fieldOverrides": [
