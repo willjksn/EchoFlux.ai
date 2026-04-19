@@ -3,7 +3,9 @@
 // Runs via Vercel Cron every 5-10 minutes
 
 import type { VercelRequest, VercelResponse } from "@vercel/node";
+import { requireCronAuth } from "./_cronAuth.js";
 import { getAdminDb } from "./_firebaseAdmin.js";
+import { hasPlatformAdminAccess } from "./_platformAdminAccess.js";
 import { verifyAuth } from "./verifyAuth.js";
 
 interface SyncResult {
@@ -502,11 +504,9 @@ async function syncFacebookComments(
  * Main handler - can be called via cron or manually
  */
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  // Verify cron secret (if called via cron)
-  const cronSecret = req.headers["authorization"]?.replace("Bearer ", "");
-  const isCronCall = cronSecret === process.env.CRON_SECRET;
+  // Cron: shared requireCronAuth (fixes bypass when CRON_SECRET was unset: undefined === undefined).
+  const isCronCall = requireCronAuth(req);
 
-  // If not cron, require auth
   if (!isCronCall) {
     try {
       const user = await verifyAuth(req);
@@ -517,10 +517,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       // Check role from Firestore user document
       const db = getAdminDb();
       const userDoc = await db.collection("users").doc(user.uid).get();
-      const userData = userDoc.data();
+      const userData = userDoc.data() as Record<string, unknown> | undefined;
       const requestedUserId = typeof req.query.userId === "string" ? req.query.userId : null;
       const isOwnerRequest = requestedUserId && requestedUserId === user.uid;
-      if (!userData || (userData.role !== "Admin" && !isOwnerRequest)) {
+      if (!hasPlatformAdminAccess(userData) && !isOwnerRequest) {
         return res.status(403).json({ error: "Admin access required for manual sync" });
       }
     } catch (authError) {

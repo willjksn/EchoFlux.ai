@@ -3,7 +3,9 @@
 // Runs via Vercel Cron every 4-6 hours
 
 import type { VercelRequest, VercelResponse } from "@vercel/node";
+import { requireCronAuth } from "./_cronAuth.js";
 import { getAdminDb } from "./_firebaseAdmin.js";
+import { hasPlatformAdminAccess } from "./_platformAdminAccess.js";
 import { verifyAuth } from "./verifyAuth.js";
 
 interface TrendingTopic {
@@ -115,11 +117,8 @@ async function storeTrendingTopics(
  * Main handler
  */
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  // Verify cron secret (if called via cron)
-  const cronSecret = req.headers["authorization"]?.replace("Bearer ", "");
-  const isCronCall = cronSecret === process.env.CRON_SECRET;
+  const isCronCall = requireCronAuth(req);
 
-  // If not cron, require auth
   if (!isCronCall) {
     try {
       const user = await verifyAuth(req);
@@ -130,8 +129,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       // Check role from Firestore user document
       const db = getAdminDb();
       const userDoc = await db.collection("users").doc(user.uid).get();
-      const userData = userDoc.data();
-      if (!userData || userData.role !== "Admin") {
+      const userData = userDoc.data() as Record<string, unknown> | undefined;
+      if (!hasPlatformAdminAccess(userData)) {
         return res.status(403).json({ error: "Admin access required" });
       }
     } catch (authError) {

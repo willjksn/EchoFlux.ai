@@ -22,7 +22,8 @@ function customStorefrontHostnames(): string[] {
     .filter(Boolean);
 }
 
-function isAllowedOrigin(origin: string): boolean {
+/** Exported for endpoints that need the same origin list without full OPTIONS handling (e.g. GET-only image proxy). */
+export function isBrowserApiAllowedOrigin(origin: string): boolean {
   if (!origin) return false;
   try {
     const u = new URL(origin);
@@ -48,7 +49,7 @@ function isAllowedOrigin(origin: string): boolean {
 export function applyBrowserApiCors(req: VercelRequest, res: VercelResponse): boolean {
   const origin = typeof req.headers.origin === "string" ? req.headers.origin : "";
   if (req.method === "OPTIONS") {
-    if (!isAllowedOrigin(origin)) {
+    if (!isBrowserApiAllowedOrigin(origin)) {
       res.status(403).end();
       return true;
     }
@@ -60,7 +61,7 @@ export function applyBrowserApiCors(req: VercelRequest, res: VercelResponse): bo
     res.status(204).end();
     return true;
   }
-  if (isAllowedOrigin(origin)) {
+  if (isBrowserApiAllowedOrigin(origin)) {
     res.setHeader("Access-Control-Allow-Origin", origin);
     res.setHeader("Vary", "Origin");
   }

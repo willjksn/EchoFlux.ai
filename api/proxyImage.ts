@@ -1,15 +1,13 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 // Important: use .js extension for Vercel ESM resolver
+import { applyBrowserApiCors } from "./_browserApiCors.js";
 import { verifyAuth } from "./verifyAuth.js";
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  // Set CORS headers early
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-  
-  if (req.method !== 'GET') {
-    return res.status(405).json({ error: 'Method not allowed' });
+  if (applyBrowserApiCors(req, res)) return;
+
+  if (req.method !== "GET") {
+    return res.status(405).json({ error: "Method not allowed" });
   }
 
   // Declare decodedUrl outside try block so it's available in catch
@@ -20,9 +18,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     let auth;
     try {
       auth = await verifyAuth(req);
-    } catch (authError: any) {
-      console.error('Auth verification error:', authError);
-      return res.status(401).json({ error: 'Unauthorized', details: authError?.message });
+    } catch (authError: unknown) {
+      console.error("Auth verification error:", authError);
+      const msg = authError instanceof Error ? authError.message : undefined;
+      return res.status(401).json({
+        error: "Unauthorized",
+        ...(process.env.NODE_ENV === "development" && msg ? { details: msg } : {}),
+      });
     }
     
     if (!auth?.uid) {
