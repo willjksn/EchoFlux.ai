@@ -69,8 +69,8 @@ export const Sidebar: React.FC = () => {
   const hasPremiumStudioAccess = hasPremiumStudioRouteAccess(user);
   const trackFanHubSidebarBadge = hasFanHubAccess || hasPremiumStudioAccess;
   const fanHubUnreadCount = useFanHubCreatorNotificationsUnread(trackFanHubSidebarBadge);
-  const fanHubSidebarBadge =
-    trackFanHubSidebarBadge && activePage !== 'fanHub' ? fanHubUnreadCount : 0;
+  /** Always mirror the Fan Hub bell on the nav row, including while Fan Hub is open (selected). */
+  const fanHubSidebarBadge = trackFanHubSidebarBadge ? fanHubUnreadCount : 0;
 
   const allNavItems: (Omit<NavItemProps, 'page' | 'label'> & { page: Page | 'admin', label: string })[] = [
     // MAIN
