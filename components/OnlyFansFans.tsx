@@ -604,6 +604,14 @@ export const OnlyFansFans: React.FC = () => {
                                         });
                                         if (cleaned) avatarUrl = cleaned;
                                     }
+                                } else {
+                                    const d = data as Record<string, unknown>;
+                                    hubMembershipExpired = isHubMembershipAccessExpired({
+                                        subscriptionStatus: subscriptionStatusFromFanDoc(d),
+                                        cancelAtPeriodEnd: parseCancelAtPeriodEndFromFanDoc(d),
+                                        accessEnd: pickLatestMemberAccessEnd(d),
+                                        canceledAt: parseDateLike(d.canceledAt),
+                                    });
                                 }
                                 if (uSnap.exists()) {
                                     const ud = uSnap.data() as Record<string, unknown>;
@@ -1339,19 +1347,25 @@ export const OnlyFansFans: React.FC = () => {
                             return (
                                 <div
                                     key={fan.id}
-                                    onClick={() => setSelectedFan(fan)}
+                                    onClick={() => {
+                                        if (!accessExpired) setSelectedFan(fan);
+                                    }}
                                     title={
                                         accessExpired
                                             ? 'Paid membership ended. Card stays for history; it updates if they resubscribe.'
                                             : undefined
                                     }
-                                    className={`relative p-4 rounded-lg border-2 cursor-pointer transition-all hover:shadow-lg ${
+                                    className={`relative p-4 rounded-lg border-2 transition-all ${
+                                        accessExpired
+                                            ? 'cursor-not-allowed opacity-[0.82] grayscale-[0.55] hover:shadow-none'
+                                            : 'cursor-pointer hover:shadow-lg'
+                                    } ${
                                         isSelected
                                             ? accessExpired
-                                                ? 'border-primary-400/80 bg-primary-50/70 dark:bg-primary-900/15 opacity-95 grayscale-[0.35]'
+                                                ? 'border-gray-400 dark:border-gray-500 bg-gray-100 dark:bg-gray-800/95 ring-1 ring-gray-300/80 dark:ring-gray-600/80'
                                                 : 'border-primary-500 bg-primary-50 dark:bg-primary-900/20'
                                             : accessExpired
-                                              ? 'border-gray-300 dark:border-gray-600 bg-gray-50/95 dark:bg-gray-900/70 opacity-[0.92] grayscale-[0.4] hover:border-gray-400 dark:hover:border-gray-500'
+                                              ? 'border-gray-300 dark:border-gray-600 bg-gray-100/95 dark:bg-gray-900/85 shadow-inner'
                                               : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 hover:border-primary-300 dark:hover:border-primary-700'
                                     }`}
                                 >
@@ -1402,6 +1416,7 @@ export const OnlyFansFans: React.FC = () => {
                                                     <button
                                                         onClick={async (e) => {
                                                             e.stopPropagation();
+                                                            if (accessExpired) return;
                                                             // Select the fan first if not already selected
                                                             if (!isSelected) {
                                                                 setSelectedFan(fan);

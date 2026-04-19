@@ -183,7 +183,11 @@ export function isHubMembershipAccessExpired(input: {
     return true;
   }
   if (st === "active" || st === "trialing") {
-    return input.cancelAtPeriodEnd === true && endMs != null && endMs <= now;
+    /** Period end in the past ends paid access even if cancel_at_period_end never synced. */
+    if (endMs != null && endMs <= now) return true;
+    return false;
   }
+  /** No explicit status but a mirrored period end exists and has passed (partial webhook / CRM data). */
+  if (!st && endMs != null && endMs <= now) return true;
   return false;
 }
