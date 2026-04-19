@@ -862,7 +862,6 @@ export const OnlyFansStudio: React.FC<{ mode?: 'studio' | 'fanHub' }> = ({ mode 
                     minHeight: '100%',
                     backgroundColor: 'var(--fan-bg, transparent)',
                     ...(bridge ?? {}),
-                    color: 'var(--fan-text, inherit)',
                     fontFamily: 'var(--fan-sans, system-ui, sans-serif)',
                 }}
             >

@@ -241,10 +241,11 @@ export const PremiumStudioLayout: React.FC<PremiumStudioLayoutProps> = ({ childr
     return {
       ...fanHubCssVarBridge,
       background,
-      color: text,
+      /** Dark storefront: keep explicit shell text. Light storefront: color comes from `.stormij-theme--light` in CSS so `html.dark` + Tailwind `dark:bg-gray-*` panels do not inherit dark `--fan-text` on charcoal. */
+      ...(fanHubSurfaceIsDark ? { color: text } : {}),
       ...(fontFamily ? { fontFamily } : {}),
     };
-  }, [isFanHub, effectiveFanTheme, fanHubCssVarBridge]);
+  }, [isFanHub, effectiveFanTheme, fanHubCssVarBridge, fanHubSurfaceIsDark]);
 
   const inner = (
     <>
@@ -353,9 +354,11 @@ export const PremiumStudioLayout: React.FC<PremiumStudioLayoutProps> = ({ childr
   );
 
   if (isFanHub) {
+    const fanHubThemeClass =
+      !fanHubSurfaceIsDark ? 'stormij-theme stormij-theme--light' : 'stormij-theme';
     return (
       <div
-        className="stormij-theme -m-6 min-h-full p-6 rounded-xl shadow-sm border border-black/5 dark:border-slate-600/60"
+        className={`${fanHubThemeClass} -m-6 min-h-full p-6 rounded-xl shadow-sm border border-black/5 dark:border-slate-600/60`}
         style={{
           ...fanHubShellStyle,
           borderColor: fanHubSurfaceIsDark

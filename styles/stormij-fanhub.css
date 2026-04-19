@@ -32,6 +32,41 @@
   background: transparent;
 }
 
+/*
+ * Creator Fan Hub (light storefront) under EchoFlux `html.dark`:
+ * - `stormij-theme--light` skips the heavy `.dark .stormij-theme:not(.stormij-theme--light)` overrides (same idea as member storefront).
+ * - Default body text on the pink shell uses storefront `--fan-text`.
+ * - Tailwind `dark:bg-gray-*` panels must not inherit that dark maroon onto charcoal (unreadable).
+ */
+.stormij-theme.stormij-theme--light {
+  color: var(--fan-text, #1f2937);
+}
+
+html.dark .stormij-theme.stormij-theme--light :where(
+  .dark\:bg-gray-700,
+  .dark\:bg-gray-800,
+  .dark\:bg-gray-850,
+  .dark\:bg-gray-900,
+  .dark\:bg-gray-950,
+  .dark\:bg-slate-800,
+  .dark\:bg-slate-900
+) {
+  color: rgb(243 244 246);
+}
+
+html.dark .stormij-theme.stormij-theme--light :where(
+  .dark\:bg-gray-700\/50,
+  .dark\:bg-gray-700\/80,
+  .dark\:bg-gray-800\/50,
+  .dark\:bg-gray-800\/80,
+  .dark\:bg-gray-800\/90,
+  .dark\:bg-gray-800\/95,
+  .dark\:bg-gray-900\/50,
+  .dark\:bg-gray-900\/80
+) {
+  color: rgb(243 244 246);
+}
+
 /* Creator-themed controls (Tailwind `primary-*` stays app indigo; use these inside .stormij-theme) */
 .stormij-theme .fh-btn {
   display: inline-flex;
