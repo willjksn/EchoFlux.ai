@@ -42,7 +42,10 @@ export function shouldHaveCreatorAppAccess(params: {
   }
   const plan = typeof d.plan === "string" ? d.plan : "";
   if (plan && PAID_PLANS.has(plan)) return true;
-  if (d.hasCompletedOnboarding === true && d.accountOrigin !== "fan_hub") return true;
+  // Fan Hub–provisioned accounts: never get the EchoFlux creator shell from onboarding alone
+  // (creators/{uid}, paid SaaS/invite tiers, and rules above still apply).
+  if (d.accountOrigin === "fan_hub") return false;
+  if (d.hasCompletedOnboarding === true) return true;
   return false;
 }
 

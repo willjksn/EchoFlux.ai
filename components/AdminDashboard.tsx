@@ -407,6 +407,8 @@ type FanBuyerSummaryRowState = {
     purchasesCents: number;
     tipCount: number;
     tipsCents: number;
+    /** Fan Hub index key(s) merged into this row (server-resolved roster). */
+    fanIndexKeys?: string[];
 };
 
 const ADMIN_ROSTER_UID_RE = /^[A-Za-z0-9]{20,36}$/;
@@ -538,6 +540,8 @@ export const AdminDashboard: React.FC = () => {
     const [showAddUserModal, setShowAddUserModal] = useState(false);
     const [creatorStorefrontDiag, setCreatorStorefrontDiag] = useState<CreatorStorefrontDiagnosticPayload | null>(null);
     const [creatorStorefrontDiagLoading, setCreatorStorefrontDiagLoading] = useState(false);
+    /** When false, hide the long scan output but keep the panel header + run control. */
+    const [creatorStorefrontHealthResultsExpanded, setCreatorStorefrontHealthResultsExpanded] = useState(true);
 
     // Fan Hub Revenue State
     const [fanHubRevenue, setFanHubRevenue] = useState<{
@@ -564,6 +568,8 @@ export const AdminDashboard: React.FC = () => {
     const [isLoadingFanHubRevenue, setIsLoadingFanHubRevenue] = useState(true);
     const [fanHubMembershipsByFanId, setFanHubMembershipsByFanId] = useState<Record<string, FanMembershipLink[]>>({});
     const [fanHubMemberProfilesByFanId, setFanHubMemberProfilesByFanId] = useState<Record<string, FanHubMemberProfile>>({});
+    /** Server-built Fan Buyer rows (Firestore users join); null = use client merge fallback. */
+    const [fanBuyerRosterFromApi, setFanBuyerRosterFromApi] = useState<FanBuyerSummaryRowState[] | null>(null);
     const [showFanHubMembersSection, setShowFanHubMembersSection] = useState(true);
     /** Admin: expandable `creators/{creatorId}/fans` roster (EchoFlux workspace creators, including dual Fan Hub members). */
     const [adminCreatorRosterOpen, setAdminCreatorRosterOpen] = useState<Record<string, boolean>>({});
@@ -826,7 +832,10 @@ export const AdminDashboard: React.FC = () => {
     // Fan Hub member -> subscribed creators map (admin-only).
     useEffect(() => {
         const fetchFanHubMemberships = async () => {
-            if (currentUser?.role !== 'Admin') return;
+            if (currentUser?.role !== 'Admin') {
+                setFanBuyerRosterFromApi(null);
+                return;
+            }
             try {
                 const token = await auth.currentUser?.getIdToken(true);
                 if (!token) return;
@@ -835,16 +844,46 @@ export const AdminDashboard: React.FC = () => {
                 });
                 if (!res.ok) {
                     console.warn('adminFanHubMemberships:', res.status, await res.text());
+                    setFanBuyerRosterFromApi(null);
                     return;
                 }
                 const data = await res.json() as {
                     membershipsByFan?: Record<string, FanMembershipLink[]>;
                     fanProfilesByFanId?: Record<string, FanHubMemberProfile>;
+                    buyerRoster?: {
+                        rows?: Array<{
+                            directoryOnly?: boolean;
+                            fanIndexKeys?: string[];
+                            user?: Record<string, unknown>;
+                            memberships?: FanMembershipLink[];
+                            purchaseCount?: number;
+                            purchasesCents?: number;
+                            tipCount?: number;
+                            tipsCents?: number;
+                        }>;
+                    };
                 };
                 setFanHubMembershipsByFanId(data.membershipsByFan || {});
                 setFanHubMemberProfilesByFanId(data.fanProfilesByFanId || {});
+                if (Array.isArray(data.buyerRoster?.rows)) {
+                    setFanBuyerRosterFromApi(
+                        data.buyerRoster.rows.map((r) => ({
+                            user: (r.user || {}) as unknown as User,
+                            memberships: Array.isArray(r.memberships) ? r.memberships : [],
+                            directoryOnly: !!r.directoryOnly,
+                            purchaseCount: Number(r.purchaseCount) || 0,
+                            purchasesCents: Number(r.purchasesCents) || 0,
+                            tipCount: Number(r.tipCount) || 0,
+                            tipsCents: Number(r.tipsCents) || 0,
+                            fanIndexKeys: Array.isArray(r.fanIndexKeys) ? r.fanIndexKeys : [],
+                        })),
+                    );
+                } else {
+                    setFanBuyerRosterFromApi(null);
+                }
             } catch (error) {
                 console.warn('Failed to fetch Fan Hub memberships:', error);
+                setFanBuyerRosterFromApi(null);
             }
         };
         fetchFanHubMemberships();
@@ -1124,6 +1163,39 @@ export const AdminDashboard: React.FC = () => {
 
         const passesWorkspaceDirectory = (u: User) => isEchofluxWorkspaceUser(u) || hasFanHubMembership(u);
 
+        if (fanBuyerRosterFromApi !== null) {
+            const filteredRows = fanBuyerRosterFromApi.filter((row) => {
+                if (row.user.role === 'Admin') return false;
+                const profile =
+                    fanHubMemberProfilesByFanId[row.user.id] ||
+                    (row.user.email
+                        ? fanHubMemberProfilesByFanId[row.user.email.trim().toLowerCase()]
+                        : undefined);
+                const extra = row.fanIndexKeys ?? [];
+                return matchesText([
+                    row.user.name,
+                    row.user.email,
+                    ...extra,
+                    profile?.displayName,
+                    profile?.email,
+                    profile?.username,
+                ]);
+            });
+            const unassigned: User[] = [];
+            for (const u of users) {
+                if (u.role === 'Admin') continue;
+                if (!passesWorkspaceDirectory(u)) continue;
+                if (!matchesText([u.name, u.email])) continue;
+                if (u.accountOrigin !== 'fan_hub') continue;
+                if (getFanHubMembershipsForUser(u).length > 0) continue;
+                if (filteredRows.some((r) => r.user.id === u.id)) continue;
+                unassigned.push(u);
+            }
+            unassigned.sort((a, b) => a.name.localeCompare(b.name));
+            const rows = [...filteredRows].sort((a, b) => a.user.name.localeCompare(b.user.name));
+            return { rows, unassigned };
+        }
+
         const userById = new Map(users.map((u) => [u.id, u] as const));
         const userByEmail = new Map(
             users.filter((x) => x.email).map((x) => [x.email.trim().toLowerCase(), x] as const),
@@ -1256,6 +1328,7 @@ export const AdminDashboard: React.FC = () => {
         getFanHubMembershipsForUser,
         hasFanHubMembership,
         isEchofluxWorkspaceUser,
+        fanBuyerRosterFromApi,
     ]);
 
     const runCreatorStorefrontDiagnostics = useCallback(async () => {
@@ -1274,6 +1347,7 @@ export const AdminDashboard: React.FC = () => {
                 throw new Error((data as { error?: string }).error || res.statusText || 'Request failed');
             }
             setCreatorStorefrontDiag(data);
+            setCreatorStorefrontHealthResultsExpanded(true);
         } catch (e) {
             console.error('adminCreatorStorefrontDiagnostics', e);
             showToast?.((e as Error).message || 'Diagnostics failed', 'error');
@@ -1574,6 +1648,17 @@ export const AdminDashboard: React.FC = () => {
     
     const handleSaveUser = async (updatedUser: User) => {
         try {
+            const fanHubOnlyAdmin =
+                updatedUser.accountOrigin === 'fan_hub' ||
+                (hasFanHubMembership(updatedUser) && !isEchofluxWorkspaceUser(updatedUser));
+            if (fanHubOnlyAdmin) {
+                showToast?.(
+                    'This account is Fan Hub–only (not an EchoFlux workspace subscriber). Creator plans are not applied here.',
+                    'error',
+                );
+                return;
+            }
+
             // Ensure plan is valid (only Pro and Elite in use)
             const validPlans: User['plan'][] = ['Pro', 'Elite'];
             if (!validPlans.includes(updatedUser.plan)) {
@@ -1742,6 +1827,9 @@ export const AdminDashboard: React.FC = () => {
                     onClose={() => setEditingUser(null)}
                     onSave={handleSaveUser}
                     showToast={showToast}
+                    fanHubConsumerOnly={
+                        hasFanHubMembership(editingUser) && !isEchofluxWorkspaceUser(editingUser)
+                    }
                 />
             )}
             {grantingRewardToUser && (
@@ -2916,16 +3004,47 @@ export const AdminDashboard: React.FC = () => {
                                     multiple creator roots.
                                 </p>
                             </div>
-                            <button
-                                type="button"
-                                onClick={() => void runCreatorStorefrontDiagnostics()}
-                                disabled={creatorStorefrontDiagLoading}
-                                className="shrink-0 px-3 py-1.5 text-xs font-semibold rounded-md bg-amber-700 text-white hover:bg-amber-800 disabled:opacity-50 dark:bg-amber-800 dark:hover:bg-amber-700"
-                            >
-                                {creatorStorefrontDiagLoading ? 'Scanning…' : 'Run scan'}
-                            </button>
+                            <div className="flex flex-wrap items-center gap-2 shrink-0">
+                                {creatorStorefrontDiag?.success ? (
+                                    <button
+                                        type="button"
+                                        onClick={() => setCreatorStorefrontHealthResultsExpanded((v) => !v)}
+                                        className="px-3 py-1.5 text-xs font-semibold rounded-md border border-amber-600/50 bg-white/90 text-amber-900 hover:bg-amber-100/90 dark:bg-amber-950/50 dark:text-amber-100 dark:border-amber-600/40 dark:hover:bg-amber-900/40"
+                                    >
+                                        {creatorStorefrontHealthResultsExpanded ? 'Minimize results' : 'Expand results'}
+                                    </button>
+                                ) : null}
+                                <button
+                                    type="button"
+                                    onClick={() => void runCreatorStorefrontDiagnostics()}
+                                    disabled={creatorStorefrontDiagLoading}
+                                    className="px-3 py-1.5 text-xs font-semibold rounded-md bg-amber-700 text-white hover:bg-amber-800 disabled:opacity-50 dark:bg-amber-800 dark:hover:bg-amber-700"
+                                >
+                                    {creatorStorefrontDiagLoading ? 'Scanning…' : 'Run scan'}
+                                </button>
+                            </div>
                         </div>
-                        {creatorStorefrontDiag?.success ? (
+                        {creatorStorefrontDiag?.success && !creatorStorefrontHealthResultsExpanded ? (
+                            <p className="mt-2 text-[10px] text-amber-800/90 dark:text-amber-200/80 border-t border-amber-200/60 dark:border-amber-800/40 pt-2">
+                                Results hidden · {creatorStorefrontDiag.creatorsScanned ?? 0} creators scanned
+                                {creatorStorefrontDiag.generatedAt
+                                    ? ` · ${new Date(creatorStorefrontDiag.generatedAt).toLocaleString()}`
+                                    : ''}
+                                · dup handles: {creatorStorefrontDiag.duplicateHandles?.length ?? 0}, no{' '}
+                                <code className="text-[9px]">users/</code>:{' '}
+                                {creatorStorefrontDiag.creatorsWithoutUsersDoc?.total ?? 0}, handle issues:{' '}
+                                {creatorStorefrontDiag.creatorHandlesIssues?.length ?? 0}.{' '}
+                                <button
+                                    type="button"
+                                    onClick={() => setCreatorStorefrontHealthResultsExpanded(true)}
+                                    className="font-semibold text-amber-900 dark:text-amber-100 underline underline-offset-2"
+                                >
+                                    Expand
+                                </button>{' '}
+                                to view full report.
+                            </p>
+                        ) : null}
+                        {creatorStorefrontDiag?.success && creatorStorefrontHealthResultsExpanded ? (
                             <div className="mt-3 space-y-3 text-xs text-amber-950 dark:text-amber-50 border-t border-amber-200/70 dark:border-amber-800/50 pt-3">
                                 <p className="text-[10px] text-amber-800/80 dark:text-amber-200/75">
                                     Scanned {creatorStorefrontDiag.creatorsScanned ?? 0} creator docs ·{' '}
@@ -3479,7 +3598,9 @@ export const AdminDashboard: React.FC = () => {
                                                                                                         <p className="text-sm text-gray-500 dark:text-gray-400">{row.user.email}</p>
                                                                                                         {row.directoryOnly ? (
                                                                                                             <p className="text-[11px] text-cyan-800/90 dark:text-cyan-200/90">
-                                                                                                                Storefront index only (no matching row in users directory).
+                                                                                                                Fan Hub index only — no matching Firestore{' '}
+                                                                                                                <span className="font-mono">users/</span> document for this fan
+                                                                                                                key (by UID or email).
                                                                                                             </p>
                                                                                                         ) : null}
                                                                                                     </div>
@@ -3513,7 +3634,8 @@ export const AdminDashboard: React.FC = () => {
                                                                                             <td className="p-3">
                                                                                                 {row.directoryOnly ? (
                                                                                                     <span className="text-[11px] text-gray-500 dark:text-gray-400">
-                                                                                                        Manage/Delete require a users/ account.
+                                                                                                        Manage/Delete need a real{' '}
+                                                                                                        <span className="font-mono">users/</span> account row.
                                                                                                     </span>
                                                                                                 ) : (
                                                                                                     <div className="flex gap-2">

@@ -48,7 +48,8 @@ function shouldHaveCreatorAppAccess(userData: UserDoc | undefined, creatorDocExi
   }
   const plan = typeof d.plan === "string" ? d.plan : "";
   if (plan && PAID_PLANS.has(plan)) return true;
-  if (d.hasCompletedOnboarding === true && d.accountOrigin !== "fan_hub") return true;
+  if (d.accountOrigin === "fan_hub") return false;
+  if (d.hasCompletedOnboarding === true) return true;
   return false;
 }
 

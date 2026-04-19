@@ -9,9 +9,21 @@ interface UserManagementModalProps {
     onClose: () => void;
     onSave: (updatedUser: User) => void;
     showToast?: (message: string, type: 'success' | 'error' | 'info') => void;
+    /**
+     * When true, hide EchoFlux creator controls (plans, video grants, etc.) even if `accountOrigin`
+     * was not set to `fan_hub` on the user doc — e.g. storefront fans who are not workspace creators
+     * and do not have an active EchoFlux SaaS subscription.
+     */
+    fanHubConsumerOnly?: boolean;
 }
 
-export const UserManagementModal: React.FC<UserManagementModalProps> = ({ user, onClose, onSave, showToast }) => {
+export const UserManagementModal: React.FC<UserManagementModalProps> = ({
+    user,
+    onClose,
+    onSave,
+    showToast,
+    fanHubConsumerOnly = false,
+}) => {
     const [editedUser, setEditedUser] = useState<User>(user);
     const [showGrantRewardModal, setShowGrantRewardModal] = useState(false);
     const [newPassword, setNewPassword] = useState('');
@@ -221,15 +233,17 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({ user, 
                         <div>
                             <p className="text-lg font-bold text-gray-900 dark:text-white">{editedUser.name}</p>
                             <p className="text-sm text-gray-500 dark:text-gray-400">{editedUser.email}</p>
-                            {isFanHubAccount ? (
+                            {restrictEchoFluxAdminTools ? (
                                 <span className="mt-1 inline-flex text-[10px] bg-cyan-600 text-white px-2 py-0.5 rounded-full font-semibold tracking-wide">
-                                    FAN HUB MEMBER
+                                    {fanHubConsumerOnly && !isFanHubAccount
+                                        ? 'FAN HUB CONSUMER (no EchoFlux workspace)'
+                                        : 'FAN HUB MEMBER'}
                                 </span>
                             ) : null}
                         </div>
                     </div>
 
-                    {!isFanHubAccount ? (
+                    {!restrictEchoFluxAdminTools ? (
                         <>
                             <div className="mt-6 space-y-4">
                                 <div>
@@ -389,7 +403,7 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({ user, 
                         </div>
                     )}
 
-                    {!isFanHubAccount && (
+                    {!restrictEchoFluxAdminTools && (
                     <div className="mt-4 p-4 bg-gray-50 dark:bg-gray-700/40 rounded-lg border border-gray-200 dark:border-gray-600">
                         <p className="text-sm font-semibold text-gray-900 dark:text-white mb-2">Reward Summary</p>
                         {Object.keys(rewardSummary).length === 0 ? (
@@ -411,7 +425,7 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({ user, 
 
                      <div className="mt-6 flex justify-end space-x-3">
                         <button onClick={onClose} className="px-4 py-2 bg-gray-200 dark:bg-gray-600 text-gray-800 dark:text-gray-200 rounded-md hover:bg-gray-300 dark:hover:bg-gray-500">Cancel</button>
-                        {!isFanHubAccount ? (
+                        {!restrictEchoFluxAdminTools ? (
                             <button onClick={handleSave} className="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700">Save Changes</button>
                         ) : null}
                     </div>

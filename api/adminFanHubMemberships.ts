@@ -1,5 +1,7 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { getAdminDb } from "./_firebaseAdmin.js";
+import type { DocumentSnapshot, Firestore } from "firebase-admin/firestore";
+import { defaultSettings } from "../constants.js";
+import { getAdminApp, getAdminDb } from "./_firebaseAdmin.js";
 import { verifyAuth } from "./verifyAuth.js";
 
 type MembershipRow = {
@@ -105,11 +107,71 @@ function parseCompoundFanId(raw: unknown): { authUid: string | null; emailFromId
   return { authUid: null, emailFromId: null };
 }
 
-function deriveCanonicalFanKey(rawDocId: string, rawDataId: unknown, rawEmail: unknown): { key: string; emailHint: string | null } {
+/** Prefer explicit Auth UIDs stored on fan docs (`uid`, `userId`, etc.) over email-shaped document ids. */
+function firstFirebaseAuthUid(...vals: unknown[]): string | null {
+  for (const v of vals) {
+    if (typeof v !== "string") continue;
+    const t = v.trim();
+    if (t && FIREBASE_UID_RE.test(t)) return t;
+  }
+  return null;
+}
+
+/** Matches admin annotations like `uid: xxx`, `udi: xxx`, `Uid:xxx` embedded in display names / notes. */
+const UID_TAG_IN_TEXT = /\b(?:uid|udi)\s*:\s*([A-Za-z0-9]{20,36})\b/gi;
+
+function extractTaggedFirebaseUids(...chunks: unknown[]): string[] {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const c of chunks) {
+    if (typeof c !== "string" || !c.trim()) continue;
+    UID_TAG_IN_TEXT.lastIndex = 0;
+    let m: RegExpExecArray | null;
+    while ((m = UID_TAG_IN_TEXT.exec(c)) !== null) {
+      const u = m[1];
+      if (!FIREBASE_UID_RE.test(u) || seen.has(u)) continue;
+      seen.add(u);
+      out.push(u);
+    }
+  }
+  return out;
+}
+
+type FanDocAuthHints = {
+  /** Raw field values that may be a plain Firebase uid. */
+  structured?: unknown[];
+  /** Free text (displayName, doc id string, notes, …) that may contain `uid: …` / `udi: …`. */
+  haystack?: unknown[];
+};
+
+function resolveFanDocAuthUid(hints?: FanDocAuthHints): string | null {
+  const structured = hints?.structured ?? [];
+  const haystack = hints?.haystack ?? [];
+  return (
+    firstFirebaseAuthUid(...structured) ||
+    extractTaggedFirebaseUids(...structured)[0] ||
+    extractTaggedFirebaseUids(...haystack)[0] ||
+    null
+  );
+}
+
+function deriveCanonicalFanKey(
+  rawDocId: string,
+  rawDataId: unknown,
+  rawEmail: unknown,
+  authHints?: FanDocAuthHints,
+): { key: string; emailHint: string | null } {
   const docParsed = parseCompoundFanId(rawDocId);
   const dataParsed = parseCompoundFanId(rawDataId);
   const directEmail =
     typeof rawEmail === "string" && rawEmail.trim() ? rawEmail.trim().toLowerCase() : null;
+  const fieldUid = resolveFanDocAuthUid(authHints);
+  if (fieldUid) {
+    return {
+      key: fieldUid,
+      emailHint: directEmail || docParsed.emailFromId || dataParsed.emailFromId || null,
+    };
+  }
   const authUid = docParsed.authUid || dataParsed.authUid;
   if (authUid) return { key: authUid, emailHint: directEmail || docParsed.emailFromId || dataParsed.emailFromId || null };
   const email = directEmail || docParsed.emailFromId || dataParsed.emailFromId;
@@ -161,6 +223,321 @@ function statusRank(status: string): number {
   return 0;
 }
 
+function normalizeAdminCreatorGroupKey(raw: string | null | undefined): string {
+  const id = String(raw || "").trim();
+  if (!id) return "";
+  const idx = id.indexOf("--collection=");
+  if (idx >= 0) return id.slice(0, idx).trim();
+  return id;
+}
+
+function fanMembershipStatusRankAdmin(status: string | null | undefined): number {
+  const s = String(status || "").toLowerCase().trim();
+  if (s === "active") return 5;
+  if (s === "trialing") return 4;
+  if (s === "past_due") return 3;
+  if (s === "free") return 2;
+  if (s === "canceled" || s === "cancelled" || s === "unpaid") return 1;
+  return 0;
+}
+
+function dedupeFanMembershipLinksAdmin(links: MembershipRow[]): MembershipRow[] {
+  const dedupedByCreator = new Map<string, MembershipRow>();
+  for (const membership of links) {
+    const normalizedCreatorId = normalizeAdminCreatorGroupKey(membership.creatorId);
+    const key =
+      normalizedCreatorId ||
+      (membership.creatorHandle ? `handle:${membership.creatorHandle}` : "") ||
+      `name:${(membership.creatorName || "").trim().toLowerCase()}`;
+    const existing = dedupedByCreator.get(key);
+    if (!existing) {
+      dedupedByCreator.set(key, {
+        ...membership,
+        creatorId: normalizedCreatorId || membership.creatorId,
+      });
+      continue;
+    }
+    const chosen =
+      fanMembershipStatusRankAdmin(membership.status) > fanMembershipStatusRankAdmin(existing.status)
+        ? membership
+        : existing;
+    dedupedByCreator.set(key, {
+      ...chosen,
+      creatorId: normalizedCreatorId || chosen.creatorId,
+      purchaseCount: Math.max(existing.purchaseCount || 0, membership.purchaseCount || 0),
+      purchasesCents: Math.max(existing.purchasesCents || 0, membership.purchasesCents || 0),
+      tipCount: Math.max(existing.tipCount || 0, membership.tipCount || 0),
+      tipsCents: Math.max(existing.tipsCents || 0, membership.tipsCents || 0),
+      totalSpentCents: Math.max(existing.totalSpentCents || 0, membership.totalSpentCents || 0),
+      subscriptionPriceCents: Math.max(
+        existing.subscriptionPriceCents || 0,
+        membership.subscriptionPriceCents || 0,
+      ),
+    });
+  }
+  return Array.from(dedupedByCreator.values());
+}
+
+function aggregateBuyerRowAdmin(memberships: MembershipRow[]) {
+  return {
+    purchaseCount: memberships.reduce((acc, m) => acc + (m.purchaseCount || 0), 0),
+    purchasesCents: memberships.reduce((acc, m) => acc + (m.purchasesCents || 0), 0),
+    tipCount: memberships.reduce((acc, m) => acc + (m.tipCount || 0), 0),
+    tipsCents: memberships.reduce((acc, m) => acc + (m.tipsCents || 0), 0),
+  };
+}
+
+function adminUserDisplayLabelServer(user: {
+  name?: string | null;
+  email?: string | null;
+  username?: string | null;
+  handle?: string | null;
+  memberUsername?: string | null;
+}): string {
+  const email = typeof user.email === "string" ? user.email.trim().toLowerCase() : "";
+  const nameRaw = typeof user.name === "string" ? user.name.trim() : "";
+  const nameLower = nameRaw.toLowerCase();
+  const nameLooksPlaceholder =
+    !nameRaw ||
+    nameLower === "new user" ||
+    nameLower === "member" ||
+    nameLower === "user" ||
+    (email && nameLower === email);
+  if (!nameLooksPlaceholder) return nameRaw;
+
+  const rawHandle = user.username || user.handle || user.memberUsername;
+  const u = rawHandle?.trim().toLowerCase();
+  let username: string | null = null;
+  if (u) {
+    username = u.includes("@") ? (u.split("@")[0]?.trim().slice(0, 60) ?? null) : u.slice(0, 60);
+  }
+  if (username) return username;
+
+  const emailLocal = email && email.includes("@") ? email.split("@")[0]!.trim() : "";
+  if (emailLocal) return emailLocal;
+  return nameRaw || "User";
+}
+
+function placeholderUserForFanBuyerSummaryServer(fanKey: string, profile: FanProfile | undefined): Record<string, unknown> {
+  const email =
+    (profile?.email && profile.email.trim().toLowerCase()) || (fanKey.includes("@") ? fanKey.trim().toLowerCase() : "");
+  const name =
+    (profile?.displayName && profile.displayName.trim()) ||
+    adminUserDisplayLabelServer({
+      name: "",
+      email: email || undefined,
+      username: profile?.username ?? undefined,
+      handle: profile?.username ?? undefined,
+      memberUsername: profile?.username ?? undefined,
+    });
+  const id = `fanhub-summary:${fanKey.replace(/[^a-zA-Z0-9@._-]/g, "_")}`;
+  return {
+    id,
+    name: name || fanKey,
+    email: email || "—",
+    avatar: `https://picsum.photos/seed/${encodeURIComponent(id)}/100/100`,
+    bio: "",
+    plan: null,
+    role: "User",
+    signupDate: new Date(0).toISOString(),
+    notifications: { newMessages: true, weeklySummary: false, trendAlerts: false },
+    monthlyCaptionGenerationsUsed: 0,
+    monthlyImageGenerationsUsed: 0,
+    monthlyVideoGenerationsUsed: 0,
+    storageUsed: 0,
+    storageLimit: 0,
+    mediaLibrary: [],
+    settings: defaultSettings,
+    accountOrigin: "fan_hub",
+  };
+}
+
+function firestoreUserDocToClientUser(doc: DocumentSnapshot): Record<string, unknown> {
+  return { ...(doc.data() as Record<string, unknown>), id: doc.id };
+}
+
+type BuyerRosterRowJson = {
+  directoryOnly: boolean;
+  fanIndexKeys: string[];
+  user: Record<string, unknown>;
+  memberships: MembershipRow[];
+  purchaseCount: number;
+  purchasesCents: number;
+  tipCount: number;
+  tipsCents: number;
+};
+
+async function resolveFanKeysToUserSnapsBatch(
+  db: Firestore,
+  fanIds: string[],
+  fanProfilesByFanId: Record<string, FanProfile>,
+): Promise<Map<string, DocumentSnapshot | null>> {
+  const out = new Map<string, DocumentSnapshot | null>();
+  const uidFanIds = fanIds.filter((id) => FIREBASE_UID_RE.test(id));
+  const chunk = 10;
+  for (let i = 0; i < uidFanIds.length; i += chunk) {
+    const part = uidFanIds.slice(i, i + chunk);
+    const snaps = await db.getAll(...part.map((id) => db.collection("users").doc(id)));
+    for (let j = 0; j < part.length; j++) {
+      const fid = part[j]!;
+      const snap = snaps[j]!;
+      out.set(fid, snap.exists ? snap : null);
+    }
+  }
+  for (const id of fanIds) {
+    if (!out.has(id)) out.set(id, null);
+  }
+
+  const needEmail = fanIds.filter((id) => !out.get(id)?.exists);
+  const uniqueEmails: string[] = [];
+  const seenEm = new Set<string>();
+  for (const fanId of needEmail) {
+    if (fanId.includes("@")) {
+      const e = fanId.trim().toLowerCase();
+      if (e && !seenEm.has(e)) {
+        seenEm.add(e);
+        uniqueEmails.push(e);
+      }
+    }
+    const pe = fanProfilesByFanId[fanId]?.email?.trim().toLowerCase();
+    if (pe && !seenEm.has(pe)) {
+      seenEm.add(pe);
+      uniqueEmails.push(pe);
+    }
+  }
+
+  const emailDocByEmail = new Map<string, DocumentSnapshot>();
+  for (let i = 0; i < uniqueEmails.length; i += chunk) {
+    const part = uniqueEmails.slice(i, i + chunk);
+    if (part.length === 0) continue;
+    const q = await db.collection("users").where("email", "in", part).get();
+    for (const d of q.docs) {
+      const raw = d.data().email;
+      const em = typeof raw === "string" ? raw.trim().toLowerCase() : "";
+      if (em) emailDocByEmail.set(em, d);
+    }
+  }
+
+  for (const fanId of needEmail) {
+    if (out.get(fanId)?.exists) continue;
+    const candidates: string[] = [];
+    if (fanId.includes("@")) candidates.push(fanId.trim().toLowerCase());
+    const pe = fanProfilesByFanId[fanId]?.email?.trim().toLowerCase();
+    if (pe) candidates.push(pe);
+    for (const e of candidates) {
+      const doc = emailDocByEmail.get(e);
+      if (doc) {
+        out.set(fanId, doc);
+        break;
+      }
+    }
+  }
+
+  const authUidByEmail = new Map<string, string | null>();
+  const resolveAuthUid = async (email: string): Promise<string | null> => {
+    const e = email.trim().toLowerCase();
+    if (authUidByEmail.has(e)) return authUidByEmail.get(e)!;
+    try {
+      const auth = getAdminApp().auth();
+      const rec = await auth.getUserByEmail(e);
+      const uid = rec?.uid && FIREBASE_UID_RE.test(rec.uid) ? rec.uid : null;
+      authUidByEmail.set(e, uid);
+      return uid;
+    } catch {
+      authUidByEmail.set(e, null);
+      return null;
+    }
+  };
+
+  for (const fanId of needEmail) {
+    if (out.get(fanId)?.exists) continue;
+    const candidates: string[] = [];
+    if (fanId.includes("@")) candidates.push(fanId.trim().toLowerCase());
+    const pe = fanProfilesByFanId[fanId]?.email?.trim().toLowerCase();
+    if (pe) candidates.push(pe);
+    for (const e of candidates) {
+      const uid = await resolveAuthUid(e);
+      if (!uid) continue;
+      const snap = await db.collection("users").doc(uid).get();
+      if (snap.exists) {
+        out.set(fanId, snap);
+        break;
+      }
+    }
+  }
+
+  for (const fanId of needEmail) {
+    if (out.get(fanId)?.exists) continue;
+    if (FIREBASE_UID_RE.test(fanId)) continue;
+    const snap = await db.collection("users").doc(fanId).get();
+    if (snap.exists) out.set(fanId, snap);
+  }
+
+  return out;
+}
+
+async function buildBuyerRosterRows(
+  db: Firestore,
+  byFan: Record<string, MembershipRow[]>,
+  fanProfilesByFanId: Record<string, FanProfile>,
+): Promise<BuyerRosterRowJson[]> {
+  const fanIds = Object.keys(byFan);
+  if (fanIds.length === 0) return [];
+
+  const resolvedMap = await resolveFanKeysToUserSnapsBatch(db, fanIds, fanProfilesByFanId);
+
+  const mergedByUid = new Map<
+    string,
+    { snap: DocumentSnapshot; fanIndexKeys: string[]; rawMemberships: MembershipRow[] }
+  >();
+  const orphanRows: BuyerRosterRowJson[] = [];
+
+  for (const fanId of fanIds) {
+    const memberships = byFan[fanId] || [];
+    const snap = resolvedMap.get(fanId);
+    if (!snap?.exists) {
+      const deduped = dedupeFanMembershipLinksAdmin(memberships);
+      const agg = aggregateBuyerRowAdmin(deduped);
+      orphanRows.push({
+        directoryOnly: true,
+        fanIndexKeys: [fanId],
+        user: placeholderUserForFanBuyerSummaryServer(fanId, fanProfilesByFanId[fanId]),
+        memberships: deduped,
+        ...agg,
+      });
+      continue;
+    }
+    const uid = snap.id;
+    const prev = mergedByUid.get(uid);
+    if (!prev) {
+      mergedByUid.set(uid, { snap, fanIndexKeys: [fanId], rawMemberships: [...memberships] });
+    } else {
+      prev.fanIndexKeys.push(fanId);
+      prev.rawMemberships.push(...memberships);
+    }
+  }
+
+  const matchedRows: BuyerRosterRowJson[] = [];
+  for (const { snap, fanIndexKeys, rawMemberships } of mergedByUid.values()) {
+    const deduped = dedupeFanMembershipLinksAdmin(rawMemberships);
+    const agg = aggregateBuyerRowAdmin(deduped);
+    matchedRows.push({
+      directoryOnly: false,
+      fanIndexKeys,
+      user: firestoreUserDocToClientUser(snap),
+      memberships: deduped,
+      ...agg,
+    });
+  }
+
+  const rows = [...matchedRows, ...orphanRows];
+  rows.sort((a, b) => {
+    const na = String((a.user.name as string) || "").localeCompare(String((b.user.name as string) || ""));
+    return na;
+  });
+  return rows;
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== "GET") return res.status(405).json({ error: "Method not allowed" });
 
@@ -192,6 +569,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         username?: string;
         memberUsername?: string;
         handle?: string;
+        uid?: string;
+        userId?: string;
+        fanUserId?: string;
+        note?: string;
+        notes?: string;
+        bio?: string;
+        description?: string;
+        internalNote?: string;
+        adminNote?: string;
         totalSpentCents?: number;
         purchaseCount?: number;
         tipCount?: number;
@@ -199,7 +585,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         updatedAt?: unknown;
       };
 
-      const identity = deriveCanonicalFanKey(docSnap.id, data.id, data.email);
+      const identity = deriveCanonicalFanKey(docSnap.id, data.id, data.email, {
+        structured: [data.uid, data.userId, data.fanUserId],
+        haystack: [
+          docSnap.id,
+          data.id,
+          data.displayName,
+          data.username,
+          data.memberUsername,
+          data.handle,
+          data.note,
+          data.notes,
+          data.bio,
+          data.description,
+          data.internalNote,
+          data.adminNote,
+        ],
+      });
       const fanId = identity.key;
       const creatorIdRaw =
         getCreatorIdFromPath(docSnap.ref.path) || (typeof data.creatorId === "string" && data.creatorId);
@@ -559,12 +961,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       byFan[fanId] = finalRows.sort((a, b) => a.creatorName.localeCompare(b.creatorName));
     }
 
+    let buyerRoster: { rows: BuyerRosterRowJson[] } | null = null;
+    try {
+      const rows = await buildBuyerRosterRows(db, byFan, fanProfilesByFanId);
+      buyerRoster = { rows };
+    } catch (rosterErr) {
+      console.warn("adminFanHubMemberships: buyerRoster build skipped:", rosterErr);
+    }
+
     return res.status(200).json({
       success: true,
       activeOnly,
       membershipsByFan: byFan,
       fanProfilesByFanId,
       fanCount: Object.keys(byFan).length,
+      ...(buyerRoster ? { buyerRoster } : {}),
       generatedAt: new Date().toISOString(),
     });
   } catch (error: any) {
