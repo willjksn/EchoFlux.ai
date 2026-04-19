@@ -59,6 +59,7 @@ import { OFFLINE_MODE } from "../../constants";
 
 import { categorizeMessage } from "../../src/services/geminiService";
 import { checkAllUsageLimits } from "../../src/utils/usageNotifications";
+import { loadDismissedUsageNotificationIds } from "../../src/utils/usageNotificationDismissals";
 
 
 /*--------------------------------------------------------------------
@@ -370,7 +371,13 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     // Check for usage limit and trial notifications using functional update to avoid dependency issues
     setNotifications(prevNotifications => {
-      const newNotifications = checkAllUsageLimits(user, prevNotifications, usageStatsForNotifications);
+      const dismissedUsage = loadDismissedUsageNotificationIds(user.id);
+      const newNotifications = checkAllUsageLimits(
+        user,
+        prevNotifications,
+        usageStatsForNotifications,
+        dismissedUsage
+      );
       
       if (newNotifications.length > 0) {
         // Add new notifications, avoiding duplicates

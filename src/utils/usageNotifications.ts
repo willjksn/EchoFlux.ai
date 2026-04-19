@@ -1,4 +1,6 @@
 import { User, Notification, Plan } from '../../types';
+import { normalizePlanForLimitsClient } from '../lib/creatorIdentity/planGate';
+import { usageNotificationMonthKey } from './usageNotificationDismissals';
 
 // Define usage limits for each plan
 const USAGE_LIMITS: Record<Plan, {
@@ -12,10 +14,18 @@ const USAGE_LIMITS: Record<Plan, {
   Elite: { captions: 1500, strategies: 5, images: 500, videos: 25 },
   Agency: { captions: 10000, strategies: 20, images: 1000, videos: 50 },
   Caption: { captions: 100, strategies: 0, images: 0, videos: 0 },
-  OnlyFansStudio: { captions: 500, strategies: 2, images: 100, videos: 5 },
+  OnlyFansStudio: { captions: 1500, strategies: 5, images: 500, videos: 25 },
   Starter: { captions: 200, strategies: 1, images: 10, videos: 0 },
   Growth: { captions: 1000, strategies: 3, images: 100, videos: 5 },
+  CreatorPro: { captions: 500, strategies: 2, images: 50, videos: 1 },
+  CreatorElite: { captions: 1500, strategies: 5, images: 500, videos: 25 },
 };
+
+function limitsForUserPlan(user: User) {
+  const raw = user.plan || 'Free';
+  const tier = normalizePlanForLimitsClient(raw) as Plan;
+  return USAGE_LIMITS[tier] ?? USAGE_LIMITS.Free;
+}
 
 // Thresholds for notifications (percentage used)
 const WARNING_THRESHOLD = 0.8; // 80% used
@@ -33,16 +43,16 @@ export function checkCaptionUsage(
   user: User,
   existingNotifications: Notification[]
 ): UsageCheckResult {
-  const plan = user.plan || 'Free';
-  const limits = USAGE_LIMITS[plan] || USAGE_LIMITS.Free;
+  const limits = limitsForUserPlan(user);
   const used = user.monthlyCaptionGenerationsUsed || 0;
   const remaining = limits.captions - used;
   const usagePercent = limits.captions > 0 ? used / limits.captions : 0;
 
   // Check if we've already notified about this specific threshold
   const warningKey = `caption-warning-${Math.floor(usagePercent * 10)}`;
+  const limitId = `caption-limit-${usageNotificationMonthKey()}`;
   const hasExistingNotification = existingNotifications.some(
-    n => n.id === warningKey || n.text.includes('AI Caption') && !n.read
+    (n) => n.id === warningKey || n.id === limitId || (n.text.includes('AI Caption') && !n.read)
   );
 
   if (hasExistingNotification && remaining > 0) {
@@ -54,7 +64,7 @@ export function checkCaptionUsage(
     return {
       shouldNotify: true,
       notification: {
-        id: `caption-limit-${Date.now()}`,
+        id: limitId,
         text: `⚠️ AI Caption limit reached! You've used all ${limits.captions} captions this month. Upgrade to continue.`,
         timestamp: 'Just now',
         read: false,
@@ -98,17 +108,15 @@ export function checkStrategyUsage(
   existingNotifications: Notification[],
   usageStats?: { strategy: { count: number; limit: number; remaining: number } } | null
 ): UsageCheckResult {
-  const plan = user.plan || 'Free';
-  const limits = USAGE_LIMITS[plan] || USAGE_LIMITS.Free;
-  
   // If we have usageStats from API, use those (more accurate)
   if (usageStats?.strategy) {
     const { count, limit, remaining } = usageStats.strategy;
     const usagePercent = limit > 0 ? count / limit : 0;
     
     const warningKey = `strategy-warning-${Math.floor(usagePercent * 10)}`;
+    const limitId = `strategy-limit-${usageNotificationMonthKey()}`;
     const hasExistingNotification = existingNotifications.some(
-      n => n.id === warningKey || (n.text.includes('Plan My Week') && !n.read)
+      (n) => n.id === warningKey || n.id === limitId || (n.text.includes('Plan My Week') && !n.read)
     );
     
     if (hasExistingNotification && remaining > 0) {
@@ -119,7 +127,7 @@ export function checkStrategyUsage(
       return {
         shouldNotify: true,
         notification: {
-          id: `strategy-limit-${Date.now()}`,
+          id: `strategy-limit-${usageNotificationMonthKey()}`,
           text: `⚠️ Plan My Week limit reached! You've used all ${limit} plans this month. Upgrade to continue.`,
           timestamp: 'Just now',
           read: false,
@@ -162,8 +170,7 @@ export function checkVideoUsage(
   user: User,
   existingNotifications: Notification[]
 ): UsageCheckResult {
-  const plan = user.plan || 'Free';
-  const limits = USAGE_LIMITS[plan] || USAGE_LIMITS.Free;
+  const limits = limitsForUserPlan(user);
   const used = user.monthlyVideoGenerationsUsed || 0;
   const remaining = limits.videos - used;
   const usagePercent = limits.videos > 0 ? used / limits.videos : 0;
@@ -173,8 +180,9 @@ export function checkVideoUsage(
   }
 
   const warningKey = `video-warning-${Math.floor(usagePercent * 10)}`;
+  const videoLimitId = `video-limit-${usageNotificationMonthKey()}`;
   const hasExistingNotification = existingNotifications.some(
-    n => n.id === warningKey || (n.text.includes('AI Video') && !n.read)
+    (n) => n.id === warningKey || n.id === videoLimitId || (n.text.includes('AI Video') && !n.read)
   );
 
   if (hasExistingNotification && remaining > 0) {
@@ -185,7 +193,7 @@ export function checkVideoUsage(
     return {
       shouldNotify: true,
       notification: {
-        id: `video-limit-${Date.now()}`,
+        id: videoLimitId,
         text: `⚠️ AI Video generation limit reached! You've used all ${limits.videos} videos this month. Upgrade to continue.`,
         timestamp: 'Just now',
         read: false,
@@ -226,8 +234,7 @@ export function checkImageUsage(
   user: User,
   existingNotifications: Notification[]
 ): UsageCheckResult {
-  const plan = user.plan || 'Free';
-  const limits = USAGE_LIMITS[plan] || USAGE_LIMITS.Free;
+  const limits = limitsForUserPlan(user);
   const used = user.monthlyImageGenerationsUsed || 0;
   const remaining = limits.images - used;
   const usagePercent = limits.images > 0 ? used / limits.images : 0;
@@ -237,8 +244,9 @@ export function checkImageUsage(
   }
 
   const warningKey = `image-warning-${Math.floor(usagePercent * 10)}`;
+  const imageLimitId = `image-limit-${usageNotificationMonthKey()}`;
   const hasExistingNotification = existingNotifications.some(
-    n => n.id === warningKey || (n.text.includes('AI Image') && !n.read)
+    (n) => n.id === warningKey || n.id === imageLimitId || (n.text.includes('AI Image') && !n.read)
   );
 
   if (hasExistingNotification && remaining > 0) {
@@ -249,7 +257,7 @@ export function checkImageUsage(
     return {
       shouldNotify: true,
       notification: {
-        id: `image-limit-${Date.now()}`,
+        id: imageLimitId,
         text: `⚠️ AI Image generation limit reached! You've used all ${limits.images} images this month. Upgrade to continue.`,
         timestamp: 'Just now',
         read: false,
@@ -300,8 +308,9 @@ export function checkStorageUsage(
 
   // Check if we've already notified about this specific threshold
   const warningKey = `storage-warning-${Math.floor(usagePercent * 10)}`;
+  const storageLimitId = `storage-limit-${usageNotificationMonthKey()}`;
   const hasExistingNotification = existingNotifications.some(
-    n => n.id === warningKey || (n.text.includes('Storage') && !n.read)
+    (n) => n.id === warningKey || n.id === storageLimitId || (n.text.includes('Storage') && !n.read)
   );
 
   if (hasExistingNotification && usagePercent < 1.0) {
@@ -321,7 +330,7 @@ export function checkStorageUsage(
     return {
       shouldNotify: true,
       notification: {
-        id: `storage-limit-${Date.now()}`,
+        id: storageLimitId,
         text: `⚠️ Storage limit reached! You've used ${formatStorage(storageUsed)} of ${formatStorage(storageLimit)}. Delete files or upgrade to continue uploading.`,
         timestamp: 'Just now',
         read: false,
@@ -432,47 +441,58 @@ export function checkTrialEndDate(
 /**
  * Check all usage types and return notifications to add
  */
+function pushUnlessDismissed(
+  notifications: Notification[],
+  n: Notification | null | undefined,
+  dismissed: Set<string>
+): void {
+  if (!n || dismissed.has(n.id)) return;
+  notifications.push(n);
+}
+
 export function checkAllUsageLimits(
   user: User,
   existingNotifications: Notification[],
-  usageStats?: { strategy: { count: number; limit: number; remaining: number } } | null
+  usageStats?: { strategy: { count: number; limit: number; remaining: number } } | null,
+  dismissedUsageIds?: Set<string>
 ): Notification[] {
+  const dismissed = dismissedUsageIds ?? new Set<string>();
   const notifications: Notification[] = [];
 
   // Check trial end date
   const trialCheck = checkTrialEndDate(user, existingNotifications);
-  if (trialCheck.shouldNotify && trialCheck.notification) {
-    notifications.push(trialCheck.notification);
+  if (trialCheck.shouldNotify) {
+    pushUnlessDismissed(notifications, trialCheck.notification, dismissed);
   }
 
   // Check storage usage
   const storageCheck = checkStorageUsage(user, existingNotifications);
-  if (storageCheck.shouldNotify && storageCheck.notification) {
-    notifications.push(storageCheck.notification);
+  if (storageCheck.shouldNotify) {
+    pushUnlessDismissed(notifications, storageCheck.notification, dismissed);
   }
 
   // Check caption usage
   const captionCheck = checkCaptionUsage(user, existingNotifications);
-  if (captionCheck.shouldNotify && captionCheck.notification) {
-    notifications.push(captionCheck.notification);
+  if (captionCheck.shouldNotify) {
+    pushUnlessDismissed(notifications, captionCheck.notification, dismissed);
   }
 
   // Check image usage
   const imageCheck = checkImageUsage(user, existingNotifications);
-  if (imageCheck.shouldNotify && imageCheck.notification) {
-    notifications.push(imageCheck.notification);
+  if (imageCheck.shouldNotify) {
+    pushUnlessDismissed(notifications, imageCheck.notification, dismissed);
   }
 
   // Check video usage
   const videoCheck = checkVideoUsage(user, existingNotifications);
-  if (videoCheck.shouldNotify && videoCheck.notification) {
-    notifications.push(videoCheck.notification);
+  if (videoCheck.shouldNotify) {
+    pushUnlessDismissed(notifications, videoCheck.notification, dismissed);
   }
 
   // Check strategy usage (requires usageStats from API)
   const strategyCheck = checkStrategyUsage(user, existingNotifications, usageStats);
-  if (strategyCheck.shouldNotify && strategyCheck.notification) {
-    notifications.push(strategyCheck.notification);
+  if (strategyCheck.shouldNotify) {
+    pushUnlessDismissed(notifications, strategyCheck.notification, dismissed);
   }
 
   return notifications;

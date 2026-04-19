@@ -14,6 +14,14 @@ import {
   resolveFanHubNotificationTarget,
 } from '../src/lib/fanHubNotificationRouting';
 import { resolveApiUrl } from '../src/lib/resolveApiUrl';
+import {
+  dismissUsageNotificationId,
+  dismissUsageNotificationIds,
+} from '../src/utils/usageNotificationDismissals';
+
+function shouldPersistBellDismissal(messageId?: string): boolean {
+  return !!messageId && (messageId.startsWith('usage-') || messageId === 'trial-ending');
+}
 
 interface HeaderProps {
   pageTitle: string;
@@ -132,6 +140,10 @@ export const Header: React.FC<HeaderProps> = ({ pageTitle }) => {
     async (id: string, e?: React.MouseEvent) => {
       e?.preventDefault();
       e?.stopPropagation();
+      const row = notifications.find((n) => n.id === id);
+      if (row && shouldPersistBellDismissal(row.messageId)) {
+        dismissUsageNotificationId(user.id, id);
+      }
       const docId = adminAlertDocId(id);
       if (docId) {
         try {
@@ -143,13 +155,17 @@ export const Header: React.FC<HeaderProps> = ({ pageTitle }) => {
       }
       setNotifications((prev) => prev.filter((n) => n.id !== id));
     },
-    [adminAlertDocId, markAdminAlertsReadRemote, setNotifications, showToast]
+    [adminAlertDocId, markAdminAlertsReadRemote, notifications, setNotifications, showToast, user.id]
   );
 
   const clearAllVisibleReminders = useCallback(() => {
     const adminIds = visibleNotifications
       .map((n) => adminAlertDocId(n.id))
       .filter((x): x is string => Boolean(x));
+    const usageIds = visibleNotifications
+      .filter((n) => shouldPersistBellDismissal(n.messageId))
+      .map((n) => n.id);
+    if (usageIds.length) dismissUsageNotificationIds(user.id, usageIds);
     void (async () => {
       if (adminIds.length) {
         try {
@@ -167,6 +183,7 @@ export const Header: React.FC<HeaderProps> = ({ pageTitle }) => {
     markAdminAlertsReadRemote,
     setNotifications,
     showToast,
+    user.id,
     visibleNotificationIds,
     visibleNotifications,
   ]);
@@ -180,6 +197,9 @@ export const Header: React.FC<HeaderProps> = ({ pageTitle }) => {
   /** Row tap: mark read and close only — no surprise navigation (pricing/admin/dashboard). */
   const handleReminderRowActivate = useCallback(
     (notification: Notification) => {
+      if (shouldPersistBellDismissal(notification.messageId)) {
+        dismissUsageNotificationId(user.id, notification.id);
+      }
       const docId = adminAlertDocId(notification.id);
       if (docId) {
         void (async () => {
@@ -195,7 +215,7 @@ export const Header: React.FC<HeaderProps> = ({ pageTitle }) => {
       );
       setIsNotificationsOpen(false);
     },
-    [adminAlertDocId, markAdminAlertsReadRemote, setNotifications]
+    [adminAlertDocId, markAdminAlertsReadRemote, setNotifications, user.id]
   );
 
   const openPricingFromReminder = useCallback(
@@ -212,6 +232,8 @@ export const Header: React.FC<HeaderProps> = ({ pageTitle }) => {
     const adminIds = notifications
       .map((n) => adminAlertDocId(n.id))
       .filter((x): x is string => Boolean(x));
+    const usageIds = notifications.filter((n) => shouldPersistBellDismissal(n.messageId)).map((n) => n.id);
+    if (usageIds.length) dismissUsageNotificationIds(user.id, usageIds);
     void (async () => {
       if (adminIds.length) {
         try {
@@ -222,7 +244,7 @@ export const Header: React.FC<HeaderProps> = ({ pageTitle }) => {
       }
       setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
     })();
-  }, [notifications, adminAlertDocId, markAdminAlertsReadRemote, showToast, setNotifications]);
+  }, [notifications, adminAlertDocId, markAdminAlertsReadRemote, showToast, setNotifications, user.id]);
 
   const ClientSwitcher: React.FC = () => {
     // Hide agency/client switching for now; leave available only for Admin
