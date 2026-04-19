@@ -3,12 +3,21 @@ import { getAdminDb } from "./_firebaseAdmin.js";
 import { verifyAuth } from "./verifyAuth.js";
 import { isFanBlocked } from "./_fanDmHelpers.js";
 
+function purchaseProductStubEnabled(): boolean {
+  const v = (process.env.ALLOW_PURCHASE_PRODUCT_STUB || "").toString().toLowerCase().trim();
+  return v === "true" || v === "1";
+}
+
 /**
- * Placeholder purchase: no Stripe. Creates/updates creatorEntitlements/{creatorId}/grants/{fanId}
- * and adds productId to unlockedProductIds. Callable by authenticated fan.
- * Banned (blocked) fans cannot purchase.
+ * Legacy stub: no Stripe — grants entitlements without payment.
+ * Disabled by default; set ALLOW_PURCHASE_PRODUCT_STUB=true only for local/staging tests.
+ * Production: use createFanCheckoutSession + Stripe webhooks.
  */
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+  if (!purchaseProductStubEnabled()) {
+    return res.status(404).json({ error: "Not found" });
+  }
+
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
   }

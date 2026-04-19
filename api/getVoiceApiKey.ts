@@ -1,5 +1,7 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { checkApiKeys, getVerifyAuth, withErrorHandling } from "./_errorHandler.js";
+import { getAdminDb } from "./_firebaseAdmin.js";
+import { hasPlatformAdminAccess } from "./_platformAdminAccess.js";
 
 async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
   if (req.method !== "GET") {
@@ -7,7 +9,6 @@ async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
     return;
   }
 
-  // Check API keys are configured
   const apiKeyCheck = checkApiKeys();
   if (!apiKeyCheck.hasKey) {
     res.status(200).json({
@@ -18,17 +19,19 @@ async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
     return;
   }
 
-  // Verify user authentication
   let user;
   try {
     const verifyAuth = await getVerifyAuth();
     user = await verifyAuth(req);
-  } catch (authError: any) {
+  } catch (authError: unknown) {
     console.error("verifyAuth error:", authError);
     res.status(401).json({
       success: false,
       error: "Authentication error",
-      note: authError?.message || "Failed to verify authentication. Please try logging in again.",
+      note:
+        authError instanceof Error
+          ? authError.message
+          : "Failed to verify authentication. Please try logging in again.",
     });
     return;
   }
@@ -38,15 +41,29 @@ async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
     return;
   }
 
-  // Return the API key (it's safe to expose to authenticated users as it's rate-limited by user)
+  try {
+    const db = getAdminDb();
+    const userSnap = await db.collection("users").doc(user.uid).get();
+    const data = userSnap.data() as Record<string, unknown> | undefined;
+    if (!hasPlatformAdminAccess(data)) {
+      res.status(403).json({
+        success: false,
+        error: "Voice live API access is restricted to platform administrators.",
+      });
+      return;
+    }
+  } catch (e) {
+    console.error("getVoiceApiKey admin check failed:", e);
+    res.status(503).json({ success: false, error: "Unable to verify permissions" });
+    return;
+  }
+
   const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
-  
+
   res.status(200).json({
     success: true,
-    apiKey: apiKey,
+    apiKey,
   });
-  return;
 }
 
 export default withErrorHandling(handler);
-

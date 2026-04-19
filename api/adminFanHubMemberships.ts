@@ -2,6 +2,7 @@ import type { VercelRequest, VercelResponse } from "@vercel/node";
 import type { DocumentSnapshot, Firestore } from "firebase-admin/firestore";
 import { defaultSettings } from "../constants.js";
 import { getAdminApp, getAdminDb } from "./_firebaseAdmin.js";
+import { hasPlatformAdminAccess } from "./_platformAdminAccess.js";
 import { verifyAuth } from "./verifyAuth.js";
 
 type MembershipRow = {
@@ -33,14 +34,6 @@ const ACTIVE_STATUSES = new Set(["active", "trialing", "free", "past_due"]);
 const FIREBASE_UID_RE = /^[A-Za-z0-9]{20,36}$/;
 const UID_LABEL_SUFFIX = /(?:^|[-_\s])u(?:id|di)\s*:\s*([A-Za-z0-9]{20,36})$/i;
 const EMAIL_IN_ID = /([^\s]+@[^\s]+)$/i;
-
-function hasPlatformAdminAccess(userData: Record<string, unknown> | undefined): boolean {
-  if (!userData) return false;
-  const role = typeof userData.role === "string" ? userData.role.trim().toLowerCase() : "";
-  if (role === "admin" || role === "superadmin" || role === "owner") return true;
-  if (userData.isAdmin === true || userData.isSuperAdmin === true || userData.isOwner === true) return true;
-  return false;
-}
 
 function toIso(value: unknown): string | null {
   if (!value) return null;

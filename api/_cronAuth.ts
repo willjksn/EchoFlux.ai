@@ -3,18 +3,26 @@ import type { VercelRequest } from "@vercel/node";
 /**
  * Shared auth for Vercel Cron endpoints.
  *
- * We support two safe modes:
- * - Manual run (for smoke tests): Authorization: Bearer ${CRON_SECRET}
- * - Vercel Cron run: header x-vercel-cron: 1 AND User-Agent contains vercel-cron/1.0
- *
- * Note: headers can be spoofed by a determined attacker, but this is a meaningful
- * hardening step. Critical actions should still be idempotent (markers/locks).
+ * - When CRON_SECRET is set: only `Authorization: Bearer ${CRON_SECRET}` is accepted
+ *   (Vercel injects this on cron invocations when the env var is configured).
+ * - When CRON_SECRET is unset: allow Vercel cron headers (preview/local only — not for production).
+ * - Vercel Production: CRON_SECRET must be set or all cron calls fail closed.
  */
 export function requireCronAuth(req: VercelRequest): boolean {
-  const secret = process.env.CRON_SECRET;
+  const secret = (process.env.CRON_SECRET || "").trim();
   const authHeader = (req.headers.authorization as string | undefined) || "";
-  if (secret && secret.trim() && authHeader === `Bearer ${secret}`) {
+
+  if (secret && authHeader === `Bearer ${secret}`) {
     return true;
+  }
+
+  const isVercelProduction = process.env.VERCEL_ENV === "production";
+  if (isVercelProduction) {
+    return false;
+  }
+
+  if (secret) {
+    return false;
   }
 
   const xVercelCron = req.headers["x-vercel-cron"];

@@ -15,6 +15,8 @@ type RateLimitResult = {
 // so limits could be bypassed by hitting different instances.
 const memoryStore: Record<string, { count: number; resetTime: number }> = {};
 
+let loggedMissingUpstashProduction = false;
+
 function getClientIp(req: VercelRequest): string {
   const xff = (req.headers["x-forwarded-for"] as string | undefined) || "";
   const first = xff.split(",")[0]?.trim();
@@ -137,6 +139,15 @@ export async function enforceRateLimit(params: {
 }): Promise<boolean> {
   const identifier = params.identifier || getClientIp(params.req);
   const key = `${params.keyPrefix}:${identifier}`;
+
+  const hasRedis = getUpstashConfig() !== null;
+  if (!hasRedis && process.env.VERCEL_ENV === "production" && !loggedMissingUpstashProduction) {
+    loggedMissingUpstashProduction = true;
+    console.warn(
+      "[rateLimit] UPSTASH_REDIS_REST_URL/UPSTASH_REDIS_REST_TOKEN (or KV_*) not set — " +
+        "limits are per-instance memory only in production. Configure Upstash for reliable throttling.",
+    );
+  }
 
   let result: RateLimitResult | null = null;
   try {

@@ -6,13 +6,21 @@ service firebase.storage {
     /** -------------------------------------------------------
      *  Helper: Check if the authenticated user is an Admin
      *  ------------------------------------------------------- */
-    /** App convention: `users/{uid}.role` is `Admin` (Firestore lookup can fail if doc missing — prefer path-scoped rules). */
+    /** Align with Firestore `isAdminUserDoc` (dashboard / platform operators). */
+    function storageUserDoc() {
+      return firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data;
+    }
     function isAdmin() {
       return request.auth != null
         && firestore.exists(/databases/(default)/documents/users/$(request.auth.uid))
         && (
-          firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.role == 'Admin'
-          || firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.role == 'admin'
+          storageUserDoc().role == 'Admin'
+          || storageUserDoc().role == 'admin'
+          || storageUserDoc().role == 'superadmin'
+          || storageUserDoc().role == 'owner'
+          || ('isAdmin' in storageUserDoc() && storageUserDoc().isAdmin == true)
+          || ('isSuperAdmin' in storageUserDoc() && storageUserDoc().isSuperAdmin == true)
+          || ('isOwner' in storageUserDoc() && storageUserDoc().isOwner == true)
         );
     }
 
@@ -47,9 +55,7 @@ service firebase.storage {
      *  - Regular users cannot access admin storage
      *  ------------------------------------------------------- */
     match /admin/{allPaths=**} {
-      // Allow read/write for authenticated users (app enforces Admin access)
-      // TODO: Tighten this to use isAdmin() once Firestore checks are reliable
-      allow read, write: if isAuthenticated();
+      allow read, write: if isAdmin();
     }
 
     /**
