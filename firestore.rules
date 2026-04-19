@@ -9,10 +9,23 @@ service cloud.firestore {
      *  - Safely checks if user exists and has Admin role
      *  - Returns false if user doc doesn't exist or role is missing
      */
+    /** Match server-side admin checks (see api/adminFanHubMemberships, adminCreatorHubFans). */
+    function isAdminUserDoc(data) {
+      return (data.role is string && (
+          data.role == 'Admin'
+          || data.role == 'admin'
+          || data.role == 'superadmin'
+          || data.role == 'owner'
+        ))
+        || ('isAdmin' in data && data.isAdmin == true)
+        || ('isSuperAdmin' in data && data.isSuperAdmin == true)
+        || ('isOwner' in data && data.isOwner == true);
+    }
+
     function isAdmin() {
       return request.auth != null
         && exists(/databases/$(database)/documents/users/$(request.auth.uid))
-        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'Admin';
+        && isAdminUserDoc(get(/databases/$(database)/documents/users/$(request.auth.uid)).data);
     }
 
     /** -------------------------------------------------------

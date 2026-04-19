@@ -16,7 +16,7 @@ import { WaitlistManager } from './WaitlistManager';
 import { EmailCenterPage } from './EmailCenterPage';
 import { TeamIcon, DollarSignIcon, UserPlusIcon, ArrowUpCircleIcon, ImageIcon, VideoIcon, LockIcon, TrendingIcon, TrashIcon, HeartIcon, StarIcon, ChatIcon, GlobeIcon, SparklesIcon } from './icons/UIIcons';
 import { db, auth } from '../firebaseConfig';
-import { collection, query, orderBy, onSnapshot, setDoc, doc, getDoc, deleteField, getDocs, limit } from 'firebase/firestore';
+import { collection, query, orderBy, onSnapshot, setDoc, doc, getDoc, deleteField, getDocs } from 'firebase/firestore';
 import { useAppContext } from './AppContext';
 import { defaultSettings, ECHOFLUX_CREATOR_ELITE_INVITE_USD, ECHOFLUX_CREATOR_PRO_INVITE_USD } from '../constants';
 import { getModelUsageAnalytics, type ModelUsageStats } from '../src/services/modelUsageService';
@@ -327,7 +327,10 @@ export const AdminDashboard: React.FC = () => {
     const [editingUser, setEditingUser] = useState<User | null>(null);
     const [grantingRewardToUser, setGrantingRewardToUser] = useState<User | null>(null);
     const [searchTerm, setSearchTerm] = useState('');
-    const [userOriginFilter, setUserOriginFilter] = useState<'all' | 'fan_hub' | 'echoflux'>('echoflux');
+    /** User Management directory: workspace = EchoFlux accounts; storefront = My Page creators (+ rosters). */
+    const [userMgmtView, setUserMgmtView] = useState<'workspace' | 'storefront'>('workspace');
+    /** When on workspace view, optionally show the nested Fan Hub buyer / membership summary (old “All” lower section). */
+    const [userMgmtShowFanSummary, setUserMgmtShowFanSummary] = useState(false);
     const [isLoading, setIsLoading] = useState(true);
     const [accessError, setAccessError] = useState<string | null>(null);
     const [modelUsageStats, setModelUsageStats] = useState<ModelUsageStats | null>(null);
@@ -451,7 +454,7 @@ export const AdminDashboard: React.FC = () => {
     // Reset to page 1 when search term changes
     useEffect(() => {
         setCurrentPage(1);
-    }, [searchTerm, userOriginFilter]);
+    }, [searchTerm, userMgmtView, userMgmtShowFanSummary]);
 
     // Fetch Video Chat Usage Stats
     useEffect(() => {
@@ -917,7 +920,19 @@ export const AdminDashboard: React.FC = () => {
             if (!id) return;
             setAdminCreatorRosterLoading((p) => ({ ...p, [id]: true }));
             try {
-                const snap = await getDocs(query(collection(db, 'creators', id, 'fans'), limit(500)));
+                const token = await auth.currentUser?.getIdToken();
+                if (!token) {
+                    showToast?.('Sign in again to load My Page members.', 'error');
+                    return;
+                }
+                const res = await fetch(`/api/adminCreatorHubFans?creatorId=${encodeURIComponent(id)}`, {
+                    headers: { Authorization: `Bearer ${token}` },
+                });
+                const payload = (await res.json().catch(() => null)) as { fans?: unknown; error?: string } | null;
+                if (!res.ok) {
+                    throw new Error(payload?.error || res.statusText || 'Request failed');
+                }
+                const list = Array.isArray(payload?.fans) ? payload!.fans : [];
                 const rows: Array<{
                     id: string;
                     email: string;
@@ -925,22 +940,22 @@ export const AdminDashboard: React.FC = () => {
                     subscriptionStatus: string | null;
                     totalSpentCents: number;
                 }> = [];
-                snap.forEach((d) => {
-                    const x = d.data() as Record<string, unknown>;
+                for (const item of list) {
+                    if (!item || typeof item !== 'object') continue;
+                    const r = item as Record<string, unknown>;
+                    const rowId = String(r.id ?? '').trim();
+                    if (!rowId) continue;
                     rows.push({
-                        id: d.id,
-                        email: typeof x.email === 'string' && x.email.trim() ? x.email : '—',
-                        displayName:
-                            (typeof x.displayName === 'string' && x.displayName.trim() && x.displayName) ||
-                            (typeof x.fanName === 'string' && x.fanName.trim() && x.fanName) ||
-                            '—',
-                        subscriptionStatus: typeof x.subscriptionStatus === 'string' ? x.subscriptionStatus : null,
+                        id: rowId,
+                        email: typeof r.email === 'string' ? r.email : '—',
+                        displayName: typeof r.displayName === 'string' ? r.displayName : '—',
+                        subscriptionStatus: typeof r.subscriptionStatus === 'string' ? r.subscriptionStatus : null,
                         totalSpentCents:
-                            typeof x.totalSpentCents === 'number' && Number.isFinite(x.totalSpentCents)
-                                ? Math.max(0, Math.round(x.totalSpentCents))
+                            typeof r.totalSpentCents === 'number' && Number.isFinite(r.totalSpentCents)
+                                ? Math.max(0, Math.round(r.totalSpentCents))
                                 : 0,
                     });
-                });
+                }
                 rows.sort((a, b) => b.totalSpentCents - a.totalSpentCents);
                 setAdminCreatorRosters((p) => ({ ...p, [id]: rows }));
             } catch (e) {
@@ -1033,21 +1048,16 @@ export const AdminDashboard: React.FC = () => {
                 user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                 user.email.toLowerCase().includes(searchTerm.toLowerCase());
             if (!matchesSearch) return false;
-            if (userOriginFilter === 'all') {
-                return (
-                    user.role === 'Admin' ||
-                    isEchofluxWorkspaceUser(user) ||
-                    hasFanHubMembership(user)
-                );
-            }
-            if (userOriginFilter === 'fan_hub') {
+            if (userMgmtView === 'storefront') {
                 if (creatorIds.size > 0) {
                     return creatorIds.has(user.id);
                 }
-                // Creators index failed to load (e.g. rules not deployed) — show Fan Hub–related users instead of an empty page.
                 return hasFanHubMembership(user) || isEchofluxWorkspaceUser(user);
             }
-            // EchoFlux: every workspace / subscription account (including creators who also subscribe on Fan Hub).
+            // Workspace: optionally widen the directory so fan-only accounts appear (for the buyer summary table).
+            if (userMgmtShowFanSummary) {
+                return isEchofluxWorkspaceUser(user) || hasFanHubMembership(user);
+            }
             return isEchofluxWorkspaceUser(user);
         });
 
@@ -1062,7 +1072,7 @@ export const AdminDashboard: React.FC = () => {
 
         // Return admins first, then regular users
         return [...adminUsers, ...regularUsers];
-    }, [users, searchTerm, userOriginFilter, hasFanHubMembership, isEchofluxWorkspaceUser, creatorIds]);
+    }, [users, searchTerm, userMgmtView, userMgmtShowFanSummary, hasFanHubMembership, isEchofluxWorkspaceUser, creatorIds]);
 
     const filteredFanHubTransactions = useMemo(() => {
         if (!fanHubRevenue.recentTransactions.length) return [];
@@ -2377,58 +2387,84 @@ export const AdminDashboard: React.FC = () => {
             )}
             {activeTab === 'users' && (
             <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-md">
-                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4">
-                    <h3 className="text-xl font-bold text-gray-900 dark:text-white">User Management</h3>
-                    <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
-                        <div className="inline-flex rounded-md border border-gray-300 dark:border-gray-600 overflow-hidden">
-                            <button
-                                type="button"
-                                onClick={() => setUserOriginFilter('all')}
-                                className={`px-3 py-2 text-xs font-semibold ${
-                                    userOriginFilter === 'all'
-                                        ? 'bg-gray-900 text-white dark:bg-gray-100 dark:text-gray-900'
-                                        : 'bg-white text-gray-700 dark:bg-gray-800 dark:text-gray-300'
-                                }`}
-                            >
-                                All
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => setUserOriginFilter('fan_hub')}
-                                className={`px-3 py-2 text-xs font-semibold ${
-                                    userOriginFilter === 'fan_hub'
-                                        ? 'bg-cyan-600 text-white dark:bg-cyan-500 dark:text-white'
-                                        : 'bg-white text-gray-700 dark:bg-gray-800 dark:text-gray-300'
-                                }`}
-                            >
-                                Fan Hub
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => setUserOriginFilter('echoflux')}
-                                className={`px-3 py-2 text-xs font-semibold ${
-                                    userOriginFilter === 'echoflux'
-                                        ? 'bg-indigo-600 text-white dark:bg-indigo-500 dark:text-white'
-                                        : 'bg-white text-gray-700 dark:bg-gray-800 dark:text-gray-300'
-                                }`}
-                            >
-                                EchoFlux
-                            </button>
+                <div className="flex flex-col gap-4 mb-4">
+                    <div className="flex flex-col lg:flex-row lg:justify-between lg:items-start gap-4">
+                        <h3 className="text-xl font-bold text-gray-900 dark:text-white shrink-0">User Management</h3>
+                        <div className="flex flex-col gap-3 w-full lg:w-auto lg:max-w-xl">
+                            <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-2 sm:gap-2">
+                                <span className="text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide shrink-0">
+                                    Directory
+                                </span>
+                                <div className="inline-flex rounded-lg border border-gray-300 dark:border-gray-600 p-0.5 bg-gray-50 dark:bg-gray-900/40 w-fit max-w-full">
+                                    <button
+                                        type="button"
+                                        onClick={() => setUserMgmtView('workspace')}
+                                        className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-colors whitespace-nowrap ${
+                                            userMgmtView === 'workspace'
+                                                ? 'bg-indigo-600 text-white shadow-sm'
+                                                : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
+                                        }`}
+                                    >
+                                        Workspace
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setUserMgmtView('storefront')}
+                                        className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-colors whitespace-nowrap ${
+                                            userMgmtView === 'storefront'
+                                                ? 'bg-cyan-600 text-white shadow-sm'
+                                                : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
+                                        }`}
+                                    >
+                                        My Page creators
+                                    </button>
+                                </div>
+                                {userMgmtView === 'workspace' && (
+                                    <button
+                                        type="button"
+                                        onClick={() => setUserMgmtShowFanSummary((v) => !v)}
+                                        className={`px-2.5 py-1.5 text-[11px] font-semibold rounded-md border transition-colors whitespace-nowrap w-fit ${
+                                            userMgmtShowFanSummary
+                                                ? 'border-indigo-400 bg-indigo-50 text-indigo-800 dark:border-indigo-600 dark:bg-indigo-950/40 dark:text-indigo-200'
+                                                : 'border-gray-300 bg-white text-gray-700 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300'
+                                        }`}
+                                    >
+                                        {userMgmtShowFanSummary ? 'Hide buyer summary' : 'Show buyer summary'}
+                                    </button>
+                                )}
+                            </div>
+                            <p className="text-[11px] leading-snug text-gray-500 dark:text-gray-400">
+                                {userMgmtView === 'workspace' ? (
+                                    <>
+                                        EchoFlux app accounts (plans, storage, captions). Use{' '}
+                                        <span className="font-medium text-gray-600 dark:text-gray-300">Show My Page members</span> on a
+                                        row to load that creator&apos;s fans.
+                                    </>
+                                ) : (
+                                    <>
+                                        Accounts with a <span className="font-medium text-gray-600 dark:text-gray-300">creators/</span>{' '}
+                                        doc (storefront owners). Expand each row to list fans from Firestore.
+                                    </>
+                                )}
+                            </p>
+                            <div className="flex flex-wrap items-center gap-2">
+                                <button
+                                    type="button"
+                                    onClick={() => setShowAddUserModal(true)}
+                                    className="inline-flex items-center justify-center gap-2 px-3 py-2 text-sm bg-primary-600 text-white rounded-md hover:bg-primary-700 transition-colors font-medium shrink-0 w-auto"
+                                >
+                                    <UserPlusIcon />
+                                    Add User
+                                </button>
+                                <input
+                                    type="text"
+                                    placeholder="Search by name or email..."
+                                    value={searchTerm}
+                                    onChange={(e) => setSearchTerm(e.target.value)}
+                                    className="flex-1 min-w-[12rem] max-w-md p-2 border rounded-md bg-gray-50 dark:bg-gray-700 border-gray-300 dark:border-gray-600 focus:ring-primary-500 focus:border-primary-500 dark:text-white dark:placeholder-gray-400"
+                                />
+                            </div>
                         </div>
-                        <button
-                            onClick={() => setShowAddUserModal(true)}
-                            className="inline-flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 transition-colors font-medium"
-                        >
-                            <UserPlusIcon />
-                            Add User
-                        </button>
-                        <input 
-                            type="text"
-                            placeholder="Search by name or email..."
-                            value={searchTerm}
-                            onChange={e => setSearchTerm(e.target.value)}
-                            className="w-full sm:w-64 p-2 border rounded-md bg-gray-50 dark:bg-gray-700 border-gray-300 dark:border-gray-600 focus:ring-primary-500 focus:border-primary-500 dark:text-white dark:placeholder-gray-400"
-                        />
                     </div>
                 </div>
                 <div className="overflow-x-auto">
@@ -2461,15 +2497,22 @@ export const AdminDashboard: React.FC = () => {
                                             user.plan !== 'Caption'),
                                 );
                                 
-                                const showEchofluxSection = userOriginFilter === 'all' || userOriginFilter === 'echoflux';
-                                const showFanConsumersSection = userOriginFilter === 'all';
-                                const showCreatorsMyPageSection = userOriginFilter === 'fan_hub';
+                                const showEchofluxSection = userMgmtView === 'workspace';
+                                const showFanConsumersSection = userMgmtView === 'workspace' && userMgmtShowFanSummary;
+                                const showCreatorsMyPageSection = userMgmtView === 'storefront';
 
-                                // Separate admins, Fan Hub consumers (All tab only), and EchoFlux workspace users
-                                const adminUsers = visibleUsers.filter(user => user.role === 'Admin');
-                                const nonAdminUsers = visibleUsers.filter(user => user.role !== 'Admin');
-                                // EchoFlux block: all workspace accounts (not split by Fan Hub consumer status).
-                                const echofluxUsers = nonAdminUsers.filter((user) => isEchofluxWorkspaceUser(user));
+                                const adminUsers = visibleUsers.filter((user) => user.role === 'Admin');
+                                const nonAdminUsers = visibleUsers.filter((user) => user.role !== 'Admin');
+                                /** Workspace directory: all workspace accounts on this page, admins first (same list as Stormij + Krissi). */
+                                const workspaceAccountUsers = visibleUsers
+                                    .filter((user) => isEchofluxWorkspaceUser(user))
+                                    .sort((a, b) => {
+                                        const aAd = a.role === 'Admin' ? 0 : 1;
+                                        const bAd = b.role === 'Admin' ? 0 : 1;
+                                        if (aAd !== bAd) return aAd - bAd;
+                                        if (a.role === 'Admin') return a.email.localeCompare(b.email);
+                                        return new Date(b.signupDate).getTime() - new Date(a.signupDate).getTime();
+                                    });
                                 // Fan Hub block on "All": people with a synced Fan Hub membership as a fan (may overlap EchoFlux rows).
                                 const fanHubUsers = nonAdminUsers.filter((user) => hasFanHubMembership(user));
                                 // Fan Hub tab: non-admin rows are already creator-only from filteredUsers; list them with rosters.
@@ -2519,8 +2562,8 @@ export const AdminDashboard: React.FC = () => {
                                         {/* Totals row at top if wil_jackson@icloud.com is not on this page */}
                                         {!wilJacksonUser && <TotalsRow />}
                                         
-                                        {/* Admin Users Section */}
-                                        {adminUsers.length > 0 && (
+                                        {/* Storefront: admins first; Workspace merges admins into WORKSPACE ACCOUNTS below */}
+                                        {userMgmtView === 'storefront' && adminUsers.length > 0 && (
                                             <>
                                                 {adminUsers.map((user) => {
                                                     const isWilJackson = user.email === 'wil_jackson@icloud.com';
@@ -2606,7 +2649,7 @@ export const AdminDashboard: React.FC = () => {
                                                 <tr>
                                                     <td colSpan={6} className="p-2 border-t-2 border-cyan-300 dark:border-cyan-700 bg-cyan-50/40 dark:bg-cyan-900/15">
                                                         <div className="text-xs text-cyan-800 dark:text-cyan-200 font-semibold tracking-wide text-center">
-                                                            MY PAGE CREATORS (show members per creator)
+                                                            MY PAGE CREATORS
                                                         </div>
                                                     </td>
                                                 </tr>
@@ -2672,77 +2715,157 @@ export const AdminDashboard: React.FC = () => {
                                             </>
                                         )}
                                         
-                                        {/* EchoFlux Users Section */}
-                                        {showEchofluxSection && echofluxUsers.length > 0 && (
+                                        {/* Workspace accounts (includes admins like Stormij with non-admin creators) */}
+                                        {showEchofluxSection && workspaceAccountUsers.length > 0 && (
                                             <>
                                                 <tr>
                                                     <td colSpan={6} className="p-2 border-t-2 border-gray-300 dark:border-gray-600">
                                                         <div className="text-xs text-gray-500 dark:text-gray-400 font-semibold tracking-wide text-center">
-                                                            ECHOFLUX USERS
+                                                            WORKSPACE ACCOUNTS
                                                         </div>
                                                     </td>
                                                 </tr>
 
-                                                {echofluxUsers.map((user) => {
+                                                {workspaceAccountUsers.map((user) => {
                                                     const isWilJackson = user.email === 'wil_jackson@icloud.com';
-                                                    
+                                                    const isRowAdmin = user.role === 'Admin';
+
                                                     return (
                                                         <React.Fragment key={user.id}>
-                                                            <tr className="border-b border-gray-200 dark:border-gray-700">
-                                                                <td className="p-3">
-                                                                    <div className="flex items-center space-x-3">
-                                                                        <img src={user.avatar} alt={user.name} className="w-10 h-10 rounded-full"/>
-                                                                        <div>
-                                                                            <p className="font-bold text-gray-900 dark:text-white flex items-center gap-2">
-                                                                                {user.name}
-                                                                                {getUserOriginBadge(user)}
-                                                                            </p>
-                                                                            <p className="text-sm text-gray-500 dark:text-gray-400">{user.email}</p>
+                                                            {isRowAdmin ? (
+                                                                <tr className="border-b border-gray-200 dark:border-gray-700 bg-blue-50/30 dark:bg-blue-900/10">
+                                                                    <td className="p-3">
+                                                                        <div className="flex items-center space-x-3">
+                                                                            <img
+                                                                                src={user.avatar}
+                                                                                alt={user.name}
+                                                                                className="w-10 h-10 rounded-full border-2 border-blue-500"
+                                                                            />
+                                                                            <div>
+                                                                                <p className="font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                                                                                    {user.name}
+                                                                                    <span className="text-xs bg-blue-600 text-white px-2 py-0.5 rounded">
+                                                                                        ADMIN
+                                                                                    </span>
+                                                                                    {getUserOriginBadge(user)}
+                                                                                </p>
+                                                                                <p className="text-sm text-gray-500 dark:text-gray-400">{user.email}</p>
+                                                                            </div>
                                                                         </div>
-                                                                    </div>
-                                                                </td>
-                                                                <td className="p-3">
-                                                                    <span className={`px-3 py-1 text-xs font-semibold rounded-full ${planColorMap[getPlanKey(user.plan)]}`}>
-                                                                        {user.plan}
-                                                                    </span>
-                                                                </td>
-                                                                <td className="p-3 text-sm text-gray-600 dark:text-gray-300">
-                                                                    {new Date(user.signupDate).toLocaleDateString()}
-                                                                </td>
-                                                                <td className="p-3 text-sm text-gray-600 dark:text-gray-300">
-                                                                    {formatStorage(userStorageMap[user.id] ?? user.storageUsed ?? 0, getStorageLimit(user.plan))}
-                                                                </td>
-                                                                <td className="p-3 font-mono text-gray-600 dark:text-gray-300">
-                                                                    {(() => {
-                                                                        const used = adminCaptionUsedThisMonth(user);
-                                                                        const limit = adminCaptionMonthlyLimit(user.plan);
-                                                                        return limit > 0 ? `${used}/${limit}` : `${used}`;
-                                                                    })()}
-                                                                </td>
-                                                                <td className="p-3">
-                                                                    <div className="flex gap-2">
-                                                                        <button onClick={() => setEditingUser(user)} className="px-3 py-1 text-sm font-medium text-primary-600 dark:text-primary-400 hover:bg-primary-50 dark:hover:bg-primary-900/30 rounded-md">
-                                                                            Manage
-                                                                        </button>
-                                                                        <button onClick={() => setGrantingRewardToUser(user)} className="px-3 py-1 text-sm font-medium text-purple-600 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-900/30 rounded-md">
-                                                                            Grant Reward
-                                                                        </button>
-                                                                        <button 
-                                                                            onClick={() => handleDeleteUser(user)} 
-                                                                            className="px-3 py-1 text-sm font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-md flex items-center gap-1"
-                                                                            title="Delete User"
+                                                                    </td>
+                                                                    <td className="p-3">
+                                                                        <span
+                                                                            className={`px-3 py-1 text-xs font-semibold rounded-full ${planColorMap[getPlanKey(user.plan)]}`}
                                                                         >
-                                                                            <TrashIcon className="w-4 h-4" />
-                                                                            Delete
-                                                                        </button>
-                                                                    </div>
-                                                                </td>
-                                                            </tr>
-                                                            {renderCreatorHubRosterBlock(user, 6)}
-                                                            {/* Totals row after wil_jackson@icloud.com if they're a regular user */}
-                                                            {isWilJackson && (
-                                                                <TotalsRow />
+                                                                            {user.plan}
+                                                                        </span>
+                                                                    </td>
+                                                                    <td className="p-3 text-sm text-gray-600 dark:text-gray-300">
+                                                                        {new Date(user.signupDate).toLocaleDateString()}
+                                                                    </td>
+                                                                    <td className="p-3 text-sm text-gray-600 dark:text-gray-300">
+                                                                        {formatStorage(
+                                                                            userStorageMap[user.id] ?? user.storageUsed ?? 0,
+                                                                            getStorageLimit(user.plan),
+                                                                        )}
+                                                                    </td>
+                                                                    <td className="p-3 font-mono text-gray-600 dark:text-gray-300">
+                                                                        {(() => {
+                                                                            const used = adminCaptionUsedThisMonth(user);
+                                                                            const limit = adminCaptionMonthlyLimit(user.plan);
+                                                                            return limit > 0 ? `${used}/${limit}` : `${used}`;
+                                                                        })()}
+                                                                    </td>
+                                                                    <td className="p-3">
+                                                                        <div className="flex gap-2">
+                                                                            <button
+                                                                                onClick={() => setEditingUser(user)}
+                                                                                className="px-3 py-1 text-sm font-medium text-primary-600 dark:text-primary-400 hover:bg-primary-50 dark:hover:bg-primary-900/30 rounded-md"
+                                                                            >
+                                                                                Manage
+                                                                            </button>
+                                                                            <button
+                                                                                onClick={() => setGrantingRewardToUser(user)}
+                                                                                className="px-3 py-1 text-sm font-medium text-purple-600 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-900/30 rounded-md"
+                                                                            >
+                                                                                Grant Reward
+                                                                            </button>
+                                                                            <button
+                                                                                onClick={() => handleDeleteUser(user)}
+                                                                                className="px-3 py-1 text-sm font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-md flex items-center gap-1"
+                                                                                title="Delete User"
+                                                                            >
+                                                                                <TrashIcon className="w-4 h-4" />
+                                                                                Delete
+                                                                            </button>
+                                                                        </div>
+                                                                    </td>
+                                                                </tr>
+                                                            ) : (
+                                                                <tr className="border-b border-gray-200 dark:border-gray-700">
+                                                                    <td className="p-3">
+                                                                        <div className="flex items-center space-x-3">
+                                                                            <img src={user.avatar} alt={user.name} className="w-10 h-10 rounded-full" />
+                                                                            <div>
+                                                                                <p className="font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                                                                                    {user.name}
+                                                                                    {getUserOriginBadge(user)}
+                                                                                </p>
+                                                                                <p className="text-sm text-gray-500 dark:text-gray-400">{user.email}</p>
+                                                                            </div>
+                                                                        </div>
+                                                                    </td>
+                                                                    <td className="p-3">
+                                                                        <span
+                                                                            className={`px-3 py-1 text-xs font-semibold rounded-full ${planColorMap[getPlanKey(user.plan)]}`}
+                                                                        >
+                                                                            {user.plan}
+                                                                        </span>
+                                                                    </td>
+                                                                    <td className="p-3 text-sm text-gray-600 dark:text-gray-300">
+                                                                        {new Date(user.signupDate).toLocaleDateString()}
+                                                                    </td>
+                                                                    <td className="p-3 text-sm text-gray-600 dark:text-gray-300">
+                                                                        {formatStorage(
+                                                                            userStorageMap[user.id] ?? user.storageUsed ?? 0,
+                                                                            getStorageLimit(user.plan),
+                                                                        )}
+                                                                    </td>
+                                                                    <td className="p-3 font-mono text-gray-600 dark:text-gray-300">
+                                                                        {(() => {
+                                                                            const used = adminCaptionUsedThisMonth(user);
+                                                                            const limit = adminCaptionMonthlyLimit(user.plan);
+                                                                            return limit > 0 ? `${used}/${limit}` : `${used}`;
+                                                                        })()}
+                                                                    </td>
+                                                                    <td className="p-3">
+                                                                        <div className="flex gap-2">
+                                                                            <button
+                                                                                onClick={() => setEditingUser(user)}
+                                                                                className="px-3 py-1 text-sm font-medium text-primary-600 dark:text-primary-400 hover:bg-primary-50 dark:hover:bg-primary-900/30 rounded-md"
+                                                                            >
+                                                                                Manage
+                                                                            </button>
+                                                                            <button
+                                                                                onClick={() => setGrantingRewardToUser(user)}
+                                                                                className="px-3 py-1 text-sm font-medium text-purple-600 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-900/30 rounded-md"
+                                                                            >
+                                                                                Grant Reward
+                                                                            </button>
+                                                                            <button
+                                                                                onClick={() => handleDeleteUser(user)}
+                                                                                className="px-3 py-1 text-sm font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-md flex items-center gap-1"
+                                                                                title="Delete User"
+                                                                            >
+                                                                                <TrashIcon className="w-4 h-4" />
+                                                                                Delete
+                                                                            </button>
+                                                                        </div>
+                                                                    </td>
+                                                                </tr>
                                                             )}
+                                                            {renderCreatorHubRosterBlock(user, 6)}
+                                                            {isWilJackson && <TotalsRow />}
                                                         </React.Fragment>
                                                     );
                                                 })}
@@ -2756,7 +2879,7 @@ export const AdminDashboard: React.FC = () => {
                                                     <td colSpan={6} className="p-3 border-t-2 border-cyan-300 dark:border-cyan-700">
                                                         <div className="flex items-center justify-between gap-3">
                                                             <div className="text-xs font-semibold text-cyan-800 dark:text-cyan-200 tracking-wide">
-                                                                FAN HUB MEMBERS
+                                                                FAN BUYER SUMMARY
                                                             </div>
                                                             <button
                                                                 type="button"
@@ -2972,7 +3095,7 @@ export const AdminDashboard: React.FC = () => {
                                                 })() : (
                                                     <tr className="bg-cyan-50/20 dark:bg-cyan-900/10">
                                                         <td colSpan={6} className="p-3 text-xs text-cyan-800 dark:text-cyan-200 border-b border-cyan-200 dark:border-cyan-900/40">
-                                                            Fan Hub members are hidden. Click "Show members" to expand.
+                                                            Buyer summary is collapsed. Click Show members to expand.
                                                         </td>
                                                     </tr>
                                                 )}
