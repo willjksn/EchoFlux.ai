@@ -39,10 +39,8 @@ const NavItem: React.FC<NavItemProps> = ({ page, icon, label, tourId, badgeCount
         <span className="ml-1 font-medium flex-1 min-w-0">{label}</span>
         {showBadge ? (
           <span
-            className={`shrink-0 min-w-[1.25rem] h-5 px-1 rounded-full text-[10px] font-bold leading-none flex items-center justify-center ${
-              activePage === page
-                ? 'bg-white/25 text-white ring-1 ring-white/40'
-                : 'bg-red-500 text-white'
+            className={`shrink-0 min-w-[1.25rem] h-5 px-1 rounded-full text-[10px] font-bold leading-none flex items-center justify-center bg-red-500 text-white shadow-sm ${
+              activePage === page ? 'ring-2 ring-white/90' : ''
             }`}
             aria-hidden
           >
