@@ -2161,6 +2161,11 @@ export const FanStorefrontView: React.FC = () => {
         );
         const data = await res.json().catch(() => ({}));
         if (gen !== entitlementFetchGen.current) return;
+        if (!res.ok) {
+          const msg = typeof (data as { error?: unknown }).error === "string" ? (data as { error: string }).error : "";
+          showToast?.(msg || `Could not verify membership (${res.status}). Refresh and try again.`, "error");
+          return;
+        }
         const nextUnlockedProducts = Array.isArray((data as { unlockedProductIds?: string[] }).unlockedProductIds)
           ? (data as { unlockedProductIds: string[] }).unlockedProductIds
           : [];
@@ -2222,7 +2227,9 @@ export const FanStorefrontView: React.FC = () => {
       );
       const data = await res.json().catch(() => ({}));
       if (gen !== entitlementFetchGen.current) return;
-      if (!res.ok) return;
+      if (!res.ok) {
+        return;
+      }
       const nextUnlockedProducts = Array.isArray((data as { unlockedProductIds?: string[] }).unlockedProductIds)
         ? (data as { unlockedProductIds: string[] }).unlockedProductIds
         : [];
@@ -4656,6 +4663,11 @@ export const FanStorefrontView: React.FC = () => {
             onAuthSessionReady={syncFanAuthSessionToHub}
             onSuccess={() => {
               syncFanAuthSessionToHub();
+              /** Free storefront: entitlement fetch can lag behind join; without this, showLanding stays true and fans stay on the landing page after "You're in!". */
+              if (creator.monetization?.freeAccessEnabled === true) {
+                setSubscribed(true);
+                setMembershipType("free");
+              }
               void refetchMemberEntitlement();
               setFanAuthOpen(false);
               setFanAuthPaidDetailsStep(false);

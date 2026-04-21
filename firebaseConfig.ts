@@ -95,20 +95,21 @@ onAuthStateChanged(auth, async (user) => {
 // Firestore & Storage
 // ------------------------------------------------------------
 // Firestore transport:
-// - WebChannel `Listen/channel` can 400 in localhost/Electron/proxied environments.
-// - In dev we force long-polling and also enable auto-detect fallback.
-// - Override with VITE_FIRESTORE_FORCE_LONG_POLLING=false only when debugging transport.
+// - WebChannel `Listen/channel` can show HTTP 400 in DevTools on some networks (proxies, VPNs, extensions).
+//   The client usually retries; persistent failures break listeners until refresh or long-polling.
+// - `experimentalForceLongPolling` and `experimentalAutoDetectLongPolling` must not both be set (Firebase docs).
+// - Dev: default to forced long-polling unless VITE_FIRESTORE_FORCE_LONG_POLLING=false.
+// - Prod: default to auto long-polling detection (SDK default since v9.22); set env true to force long-polling sitewide.
 const envLongPoll = String(import.meta.env.VITE_FIRESTORE_FORCE_LONG_POLLING || "").toLowerCase();
 const forceLongPolling =
   envLongPoll === "true" ||
   (import.meta.env.DEV && envLongPoll !== "false");
-export const db = initializeFirestore(app, {
-  ...(forceLongPolling
-    ? {
-        experimentalForceLongPolling: true,
-      }
-    : {}),
-});
+export const db = initializeFirestore(
+  app,
+  forceLongPolling
+    ? { experimentalForceLongPolling: true }
+    : { experimentalAutoDetectLongPolling: true },
+);
 export const storage = getStorage(app);
 
 /** Configured default bucket id (for Storage URL checks). */

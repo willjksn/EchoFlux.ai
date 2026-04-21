@@ -288,10 +288,14 @@ export const FanAuthModal: React.FC<FanAuthModalProps> = ({
         { headers: { Authorization: `Bearer ${token}` } },
       );
       const ent = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error("entitlement_fetch_failed");
+      }
       const mt = (ent as { membershipType?: "free" | "paid" | null }).membershipType ?? null;
       const sub = !!(ent as { subscribed?: boolean }).subscribed;
       if (mt === "paid" && sub) {
         showToast?.("You're in!", "success");
+        onSuccess?.();
         onClose();
         return;
       }
