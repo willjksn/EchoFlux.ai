@@ -1,4 +1,5 @@
 import React from "react";
+import { fanEffectiveStreamStatus } from "../src/hooks/useCreatorLiveStreamStatuses";
 import type { LiveStreamEventStatus, LiveStreamPromoOnPost } from "../types";
 
 function formatStreamStart(iso?: string): string {
@@ -83,9 +84,11 @@ export const LiveStreamPromoBanner: React.FC<{
 }) => {
   const title = promo.title?.trim() || "Live stream";
   const border = accentHex && /^#[0-9A-Fa-f]{6}$/.test(accentHex) ? accentHex : "#7c3aed";
-  const streamStatus = promo.streamStatus as LiveStreamEventStatus | undefined;
+  const streamStatusRaw = promo.streamStatus as LiveStreamEventStatus | undefined;
+  const streamStatus =
+    variant === "fan" ? fanEffectiveStreamStatus(promo) ?? streamStatusRaw : streamStatusRaw;
   const streamIsLive = streamStatus === "live";
-  const streamEnded = streamStatus === "ended";
+  const streamEnded = streamStatus === "ended" || streamStatus === "cancelled";
   /** Creator UI: optimistic live after successful Go live API, before fanPosts promo sync */
   const streamLiveEffective =
     variant === "creator" &&
@@ -245,7 +248,7 @@ export const LiveStreamPromoBanner: React.FC<{
 
   return (
     <div
-      className="live-stream-promo-banner"
+      className={`live-stream-promo-banner${variant === "fan" && streamEnded ? " live-stream-promo-banner--fan-ended" : ""}`}
       role="region"
       aria-label="Live stream"
       style={

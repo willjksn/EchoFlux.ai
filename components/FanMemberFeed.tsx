@@ -40,6 +40,11 @@ import { resolveApiUrl } from "../src/lib/resolveApiUrl";
 import { EmojiIcon } from "./icons/UIIcons";
 import { useFanFeedCommentEmojiPicker } from "./fanFeedCommentEmojiPicker";
 import type { FanHubPostKind, LiveStreamPromoOnPost } from "../types";
+import {
+  fanEffectiveStreamStatus,
+  mergeLiveStreamPromoWithLiveDocStatus,
+  useCreatorLiveStreamStatuses,
+} from "../src/hooks/useCreatorLiveStreamStatuses";
 import { LiveStreamPromoBanner, type LiveStreamPromoFanAccess } from "./LiveStreamPromoBanner";
 import { LiveStreamWatchRoom } from "./LiveStreamWatchRoom";
 
@@ -1670,6 +1675,28 @@ export const FanMemberFeed: React.FC<FanMemberFeedProps> = ({
   const { detailPost, detailLoading, reload: reloadDetailPost } = useMemberPostDetail(creatorId, viewPostId, {
     allowCreatorTestLivePromos,
   });
+  const liveStreamStreamIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const p of posts) {
+      if (p.postKind === "live_stream_promo" && p.liveStreamPromo?.streamId) ids.add(p.liveStreamPromo.streamId);
+    }
+    if (detailPost?.postKind === "live_stream_promo" && detailPost.liveStreamPromo?.streamId) {
+      ids.add(detailPost.liveStreamPromo.streamId);
+    }
+    return [...ids].sort();
+  }, [posts, detailPost]);
+  const liveStreamStatusMap = useCreatorLiveStreamStatuses(creatorId, liveStreamStreamIds);
+  const mergeLivePromo = useCallback(
+    (promo: LiveStreamPromoOnPost) => mergeLiveStreamPromoWithLiveDocStatus(promo, liveStreamStatusMap),
+    [liveStreamStatusMap],
+  );
+  const detailPostForModal = useMemo(() => {
+    if (!detailPost?.liveStreamPromo?.streamId) return detailPost;
+    return {
+      ...detailPost,
+      liveStreamPromo: mergeLiveStreamPromoWithLiveDocStatus(detailPost.liveStreamPromo, liveStreamStatusMap),
+    };
+  }, [detailPost, liveStreamStatusMap]);
   const [fanPublicProfile, setFanPublicProfile] = useState<{ photoURL?: string; displayName?: string }>({});
 
   const fanPhotoResolved =
@@ -1694,24 +1721,49 @@ export const FanMemberFeed: React.FC<FanMemberFeedProps> = ({
     [creatorId, liveStreamCheckoutStreamId, showToast],
   );
 
-  const handleLiveStreamWatch = useCallback((promo: LiveStreamPromoOnPost) => {
-    setLiveStreamWatch({
-      streamId: promo.streamId,
-      title: promo.title?.trim() || "Live stream",
-    });
-  }, []);
+  const handleLiveStreamWatch = useCallback(
+    (promo: LiveStreamPromoOnPost) => {
+      const merged = mergeLiveStreamPromoWithLiveDocStatus(promo, liveStreamStatusMap);
+      const st = String(fanEffectiveStreamStatus(merged) ?? merged.streamStatus ?? "")
+        .trim()
+        .toLowerCase();
+      if (st === "ended" || st === "cancelled") {
+        showToast?.("This stream has ended.", "info");
+        return;
+      }
+      if (st !== "live") {
+        showToast?.("The broadcast isn’t live right now.", "info");
+        return;
+      }
+      setLiveStreamWatch({
+        streamId: merged.streamId,
+        title: merged.title?.trim() || "Live stream",
+      });
+    },
+    [liveStreamStatusMap, showToast],
+  );
 
   useEffect(() => {
     if (!liveStreamWatch) return;
-    const st = posts
-      .find((p) => p.liveStreamPromo?.streamId === liveStreamWatch.streamId)
-      ?.liveStreamPromo?.streamStatus?.trim()
+    const fromMap = liveStreamStatusMap[liveStreamWatch.streamId];
+    const fromDetail =
+      detailPost?.liveStreamPromo?.streamId === liveStreamWatch.streamId
+        ? detailPost.liveStreamPromo.streamStatus
+        : undefined;
+    const fromPost = posts.find((p) => p.liveStreamPromo?.streamId === liveStreamWatch.streamId)?.liveStreamPromo;
+    const promoMerged = fromPost?.streamId
+      ? mergeLiveStreamPromoWithLiveDocStatus(fromPost, liveStreamStatusMap)
+      : undefined;
+    const stRaw = fromMap || fromDetail || fromPost?.streamStatus || "";
+    const stEff = promoMerged ? fanEffectiveStreamStatus(promoMerged) : undefined;
+    const st = String(stEff ?? stRaw ?? "")
+      .trim()
       .toLowerCase();
     if (st === "ended" || st === "cancelled") {
       setLiveStreamWatch(null);
       showToast?.("The live stream has ended.", "info");
     }
-  }, [posts, liveStreamWatch, showToast]);
+  }, [posts, detailPost, liveStreamStatusMap, liveStreamWatch, showToast]);
 
   const feedBucketsRef = useRef<Record<MemberFeedBucketKey, Map<string, Post>>>({
     fanPosts: new Map(),
@@ -2071,9 +2123,9 @@ export const FanMemberFeed: React.FC<FanMemberFeedProps> = ({
               {post.postKind === "live_stream_promo" && post.liveStreamPromo?.streamId ? (
                 <div className="feed-card-live-stream-promo-wrap fan-feed-live-stream-promo">
                   <LiveStreamPromoBanner
-                    promo={post.liveStreamPromo}
+                    promo={mergeLivePromo(post.liveStreamPromo)}
                     accentHex={primary}
-                    fanAccess={liveStreamFanAccess(post.liveStreamPromo, {
+                    fanAccess={liveStreamFanAccess(mergeLivePromo(post.liveStreamPromo), {
                       fanId,
                       fanPageAdminBypass,
                       unlockedStreamIds: unlockedLiveStreamIdSet,
@@ -2369,7 +2421,7 @@ export const FanMemberFeed: React.FC<FanMemberFeedProps> = ({
       <FanMemberPostDetailModal
         open={viewPostId !== null}
         onClose={() => setViewPostId(null)}
-        post={detailPost}
+        post={detailPostForModal}
         loading={detailLoading}
         displayName={displayName}
         creatorAvatar={avatar}
@@ -2462,25 +2514,6 @@ export const FanMemberSaved: React.FC<FanMemberSavedProps> = ({
   );
   const [unlockingPostIdSaved, setUnlockingPostIdSaved] = useState<string | null>(null);
   const [liveStreamCheckoutStreamIdSaved, setLiveStreamCheckoutStreamIdSaved] = useState<string | null>(null);
-  const [liveStreamWatchSaved, setLiveStreamWatchSaved] = useState<{ streamId: string; title: string } | null>(null);
-  const handleLiveStreamWatchSaved = useCallback((promo: LiveStreamPromoOnPost) => {
-    setLiveStreamWatchSaved({
-      streamId: promo.streamId,
-      title: promo.title?.trim() || "Live stream",
-    });
-  }, []);
-
-  useEffect(() => {
-    if (!liveStreamWatchSaved) return;
-    const st = posts
-      .find((p) => p.liveStreamPromo?.streamId === liveStreamWatchSaved.streamId)
-      ?.liveStreamPromo?.streamStatus?.trim()
-      .toLowerCase();
-    if (st === "ended" || st === "cancelled") {
-      setLiveStreamWatchSaved(null);
-      showToastSaved?.("The live stream has ended.", "info");
-    }
-  }, [posts, liveStreamWatchSaved, showToastSaved]);
 
   const handleLiveStreamTicketSaved = useCallback(
     async (streamId: string) => {
@@ -2520,6 +2553,73 @@ export const FanMemberSaved: React.FC<FanMemberSavedProps> = ({
   const { detailPost, detailLoading, reload: reloadDetailPost } = useMemberPostDetail(creatorId, viewPostId, {
     allowCreatorTestLivePromos: allowCreatorTestLivePromosSaved,
   });
+  const liveStreamStreamIdsSaved = useMemo(() => {
+    const ids = new Set<string>();
+    for (const p of posts) {
+      if (p.postKind === "live_stream_promo" && p.liveStreamPromo?.streamId) ids.add(p.liveStreamPromo.streamId);
+    }
+    if (detailPost?.postKind === "live_stream_promo" && detailPost.liveStreamPromo?.streamId) {
+      ids.add(detailPost.liveStreamPromo.streamId);
+    }
+    return [...ids].sort();
+  }, [posts, detailPost]);
+  const liveStreamStatusMapSaved = useCreatorLiveStreamStatuses(creatorId, liveStreamStreamIdsSaved);
+  const mergeLivePromoSaved = useCallback(
+    (promo: LiveStreamPromoOnPost) => mergeLiveStreamPromoWithLiveDocStatus(promo, liveStreamStatusMapSaved),
+    [liveStreamStatusMapSaved],
+  );
+  const detailPostForModalSaved = useMemo(() => {
+    if (!detailPost?.liveStreamPromo?.streamId) return detailPost;
+    return {
+      ...detailPost,
+      liveStreamPromo: mergeLiveStreamPromoWithLiveDocStatus(detailPost.liveStreamPromo, liveStreamStatusMapSaved),
+    };
+  }, [detailPost, liveStreamStatusMapSaved]);
+  const [liveStreamWatchSaved, setLiveStreamWatchSaved] = useState<{ streamId: string; title: string } | null>(null);
+  const handleLiveStreamWatchSaved = useCallback(
+    (promo: LiveStreamPromoOnPost) => {
+      const merged = mergeLiveStreamPromoWithLiveDocStatus(promo, liveStreamStatusMapSaved);
+      const st = String(fanEffectiveStreamStatus(merged) ?? merged.streamStatus ?? "")
+        .trim()
+        .toLowerCase();
+      if (st === "ended" || st === "cancelled") {
+        showToastSaved?.("This stream has ended.", "info");
+        return;
+      }
+      if (st !== "live") {
+        showToastSaved?.("The broadcast isn’t live right now.", "info");
+        return;
+      }
+      setLiveStreamWatchSaved({
+        streamId: merged.streamId,
+        title: merged.title?.trim() || "Live stream",
+      });
+    },
+    [liveStreamStatusMapSaved, showToastSaved],
+  );
+
+  useEffect(() => {
+    if (!liveStreamWatchSaved) return;
+    const fromMap = liveStreamStatusMapSaved[liveStreamWatchSaved.streamId];
+    const fromDetail =
+      detailPost?.liveStreamPromo?.streamId === liveStreamWatchSaved.streamId
+        ? detailPost.liveStreamPromo.streamStatus
+        : undefined;
+    const fromPost = posts.find((p) => p.liveStreamPromo?.streamId === liveStreamWatchSaved.streamId)?.liveStreamPromo;
+    const promoMerged = fromPost?.streamId
+      ? mergeLiveStreamPromoWithLiveDocStatus(fromPost, liveStreamStatusMapSaved)
+      : undefined;
+    const stRaw = fromMap || fromDetail || fromPost?.streamStatus || "";
+    const stEff = promoMerged ? fanEffectiveStreamStatus(promoMerged) : undefined;
+    const st = String(stEff ?? stRaw ?? "")
+      .trim()
+      .toLowerCase();
+    if (st === "ended" || st === "cancelled") {
+      setLiveStreamWatchSaved(null);
+      showToastSaved?.("The live stream has ended.", "info");
+    }
+  }, [posts, detailPost, liveStreamStatusMapSaved, liveStreamWatchSaved, showToastSaved]);
+
   const [fanPublicProfile, setFanPublicProfile] = useState<{ photoURL?: string; displayName?: string }>({});
   const [expandedInlineCommentKeys, setExpandedInlineCommentKeys] = useState<Set<string>>(new Set());
   const [savedBookmarkCount, setSavedBookmarkCount] = useState(0);
@@ -2740,9 +2840,9 @@ export const FanMemberSaved: React.FC<FanMemberSavedProps> = ({
               {post.postKind === "live_stream_promo" && post.liveStreamPromo?.streamId ? (
                 <div className="feed-card-live-stream-promo-wrap fan-feed-live-stream-promo px-1">
                   <LiveStreamPromoBanner
-                    promo={post.liveStreamPromo}
+                    promo={mergeLivePromoSaved(post.liveStreamPromo)}
                     accentHex={primary}
-                    fanAccess={liveStreamFanAccess(post.liveStreamPromo, {
+                    fanAccess={liveStreamFanAccess(mergeLivePromoSaved(post.liveStreamPromo), {
                       fanId,
                       fanPageAdminBypass,
                       unlockedStreamIds: unlockedLiveStreamIdSetSaved,
@@ -2836,7 +2936,7 @@ export const FanMemberSaved: React.FC<FanMemberSavedProps> = ({
       <FanMemberPostDetailModal
         open={viewPostId !== null}
         onClose={() => setViewPostId(null)}
-        post={detailPost}
+        post={detailPostForModalSaved}
         loading={detailLoading}
         displayName={displayName}
         creatorAvatar={avatar}
