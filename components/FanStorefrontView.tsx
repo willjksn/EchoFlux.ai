@@ -2263,6 +2263,17 @@ export const FanStorefrontView: React.FC = () => {
       setFanPageAdminBypass(!!(data as { fanPageAdminBypass?: boolean }).fanPageAdminBypass);
     } catch {
       /* keep prior entitlement on transient failures */
+    } finally {
+      /**
+       * `onSuccess` often calls this while the `[creatorId, isLoggedIn]` entitlement effect is still in flight.
+       * That effect bumps the same gen counter — its `finally` then skips (stale gen) and never cleared bootstrap.
+       * Mirror the effect’s release so paid storefronts don’t stick on the post-login Loading spinner.
+       */
+      if (gen === entitlementFetchGen.current) {
+        setEntitlementLoading(false);
+        setEntitlementBootstrapResolved(true);
+        entitlementHydratingRef.current = false;
+      }
     }
   }, [creator?.creatorId]);
 
@@ -4271,6 +4282,11 @@ export const FanStorefrontView: React.FC = () => {
   /** Fan signed in — sync hub URL/state; does not close FanAuthModal (used before Stripe continuation step). */
   const syncFanAuthSessionToHub = useCallback(() => {
     if (!creator) return;
+    /** Auth state listener can lag one tick behind `signIn*`; avoid full-page `holdForAuthResolution` spinner after modal login. */
+    if (auth.currentUser) {
+      setAuthResolved(true);
+      setFanAuthUid(auth.currentUser.uid);
+    }
     setIsLoggedIn(true);
     if (creator.monetization?.freeAccessEnabled === true) {
       const nextTab: FanStorefrontMemberTab = "feed";
