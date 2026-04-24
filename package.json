@@ -28,6 +28,7 @@
     "sync:fan-dm-threads": "npx ts-node --esm scripts/sync-conversations-to-fanDmThreads.ts",
     "backfill:stormij-purchases-to-grants": "npx ts-node --esm scripts/backfillStormijPurchasesToGrants.ts",
     "backfill:fan-spend-from-orders": "npx ts-node --esm scripts/backfillFanSpendFromOrders.ts",
+    "backfill:fan-membership-spend": "npx ts-node --esm scripts/backfillFanMembershipSpend.ts",
     "reparent:creator": "npx ts-node --esm scripts/reparentCreatorArtifacts.ts",
     "upsert:creator-domain": "npx ts-node --esm scripts/upsertCreatorDomain.ts",
     "report:fans-missing-auth": "npx ts-node --esm scripts/reportFansMissingAuth.ts",

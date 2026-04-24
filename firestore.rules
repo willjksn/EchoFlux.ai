@@ -210,9 +210,9 @@ service cloud.firestore {
        * Previous `{subCollection=**}/{docId}` pattern did not apply reliably — Admins could not list peers' media_library.
        * Writes under dm_muted_threads/* are denied (server/Admin SDK only).
        */
-      match /{document=**} {
+      match /{subCollection}/{document=**} {
         allow read: if (isAuthenticated() && request.auth.uid == userId) || isAdmin();
-        allow write: if !document.matches('dm_muted_threads/.*')
+        allow write: if subCollection != 'dm_muted_threads'
           && ((isAuthenticated() && request.auth.uid == userId) || isAdmin());
       }
     }
