@@ -264,11 +264,15 @@ export const FanHubUsers: React.FC = () => {
       let orders: any[] = [];
       let earliestPurchaseAtByFanId: Record<string, string> = {};
       let earliestPurchaseAtByFanEmail: Record<string, string> = {};
+      let subscriptionSpendByFanId: Record<string, number> = {};
+      let subscriptionSpendByFanEmail: Record<string, number> = {};
       if (ordersRes.ok) {
         const data = await ordersRes.json();
         orders = data.orders || [];
         earliestPurchaseAtByFanId = (data.earliestPurchaseAtByFanId as Record<string, string>) || {};
         earliestPurchaseAtByFanEmail = (data.earliestPurchaseAtByFanEmail as Record<string, string>) || {};
+        subscriptionSpendByFanId = (data.subscriptionSpendByFanId as Record<string, number>) || {};
+        subscriptionSpendByFanEmail = (data.subscriptionSpendByFanEmail as Record<string, number>) || {};
       } else if (import.meta.env.DEV && (ordersRes.status === 404 || ordersRes.status === 502)) {
         console.warn(
           `[FanHubUsers] /api/creatorOrders returned ${ordersRes.status}. ` +
@@ -312,6 +316,8 @@ export const FanHubUsers: React.FC = () => {
         total: number;
         /** `creators/.../fans/{id}.totalSpentCents` — used when orders are missing or undercounted */
         fanDocBaselineCents: number;
+        /** `creators/.../fans/{id}.totalMembershipCents` — webhook-maintained subscription spend when available */
+        fanDocMembershipCents: number;
         mtdTips: number;
         mtdUnlocks: number;
         mtdTreats: number;
@@ -413,6 +419,10 @@ export const FanHubUsers: React.FC = () => {
               typeof data.totalSpentCents === "number" && Number.isFinite(data.totalSpentCents)
                 ? Math.max(0, Math.round(data.totalSpentCents))
                 : 0,
+            fanDocMembershipCents:
+              typeof data.totalMembershipCents === "number" && Number.isFinite(data.totalMembershipCents)
+                ? Math.max(0, Math.round(data.totalMembershipCents))
+                : 0,
             lastActive: firestoreDate(data.lastPaymentAt) ?? subscribedAt,
             firstOrder: subscribedAt,
             avatarUrl:
@@ -455,6 +465,7 @@ export const FanHubUsers: React.FC = () => {
           mtdMembership: 0,
           total: 0,
           fanDocBaselineCents: 0,
+          fanDocMembershipCents: 0,
           lastActive: null,
           firstOrder: null,
           profileSignupAt: null as Date | null,
@@ -529,6 +540,7 @@ export const FanHubUsers: React.FC = () => {
               mtdMembership: 0,
               total: 0,
               fanDocBaselineCents: 0,
+              fanDocMembershipCents: 0,
               lastActive: subscribedAt,
               firstOrder: subscribedAt,
               cancelAtPeriodEnd: parseCancelAtPeriodEndFromDoc(data as Record<string, unknown>),
@@ -580,6 +592,7 @@ export const FanHubUsers: React.FC = () => {
               mtdMembership: 0,
               total: 0,
               fanDocBaselineCents: 0,
+              fanDocMembershipCents: 0,
               lastActive: createdAt,
               firstOrder: createdAt,
               profileSignupAt: createdAt,
@@ -611,6 +624,7 @@ export const FanHubUsers: React.FC = () => {
           base.mtdUnlocks += o.mtdUnlocks;
           base.mtdMembership += o.mtdMembership ?? 0;
           base.fanDocBaselineCents = Math.max(base.fanDocBaselineCents ?? 0, o.fanDocBaselineCents ?? 0);
+          base.fanDocMembershipCents = Math.max(base.fanDocMembershipCents ?? 0, o.fanDocMembershipCents ?? 0);
           if (!base.email && o.email) base.email = o.email;
           if (!base.displayName && o.displayName) base.displayName = o.displayName;
           if (!base.username && o.username) base.username = o.username;
@@ -733,6 +747,20 @@ export const FanHubUsers: React.FC = () => {
       for (const row of userMap.values()) {
         const pd = purchaseHintDate(row.id, row.email);
         if (pd && (!row.firstOrder || pd < row.firstOrder)) row.firstOrder = pd;
+      }
+
+      const subscriptionSpendHint = (fanId: string, email: string | null | undefined): number => {
+        const byId = subscriptionSpendByFanId[fanId];
+        const em = typeof email === "string" ? email.trim().toLowerCase() : "";
+        const byEmail = em ? subscriptionSpendByFanEmail[em] : undefined;
+        return Math.max(
+          typeof byId === "number" && Number.isFinite(byId) ? byId : 0,
+          typeof byEmail === "number" && Number.isFinite(byEmail) ? byEmail : 0
+        );
+      };
+      for (const row of userMap.values()) {
+        const hint = subscriptionSpendHint(row.id, row.email);
+        if (hint > 0) row.fanDocMembershipCents = Math.max(row.fanDocMembershipCents ?? 0, Math.round(hint));
       }
 
       // Merge `users/{fanId}` so @username shows when `fans` doc lacks it (Stripe + claimed handles)
@@ -877,6 +905,14 @@ export const FanHubUsers: React.FC = () => {
         const orderSumCents = tips + treats + unlocks + membership;
         const baselineCents = data.fanDocBaselineCents ?? 0;
         const lifetimeSpendCents = Math.max(orderSumCents, baselineCents);
+        const explicitFanDocMembership = data.fanDocMembershipCents ?? 0;
+        const inferredFanDocMembership =
+          explicitFanDocMembership > 0
+            ? explicitFanDocMembership
+            : hasMembershipStatus
+              ? Math.max(0, baselineCents - tips - treats - unlocks)
+              : 0;
+        const lifetimeMembershipCents = Math.max(membership, inferredFanDocMembership);
 
         const stPlan = (data.subscriptionStatus || "").toLowerCase();
         /** Badge: treat as scheduled cancel if flag is set OR remaining-access copy implies it (handles stale client reads). */
@@ -915,7 +951,7 @@ export const FanHubUsers: React.FC = () => {
           signupDate,
           remainingAccess,
           lifetimeSpendCents,
-          lifetimeMembershipCents: membership,
+          lifetimeMembershipCents,
           lifetimeStorePurchasesCents: treats,
           lifetimeTipsCents: tips,
           lifetimeUnlocksCents: unlocks,

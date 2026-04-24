@@ -63,6 +63,9 @@ service cloud.firestore {
       return [
         // Privilege / billing
         'role',
+        'isAdmin',
+        'isSuperAdmin',
+        'isOwner',
         'plan',
         'stripeCustomerId',
         'stripeSubscriptionId',
@@ -110,6 +113,9 @@ service cloud.firestore {
           'subscriptionEndDate',
           'cancelAtPeriodEnd',
           'lastPaymentDate',
+          'isAdmin',
+          'isSuperAdmin',
+          'isOwner',
           'trialUsed',
           'trialStartedAt',
           'inviteGrantPlan',
@@ -121,7 +127,7 @@ service cloud.firestore {
 
     function isSafeUserUpdate() {
       // Prevent updating any restricted fields from the client.
-      return !(request.resource.data.diff(resource.data).changedKeys().hasAny(restrictedUserFields()));
+      return !(request.resource.data.diff(resource.data).affectedKeys().hasAny(restrictedUserFields()));
     }
 
     /** Fan Hub post visible to any signed-in user (feed is gated in-app; published = public-ish doc). */

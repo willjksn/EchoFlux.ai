@@ -335,6 +335,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const cap = Math.min(500, Math.max(limitNum, limitNum * 2));
     let docs: QueryDocumentSnapshot[] = [];
+    const subscriptionSpendByFanId: Record<string, number> = {};
+    const subscriptionSpendByFanEmail: Record<string, number> = {};
 
     try {
       const snap = await db
@@ -554,9 +556,44 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       );
     }
 
+    try {
+      const subSnap = await db
+        .collection("orders")
+        .where("creatorId", "==", creatorIdToQuery)
+        .where("type", "==", "subscription")
+        .limit(5000)
+        .get();
+      for (const docSnap of subSnap.docs) {
+        const raw = docSnap.data() as Record<string, unknown>;
+        const status = typeof raw.status === "string" ? raw.status.trim().toLowerCase() : "";
+        if (status === "refunded") continue;
+        const amount = toPositiveCents(raw.amountCents);
+        if (amount <= 0) continue;
+        const fanId = typeof raw.fanId === "string" ? raw.fanId.trim() : "";
+        if (fanId) {
+          subscriptionSpendByFanId[fanId] = (subscriptionSpendByFanId[fanId] || 0) + amount;
+        }
+        const fanEmail = typeof raw.fanEmail === "string" ? raw.fanEmail.trim().toLowerCase() : "";
+        if (fanEmail) {
+          subscriptionSpendByFanEmail[fanEmail] = (subscriptionSpendByFanEmail[fanEmail] || 0) + amount;
+        }
+      }
+    } catch (subscriptionErr: unknown) {
+      console.warn(
+        "creatorOrders: subscription spend summary skipped:",
+        subscriptionErr instanceof Error ? subscriptionErr.message : subscriptionErr
+      );
+    }
+
     orderRows.sort((a, b) => b.__createdAtMs - a.__createdAtMs);
     const orders: CreatorOrder[] = orderRows.slice(0, limitNum).map(({ __createdAtMs, ...rest }) => rest);
-    return res.status(200).json({ orders, earliestPurchaseAtByFanId, earliestPurchaseAtByFanEmail });
+    return res.status(200).json({
+      orders,
+      earliestPurchaseAtByFanId,
+      earliestPurchaseAtByFanEmail,
+      subscriptionSpendByFanId,
+      subscriptionSpendByFanEmail,
+    });
   } catch (e: unknown) {
     console.error("creatorOrders error:", e);
     const msg = e instanceof Error ? e.message : "Failed to load orders";

@@ -392,13 +392,23 @@ export async function processFanHubCheckoutSessionCompleted(
         subscribedAt: now,
         lastPaymentAt: now,
         totalSpentCents: amountTotal,
+        totalMembershipCents: amountTotal,
+        membershipPaymentCount: 1,
         createdAt: now,
         updatedAt: now,
       });
     } else {
+      const fanData = fanSnap.data() as {
+        totalSpentCents?: number;
+        totalMembershipCents?: number;
+        membershipPaymentCount?: number;
+      } | undefined;
       const patch: Record<string, unknown> = {
         subscriptionStatus: 'active',
         lastPaymentAt: now,
+        totalSpentCents: (fanData?.totalSpentCents || 0) + amountTotal,
+        totalMembershipCents: (fanData?.totalMembershipCents || 0) + amountTotal,
+        membershipPaymentCount: (fanData?.membershipPaymentCount || 0) + 1,
         updatedAt: now,
       };
       if (memberUsername) patch.username = memberUsername;
@@ -1070,12 +1080,18 @@ async function processFanHubSubscriptionInvoicePaid(
   const fanRef = db.collection('creators').doc(creatorId).collection('fans').doc(fanId);
   const fanSnap = await fanRef.get();
   if (fanSnap.exists) {
-    const fanData = fanSnap.data() as { totalSpentCents?: number } | undefined;
+    const fanData = fanSnap.data() as {
+      totalSpentCents?: number;
+      totalMembershipCents?: number;
+      membershipPaymentCount?: number;
+    } | undefined;
     await fanRef.set(
       {
         subscriptionStatus: 'active',
         lastPaymentAt: createdAt,
         totalSpentCents: (fanData?.totalSpentCents ?? 0) + amountPaid,
+        totalMembershipCents: (fanData?.totalMembershipCents ?? 0) + amountPaid,
+        membershipPaymentCount: (fanData?.membershipPaymentCount ?? 0) + 1,
         updatedAt: now,
       },
       { merge: true },
