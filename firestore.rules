@@ -357,7 +357,13 @@ service cloud.firestore {
        * (local Vite + DEV_API_PROXY to an old deployment, or before rules deploy).
        */
       match /liveStreams/{streamId} {
-        allow read: if isOwner(creatorId);
+        /**
+         * Fans need read access to `status` so member feed can subscribe and disable Watch live when the host ends.
+         * Stream ids are unguessable; test-only promos stay creator-only.
+         */
+        allow read: if isOwner(creatorId)
+          || (isAuthenticated()
+            && (!('creatorTestOnly' in resource.data) || resource.data.creatorTestOnly != true));
         allow create, update, delete: if isOwner(creatorId) && creatorLiveStreamPlanEligible();
       }
 

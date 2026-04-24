@@ -84,7 +84,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(500).json({ error: "Database unavailable" });
     }
 
-    if (await shouldGrantFanPageAdminMemberAccess(db, fanId, creatorId)) {
+    if (await shouldGrantFanPageAdminMemberAccess(db, fanId, creatorId, fanEmail || undefined)) {
       return res.status(200).json({
         subscribed: true,
         membershipType: "paid" as const,

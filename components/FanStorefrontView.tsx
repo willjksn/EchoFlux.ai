@@ -1143,6 +1143,7 @@ export const FanStorefrontView: React.FC = () => {
   const fanAuthPendingHubNavRef = useRef(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [geoBlocked, setGeoBlocked] = useState(false);
   const [activeTab, setActiveTab] = useState<"feed" | "treats" | "messages" | "tip" | "saved" | "about" | "profile" | "purchases">("feed");
   const [tipSelectedPreset, setTipSelectedPreset] = useState<number | null>(null);
   const [tipCustomAmount, setTipCustomAmount] = useState("");
@@ -1485,6 +1486,7 @@ export const FanStorefrontView: React.FC = () => {
   useEffect(() => {
     if (!handleResolveComplete) return;
     if (!handle) {
+      setGeoBlocked(false);
       setError("Invalid handle");
       setLoading(false);
       return;
@@ -1495,12 +1497,23 @@ export const FanStorefrontView: React.FC = () => {
 
     (async () => {
       try {
-        const res = await fetch(`/api/getCreatorByHandle?handle=${encodeURIComponent(handle)}`);
+        const params = new URLSearchParams({ handle });
+        if (typeof window !== "undefined") {
+          const invite = new URLSearchParams(window.location.search).get("invite");
+          if (invite?.trim()) params.set("invite", invite.trim());
+        }
+        const token = auth.currentUser ? await auth.currentUser.getIdToken() : null;
+        const res = await fetch(`/api/getCreatorByHandle?${params.toString()}`, {
+          headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+        });
         if (cancelled) return;
         let resolved: StorefrontCreator | null = null;
         if (!res.ok) {
           const body = await res.json().catch(() => ({}));
           const msg = (body as { error?: string }).error;
+          const code = (body as { code?: string }).code;
+          const blockedByGeo = res.status === 451 || code === "GEO_BLOCKED";
+          setGeoBlocked(blockedByGeo);
           // Local-dev resilience: if proxied API is down, allow the signed-in creator
           // to load their own storefront directly from Firestore by matching handle.
           if (db && import.meta.env.DEV && auth.currentUser?.uid) {
@@ -1592,7 +1605,9 @@ export const FanStorefrontView: React.FC = () => {
           }
           if (!resolved) {
             setError(
-              res.status === 404
+              blockedByGeo
+                ? msg || "This page is not available in your region."
+                : res.status === 404
                 ? msg || "Creator not found"
                 : res.status >= 500
                   ? msg || "Unable to load this creator. Please try again in a moment."
@@ -1605,6 +1620,7 @@ export const FanStorefrontView: React.FC = () => {
         } else {
           const data = await res.json();
           resolved = data as StorefrontCreator;
+          setGeoBlocked(false);
         }
 
         const missingVisuals =
@@ -1866,6 +1882,7 @@ export const FanStorefrontView: React.FC = () => {
         setError(null);
       } catch (e) {
         if (!cancelled) {
+          setGeoBlocked(false);
           setError("Failed to load creator");
           setCreator(null);
         }
@@ -4350,7 +4367,7 @@ export const FanStorefrontView: React.FC = () => {
       <>
         <div className="stormij-theme stormij-theme--light storefront-landing-wrap min-h-screen flex items-center justify-center">
           <div className="text-center max-w-md px-4" style={{ color: "var(--text)" }}>
-            <h1 className="text-xl font-semibold mb-2">Not found</h1>
+            <h1 className="text-xl font-semibold mb-2">{geoBlocked ? "Unavailable in your region" : "Not found"}</h1>
             <p style={{ color: "var(--text-muted)" }}>{error || "This creator page doesn't exist."}</p>
           </div>
         </div>

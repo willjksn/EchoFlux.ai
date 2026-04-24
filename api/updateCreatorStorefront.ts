@@ -101,6 +101,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       spicyMode: body.spicyMode !== undefined ? body.spicyMode : existingData?.spicyMode,
       rules: body.rules !== undefined ? body.rules : existingData?.rules,
       monetization: body.monetization !== undefined ? body.monetization : existingData?.monetization,
+      geoAccess: body.geoAccess !== undefined ? body.geoAccess : existingData?.geoAccess,
       onboardingStatus: body.onboardingStatus !== undefined ? body.onboardingStatus : existingData?.onboardingStatus,
       publicTreatsOnLanding:
         body.publicTreatsOnLanding !== undefined ? body.publicTreatsOnLanding : existingData?.publicTreatsOnLanding,

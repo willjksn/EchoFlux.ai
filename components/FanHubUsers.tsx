@@ -29,11 +29,14 @@ interface FanUser {
   remainingAccess: "Active" | "Expired" | "Cancelled" | string;
   /** All-time spend: max(sum of paid orders in Hub, fans.totalSpentCents). Orders and fan doc both reflect webhooks — we do not add them together. */
   lifetimeSpendCents: number;
+  /** Order type `subscription` (Stripe membership), not store SKUs */
+  lifetimeMembershipCents: number;
   lifetimeStorePurchasesCents: number;
   lifetimeTipsCents: number;
   lifetimeUnlocksCents: number;
   /** Calendar month-to-date from orders — summed in the Monthly Totals row only */
   mtdSpendCents: number;
+  mtdMembershipCents: number;
   mtdStorePurchasesCents: number;
   mtdTipsCents: number;
   mtdUnlocksCents: number;
@@ -304,13 +307,15 @@ export const FanHubUsers: React.FC = () => {
         tips: number;
         unlocks: number;
         treats: number;
-        /** Sum of order amounts only (tips + unlocks + treats); not fans.totalSpentCents */
+        membership: number;
+        /** Sum of order amounts only (tips + unlocks + treats + membership); not fans.totalSpentCents */
         total: number;
         /** `creators/.../fans/{id}.totalSpentCents` — used when orders are missing or undercounted */
         fanDocBaselineCents: number;
         mtdTips: number;
         mtdUnlocks: number;
         mtdTreats: number;
+        mtdMembership: number;
         lastActive: Date | null;
         firstOrder: Date | null;
         avatarUrl?: string;
@@ -398,9 +403,11 @@ export const FanHubUsers: React.FC = () => {
             tips: 0,
             unlocks: 0,
             treats: 0,
+            membership: 0,
             mtdTips: 0,
             mtdUnlocks: 0,
             mtdTreats: 0,
+            mtdMembership: 0,
             total: 0,
             fanDocBaselineCents:
               typeof data.totalSpentCents === "number" && Number.isFinite(data.totalSpentCents)
@@ -427,7 +434,7 @@ export const FanHubUsers: React.FC = () => {
         const fanId = o.fanId || o.fanEmail || "unknown";
         const fanEmail = o.fanEmail || null;
         const amount = o.amountCents || 0;
-        const type = o.type || o.productType || "";
+        const type = String(o.type || o.productType || "").trim().toLowerCase();
         const orderDate = new Date(o.createdAt);
 
         const existing = userMap.get(fanId) || {
@@ -441,9 +448,11 @@ export const FanHubUsers: React.FC = () => {
           tips: 0,
           unlocks: 0,
           treats: 0,
+          membership: 0,
           mtdTips: 0,
           mtdUnlocks: 0,
           mtdTreats: 0,
+          mtdMembership: 0,
           total: 0,
           fanDocBaselineCents: 0,
           lastActive: null,
@@ -453,12 +462,14 @@ export const FanHubUsers: React.FC = () => {
 
         if (type === "tip") existing.tips += amount;
         else if (type === "unlock" || type === "unlock_media" || type === "post_unlock") existing.unlocks += amount;
+        else if (type === "subscription") existing.membership += amount;
         else existing.treats += amount;
         existing.total += amount;
 
         if (isInCurrentMonth(orderDate)) {
           if (type === "tip") existing.mtdTips += amount;
           else if (type === "unlock" || type === "unlock_media" || type === "post_unlock") existing.mtdUnlocks += amount;
+          else if (type === "subscription") existing.mtdMembership += amount;
           else existing.mtdTreats += amount;
         }
 
@@ -511,9 +522,11 @@ export const FanHubUsers: React.FC = () => {
               tips: 0,
               unlocks: 0,
               treats: 0,
+              membership: 0,
               mtdTips: 0,
               mtdUnlocks: 0,
               mtdTreats: 0,
+              mtdMembership: 0,
               total: 0,
               fanDocBaselineCents: 0,
               lastActive: subscribedAt,
@@ -560,9 +573,11 @@ export const FanHubUsers: React.FC = () => {
               tips: 0,
               unlocks: 0,
               treats: 0,
+              membership: 0,
               mtdTips: 0,
               mtdUnlocks: 0,
               mtdTreats: 0,
+              mtdMembership: 0,
               total: 0,
               fanDocBaselineCents: 0,
               lastActive: createdAt,
@@ -589,10 +604,12 @@ export const FanHubUsers: React.FC = () => {
           base.tips += o.tips;
           base.treats += o.treats;
           base.unlocks += o.unlocks;
+          base.membership += o.membership ?? 0;
           base.total += o.total;
           base.mtdTips += o.mtdTips;
           base.mtdTreats += o.mtdTreats;
           base.mtdUnlocks += o.mtdUnlocks;
+          base.mtdMembership += o.mtdMembership ?? 0;
           base.fanDocBaselineCents = Math.max(base.fanDocBaselineCents ?? 0, o.fanDocBaselineCents ?? 0);
           if (!base.email && o.email) base.email = o.email;
           if (!base.displayName && o.displayName) base.displayName = o.displayName;
@@ -653,7 +670,7 @@ export const FanHubUsers: React.FC = () => {
           for (const id of ids) {
             const r = map.get(id);
             if (!r) continue;
-            const score = r.treats + r.tips + r.unlocks;
+            const score = r.treats + r.tips + r.unlocks + (r.membership ?? 0);
             if (score > bestScore) {
               bestScore = score;
               best = id;
@@ -694,7 +711,7 @@ export const FanHubUsers: React.FC = () => {
           for (const id of ids) {
             const r = map.get(id);
             if (!r) continue;
-            const score = r.treats + r.tips + r.unlocks;
+            const score = r.treats + r.tips + r.unlocks + (r.membership ?? 0);
             if (score > bestScore) {
               bestScore = score;
               best = id;
@@ -816,11 +833,15 @@ export const FanHubUsers: React.FC = () => {
           subStatusNormalized === "trialing" ||
           subStatusNormalized === "past_due" ||
           subStatusNormalized === "free";
-        if (hasMembershipStatus) {
+        /** Fan doc `role: admin` must stay visible even when they also hold a membership row (staff + subscriber). */
+        if (hasMembershipStatus && data.storedRole !== "admin") {
           role = "member";
         }
         const onlyTips =
-          data.tips > 0 && data.treats === 0 && data.unlocks === 0;
+          data.tips > 0 &&
+          data.treats === 0 &&
+          data.unlocks === 0 &&
+          (data.membership ?? 0) === 0;
         if (!hasMembershipStatus && !data.storedRole && !data.subscriptionStatus && onlyTips) {
           role = "tipper";
         } else if (!hasMembershipStatus && !data.storedRole && String(data.id).startsWith("guest_")) {
@@ -834,7 +855,9 @@ export const FanHubUsers: React.FC = () => {
           accessEnd: data.subscriptionCurrentPeriodEnd ?? null,
           canceledAt: data.canceledAt ?? null,
         });
+        /** "Inactive" is for members with no sub and stale activity — not staff rows (no subscriptionStatus is normal). */
         if (
+          role !== "admin" &&
           remainingAccess === "—" &&
           data.lastActive &&
           data.lastActive < thirtyDaysAgo &&
@@ -846,12 +869,14 @@ export const FanHubUsers: React.FC = () => {
         const mtdTips = data.mtdTips ?? 0;
         const mtdTreats = data.mtdTreats ?? 0;
         const mtdUnlocks = data.mtdUnlocks ?? 0;
+        const mtdMembership = data.mtdMembership ?? 0;
         const tips = data.tips ?? 0;
         const treats = data.treats ?? 0;
         const unlocks = data.unlocks ?? 0;
-        const tipsTreatsUnlocksSum = tips + treats + unlocks;
+        const membership = data.membership ?? 0;
+        const orderSumCents = tips + treats + unlocks + membership;
         const baselineCents = data.fanDocBaselineCents ?? 0;
-        const lifetimeSpendCents = Math.max(tipsTreatsUnlocksSum, baselineCents);
+        const lifetimeSpendCents = Math.max(orderSumCents, baselineCents);
 
         const stPlan = (data.subscriptionStatus || "").toLowerCase();
         /** Badge: treat as scheduled cancel if flag is set OR remaining-access copy implies it (handles stale client reads). */
@@ -869,7 +894,7 @@ export const FanHubUsers: React.FC = () => {
           plan = "Cancelled";
         } else if (stPlan === "past_due") {
           plan = "Past Due";
-        } else if (tipsTreatsUnlocksSum > 0 || baselineCents > 0) {
+        } else if (orderSumCents > 0 || baselineCents > 0) {
           plan = "Purchaser";
         }
         const signupDate =
@@ -890,10 +915,12 @@ export const FanHubUsers: React.FC = () => {
           signupDate,
           remainingAccess,
           lifetimeSpendCents,
+          lifetimeMembershipCents: membership,
           lifetimeStorePurchasesCents: treats,
           lifetimeTipsCents: tips,
           lifetimeUnlocksCents: unlocks,
-          mtdSpendCents: mtdTips + mtdTreats + mtdUnlocks,
+          mtdSpendCents: mtdTips + mtdTreats + mtdUnlocks + mtdMembership,
+          mtdMembershipCents: mtdMembership,
           mtdStorePurchasesCents: mtdTreats,
           mtdTipsCents: mtdTips,
           mtdUnlocksCents: mtdUnlocks,
@@ -1344,6 +1371,7 @@ export const FanHubUsers: React.FC = () => {
   // Calculate monthly totals
   const monthlyTotals = {
     spend: users.reduce((sum, u) => sum + u.mtdSpendCents, 0),
+    membership: users.reduce((sum, u) => sum + u.mtdMembershipCents, 0),
     purchases: users.reduce((sum, u) => sum + u.mtdStorePurchasesCents, 0),
     tips: users.reduce((sum, u) => sum + u.mtdTipsCents, 0),
     unlocks: users.reduce((sum, u) => sum + u.mtdUnlocksCents, 0),
@@ -1414,6 +1442,12 @@ export const FanHubUsers: React.FC = () => {
       <td className="px-4 py-3 text-sm text-gray-700 dark:text-gray-300">
         {formatCents(fanUser.lifetimeSpendCents)}
       </td>
+      <td
+        className="px-4 py-3 text-sm text-gray-700 dark:text-gray-300"
+        title="Stripe subscription charges (order type subscription), not store products."
+      >
+        {formatCents(fanUser.lifetimeMembershipCents)}
+      </td>
       <td className="px-4 py-3 text-sm text-gray-700 dark:text-gray-300">
         {formatCents(fanUser.lifetimeStorePurchasesCents)}
       </td>
@@ -1482,7 +1516,7 @@ export const FanHubUsers: React.FC = () => {
 
   const SectionHeader: React.FC<{ title: string; count: number }> = ({ title, count }) => (
     <tr className="bg-gray-50 dark:bg-gray-800/50">
-      <td colSpan={10} className="px-4 py-2">
+      <td colSpan={11} className="px-4 py-2">
         <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
           {title} ({count})
         </span>
@@ -1552,6 +1586,12 @@ export const FanHubUsers: React.FC = () => {
                   <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                     Total spend
                   </th>
+                  <th
+                    className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider"
+                    title="Subscription / membership charges from paid orders (type subscription). Separate from store SKUs."
+                  >
+                    Membership
+                  </th>
                   <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                     Store
                   </th>
@@ -1603,6 +1643,12 @@ export const FanHubUsers: React.FC = () => {
                     className="px-4 py-3 text-sm font-semibold"
                     style={{ color: "var(--fan-primary, #6366f1)" }}
                   >
+                    {formatCents(monthlyTotals.membership)}
+                  </td>
+                  <td
+                    className="px-4 py-3 text-sm font-semibold"
+                    style={{ color: "var(--fan-primary, #6366f1)" }}
+                  >
                     {formatCents(monthlyTotals.purchases)}
                   </td>
                   <td
@@ -1649,7 +1695,7 @@ export const FanHubUsers: React.FC = () => {
                   ))
                 ) : (
                   <tr>
-                    <td colSpan={10} className="px-4 py-4 text-sm text-gray-500 dark:text-gray-400 italic">
+                    <td colSpan={11} className="px-4 py-4 text-sm text-gray-500 dark:text-gray-400 italic">
                       No store buyers yet. They appear when someone buys from your store on the landing page before subscribing.
                     </td>
                   </tr>
@@ -1663,7 +1709,7 @@ export const FanHubUsers: React.FC = () => {
                   ))
                 ) : (
                   <tr>
-                    <td colSpan={10} className="px-4 py-4 text-sm text-gray-500 dark:text-gray-400 italic">
+                    <td colSpan={11} className="px-4 py-4 text-sm text-gray-500 dark:text-gray-400 italic">
                       No tippers yet.
                     </td>
                   </tr>
@@ -1672,7 +1718,7 @@ export const FanHubUsers: React.FC = () => {
                 {/* Empty State */}
                 {filteredUsers.length === 0 && !loading && (
                   <tr>
-                    <td colSpan={10} className="px-4 py-12 text-center text-gray-500 dark:text-gray-400">
+                    <td colSpan={11} className="px-4 py-12 text-center text-gray-500 dark:text-gray-400">
                       {searchQuery ? "No users match your search." : "No users yet. Add users or they'll appear here when they make purchases."}
                     </td>
                   </tr>
@@ -2006,6 +2052,10 @@ export const FanHubUsers: React.FC = () => {
                     <div className="flex justify-between">
                       <span className="text-gray-600 dark:text-gray-400">Tips</span>
                       <span className="font-medium text-gray-900 dark:text-white">{formatCents(selectedUser.lifetimeTipsCents)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-600 dark:text-gray-400">Membership</span>
+                      <span className="font-medium text-gray-900 dark:text-white">{formatCents(selectedUser.lifetimeMembershipCents)}</span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-gray-600 dark:text-gray-400">Store</span>

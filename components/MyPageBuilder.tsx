@@ -14,6 +14,7 @@ import type {
   LandingSectionListMarker,
   LandingSectionBodyMode,
   TreatProduct,
+  StorefrontGeoAccessSettings,
 } from "../types";
 import { STOREFRONT_CONTENT_POLICY, DEFAULT_PRIVACY_POLICY, DEFAULT_TERMS_OF_SERVICE, FAN_HUB_THEME_PRESETS, HERO_LAYOUT_OPTIONS, HERO_MEDIA_SIZE_OPTIONS } from "../constants";
 import { getAvatarCropStyle } from "../src/lib/avatarCrop";
@@ -60,6 +61,31 @@ const DEFAULT_MONETIZATION: NonNullable<CreatorStorefrontSettings["monetization"
   videoEnabled: true,
   freeAccessEnabled: false,
 };
+
+const DEFAULT_GEO_ACCESS: NonNullable<StorefrontGeoAccessSettings> = {
+  enabled: false,
+  blockedCountries: [],
+  blockedUsStates: [],
+  exemptActivePaidMembers: true,
+  inviteBypassCodes: [],
+};
+
+/** Geo rules run when at least one country or US state is listed (no separate enable toggle). */
+function deriveGeoAccessEnabled(geo: Partial<StorefrontGeoAccessSettings> | undefined): boolean {
+  const c = (geo?.blockedCountries ?? []).filter((x) => String(x).trim()).length;
+  const s = (geo?.blockedUsStates ?? []).filter((x) => String(x).trim()).length;
+  return c > 0 || s > 0;
+}
+
+function generateGeoInviteBypassCode(): string {
+  try {
+    const bytes = new Uint8Array(12);
+    crypto.getRandomValues(bytes);
+    return `inv_${Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("")}`;
+  } catch {
+    return `inv_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 14)}`;
+  }
+}
 
 const DEFAULT_SOCIAL_LINKS: StorefrontSocialLinks = {
   instagram: { url: "", show: true },
@@ -279,6 +305,10 @@ function normalizeForCompare(a: Partial<CreatorStorefrontSettings>): string {
     textStyles: a.textStyles ?? {},
     publicTreatsOnLanding: a.publicTreatsOnLanding === true,
     fanAuthBranding: a.fanAuthBranding ?? {},
+    geoAccess: (() => {
+      const g = a.geoAccess ? { ...DEFAULT_GEO_ACCESS, ...a.geoAccess } : { ...DEFAULT_GEO_ACCESS };
+      return { ...g, enabled: deriveGeoAccessEnabled(g) };
+    })(),
   });
 }
 
@@ -325,6 +355,10 @@ function buildStorefrontPreviewConfig(draft: Partial<CreatorStorefrontSettings>)
     updatedAt: draft.updatedAt,
     publicTreatsOnLanding: draft.publicTreatsOnLanding === true,
     fanAuthBranding: draft.fanAuthBranding ?? {},
+    geoAccess: (() => {
+      const g = draft.geoAccess ? { ...DEFAULT_GEO_ACCESS, ...draft.geoAccess } : { ...DEFAULT_GEO_ACCESS };
+      return { ...g, enabled: deriveGeoAccessEnabled(g) };
+    })(),
   };
 }
 
@@ -627,14 +661,52 @@ const TextStyleControls: React.FC<{
 const CollapsibleSection: React.FC<{
   title: string;
   defaultOpen?: boolean;
+  /** When set, open/closed is remembered in localStorage; `defaultOpen` applies until the user toggles once. */
+  storageKey?: string;
   children: React.ReactNode;
-}> = ({ title, defaultOpen = false, children }) => {
-  const [isOpen, setIsOpen] = useState(defaultOpen);
+}> = ({ title, defaultOpen = false, storageKey, children }) => {
+  const [isOpen, setIsOpen] = useState(() => {
+    if (storageKey && typeof window !== "undefined") {
+      try {
+        const v = window.localStorage.getItem(storageKey);
+        if (v === "0") return false;
+        if (v === "1") return true;
+      } catch {
+        /* ignore */
+      }
+    }
+    return defaultOpen;
+  });
+
+  useEffect(() => {
+    if (storageKey && typeof window !== "undefined") {
+      try {
+        const v = window.localStorage.getItem(storageKey);
+        if (v === "0" || v === "1") return;
+      } catch {
+        /* ignore */
+      }
+    }
+    setIsOpen(defaultOpen);
+  }, [defaultOpen, storageKey]);
+
   return (
     <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
       <button
         type="button"
-        onClick={() => setIsOpen(!isOpen)}
+        onClick={() => {
+          setIsOpen((prev) => {
+            const next = !prev;
+            if (storageKey && typeof window !== "undefined") {
+              try {
+                window.localStorage.setItem(storageKey, next ? "1" : "0");
+              } catch {
+                /* ignore */
+              }
+            }
+            return next;
+          });
+        }}
         className="w-full flex items-center justify-between p-4 text-left hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
       >
         <h3 className="text-sm font-semibold text-gray-900 dark:text-white">{title}</h3>
@@ -676,11 +748,34 @@ export const MyPageBuilder: React.FC = () => {
   const [builderLandingTreatsProducts, setBuilderLandingTreatsProducts] = useState<TreatProduct[]>([]);
   const [builderLandingTreatsLoading, setBuilderLandingTreatsLoading] = useState(false);
   const [monthlySubscriptionInput, setMonthlySubscriptionInput] = useState("");
+  const [lastGeneratedInviteCode, setLastGeneratedInviteCode] = useState("");
 
   const includeSjHeartEmoji = useMemo(
     () => canUseSjHeartEmoji({ creatorHandle: draft.handle, viewerIsAdmin: user?.role === "Admin" }),
     [draft.handle, user?.role]
   );
+
+  /** Full storefront URL with `?invite=` — shown to creators (no extra field). */
+  const geoInviteShareUrl = useMemo(() => {
+    const handlePart = (draft.handle ?? "").replace("@", "").toLowerCase().trim() || "your-handle";
+    const fromList = (draft.geoAccess?.inviteBypassCodes ?? [])
+      .map((c) => (typeof c?.code === "string" ? c.code.trim() : ""))
+      .find(Boolean);
+    const code =
+      lastGeneratedInviteCode.trim() ||
+      fromList ||
+      "inv_a1b2c3d4e5f6789012345678";
+    /** Fan storefront lives on production witme.io — show that URL even when building on localhost. */
+    const origin = "https://witme.io";
+    return `${origin}/${encodeURIComponent(handlePart)}?invite=${encodeURIComponent(code)}`;
+  }, [draft.handle, draft.geoAccess?.inviteBypassCodes, lastGeneratedInviteCode]);
+
+  /** Open Geo section by default when there is something to edit; collapses when empty (unless user saved a preference). */
+  const geoSectionDefaultOpen = useMemo(() => {
+    const inv = draft.geoAccess?.inviteBypassCodes ?? [];
+    const hasInvites = inv.some((c) => typeof c?.code === "string" && !!c.code.trim());
+    return deriveGeoAccessEnabled(draft.geoAccess) || hasInvites;
+  }, [draft.geoAccess]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -924,6 +1019,10 @@ export const MyPageBuilder: React.FC = () => {
         updatedAt: data.updatedAt,
         publicTreatsOnLanding: data.publicTreatsOnLanding === true,
         fanAuthBranding: data.fanAuthBranding ?? {},
+        geoAccess: (() => {
+          const g = data.geoAccess ? { ...DEFAULT_GEO_ACCESS, ...data.geoAccess } : { ...DEFAULT_GEO_ACCESS };
+          return { ...g, enabled: deriveGeoAccessEnabled(g) };
+        })(),
       };
       const handleForLookup = String(merged.handle ?? "").replace("@", "").toLowerCase().trim();
       const missingVisuals =
@@ -1222,6 +1321,23 @@ export const MyPageBuilder: React.FC = () => {
         onboardingStatus: draft.onboardingStatus,
         publicTreatsOnLanding: draft.publicTreatsOnLanding === true,
         fanAuthBranding: draft.fanAuthBranding,
+        geoAccess: draft.geoAccess
+          ? (() => {
+              const blockedCountries = (draft.geoAccess.blockedCountries ?? [])
+                .map((v) => String(v).trim().toUpperCase())
+                .filter(Boolean);
+              const blockedUsStates = (draft.geoAccess.blockedUsStates ?? [])
+                .map((v) => String(v).trim().toUpperCase())
+                .filter(Boolean);
+              return {
+                ...DEFAULT_GEO_ACCESS,
+                ...draft.geoAccess,
+                blockedCountries,
+                blockedUsStates,
+                enabled: blockedCountries.length > 0 || blockedUsStates.length > 0,
+              };
+            })()
+          : { ...DEFAULT_GEO_ACCESS },
       });
       console.log("[MyPageBuilder] Saving payload:", payload);
       const token = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
@@ -3245,6 +3361,175 @@ export const MyPageBuilder: React.FC = () => {
           </CollapsibleSection>
 
 
+
+          <CollapsibleSection
+            title="Geo Access Rules"
+            defaultOpen={geoSectionDefaultOpen}
+            storageKey="fanHubMyPage:geoAccessRules"
+          >
+            <div className="space-y-4 pt-4">
+              <p className="text-xs text-gray-500 dark:text-gray-400">
+                Block visitors by country or US state before they enter your storefront. Rules turn on automatically when
+                you list at least one country or state (clear both fields to turn off).
+              </p>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+                    Blocked countries (ISO-2, comma separated)
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="US, CA, GB"
+                    value={(draft.geoAccess?.blockedCountries ?? []).join(", ")}
+                    onChange={(e) => {
+                      const blockedCountries = e.target.value
+                        .split(",")
+                        .map((v) => v.trim().toUpperCase())
+                        .filter(Boolean);
+                      const blockedUsStates = draft.geoAccess?.blockedUsStates ?? [];
+                      updateDraft({
+                        geoAccess: {
+                          ...DEFAULT_GEO_ACCESS,
+                          ...(draft.geoAccess ?? {}),
+                          blockedCountries,
+                          enabled: blockedCountries.length > 0 || blockedUsStates.length > 0,
+                        },
+                      });
+                    }}
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+                    Blocked US states (2-letter, comma separated)
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="TX, FL, NY"
+                    value={(draft.geoAccess?.blockedUsStates ?? []).join(", ")}
+                    onChange={(e) => {
+                      const blockedUsStates = e.target.value
+                        .split(",")
+                        .map((v) => v.trim().toUpperCase())
+                        .filter(Boolean);
+                      const blockedCountries = draft.geoAccess?.blockedCountries ?? [];
+                      updateDraft({
+                        geoAccess: {
+                          ...DEFAULT_GEO_ACCESS,
+                          ...(draft.geoAccess ?? {}),
+                          blockedUsStates,
+                          enabled: blockedCountries.length > 0 || blockedUsStates.length > 0,
+                        },
+                      });
+                    }}
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
+                  />
+                </div>
+              </div>
+              <label className="flex items-center justify-between gap-3 cursor-pointer">
+                <div>
+                  <span className="text-sm font-medium text-gray-800 dark:text-gray-200">Exempt active paid members</span>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">Active/trialing subscribers bypass geo block.</p>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={draft.geoAccess?.exemptActivePaidMembers !== false}
+                  onChange={(e) =>
+                    updateDraft({
+                      geoAccess: {
+                        ...DEFAULT_GEO_ACCESS,
+                        ...(draft.geoAccess ?? {}),
+                        exemptActivePaidMembers: e.target.checked,
+                        enabled: deriveGeoAccessEnabled(draft.geoAccess),
+                      },
+                    })
+                  }
+                  className="rounded border-gray-300 dark:border-gray-600 text-primary-600"
+                />
+              </label>
+              <div>
+                <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+                  Invite bypass codes
+                </label>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">
+                  Example of what you send (public fan URL on{" "}
+                  <a href="https://witme.io/" className="text-primary-600 hover:underline" target="_blank" rel="noreferrer">
+                    witme.io
+                  </a>
+                  , your handle, then <span className="font-mono">?invite=</span> and the code):
+                </p>
+                <p className="text-xs font-mono text-gray-800 dark:text-gray-200 break-all mb-2">{geoInviteShareUrl}</p>
+                <div className="flex flex-wrap gap-2 mb-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const code = generateGeoInviteBypassCode();
+                      setDraft((prev) => {
+                        const g = prev.geoAccess ?? {};
+                        const prevCodes = Array.isArray(g.inviteBypassCodes) ? g.inviteBypassCodes : [];
+                        const nextGeo = {
+                          ...DEFAULT_GEO_ACCESS,
+                          ...g,
+                          inviteBypassCodes: [{ code, active: true }, ...prevCodes],
+                        };
+                        return {
+                          ...prev,
+                          geoAccess: {
+                            ...nextGeo,
+                            enabled: deriveGeoAccessEnabled(nextGeo),
+                          },
+                        };
+                      });
+                      setLastGeneratedInviteCode(code);
+                      showToast?.("Code added — save your page to publish it.", "info");
+                    }}
+                    className="text-xs px-3 py-2 rounded-lg bg-primary-600 text-white hover:bg-primary-700 dark:bg-primary-500 dark:hover:bg-primary-600"
+                  >
+                    Generate bypass code
+                  </button>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      try {
+                        await navigator.clipboard.writeText(geoInviteShareUrl);
+                        showToast?.("Link copied", "success");
+                      } catch {
+                        showToast?.("Could not copy automatically — select the link above and copy manually.", "error");
+                      }
+                    }}
+                    className="text-xs px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 text-gray-800 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700"
+                  >
+                    Copy link
+                  </button>
+                </div>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">All codes (one per line — you can edit or remove)</p>
+                <textarea
+                  rows={4}
+                  placeholder={"inv_a1b2c3d4e5f6789012345678"}
+                  value={(draft.geoAccess?.inviteBypassCodes ?? []).map((c) => c?.code || "").filter(Boolean).join("\n")}
+                  onChange={(e) => {
+                    const inviteBypassCodes = e.target.value
+                      .split("\n")
+                      .map((line) => line.trim())
+                      .filter(Boolean)
+                      .map((code) => ({ code, active: true }));
+                    const nextGeo = {
+                      ...DEFAULT_GEO_ACCESS,
+                      ...(draft.geoAccess ?? {}),
+                      inviteBypassCodes,
+                    };
+                    updateDraft({
+                      geoAccess: {
+                        ...nextGeo,
+                        enabled: deriveGeoAccessEnabled(nextGeo),
+                      },
+                    });
+                  }}
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm font-mono"
+                />
+              </div>
+            </div>
+          </CollapsibleSection>
 
           {/* Legal */}
           <CollapsibleSection title="Terms & Privacy">

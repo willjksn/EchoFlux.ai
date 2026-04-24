@@ -1,5 +1,6 @@
 import type { Firestore } from "firebase-admin/firestore";
 import { normalizeCreatorId } from "./creatorIdNormalize.js";
+import { parseFanMemberRoleFromFirestore } from "./fanHubDisplay.js";
 
 function parseCommaList(raw: string | undefined): string[] {
   if (!raw?.trim()) return [];
@@ -75,19 +76,53 @@ async function isCreatorEligibleForFanPageAdminBypass(
   return false;
 }
 
-async function isFanEligibleForFanPageAdminBypass(db: Firestore, fanId: string): Promise<boolean> {
+function normalizedEmail(raw: string | undefined): string {
+  return typeof raw === "string" ? raw.trim().toLowerCase() : "";
+}
+
+async function isFanEligibleForFanPageAdminBypass(
+  db: Firestore,
+  fanId: string,
+  creatorIdParam: string,
+  fanEmail?: string
+): Promise<boolean> {
   const nf = normUid(fanId);
   const listUids = parseCommaList(process.env.FAN_PAGE_ADMIN_MEMBER_UIDS);
   if (listUids.some((u) => normUid(u) === nf)) return true;
   try {
     const snap = await db.collection("users").doc(fanId).get();
-    if (!snap.exists) return false;
-    const d = snap.data() as { role?: unknown; isAdmin?: unknown } | undefined;
-    const role = typeof d?.role === "string" ? d.role.trim().toLowerCase() : "";
-    if (role === "admin" || role === "superadmin" || role === "owner") return true;
-    if (d?.isAdmin === true) return true;
+    if (snap.exists) {
+      const d = snap.data() as { role?: unknown; isAdmin?: unknown } | undefined;
+      const role = typeof d?.role === "string" ? d.role.trim().toLowerCase() : "";
+      if (role === "admin" || role === "superadmin" || role === "owner") return true;
+      if (d?.isAdmin === true) return true;
+    }
   } catch {
     /* ignore */
+  }
+
+  /** Fan Hub “Add admin” writes `role: admin` on `creators/.../fans/...` — not always mirrored on `users/{uid}`. */
+  const nc = normUid(creatorIdParam);
+  const em = normalizedEmail(fanEmail);
+  try {
+    const fanSnap = await db.collection("creators").doc(nc).collection("fans").doc(fanId).get();
+    if (fanSnap.exists) {
+      const hubRole = parseFanMemberRoleFromFirestore((fanSnap.data() || {}) as Record<string, unknown>);
+      if (hubRole === "admin") return true;
+    }
+  } catch {
+    /* ignore */
+  }
+  if (em) {
+    try {
+      const q = await db.collection("creators").doc(nc).collection("fans").where("email", "==", em).limit(8).get();
+      for (const d of q.docs) {
+        const hubRole = parseFanMemberRoleFromFirestore((d.data() || {}) as Record<string, unknown>);
+        if (hubRole === "admin") return true;
+      }
+    } catch {
+      /* ignore */
+    }
   }
   return false;
 }
@@ -103,12 +138,14 @@ async function isFanEligibleForFanPageAdminBypass(db: Firestore, fanId: string):
  * **Viewer** must match any of:
  * - `FAN_PAGE_ADMIN_MEMBER_UIDS`
  * - Firestore `users/{uid}.role` is `Admin` (Witme / EchoFlux app admin — same account as creator app)
+ * - `creators/{creatorId}/fans/{uid}` (or same `email`) has hub admin role (`role` / `isAdmin`, etc.)
  */
 export async function shouldGrantFanPageAdminMemberAccess(
   db: Firestore,
   fanId: string,
-  creatorIdParam: string
+  creatorIdParam: string,
+  fanEmail?: string
 ): Promise<boolean> {
   if (!(await isCreatorEligibleForFanPageAdminBypass(db, creatorIdParam))) return false;
-  return isFanEligibleForFanPageAdminBypass(db, fanId);
+  return isFanEligibleForFanPageAdminBypass(db, fanId, creatorIdParam, fanEmail);
 }

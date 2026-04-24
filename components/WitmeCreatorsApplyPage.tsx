@@ -1,5 +1,6 @@
 import React, { useEffect } from "react";
 import { witmePublicHref } from "../src/lib/witmeFirstCreator";
+import { WITME_OG_IMAGE_PATH } from "../src/lib/witmePublicAssets";
 import { trackWitmeEvent } from "../src/lib/witmeTrackEvent";
 import { useWitmeSeo } from "./witme-home/useWitmeSeo";
 import { WITME_LANDING_SECTION_CLASS, WitmePublicPageShell } from "./witme-home/WitmePublicPageShell";
@@ -13,7 +14,7 @@ export const WitmeCreatorsApplyPage: React.FC<{ echofluxUrl?: string }> = ({ ech
     description:
       "Join the WitMe creator waitlist. We are expanding carefully with early creators who want their own page and experience.",
     path: "/creators/apply",
-    imageUrl: "https://witme.io/witme-og.png",
+    imageUrl: WITME_OG_IMAGE_PATH,
   });
 
   useEffect(() => {

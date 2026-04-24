@@ -20,7 +20,7 @@ export const WITME_DEFAULT_FEATURED_CREATOR: WitmeShowcaseCreator = {
   pageSlug: "stormijxo",
   descriptor: "Quiet confidence. Real moments. Closer access.",
   tags: ["Memberships", "Store", "Messages"],
-  imageUrl: "https://witme.io/witme-og.png",
+  imageUrl: "/witme-og.png",
   mediaKind: "image",
   mediaObjectPosition: "50% 50%",
   mediaScale: 1,
@@ -37,12 +37,19 @@ function sanitizeString(value: unknown, max = 300): string {
   return value.trim().slice(0, max);
 }
 
-/** Showcase media must be https; blocks javascript:/data: and credential URLs. */
+/** Showcase media: https URLs, or root-relative WitMe static OG paths (served from `public/`). */
 function sanitizeShowcaseImageUrl(value: unknown, max = 4096): string {
   const s = typeof value === "string" ? value.trim().slice(0, max) : "";
   if (!s) return "";
   const head = s.slice(0, 48).toLowerCase();
   if (head.includes("javascript:") || head.startsWith("data:") || head.includes("vbscript:")) {
+    return "";
+  }
+  if (s.startsWith("/") && !s.startsWith("//")) {
+    const pathOnly = s.split("?")[0];
+    if (pathOnly.includes("..")) return "";
+    const pl = pathOnly.toLowerCase();
+    if (pl === "/witme-og.png" || pl === "/witme-og-discover.png") return pathOnly;
     return "";
   }
   if (!s.startsWith("https://")) return "";

@@ -4,6 +4,103 @@ import { enforceRateLimit } from "./_rateLimit.js";
 import { mergeFanHubStorefrontTheme } from "./_mergeFanHubStorefrontTheme.js";
 import { normalizeHeroMediaForStorefront } from "./_storefrontHeroNormalize.js";
 import { jsonSafeForApiResponse } from "./_jsonSafeForApiResponse.js";
+import { verifyAuth } from "./verifyAuth.js";
+
+type GeoAccessInviteCode = {
+  code?: string;
+  active?: boolean;
+  expiresAt?: string;
+};
+
+type GeoAccessSettings = {
+  enabled?: boolean;
+  blockedCountries?: string[];
+  blockedUsStates?: string[];
+  exemptActivePaidMembers?: boolean;
+  inviteBypassCodes?: GeoAccessInviteCode[];
+};
+
+type RequestGeo = {
+  country: string;
+  region: string;
+};
+
+function upperToken(v: unknown): string {
+  return typeof v === "string" ? v.trim().toUpperCase() : "";
+}
+
+function lowerToken(v: unknown): string {
+  return typeof v === "string" ? v.trim().toLowerCase() : "";
+}
+
+function parseGeoFromHeaders(req: VercelRequest): RequestGeo {
+  const country = upperToken(
+    req.headers["x-vercel-ip-country"] ||
+    req.headers["cf-ipcountry"] ||
+    req.headers["x-country-code"] ||
+    ""
+  );
+  const region = upperToken(
+    req.headers["x-vercel-ip-country-region"] ||
+    req.headers["x-geo-region"] ||
+    req.headers["x-region-code"] ||
+    ""
+  );
+  return { country, region };
+}
+
+function normalizeGeoAccess(raw: unknown): GeoAccessSettings {
+  if (!raw || typeof raw !== "object") return {};
+  const o = raw as Record<string, unknown>;
+  return {
+    enabled: o.enabled === true,
+    blockedCountries: Array.isArray(o.blockedCountries)
+      ? o.blockedCountries.map((v) => upperToken(v)).filter(Boolean)
+      : [],
+    blockedUsStates: Array.isArray(o.blockedUsStates)
+      ? o.blockedUsStates.map((v) => upperToken(v)).filter(Boolean)
+      : [],
+    exemptActivePaidMembers: o.exemptActivePaidMembers === true,
+    inviteBypassCodes: Array.isArray(o.inviteBypassCodes)
+      ? o.inviteBypassCodes
+        .filter((v) => !!v && typeof v === "object")
+        .map((v) => v as GeoAccessInviteCode)
+      : [],
+  };
+}
+
+function isInviteBypassValid(geo: GeoAccessSettings, inviteParam: unknown): boolean {
+  const invite = lowerToken(inviteParam);
+  if (!invite) return false;
+  const codes = Array.isArray(geo.inviteBypassCodes) ? geo.inviteBypassCodes : [];
+  for (const c of codes) {
+    const code = lowerToken(c?.code);
+    if (!code || code !== invite) continue;
+    if (c?.active === false) continue;
+    if (typeof c?.expiresAt === "string" && c.expiresAt.trim()) {
+      const t = new Date(c.expiresAt).getTime();
+      if (!Number.isNaN(t) && Date.now() > t) continue;
+    }
+    return true;
+  }
+  return false;
+}
+
+async function isActivePaidMember(
+  db: FirebaseFirestore.Firestore,
+  creatorId: string,
+  fanId: string
+): Promise<boolean> {
+  const snap = await db
+    .collection("creatorSubscribers")
+    .doc(creatorId)
+    .collection("subscribers")
+    .doc(fanId)
+    .get();
+  if (!snap.exists) return false;
+  const status = lowerToken((snap.data() as { status?: unknown } | undefined)?.status);
+  return status === "active" || status === "trialing";
+}
 
 /**
  * Resolve creator by handle for fan storefront (echoflux.ai/{handle}).
@@ -129,6 +226,44 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     const cd = creatorData as Record<string, unknown>;
+    const geo = normalizeGeoAccess(cd.geoAccess);
+    const reqGeo = parseGeoFromHeaders(req);
+
+    let geoBypassed = false;
+    const geoRulesApply =
+      (Array.isArray(geo.blockedCountries) && geo.blockedCountries.length > 0) ||
+      (Array.isArray(geo.blockedUsStates) && geo.blockedUsStates.length > 0);
+    if (geoRulesApply) {
+      // Direct-link invite bypass (`?invite=CODE`) for specific members.
+      if (isInviteBypassValid(geo, req.query.invite)) {
+        geoBypassed = true;
+      } else if (geo.exemptActivePaidMembers) {
+        // Existing paid members can bypass country/state block checks.
+        const decoded = await verifyAuth(req);
+        if (decoded?.uid) {
+          try {
+            geoBypassed = await isActivePaidMember(db, creatorId, decoded.uid);
+          } catch {
+            geoBypassed = false;
+          }
+        }
+      }
+
+      if (!geoBypassed) {
+        const blockedCountries = new Set((geo.blockedCountries || []).map((v) => upperToken(v)));
+        const blockedStates = new Set((geo.blockedUsStates || []).map((v) => upperToken(v)));
+        const countryBlocked = !!reqGeo.country && blockedCountries.has(reqGeo.country);
+        const stateBlocked = reqGeo.country === "US" && !!reqGeo.region && blockedStates.has(reqGeo.region);
+        if (countryBlocked || stateBlocked) {
+          return res.status(451).json({
+            error: "This page is not available in your region.",
+            code: "GEO_BLOCKED",
+            blocked: { country: reqGeo.country || undefined, state: reqGeo.region || undefined },
+          });
+        }
+      }
+    }
+
     const theme = mergeFanHubStorefrontTheme(creatorData.theme as Record<string, unknown> | undefined);
     const sections = (creatorData.sections as Record<string, boolean> | undefined) || {};
     const rules = (creatorData.rules as Record<string, string> | undefined) || {};

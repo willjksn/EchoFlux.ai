@@ -5,6 +5,7 @@ import {
   type WitmeShowcaseCreator,
   witmeCreatorPagePath,
 } from "../src/lib/witmeShowcase";
+import { WITME_DISCOVER_OG_IMAGE_PATH, WITME_OG_IMAGE_PATH } from "../src/lib/witmePublicAssets";
 import { WITME_FIRST_CREATOR_SLUG, witmePublicHref } from "../src/lib/witmeFirstCreator";
 import { shouldUseWitmeApi, trackWitmeEvent } from "../src/lib/witmeTrackEvent";
 import { ShowcaseMedia } from "./witme-home/ShowcaseMedia";
@@ -246,7 +247,7 @@ export const WitmeHomepage: React.FC<WitmeHomepageProps> = ({
     title: "witme.io — Different creators. Different worlds. One place.",
     description: WITME_HOME_SEO_DESCRIPTION,
     path: "/",
-    imageUrl: "https://witme.io/witme-og.png",
+    imageUrl: WITME_OG_IMAGE_PATH,
     enabled: !disableSeo,
   });
 
@@ -315,7 +316,7 @@ export const WitmeDiscoverPage: React.FC<{ echofluxUrl?: string }> = ({ echoflux
     description:
       "Explore live creator pages on WitMe. Each page is different — start with who is live on the platform now.",
     path: "/discover",
-    imageUrl: "https://witme.io/witme-og-discover.png",
+    imageUrl: WITME_DISCOVER_OG_IMAGE_PATH,
   });
 
   useEffect(() => {

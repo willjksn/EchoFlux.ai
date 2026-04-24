@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { WitmeShowcaseCreator } from "../../src/lib/witmeShowcase";
 import { parseObjectPositionPercentPair } from "../../src/lib/objectPositionPan";
+import { witmeCoerceShowcaseImageUrl } from "../../src/lib/witmePublicAssets";
 
 const VIDEO_LOOP_FADE_MS = 380;
 
@@ -42,7 +43,7 @@ export const ShowcaseMedia: React.FC<{
   imgLoading = "lazy",
   onReady,
 }) => {
-  const u = url.trim();
+  const u = witmeCoerceShowcaseImageUrl(url.trim());
   const fitStyle = showcaseObjectStyle(objectPosition, objectFit);
   const [ox, oy] = parseObjectPositionPercentPair(objectPosition);
   const scale = typeof mediaScale === "number" && Number.isFinite(mediaScale) ? mediaScale : 1;

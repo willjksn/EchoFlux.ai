@@ -375,6 +375,29 @@ export interface TextStyle {
     fontStyle?: 'normal' | 'italic';
 }
 
+/** Hard geo restrictions + invite bypass for storefront entry. */
+export interface StorefrontGeoAccessInviteCode {
+    /** Opaque token the fan appends as `?invite=...` on the storefront URL. */
+    code: string;
+    label?: string;
+    active?: boolean;
+    /** ISO timestamp; if in the past, code is ignored. */
+    expiresAt?: string;
+}
+
+export interface StorefrontGeoAccessSettings {
+    /** True when at least one blocked country or US state is set (derived on save; optional on read). */
+    enabled?: boolean;
+    /** ISO alpha-2 country codes, e.g. ["US","CA"]. */
+    blockedCountries?: string[];
+    /** US state codes, e.g. ["TX","FL"] (applies when visitor country resolves to US). */
+    blockedUsStates?: string[];
+    /** When true, active/trialing subscribers bypass geo block checks. */
+    exemptActivePaidMembers?: boolean;
+    /** Optional invite codes for direct-link bypass (`?invite=<code>`). */
+    inviteBypassCodes?: StorefrontGeoAccessInviteCode[];
+}
+
 /** Fan Hub My Page / storefront settings persisted at creators/{creatorId} */
 export interface CreatorStorefrontSettings {
     handle: string; // unique, lowercase, 3-20 chars, alphanumeric + underscore; URL /{handle}
@@ -471,6 +494,8 @@ export interface CreatorStorefrontSettings {
     publicTreatsOnLanding?: boolean;
     /** Fan log in / sign up modal: community name, copy, and optional color overrides */
     fanAuthBranding?: FanAuthBranding;
+    /** Country/state block + city advisory + invite bypass. */
+    geoAccess?: StorefrontGeoAccessSettings;
     updatedAt?: string;  // ISO
 }
 

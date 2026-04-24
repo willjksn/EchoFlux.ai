@@ -1,5 +1,32 @@
 import { useEffect } from "react";
+import { WITME_OG_IMAGE_PATH } from "../../src/lib/witmePublicAssets";
 import { applyWitmeTabIcons } from "../../src/lib/witmeTabIcons";
+
+function resolveOgAbsoluteUrl(path: string, origin: string): string {
+  const p = path.startsWith("/") ? path : `/${path}`;
+  return `${origin}${p}`;
+}
+
+/** Absolute image URL for og/twitter meta (crawlers require absolute). */
+function resolveOgImageUrl(imageUrl: string | undefined, origin: string): string {
+  const raw = (imageUrl?.trim() || WITME_OG_IMAGE_PATH).trim();
+  if (raw.startsWith("http://") || raw.startsWith("https://")) {
+    try {
+      const u = new URL(raw);
+      const pathLower = u.pathname.toLowerCase();
+      if (
+        u.hostname.toLowerCase() === "witme.io" &&
+        (pathLower === "/witme-og.png" || pathLower === "/witme-og-discover.png")
+      ) {
+        return `${origin}${u.pathname}${u.search}`;
+      }
+      return raw;
+    } catch {
+      return raw;
+    }
+  }
+  return resolveOgAbsoluteUrl(raw, origin);
+}
 
 const upsertMetaTag = (selector: string, attrs: Record<string, string>, content: string) => {
   let el = document.head.querySelector(selector) as HTMLMetaElement | null;
@@ -21,8 +48,9 @@ export function useWitmeSeo(opts: {
   useEffect(() => {
     if (opts.enabled === false) return;
     if (typeof document === "undefined") return;
-    const absoluteUrl = `https://witme.io${opts.path}`;
-    const ogImage = opts.imageUrl || "https://witme.io/witme-og.png";
+    const origin = window.location?.origin || "https://witme.io";
+    const absoluteUrl = resolveOgAbsoluteUrl(opts.path, origin);
+    const ogImage = resolveOgImageUrl(opts.imageUrl, origin);
 
     document.title = opts.title;
     upsertMetaTag('meta[name="description"]', { name: "description" }, opts.description);

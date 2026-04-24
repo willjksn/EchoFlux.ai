@@ -36,7 +36,7 @@ export const WITME_DEFAULT_FEATURED_CREATOR: WitmeShowcaseCreator = {
   pageSlug: "stormijxo",
   descriptor: "Quiet confidence. Real moments. Closer access.",
   tags: ["Memberships", "Store", "Messages"],
-  imageUrl: "https://witme.io/witme-og.png",
+  imageUrl: "/witme-og.png",
   mediaKind: "image",
   mediaObjectPosition: "50% 50%",
   mediaScale: 1,
