@@ -8,6 +8,7 @@
   },
   "scripts": {
     "dev": "vite",
+    "dev:api": "tsx scripts/local-api-smoke-server.ts",
     "dev:vercel": "vercel dev",
     "build": "vite build",
     "preview": "vite preview",
@@ -29,6 +30,7 @@
     "backfill:stormij-purchases-to-grants": "npx ts-node --esm scripts/backfillStormijPurchasesToGrants.ts",
     "backfill:fan-spend-from-orders": "npx ts-node --esm scripts/backfillFanSpendFromOrders.ts",
     "backfill:fan-membership-spend": "npx ts-node --esm scripts/backfillFanMembershipSpend.ts",
+    "backfill:locked-fan-post-media": "npx ts-node --esm scripts/backfillLockedFanPostMedia.ts",
     "reparent:creator": "npx ts-node --esm scripts/reparentCreatorArtifacts.ts",
     "upsert:creator-domain": "npx ts-node --esm scripts/upsertCreatorDomain.ts",
     "report:fans-missing-auth": "npx ts-node --esm scripts/reportFansMissingAuth.ts",
@@ -60,15 +62,16 @@
     "vercel": "^48.11.0"
   },
   "devDependencies": {
+    "@playwright/test": "^1.49.1",
     "@types/node": "^22.0.0",
     "@types/nodemailer": "^6.4.17",
     "@types/react": "^18.3.1",
     "@types/react-dom": "^18.3.0",
-    "@playwright/test": "^1.49.1",
     "@vitejs/plugin-react": "^4.2.1",
     "autoprefixer": "^10.4.19",
     "postcss": "^8.4.38",
     "tailwindcss": "^3.4.3",
+    "tsx": "^4.21.0",
     "typescript": "^5.4.5",
     "vite": "^5.2.11"
   }

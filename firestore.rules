@@ -326,6 +326,11 @@ service cloud.firestore {
         allow update, delete: if isOwner(creatorId);
       }
 
+      /** Full URLs for locked / PPV fan post media. Fans must resolve through api/fanPostMedia. */
+      match /fanPostPrivateMedia/{postId} {
+        allow read, write: if isOwner(creatorId) || isAdmin();
+      }
+
       /** Legacy mirror under creators */
       match /posts/{postId} {
         allow read: if isAuthenticated() && (

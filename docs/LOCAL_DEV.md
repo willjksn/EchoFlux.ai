@@ -1,6 +1,6 @@
 # Local development (EchoFlux)
 
-## Full stack: `npm run dev` + `DEV_API_PROXY` (recommended)
+## Full stack option A: `npm run dev` + deployed API
 
 1. **Deploy** (or use an existing) Vercel URL where this app already runs — e.g. `https://your-app.vercel.app` (no trailing slash).
 
@@ -38,6 +38,44 @@ npm run dev
 - Most `/api` routes use Firebase `Authorization: Bearer …` from the client; those work through the proxy. Cookie-only flows that depend on the deployment domain may not match `localhost`.
 - Proxy timeout is **120s** to allow cold starts on Vercel.
 - Template line: see **`.env.example`**.
+
+## Full stack option B: focused local API smoke server
+
+Use this when you need to smoke test the launch-critical API routes locally before deploy, without `vercel dev`.
+
+Terminal 1:
+
+```bash
+npm run dev:api
+```
+
+This starts a small Node server on **http://localhost:3001** and mounts these Vercel handlers:
+
+- `/api/createFanCheckoutSession`
+- `/api/creatorOrders`
+- `/api/fanPostMedia`
+- `/api/getCreatorByHandle`
+- `/api/getFanEntitlement`
+
+Terminal 2:
+
+```bash
+npm run dev
+```
+
+Leave `DEV_API_PROXY` unset, or set it explicitly:
+
+```env
+DEV_API_PROXY=http://localhost:3001
+```
+
+Vite proxies browser `/api/*` requests to the local smoke server. The local API server still needs the same server-side environment variables as Vercel for the routes you are testing, especially Firebase Admin and Stripe variables.
+
+Health check:
+
+```bash
+curl http://localhost:3001/api/__local-health
+```
 
 ### `/api/...` returns **404** (e.g. `markAdminAlertRead`)
 
@@ -125,6 +163,7 @@ Repo `vercel.json` no longer uses a broad `functions: { "api/**/*.ts": … }` bl
 
 | Approach | When to use |
 |----------|-------------|
+| **`npm run dev:api` + `npm run dev`** | Full UI on localhost; selected launch-critical `/api/*` routes run locally on port 3001. |
 | **`npm run dev` + `DEV_API_PROXY=https://your-deployment.vercel.app`** | Full UI on localhost; `/api/*` hits your real Vercel backend (see top of this doc). |
 | **Open the Preview / Production URL** | Full app + API on Vercel after `git push` or deploy. |
 | **Long-term** | Fewer `api/*.ts` entrypoints (e.g. catch-all router) if you must run `vercel dev` locally. |

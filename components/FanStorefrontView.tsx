@@ -2826,6 +2826,13 @@ export const FanStorefrontView: React.FC = () => {
 
   const handleGuestTreatPurchase = async (productId: string) => {
     if (!creator?.creatorId) return;
+    const guestEmail = window.prompt("Enter your email for checkout and purchase access:");
+    const normalizedGuestEmail = (guestEmail || "").trim().toLowerCase();
+    if (!normalizedGuestEmail) return;
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedGuestEmail)) {
+      showToast?.("Enter a valid email to continue checkout.", "error");
+      return;
+    }
     setGuestTreatPurchasingId(productId);
     try {
       const successUrl = buildPublicCheckoutUrl(
@@ -2841,6 +2848,7 @@ export const FanStorefrontView: React.FC = () => {
           type: "product",
           productId,
           guestProduct: true,
+          guestEmail: normalizedGuestEmail,
           ...(successUrl ? { successUrl } : {}),
           ...(cancelUrl ? { cancelUrl } : {}),
         }),

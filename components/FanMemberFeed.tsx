@@ -19,6 +19,7 @@ import { db, auth } from "../firebaseConfig";
 import {
   parseLockedContent,
   isMediaSlotLocked,
+  isProtectedLockedMediaUrl,
   type LockedPostContent,
 } from "../src/lib/lockedPostMedia";
 import { getAvatarCropStyle } from "../src/lib/avatarCrop";
@@ -130,6 +131,28 @@ async function startFanPostUnlockCheckoutSession(creatorId: string, postId: stri
   return url;
 }
 
+async function fetchUnlockedFanPostMedia(creatorId: string, postId: string): Promise<{
+  mediaUrls: string[];
+  mediaTypes: ("image" | "video")[];
+} | null> {
+  const token = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
+  if (!token) return null;
+  const qs = new URLSearchParams({ creatorId, postId });
+  const res = await fetch(resolveApiUrl(`/api/fanPostMedia?${qs.toString()}`), {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) return null;
+  const data = await res.json().catch(() => null) as {
+    mediaUrls?: unknown;
+    mediaTypes?: unknown;
+  } | null;
+  const mediaUrls = Array.isArray(data?.mediaUrls)
+    ? data.mediaUrls.filter((u): u is string => typeof u === "string" && !!u.trim())
+    : [];
+  const rawTypes = Array.isArray(data?.mediaTypes) ? data.mediaTypes.filter((t): t is string => typeof t === "string") : [];
+  return { mediaUrls, mediaTypes: normalizePostMediaTypes(mediaUrls, rawTypes) };
+}
+
 function buildLiveStreamTicketCheckoutReturnUrls(): { successUrl?: string; cancelUrl?: string } {
   if (typeof window === "undefined") return {};
   const u = new URL(window.location.href);
@@ -169,7 +192,7 @@ async function startLiveStreamTicketCheckoutSession(creatorId: string, streamId:
   return url;
 }
 
-async function startFanTipCheckoutSession(creatorId: string, amountCents: number): Promise<string> {
+async function startFanTipCheckoutSession(creatorId: string, amountCents: number, fanEmail?: string): Promise<string> {
   const token = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
   const successUrl = buildTipCheckoutReturnUrl(window.location.pathname, `?${FAN_TIP_CHECKOUT_SUCCESS_QS}`);
   const cancelUrl = buildTipCheckoutReturnUrl(window.location.pathname, "?tip=cancel");
@@ -183,6 +206,7 @@ async function startFanTipCheckoutSession(creatorId: string, amountCents: number
       creatorId,
       type: "tip",
       amountCents,
+      ...(fanEmail ? { fanEmail } : {}),
       ...(successUrl ? { successUrl } : {}),
       ...(cancelUrl ? { cancelUrl } : {}),
     }),
@@ -674,8 +698,23 @@ function FanMemberPostMedia({
   /** Shown when user taps Unlock but fanId is missing (e.g. auth still restoring). */
   onUnlockNeedSignIn?: (message: string) => void;
 }) {
-  const urls = post.mediaUrls;
-  const types = post.mediaTypes;
+  const [resolvedMedia, setResolvedMedia] = useState<{
+    postId: string;
+    mediaUrls: string[];
+    mediaTypes: ("image" | "video")[];
+  } | null>(null);
+  const shouldResolveProtectedMedia =
+    !!creatorId &&
+    (fanPageAdminBypass || (unlockedFanPostIds ?? EMPTY_FAN_POST_UNLOCK_SET).has(post.id)) &&
+    post.mediaUrls.some(isProtectedLockedMediaUrl);
+  const urls =
+    resolvedMedia?.postId === post.id && resolvedMedia.mediaUrls.length > 0
+      ? resolvedMedia.mediaUrls
+      : post.mediaUrls;
+  const types =
+    resolvedMedia?.postId === post.id && resolvedMedia.mediaUrls.length > 0
+      ? resolvedMedia.mediaTypes
+      : post.mediaTypes;
   const n = urls.length;
   const isDemoPost = post.id.startsWith("demo-");
   const idSet = unlockedFanPostIds ?? EMPTY_FAN_POST_UNLOCK_SET;
@@ -690,7 +729,20 @@ function FanMemberPostMedia({
 
   useEffect(() => {
     setMediaIndex(0);
+    setResolvedMedia(null);
   }, [post.id]);
+
+  useEffect(() => {
+    if (!shouldResolveProtectedMedia || !creatorId) return;
+    let cancelled = false;
+    void fetchUnlockedFanPostMedia(creatorId, post.id).then((media) => {
+      if (cancelled || !media?.mediaUrls.length) return;
+      setResolvedMedia({ postId: post.id, ...media });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [creatorId, post.id, shouldResolveProtectedMedia]);
 
   useEffect(() => {
     setMediaIndex((i) => Math.min(i, Math.max(0, n - 1)));
@@ -782,8 +834,9 @@ function FanMemberPostMedia({
 
   const idx = n > 0 ? Math.min(mediaIndex, n - 1) : 0;
   const currentUrl = n > 0 ? urls[idx] : "";
+  const currentProtectedPlaceholder = isProtectedLockedMediaUrl(currentUrl);
   const currentIsVideo =
-    n > 0 && (types[idx] === "video" || inferIsVideoFromUrl(currentUrl));
+    n > 0 && (types[idx] === "video" || (!currentProtectedPlaceholder && inferIsVideoFromUrl(currentUrl)));
   const activeVideoSrcKey =
     currentIsVideo && currentUrl ? (currentUrl.split("#")[0]?.trim() ?? "") : "";
 
@@ -852,7 +905,12 @@ function FanMemberPostMedia({
           {slideLabel}
         </span>
       ) : null}
-      {currentIsVideo ? (
+      {currentProtectedPlaceholder ? (
+        <div
+          className={splitModal ? "feed-comments-modal-media fan-feed-media-protected-placeholder" : "feed-card-media fan-feed-media-protected-placeholder"}
+          aria-hidden
+        />
+      ) : currentIsVideo ? (
         lockedCurrent ? (
           <video
             key={`${post.id}-v-${idx}`}
@@ -1899,9 +1957,19 @@ export const FanMemberFeed: React.FC<FanMemberFeedProps> = ({
 
   const submitTipFromSheet = useCallback(async () => {
     if (tipAmountCents < 100 || tipAmountCents > 100_000) return;
+    let anonymousTipEmail = "";
+    if (!auth.currentUser) {
+      const entered = window.prompt("Enter your email for checkout:");
+      anonymousTipEmail = (entered || "").trim().toLowerCase();
+      if (!anonymousTipEmail) return;
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(anonymousTipEmail)) {
+        showToast?.("Enter a valid email to continue checkout.", "error");
+        return;
+      }
+    }
     setTipLoading(true);
     try {
-      const url = await startFanTipCheckoutSession(creatorId, tipAmountCents);
+      const url = await startFanTipCheckoutSession(creatorId, tipAmountCents, anonymousTipEmail || undefined);
       window.location.href = url;
     } catch (e) {
       showToast?.(e instanceof Error ? e.message : "Could not start checkout.", "error");

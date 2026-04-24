@@ -5,7 +5,7 @@ import { getPlatformStripe, checkoutSessionsCreate } from "./_stripeConnect.js";
 import { getAdminDb } from "./_firebaseAdmin.js";
 import { verifyAuth } from "./verifyAuth.js";
 import { userMayUseLiveStreaming } from "./_liveStreamAccess.js";
-import { isFanBlocked } from "./_fanDmHelpers.js";
+import { isFanBlockedByIdentity } from "./_fanDmHelpers.js";
 import { enforceRateLimit } from "./_rateLimit.js";
 import { applyBrowserApiCors } from "./_browserApiCors.js";
 
@@ -124,10 +124,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     successUrl?: string;
     cancelUrl?: string;
     guestProduct?: boolean;
+    guestEmail?: string;
+    fanEmail?: string;
   };
 
   const creatorId = typeof body.creatorId === "string" ? body.creatorId.trim() : "";
   const { type, productId, postId, streamId, subscriptionPriceCents, amountCents, tipHandle, successUrl, cancelUrl, guestProduct } = body;
+  const providedFanEmail =
+    typeof body.guestEmail === "string" && body.guestEmail.trim()
+      ? body.guestEmail.trim().toLowerCase()
+      : typeof body.fanEmail === "string" && body.fanEmail.trim()
+        ? body.fanEmail.trim().toLowerCase()
+        : "";
   if (!creatorId || !type) {
     return res.status(400).json({ error: "creatorId and type are required" });
   }
@@ -200,11 +208,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
     }
 
-    if (decoded?.uid && (await isFanBlocked(db, creatorId, decoded.uid))) {
+    const fanEmail =
+      (typeof decoded?.email === "string" ? decoded.email.trim().toLowerCase() : "") || providedFanEmail;
+    if (await isFanBlockedByIdentity(db, creatorId, { fanId: decoded?.uid || null, email: fanEmail || null })) {
       return res.status(403).json({ error: "You cannot purchase from this creator" });
     }
 
-    const fanEmail = typeof decoded?.email === "string" ? decoded.email.trim().toLowerCase() : "";
     const creatorSnap = await db.collection("creators").doc(creatorId).get();
     const creatorData = creatorSnap.data() as {
       stripeConnectAccountId?: string;
@@ -416,11 +425,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           productId: productId!,
           productTitle: title,
           isPlatformOwner: isPlatformOwner ? "true" : "false",
+          ...(fanEmail ? { fanEmail } : {}),
           ...(allowGuestProduct ? { guestCheckout: "true", entry: "landing_treats" } : {}),
         },
         ...(allowGuestProduct
           ? {
               customer_creation: "always",
+              ...(fanEmail ? { customer_email: fanEmail } : {}),
             }
           : {}),
         // Only add application_fee_amount for regular creators (not platform owners)
@@ -512,6 +523,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           postId: postIdStr,
           amountCents: String(unlockAmount),
           isPlatformOwner: isPlatformOwner ? "true" : "false",
+          ...(fanEmail ? { fanEmail } : {}),
         },
         ...(isPlatformOwner
           ? {}
@@ -600,6 +612,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           streamId: streamIdStr,
           amountCents: String(ticketAmount),
           isPlatformOwner: isPlatformOwner ? "true" : "false",
+          ...(fanEmail ? { fanEmail } : {}),
         },
         ...(isPlatformOwner
           ? {}
@@ -645,7 +658,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           type: "tip",
           tipHandle: tipperName,
           isPlatformOwner: isPlatformOwner ? "true" : "false",
+          ...(fanEmail ? { fanEmail } : {}),
         },
+        ...(fanEmail ? { customer_email: fanEmail } : {}),
         // Only add application_fee_amount for regular creators (not platform owners)
         ...(isPlatformOwner ? {} : {
           payment_intent_data: {

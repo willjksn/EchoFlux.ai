@@ -79,7 +79,7 @@ export default defineConfig(({ mode }) => {
     server: {
       /** Prefer 3000 for OAuth / Firebase referrer presets; if busy Vite picks the next port. */
       port: 3000,
-      strictPort: true,
+      strictPort: false,
       /** Open the app in the default browser to the correct port (fixes “server runs but I see nothing” on :3000). */
       open: true,
       /** Listen on all interfaces so http://127.0.0.1:<port>/ works if localhost misbehaves. */

@@ -1116,6 +1116,104 @@ async function processFanHubSubscriptionInvoicePaid(
   return true;
 }
 
+async function processFanHubChargeRefunded(db: Firestore, charge: Stripe.Charge): Promise<boolean> {
+  const paymentIntentId =
+    typeof charge.payment_intent === 'string'
+      ? charge.payment_intent
+      : (charge.payment_intent as { id?: string } | null)?.id || null;
+  if (!paymentIntentId) return false;
+
+  const ordersSnap = await db.collection('orders').where('stripePaymentIntentId', '==', paymentIntentId).limit(1).get();
+  if (ordersSnap.empty) return false;
+  const orderDoc = ordersSnap.docs[0];
+  const order = orderDoc.data() as {
+    creatorId?: string;
+    fanId?: string;
+    productId?: string | null;
+    postId?: string | null;
+    streamId?: string | null;
+    type?: string;
+    amountCents?: number;
+    status?: string;
+    refundedAmountCents?: number;
+  };
+
+  const { creatorId, fanId, productId, postId: orderPostId, streamId: orderStreamId, type: orderType } = order;
+  if (!creatorId || !fanId) return false;
+
+  const orderAmount = Math.max(0, Math.round(order.amountCents || 0));
+  const chargeRefunded = Math.max(0, Math.round(charge.amount_refunded || 0));
+  const refundCents = orderAmount > 0 ? Math.min(chargeRefunded, orderAmount) : chargeRefunded;
+  const alreadyRefunded = Math.max(0, Math.round(order.refundedAmountCents || 0));
+  const refundDelta = Math.max(0, refundCents - alreadyRefunded);
+  if (refundDelta <= 0) return true;
+
+  const fullRefund = orderAmount > 0 && refundCents >= orderAmount;
+  const now = new Date().toISOString();
+  await orderDoc.ref.set(
+    {
+      status: fullRefund ? 'refunded' : 'partially_refunded',
+      refundedAmountCents: refundCents,
+      refundedAt: now,
+      updatedAt: now,
+    },
+    { merge: true },
+  );
+
+  if (fullRefund && (productId || (orderType === 'post_unlock' && orderPostId) || (orderType === 'live_stream_ticket' && orderStreamId))) {
+    const grantRef = db.collection('creatorEntitlements').doc(creatorId).collection('grants').doc(fanId);
+    const grantSnap = await grantRef.get();
+    const grantData = grantSnap.data() as {
+      unlockedProductIds?: string[];
+      unlockedFanPostIds?: string[];
+      unlockedLiveStreamIds?: string[];
+    } | undefined;
+    const patch: Record<string, unknown> = { updatedAt: now };
+    if (productId) {
+      patch.unlockedProductIds = Array.isArray(grantData?.unlockedProductIds)
+        ? grantData.unlockedProductIds.filter((id) => id !== productId)
+        : [];
+    }
+    if (orderType === 'post_unlock' && orderPostId) {
+      patch.unlockedFanPostIds = Array.isArray(grantData?.unlockedFanPostIds)
+        ? grantData.unlockedFanPostIds.filter((id) => id !== orderPostId)
+        : [];
+    }
+    if (orderType === 'live_stream_ticket' && orderStreamId) {
+      patch.unlockedLiveStreamIds = Array.isArray(grantData?.unlockedLiveStreamIds)
+        ? grantData.unlockedLiveStreamIds.filter((id) => id !== orderStreamId)
+        : [];
+    }
+    await grantRef.set(patch, { merge: true });
+  }
+
+  const statsRef = db.collection('creatorStats').doc(creatorId);
+  const statsSnap = await statsRef.get();
+  const stats = statsSnap.data() as { totalRevenueCents?: number; totalOrders?: number } | undefined;
+  const totalRevenue = Math.max(0, (stats?.totalRevenueCents ?? 0) - refundDelta);
+  const shouldDecrementOrder = fullRefund && order.status !== 'refunded';
+  const totalOrders = shouldDecrementOrder ? Math.max(0, (stats?.totalOrders ?? 1) - 1) : (stats?.totalOrders ?? 0);
+  await statsRef.set({ totalRevenueCents: totalRevenue, totalOrders, updatedAt: now }, { merge: true });
+
+  const fanRef = db.collection('creators').doc(creatorId).collection('fans').doc(fanId);
+  const fanPatch: Record<string, unknown> = {
+    totalSpentCents: FieldValue.increment(-refundDelta),
+    updatedAt: now,
+  };
+  if (orderType === 'subscription') {
+    fanPatch.totalMembershipCents = FieldValue.increment(-refundDelta);
+    if (fullRefund) fanPatch.membershipPaymentCount = FieldValue.increment(-1);
+  } else if (orderType === 'tip') {
+    fanPatch.totalTipsCents = FieldValue.increment(-refundDelta);
+    if (fullRefund) fanPatch.tipCount = FieldValue.increment(-1);
+  } else if (fullRefund && (orderType === 'product' || productId)) {
+    fanPatch.purchaseCount = FieldValue.increment(-1);
+  }
+  await fanRef.set(fanPatch, { merge: true });
+  console.log(`Fan hub: refund processed creator=${creatorId} order=${orderDoc.id} delta=${refundDelta} full=${fullRefund}`);
+  return true;
+}
+
 /** Connect + same handlers: fan storefront events (checkout on connected account includes event.account). */
 async function handleConnectEvent(db: Firestore, stripeClient: Stripe, event: Stripe.Event): Promise<void> {
   if (event.type === 'checkout.session.completed') {
@@ -1143,62 +1241,7 @@ async function handleConnectEvent(db: Firestore, stripeClient: Stripe, event: St
   }
 
   if (event.type === 'charge.refunded') {
-    const charge = event.data.object as Stripe.Charge;
-    const paymentIntentId = charge.payment_intent as string | null;
-    if (!paymentIntentId) return;
-    const ordersSnap = await db.collection('orders').where('stripePaymentIntentId', '==', paymentIntentId).limit(1).get();
-    if (ordersSnap.empty) return;
-    const orderDoc = ordersSnap.docs[0];
-    const order = orderDoc.data() as {
-      creatorId?: string;
-      fanId?: string;
-      productId?: string;
-      postId?: string;
-      streamId?: string;
-      type?: string;
-      amountCents?: number;
-      status?: string;
-    };
-    if (order.status === 'refunded') return;
-    const { creatorId, fanId, productId, postId: orderPostId, streamId: orderStreamId, type: orderType, amountCents = 0 } = order;
-    if (!creatorId || !fanId) return;
-
-    await orderDoc.ref.update({ status: 'refunded', updatedAt: new Date().toISOString() });
-
-    if (productId || (orderType === 'post_unlock' && orderPostId) || (orderType === 'live_stream_ticket' && orderStreamId)) {
-      const grantRef = db.collection('creatorEntitlements').doc(creatorId).collection('grants').doc(fanId);
-      const grantSnap = await grantRef.get();
-      const grantData = grantSnap.data() as {
-        unlockedProductIds?: string[];
-        unlockedFanPostIds?: string[];
-        unlockedLiveStreamIds?: string[];
-      } | undefined;
-      const patch: Record<string, unknown> = { updatedAt: new Date().toISOString() };
-      if (productId) {
-        patch.unlockedProductIds = Array.isArray(grantData?.unlockedProductIds)
-          ? grantData.unlockedProductIds.filter((id) => id !== productId)
-          : [];
-      }
-      if (orderType === 'post_unlock' && orderPostId) {
-        patch.unlockedFanPostIds = Array.isArray(grantData?.unlockedFanPostIds)
-          ? grantData.unlockedFanPostIds.filter((id) => id !== orderPostId)
-          : [];
-      }
-      if (orderType === 'live_stream_ticket' && orderStreamId) {
-        patch.unlockedLiveStreamIds = Array.isArray(grantData?.unlockedLiveStreamIds)
-          ? grantData.unlockedLiveStreamIds.filter((id) => id !== orderStreamId)
-          : [];
-      }
-      await grantRef.set(patch, { merge: true });
-    }
-
-    const statsRef = db.collection('creatorStats').doc(creatorId);
-    const statsSnap = await statsRef.get();
-    const stats = statsSnap.data() as { totalRevenueCents?: number; totalOrders?: number } | undefined;
-    const totalRevenue = Math.max(0, (stats?.totalRevenueCents ?? 0) - amountCents);
-    const totalOrders = Math.max(0, (stats?.totalOrders ?? 1) - 1);
-    await statsRef.set({ totalRevenueCents: totalRevenue, totalOrders, updatedAt: new Date().toISOString() }, { merge: true });
-    console.log(`Fan hub: refund processed creator=${creatorId} order=${orderDoc.id}`);
+    await processFanHubChargeRefunded(db, event.data.object as Stripe.Charge);
   }
 }
 
@@ -1555,6 +1598,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
           console.log(`Payment succeeded for user ${userDoc.id}`);
         }
+        break;
+      }
+
+      case 'charge.refunded': {
+        await processFanHubChargeRefunded(db, event.data.object as Stripe.Charge);
         break;
       }
 

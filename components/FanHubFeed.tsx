@@ -21,7 +21,7 @@ import {
   type DocumentData,
 } from "firebase/firestore";
 import { db } from "../firebaseConfig";
-import type { LockedPostContent } from "../src/lib/lockedPostMedia";
+import { isProtectedLockedMediaUrl, type LockedPostContent } from "../src/lib/lockedPostMedia";
 import { getAvatarCropStyle } from "../src/lib/avatarCrop";
 import { inferIsVideoFromUrl, normalizePostMediaTypes } from "../src/lib/mediaUrlInfer";
 import { getFeedGridCoverMedia } from "../src/lib/feedGridCover";
@@ -692,9 +692,10 @@ function FeedCard({
 
   const slideIdx = mediaCount > 0 ? Math.min(mediaSlideIndex, mediaCount - 1) : 0;
   const currentUrl = urls[slideIdx];
+  const currentProtectedPlaceholder = isProtectedLockedMediaUrl(currentUrl);
   const currentIsVideo =
     !!currentUrl &&
-    (post.mediaTypes?.[slideIdx] === "video" || inferIsVideoFromUrl(currentUrl));
+    (post.mediaTypes?.[slideIdx] === "video" || (!currentProtectedPlaceholder && inferIsVideoFromUrl(currentUrl)));
   const showMediaCarousel = mediaCount > 1;
 
   const hasTipGoal = !!(post.tipGoal && typeof post.tipGoal.targetCents === "number" && post.tipGoal.targetCents > 0);
@@ -1253,7 +1254,16 @@ function FeedCard({
       </div>
 
       {currentUrl ? (
-        currentIsVideo ? (
+        currentProtectedPlaceholder ? (
+          <div ref={carouselRootRef} className={`feed-card-media-wrap${inFeedCarouselClass}`}>
+            <div className="feed-card-media fan-feed-media-protected-placeholder" aria-hidden />
+            {showCaptionOnMedia && (
+              <FeedCardCaptionOverlay caption={post.body} style={captionStyle} size={post.overlayTextSize} sjHeartEmojiCtx={sjHeartEmojiCtx} />
+            )}
+            {renderCarouselArrows()}
+            {renderCountBadge()}
+          </div>
+        ) : currentIsVideo ? (
           <div
             ref={carouselRootRef}
             className={`feed-card-media-wrap feed-card-media-wrap-video${inFeedCarouselClass}`}

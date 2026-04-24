@@ -15,7 +15,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   const body = (req.body || {}) as Record<string, unknown>;
-  const fanId = body.fanId as string;
+    const fanId = body.fanId as string;
   if (!fanId) {
     return res.status(400).json({ error: "fanId is required" });
   }
@@ -32,7 +32,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       .collection("blocked")
       .doc(fanId);
     const now = new Date().toISOString();
-    await blockRef.set({ createdAt: now }, { merge: true });
+    const fanSnap = await db.collection("creators").doc(creatorId).collection("fans").doc(fanId).get().catch(() => null);
+    const fanData = fanSnap?.data() as Record<string, unknown> | undefined;
+    const email =
+      typeof fanData?.email === "string" && fanData.email.trim()
+        ? fanData.email.trim().toLowerCase()
+        : "";
+    await blockRef.set({
+      createdAt: now,
+      ...(email ? { email, emailLower: email, fanEmail: email } : {}),
+    }, { merge: true });
 
     return res.status(200).json({ success: true });
   } catch (e: unknown) {

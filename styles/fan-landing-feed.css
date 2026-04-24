@@ -1433,6 +1433,18 @@
   -webkit-user-drag: none;
 }
 
+.fan-feed-media-protected-placeholder {
+  min-height: 260px;
+  background:
+    radial-gradient(circle at center, rgba(255,255,255,0.12), transparent 42%),
+    rgba(15, 23, 42, 0.88);
+}
+
+.feed-comments-modal-media.fan-feed-media-protected-placeholder {
+  width: 100%;
+  min-height: min(70vh, 620px);
+}
+
 /* In-feed carousel: prev/next on member post cards (multi image/video) */
 .fan-feed-media-carousel {
   outline: none;

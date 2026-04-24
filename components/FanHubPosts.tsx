@@ -15,6 +15,7 @@ import {
   getDoc,
   updateDoc,
   deleteField,
+  deleteDoc,
   type DocumentData,
   type QueryDocumentSnapshot,
 } from "firebase/firestore";
@@ -45,6 +46,11 @@ import { resolveApiUrl, DEV_API_404_USER_HINT } from "../src/lib/resolveApiUrl";
 import type { LiveStreamEventStatus, LiveStreamPromoOnPost } from "../types";
 import { hasLiveStreamAccess } from "../src/utils/planAccess";
 import { LiveStreamWatchRoom } from "./LiveStreamWatchRoom";
+import {
+  isProtectedLockedMediaUrl,
+  publicMediaUrlsForLockedPost,
+  type LockedPostContent,
+} from "../src/lib/lockedPostMedia";
 
 const LIVE_STREAM_DOC_STATUSES: LiveStreamEventStatus[] = ["draft", "scheduled", "live", "ended", "cancelled"];
 
@@ -393,6 +399,27 @@ async function resolveFanHubCaptionMedia(
   }
 
   return null;
+}
+
+async function fetchCreatorFanPostMedia(creatorId: string, postId: string): Promise<{
+  mediaUrls: string[];
+  mediaTypes: ("image" | "video")[];
+} | null> {
+  const token = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
+  if (!token) return null;
+  const qs = new URLSearchParams({ creatorId, postId });
+  const res = await fetch(resolveApiUrl(`/api/fanPostMedia?${qs.toString()}`), {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) return null;
+  const data = await res.json().catch(() => null) as { mediaUrls?: unknown; mediaTypes?: unknown } | null;
+  const mediaUrls = Array.isArray(data?.mediaUrls)
+    ? data.mediaUrls.filter((u): u is string => typeof u === "string" && !!u.trim())
+    : [];
+  const rawTypes = Array.isArray(data?.mediaTypes)
+    ? data.mediaTypes.filter((t): t is string => typeof t === "string")
+    : [];
+  return { mediaUrls, mediaTypes: rawTypes.map((t) => (t === "video" ? "video" : "image")) };
 }
 
 export const FanHubPosts: React.FC = () => {
@@ -1527,11 +1554,28 @@ Write 2-4 sentences that are engaging and on-topic.`;
       const calendarDate = postDate.toISOString().split("T")[0]; // YYYY-MM-DD
       const calendarTime = `${String(postDate.getHours()).padStart(2, "0")}:${String(postDate.getMinutes()).padStart(2, "0")}`; // HH:MM
       
+      const lockedContentForPost: LockedPostContent | undefined =
+        lockEnabled && lockPrice
+          ? {
+              enabled: true,
+              priceCents: Math.round(parseFloat(lockPrice) * 100),
+              ...(uploadedUrls.length > 1
+                ? {
+                    previewMediaIndex: Math.max(
+                      0,
+                      Math.min(uploadedUrls.length - 1, lockPreviewMediaIndex)
+                    ),
+                  }
+                : {}),
+            }
+          : undefined;
+      const publicMediaUrls = publicMediaUrlsForLockedPost(uploadedUrls, lockedContentForPost);
+
       // Build post data
       const postData: Partial<FeedPost> & { creatorId: string; createdAt: ReturnType<typeof serverTimestamp> } = {
         creatorId,
         body: caption,
-        mediaUrls: uploadedUrls,
+        mediaUrls: publicMediaUrls,
         mediaTypes,
         // Firestore rejects `undefined`; use [] when there is no audio
         audioUrls,
@@ -1560,16 +1604,8 @@ Write 2-4 sentences that are engaging and on-topic.`;
       }
       
       // Locked content
-      if (lockEnabled && lockPrice) {
-        const previewIdx =
-          uploadedUrls.length > 1
-            ? Math.max(0, Math.min(uploadedUrls.length - 1, lockPreviewMediaIndex))
-            : 0;
-        (postData as Record<string, unknown>).lockedContent = {
-          enabled: true,
-          priceCents: Math.round(parseFloat(lockPrice) * 100),
-          ...(uploadedUrls.length > 1 ? { previewMediaIndex: previewIdx } : {}),
-        };
+      if (lockedContentForPost) {
+        (postData as Record<string, unknown>).lockedContent = lockedContentForPost;
       }
       
       // Poll
@@ -1619,8 +1655,29 @@ Write 2-4 sentences that are engaging and on-topic.`;
       // Save to Firestore (update existing when editing, otherwise create new)
       if (editingPostId) {
         await setDoc(doc(db, "creators", creatorId, "fanPosts", editingPostId), postData, { merge: true });
+        const privateMediaRef = doc(db, "creators", creatorId, "fanPostPrivateMedia", editingPostId);
+        if (lockedContentForPost) {
+          await setDoc(privateMediaRef, {
+            creatorId,
+            postId: editingPostId,
+            mediaUrls: uploadedUrls,
+            mediaTypes,
+            updatedAt: serverTimestamp(),
+          }, { merge: true });
+        } else {
+          await deleteDoc(privateMediaRef).catch(() => undefined);
+        }
       } else {
         const postRef = await addDoc(collection(db, "creators", creatorId, "fanPosts"), postData);
+        if (lockedContentForPost) {
+          await setDoc(doc(db, "creators", creatorId, "fanPostPrivateMedia", postRef.id), {
+            creatorId,
+            postId: postRef.id,
+            mediaUrls: uploadedUrls,
+            mediaTypes,
+            updatedAt: serverTimestamp(),
+          });
+        }
         if (liveStreamPromoEnabled && creatorCanLiveStream && streamIdForPost && !liveStreamEditStreamId) {
           try {
             const linkRes = await fetch(resolveApiUrl("/api/liveStreams"), {
@@ -1746,7 +1803,7 @@ Write 2-4 sentences that are engaging and on-topic.`;
     setEditingPostId(null);
   };
 
-  const openComposerForEdit = useCallback((post: FeedPost) => {
+  const openComposerForEdit = useCallback(async (post: FeedPost) => {
     stopMediaRecorderSafe(mediaRecorderRef.current);
     stopMediaRecorderSafe(videoMediaRecorderRef.current);
     setVoiceMeterStream((prev) => {
@@ -1761,8 +1818,15 @@ Write 2-4 sentences that are engaging and on-topic.`;
     setIsRecordingVideo(false);
     setRecordingCountdown(null);
 
-    const urls = Array.isArray(post.mediaUrls) ? post.mediaUrls : [];
-    const types = Array.isArray(post.mediaTypes) ? post.mediaTypes : [];
+    let urls = Array.isArray(post.mediaUrls) ? post.mediaUrls : [];
+    let types = Array.isArray(post.mediaTypes) ? post.mediaTypes : [];
+    if (user?.uid && post.lockedContent?.enabled && urls.some(isProtectedLockedMediaUrl)) {
+      const resolved = await fetchCreatorFanPostMedia(user.uid, post.id).catch(() => null);
+      if (resolved?.mediaUrls.length) {
+        urls = resolved.mediaUrls;
+        types = resolved.mediaTypes;
+      }
+    }
     const mediaFromPost: MediaItem[] = urls
       .filter((u): u is string => typeof u === "string" && u.trim().length > 0)
       .map((url, index) => ({
