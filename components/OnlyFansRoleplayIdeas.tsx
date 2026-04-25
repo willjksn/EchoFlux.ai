@@ -198,7 +198,7 @@ Format as JSON: {"premise": "...", "openingMessage": "...", "escalationPrompts":
                 throw new Error('Failed to generate roleplay scenario');
             }
 
-            const data = await response.json();
+            const data = await response.json() as { text?: string; caption?: string };
             const text = data.text || data.caption || '';
             
             // Try to parse JSON, fallback to structured text parsing
@@ -274,7 +274,7 @@ Make it detailed, creative, and tailored for adult content platforms. Format as 
                 throw new Error('Failed to generate persona');
             }
 
-            const data = await response.json();
+            const data = await response.json() as { text?: string; caption?: string };
             const text = data.text || data.caption || '';
             setGeneratedPersona(text);
             showToast('Persona generated successfully!', 'success');
@@ -352,7 +352,7 @@ Be helpful, specific, and actionable. Write in a friendly, conversational tone.`
                 throw new Error('Failed to get AI help');
             }
 
-            const data = await response.json();
+            const data = await response.json() as { text?: string; caption?: string };
             const text = data.text || data.caption || '';
             
             // If they had no text and no instructions, set this as help guidance
@@ -423,7 +423,7 @@ Format as a numbered list with brief descriptions. Make them engaging and moneti
                 throw new Error('Failed to generate interactive ideas');
             }
 
-            const data = await response.json();
+            const data = await response.json() as { text?: string; caption?: string };
             const text = data.text || data.caption || '';
             const ideas = text.split(/\d+\./).filter(item => item.trim()).map(item => item.trim());
             setGeneratedInteractive(ideas.length > 0 ? ideas : [text]);
@@ -513,7 +513,7 @@ Format as a numbered list (1-12) with complete prompt text. Make them creative, 
                 throw new Error('Failed to generate rating prompts');
             }
 
-            const data = await response.json();
+            const data = await response.json() as { text?: string; caption?: string };
             const text = data.text || data.caption || '';
             const ratings = text.split(/\d+\./).filter(item => item.trim()).map(item => item.trim());
             setGeneratedRatings(ratings.length > 0 ? ratings : [text]);

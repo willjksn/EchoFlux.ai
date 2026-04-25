@@ -335,7 +335,7 @@ export function generateDefaultWeeklyPlan(
 
 function pickLane(settings: CreatorOSSettings, dayOfWeek: string): ContentLane {
   if (dayOfWeek.toLowerCase().includes("thu") && settings.preferredLanes.includes("car_driving")) return "car_driving";
-  if (settings.primaryGoal === "test_amazon_products" && settings.preferredLanes.includes("amazon_soft_mention")) return "amazon_soft_mention";
+  if (["tuesday", "friday", "sunday"].includes(dayOfWeek.toLowerCase()) && settings.preferredLanes.includes("amazon_soft_mention")) return "amazon_soft_mention";
   return settings.preferredLanes[0] || "smirk_curiosity";
 }
 
@@ -386,7 +386,7 @@ export function generateTodaysMove(
     innerCircleDrop: planDay?.innerCircleDrop || (isCar ? "Post a short car-talk clip." : "Post the closer version inside Inner Circle."),
     innerCircleCaption: isCar ? "car talks are better on here anyway" : "this is the calm version... obviously",
     checklist,
-    whyThisWorks: `This matches ${audiencePhrase(settings.primaryAudience)}, keeps the public post simple, then uses Stories and Inner Circle as the money path.`,
+    whyThisWorks: `This matches ${audiencePhrase(settings.primaryAudience)} and runs the full weekly money flow: get attention, earn Story clicks, drive Inner Circle, test Amazon/Treat interest, and retain subscribers.`,
     completed: false,
   };
 }
