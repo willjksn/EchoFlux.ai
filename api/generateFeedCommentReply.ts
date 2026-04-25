@@ -3,6 +3,7 @@ import { checkApiKeys, getVerifyAuth, getModelRouter, withErrorHandling } from "
 import { sanitizeForAI } from "./_inputSanitizer.js";
 import { getAdminDb } from "./_firebaseAdmin.js";
 import { enforceRateLimit } from "./_rateLimit.js";
+import { normalizePlanForLimits } from "./_planLimits.js";
 
 /** Elite-only: generate a single short reply to a feed comment, in creator voice. No medical/legal/explicit; edgy/bold ok if it fits personality. */
 async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
@@ -52,7 +53,7 @@ async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
   const userData = userSnap.data() || {};
   const plan = userData.plan as string | undefined;
   const role = userData.role as string | undefined;
-  const isElite = plan === "Elite" || plan === "Agency" || role === "Admin";
+  const isElite = normalizePlanForLimits(plan ?? "") === "Elite" || plan === "Agency" || role === "Admin";
   if (!isElite) {
     res.status(200).json({
       success: false,

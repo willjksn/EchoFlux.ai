@@ -111,6 +111,7 @@ export const KNOWN_APP_ROUTES: readonly string[] = [
   '/bio',
   '/plan-my-week',
   '/strategy',
+  '/creator-os',
   '/ads',
   '/my-vault',
   '/mediaLibrary',

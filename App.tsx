@@ -76,6 +76,7 @@ const WitmePageManager = lazy(() => import('./components/WitmePageManager'));
 const Compose = lazy(() => import('./components/Compose').then((m) => ({ default: m.Compose })));
 const Calendar = lazy(() => import('./components/Calendar').then((m) => ({ default: m.Calendar })));
 const MediaLibrary = lazy(() => import('./components/MediaLibrary'));
+const CreatorOSPage = lazy(() => import('./src/pages/CreatorOSPage'));
 
 const RouteChunkFallback: React.FC<{ label?: string }> = ({ label = 'Loading…' }) => (
   <div className="min-h-[50vh] flex items-center justify-center p-8 bg-gray-50 dark:bg-gray-900 text-gray-600 dark:text-gray-300">
@@ -116,6 +117,7 @@ const pageTitles: Record<Page, string> = {
     automation: 'Automation',
     bio: 'Bio Link Page',
     strategy: 'What to Post',
+    "creator-os": 'Creator OS',
     ads: 'Ad Ideas',
     mediaLibrary: 'My Vault',
     autopilot: 'AI Autopilot',
@@ -240,6 +242,12 @@ const MainContent: React.FC = () => {
                 }
                 return <WhatToPost onOpenAdvanced={() => setStrategyViewMode('advanced')} />;
             }
+            case 'creator-os':
+                return (
+                    <LazyBoundary label="Loading Creator OS…">
+                        <CreatorOSPage />
+                    </LazyBoundary>
+                );
             case 'ads': return <AdGenerator />;
             case 'mediaLibrary':
                 return (
@@ -508,6 +516,7 @@ const AppContent: React.FC = () => {
             path === '/bio' ||
             path === '/plan-my-week' ||
             path === '/strategy' ||
+            path === '/creator-os' ||
             path === '/ads' ||
             path === '/my-vault' ||
             path === '/mediaLibrary' ||

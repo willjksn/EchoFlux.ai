@@ -10,6 +10,7 @@ import { BioPageSubscribersPanel } from './BioPageSubscribersPanel';
 import { storage } from '../firebaseConfig';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { InstagramIcon, TikTokIcon, ThreadsIcon, XIcon, YouTubeIcon, LinkedInIcon, FacebookIcon, PinterestIcon } from './icons/PlatformIcons';
+import { hasEliteAccess } from '../src/utils/planAccess';
 
 const categoryIcons: Record<string, React.ReactNode> = {
     FaceSmileIcon: <FaceSmileIcon className="w-5 h-5"/>,
@@ -435,7 +436,7 @@ export const BioPageBuilder: React.FC = () => {
         let linkLimit: number | null = null;
         if (user?.plan === 'Free') linkLimit = 1;
         else if (user?.plan === 'Pro') linkLimit = 5;
-        else if (user?.plan === 'Elite' || user?.plan === 'Agency') linkLimit = null; // Unlimited
+        else if (hasEliteAccess(user)) linkLimit = null; // Unlimited
         
         if (linkLimit !== null && customLinksCount >= linkLimit) {
             showToast(`Link limit reached (${customLinksCount}/${linkLimit}). ${user?.plan === 'Free' ? 'Upgrade to Pro for 5 links or Elite for unlimited.' : 'Upgrade to Elite for unlimited links.'}`, 'error');
@@ -522,7 +523,7 @@ export const BioPageBuilder: React.FC = () => {
         let linkLimit: number | null = null;
         if (user?.plan === 'Free') linkLimit = 1;
         else if (user?.plan === 'Pro') linkLimit = 5;
-        else if (user?.plan === 'Elite' || user?.plan === 'Agency') linkLimit = null; // Unlimited
+        else if (hasEliteAccess(user)) linkLimit = null; // Unlimited
         
         const newSocialLinks: SocialBioLink[] = [];
         
@@ -1155,7 +1156,7 @@ export const BioPageBuilder: React.FC = () => {
                             let linkLimit: number | null = null;
                             if (user?.plan === 'Free') linkLimit = 1;
                             else if (user?.plan === 'Pro') linkLimit = 5;
-                            else if (user?.plan === 'Elite' || user?.plan === 'Agency') linkLimit = null;
+                            else if (hasEliteAccess(user)) linkLimit = null;
                             
                             return (
                                 <span className="text-sm text-gray-500 dark:text-gray-400">

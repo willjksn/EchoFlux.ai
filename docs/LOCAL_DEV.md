@@ -52,6 +52,7 @@ npm run dev:api
 This starts a small Node server on **http://localhost:3001** and mounts these Vercel handlers:
 
 - `/api/createFanCheckoutSession`
+- `/api/creator-os/amazon-trends`
 - `/api/creatorOrders`
 - `/api/fanPostMedia`
 - `/api/getCreatorByHandle`

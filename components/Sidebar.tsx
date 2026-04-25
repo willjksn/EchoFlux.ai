@@ -74,6 +74,7 @@ export const Sidebar: React.FC = () => {
     // MAIN
     { page: 'dashboard', icon: <DashboardIcon />, label: 'Dashboard', tourId: 'tour-step-1-dashboard' },
     { page: 'strategy', icon: <TargetIcon />, label: 'What to Post' },
+    { page: 'creator-os', icon: <SparklesIcon />, label: 'Creator OS' },
     { page: 'compose', icon: <ComposeIcon />, label: 'Create Post', tourId: 'tour-step-3-compose-nav' },
     { page: 'calendar', icon: <CalendarIcon />, label: 'Calendar' },
     { page: 'mediaLibrary', icon: <ImageIcon />, label: 'Vault' },
@@ -93,6 +94,8 @@ export const Sidebar: React.FC = () => {
           case 'compose':
           case 'settings':
           case 'mediaLibrary':
+              return true;
+          case 'creator-os':
               return true;
           case 'admin':
               return user.role === 'Admin';

@@ -36,6 +36,11 @@ export function hasFanHubStudioRouteAccess(user: Pick<User, "plan" | "role"> | n
   return t === "Pro" || t === "Elite";
 }
 
+/** Creator OS: Pro and Elite creator tiers, including CreatorPro / CreatorElite invites, plus Agency/Admin. */
+export function hasCreatorOSAccess(user: Pick<User, "plan" | "role"> | null | undefined): boolean {
+  return hasFanHubStudioRouteAccess(user);
+}
+
 /**
  * Routes: /studio (Premium Studio), Creator Identity — Elite-equivalent (Elite, CreatorElite, OnlyFansStudio) + Agency.
  */

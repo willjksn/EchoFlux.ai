@@ -41,6 +41,7 @@ import {
   query,
   orderBy,
 } from "firebase/firestore";
+import { hasEliteAccess } from "../../src/utils/planAccess";
 
 import { db } from "../../firebaseConfig";
 import { auth } from "../../firebaseConfig";
@@ -840,7 +841,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     let linkLimit: number | null = null;
     if (user.plan === 'Free') linkLimit = 1;
     else if (user.plan === 'Pro') linkLimit = 5;
-    else if (user.plan === 'Elite' || user.plan === 'Agency') linkLimit = null; // Unlimited
+    else if (hasEliteAccess(user)) linkLimit = null; // Unlimited
     
     if (linkLimit !== null && totalActiveLinks > linkLimit) {
       showToast(`Cannot save: You have ${totalActiveLinks} active links, but your ${user.plan} plan only allows ${linkLimit}. Please deactivate some links or upgrade.`, 'error');

@@ -7,6 +7,7 @@ import { getAdminDb } from "./_firebaseAdmin.js";
 import { enforceRateLimit } from "./_rateLimit.js";
 import { checkApiKeys } from "./_errorHandler.js";
 import { sendCreatorHubNotification } from "./_fanNotifications.js";
+import { normalizePlanForLimits } from "./_planLimits.js";
 
 type Comment = { username?: string; author?: string; text: string; hidden?: boolean; authorId?: string; isCreatorReply?: boolean };
 
@@ -151,7 +152,7 @@ async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
 
   const plan = creatorData.plan as string | undefined;
   const role = creatorData.role as string | undefined;
-  const isElite = plan === "Elite" || plan === "Agency" || role === "Admin";
+  const isElite = normalizePlanForLimits(plan ?? "") === "Elite" || plan === "Agency" || role === "Admin";
   const settings = (creatorData.fanHubFeedSettings as { autoReplyAI?: boolean; autoReplyChance?: number }) || {};
   const autoReplyAI = !!settings.autoReplyAI;
   const autoReplyChance = Math.max(0, Math.min(100, Number(settings.autoReplyChance) ?? 25));

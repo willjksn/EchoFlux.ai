@@ -14,6 +14,7 @@
  */
 
 import { FieldValue } from "firebase-admin/firestore";
+import { normalizePlanForLimits } from "./_planLimits.js";
 
 export type ComposeInsightFeature = "content_gaps" | "predict" | "repurpose";
 
@@ -32,8 +33,7 @@ const LIMITS: Record<
 
 function normalizePlan(plan: string | undefined | null): string {
   if (!plan) return "Free";
-  if (plan === "OnlyFansStudio") return "Elite";
-  return plan;
+  return normalizePlanForLimits(plan);
 }
 
 function getCurrentMonthKey(): string {

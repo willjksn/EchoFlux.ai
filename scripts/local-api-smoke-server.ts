@@ -11,6 +11,7 @@ const MAX_BODY_BYTES = 2 * 1024 * 1024;
 
 const routeLoaders: Record<string, () => Promise<ApiModule>> = {
   "/api/createFanCheckoutSession": () => import("../api/createFanCheckoutSession.ts"),
+  "/api/creator-os/amazon-trends": () => import("../api/creator-os/amazon-trends.ts"),
   "/api/creatorOrders": () => import("../api/creatorOrders.ts"),
   "/api/fanPostMedia": () => import("../api/fanPostMedia.ts"),
   "/api/getCreatorByHandle": () => import("../api/getCreatorByHandle.ts"),

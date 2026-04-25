@@ -8,6 +8,7 @@ import { getLatestTrends } from "./_trendsHelper.js";
 import { ComposeInsightLimitError, enforceAndRecordComposeInsightUsage } from "./_composeInsightsUsage.js";
 import { enforceRateLimit } from "./_rateLimit.js";
 import { enqueueAiJob, processAiJob } from "./_aiQueue.js";
+import { normalizePlanForLimits } from "./_planLimits.js";
 
 /**
  * Smart Content Gap Analysis
@@ -116,7 +117,8 @@ async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
 
     // Get trending context - use weekly trends if requested, or Elite user
     let trendContext = '';
-    if (useWeeklyTrends || user.plan === 'Elite' || user.role === 'Admin') {
+    const hasEliteTier = normalizePlanForLimits(user.plan ?? "") === 'Elite' || user.role === 'Admin';
+    if (useWeeklyTrends || hasEliteTier) {
       try {
         // Try to get weekly trends first (free, updated every Monday)
         if (useWeeklyTrends) {
@@ -124,7 +126,7 @@ async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
         }
         
         // If Elite user and weekly trends not available, try Tavily
-        if (!trendContext && (user.plan === 'Elite' || user.role === 'Admin')) {
+        if (!trendContext && hasEliteTier) {
           const trendRes = await fetch(`${req.headers['x-forwarded-proto'] || 'https'}://${req.headers.host}/api/getTrendingContext`, {
             method: 'POST',
             headers: {
