@@ -8,6 +8,7 @@ import {
   stripStrategyFormatPrefix,
   instagramPostTypeFromContentFormat,
 } from '../src/lib/strategyComposeHandoff';
+import { hasEliteAccess } from '../src/utils/planAccess';
 
 type PlatformOption = 'instagram' | 'facebook' | 'x' | 'mypage';
 
@@ -362,8 +363,8 @@ export const WhatToPost: React.FC<WhatToPostProps> = ({ onOpenAdvanced }) => {
     [user?.id, showToast]
   );
 
-  // Check if user has access to advanced planner (Elite, Agency, or Admin)
-  const hasAdvancedAccess = user?.plan === 'Elite' || user?.plan === 'Agency' || user?.role === 'Admin';
+  // Advanced Planner is Elite-tier, including CreatorElite invite accounts.
+  const hasAdvancedAccess = hasEliteAccess(user);
 
   const handleAdvancedClick = () => {
     if (hasAdvancedAccess) {

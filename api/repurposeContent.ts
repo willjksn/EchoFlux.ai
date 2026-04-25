@@ -5,6 +5,7 @@ import { getModelForTask, getModelNameForTask, getCostTierForTask } from "./_mod
 import { trackModelUsage } from "./trackModelUsage.js";
 import { getAdminDb } from "./_firebaseAdmin.js";
 import { ComposeInsightLimitError, enforceAndRecordComposeInsightUsage } from "./_composeInsightsUsage.js";
+import { normalizePlanForLimits } from "./_planLimits.js";
 
 /**
  * AI Content Repurposing Engine
@@ -64,7 +65,7 @@ async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
 
     // Get trending context if Elite user (optional - works without trends too)
     let trendContext = '';
-    if (user.plan === 'Elite' || user.role === 'Admin') {
+    if (normalizePlanForLimits(user.plan ?? "") === 'Elite' || user.role === 'Admin') {
       try {
         const trendRes = await fetch(`${req.headers['x-forwarded-proto'] || 'https'}://${req.headers.host}/api/getTrendingContext`, {
           method: 'POST',

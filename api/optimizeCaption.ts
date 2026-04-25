@@ -3,6 +3,7 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 import { checkApiKeys, getVerifyAuth, withErrorHandling } from "./_errorHandler.js";
 import { getModelForTask, getModelNameForTask, getCostTierForTask } from "./_modelRouter.js";
 import { trackModelUsage } from "./trackModelUsage.js";
+import { normalizePlanForLimits } from "./_planLimits.js";
 
 /**
  * AI Caption Optimizer
@@ -53,7 +54,7 @@ async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
   try {
     // Get trending context if Elite user (optional - works without trends too)
     let trendContext = '';
-    if (user.plan === 'Elite' || user.role === 'Admin') {
+    if (normalizePlanForLimits(user.plan ?? "") === 'Elite' || user.role === 'Admin') {
       try {
         const trendRes = await fetch(`${req.headers['x-forwarded-proto'] || 'https'}://${req.headers.host}/api/getTrendingContext`, {
           method: 'POST',

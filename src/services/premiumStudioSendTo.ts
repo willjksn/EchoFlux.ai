@@ -57,6 +57,10 @@ function safeAuthor(author?: { name: string; avatar: string }): { name: string; 
     : { name: 'Creator', avatar: '' };
 }
 
+function withoutUndefined<T extends Record<string, unknown>>(value: T): T {
+  return Object.fromEntries(Object.entries(value).filter(([, fieldValue]) => fieldValue !== undefined)) as T;
+}
+
 /** Write a draft post to users/{userId}/posts. Appears in Compose drafts. */
 export async function sendToDraft(
   db: Firestore,
@@ -78,7 +82,7 @@ export async function sendToDraft(
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   };
-  await setDoc(doc(db, 'users', userId, 'posts', postId), post);
+  await setDoc(doc(db, 'users', userId, 'posts', postId), withoutUndefined(post as unknown as Record<string, unknown>));
   return { postId };
 }
 
@@ -104,7 +108,7 @@ export async function sendToScheduledPost(
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   };
-  await setDoc(doc(db, 'users', userId, 'posts', postId), post);
+  await setDoc(doc(db, 'users', userId, 'posts', postId), withoutUndefined(post as unknown as Record<string, unknown>));
 
   const eventId = `post-${postId}-${platforms[0]}-0`;
   const dateStr = payload.scheduledDate.slice(0, 10);

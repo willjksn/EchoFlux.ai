@@ -51,7 +51,7 @@ import { getAnalytics } from '../src/services/geminiService';
 import { MediaItemState } from '../types';
 import { publishFacebookPost, publishInstagramPost, publishTweet, publishPinterestPin } from '../src/services/socialMediaService';
 import { PinterestBoardSelectionModal } from './PinterestBoardSelectionModal';
-import { hasCalendarAccess } from '../src/utils/planAccess';
+import { hasCalendarAccess, hasEliteAccess } from '../src/utils/planAccess';
 import {
   isComposeStrategyHandoffActive,
   setComposeStrategyHandoffActive,
@@ -315,7 +315,7 @@ const CaptionGenerator: React.FC = () => {
     const monthKey = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`;
     const isNewMonth = user.composeInsightsUsageMonth !== monthKey;
     const currentGapsUsed = isNewMonth ? 0 : (user.monthlyContentGapsUsed || 0);
-    const gapsLimit = user.role === 'Admin' || user.plan === 'Elite' || user.plan === 'Agency' || user.plan === 'OnlyFansStudio'
+    const gapsLimit = hasEliteAccess(user)
       ? Infinity
       : user.plan === 'Pro'
         ? 2
@@ -434,7 +434,7 @@ const CaptionGenerator: React.FC = () => {
   }, [user?.id]);
 
   // Plan + role logic
-  const isAgency = user?.plan === 'Agency' || user?.plan === 'Elite';
+  const isAgency = user?.plan === 'Agency' || hasEliteAccess(user);
   const isBusiness = user?.userType === 'Business';
   const isAgencyPlan = user?.plan === 'Agency';
   const isAdminOrAgency = user?.role === 'Admin' || user?.plan === 'Agency';
@@ -3958,11 +3958,11 @@ const CaptionGenerator: React.FC = () => {
               <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
                 Usage this month:{' '}
                 <span className="font-semibold text-blue-700 dark:text-blue-300">
-                  Ideas for this content {user.plan === 'Pro' ? `${user.monthlyPredictionsUsed || 0}/5` : `${user.monthlyPredictionsUsed || 0}${(user.plan === 'Elite' || user.plan === 'Agency' || user.role === 'Admin') ? ' (unlimited)' : ''}`}
+                  Ideas for this content {user.plan === 'Pro' ? `${user.monthlyPredictionsUsed || 0}/5` : `${user.monthlyPredictionsUsed || 0}${hasEliteAccess(user) ? ' (unlimited)' : ''}`}
                 </span>
                 {' • '}
                 <span className="font-semibold text-emerald-700 dark:text-emerald-300">
-                  Repurpose {user.plan === 'Pro' ? `${user.monthlyRepurposesUsed || 0}/5` : `${user.monthlyRepurposesUsed || 0}${(user.plan === 'Elite' || user.plan === 'Agency' || user.role === 'Admin') ? ' (unlimited)' : ''}`}
+                  Repurpose {user.plan === 'Pro' ? `${user.monthlyRepurposesUsed || 0}/5` : `${user.monthlyRepurposesUsed || 0}${hasEliteAccess(user) ? ' (unlimited)' : ''}`}
                 </span>
               </p>
             </div>
@@ -4731,7 +4731,7 @@ export const Compose: React.FC<{ approvalsWorkflow?: boolean }> = ({ approvalsWo
     const userType: 'Creator' | 'Business' = isBusiness ? 'Business' : 'Creator';
     const userPlan = user?.plan || 'Free';
     const isAgency = (userPlan === 'Agency') || isAdmin;
-    const isElite = (userPlan === 'Elite') || isAgency;
+    const isElite = hasEliteAccess(user) || isAgency;
     const isPro = (userPlan === 'Pro') || isElite;
     const isGrowth = (userPlan === 'Growth') || isAgency;
 

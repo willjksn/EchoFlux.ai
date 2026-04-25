@@ -4,6 +4,7 @@ import { getModelForTask, getModelNameForTask, getCostTierForTask } from "./_mod
 import { getAdminDb } from "./_firebaseAdmin.js";
 import { trackModelUsage } from "./trackModelUsage.js";
 import { ComposeInsightLimitError, enforceAndRecordComposeInsightUsage } from "./_composeInsightsUsage.js";
+import { normalizePlanForLimits } from "./_planLimits.js";
 
 /**
  * What To Post Next
@@ -73,7 +74,7 @@ async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
     });
 
     let trendContext = "";
-    if (user.plan === "Elite" || user.role === "Admin" || user.plan === "OnlyFansStudio") {
+    if (normalizePlanForLimits(user.plan ?? "") === "Elite" || user.role === "Admin") {
       try {
         const trendRes = await fetch(
           `${req.headers["x-forwarded-proto"] || "https"}://${req.headers.host}/api/getTrendingContext`,

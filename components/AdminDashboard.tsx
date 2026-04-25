@@ -22,6 +22,7 @@ import { defaultSettings, ECHOFLUX_CREATOR_ELITE_INVITE_USD, ECHOFLUX_CREATOR_PR
 import { getModelUsageAnalytics, type ModelUsageStats } from '../src/services/modelUsageService';
 import { hasActiveStripeEchofluxSubscription } from '../src/lib/echofluxStripeMrr';
 import { safeUsernameForHandle } from '../src/lib/fanHubDisplay';
+import { normalizePlanForLimitsClient } from '../src/lib/creatorIdentity/planGate';
 
 /** Gemini text models always listed in Requests by Model (0 when unused) so 2.5 / 2.0 / 1.5 show like other rows. */
 const GEMINI_TEXT_MODEL_DISPLAY_ORDER = [
@@ -149,7 +150,7 @@ function adminCaptionMonthlyLimit(plan: User["plan"] | null): number {
     if (!plan) return 0;
     if (plan === "Free") return 10;
     if (plan === "Pro") return 500;
-    if (plan === "Elite" || plan === "OnlyFansStudio") return 1500;
+    if (normalizePlanForLimitsClient(plan) === "Elite") return 1500;
     if (plan === "Agency") return 10000;
     return 0;
 }
@@ -158,7 +159,7 @@ const getStorageLimit = (plan: User['plan']): number => {
     // Storage limits in MB
     if (plan === 'Free') return 100;
     if (plan === 'Pro') return 5120; // 5 GB
-    if (plan === 'Elite' || plan === 'Growth') return 10240; // 10 GB
+    if (normalizePlanForLimitsClient(plan ?? '') === 'Elite' || plan === 'Growth') return 10240; // 10 GB
     if (plan === 'Agency') return 51200; // 50 GB
     if (plan === 'Starter') return 1024; // 1 GB
     return 100; // Default to Free plan limit

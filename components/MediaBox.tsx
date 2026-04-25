@@ -44,7 +44,7 @@ import {
   FacebookIcon
 } from './icons/PlatformIcons';
 import { useAppContext } from './AppContext';
-import { hasCalendarAccess } from '../src/utils/planAccess';
+import { hasCalendarAccess, hasEliteAccess } from '../src/utils/planAccess';
 import { MediaLibraryItem } from '../types';
 import { db } from '../firebaseConfig';
 import { collection, getDocs, query, orderBy, setDoc, doc, addDoc, Timestamp, deleteDoc } from 'firebase/firestore';
@@ -309,6 +309,10 @@ export const MediaBox: React.FC<MediaBoxProps> = ({
 
 
   const handleSelectFromLibrary = (item: MediaLibraryItem) => {
+    if (item.type !== 'image' && item.type !== 'video') {
+      showToast('Only image and video media can be used in Compose.', 'info');
+      return;
+    }
     onUpdate(index, {
       previewUrl: item.url,
       data: '', // Media Library items are already URLs
@@ -1402,7 +1406,7 @@ ${contextLines || 'None'}
               const monthKey = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`;
               const monthChanged = user.composeInsightsUsageMonth !== monthKey;
               const used = monthChanged ? 0 : (user.monthlyPredictionsUsed || 0);
-              const limit = user.role === 'Admin' || user.plan === 'Elite' || user.plan === 'Agency' || user.plan === 'OnlyFansStudio'
+              const limit = hasEliteAccess(user)
                 ? Infinity
                 : user.plan === 'Pro'
                   ? 5
@@ -1519,7 +1523,7 @@ ${contextLines || 'None'}
               const monthKey = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`;
               const monthChanged = user.composeInsightsUsageMonth !== monthKey;
               const used = monthChanged ? 0 : (user.monthlyRepurposesUsed || 0);
-              const limit = user.role === 'Admin' || user.plan === 'Elite' || user.plan === 'Agency' || user.plan === 'OnlyFansStudio'
+              const limit = hasEliteAccess(user)
                 ? Infinity
                 : user.plan === 'Pro'
                   ? 5

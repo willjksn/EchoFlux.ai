@@ -194,6 +194,7 @@ export const UIProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
         automation: '/automation',
         bio: '/bio-link-page',
         strategy: '/plan-my-week',
+        "creator-os": '/creator-os',
         ads: '/ads',
         mediaLibrary: '/my-vault',
         autopilot: '/autopilot',
@@ -222,6 +223,7 @@ export const UIProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
     pathToPage['/write-captions'] = 'compose';
     // Legacy strategy route
     pathToPage['/strategy'] = 'strategy';
+    pathToPage['/creator-os'] = 'creator-os';
     // Legacy schedule route
     pathToPage['/calendar'] = 'calendar';
     // Legacy media library route
