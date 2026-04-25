@@ -267,7 +267,11 @@ function firestoreDocToFeedPost(docSnap: QueryDocumentSnapshot<DocumentData>, is
     likedBy: (d.likedBy as string[]) ?? [],
     comments: (d.comments as FeedPost["comments"]) ?? [],
     captionStyle: (d.captionStyle as FeedPost["captionStyle"]) ?? "static",
+    overlayText: typeof d.overlayText === "string" ? d.overlayText : undefined,
+    overlayTextColor: typeof d.overlayTextColor === "string" ? d.overlayTextColor : undefined,
     overlayTextSize: typeof d.overlayTextSize === "number" ? d.overlayTextSize : 18,
+    overlayHighlight: !!d.overlayHighlight,
+    overlayItalic: !!d.overlayItalic,
     hideComments: !!d.hideComments,
     hideLikes: !!d.hideLikes,
     hideLikeCounts: !!d.hideLikeCounts,
@@ -591,17 +595,35 @@ function FeedCardCaptionOverlay({
   caption,
   style: captionStyle,
   size,
+  color,
+  highlight,
+  italic,
   sjHeartEmojiCtx,
 }: {
   caption: string;
   style?: string;
   size?: number;
+  color?: string;
+  highlight?: boolean;
+  italic?: boolean;
   sjHeartEmojiCtx: SjHeartEmojiAccessContext;
 }) {
   if (!caption?.trim()) return null;
+  const textStyle: React.CSSProperties = {
+    ...(size != null && size > 0 ? { fontSize: `${size}px` } : {}),
+    ...(color ? { color } : {}),
+    ...(italic ? { fontStyle: "italic" } : {}),
+    ...(highlight
+      ? {
+          backgroundColor: "rgba(0, 0, 0, 0.45)",
+          borderRadius: "999px",
+          padding: "0.25rem 0.7rem",
+        }
+      : {}),
+  };
   return (
     <div className={`feed-card-caption-overlay feed-card-caption-overlay-${captionStyle || "static"}`} aria-hidden>
-      <span className="feed-card-caption-overlay-text" style={size != null && size > 0 ? { fontSize: `${size}px` } : undefined}>
+      <span className="feed-card-caption-overlay-text" style={textStyle}>
         {renderTextWithCustomEmoji(caption, sjHeartEmojiCtx)}
       </span>
     </div>
@@ -723,7 +745,8 @@ function FeedCard({
     : "";
 
   const captionStyle = post.captionStyle ?? "static";
-  const showCaptionOnMedia = captionStyle !== "static" && post.body?.trim();
+  const overlayCaption = post.overlayText?.trim() || (captionStyle !== "static" ? post.body?.trim() || "" : "");
+  const showCaptionOnMedia = !!overlayCaption;
   const [commentsOpen, setCommentsOpen] = useState(false);
   const [modalMediaIndex, setModalMediaIndex] = useState(0);
   const [likeSaving, setLikeSaving] = useState(false);
@@ -1258,7 +1281,15 @@ function FeedCard({
           <div ref={carouselRootRef} className={`feed-card-media-wrap${inFeedCarouselClass}`}>
             <div className="feed-card-media fan-feed-media-protected-placeholder" aria-hidden />
             {showCaptionOnMedia && (
-              <FeedCardCaptionOverlay caption={post.body} style={captionStyle} size={post.overlayTextSize} sjHeartEmojiCtx={sjHeartEmojiCtx} />
+              <FeedCardCaptionOverlay
+                caption={overlayCaption}
+                style={captionStyle}
+                size={post.overlayTextSize}
+                color={post.overlayTextColor}
+                highlight={post.overlayHighlight}
+                italic={post.overlayItalic}
+                sjHeartEmojiCtx={sjHeartEmojiCtx}
+              />
             )}
             {renderCarouselArrows()}
             {renderCountBadge()}
@@ -1324,7 +1355,15 @@ function FeedCard({
             )}
             {feedVideoDecodeError && currentUrl ? <FeedVideoPlaybackErrorOverlay videoSrc={currentUrl} /> : null}
             {showCaptionOnMedia && (
-              <FeedCardCaptionOverlay caption={post.body} style={captionStyle} size={post.overlayTextSize} sjHeartEmojiCtx={sjHeartEmojiCtx} />
+              <FeedCardCaptionOverlay
+                caption={overlayCaption}
+                style={captionStyle}
+                size={post.overlayTextSize}
+                color={post.overlayTextColor}
+                highlight={post.overlayHighlight}
+                italic={post.overlayItalic}
+                sjHeartEmojiCtx={sjHeartEmojiCtx}
+              />
             )}
             {renderCarouselArrows()}
             {renderCountBadge()}
@@ -1340,7 +1379,15 @@ function FeedCard({
               {...feedImageDownloadGuardProps}
             />
             {showCaptionOnMedia && (
-              <FeedCardCaptionOverlay caption={post.body} style={captionStyle} size={post.overlayTextSize} sjHeartEmojiCtx={sjHeartEmojiCtx} />
+              <FeedCardCaptionOverlay
+                caption={overlayCaption}
+                style={captionStyle}
+                size={post.overlayTextSize}
+                color={post.overlayTextColor}
+                highlight={post.overlayHighlight}
+                italic={post.overlayItalic}
+                sjHeartEmojiCtx={sjHeartEmojiCtx}
+              />
             )}
             {renderCarouselArrows()}
             {renderCountBadge()}

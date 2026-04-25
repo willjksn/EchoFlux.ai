@@ -148,6 +148,35 @@ function getCheckoutSessionName(session: Stripe.Checkout.Session): string | null
   return typeof name === 'string' && name.trim() ? name.trim() : null;
 }
 
+async function incrementFanPostTipGoalRaisedCents(
+  db: Firestore,
+  creatorId: string,
+  postId: string,
+  amountCents: number,
+): Promise<void> {
+  const cleanPostId = typeof postId === 'string' ? postId.trim() : '';
+  if (!creatorId || !cleanPostId || amountCents <= 0) return;
+  const refs = [
+    db.collection('creators').doc(creatorId).collection('fanPosts').doc(cleanPostId),
+    db.collection('creators').doc(creatorId).collection('posts').doc(cleanPostId),
+    db.collection('users').doc(creatorId).collection('posts').doc(cleanPostId),
+  ];
+  await Promise.all(
+    refs.map(async (ref) => {
+      const snap = await ref.get().catch(() => null);
+      const data = snap?.exists ? snap.data() : null;
+      const tipGoal = data?.tipGoal as { targetCents?: unknown } | undefined;
+      if (!tipGoal || typeof tipGoal !== 'object') return;
+      const targetCents = typeof tipGoal.targetCents === 'number' ? tipGoal.targetCents : 0;
+      if (targetCents <= 0) return;
+      await ref.update({
+        'tipGoal.raisedCents': FieldValue.increment(amountCents),
+        updatedAt: new Date().toISOString(),
+      });
+    }),
+  );
+}
+
 function stripeRefId(
   value: unknown,
 ): string | null {
@@ -778,6 +807,7 @@ export async function processFanHubCheckoutSessionCompleted(
     const paymentIntentId = typeof session.payment_intent === 'string' ? session.payment_intent : (session.payment_intent as Stripe.PaymentIntent)?.id;
     const amountTotal = session.amount_total ?? 0;
     const tipHandle = session.metadata?.tipHandle || 'Anonymous';
+    const tipPostId = typeof session.metadata?.postId === 'string' && session.metadata.postId.trim() ? session.metadata.postId.trim() : '';
 
     const orderRef = db.collection('orders').doc(session.id);
     await orderRef.set({
@@ -788,6 +818,7 @@ export async function processFanHubCheckoutSessionCompleted(
       stripePaymentIntentId: paymentIntentId || null,
       amountCents: amountTotal,
       tipHandle,
+      ...(tipPostId ? { postId: tipPostId } : {}),
       fanEmail: getCheckoutSessionEmail(session),
       fanName: getCheckoutSessionName(session),
       status: 'paid',
@@ -861,6 +892,14 @@ export async function processFanHubCheckoutSessionCompleted(
       totalTipCount: (stats?.totalTipCount ?? 0) + 1,
       updatedAt: now,
     }, { merge: true });
+
+    if (tipPostId) {
+      try {
+        await incrementFanPostTipGoalRaisedCents(db, creatorId, tipPostId, amountTotal);
+      } catch (e) {
+        console.warn('incrementFanPostTipGoalRaisedCents:', e);
+      }
+    }
 
     console.log(`Fan hub: tip creator=${creatorId} fan=${fanId} amount=${amountTotal} handle=${tipHandle}`);
     return true;

@@ -192,7 +192,12 @@ async function startLiveStreamTicketCheckoutSession(creatorId: string, streamId:
   return url;
 }
 
-async function startFanTipCheckoutSession(creatorId: string, amountCents: number, fanEmail?: string): Promise<string> {
+async function startFanTipCheckoutSession(
+  creatorId: string,
+  amountCents: number,
+  fanEmail?: string,
+  postId?: string,
+): Promise<string> {
   const token = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
   const successUrl = buildTipCheckoutReturnUrl(window.location.pathname, `?${FAN_TIP_CHECKOUT_SUCCESS_QS}`);
   const cancelUrl = buildTipCheckoutReturnUrl(window.location.pathname, "?tip=cancel");
@@ -206,6 +211,7 @@ async function startFanTipCheckoutSession(creatorId: string, amountCents: number
       creatorId,
       type: "tip",
       amountCents,
+      ...(postId ? { postId } : {}),
       ...(fanEmail ? { fanEmail } : {}),
       ...(successUrl ? { successUrl } : {}),
       ...(cancelUrl ? { cancelUrl } : {}),
@@ -437,6 +443,18 @@ export type FanMemberPostComment = {
   isCreatorReply?: boolean;
 };
 
+type FanMemberPostPoll = {
+  question: string;
+  options: string[];
+  optionVotes?: number[];
+};
+
+type FanMemberPostTipGoal = {
+  description: string;
+  targetCents: number;
+  raisedCents: number;
+};
+
 interface Post {
   id: string;
   content: string;
@@ -447,6 +465,14 @@ interface Post {
   commentsCount: number;
   /** Parsed when loading a post doc — used in View post modal */
   commentsList?: FanMemberPostComment[];
+  poll?: FanMemberPostPoll;
+  tipGoal?: FanMemberPostTipGoal;
+  captionStyle?: "static" | "scroll-up" | "scroll-across" | "dissolve";
+  overlayText?: string;
+  overlayTextColor?: string;
+  overlayTextSize?: number;
+  overlayHighlight?: boolean;
+  overlayItalic?: boolean;
   pinned?: boolean;
   hideComments?: boolean;
   hideLikes?: boolean;
@@ -483,6 +509,139 @@ function parseLiveStreamPromoMember(data: DocumentData): LiveStreamPromoOnPost |
     promo.streamStatus = ss as (typeof allowed)[number];
   }
   return promo;
+}
+
+function parseFanMemberPostPoll(data: DocumentData): FanMemberPostPoll | undefined {
+  const raw = data.poll;
+  if (!raw || typeof raw !== "object") return undefined;
+  const poll = raw as Record<string, unknown>;
+  const question = typeof poll.question === "string" ? poll.question.trim() : "";
+  const options = Array.isArray(poll.options)
+    ? poll.options
+        .filter((option): option is string => typeof option === "string" && !!option.trim())
+        .map((option) => option.trim())
+    : [];
+  if (!question || options.length < 2) return undefined;
+  const optionVotes = Array.isArray(poll.optionVotes)
+    ? poll.optionVotes.map((vote) => (typeof vote === "number" && Number.isFinite(vote) ? Math.max(0, Math.round(vote)) : 0))
+    : undefined;
+  return {
+    question,
+    options,
+    ...(optionVotes ? { optionVotes: optionVotes.slice(0, options.length) } : {}),
+  };
+}
+
+function parseFanMemberPostTipGoal(data: DocumentData): FanMemberPostTipGoal | undefined {
+  const raw = data.tipGoal;
+  if (!raw || typeof raw !== "object") return undefined;
+  const tipGoal = raw as Record<string, unknown>;
+  const description = typeof tipGoal.description === "string" ? tipGoal.description.trim() : "";
+  const targetCents =
+    typeof tipGoal.targetCents === "number" && Number.isFinite(tipGoal.targetCents)
+      ? Math.max(0, Math.round(tipGoal.targetCents))
+      : 0;
+  if (!description || targetCents <= 0) return undefined;
+  const raisedCents =
+    typeof tipGoal.raisedCents === "number" && Number.isFinite(tipGoal.raisedCents)
+      ? Math.max(0, Math.round(tipGoal.raisedCents))
+      : 0;
+  return { description, targetCents, raisedCents };
+}
+
+function FanMemberPostPollView({ poll }: { poll?: FanMemberPostPoll }) {
+  if (!poll?.question || poll.options.length < 2) return null;
+  const votes = poll.optionVotes ?? poll.options.map(() => 0);
+  const total = votes.reduce((sum, vote) => sum + vote, 0);
+  return (
+    <div className="feed-card-poll">
+      <p className="feed-card-poll-question">{poll.question}</p>
+      <ul className="feed-card-poll-options">
+        {poll.options.map((option, index) => {
+          const voteCount = votes[index] ?? 0;
+          const percent = total > 0 ? Math.round((voteCount / total) * 100) : 0;
+          return (
+            <li key={`${option}-${index}`} className="feed-card-poll-option">
+              <span className="feed-card-poll-option-label">{option}</span>
+              <span className="feed-card-poll-option-meta">{total > 0 ? `${percent}%` : "0%"}</span>
+              {total > 0 ? <div className="feed-card-poll-option-bar" style={{ width: `${percent}%` }} aria-hidden /> : null}
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+}
+
+function FanMemberPostTipGoalView({
+  tipGoal,
+  primary,
+  showTipButton,
+  onSendTip,
+}: {
+  tipGoal?: FanMemberPostTipGoal;
+  primary: string;
+  showTipButton: boolean;
+  onSendTip?: () => void;
+}) {
+  if (!tipGoal || tipGoal.targetCents <= 0) return null;
+  const percent = Math.min(100, Math.round((tipGoal.raisedCents / tipGoal.targetCents) * 100));
+  return (
+    <div className="feed-card-tip-goal">
+      <p className="feed-card-tip-goal-desc">{tipGoal.description}</p>
+      <div className="feed-card-tip-goal-bar-wrap">
+        <div className="feed-card-tip-goal-bar-fill" style={{ width: `${percent}%` }} />
+      </div>
+      <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+        <p className="feed-card-tip-goal-raised">
+          ${(tipGoal.raisedCents / 100).toFixed(2)} of ${(tipGoal.targetCents / 100).toFixed(2)}
+        </p>
+        {showTipButton && onSendTip ? (
+          <button
+            type="button"
+            className="feed-card-send-tip"
+            aria-label={`Send a tip toward ${tipGoal.description}`}
+            onClick={onSendTip}
+            style={{ backgroundColor: primary }}
+          >
+            <span className="tip-currency">$</span>
+            <span>SEND TIP</span>
+          </button>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+function FanMemberCaptionOverlay({
+  post,
+  sjHeartEmojiCtx,
+}: {
+  post: Post;
+  sjHeartEmojiCtx: SjHeartEmojiAccessContext;
+}) {
+  const captionStyle = post.captionStyle ?? "static";
+  const caption = post.overlayText?.trim() || (captionStyle !== "static" ? post.content?.trim() || "" : "");
+  if (!caption) return null;
+  const textStyle: React.CSSProperties = {
+    ...(typeof post.overlayTextSize === "number" && post.overlayTextSize > 0 ? { fontSize: `${post.overlayTextSize}px` } : {}),
+    ...(post.overlayTextColor ? { color: post.overlayTextColor } : {}),
+    ...(post.overlayItalic ? { fontStyle: "italic" } : {}),
+    ...(post.overlayHighlight
+      ? {
+          backgroundColor: "rgba(0, 0, 0, 0.45)",
+          borderRadius: "999px",
+          padding: "0.25rem 0.7rem",
+        }
+      : {}),
+  };
+  return (
+    <div className={`feed-card-caption-overlay feed-card-caption-overlay-${captionStyle}`} aria-hidden>
+      <span className="feed-card-caption-overlay-text" style={textStyle}>
+        {renderTextWithCustomEmoji(caption, sjHeartEmojiCtx)}
+      </span>
+    </div>
+  );
 }
 
 export interface FanFeedVisibilitySettings {
@@ -638,6 +797,8 @@ function postFromFirestore(
   const likedByRaw = Array.isArray(data.likedBy) ? (data.likedBy as unknown[]) : [];
   const likedBy = likedByRaw.map((v) => String(v));
   const liveStreamPromo = parseLiveStreamPromoMember(data);
+  const poll = parseFanMemberPostPoll(data);
+  const tipGoal = parseFanMemberPostTipGoal(data);
   if (liveStreamPromo?.creatorTestOnly && !opts?.allowCreatorTestLivePromos) {
     return null;
   }
@@ -658,6 +819,14 @@ function postFromFirestore(
       typeof data.likeCount === "number" ? data.likeCount : (data.likesCount as number) || 0,
     commentsCount: commentsCountFallback,
     commentsList: commentsList.length > 0 ? commentsList : undefined,
+    poll,
+    tipGoal,
+    captionStyle: (data.captionStyle as Post["captionStyle"]) ?? "static",
+    overlayText: typeof data.overlayText === "string" ? data.overlayText : undefined,
+    overlayTextColor: typeof data.overlayTextColor === "string" ? data.overlayTextColor : undefined,
+    overlayTextSize: typeof data.overlayTextSize === "number" ? data.overlayTextSize : 18,
+    overlayHighlight: !!data.overlayHighlight,
+    overlayItalic: !!data.overlayItalic,
     pinned: !!(data.pinned as boolean),
     hideComments: data.hideComments as boolean | undefined,
     hideLikes: data.hideLikes as boolean | undefined,
@@ -682,6 +851,7 @@ function FanMemberPostMedia({
   unlockingPostId = null,
   onUnlockPost,
   onUnlockNeedSignIn,
+  sjHeartEmojiCtx,
 }: {
   post: Post;
   primary: string;
@@ -697,6 +867,7 @@ function FanMemberPostMedia({
   onUnlockPost?: (postId: string) => void | Promise<void>;
   /** Shown when user taps Unlock but fanId is missing (e.g. auth still restoring). */
   onUnlockNeedSignIn?: (message: string) => void;
+  sjHeartEmojiCtx: SjHeartEmojiAccessContext;
 }) {
   const [resolvedMedia, setResolvedMedia] = useState<{
     postId: string;
@@ -957,6 +1128,7 @@ function FanMemberPostMedia({
           {...feedImageDownloadGuardProps}
         />
       )}
+      <FanMemberCaptionOverlay post={post} sjHeartEmojiCtx={sjHeartEmojiCtx} />
       {lockedCurrent && (
         <div
           className="fan-feed-media-lock-overlay"
@@ -1331,6 +1503,8 @@ function FanMemberPostDetailModal({
   onLiveStreamTicket,
   onLiveStreamSignIn,
   onLiveStreamWatch,
+  tipsEnabled = true,
+  onSendTip,
   unlockingPostId,
   onUnlockPost,
   onUnlockNeedSignIn,
@@ -1367,6 +1541,8 @@ function FanMemberPostDetailModal({
   onLiveStreamTicket?: (streamId: string) => void | Promise<void>;
   onLiveStreamSignIn?: () => void;
   onLiveStreamWatch?: (promo: LiveStreamPromoOnPost) => void;
+  tipsEnabled?: boolean;
+  onSendTip?: (postId?: string) => void;
   fanPageAdminBypass?: boolean;
   unlockingPostId?: string | null;
   onUnlockPost?: (postId: string) => void | Promise<void>;
@@ -1482,6 +1658,7 @@ function FanMemberPostDetailModal({
                   unlockingPostId={unlockingPostId}
                   onUnlockPost={onUnlockPost}
                   onUnlockNeedSignIn={onUnlockNeedSignIn}
+                  sjHeartEmojiCtx={sjHeartEmojiCtx}
                 />
               ) : null}
                 <div className="feed-comments-modal-panel">
@@ -1513,6 +1690,13 @@ function FanMemberPostDetailModal({
                     <p className="fan-member-viewpost-date-inline">{formatPostCalendarDate(post.createdAt)}</p>
                   </div>
                 )}
+                <FanMemberPostPollView poll={post.poll} />
+                <FanMemberPostTipGoalView
+                  tipGoal={post.tipGoal}
+                  primary={primary}
+                  showTipButton={!(feedSettings?.hideTipButton) && tipsEnabled}
+                  onSendTip={() => onSendTip?.(post.id)}
+                />
                 {post.audioUrls && post.audioUrls.length > 0 ? (
                   <div className="fan-member-post-modal-audio fan-member-post-modal-audio--in-split">
                     {post.audioUrls.map((url) => (
@@ -1724,6 +1908,7 @@ export const FanMemberFeed: React.FC<FanMemberFeedProps> = ({
   const [tipSheetOpen, setTipSheetOpen] = useState(false);
   const [tipSelectedPreset, setTipSelectedPreset] = useState<number | null>(null);
   const [tipCustomAmount, setTipCustomAmount] = useState("");
+  const [tipGoalPostId, setTipGoalPostId] = useState<string | null>(null);
   const [tipLoading, setTipLoading] = useState(false);
   const [unlockingPostId, setUnlockingPostId] = useState<string | null>(null);
   const [liveStreamCheckoutStreamId, setLiveStreamCheckoutStreamId] = useState<string | null>(null);
@@ -1943,7 +2128,8 @@ export const FanMemberFeed: React.FC<FanMemberFeedProps> = ({
     };
   }, [tipSheetOpen]);
 
-  const openTipSheet = useCallback(() => {
+  const openTipSheet = useCallback((postId?: string) => {
+    setTipGoalPostId(postId || null);
     setTipSelectedPreset(null);
     setTipCustomAmount("");
     setTipSheetOpen(true);
@@ -1969,14 +2155,14 @@ export const FanMemberFeed: React.FC<FanMemberFeedProps> = ({
     }
     setTipLoading(true);
     try {
-      const url = await startFanTipCheckoutSession(creatorId, tipAmountCents, anonymousTipEmail || undefined);
+      const url = await startFanTipCheckoutSession(creatorId, tipAmountCents, anonymousTipEmail || undefined, tipGoalPostId || undefined);
       window.location.href = url;
     } catch (e) {
       showToast?.(e instanceof Error ? e.message : "Could not start checkout.", "error");
     } finally {
       setTipLoading(false);
     }
-  }, [creatorId, tipAmountCents, showToast]);
+  }, [creatorId, tipAmountCents, tipGoalPostId, showToast]);
 
   const handleUnlockPost = useCallback(
     async (postId: string) => {
@@ -2178,6 +2364,7 @@ export const FanMemberFeed: React.FC<FanMemberFeedProps> = ({
                 unlockingPostId={unlockingPostId}
                 onUnlockPost={handleUnlockPost}
                 onUnlockNeedSignIn={(m) => showToast?.(m, "error")}
+                sjHeartEmojiCtx={sjHeartEmojiCtx}
               />
 
               {post.audioUrls && post.audioUrls.length > 0 ? (
@@ -2248,14 +2435,14 @@ export const FanMemberFeed: React.FC<FanMemberFeedProps> = ({
                   </button>
                 )}
 
-                {!feedSettings?.hideTipButton && tipsEnabled && (
+                {!post.tipGoal && !feedSettings?.hideTipButton && tipsEnabled && (
                   <button
                     type="button"
                     className="feed-card-send-tip"
                     aria-label="Send a tip"
                     aria-haspopup="dialog"
                     aria-expanded={tipSheetOpen}
-                    onClick={openTipSheet}
+                    onClick={() => openTipSheet()}
                   >
                     <span className="tip-currency">$</span>
                     <span>SEND TIP</span>
@@ -2281,6 +2468,13 @@ export const FanMemberFeed: React.FC<FanMemberFeedProps> = ({
                   <span style={{ fontWeight: 600, color: primary, marginRight: "0.35rem" }}>{displayName}</span>
                   {renderTextWithCustomEmoji(post.content, sjHeartEmojiCtx)}
                 </p>
+                <FanMemberPostPollView poll={post.poll} />
+                <FanMemberPostTipGoalView
+                  tipGoal={post.tipGoal}
+                  primary={primary}
+                  showTipButton={!feedSettings?.hideTipButton && tipsEnabled}
+                  onSendTip={() => openTipSheet(post.id)}
+                />
               </div>
 
               {!(feedSettings?.hideComments || post.hideComments) && (
@@ -2517,6 +2711,8 @@ export const FanMemberFeed: React.FC<FanMemberFeedProps> = ({
         onLiveStreamTicket={handleLiveStreamTicket}
         onLiveStreamSignIn={() => showToast?.("Sign in to get a ticket.", "error")}
         onLiveStreamWatch={handleLiveStreamWatch}
+        tipsEnabled={tipsEnabled}
+        onSendTip={(postId) => openTipSheet(postId)}
       />
 
       {liveStreamWatch ? (
@@ -2904,6 +3100,7 @@ export const FanMemberSaved: React.FC<FanMemberSavedProps> = ({
                 unlockingPostId={unlockingPostIdSaved}
                 onUnlockPost={handleUnlockPostSaved}
                 onUnlockNeedSignIn={(m) => showToastSaved?.(m, "error")}
+                sjHeartEmojiCtx={sjHeartEmojiCtxSaved}
               />
               {post.postKind === "live_stream_promo" && post.liveStreamPromo?.streamId ? (
                 <div className="feed-card-live-stream-promo-wrap fan-feed-live-stream-promo px-1">
@@ -2943,6 +3140,12 @@ export const FanMemberSaved: React.FC<FanMemberSavedProps> = ({
                   <span style={{ fontWeight: 600, color: primary, marginRight: "0.35rem" }}>{displayName}</span>
                   {renderTextWithCustomEmoji(post.content, sjHeartEmojiCtxSaved)}
                 </p>
+                <FanMemberPostPollView poll={post.poll} />
+                <FanMemberPostTipGoalView
+                  tipGoal={post.tipGoal}
+                  primary={primary}
+                  showTipButton={false}
+                />
               </div>
               {!(feedSettings?.hideComments || post.hideComments) && (
                 <div className="fan-feed-post-footer">

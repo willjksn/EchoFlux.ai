@@ -296,8 +296,8 @@ const FanHubSwitch: React.FC<{
     aria-labelledby={ariaLabelledBy}
     disabled={disabled}
     onClick={() => onCheckedChange(!checked)}
-    className={`relative inline-block h-6 w-11 shrink-0 rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus-visible:ring-2 focus-visible:ring-pink-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-800 ${
-      checked ? "bg-pink-500" : "bg-gray-200 dark:bg-gray-600"
+    className={`relative inline-block h-6 w-11 shrink-0 rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-800 ${
+      checked ? "bg-primary-500" : "bg-gray-200 dark:bg-gray-600"
     } disabled:opacity-50 disabled:cursor-not-allowed`}
   >
     {/* Thumb: w-11 (44px) − border-2×2 (8px) = 40px track; 20px knob + 2px inset each side → translate 16px (x-4), not x-5 */}
@@ -1966,11 +1966,11 @@ Write 2-4 sentences that are engaging and on-topic.`;
       {showComposer && (
         <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/50 p-4 overflow-y-auto">
           <div 
-            className="bg-gradient-to-b from-pink-50 to-white dark:from-gray-800 dark:to-gray-900 rounded-2xl shadow-2xl w-full max-w-2xl my-8"
-            style={{ boxShadow: "0 8px 40px rgba(212, 85, 139, 0.15)" }}
+            className="bg-gradient-to-b from-primary-50 to-white dark:from-gray-800 dark:to-gray-900 rounded-2xl shadow-2xl w-full max-w-2xl my-8"
+            style={{ boxShadow: "0 8px 40px rgba(99, 102, 241, 0.15)" }}
           >
             {/* Header */}
-            <div className="flex items-center justify-between p-5 border-b border-pink-100 dark:border-gray-700">
+            <div className="flex items-center justify-between p-5 border-b border-primary-100 dark:border-gray-700">
               <div>
                 <h3 className="text-xl font-bold text-gray-900 dark:text-white">{editingPostId ? "Edit Post" : "Create Post"}</h3>
                 <p className="text-sm text-gray-500 dark:text-gray-400">Share with your fans</p>
@@ -2232,7 +2232,7 @@ Write 2-4 sentences that are engaging and on-topic.`;
                     placeholder="Write your caption..."
                     rows={4}
                     maxLength={2200}
-                    className="w-full px-3 py-2 pr-12 border border-gray-200 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white resize-none focus:ring-2 focus:ring-pink-500 focus:border-transparent"
+                    className="w-full px-3 py-2 pr-12 border border-gray-200 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white resize-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                   />
                   <div className="absolute right-2 top-2">
                     <EmojiButton includeSjHeartEmoji={includeSjHeartEmoji} onSelect={(emoji) => setCaption((prev) => prev + emoji)} />
@@ -2248,7 +2248,7 @@ Write 2-4 sentences that are engaging and on-topic.`;
                     type="button"
                     onClick={() => generateCaption("generate")}
                     disabled={generating || media.length === 0}
-                    className="flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-lg text-sm font-medium disabled:opacity-50 hover:from-purple-600 hover:to-pink-600 transition"
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-purple-500 to-primary-500 text-white rounded-lg text-sm font-medium disabled:opacity-50 hover:from-purple-600 hover:to-primary-600 transition"
                   >
                     <SparklesIcon />
                     {generating ? "Generating..." : "Generate"}
@@ -2309,8 +2309,8 @@ Write 2-4 sentences that are engaging and on-topic.`;
                   onClick={() => setLockEnabled(!lockEnabled)}
                   className={`w-full flex items-center justify-between p-3 rounded-lg border-2 border-dashed transition ${
                     lockEnabled
-                      ? "border-pink-400 bg-pink-50 dark:bg-pink-900/20"
-                      : "border-gray-300 dark:border-gray-600 hover:border-pink-400"
+                      ? "border-primary-400 bg-primary-50 dark:bg-primary-900/20"
+                      : "border-gray-300 dark:border-gray-600 hover:border-primary-400"
                   }`}
                 >
                   <div className="flex items-center gap-3">
@@ -2324,7 +2324,7 @@ Write 2-4 sentences that are engaging and on-topic.`;
                       </p>
                     </div>
                   </div>
-                  <div className={`w-10 h-6 rounded-full transition ${lockEnabled ? "bg-pink-500" : "bg-gray-300 dark:bg-gray-600"}`}>
+                  <div className={`w-10 h-6 rounded-full transition ${lockEnabled ? "bg-primary-500" : "bg-gray-300 dark:bg-gray-600"}`}>
                     <div className={`w-5 h-5 bg-white rounded-full shadow transform transition ${lockEnabled ? "translate-x-4" : "translate-x-0.5"} mt-0.5`} />
                   </div>
                 </button>
@@ -2372,10 +2372,10 @@ Write 2-4 sentences that are engaging and on-topic.`;
 
               {/* Live stream — Elite; Pro sees upgrade + non-interactive control */}
               {creatorCanLiveStream || liveStreamPromoEnabled ? (
-                <div className="rounded-xl border border-pink-200/70 dark:border-pink-900/45 bg-gradient-to-br from-pink-50/90 via-white to-rose-50/50 dark:from-gray-800 dark:via-gray-800/95 dark:to-pink-950/25 p-4 shadow-sm ring-1 ring-pink-100/50 dark:ring-pink-900/20">
+                <div className="rounded-xl border border-primary-200/70 dark:border-primary-900/45 bg-gradient-to-br from-primary-50/90 via-white to-primary-50/50 dark:from-gray-800 dark:via-gray-800/95 dark:to-primary-950/25 p-4 shadow-sm ring-1 ring-primary-100/50 dark:ring-primary-900/20">
                   <div className="flex items-start justify-between gap-3 mb-2">
                     <div className="flex items-center gap-2 min-w-0">
-                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-pink-500/10 text-pink-600 dark:bg-pink-500/15 dark:text-pink-300">
+                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary-500/10 text-primary-600 dark:bg-primary-500/15 dark:text-primary-300">
                         <VideoCamIcon />
                       </span>
                       <div className="min-w-0">
@@ -2391,7 +2391,7 @@ Write 2-4 sentences that are engaging and on-topic.`;
                       <button
                         type="button"
                         onClick={() => setShowLiveStreamHelpModal(true)}
-                        className="shrink-0 text-xs font-medium text-pink-600 dark:text-pink-400 hover:text-pink-700 dark:hover:text-pink-300 underline-offset-2 hover:underline"
+                        className="shrink-0 text-xs font-medium text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 underline-offset-2 hover:underline"
                       >
                         How it works
                       </button>
@@ -2422,7 +2422,7 @@ Write 2-4 sentences that are engaging and on-topic.`;
                     }}
                   />
                   {liveStreamPromoEnabled && (
-                    <div className="mt-3 space-y-3 border-t border-pink-100/80 dark:border-pink-900/30 pt-3">
+                    <div className="mt-3 space-y-3 border-t border-primary-100/80 dark:border-primary-900/30 pt-3">
                       <input
                         type="text"
                         value={liveStreamTitle}
@@ -2430,7 +2430,7 @@ Write 2-4 sentences that are engaging and on-topic.`;
                         placeholder="Stream title on the card"
                         disabled={liveStreamFieldsLocked}
                         readOnly={liveStreamFieldsLocked}
-                        className="w-full px-3 py-2 border border-pink-200/80 dark:border-gray-600 rounded-lg bg-white/90 dark:bg-gray-900/50 text-gray-900 dark:text-white text-sm disabled:opacity-60"
+                        className="w-full px-3 py-2 border border-primary-200/80 dark:border-gray-600 rounded-lg bg-white/90 dark:bg-gray-900/50 text-gray-900 dark:text-white text-sm disabled:opacity-60"
                       />
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div>
@@ -2444,7 +2444,7 @@ Write 2-4 sentences that are engaging and on-topic.`;
                             onChange={(e) => setLiveStreamStartLocal(e.target.value)}
                             disabled={liveStreamFieldsLocked}
                             readOnly={liveStreamFieldsLocked}
-                            className="w-full px-3 py-2 border border-pink-200/80 dark:border-gray-600 rounded-lg bg-white/90 dark:bg-gray-900/50 text-gray-900 dark:text-white text-sm disabled:opacity-60"
+                            className="w-full px-3 py-2 border border-primary-200/80 dark:border-gray-600 rounded-lg bg-white/90 dark:bg-gray-900/50 text-gray-900 dark:text-white text-sm disabled:opacity-60"
                           />
                         </div>
                         <div>
@@ -2463,12 +2463,12 @@ Write 2-4 sentences that are engaging and on-topic.`;
                               placeholder="0"
                               disabled={liveStreamFieldsLocked}
                               readOnly={liveStreamFieldsLocked}
-                              className="w-full pl-7 pr-3 py-2 border border-pink-200/80 dark:border-gray-600 rounded-lg bg-white/90 dark:bg-gray-900/50 text-gray-900 dark:text-white text-sm disabled:opacity-60"
+                              className="w-full pl-7 pr-3 py-2 border border-primary-200/80 dark:border-gray-600 rounded-lg bg-white/90 dark:bg-gray-900/50 text-gray-900 dark:text-white text-sm disabled:opacity-60"
                             />
                           </div>
                         </div>
                       </div>
-                      <div className="rounded-lg border border-pink-200/60 dark:border-gray-600 bg-white/70 dark:bg-gray-900/35 px-3 py-2.5">
+                      <div className="rounded-lg border border-primary-200/60 dark:border-gray-600 bg-white/70 dark:bg-gray-900/35 px-3 py-2.5">
                         <div className="flex items-start justify-between gap-3">
                           <div className="min-w-0 flex-1 pr-2">
                             <p className="text-sm font-medium text-gray-800 dark:text-gray-100">Paid members included</p>
@@ -2578,7 +2578,7 @@ Write 2-4 sentences that are engaging and on-topic.`;
                         <button
                           type="button"
                           onClick={() => setActivePage("pricing")}
-                          className="text-xs font-medium text-pink-600 dark:text-pink-400 hover:underline"
+                          className="text-xs font-medium text-primary-600 dark:text-primary-400 hover:underline"
                         >
                           View pricing
                         </button>
@@ -2597,8 +2597,8 @@ Write 2-4 sentences that are engaging and on-topic.`;
                   onClick={() => setPollEnabled(!pollEnabled)}
                   className={`flex flex-col items-center gap-1 p-3 rounded-lg border-2 border-dashed transition ${
                     pollEnabled
-                      ? "border-pink-400 bg-pink-50 dark:bg-pink-900/20 text-pink-600 dark:text-pink-400"
-                      : "border-gray-300 dark:border-gray-600 text-gray-500 dark:text-gray-400 hover:border-pink-400"
+                      ? "border-primary-400 bg-primary-50 dark:bg-primary-900/20 text-primary-600 dark:text-primary-400"
+                      : "border-gray-300 dark:border-gray-600 text-gray-500 dark:text-gray-400 hover:border-primary-400"
                   } disabled:opacity-40 disabled:pointer-events-none`}
                 >
                   <PollIcon />
@@ -2612,8 +2612,8 @@ Write 2-4 sentences that are engaging and on-topic.`;
                   onClick={() => setTipGoalEnabled(!tipGoalEnabled)}
                   className={`flex flex-col items-center gap-1 p-3 rounded-lg border-2 border-dashed transition ${
                     tipGoalEnabled
-                      ? "border-pink-400 bg-pink-50 dark:bg-pink-900/20 text-pink-600 dark:text-pink-400"
-                      : "border-gray-300 dark:border-gray-600 text-gray-500 dark:text-gray-400 hover:border-pink-400"
+                      ? "border-primary-400 bg-primary-50 dark:bg-primary-900/20 text-primary-600 dark:text-primary-400"
+                      : "border-gray-300 dark:border-gray-600 text-gray-500 dark:text-gray-400 hover:border-primary-400"
                   } disabled:opacity-40 disabled:pointer-events-none`}
                 >
                   <TipIcon />
@@ -2627,8 +2627,8 @@ Write 2-4 sentences that are engaging and on-topic.`;
                   onClick={() => setOverlayEnabled(!overlayEnabled)}
                   className={`flex flex-col items-center gap-1 p-3 rounded-lg border-2 border-dashed transition ${
                     overlayEnabled
-                      ? "border-pink-400 bg-pink-50 dark:bg-pink-900/20 text-pink-600 dark:text-pink-400"
-                      : "border-gray-300 dark:border-gray-600 text-gray-500 dark:text-gray-400 hover:border-pink-400"
+                      ? "border-primary-400 bg-primary-50 dark:bg-primary-900/20 text-primary-600 dark:text-primary-400"
+                      : "border-gray-300 dark:border-gray-600 text-gray-500 dark:text-gray-400 hover:border-primary-400"
                   } disabled:opacity-40 disabled:pointer-events-none`}
                 >
                   <TextIcon />
@@ -2653,8 +2653,8 @@ Write 2-4 sentences that are engaging and on-topic.`;
                     }}
                     className={`flex flex-col items-center gap-1 p-3 rounded-lg border-2 border-dashed transition ${
                       liveStreamPromoEnabled
-                        ? "border-pink-400 bg-pink-50 dark:bg-pink-900/20 text-pink-600 dark:text-pink-400"
-                        : "border-gray-300 dark:border-gray-600 text-gray-500 dark:text-gray-400 hover:border-pink-400"
+                        ? "border-primary-400 bg-primary-50 dark:bg-primary-900/20 text-primary-600 dark:text-primary-400"
+                        : "border-gray-300 dark:border-gray-600 text-gray-500 dark:text-gray-400 hover:border-primary-400"
                     }`}
                   >
                     <VideoCamIcon />
@@ -2662,7 +2662,7 @@ Write 2-4 sentences that are engaging and on-topic.`;
                   </button>
                 ) : liveStreamPromoEnabled ? (
                   <div
-                    className="flex flex-col items-center gap-0.5 p-3 rounded-lg border-2 border-dashed border-pink-400/70 bg-pink-50/50 dark:bg-pink-900/15 text-pink-600 dark:text-pink-400 opacity-75 cursor-not-allowed select-none"
+                    className="flex flex-col items-center gap-0.5 p-3 rounded-lg border-2 border-dashed border-primary-400/70 bg-primary-50/50 dark:bg-primary-900/15 text-primary-600 dark:text-primary-400 opacity-75 cursor-not-allowed select-none"
                     title="Live stream editing requires Elite"
                   >
                     <VideoCamIcon />
@@ -2683,17 +2683,20 @@ Write 2-4 sentences that are engaging and on-topic.`;
 
               {/* Poll Editor */}
               {pollEnabled && (
-                <div className="bg-pink-50 dark:bg-pink-900/20 rounded-xl p-4 border border-pink-200 dark:border-pink-800">
-                  <h4 className="text-sm font-semibold text-pink-700 dark:text-pink-300 mb-3 flex items-center gap-2">
+                <div className="bg-primary-50 dark:bg-primary-900/20 rounded-xl p-4 border border-primary-200 dark:border-primary-800">
+                  <h4 className="text-sm font-semibold text-primary-700 dark:text-primary-300 mb-3 flex items-center gap-2">
                     <PollIcon /> Poll
                   </h4>
-                  <input
-                    type="text"
-                    value={pollQuestion}
-                    onChange={(e) => setPollQuestion(e.target.value)}
-                    placeholder="Ask a question..."
-                    className="w-full px-3 py-2 mb-3 border border-pink-200 dark:border-pink-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
-                  />
+                  <div className="mb-3 flex items-center gap-2">
+                    <input
+                      type="text"
+                      value={pollQuestion}
+                      onChange={(e) => setPollQuestion(e.target.value)}
+                      placeholder="Ask a question..."
+                      className="min-w-0 flex-1 px-3 py-2 border border-primary-200 dark:border-primary-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+                    />
+                    <EmojiButton includeSjHeartEmoji={includeSjHeartEmoji} onSelect={(emoji) => setPollQuestion((prev) => prev + emoji)} />
+                  </div>
                   <div className="space-y-2">
                     {pollOptions.map((option, index) => (
                       <div key={index} className="flex items-center gap-2">
@@ -2702,8 +2705,9 @@ Write 2-4 sentences that are engaging and on-topic.`;
                           value={option}
                           onChange={(e) => updatePollOption(index, e.target.value)}
                           placeholder={`Option ${index + 1}`}
-                          className="flex-1 px-3 py-2 border border-pink-200 dark:border-pink-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm"
+                          className="flex-1 px-3 py-2 border border-primary-200 dark:border-primary-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm"
                         />
+                        <EmojiButton includeSjHeartEmoji={includeSjHeartEmoji} onSelect={(emoji) => updatePollOption(index, `${option}${emoji}`)} />
                         {pollOptions.length > 2 && (
                           <button type="button" onClick={() => removePollOption(index)} className="p-2 text-red-500 hover:text-red-600">
                             <TrashIcon />
@@ -2713,7 +2717,7 @@ Write 2-4 sentences that are engaging and on-topic.`;
                     ))}
                   </div>
                   {pollOptions.length < 6 && (
-                    <button type="button" onClick={addPollOption} className="mt-2 text-sm text-pink-600 dark:text-pink-400 hover:text-pink-700 font-medium">
+                    <button type="button" onClick={addPollOption} className="mt-2 text-sm text-primary-600 dark:text-primary-400 hover:text-primary-700 font-medium">
                       + Add Option
                     </button>
                   )}
@@ -2722,19 +2726,22 @@ Write 2-4 sentences that are engaging and on-topic.`;
 
               {/* Tip Goal Editor */}
               {tipGoalEnabled && (
-                <div className="bg-pink-50 dark:bg-pink-900/20 rounded-xl p-4 border border-pink-200 dark:border-pink-800">
-                  <h4 className="text-sm font-semibold text-pink-700 dark:text-pink-300 mb-3 flex items-center gap-2">
+                <div className="bg-primary-50 dark:bg-primary-900/20 rounded-xl p-4 border border-primary-200 dark:border-primary-800">
+                  <h4 className="text-sm font-semibold text-primary-700 dark:text-primary-300 mb-3 flex items-center gap-2">
                     <TipIcon /> Tip Goal
                   </h4>
-                  <input
-                    type="text"
-                    value={tipGoalDescription}
-                    onChange={(e) => setTipGoalDescription(e.target.value)}
-                    placeholder="What's the goal? (e.g., Help me reach my goal!)"
-                    className="w-full px-3 py-2 mb-3 border border-pink-200 dark:border-pink-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
-                  />
+                  <div className="mb-3 flex items-center gap-2">
+                    <input
+                      type="text"
+                      value={tipGoalDescription}
+                      onChange={(e) => setTipGoalDescription(e.target.value)}
+                      placeholder="What's the goal? (e.g., Help me reach my goal!)"
+                      className="min-w-0 flex-1 px-3 py-2 border border-primary-200 dark:border-primary-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+                    />
+                    <EmojiButton includeSjHeartEmoji={includeSjHeartEmoji} onSelect={(emoji) => setTipGoalDescription((prev) => prev + emoji)} />
+                  </div>
                   <div className="flex items-center gap-2">
-                    <span className="text-sm text-pink-700 dark:text-pink-300">Target:</span>
+                    <span className="text-sm text-primary-700 dark:text-primary-300">Target:</span>
                     <div className="relative">
                       <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">$</span>
                       <input
@@ -2743,7 +2750,7 @@ Write 2-4 sentences that are engaging and on-topic.`;
                         value={tipGoalAmount}
                         onChange={(e) => setTipGoalAmount(e.target.value)}
                         placeholder="0"
-                        className="w-28 pl-7 pr-3 py-2 border border-pink-200 dark:border-pink-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm"
+                        className="w-28 pl-7 pr-3 py-2 border border-primary-200 dark:border-primary-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm"
                       />
                     </div>
                   </div>
@@ -2752,24 +2759,27 @@ Write 2-4 sentences that are engaging and on-topic.`;
 
               {/* Text Overlay Editor */}
               {overlayEnabled && (
-                <div className="bg-pink-50 dark:bg-pink-900/20 rounded-xl p-4 border border-pink-200 dark:border-pink-800">
-                  <h4 className="text-sm font-semibold text-pink-700 dark:text-pink-300 mb-3 flex items-center gap-2">
+                <div className="bg-primary-50 dark:bg-primary-900/20 rounded-xl p-4 border border-primary-200 dark:border-primary-800">
+                  <h4 className="text-sm font-semibold text-primary-700 dark:text-primary-300 mb-3 flex items-center gap-2">
                     <TextIcon /> Text Overlay
                   </h4>
-                  <textarea
-                    value={overlayText}
-                    onChange={(e) => setOverlayText(e.target.value)}
-                    placeholder="Text to show on image..."
-                    rows={2}
-                    className="w-full px-3 py-2 mb-3 border border-pink-200 dark:border-pink-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white resize-none"
-                  />
+                  <div className="mb-3 flex items-start gap-2">
+                    <textarea
+                      value={overlayText}
+                      onChange={(e) => setOverlayText(e.target.value)}
+                      placeholder="Text to show on image..."
+                      rows={2}
+                      className="min-w-0 flex-1 px-3 py-2 border border-primary-200 dark:border-primary-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white resize-none"
+                    />
+                    <EmojiButton includeSjHeartEmoji={includeSjHeartEmoji} onSelect={(emoji) => setOverlayText((prev) => prev + emoji)} />
+                  </div>
                   <div className="flex flex-wrap gap-3 mb-3">
                     <div className="flex items-center gap-2">
-                      <span className="text-xs text-pink-700 dark:text-pink-300">Animation:</span>
+                      <span className="text-xs text-primary-700 dark:text-primary-300">Animation:</span>
                       <select
                         value={overlayStyle}
                         onChange={(e) => setOverlayStyle(e.target.value as CaptionStyle)}
-                        className="px-2 py-1 text-sm border border-pink-200 dark:border-pink-700 rounded bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300"
+                        className="px-2 py-1 text-sm border border-primary-200 dark:border-primary-700 rounded bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300"
                       >
                         <option value="static">Static</option>
                         <option value="scroll-up">Scroll Up</option>
@@ -2778,16 +2788,16 @@ Write 2-4 sentences that are engaging and on-topic.`;
                       </select>
                     </div>
                     <div className="flex items-center gap-2">
-                      <span className="text-xs text-pink-700 dark:text-pink-300">Color:</span>
+                      <span className="text-xs text-primary-700 dark:text-primary-300">Color:</span>
                       <input
                         type="color"
                         value={overlayColor}
                         onChange={(e) => setOverlayColor(e.target.value)}
-                        className="w-8 h-8 rounded border border-pink-200 dark:border-pink-700 cursor-pointer"
+                        className="w-8 h-8 rounded border border-primary-200 dark:border-primary-700 cursor-pointer"
                       />
                     </div>
                     <div className="flex items-center gap-2">
-                      <span className="text-xs text-pink-700 dark:text-pink-300">Size:</span>
+                      <span className="text-xs text-primary-700 dark:text-primary-300">Size:</span>
                       <input
                         type="range"
                         min={10}
@@ -2796,25 +2806,25 @@ Write 2-4 sentences that are engaging and on-topic.`;
                         onChange={(e) => setOverlaySize(Number(e.target.value))}
                         className="w-20"
                       />
-                      <span className="text-xs text-pink-600">{overlaySize}px</span>
+                      <span className="text-xs text-primary-600">{overlaySize}px</span>
                     </div>
                   </div>
                   <div className="flex gap-3">
-                    <label className="flex items-center gap-1.5 text-sm text-pink-700 dark:text-pink-300 cursor-pointer">
+                    <label className="flex items-center gap-1.5 text-sm text-primary-700 dark:text-primary-300 cursor-pointer">
                       <input
                         type="checkbox"
                         checked={overlayHighlight}
                         onChange={(e) => setOverlayHighlight(e.target.checked)}
-                        className="rounded border-pink-300 text-pink-500"
+                        className="rounded border-primary-300 text-primary-500"
                       />
                       Highlight
                     </label>
-                    <label className="flex items-center gap-1.5 text-sm text-pink-700 dark:text-pink-300 cursor-pointer">
+                    <label className="flex items-center gap-1.5 text-sm text-primary-700 dark:text-primary-300 cursor-pointer">
                       <input
                         type="checkbox"
                         checked={overlayItalic}
                         onChange={(e) => setOverlayItalic(e.target.checked)}
-                        className="rounded border-pink-300 text-pink-500"
+                        className="rounded border-primary-300 text-primary-500"
                       />
                       Italic
                     </label>
@@ -2852,7 +2862,7 @@ Write 2-4 sentences that are engaging and on-topic.`;
             </div>
 
             {/* Footer */}
-            <div className="flex items-center justify-between p-5 border-t border-pink-100 dark:border-gray-700 bg-white/50 dark:bg-gray-800/50">
+            <div className="flex items-center justify-between p-5 border-t border-primary-100 dark:border-gray-700 bg-white/50 dark:bg-gray-800/50">
               <button
                 type="button"
                 onClick={() => handlePublish("draft")}
@@ -2885,7 +2895,7 @@ Write 2-4 sentences that are engaging and on-topic.`;
                     (!caption.trim() && media.length === 0) ||
                     (liveStreamPromoEnabled && (!liveStreamTitle.trim() || !liveStreamStartLocal.trim()))
                   }
-                  className="px-6 py-2.5 bg-gradient-to-r from-pink-500 to-rose-500 text-white rounded-lg font-semibold disabled:opacity-50 hover:from-pink-600 hover:to-rose-600 transition shadow-lg shadow-pink-500/25"
+                  className="px-6 py-2.5 bg-gradient-to-r from-primary-500 to-primary-600 text-white rounded-lg font-semibold disabled:opacity-50 hover:from-primary-600 hover:to-primary-700 transition shadow-lg shadow-primary-500/25"
                 >
                   {publishing ? "Publishing..." : "Publish Now"}
                 </button>
@@ -2968,7 +2978,7 @@ Write 2-4 sentences that are engaging and on-topic.`;
                 type="button"
                 onClick={handleScheduleConfirm}
                 disabled={publishing || liveStreamPromoEnabled || !scheduleDate || !scheduleTime}
-                className="flex items-center gap-2 px-5 py-2 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-lg font-semibold disabled:opacity-50 hover:from-purple-600 hover:to-pink-600 transition"
+                className="flex items-center gap-2 px-5 py-2 bg-gradient-to-r from-purple-500 to-primary-500 text-white rounded-lg font-semibold disabled:opacity-50 hover:from-purple-600 hover:to-primary-600 transition"
               >
                 {publishing ? "Scheduling..." : "Schedule Post"}
               </button>
@@ -2988,12 +2998,12 @@ Write 2-4 sentences that are engaging and on-topic.`;
             role="dialog"
             aria-modal="true"
             aria-labelledby="fanhub-live-stream-help-title"
-            className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-lg max-h-[min(85vh,32rem)] flex flex-col border border-pink-100 dark:border-gray-700"
+            className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-lg max-h-[min(85vh,32rem)] flex flex-col border border-primary-100 dark:border-gray-700"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-start justify-between gap-3 p-4 border-b border-pink-100 dark:border-gray-700 bg-gradient-to-r from-pink-50/80 to-white dark:from-pink-950/30 dark:to-gray-800">
+            <div className="flex items-start justify-between gap-3 p-4 border-b border-primary-100 dark:border-gray-700 bg-gradient-to-r from-primary-50/80 to-white dark:from-primary-950/30 dark:to-gray-800">
               <div className="flex items-start gap-3 min-w-0">
-                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-pink-500/10 text-pink-600 dark:text-pink-300">
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary-500/10 text-primary-600 dark:text-primary-300">
                   <VideoCamIcon />
                 </span>
                 <div>
@@ -3016,7 +3026,7 @@ Write 2-4 sentences that are engaging and on-topic.`;
             </div>
             <div className="overflow-y-auto p-4 space-y-4 text-sm text-gray-700 dark:text-gray-300">
               <section>
-                <h4 className="text-xs font-semibold uppercase tracking-wide text-pink-600 dark:text-pink-400 mb-1.5">
+                <h4 className="text-xs font-semibold uppercase tracking-wide text-primary-600 dark:text-primary-400 mb-1.5">
                   Publishing
                 </h4>
                 <ul className="list-disc list-inside space-y-1 text-[13px] leading-relaxed text-gray-600 dark:text-gray-400">
@@ -3025,7 +3035,7 @@ Write 2-4 sentences that are engaging and on-topic.`;
                 </ul>
               </section>
               <section>
-                <h4 className="text-xs font-semibold uppercase tracking-wide text-pink-600 dark:text-pink-400 mb-1.5">
+                <h4 className="text-xs font-semibold uppercase tracking-wide text-primary-600 dark:text-primary-400 mb-1.5">
                   Ticket price
                 </h4>
                 <ul className="list-disc list-inside space-y-1 text-[13px] leading-relaxed text-gray-600 dark:text-gray-400">
@@ -3034,7 +3044,7 @@ Write 2-4 sentences that are engaging and on-topic.`;
                 </ul>
               </section>
               <section>
-                <h4 className="text-xs font-semibold uppercase tracking-wide text-pink-600 dark:text-pink-400 mb-1.5">
+                <h4 className="text-xs font-semibold uppercase tracking-wide text-primary-600 dark:text-primary-400 mb-1.5">
                   Paid members included
                 </h4>
                 <p className="text-[13px] leading-relaxed text-gray-600 dark:text-gray-400">
@@ -3045,7 +3055,7 @@ Write 2-4 sentences that are engaging and on-topic.`;
                 </p>
               </section>
               <section>
-                <h4 className="text-xs font-semibold uppercase tracking-wide text-pink-600 dark:text-pink-400 mb-1.5">
+                <h4 className="text-xs font-semibold uppercase tracking-wide text-primary-600 dark:text-primary-400 mb-1.5">
                   Rehearsal
                 </h4>
                 <p className="text-[13px] leading-relaxed text-gray-600 dark:text-gray-400">
@@ -3057,7 +3067,7 @@ Write 2-4 sentences that are engaging and on-topic.`;
               <button
                 type="button"
                 onClick={() => setShowLiveStreamHelpModal(false)}
-                className="px-4 py-2 rounded-lg bg-gradient-to-r from-pink-500 to-rose-500 text-white text-sm font-semibold hover:from-pink-600 hover:to-rose-600 shadow-sm"
+                className="px-4 py-2 rounded-lg bg-gradient-to-r from-primary-500 to-primary-600 text-white text-sm font-semibold hover:from-primary-600 hover:to-primary-700 shadow-sm"
               >
                 Got it
               </button>
@@ -3091,7 +3101,7 @@ Write 2-4 sentences that are engaging and on-topic.`;
             <div className="flex-1 overflow-y-auto p-4">
               {loadingVault ? (
                 <div className="text-center py-12">
-                  <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-pink-500 mb-3"></div>
+                  <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-primary-500 mb-3"></div>
                   <p className="text-gray-500 dark:text-gray-400">Loading your vault...</p>
                 </div>
               ) : vaultItems.length === 0 ? (
@@ -3109,7 +3119,7 @@ Write 2-4 sentences that are engaging and on-topic.`;
                       key={`${item.url}\0${item.path || item.name}`}
                       type="button"
                       onClick={() => addFromVault(item)}
-                      className="fh-vault-tile aspect-square rounded-lg overflow-hidden bg-gray-100 dark:bg-gray-700 hover:ring-2 hover:ring-pink-500 transition relative group"
+                      className="fh-vault-tile aspect-square rounded-lg overflow-hidden bg-gray-100 dark:bg-gray-700 hover:ring-2 hover:ring-primary-500 transition relative group"
                     >
                       {item.type === "video" ? (
                         <>
@@ -3127,7 +3137,7 @@ Write 2-4 sentences that are engaging and on-topic.`;
                           </div>
                         </>
                       ) : item.type === "audio" ? (
-                        <div className="w-full h-full flex flex-col items-center justify-center bg-pink-100 dark:bg-pink-900/30 text-pink-600 dark:text-pink-400 p-2">
+                        <div className="w-full h-full flex flex-col items-center justify-center bg-primary-100 dark:bg-primary-900/30 text-primary-600 dark:text-primary-400 p-2">
                           <MicIcon />
                           <audio
                             src={item.url}
@@ -3147,7 +3157,7 @@ Write 2-4 sentences that are engaging and on-topic.`;
                         />
                       )}
                       <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition flex items-center justify-center">
-                        <span className="text-white opacity-0 group-hover:opacity-100 font-medium text-sm bg-pink-500 px-3 py-1 rounded-full shadow-lg">
+                        <span className="text-white opacity-0 group-hover:opacity-100 font-medium text-sm bg-primary-500 px-3 py-1 rounded-full shadow-lg">
                           Select
                         </span>
                       </div>
@@ -3169,7 +3179,7 @@ Write 2-4 sentences that are engaging and on-topic.`;
               ) : null}
             </div>
             <div className="p-3 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 text-center text-sm text-gray-500 dark:text-gray-400">
-              Tip: Upload more media from <span className="font-medium text-pink-500">My Vault</span> in the sidebar
+              Tip: Upload more media from <span className="font-medium text-primary-500">My Vault</span> in the sidebar
             </div>
           </div>
         </div>

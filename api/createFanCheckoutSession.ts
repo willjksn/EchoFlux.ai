@@ -630,6 +630,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (type === "tip") {
       const tipAmountCents = Math.min(100000, Math.max(100, Number(amountCents) || 100)); // $1 min, $1000 max
       const tipperName = tipHandle?.trim() || "Anonymous";
+      const tipPostId = typeof postId === "string" && postId.trim() ? postId.trim() : "";
       
       const tipSessionParams: Stripe.Checkout.SessionCreateParams = {
         mode: "payment",
@@ -658,6 +659,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           type: "tip",
           tipHandle: tipperName,
           isPlatformOwner: isPlatformOwner ? "true" : "false",
+          ...(tipPostId ? { postId: tipPostId } : {}),
           ...(fanEmail ? { fanEmail } : {}),
         },
         ...(fanEmail ? { customer_email: fanEmail } : {}),
