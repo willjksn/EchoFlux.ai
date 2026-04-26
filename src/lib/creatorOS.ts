@@ -426,6 +426,11 @@ export function generateTodaysMove(
   };
 }
 
+export async function getTodaysMove(uid: string, dateId = todaysDateId()): Promise<TodaysMove | null> {
+  const snap = await getDoc(doc(creatorOSCollection(uid, "todaysMoves"), dateId));
+  return snap.exists() ? withId<TodaysMove>(snap.id, snap.data()) : null;
+}
+
 export async function saveTodaysMove(uid: string, todaysMove: TodaysMove): Promise<void> {
   await setDoc(
     doc(creatorOSCollection(uid, "todaysMoves"), todaysMove.id),

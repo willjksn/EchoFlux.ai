@@ -15,6 +15,7 @@ import {
   getCreatorOSSettings,
   getCurrentWeeklyPlan,
   getInnerCircleFunnel,
+  getTodaysMove,
   listAmazonLinks,
   listContentIdeas,
   listCreatorOSTrends,
@@ -24,7 +25,6 @@ import {
   saveTodaysMove,
   saveTrendToAmazonLibrary,
   saveWeeklyPlan,
-  todaysDateId,
   turnTrendIntoContentIdea,
   updateAmazonLink,
   updateContentIdea,
@@ -89,23 +89,28 @@ export default function CreatorOSPage() {
     setLoading(true);
     setError("");
     try {
-      const [loadedSettings, loadedIdeas, loadedLinks, loadedTrends, loadedPlan, loadedFunnel] = await Promise.all([
+      const [loadedSettings, loadedIdeas, loadedLinks, loadedTrends, loadedPlan, loadedFunnel, loadedTodaysMove] = await Promise.all([
         getCreatorOSSettings(uid),
         listContentIdeas(uid),
         listAmazonLinks(uid),
         listCreatorOSTrends(uid),
         getCurrentWeeklyPlan(uid),
         getInnerCircleFunnel(uid),
+        getTodaysMove(uid),
       ]);
       const nextSettings = loadedSettings || defaultCreatorOSSettings();
       const nextPlan = loadedPlan || generateDefaultWeeklyPlan(nextSettings, loadedTrends, loadedLinks);
+      const nextMove = loadedTodaysMove || generateTodaysMove(nextSettings, nextPlan, loadedLinks, loadedTrends);
+      if (!loadedTodaysMove) {
+        await saveTodaysMove(uid, nextMove);
+      }
       setSettings(loadedSettings);
       setIdeas(loadedIdeas);
       setAmazonLinks(loadedLinks);
       setTrends(loadedTrends);
       setWeeklyPlan(nextPlan);
       setFunnel(loadedFunnel);
-      setTodaysMove(generateTodaysMove(nextSettings, nextPlan, loadedLinks, loadedTrends));
+      setTodaysMove(nextMove);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Creator OS could not load.");
     } finally {
@@ -160,7 +165,6 @@ export default function CreatorOSPage() {
     const plan = generateDefaultWeeklyPlan(effectiveSettings, trends, amazonLinks);
     setWeeklyPlan(plan);
     await saveWeeklyPlan(uid, plan);
-    setTodaysMove(generateTodaysMove(effectiveSettings, plan, amazonLinks, trends));
     showToast("Weekly plan generated.", "success");
   };
 
