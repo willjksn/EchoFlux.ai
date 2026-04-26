@@ -15,12 +15,15 @@ export const APP_KNOWLEDGE = `
 If users ask about age requirements, clearly explain these policies and direct them to the Terms of Service for complete details. If you suspect a user may be underage, you should advise them to review the Terms of Service and contact support if needed.
 
 ## Core Concept
-EchoFlux.ai is an **AI Content Studio & Campaign Planner for creators**.
+EchoFlux.ai is an **AI Content Studio, Creator OS, and fan monetization hub for creators**.
 
-- Current live mode is **offline / planning-first**:
-  - Users **do not need to connect social accounts**.
-  - The app focuses on **strategy, campaign planning, content packs, and calendars**.
-  - Creators **copy content out** to post manually wherever they like.
+- Core creator workflows include strategy, caption generation, media planning, Creator OS, Fan Hub/My Page, products, subscriptions, tips, Treats, live/video experiences, messaging, and content scheduling.
+- Publishing behavior depends on the feature and connected account:
+  - Compose and Creator OS can prepare drafts and send content into Create Post.
+  - Creators can publish/schedule where platform integrations and permissions exist.
+  - Do not promise guaranteed fully automated publishing for every network; explain what is supported in the current flow and when manual posting is still required.
+- Creator OS is the main operating system for turning attention into money flow: public content, story clicks, Amazon/product interest, Inner Circle subscribers, Treats, retention, and review.
+- Fan Hub/My Page is the creator’s owned fan experience for member posts, subscriptions, products, tips, polls, tip goals, DMs, blocking/reporting, and storefront-style fan interactions.
 
 ## Key Surfaces & Workflows
 
@@ -643,6 +646,61 @@ Your home base showing overview of activity, upcoming content, and quick actions
 
 ---
 
+### Creator OS (Main Creator Operating System)
+
+**What it is:**
+Creator OS helps creators decide what to post, where it goes, and how it supports monetization. It ties together Today’s Move, Today’s Focus, Plan My Week, Content Ideas, the Monetization Flow board, Amazon Link Library, product trends, Inner Circle Funnel, Create Post, Instagram/TikTok/X planning, and My Page drops.
+
+**Core flow:**
+- Attention: create public posts for Instagram Reels, TikTok, X, or other public channels.
+- Story clicks: move curiosity into Story actions, replies, polls, or product links.
+- Amazon/product interest: save products/categories and turn them into soft content angles.
+- Inner Circle: convert or retain subscribers with closer/private drops.
+- Treats and retention: use soft support prompts, fan appreciation, and review loops.
+- Review: move ideas through Ideas → To Film → Ready to Post → Posted → Monetized → Review.
+
+**Key Creator OS tools:**
+- Build My Money Flow: configures audience, content lanes, rhythm, monetization paths, and weekly workflow.
+- Today’s Move: one daily action plan with public post, story/product angle, Inner Circle drop, and checklist.
+- Today’s Focus: the few dynamic tasks to finish today, generated from Today’s Move and current Creator OS data.
+- Plan My Week: detailed weekly plan with public post, Story/Amazon action, and Inner Circle action for each day.
+- Content Idea Modal: saves new content ideas; AI funnel help can generate fresh ideas for Instagram, TikTok, Story, Amazon/product angles, and Inner Circle.
+- Monetization Flow Board: tracks ideas through the workflow and has actions like move to next status, Create Post, Post My Page, edit, and review.
+- Amazon Link Library: stores products/categories, URLs, audience fit, and best content situation.
+- Product Trends: finds product/content angles and can save them into ideas or Amazon library.
+- Inner Circle Funnel: welcome post script, first 48-hour plan, weekly retention plan, and Treat upsell ideas.
+
+**How it connects:**
+- Send to Create Post should create a publish-ready public caption, not paste the whole plan into the caption box.
+- Post to My Page creates a Fan Hub/My Page drop.
+- Amazon and Inner Circle details are supporting context unless the creator is publishing directly to those destinations.
+
+---
+
+### Fan Hub / My Page / witme.io
+
+**What it is:**
+Fan Hub/My Page is the creator-owned fan destination. It is used for public/member feed posts, subscriptions, products, tips, Treats, polls, tip goals, live/video experiences, DMs, blocking, reporting, and checkout flows.
+
+**Creator-side features:**
+- Create and manage feed posts, member content, polls, tip goals, overlay text, products, subscriptions, Treats, live/video offerings, and page styling.
+- View members/fans, purchases, revenue/payout information, messages, and notifications when the user has creator access.
+- Customize My Page styling and storefront-style presentation.
+
+**Fan/member-side features:**
+- View creator page/feed according to access.
+- Subscribe, buy products/unlocks, tip, contribute to tip goals, and interact with supported posts.
+- Use DMs where allowed.
+- Blocking/reporting protections apply.
+
+**Safety and monetization rules:**
+- Stripe Connect and checkout details should be explained only at a high level to non-admins.
+- Blocked fans cannot message or complete checkout.
+- DM, blocking, reporting, and checkout enforcement are server-side.
+- Do not reveal private fan data, payment internals, webhook details, API secrets, database paths, or admin reports to non-admin users.
+
+---
+
 ### 9. Pricing & Plans
 
 **Creator Plans:**
@@ -674,7 +732,7 @@ Your home base showing overview of activity, upcoming content, and quick actions
 - Text-based assistant accessible to all users
 - Click the chat icon (bottom right) to open
 - Ask questions about features, workflows, or get help
-- Uses this knowledge base for accurate answers
+- Uses this knowledge base for accurate answers about EchoFlux, Fan Hub, Creator OS, Create Post, Premium Content Studio, and core workflows
 
 **The chatbot can:**
 - Explain any feature in detail
@@ -683,12 +741,18 @@ Your home base showing overview of activity, upcoming content, and quick actions
 - Answer questions about workflows
 - Guide you through using the app
 
+**Role-aware safety:**
+- Fans/members and non-admin users may receive product help, navigation help, creator-facing feature explanations, and general best practices.
+- Only admins may receive admin-only operations, internal support workflows, model usage details, platform tools, sensitive troubleshooting, or implementation-level details.
+- Never reveal API keys, env vars, secrets, private database details, webhook internals, raw source code, hidden admin routes, private fan/member data, payment identifiers, security rules, or internal logs to non-admin users.
+- If asked for sensitive/admin-only information by a non-admin, politely say that information is only available to admins and suggest contacting support.
+
 ---
 
 ## Important Constraints & Messaging
 
 - Do **not** promise:
-  - Fully automated, guaranteed publishing to social platforms in the current live mode
+  - Fully automated, guaranteed publishing to every social platform
   - Real-time, enterprise-grade analytics or competitor/social listening
   - Team/client management for agencies
 - Emphasize:
@@ -696,7 +760,8 @@ Your home base showing overview of activity, upcoming content, and quick actions
     - Strategy and campaign planning
     - Generating content packs and captions
     - Organizing everything on a calendar/board
-    - Copying content to post anywhere manually
+    - Sending content into Create Post and supported publishing/scheduling flows
+    - Copying/manual posting where direct publishing is not connected or supported
 
 ## Detailed How-To Examples
 
@@ -874,7 +939,7 @@ Your home base showing overview of activity, upcoming content, and quick actions
 ## Common Questions & Answers
 
 **Q: Can I auto-post to social media?**
-A: No, EchoFlux.ai is currently in planning mode. You create and plan content here, then copy/paste to post manually on your platforms. This keeps your accounts safe and gives you full control.
+A: EchoFlux can prepare drafts and supports publishing/scheduling flows where the platform integration and permissions are connected. It should not be described as guaranteed full auto-posting for every network. If a network is not connected or supported, use Publish Now where available or copy/post manually.
 
 **Q: How do I know which content will perform best?**
 A: In Premium Content Studio, use the "Predict Performance" feature in Content Brain. It analyzes your content and predicts engagement potential before you post.
