@@ -7,6 +7,7 @@ import type {
   PresetFontSize,
   LandingSectionListMarker,
 } from "../types";
+import { COPYRIGHT_PROTECTION_NOTICE } from "../constants";
 
 /** When set, landing preview uses real auth, checkout, tips, and footer links (public storefront). */
 export interface StorefrontPreviewLiveLanding {
@@ -65,6 +66,11 @@ import { WitmeHeaderLogo } from "./WitmeHeaderLogo";
 import { renderTextWithCustomEmoji, type SjHeartEmojiAccessContext } from "../src/lib/customEmoji";
 
 export type StorefrontHeroMediaItem = NonNullable<CreatorStorefrontSettings["heroMedia"]>[number];
+
+const storefrontPreviewImageDownloadGuardProps = {
+  draggable: false as const,
+  onContextMenu: (e: React.MouseEvent<HTMLImageElement>) => e.preventDefault(),
+};
 
 // Font size mapping for text styles
 const FONT_SIZE_MAP: Record<PresetFontSize, string> = {
@@ -1078,6 +1084,7 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
                     alt=""
                     className="w-full h-full object-cover pointer-events-none"
                     style={avatarCropStyle}
+                    {...storefrontPreviewImageDownloadGuardProps}
                   />
                 ) : (
                   <span className="w-full h-full flex items-center justify-center text-2xl font-bold pointer-events-none" style={{ color: primary }}>{(displayName || "?")[0].toUpperCase()}</span>
@@ -1137,6 +1144,7 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
                             alt=""
                             className="w-full h-full object-cover pointer-events-none"
                             style={{ objectPosition: item.objectPosition ?? "center top" }}
+                            {...storefrontPreviewImageDownloadGuardProps}
                           />
                         </div>
                       );
@@ -1151,7 +1159,12 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
                       boxShadow: isDark ? `0 18px 44px rgba(0,0,0,0.3), 0 0 0 5px ${primary}25` : `0 18px 44px ${primary}30, 0 0 0 5px rgba(255, 255, 255, 0.45)`,
                     }}
                   >
-                    <img src={heroImage} alt="" className="w-full h-full object-cover object-top" />
+                    <img
+                      src={heroImage}
+                      alt=""
+                      className="w-full h-full object-cover object-top"
+                      {...storefrontPreviewImageDownloadGuardProps}
+                    />
                   </div>
                 )}
                 <div
@@ -1951,6 +1964,9 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
                 Privacy
               </a>
             </div>
+            <p className="mx-auto mt-2 max-w-xl text-[10px] font-semibold leading-relaxed" style={{ color: landingFaint }}>
+              {COPYRIGHT_PROTECTION_NOTICE}
+            </p>
             {socialLinks.length > 0 && (
               <div className="flex justify-center gap-2 mt-2">
                 {socialLinks.map((link) => (
@@ -2049,7 +2065,13 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
                 title="Profile menu"
               >
                 {avatar ? (
-                  <img src={avatar} alt="" className="w-full h-full rounded-full object-cover" style={avatarCropStyle} />
+                  <img
+                    src={avatar}
+                    alt=""
+                    className="w-full h-full rounded-full object-cover"
+                    style={avatarCropStyle}
+                    {...storefrontPreviewImageDownloadGuardProps}
+                  />
                 ) : (
                   <span style={{ fontSize: "0.75rem", fontWeight: 600, color: primary }}>
                     {(displayName || "?")[0].toUpperCase()}
@@ -2110,6 +2132,7 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
                         src="https://images.unsplash.com/photo-1517841905240-472988babdf9?w=600&h=700&fit=crop&crop=face"
                         alt=""
                         loading="lazy"
+                        {...storefrontPreviewImageDownloadGuardProps}
                       />
                     </button>
                   </div>
@@ -2123,6 +2146,7 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
                             alt=""
                             className="feed-card-avatar-img"
                             style={{ objectFit: "contain", objectPosition: "center" }}
+                            {...storefrontPreviewImageDownloadGuardProps}
                           />
                         ) : (
                           <span className="feed-card-avatar-initial">{(displayName || "?")[0].toUpperCase()}</span>
@@ -2140,6 +2164,7 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
                         alt="Demo post"
                         className="feed-card-media"
                         style={{ objectFit: "cover" }}
+                        {...storefrontPreviewImageDownloadGuardProps}
                       />
                     </div>
 
@@ -2407,6 +2432,7 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
                         border: `2px solid ${primary}30`,
                         ...avatarCropStyle,
                       }} 
+                      {...storefrontPreviewImageDownloadGuardProps}
                     />
                   ) : (
                     <div 

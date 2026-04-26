@@ -116,6 +116,15 @@ export const Terms: React.FC = () => {
                         EchoFlux / witme software, names, and branding are owned by their respective licensors. Creators and users keep
                         ownership of their own submitted content, while granting the limited rights needed to operate the platform.
                     </p>
+                    <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-4 text-amber-950 dark:border-amber-900/50 dark:bg-amber-900/20 dark:text-amber-100">
+                        <p className="font-bold">This content is COPYRIGHT PROTECTED © All rights reserved.</p>
+                        <p className="mt-2">
+                            Unauthorized use, reproduction, screen recording, copying, downloading, redistribution, resale, or publication
+                            of any creator images, photos, videos, messages, or paid content is prohibited and may result in legal action,
+                            including financial damages and penalties. We will pursue civil and criminal litigation against anyone
+                            infringing our clients&apos; copyrights.
+                        </p>
+                    </div>
 
                     <h3 className="text-xl font-bold text-gray-900 dark:text-white mt-8 mb-2">9. Availability and Liability</h3>
                     <p>

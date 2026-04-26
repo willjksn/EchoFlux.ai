@@ -238,6 +238,10 @@ export const VIDEO_MINUTE_PACKS = [
 ] as const;
 export type VideoMinutePackId = (typeof VIDEO_MINUTE_PACKS)[number]['id'];
 
+export const COPYRIGHT_PROTECTION_NOTICE = `This content is COPYRIGHT PROTECTED © All rights reserved.
+
+Unauthorized use, reproduction, screen recording, copying, downloading, redistribution, resale, or publication of any images, photos, videos, messages, or paid content is prohibited and may result in legal action, including financial damages and penalties. We will pursue civil and criminal litigation against anyone infringing our clients' copyrights.`;
+
 /**
  * Default Privacy Policy for creator Fan Hub / storefront pages.
  * Creators may edit or replace this text. Not a substitute for legal advice.
@@ -279,6 +283,9 @@ Depending on your location, you may have rights to access, correct, delete, expo
 
 SECURITY
 We use reasonable administrative and technical safeguards. No system is perfectly secure.
+
+COPYRIGHT-PROTECTED CONTENT
+${COPYRIGHT_PROTECTION_NOTICE}
 
 CHILDREN
 This Service is not intended for minors. Accounts and purchases require adult eligibility.
@@ -323,6 +330,9 @@ Creators may use assistants or team support for page operations, messages, and f
 
 9. CONTENT USE RULES
 Content on this page is for personal, on-platform use only. You may not copy, record, scrape, redistribute, or resell creator content or private messages without written permission.
+
+COPYRIGHT PROTECTION NOTICE
+${COPYRIGHT_PROTECTION_NOTICE}
 
 10. PROHIBITED CONDUCT
 You may not use this Service for harassment, hate, impersonation, fraud, unlawful activity, non-consensual content, exploitative content, or rights infringement.

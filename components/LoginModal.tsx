@@ -58,6 +58,12 @@ const Terms: React.FC = () => (
       We do not guarantee performance of any content or strategy recommendations provided by the AI.
     </p>
     <p>
+      <strong>Copyright-protected content:</strong> Creator images, photos, videos, messages, and paid content are
+      COPYRIGHT PROTECTED © All rights reserved. Unauthorized use, reproduction, screen recording, copying, downloading,
+      redistribution, resale, or publication is prohibited and may result in legal action, including financial damages
+      and penalties.
+    </p>
+    <p>
       EchoFlux.ai is provided &quot;as is&quot; without warranties of any kind. We are not
       liable for any loss or damage resulting from use of the platform, platform outages, API deprecations, 
       or third-party policy changes.

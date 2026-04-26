@@ -102,6 +102,15 @@ export const Privacy: React.FC = () => {
                         We retain data for as long as needed to operate services, comply with legal obligations, resolve disputes,
                         and enforce agreements.
                     </p>
+                    <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-4 text-amber-950 dark:border-amber-900/50 dark:bg-amber-900/20 dark:text-amber-100">
+                        <p className="font-bold">Copyright-protected creator content</p>
+                        <p className="mt-2">
+                            Creator images, photos, videos, messages, and paid content are COPYRIGHT PROTECTED © All rights reserved.
+                            Unauthorized use, reproduction, screen recording, copying, downloading, redistribution, resale, or publication
+                            is prohibited and may result in legal action, including financial damages and penalties. We will pursue civil
+                            and criminal litigation against anyone infringing our clients&apos; copyrights.
+                        </p>
+                    </div>
 
                     <h3 className="text-xl font-bold text-gray-900 dark:text-white mt-8 mb-2">8. Your Rights and Choices</h3>
                     <p>You have the right to:</p>
