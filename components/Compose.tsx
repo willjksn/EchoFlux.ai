@@ -4232,6 +4232,14 @@ const CaptionGenerator: React.FC = () => {
                   useFavoriteHashtags={useFavoriteHashtags}
                   creatorPersonality={settings.creatorPersonality}
                   favoriteHashtags={settings.favoriteHashtags}
+                  emojiIntensity={settings.tone?.emojiLevel ?? 50}
+                  toneSettings={settings.tone ? {
+                    formality: settings.tone.formality,
+                    humor: settings.tone.humor,
+                    empathy: settings.tone.empathy,
+                    spiciness: settings.tone.spiciness,
+                    profanity: settings.tone.profanity,
+                  } : null}
                   onTogglePersonality={() => setUsePersonality(prev => !prev)}
                   onToggleHashtags={() => setUseFavoriteHashtags(prev => !prev)}
                   creatorIdentityActive={creatorIdentityActive}
@@ -4272,6 +4280,14 @@ const CaptionGenerator: React.FC = () => {
                 useFavoriteHashtags={useFavoriteHashtags}
                 creatorPersonality={settings.creatorPersonality}
                 favoriteHashtags={settings.favoriteHashtags}
+                emojiIntensity={settings.tone?.emojiLevel ?? 50}
+                toneSettings={settings.tone ? {
+                  formality: settings.tone.formality,
+                  humor: settings.tone.humor,
+                  empathy: settings.tone.empathy,
+                  spiciness: settings.tone.spiciness,
+                  profanity: settings.tone.profanity,
+                } : null}
                 onTogglePersonality={() => setUsePersonality(prev => !prev)}
                 onToggleHashtags={() => setUseFavoriteHashtags(prev => !prev)}
                 creatorIdentityActive={creatorIdentityActive}

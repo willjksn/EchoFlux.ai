@@ -137,6 +137,14 @@ interface MediaBoxProps {
   useFavoriteHashtags?: boolean;
   creatorPersonality?: string;
   favoriteHashtags?: string;
+  emojiIntensity?: number | null;
+  toneSettings?: {
+    formality?: number;
+    humor?: number;
+    empathy?: number;
+    spiciness?: number;
+    profanity?: number;
+  } | null;
   onTogglePersonality?: () => void;
   onToggleHashtags?: () => void;
   /** Elite: Creator Identity applies by default in generation when this toggle is off. */
@@ -171,6 +179,8 @@ export const MediaBox: React.FC<MediaBoxProps> = ({
   useFavoriteHashtags = false,
   creatorPersonality,
   favoriteHashtags,
+  emojiIntensity,
+  toneSettings,
   onTogglePersonality,
   onToggleHashtags,
   creatorIdentityActive = false,
@@ -480,6 +490,8 @@ export const MediaBox: React.FC<MediaBoxProps> = ({
       useFavoriteHashtags: useFavoriteHashtags && favoriteHashtags ? true : false,
       creatorPersonality: usePersonality ? creatorPersonality || null : null,
       favoriteHashtags: useFavoriteHashtags ? favoriteHashtags || null : null,
+      emojiIntensity: emojiIntensity ?? 50,
+      toneSettings: toneSettings || null,
     });
 
     const results = normalizeCaptionResults(res);
@@ -593,6 +605,8 @@ export const MediaBox: React.FC<MediaBoxProps> = ({
         useFavoriteHashtags: useFavoriteHashtags && favoriteHashtags ? true : false,
         creatorPersonality: usePersonality ? creatorPersonality || null : null,
         favoriteHashtags: useFavoriteHashtags ? favoriteHashtags || null : null,
+        emojiIntensity: emojiIntensity ?? 50,
+        toneSettings: toneSettings || null,
       });
 
       const generatedResults = normalizeCaptionResults(res);
@@ -1729,24 +1743,23 @@ ${contextLines || 'None'}
       </div>
 
       {user?.plan !== 'Free' && hasCalendarAccess(user) && platformsToPost.length > 0 && (
-        <div className="mb-3 p-2.5 rounded-lg border border-amber-200/80 dark:border-amber-800/60 bg-amber-50/80 dark:bg-amber-900/20">
-          <label className="flex items-start gap-2 cursor-pointer">
+        <div className="mb-3">
+          <label className={`inline-flex w-full items-center justify-center gap-2 rounded-lg border px-3 py-2 text-xs font-semibold transition-colors cursor-pointer ${
+            mediaItem.autoPublishAtSchedule !== false
+              ? 'border-primary-200 bg-primary-50 text-primary-700 hover:bg-primary-100 dark:border-primary-900/50 dark:bg-primary-900/30 dark:text-primary-200'
+              : 'border-gray-200 bg-gray-50 text-gray-600 hover:bg-gray-100 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300'
+          }`}>
             <input
               type="checkbox"
-              className="mt-0.5 rounded border-gray-300 dark:border-gray-600 text-primary-600 focus:ring-primary-500"
+              className="rounded border-gray-300 text-primary-600 focus:ring-primary-500 dark:border-gray-600"
               checked={mediaItem.autoPublishAtSchedule !== false}
               onChange={(e) => onUpdate(index, { autoPublishAtSchedule: e.target.checked })}
             />
-            <span className="text-xs text-gray-800 dark:text-gray-200">
-              <span className="font-medium block">Auto-post at scheduled time</span>
-              <span className="text-[10px] text-gray-600 dark:text-gray-400 block mt-0.5 leading-snug">
-                When scheduled, we can publish for you at that time if X is among your selected platforms and X is connected in Settings. Other networks still use Publish Now or manual posting.
-                {xSelected && !xConnected ? (
-                  <span className="block mt-1 text-amber-800 dark:text-amber-200">Connect X in Settings to enable automatic posting.</span>
-                ) : null}
-              </span>
-            </span>
+            <span>Auto-post at scheduled time</span>
           </label>
+          {xSelected && !xConnected ? (
+            <p className="mt-1 text-center text-[10px] font-medium text-amber-700 dark:text-amber-300">Connect X first</p>
+          ) : null}
         </div>
       )}
 

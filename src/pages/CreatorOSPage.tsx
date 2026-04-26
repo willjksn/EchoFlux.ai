@@ -265,12 +265,64 @@ export default function CreatorOSPage() {
     setTrends((prev) => prev.map((trend) => (trend.id === trendId ? { ...trend, ...updates } : trend)));
   };
 
-  const moveCaption = (move: TodaysMove): string => {
-    const link = move.suggestedAmazonLinkId ? amazonLinks.find((item) => item.id === move.suggestedAmazonLinkId) : null;
-    return `${move.hook}\n\n${move.caption}\n\nStory: ${move.storyLinkPlan.join(" / ")}${link ? `\n\nAmazon link: ${link.productName}\n${link.amazonUrl}` : ""}\n\nInner Circle: ${move.innerCircleCaption}`;
+  const isPlanningInstruction = (text?: string): boolean => {
+    if (!text) return false;
+    return /^(use this|post|film|add|drop|share|make|create|turn this)\b/i.test(text.trim());
   };
 
-  const ideaCaption = (idea: ContentIdea): string => {
+  const formatPublicCaption = (hook: string, caption?: string, cta?: string, closingPrompt?: string): string => {
+    const cleanHook = hook.trim();
+    const cleanCaption = caption?.trim();
+    const cleanCta = cta?.trim();
+    const cleanClosingPrompt = closingPrompt?.trim();
+
+    return [
+      cleanHook ? `👀 ${cleanHook}` : "",
+      cleanCaption ? `${cleanCaption}` : "",
+      cleanCta ? `✨ ${cleanCta}` : "",
+      cleanClosingPrompt ? `💬 ${cleanClosingPrompt}` : "",
+    ].filter(Boolean).join("\n\n");
+  };
+
+  const moveCaption = (move: TodaysMove): string => {
+    const link = move.suggestedAmazonLinkId ? amazonLinks.find((item) => item.id === move.suggestedAmazonLinkId) : null;
+    const hook = isPlanningInstruction(move.hook)
+      ? link
+        ? `I did not think I needed this ${link.productName} until now`
+        : `I did not think I needed this until now`
+      : move.hook;
+    const cta = link
+      ? `I linked the ${link.productName} in my Story if you want it.`
+      : move.suggestedAmazonCategory
+        ? `Check my Story if you want the ${move.suggestedAmazonCategory.toLowerCase()} angle.`
+        : "Tell me if you get it.";
+    const closingPrompt = link || move.suggestedAmazonCategory
+      ? "Should I keep sharing finds like this?"
+      : "Tell me if you get it.";
+
+    return formatPublicCaption(hook, move.caption, cta, closingPrompt);
+  };
+
+  const ideaCreatePostCaption = (idea: ContentIdea): string => {
+    const link = idea.amazonLinkId ? amazonLinks.find((item) => item.id === idea.amazonLinkId) : null;
+    const hook = isPlanningInstruction(idea.publicHook) ? idea.title : (idea.publicHook || idea.title);
+    const cta = link
+      ? `I linked the ${link.productName} in my Story if you want it.`
+      : idea.amazonCategory
+        ? `Check my Story if you want the ${idea.amazonCategory.toLowerCase()} angle.`
+        : idea.innerCircleTieIn
+          ? "I put the closer version in Inner Circle."
+          : "";
+    const closingPrompt = link || idea.amazonCategory
+      ? "Would you actually use this?"
+      : idea.innerCircleTieIn
+        ? "Want the closer version?"
+        : "Do you get what I mean?";
+
+    return formatPublicCaption(hook, idea.caption, cta, closingPrompt);
+  };
+
+  const ideaMyPageContent = (idea: ContentIdea): string => {
     const link = idea.amazonLinkId ? amazonLinks.find((item) => item.id === idea.amazonLinkId) : null;
     const amazonText = link
       ? `\n\nAmazon link: ${link.productName}\n${link.amazonUrl}`
@@ -330,7 +382,7 @@ export default function CreatorOSPage() {
   };
 
   const sendIdeaToCreatePost = async (idea: ContentIdea) => {
-    const content = ideaCaption(idea);
+    const content = ideaCreatePostCaption(idea);
     const { postId } = await sendToDraft(db, uid, {
       content,
       platforms: ["Instagram"] as Platform[],
@@ -351,7 +403,7 @@ export default function CreatorOSPage() {
 
   const publishIdeaToMyPage = async (idea: ContentIdea) => {
     const { dropId } = await sendToDrop(db, uid, {
-      content: ideaCaption(idea),
+      content: ideaMyPageContent(idea),
       visibility: "free",
       title: idea.title,
     });

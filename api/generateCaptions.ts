@@ -739,12 +739,43 @@ FAN HUB — FRESH GENERATION (must differ from prior runs):
 `
       : "";
 
+  const hasPublicSocialStructureTarget = normalizedPlatformsEarly.some((p) =>
+    p.includes("instagram") || p.includes("tiktok") || p === "x" || p === "twitter",
+  );
+
+  const naturalSocialCaptionBlock =
+    !isExplicitContent && !isOnlyFansPlatform && !isFanHubCaption && hasPublicSocialStructureTarget
+      ? `
+NATURAL SOCIAL CAPTION STYLE (Instagram / TikTok / public socials):
+- Do NOT write bland generic captions like "loving this moment", "feeling good", "vibes", or "check this out" unless the image clearly supports that exact wording.
+- Ground every caption in at least one concrete visual detail from the uploaded media: setting, object, outfit, lighting, expression, action, color, product, or mood.
+- Write like the creator is posting casually, not like a brand or marketing assistant.
+- Prefer a simple structure: hook or observation + short personal line + natural question/CTA.
+- Use emojis naturally (usually 1-4) and only where they fit the image and tone.
+- If the image includes a product, object, car, room, outfit, or setup, make the caption specific enough that it could not apply to any random photo.
+- Avoid over-explaining the plan. The final caption should be ready to paste into the social app.
+`
+      : "";
+
+  const fanHubPersonalityBlock =
+    isFanHubCaption && usePersonalityOverrideBool
+      ? `
+FAN HUB / MY PAGE WITH PERSONALITY ENABLED:
+- The uploaded image is context, but the creator personality is the main voice. Do not write a caption based only on visual description.
+- Do NOT use CTA-style endings such as "comment below", "tell me", "subscribe", "join", "tip", "DM me", "check my story", or "link in bio".
+- Make it feel like a natural member-page post from this creator: personal, close, relaxed, and worth reading without asking the fan to do something.
+- A subtle reflective line is OK; avoid marketing language.
+`
+      : "";
+
   // Build prompt — Fan Hub / My Page: one plain caption (matches composer UX)
   const desiredCaptionCount = isOnlyFansPlatform ? 5 : isFanHubCaption ? 1 : 3;
   // For carousels, we generate the same number of variants, but each must summarize all media.
   const prompt = `
 ${strategicMediaCaptionHint}
 ${fanHubVarietyBlock}
+${naturalSocialCaptionBlock}
+${fanHubPersonalityBlock}
 ${sanitizedPromptText ? `
 🚨 USER INSTRUCTIONS ARE PRIMARY (MUST FOLLOW FIRST) 🚨
 - The user provided specific instructions or suggestions for what they want in the caption (see "Extra instructions" / USER INSTRUCTIONS below).
