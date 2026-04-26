@@ -60,7 +60,14 @@ export const DmAudioPlayer: React.FC<Props> = ({ src, className = "", variant = 
 
   if (variant === "default") {
     return (
-      <audio controls playsInline preload="metadata" className={className}>
+      <audio
+        controls
+        controlsList="nodownload noplaybackrate noremoteplayback"
+        playsInline
+        preload="metadata"
+        className={className}
+        onContextMenu={(e) => e.preventDefault()}
+      >
         <source src={src} type={type} />
         <source src={src} />
       </audio>
@@ -134,6 +141,7 @@ export const DmAudioPlayer: React.FC<Props> = ({ src, className = "", variant = 
         preload="metadata"
         playsInline
         className="fh-dm-voice-note__audio"
+        onContextMenu={(e) => e.preventDefault()}
         onPlay={() => setPlaying(true)}
         onPause={() => setPlaying(false)}
         onEnded={() => {

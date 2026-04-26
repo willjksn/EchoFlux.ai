@@ -7,6 +7,7 @@ import { doc, setDoc, addDoc, collection, serverTimestamp } from 'firebase/fires
 import type { Firestore } from 'firebase/firestore';
 import type { Post, CalendarEvent } from '../../types';
 import type { Platform } from '../../types';
+import { publicMediaUrlsForLockedPost, type LockedPostContent } from '../lib/lockedPostMedia';
 
 export type SendToDraftPayload = {
   content: string;
@@ -147,7 +148,7 @@ export async function sendToDrop(
     i === 0 && payload.mediaType === "video" ? "video" : "image"
   );
 
-  let lockedContent: { enabled: true; priceCents: number; previewMediaIndex?: number } | undefined;
+  let lockedContent: LockedPostContent | undefined;
   if (payload.visibility === "locked") {
     const priceCents = Math.round((payload.lockedPrice ?? 0) * 100);
     lockedContent = {
@@ -163,11 +164,12 @@ export async function sendToDrop(
         : {}),
     };
   }
+  const publicMediaUrls = publicMediaUrlsForLockedPost(mediaUrls, lockedContent);
 
   const postData: Record<string, unknown> = {
     creatorId: userId,
     body: payload.content,
-    mediaUrls,
+    mediaUrls: publicMediaUrls,
     mediaTypes,
     likeCount: 0,
     likedBy: [],
@@ -184,8 +186,17 @@ export async function sendToDrop(
     ...(lockedContent ? { lockedContent } : {}),
   };
 
-  const ref = await addDoc(collection(db, "creators", userId, "fanPosts"), postData);
-  return { dropId: ref.id };
+  const postRef = await addDoc(collection(db, "creators", userId, "fanPosts"), postData);
+  if (lockedContent) {
+    await setDoc(doc(db, "creators", userId, "fanPostPrivateMedia", postRef.id), {
+      creatorId: userId,
+      postId: postRef.id,
+      mediaUrls,
+      mediaTypes,
+      updatedAt: serverTimestamp(),
+    });
+  }
+  return { dropId: postRef.id };
 }
 
 /** Write a message campaign (sequence) to Fan Hub Messages: users/{userId}/onlyfans_message_campaigns. */

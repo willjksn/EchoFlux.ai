@@ -103,6 +103,22 @@ import {
 } from "../src/lib/witmeTabIcons";
 import { creatorIdFirestoreQueryVariants, normalizeCreatorId } from "../src/lib/creatorIdNormalize";
 
+const storefrontImageDownloadGuardProps = {
+  draggable: false as const,
+  onContextMenu: (e: React.MouseEvent<HTMLImageElement>) => e.preventDefault(),
+};
+
+const storefrontVideoDownloadGuardProps = {
+  controlsList: "nodownload noplaybackrate noremoteplayback" as const,
+  disablePictureInPicture: true,
+  onContextMenu: (e: React.MouseEvent<HTMLVideoElement>) => e.preventDefault(),
+};
+
+const storefrontAudioDownloadGuardProps = {
+  controlsList: "nodownload noplaybackrate noremoteplayback" as const,
+  onContextMenu: (e: React.MouseEvent<HTMLAudioElement>) => e.preventDefault(),
+};
+
 /** Ensure member-store products have usable Firestore ids (avoids every row showing “Processing…” when id is missing or duplicated). */
 function toOptionalNonNegativeInt(v: unknown): number | undefined {
   if (v == null || v === "") return undefined;
@@ -508,11 +524,10 @@ function FanPurchaseUnlockedPostBlock({
               key={`${url}-${i}`}
               src={url}
               controls
-              controlsList="nodownload noplaybackrate noremoteplayback"
-              disablePictureInPicture
               playsInline
               preload="metadata"
               style={{ width: "100%", marginTop: "0.6rem", borderRadius: 10 }}
+              {...storefrontVideoDownloadGuardProps}
             />
           );
         }
@@ -523,6 +538,7 @@ function FanPurchaseUnlockedPostBlock({
             alt=""
             loading="lazy"
             style={{ width: "100%", marginTop: "0.6rem", borderRadius: 10 }}
+            {...storefrontImageDownloadGuardProps}
           />
         );
       })}
@@ -531,9 +547,9 @@ function FanPurchaseUnlockedPostBlock({
           key={url}
           src={url}
           controls
-          controlsList="nodownload noplaybackrate noremoteplayback"
           preload="metadata"
           style={{ width: "100%", marginTop: "0.6rem" }}
+          {...storefrontAudioDownloadGuardProps}
         />
       ))}
       <button
@@ -624,11 +640,10 @@ function FanMemberPurchaseItemBody({
             <video
               src={o.deliveryUrl}
               controls
-              controlsList="nodownload noplaybackrate noremoteplayback"
-              disablePictureInPicture
               playsInline
               preload="metadata"
               style={{ width: "100%", marginTop: "0.6rem", borderRadius: 10 }}
+              {...storefrontVideoDownloadGuardProps}
             />
           ) : null}
           {o.deliveryType === "image" && o.deliveryUrl ? (
@@ -637,15 +652,16 @@ function FanMemberPurchaseItemBody({
               alt="Delivered purchase media"
               loading="lazy"
               style={{ width: "100%", marginTop: "0.6rem", borderRadius: 10 }}
+              {...storefrontImageDownloadGuardProps}
             />
           ) : null}
           {o.deliveryType === "audio" && o.deliveryUrl ? (
             <audio
               src={o.deliveryUrl}
               controls
-              controlsList="nodownload noplaybackrate noremoteplayback"
               preload="metadata"
               style={{ width: "100%", marginTop: "0.6rem" }}
+              {...storefrontAudioDownloadGuardProps}
             />
           ) : null}
           {o.deliveryType === "link" && o.deliveryUrl ? (
@@ -4567,7 +4583,13 @@ export const FanStorefrontView: React.FC = () => {
             <div className="mb-6 pb-6 border-b" style={{ borderColor: `${primary}22` }}>
               <div className="flex items-center gap-3 mb-3">
                 {creatorAvatar && (
-                  <img src={creatorAvatar} alt="" className="w-10 h-10 rounded-full object-cover" style={avatarCropStyle} />
+                  <img
+                    src={creatorAvatar}
+                    alt=""
+                    className="w-10 h-10 rounded-full object-cover"
+                    style={avatarCropStyle}
+                    {...storefrontImageDownloadGuardProps}
+                  />
                 )}
                 <span className="text-sm font-medium" style={{ color: "#666" }}>{displayName}</span>
               </div>
@@ -5145,7 +5167,13 @@ export const FanStorefrontView: React.FC = () => {
                 title="Profile menu"
               >
                 {memberAvatar ? (
-                  <img src={memberAvatar} alt="" className="storefront-profile-menu-avatar" style={avatarCropStyle} />
+                  <img
+                    src={memberAvatar}
+                    alt=""
+                    className="storefront-profile-menu-avatar"
+                    style={avatarCropStyle}
+                    {...storefrontImageDownloadGuardProps}
+                  />
                 ) : (
                   <span className="storefront-profile-menu-avatar storefront-profile-menu-avatar-fallback">{memberAvatarInitial}</span>
                 )}
@@ -5597,9 +5625,21 @@ export const FanStorefrontView: React.FC = () => {
                             {dmPendingAttachments.map((a, idx) => (
                               <div key={`${a.url}-${idx}`} className="fh-dm-pending-attach__inner relative">
                                 {a.type === "image" ? (
-                                  <img src={a.url} alt="" className="fh-dm-pending-attach__thumb" />
+                                  <img
+                                    src={a.url}
+                                    alt=""
+                                    className="fh-dm-pending-attach__thumb"
+                                    {...storefrontImageDownloadGuardProps}
+                                  />
                                 ) : a.type === "video" ? (
-                                  <video src={a.url} className="fh-dm-pending-attach__thumb" muted playsInline />
+                                  <video
+                                    src={a.url}
+                                    className="fh-dm-pending-attach__thumb"
+                                    muted
+                                    playsInline
+                                    preload="metadata"
+                                    {...storefrontVideoDownloadGuardProps}
+                                  />
                                 ) : (
                                   <div className="fh-dm-pending-attach__voice-label">
                                     <span className="fh-dm-pending-attach__voice-icon" aria-hidden>
@@ -5785,6 +5825,8 @@ export const FanStorefrontView: React.FC = () => {
                               className="h-full w-full rounded-full object-cover border-2 border-white shadow-sm"
                               style={{ objectFit: "cover", objectPosition: "center" }}
                               onError={() => setMemberProfilePhotoLoadFailed(true)}
+                              draggable={false}
+                              onContextMenu={(e) => e.preventDefault()}
                             />
                           ) : (
                             <span

@@ -9007,16 +9007,24 @@ button.treat-card:hover:not(:disabled) .treat-card-cta {
   display: block;
   cursor: zoom-in;
 }
+.stormij-theme .fh-dm-attachment--protected {
+  cursor: default;
+}
 .stormij-theme .fh-dm-attachment img,
 .stormij-theme .fh-dm-attachment video {
   display: block;
   max-width: 100%;
   max-height: 240px;
   object-fit: contain;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-user-drag: none;
+  -webkit-touch-callout: none;
 }
 .stormij-theme .fh-dm-attachment audio {
   width: 100%;
   max-width: 280px;
+  -webkit-touch-callout: none;
 }
 
 /* Voice note bubble (member DMs + shared player) — compact; tints from --fan-primary (storefront theme) */
@@ -9181,6 +9189,10 @@ button.treat-card:hover:not(:disabled) .treat-card-cta {
   object-fit: cover;
   display: block;
   border: 1px solid color-mix(in srgb, var(--fan-primary, #6366f1) 22%, transparent);
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-user-drag: none;
+  -webkit-touch-callout: none;
 }
 .stormij-theme .fh-dm-pending-attach__voice-label {
   display: flex;
