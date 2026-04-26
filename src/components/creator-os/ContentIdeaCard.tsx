@@ -1,6 +1,6 @@
 import React from "react";
 import type { AmazonLink, ContentIdea } from "../../types/creatorOS";
-import { CONTENT_LANE_LABELS, FUNNEL_GOAL_LABELS, PLATFORM_LABELS, CONTENT_IDEA_STATUS_LABELS } from "../../lib/creatorOS";
+import { CONTENT_LANE_LABELS, FUNNEL_GOAL_LABELS, PLATFORM_LABELS, CONTENT_IDEA_STATUS_LABELS, CONTENT_IDEA_STATUSES } from "../../lib/creatorOS";
 
 type Props = {
   idea: ContentIdea;
@@ -14,9 +14,11 @@ type Props = {
 
 export const ContentIdeaCard: React.FC<Props> = ({ idea, amazonLinks, onEdit, onDelete, onSendToCreatePost, onPublishToMyPage, onUpdate }) => {
   const link = idea.amazonLinkId ? amazonLinks.find((item) => item.id === idea.amazonLinkId) : null;
+  const currentStatusIndex = CONTENT_IDEA_STATUSES.indexOf(idea.status);
+  const nextStatus = CONTENT_IDEA_STATUSES[currentStatusIndex + 1];
 
   return (
-    <div className="rounded-xl border border-gray-100 bg-white p-4 shadow-sm transition-shadow hover:shadow-md dark:border-gray-700 dark:bg-gray-800">
+    <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm ring-1 ring-gray-50 transition-shadow hover:shadow-md dark:border-gray-700 dark:bg-gray-800 dark:ring-gray-800">
       <div className="flex items-start justify-between gap-3">
         <div>
           <h3 className="font-semibold text-gray-900 dark:text-white">{idea.title || "Untitled idea"}</h3>
@@ -44,7 +46,27 @@ export const ContentIdeaCard: React.FC<Props> = ({ idea, amazonLinks, onEdit, on
         <p className="mt-1 text-xs text-emerald-600 dark:text-emerald-300">Amazon: {link?.productName || idea.amazonCategory}</p>
       )}
       {idea.innerCircleTieIn && <p className="mt-1 text-xs text-primary-600 dark:text-primary-300">Inner Circle: {idea.innerCircleTieIn}</p>}
-      <div className="mt-4 flex flex-wrap gap-2">
+      <div className="mt-4 grid gap-2">
+        {nextStatus && (
+          <button
+            type="button"
+            onClick={() => onUpdate(idea.id, { status: nextStatus })}
+            className="rounded-xl bg-slate-900 px-3 py-2 text-xs font-bold text-white transition hover:bg-slate-800 dark:bg-white dark:text-slate-950 dark:hover:bg-slate-200"
+          >
+            Move to {CONTENT_IDEA_STATUS_LABELS[nextStatus]}
+          </button>
+        )}
+        {idea.status === "review" && (
+          <button
+            type="button"
+            onClick={() => onUpdate(idea.id, { status: "ideas" })}
+            className="rounded-xl bg-slate-100 px-3 py-2 text-xs font-bold text-slate-700 transition hover:bg-slate-200 dark:bg-slate-700 dark:text-slate-100 dark:hover:bg-slate-600"
+          >
+            Restart as Idea
+          </button>
+        )}
+      </div>
+      <div className="mt-3 flex flex-wrap gap-2">
         <button onClick={() => onSendToCreatePost(idea)} className="rounded-lg bg-primary-50 px-2.5 py-1.5 text-xs font-semibold text-primary-700 hover:bg-primary-100 dark:bg-primary-900/30 dark:text-primary-300">Create Post</button>
         <button onClick={() => onPublishToMyPage(idea)} className="rounded-lg bg-pink-50 px-2.5 py-1.5 text-xs font-semibold text-pink-700 hover:bg-pink-100 dark:bg-pink-900/20 dark:text-pink-300">Post My Page</button>
         <button onClick={() => onEdit(idea)} className="rounded-lg bg-primary-50 px-2.5 py-1.5 text-xs font-semibold text-primary-700 hover:bg-primary-100 dark:bg-primary-900/30 dark:text-primary-300">Edit</button>

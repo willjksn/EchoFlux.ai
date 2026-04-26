@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useState } from "react";
 import type { ContentLane, CreatorOSSettings } from "../../types/creatorOS";
 import { CONTENT_LANE_LABELS, defaultCreatorOSSettings } from "../../lib/creatorOS";
 
@@ -74,7 +74,6 @@ export const BuildMoneyFlowSetup: React.FC<Props> = ({ open, settings, onClose, 
   const [draft, setDraft] = useState<CreatorOSSettings>(settings || defaultCreatorOSSettings());
   const [saving, setSaving] = useState(false);
   const [activeStep, setActiveStep] = useState(0);
-  const scrollAreaRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     if (open) {
@@ -82,11 +81,6 @@ export const BuildMoneyFlowSetup: React.FC<Props> = ({ open, settings, onClose, 
       setActiveStep(0);
     }
   }, [open, settings]);
-
-  useEffect(() => {
-    if (!open) return;
-    scrollAreaRef.current?.scrollTo({ top: 0, behavior: "smooth" });
-  }, [activeStep, open]);
 
   if (!open) return null;
 
@@ -125,6 +119,200 @@ export const BuildMoneyFlowSetup: React.FC<Props> = ({ open, settings, onClose, 
   const selectedFilmingDays = draft.filmingDays.map((day) => day.slice(0, 3)).join(", ") || "No filming days selected yet";
   const canGoBack = activeStep > 0;
   const canGoNext = activeStep < steps.length - 1;
+  const renderActiveStepContent = () => (
+    <div className="mt-5">
+      {activeStep === 0 && (
+        <div className="space-y-4">
+          <div className="rounded-2xl bg-white p-4 text-sm text-slate-600 shadow-sm dark:bg-slate-900 dark:text-slate-300">
+            <strong className="text-slate-900 dark:text-white">What this means:</strong> this is not a single-choice goal. Creator OS plans the whole weekly funnel so every piece of content has a job.
+          </div>
+          <div>
+            <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">Weekly goal flow</p>
+            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+              These are all active every week. The plan tells you how to move attention into clicks, subscribers, products, Treats, and retention.
+            </p>
+            <div className="mt-3 grid gap-2 sm:grid-cols-2">
+              {goals.map(([value, label], index) => (
+                <div
+                  key={value}
+                  className="rounded-2xl border border-primary-100 bg-white p-4 text-left shadow-sm dark:border-primary-900/40 dark:bg-slate-900"
+                >
+                  <span className="text-xs font-bold uppercase tracking-wide text-primary-600 dark:text-primary-400">
+                    {index + 1}. Always included
+                  </span>
+                  <span className="mt-1 block text-sm font-semibold text-slate-900 dark:text-white">{label}</span>
+                  <span className="mt-1 block text-xs text-slate-500 dark:text-slate-400">{goalPlans[value].outcome}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="rounded-2xl border border-primary-100 bg-white p-4 shadow-sm dark:border-primary-900/50 dark:bg-slate-900">
+            <p className="text-xs font-bold uppercase tracking-wide text-primary-600 dark:text-primary-400">
+              {fullFunnelPlan.title}
+            </p>
+            <p className="mt-2 text-sm text-slate-700 dark:text-slate-300">{fullFunnelPlan.weeklyPlan}</p>
+            <p className="mt-2 text-sm font-medium text-slate-900 dark:text-white">{fullFunnelPlan.nextAction}</p>
+          </div>
+        </div>
+      )}
+
+      {activeStep === 1 && (
+        <div className="space-y-5">
+          <div className="rounded-2xl bg-white p-4 text-sm text-slate-600 shadow-sm dark:bg-slate-900 dark:text-slate-300">
+            <strong className="text-slate-900 dark:text-white">What to do:</strong> pick who you are posting for and the content lanes you can actually make. These lanes become your daily post ideas.
+          </div>
+          <label className="block">
+            <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">Primary audience</span>
+            <select
+              value={draft.primaryAudience}
+              onChange={(e) => setDraft({ ...draft, primaryAudience: e.target.value as CreatorOSSettings["primaryAudience"] })}
+              className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 dark:border-slate-700 dark:bg-slate-950"
+            >
+              <option value="mostly_men">Mostly men</option>
+              <option value="mostly_women">Mostly women</option>
+              <option value="mixed">Mixed audience</option>
+            </select>
+          </label>
+          <div>
+            <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">Content lanes</p>
+            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">Choose 2-4 lanes you can repeat weekly.</p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {(Object.keys(CONTENT_LANE_LABELS) as ContentLane[]).map((lane) => (
+                <button
+                  key={lane}
+                  type="button"
+                  onClick={() => toggle("preferredLanes", lane)}
+                  className={`rounded-full border px-3 py-1 text-sm ${draft.preferredLanes.includes(lane) ? "border-primary-500 bg-primary-50 text-primary-700 dark:bg-primary-950 dark:text-primary-200" : "border-slate-300 text-slate-600 dark:border-slate-700 dark:text-slate-300"}`}
+                >
+                  {CONTENT_LANE_LABELS[lane]}
+                </button>
+              ))}
+            </div>
+          </div>
+          <label className="block">
+            <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">Brand tone</span>
+            <textarea
+              value={draft.brandTone}
+              onChange={(e) => setDraft({ ...draft, brandTone: e.target.value })}
+              rows={3}
+              placeholder="Example: playful, confident, flirty, direct, casual"
+              className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 dark:border-slate-700 dark:bg-slate-950"
+            />
+          </label>
+        </div>
+      )}
+
+      {activeStep === 2 && (
+        <div className="space-y-5">
+          <div className="rounded-2xl bg-white p-4 text-sm text-slate-600 shadow-sm dark:bg-slate-900 dark:text-slate-300">
+            <strong className="text-slate-900 dark:text-white">What to do:</strong> select every way this content can make money. Creator OS will connect public posts to Stories, Amazon links, Inner Circle, Treats, and retention.
+          </div>
+          <div>
+            <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">Monetization paths</p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {monetizationPaths.map(([value, label]) => (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => toggle("monetizationPaths", value)}
+                  className={`rounded-full border px-3 py-1 text-sm ${draft.monetizationPaths.includes(value) ? "border-emerald-500 bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-200" : "border-slate-300 text-slate-600 dark:border-slate-700 dark:text-slate-300"}`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {activeStep === 3 && (
+        <div className="space-y-5">
+          <div className="rounded-2xl bg-white p-4 text-sm text-slate-600 shadow-sm dark:bg-slate-900 dark:text-slate-300">
+            <strong className="text-slate-900 dark:text-white">What to do:</strong> set numbers you can really hit. Creator OS will use this to build a weekly plan that is realistic, not overwhelming.
+          </div>
+          <label className="block">
+            <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">Time to create</span>
+            <select
+              value={draft.availableTime}
+              onChange={(e) => setDraft({ ...draft, availableTime: e.target.value as CreatorOSSettings["availableTime"] })}
+              className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 dark:border-slate-700 dark:bg-slate-950"
+            >
+              <option value="5_minutes">5 minutes</option>
+              <option value="15_minutes">15 minutes</option>
+              <option value="30_plus">30+ minutes</option>
+              <option value="batch_film">I batch film</option>
+            </select>
+          </label>
+          <div>
+            <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">Weekly rhythm</p>
+            <div className="mt-2 grid grid-cols-2 gap-2">
+              {[
+                ["weeklyPublicPostsTarget", "Public posts"],
+                ["weeklyStoriesTarget", "IG stories"],
+                ["weeklyInnerCircleDropsTarget", "Inner Circle drops"],
+                ["weeklyAmazonLinksTarget", "Amazon links"],
+              ].map(([key, label]) => (
+                <label key={key} className="text-xs text-slate-500 dark:text-slate-400">
+                  {label}
+                  <input
+                    type="number"
+                    min={0}
+                    value={Number(draft[key as keyof CreatorOSSettings] || 0)}
+                    onChange={(e) => setDraft({ ...draft, [key]: Number(e.target.value) })}
+                    className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-950 dark:text-white"
+                  />
+                </label>
+              ))}
+            </div>
+          </div>
+          <div>
+            <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">Filming days</p>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {filmingDays.map((day) => (
+                <button
+                  key={day}
+                  type="button"
+                  onClick={() => toggle("filmingDays", day)}
+                  className={`rounded-full border px-3 py-1 text-sm capitalize ${draft.filmingDays.includes(day) ? "border-slate-900 bg-slate-900 text-white dark:border-white dark:bg-white dark:text-slate-950" : "border-slate-300 text-slate-600 dark:border-slate-700 dark:text-slate-300"}`}
+                >
+                  {day.slice(0, 3)}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {activeStep === 4 && (
+        <div className="space-y-4">
+          <div className="rounded-2xl bg-white p-4 text-sm text-slate-600 shadow-sm dark:bg-slate-900 dark:text-slate-300">
+            <strong className="text-slate-900 dark:text-white">What happens after save:</strong> Creator OS creates a fresh Today's Move and an editable weekly plan. Then use Send to Create Post for Instagram or Post to My Page for Fan Hub.
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
+              <p className="text-xs font-bold uppercase tracking-wide text-slate-500">Goal</p>
+              <p className="mt-1 font-semibold text-slate-900 dark:text-white">{fullFunnelPlan.title}</p>
+              <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">{fullFunnelPlan.weeklyPlan}</p>
+            </div>
+            <div className="rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
+              <p className="text-xs font-bold uppercase tracking-wide text-slate-500">Content lanes</p>
+              <p className="mt-1 text-sm text-slate-700 dark:text-slate-300">{selectedLaneLabels}</p>
+            </div>
+            <div className="rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
+              <p className="text-xs font-bold uppercase tracking-wide text-slate-500">Money paths</p>
+              <p className="mt-1 text-sm text-slate-700 dark:text-slate-300">{selectedMoneyPaths}</p>
+            </div>
+            <div className="rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
+              <p className="text-xs font-bold uppercase tracking-wide text-slate-500">Rhythm</p>
+              <p className="mt-1 text-sm text-slate-700 dark:text-slate-300">
+                {draft.weeklyPublicPostsTarget} public, {draft.weeklyStoriesTarget} stories, {draft.weeklyInnerCircleDropsTarget} Inner Circle, {draft.weeklyAmazonLinksTarget} Amazon. Film: {selectedFilmingDays}.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
@@ -139,226 +327,36 @@ export const BuildMoneyFlowSetup: React.FC<Props> = ({ open, settings, onClose, 
           <button type="button" onClick={onClose} className="rounded-full px-3 py-1 text-sm text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800">Close</button>
         </div>
 
-        <div ref={scrollAreaRef} className="overflow-y-auto p-6">
-          <div className="grid gap-4 lg:grid-cols-[15rem_1fr]">
-            <aside className="space-y-2">
-              {steps.map((step, index) => (
-                <button
-                  key={step.title}
-                  type="button"
-                  onClick={() => setActiveStep(index)}
-                  className={`w-full rounded-2xl border p-3 text-left transition ${
-                    activeStep === index
-                      ? "border-primary-500 bg-primary-50 text-primary-800 dark:bg-primary-950/40 dark:text-primary-100"
-                      : "border-slate-200 text-slate-600 hover:bg-slate-50 dark:border-slate-800 dark:text-slate-300 dark:hover:bg-slate-800"
-                  }`}
-                >
-                  <span className="text-xs font-bold uppercase tracking-wide">Step {index + 1}</span>
-                  <span className="mt-1 block text-sm font-semibold">{step.title}</span>
-                </button>
-              ))}
-            </aside>
-
-            <section className="rounded-3xl border border-slate-200 bg-slate-50 p-5 dark:border-slate-800 dark:bg-slate-950/50">
-              <p className="text-xs font-bold uppercase tracking-wide text-primary-600 dark:text-primary-400">
-                Step {activeStep + 1} of {steps.length}
-              </p>
-              <h3 className="mt-1 text-xl font-bold text-slate-950 dark:text-white">{steps[activeStep].title}</h3>
-              <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{steps[activeStep].description}</p>
-
-              <div className="mt-5">
-                {activeStep === 0 && (
-                  <div className="space-y-4">
-                    <div className="rounded-2xl bg-white p-4 text-sm text-slate-600 shadow-sm dark:bg-slate-900 dark:text-slate-300">
-                      <strong className="text-slate-900 dark:text-white">What this means:</strong> this is not a single-choice goal. Creator OS plans the whole weekly funnel so every piece of content has a job.
-                    </div>
-                    <div>
-                      <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">Weekly goal flow</p>
-                      <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-                        These are all active every week. The plan tells you how to move attention into clicks, subscribers, products, Treats, and retention.
-                      </p>
-                      <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                        {goals.map(([value, label], index) => (
-                          <div
-                            key={value}
-                            className="rounded-2xl border border-primary-100 bg-white p-4 text-left shadow-sm dark:border-primary-900/40 dark:bg-slate-900"
-                          >
-                            <span className="text-xs font-bold uppercase tracking-wide text-primary-600 dark:text-primary-400">
-                              {index + 1}. Always included
-                            </span>
-                            <span className="mt-1 block text-sm font-semibold text-slate-900 dark:text-white">{label}</span>
-                            <span className="mt-1 block text-xs text-slate-500 dark:text-slate-400">{goalPlans[value].outcome}</span>
-                          </div>
-                        ))}
+        <div className="overflow-y-auto p-6">
+          <div>
+            <div className="space-y-3">
+              {steps.map((step, index) => {
+                const isOpen = activeStep === index;
+                return (
+                  <div key={step.title} className="rounded-3xl border border-slate-200 bg-slate-50 dark:border-slate-800 dark:bg-slate-950/50">
+                    <button
+                      type="button"
+                      onClick={() => setActiveStep(index)}
+                      className={`w-full rounded-3xl p-4 text-left transition ${
+                        isOpen
+                          ? "bg-primary-50 text-primary-800 dark:bg-primary-950/40 dark:text-primary-100"
+                          : "text-slate-700 dark:text-slate-200"
+                      }`}
+                      aria-expanded={isOpen}
+                    >
+                      <span className="text-xs font-bold uppercase tracking-wide">Step {index + 1}</span>
+                      <span className="mt-1 block text-sm font-semibold">{step.title}</span>
+                      <span className="mt-1 block text-xs text-slate-500 dark:text-slate-400">{step.description}</span>
+                    </button>
+                    {isOpen && (
+                      <div className="border-t border-slate-200 p-4 dark:border-slate-800">
+                        {renderActiveStepContent()}
                       </div>
-                    </div>
-                    <div className="rounded-2xl border border-primary-100 bg-white p-4 shadow-sm dark:border-primary-900/50 dark:bg-slate-900">
-                      <p className="text-xs font-bold uppercase tracking-wide text-primary-600 dark:text-primary-400">
-                        {fullFunnelPlan.title}
-                      </p>
-                      <p className="mt-2 text-sm text-slate-700 dark:text-slate-300">{fullFunnelPlan.weeklyPlan}</p>
-                      <p className="mt-2 text-sm font-medium text-slate-900 dark:text-white">{fullFunnelPlan.nextAction}</p>
-                    </div>
+                    )}
                   </div>
-                )}
-
-                {activeStep === 1 && (
-                  <div className="space-y-5">
-                    <div className="rounded-2xl bg-white p-4 text-sm text-slate-600 shadow-sm dark:bg-slate-900 dark:text-slate-300">
-                      <strong className="text-slate-900 dark:text-white">What to do:</strong> pick who you are posting for and the content lanes you can actually make. These lanes become your daily post ideas.
-                    </div>
-                    <label className="block">
-                      <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">Primary audience</span>
-                      <select
-                        value={draft.primaryAudience}
-                        onChange={(e) => setDraft({ ...draft, primaryAudience: e.target.value as CreatorOSSettings["primaryAudience"] })}
-                        className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 dark:border-slate-700 dark:bg-slate-950"
-                      >
-                        <option value="mostly_men">Mostly men</option>
-                        <option value="mostly_women">Mostly women</option>
-                        <option value="mixed">Mixed audience</option>
-                      </select>
-                    </label>
-                    <div>
-                      <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">Content lanes</p>
-                      <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">Choose 2-4 lanes you can repeat weekly.</p>
-                      <div className="mt-3 flex flex-wrap gap-2">
-                        {(Object.keys(CONTENT_LANE_LABELS) as ContentLane[]).map((lane) => (
-                          <button
-                            key={lane}
-                            type="button"
-                            onClick={() => toggle("preferredLanes", lane)}
-                            className={`rounded-full border px-3 py-1 text-sm ${draft.preferredLanes.includes(lane) ? "border-primary-500 bg-primary-50 text-primary-700 dark:bg-primary-950 dark:text-primary-200" : "border-slate-300 text-slate-600 dark:border-slate-700 dark:text-slate-300"}`}
-                          >
-                            {CONTENT_LANE_LABELS[lane]}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                    <label className="block">
-                      <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">Brand tone</span>
-                      <textarea
-                        value={draft.brandTone}
-                        onChange={(e) => setDraft({ ...draft, brandTone: e.target.value })}
-                        rows={3}
-                        placeholder="Example: playful, confident, flirty, direct, casual"
-                        className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 dark:border-slate-700 dark:bg-slate-950"
-                      />
-                    </label>
-                  </div>
-                )}
-
-                {activeStep === 2 && (
-                  <div className="space-y-5">
-                    <div className="rounded-2xl bg-white p-4 text-sm text-slate-600 shadow-sm dark:bg-slate-900 dark:text-slate-300">
-                      <strong className="text-slate-900 dark:text-white">What to do:</strong> select every way this content can make money. Creator OS will connect public posts to Stories, Amazon links, Inner Circle, Treats, and retention.
-                    </div>
-                    <div>
-                      <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">Monetization paths</p>
-                      <div className="mt-3 flex flex-wrap gap-2">
-                        {monetizationPaths.map(([value, label]) => (
-                          <button
-                            key={value}
-                            type="button"
-                            onClick={() => toggle("monetizationPaths", value)}
-                            className={`rounded-full border px-3 py-1 text-sm ${draft.monetizationPaths.includes(value) ? "border-emerald-500 bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-200" : "border-slate-300 text-slate-600 dark:border-slate-700 dark:text-slate-300"}`}
-                          >
-                            {label}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {activeStep === 3 && (
-                  <div className="space-y-5">
-                    <div className="rounded-2xl bg-white p-4 text-sm text-slate-600 shadow-sm dark:bg-slate-900 dark:text-slate-300">
-                      <strong className="text-slate-900 dark:text-white">What to do:</strong> set numbers you can really hit. Creator OS will use this to build a weekly plan that is realistic, not overwhelming.
-                    </div>
-                    <label className="block">
-                      <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">Time to create</span>
-                      <select
-                        value={draft.availableTime}
-                        onChange={(e) => setDraft({ ...draft, availableTime: e.target.value as CreatorOSSettings["availableTime"] })}
-                        className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 dark:border-slate-700 dark:bg-slate-950"
-                      >
-                        <option value="5_minutes">5 minutes</option>
-                        <option value="15_minutes">15 minutes</option>
-                        <option value="30_plus">30+ minutes</option>
-                        <option value="batch_film">I batch film</option>
-                      </select>
-                    </label>
-                    <div>
-                      <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">Weekly rhythm</p>
-                      <div className="mt-2 grid grid-cols-2 gap-2">
-                        {[
-                          ["weeklyPublicPostsTarget", "Public posts"],
-                          ["weeklyStoriesTarget", "IG stories"],
-                          ["weeklyInnerCircleDropsTarget", "Inner Circle drops"],
-                          ["weeklyAmazonLinksTarget", "Amazon links"],
-                        ].map(([key, label]) => (
-                          <label key={key} className="text-xs text-slate-500 dark:text-slate-400">
-                            {label}
-                            <input
-                              type="number"
-                              min={0}
-                              value={Number(draft[key as keyof CreatorOSSettings] || 0)}
-                              onChange={(e) => setDraft({ ...draft, [key]: Number(e.target.value) })}
-                              className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-950 dark:text-white"
-                            />
-                          </label>
-                        ))}
-                      </div>
-                    </div>
-                    <div>
-                      <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">Filming days</p>
-                      <div className="mt-2 flex flex-wrap gap-2">
-                        {filmingDays.map((day) => (
-                          <button
-                            key={day}
-                            type="button"
-                            onClick={() => toggle("filmingDays", day)}
-                            className={`rounded-full border px-3 py-1 text-sm capitalize ${draft.filmingDays.includes(day) ? "border-slate-900 bg-slate-900 text-white dark:border-white dark:bg-white dark:text-slate-950" : "border-slate-300 text-slate-600 dark:border-slate-700 dark:text-slate-300"}`}
-                          >
-                            {day.slice(0, 3)}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {activeStep === 4 && (
-                  <div className="space-y-4">
-                    <div className="rounded-2xl bg-white p-4 text-sm text-slate-600 shadow-sm dark:bg-slate-900 dark:text-slate-300">
-                      <strong className="text-slate-900 dark:text-white">What happens after save:</strong> Creator OS creates a fresh Today's Move and an editable weekly plan. Then use Send to Create Post for Instagram or Post to My Page for Fan Hub.
-                    </div>
-                    <div className="grid gap-3 sm:grid-cols-2">
-                      <div className="rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
-                        <p className="text-xs font-bold uppercase tracking-wide text-slate-500">Goal</p>
-                        <p className="mt-1 font-semibold text-slate-900 dark:text-white">{fullFunnelPlan.title}</p>
-                        <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">{fullFunnelPlan.weeklyPlan}</p>
-                      </div>
-                      <div className="rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
-                        <p className="text-xs font-bold uppercase tracking-wide text-slate-500">Content lanes</p>
-                        <p className="mt-1 text-sm text-slate-700 dark:text-slate-300">{selectedLaneLabels}</p>
-                      </div>
-                      <div className="rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
-                        <p className="text-xs font-bold uppercase tracking-wide text-slate-500">Money paths</p>
-                        <p className="mt-1 text-sm text-slate-700 dark:text-slate-300">{selectedMoneyPaths}</p>
-                      </div>
-                      <div className="rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
-                        <p className="text-xs font-bold uppercase tracking-wide text-slate-500">Rhythm</p>
-                        <p className="mt-1 text-sm text-slate-700 dark:text-slate-300">
-                          {draft.weeklyPublicPostsTarget} public, {draft.weeklyStoriesTarget} stories, {draft.weeklyInnerCircleDropsTarget} Inner Circle, {draft.weeklyAmazonLinksTarget} Amazon. Film: {selectedFilmingDays}.
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </section>
+                );
+              })}
+            </div>
           </div>
         </div>
 

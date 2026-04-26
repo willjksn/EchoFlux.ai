@@ -11,23 +11,26 @@ type Props = {
 };
 
 export const AmazonLinkLibrary: React.FC<Props> = ({ links, onAdd, onEdit, onDelete, onTurnIntoIdea, onUpdate }) => (
-  <section className="rounded-xl border border-gray-100 bg-white p-5 shadow-md dark:border-gray-700 dark:bg-gray-800">
-    <div className="flex items-start justify-between gap-3">
-      <div>
-        <h2 className="text-xl font-bold text-gray-900 dark:text-white">Amazon Link Library</h2>
-        <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Store products and categories that fit your content situation.</p>
+  <section className="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-md dark:border-gray-700 dark:bg-gray-800">
+    <div className="border-b border-primary-100 bg-gradient-to-r from-primary-50 via-white to-pink-50 px-4 py-3 text-gray-900 dark:border-gray-700 dark:from-gray-900 dark:via-gray-900 dark:to-primary-950/20 dark:text-white">
+      <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
+        <div>
+          <p className="text-xs font-bold uppercase tracking-[0.2em] text-primary-600 dark:text-primary-300">Creator OS product library</p>
+          <h2 className="text-lg font-bold">Amazon Link Library</h2>
+          <p className="mt-0.5 max-w-3xl text-xs leading-relaxed text-gray-600 dark:text-gray-300">Store products and categories that fit your content situation.</p>
+        </div>
+        <button onClick={onAdd} className="rounded-xl bg-primary-600 px-3 py-2 text-sm font-bold text-white shadow-sm transition hover:bg-primary-700">Add Amazon Link</button>
       </div>
-      <button onClick={onAdd} className="rounded-lg bg-primary-600 px-3 py-2 text-sm font-semibold text-white hover:bg-primary-700">Add Amazon Link</button>
     </div>
 
-    <div className="mt-5 grid gap-3 lg:grid-cols-2">
+    <div className="grid gap-4 p-4 lg:grid-cols-2">
       {links.length === 0 ? (
-        <div className="rounded-xl border border-dashed border-gray-300 p-5 text-sm text-gray-500 dark:border-gray-700 dark:text-gray-400">
+        <div className="rounded-xl border border-dashed border-primary-200 bg-primary-50/60 p-3 text-sm text-primary-900 dark:border-primary-900/40 dark:bg-primary-950/20 dark:text-primary-100 lg:col-span-2">
           Add your first link. Start with a car item, desk item, or random useful product.
         </div>
       ) : (
         links.map((link) => (
-          <div key={link.id} className="rounded-xl border border-gray-100 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-900/50">
+          <div key={link.id} className="rounded-2xl border border-gray-100 bg-gray-50 p-4 shadow-sm dark:border-gray-700 dark:bg-gray-900/50">
             <div className="flex items-start justify-between gap-3">
               <div>
                 <h3 className="font-semibold text-gray-900 dark:text-white">{link.productName}</h3>

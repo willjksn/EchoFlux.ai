@@ -12,25 +12,28 @@ type Props = {
 };
 
 export const TrendFindsPanel: React.FC<Props> = ({ trends, loading, error, onFind, onTurnIntoIdea, onSaveToLibrary, onUpdate }) => (
-  <section className="rounded-xl border border-gray-100 bg-white p-5 shadow-md dark:border-gray-700 dark:bg-gray-800">
-    <div className="flex items-start justify-between gap-3">
-      <div>
-        <h2 className="text-xl font-bold text-gray-900 dark:text-white">Trend Finds</h2>
-        <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Amazon Product Trends turned into creator actions.</p>
+  <section className="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-lg dark:border-gray-700 dark:bg-gray-800">
+    <div className="border-b border-primary-100 bg-gradient-to-r from-primary-50 via-white to-pink-50 p-4 text-gray-900 dark:border-gray-700 dark:from-gray-900 dark:via-gray-900 dark:to-primary-950/20 dark:text-white">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+        <div>
+          <p className="text-xs font-bold uppercase tracking-[0.2em] text-primary-600 dark:text-primary-300">Creator OS research</p>
+          <h2 className="mt-1 text-xl font-bold">Trend Finds</h2>
+          <p className="mt-1 max-w-3xl text-xs leading-relaxed text-gray-600 dark:text-gray-300">Amazon product trends turned into creator actions.</p>
+        </div>
+        <button onClick={onFind} disabled={loading} className="rounded-xl bg-primary-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-primary-700 disabled:opacity-60">
+          {loading ? "Finding..." : "Find Product Trends"}
+        </button>
       </div>
-      <button onClick={onFind} disabled={loading} className="rounded-lg bg-gray-900 px-3 py-2 text-sm font-semibold text-white hover:bg-gray-800 disabled:opacity-60 dark:bg-gray-100 dark:text-gray-900">
-        {loading ? "Finding..." : "Find Product Trends"}
-      </button>
     </div>
-    {error && <p className="mt-4 rounded-lg bg-amber-50 p-3 text-sm text-amber-700 dark:bg-amber-900/30 dark:text-amber-200">{error}</p>}
-    <div className="mt-5 grid gap-3 lg:grid-cols-2">
+    {error && <p className="mx-5 mt-5 rounded-xl bg-amber-50 p-3 text-sm text-amber-700 dark:bg-amber-900/30 dark:text-amber-200">{error}</p>}
+    <div className="grid gap-4 p-5 lg:grid-cols-2">
       {trends.length === 0 ? (
-        <div className="rounded-xl border border-dashed border-gray-300 p-5 text-sm text-gray-500 dark:border-gray-700 dark:text-gray-400">
+        <div className="rounded-2xl border border-dashed border-primary-200 bg-primary-50/60 p-5 text-sm text-primary-900 dark:border-primary-900/40 dark:bg-primary-950/20 dark:text-primary-100 lg:col-span-2">
           Trend search is unavailable right now? You can still plan your week manually.
         </div>
       ) : (
         trends.map((trend) => (
-          <div key={trend.id} className="rounded-xl border border-gray-100 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-900/50">
+          <div key={trend.id} className="rounded-2xl border border-gray-100 bg-gray-50 p-4 shadow-sm dark:border-gray-700 dark:bg-gray-900/50">
             <div className="flex items-start justify-between gap-3">
               <div>
                 <h3 className="font-semibold text-gray-900 dark:text-white">{trend.title}</h3>

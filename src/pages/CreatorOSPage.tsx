@@ -118,12 +118,27 @@ export default function CreatorOSPage() {
 
   const focusItems = useMemo(() => {
     const checklist = todaysMove?.checklist || [];
+    const linkedProduct = todaysMove?.suggestedAmazonLinkId
+      ? amazonLinks.find((link) => link.id === todaysMove.suggestedAmazonLinkId)?.productName
+      : todaysMove?.suggestedAmazonCategory;
     return [
-      { id: "public", label: "Post one curiosity clip", completed: checklist.find((item) => item.id === "ig")?.completed || false },
-      { id: "story", label: "Add one story with a soft product link", completed: checklist.find((item) => item.id === "story")?.completed || false },
-      { id: "inner", label: "Drop one closer post inside Inner Circle", completed: checklist.find((item) => item.id === "inner")?.completed || false },
+      {
+        id: "public",
+        label: todaysMove?.publicPost ? `Post: ${todaysMove.publicPost}` : "Post one curiosity clip",
+        completed: checklist.find((item) => item.id === "ig")?.completed || false,
+      },
+      {
+        id: "story",
+        label: linkedProduct ? `Story link: ${linkedProduct}` : "Add one story with a soft product link",
+        completed: checklist.find((item) => item.id === "story")?.completed || false,
+      },
+      {
+        id: "inner",
+        label: todaysMove?.innerCircleDrop ? `Inner Circle: ${todaysMove.innerCircleDrop}` : "Drop one closer post inside Inner Circle",
+        completed: checklist.find((item) => item.id === "inner")?.completed || false,
+      },
     ];
-  }, [todaysMove]);
+  }, [amazonLinks, todaysMove]);
 
   if (!hasAccess) {
     return <CreatorOSLockedState onUpgrade={() => setActivePage("pricing")} />;
@@ -250,11 +265,20 @@ export default function CreatorOSPage() {
     setTrends((prev) => prev.map((trend) => (trend.id === trendId ? { ...trend, ...updates } : trend)));
   };
 
-  const moveCaption = (move: TodaysMove): string =>
-    `${move.hook}\n\n${move.caption}\n\nStory: ${move.storyLinkPlan.join(" / ")}\n\nInner Circle: ${move.innerCircleCaption}`;
+  const moveCaption = (move: TodaysMove): string => {
+    const link = move.suggestedAmazonLinkId ? amazonLinks.find((item) => item.id === move.suggestedAmazonLinkId) : null;
+    return `${move.hook}\n\n${move.caption}\n\nStory: ${move.storyLinkPlan.join(" / ")}${link ? `\n\nAmazon link: ${link.productName}\n${link.amazonUrl}` : ""}\n\nInner Circle: ${move.innerCircleCaption}`;
+  };
 
-  const ideaCaption = (idea: ContentIdea): string =>
-    `${idea.publicHook || idea.title}\n\n${idea.caption || ""}${idea.storyText?.length ? `\n\nStory: ${idea.storyText.join(" / ")}` : ""}${idea.innerCircleTieIn ? `\n\nInner Circle: ${idea.innerCircleTieIn}` : ""}`.trim();
+  const ideaCaption = (idea: ContentIdea): string => {
+    const link = idea.amazonLinkId ? amazonLinks.find((item) => item.id === idea.amazonLinkId) : null;
+    const amazonText = link
+      ? `\n\nAmazon link: ${link.productName}\n${link.amazonUrl}`
+      : idea.amazonCategory
+        ? `\n\nAmazon angle: ${idea.amazonCategory}`
+        : "";
+    return `${idea.publicHook || idea.title}\n\n${idea.caption || ""}${idea.storyText?.length ? `\n\nStory: ${idea.storyText.join(" / ")}` : ""}${amazonText}${idea.innerCircleTieIn ? `\n\nInner Circle: ${idea.innerCircleTieIn}` : ""}`.trim();
+  };
 
   const stageCreatePostDraft = (draft: { id: string; content: string; platforms: Platform[]; title?: string }) => {
     const draftJson = JSON.stringify({

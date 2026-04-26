@@ -10,13 +10,55 @@ type Props = {
 
 const days: WeeklyPlanDayKey[] = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"];
 
+const fieldConfig = {
+  publicPost: {
+    label: "Public post",
+    shortLabel: "Public",
+    accent: "from-primary-500 to-pink-500",
+    border: "border-primary-100 dark:border-primary-900/40",
+    bg: "bg-primary-50/70 dark:bg-primary-950/20",
+    helper: "Film and post the attention piece.",
+  },
+  storyLink: {
+    label: "Story / Amazon",
+    shortLabel: "Story",
+    accent: "from-amber-500 to-orange-500",
+    border: "border-amber-100 dark:border-amber-900/40",
+    bg: "bg-amber-50/70 dark:bg-amber-950/20",
+    helper: "Move attention into clicks, replies, or product interest.",
+  },
+  innerCircleDrop: {
+    label: "Inner Circle / Retention",
+    shortLabel: "Inner",
+    accent: "from-emerald-500 to-teal-500",
+    border: "border-emerald-100 dark:border-emerald-900/40",
+    bg: "bg-emerald-50/70 dark:bg-emerald-950/20",
+    helper: "Give members the closer, private, or retention follow-up.",
+  },
+} as const;
+
+const dayFocus: Record<WeeklyPlanDayKey, string> = {
+  monday: "Attention starter",
+  tuesday: "Story clicks",
+  wednesday: "Retention check",
+  thursday: "Product angle",
+  friday: "Conversation push",
+  saturday: "Lifestyle sell",
+  sunday: "Review and reset",
+};
+
 export const WeeklyPlanView: React.FC<Props> = ({ plan, onChange, onSave, onGenerate }) => {
   if (!plan) {
     return (
-      <section className="rounded-xl border border-gray-100 bg-white p-5 shadow-md dark:border-gray-700 dark:bg-gray-800">
-        <h2 className="text-xl font-bold text-gray-900 dark:text-white">Weekly Plan</h2>
-        <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Generate an editable week based on your setup.</p>
-        <button onClick={onGenerate} className="mt-4 rounded-lg bg-primary-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-primary-700">Plan My Week</button>
+      <section className="overflow-hidden rounded-2xl border border-primary-100 bg-white shadow-lg dark:border-primary-900/40 dark:bg-gray-800">
+        <div className="bg-gradient-to-br from-primary-600 via-primary-500 to-pink-500 p-6 text-white">
+          <p className="text-xs font-bold uppercase tracking-[0.2em] text-white/75">Creator OS planner</p>
+          <h2 className="mt-2 text-2xl font-bold">Weekly Plan</h2>
+          <p className="mt-2 max-w-2xl text-sm text-white/85">
+            Generate an editable week that tells you what to post, what to link, and what to drop for paid members.
+          </p>
+          <button onClick={onGenerate} className="mt-5 rounded-xl bg-white px-4 py-2.5 text-sm font-bold text-primary-700 shadow-sm transition hover:bg-primary-50">Plan My Week</button>
+        </div>
       </section>
     );
   }
@@ -38,43 +80,92 @@ export const WeeklyPlanView: React.FC<Props> = ({ plan, onChange, onSave, onGene
     });
   };
 
+  const totalActions = days.length * 3;
+  const completedActions = days.reduce(
+    (count, day) =>
+      count +
+      Number(plan.days[day].completed.publicPost) +
+      Number(plan.days[day].completed.storyLink) +
+      Number(plan.days[day].completed.innerCircleDrop),
+    0,
+  );
+  const completionPercent = Math.round((completedActions / totalActions) * 100);
+
   return (
-    <section className="rounded-xl border border-gray-100 bg-white p-5 shadow-md dark:border-gray-700 dark:bg-gray-800">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <h2 className="text-xl font-bold text-gray-900 dark:text-white">Weekly Plan</h2>
-          <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Week of {plan.weekStartDate}</p>
-        </div>
-        <div className="flex gap-2">
-          <button onClick={onGenerate} className="rounded-lg border border-gray-300 px-3 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-700">Regenerate</button>
-          <button onClick={() => onSave(plan)} className="rounded-lg bg-primary-600 px-3 py-2 text-sm font-semibold text-white hover:bg-primary-700">Save</button>
+    <section className="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-lg dark:border-gray-700 dark:bg-gray-800">
+      <div className="border-b border-primary-100 bg-gradient-to-r from-primary-50 via-white to-pink-50 p-4 text-gray-900 dark:border-gray-700 dark:from-gray-900 dark:via-gray-900 dark:to-primary-950/20 dark:text-white">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-[0.2em] text-primary-600 dark:text-primary-300">Creator OS weekly flow</p>
+            <h2 className="mt-1 text-xl font-bold">Plan My Week</h2>
+            <p className="mt-1 max-w-3xl text-xs leading-relaxed text-gray-600 dark:text-gray-300">
+              Week of {plan.weekStartDate} · {completedActions}/{totalActions} tasks done · {completionPercent}% complete
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <button onClick={onGenerate} className="rounded-xl bg-primary-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-primary-700">Regenerate detailed week</button>
+            <button onClick={() => onSave(plan)} className="rounded-xl border border-primary-200 bg-white px-4 py-2.5 text-sm font-bold text-primary-700 transition hover:bg-primary-50 dark:border-primary-900/40 dark:bg-gray-800 dark:text-primary-200 dark:hover:bg-gray-700">Save plan</button>
+          </div>
         </div>
       </div>
-      <div className="mt-5 grid gap-3 lg:grid-cols-7">
+
+      <div className="border-b border-gray-100 bg-gradient-to-r from-primary-50 via-white to-pink-50 p-4 dark:border-gray-700 dark:from-gray-900 dark:via-gray-900 dark:to-primary-950/20">
+        <div className="grid gap-3 text-sm md:grid-cols-3">
+          <div className="rounded-xl border border-primary-100 bg-white/80 p-3 text-primary-900 shadow-sm dark:border-primary-900/40 dark:bg-gray-800/80 dark:text-primary-100">
+            <span className="font-bold">1. Public:</span> get attention with one repeatable post.
+          </div>
+          <div className="rounded-xl border border-amber-100 bg-white/80 p-3 text-amber-900 shadow-sm dark:border-amber-900/40 dark:bg-gray-800/80 dark:text-amber-100">
+            <span className="font-bold">2. Story/Amazon:</span> turn views into clicks or replies.
+          </div>
+          <div className="rounded-xl border border-emerald-100 bg-white/80 p-3 text-emerald-900 shadow-sm dark:border-emerald-900/40 dark:bg-gray-800/80 dark:text-emerald-100">
+            <span className="font-bold">3. Inner Circle:</span> convert or retain paid members.
+          </div>
+        </div>
+      </div>
+
+      <div className="grid gap-5 p-5 xl:grid-cols-2">
         {days.map((day) => (
-          <div key={day} className="rounded-xl border border-gray-100 bg-gray-50 p-3 dark:border-gray-700 dark:bg-gray-900/50">
-            <h3 className="text-sm font-bold capitalize text-gray-800 dark:text-gray-100">{day}</h3>
+          <div key={day} className="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm ring-1 ring-gray-50 dark:border-gray-700 dark:bg-gray-900/70 dark:ring-gray-800">
+            <div className="border-b border-gray-100 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-900">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-wide text-primary-600 dark:text-primary-400">{dayFocus[day]}</p>
+                  <h3 className="mt-1 text-lg font-bold capitalize text-gray-900 dark:text-white">{day}</h3>
+                </div>
+                <span className="rounded-full bg-white px-3 py-1 text-xs font-bold text-gray-500 shadow-sm ring-1 ring-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:ring-gray-700">
+                  {Number(plan.days[day].completed.publicPost) + Number(plan.days[day].completed.storyLink) + Number(plan.days[day].completed.innerCircleDrop)}/3 done
+                </span>
+              </div>
+            </div>
             {(["publicPost", "storyLink", "innerCircleDrop"] as const).map((field) => (
-              <label key={field} className="mt-3 block text-xs font-semibold text-gray-500 dark:text-gray-400">
-                <button
-                  type="button"
-                  onClick={() => toggle(day, field)}
-                  className={`mb-1 rounded-full px-2.5 py-1 text-[11px] font-bold transition-colors ${
-                    plan.days[day].completed[field]
-                      ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300"
-                      : "bg-white text-gray-500 ring-1 ring-gray-200 hover:bg-gray-100 dark:bg-gray-800 dark:text-gray-300 dark:ring-gray-700"
-                  }`}
-                >
-                  {plan.days[day].completed[field] ? "Done: " : ""}
-                  {field === "publicPost" ? "Public" : field === "storyLink" ? "Story/Amazon" : "Inner Circle"}
-                </button>
+              <div key={field} className={`border-t border-gray-100 p-4 first:border-t-0 dark:border-gray-800 ${fieldConfig[field].bg}`}>
+                <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <span className={`h-8 w-1.5 rounded-full bg-gradient-to-b ${fieldConfig[field].accent}`} />
+                    <div>
+                      <p className="text-sm font-bold text-gray-900 dark:text-white">{fieldConfig[field].label}</p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">{fieldConfig[field].helper}</p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => toggle(day, field)}
+                    className={`rounded-full px-3 py-1.5 text-xs font-bold transition-colors ${
+                      plan.days[day].completed[field]
+                        ? "bg-green-600 text-white shadow-sm hover:bg-green-700"
+                        : "bg-white text-gray-600 ring-1 ring-gray-200 hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-300 dark:ring-gray-700 dark:hover:bg-gray-700"
+                    }`}
+                  >
+                    {plan.days[day].completed[field] ? `Done: ${fieldConfig[field].shortLabel}` : `Mark ${fieldConfig[field].shortLabel} done`}
+                  </button>
+                </div>
                 <textarea
                   value={plan.days[day][field]}
                   onChange={(e) => updateDay(day, field, e.target.value)}
-                  rows={3}
-                  className="mt-1 w-full rounded-lg border border-gray-200 bg-white px-2 py-2 text-xs font-normal text-gray-900 dark:border-gray-700 dark:bg-gray-800 dark:text-white"
+                  rows={5}
+                  className={`mt-1 w-full rounded-xl border bg-white px-3 py-2 text-sm font-normal leading-relaxed text-gray-900 shadow-sm outline-none transition focus:ring-2 focus:ring-primary-300 dark:bg-gray-800 dark:text-white ${fieldConfig[field].border}`}
                 />
-              </label>
+              </div>
             ))}
           </div>
         ))}
