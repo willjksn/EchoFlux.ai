@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import type { AmazonLink, ContentIdea } from "../../types/creatorOS";
 import { CONTENT_LANE_LABELS, FUNNEL_GOAL_LABELS, PLATFORM_LABELS, CONTENT_IDEA_STATUS_LABELS, CONTENT_IDEA_STATUSES } from "../../lib/creatorOS";
 
@@ -13,39 +13,65 @@ type Props = {
 };
 
 export const ContentIdeaCard: React.FC<Props> = ({ idea, amazonLinks, onEdit, onDelete, onSendToCreatePost, onPublishToMyPage, onUpdate }) => {
+  const [expanded, setExpanded] = useState(false);
   const link = idea.amazonLinkId ? amazonLinks.find((item) => item.id === idea.amazonLinkId) : null;
   const currentStatusIndex = CONTENT_IDEA_STATUSES.indexOf(idea.status);
   const nextStatus = CONTENT_IDEA_STATUSES[currentStatusIndex + 1];
 
   return (
     <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm ring-1 ring-gray-50 transition-shadow hover:shadow-md dark:border-gray-700 dark:bg-gray-800 dark:ring-gray-800">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <h3 className="font-semibold text-gray-900 dark:text-white">{idea.title || "Untitled idea"}</h3>
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <h3 className="truncate font-semibold text-gray-900 dark:text-white">{idea.title || "Untitled idea"}</h3>
           <p className="mt-1 text-xs text-gray-500">{CONTENT_LANE_LABELS[idea.lane]}</p>
         </div>
-        <select
-          value={idea.status}
-          onChange={(e) => onUpdate(idea.id, { status: e.target.value as ContentIdea["status"] })}
-          className="rounded-lg border border-gray-300 bg-white px-2 py-1 text-xs dark:border-gray-600 dark:bg-gray-900"
+        <button
+          type="button"
+          onClick={() => setExpanded((value) => !value)}
+          className="shrink-0 rounded-full border border-gray-200 px-2 py-1 text-[11px] font-bold text-gray-600 transition hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-700"
         >
-          {Object.entries(CONTENT_IDEA_STATUS_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-        </select>
+          {expanded ? "Minimize" : "Expand"}
+        </button>
       </div>
-      {idea.publicHook && <p className="mt-3 text-sm font-medium text-gray-800 dark:text-gray-200">"{idea.publicHook}"</p>}
-      {idea.caption && <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">{idea.caption}</p>}
+
       <div className="mt-3 flex flex-wrap gap-1">
-        {idea.platforms.map((platform) => (
-          <span key={platform} className="rounded-full bg-gray-100 px-2 py-1 text-[11px] font-semibold text-gray-600 dark:bg-gray-700 dark:text-gray-300">
-            {PLATFORM_LABELS[platform]}
-          </span>
-        ))}
+        <span className="rounded-full bg-primary-50 px-2 py-1 text-[11px] font-bold text-primary-700 dark:bg-primary-900/30 dark:text-primary-200">{FUNNEL_GOAL_LABELS[idea.funnelGoal]}</span>
+        <span className="rounded-full bg-gray-100 px-2 py-1 text-[11px] font-semibold text-gray-600 dark:bg-gray-700 dark:text-gray-300">{idea.platforms.length} platform{idea.platforms.length === 1 ? "" : "s"}</span>
+        {(link || idea.amazonCategory) && <span className="rounded-full bg-emerald-50 px-2 py-1 text-[11px] font-semibold text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-300">Amazon</span>}
+        {idea.innerCircleTieIn && <span className="rounded-full bg-pink-50 px-2 py-1 text-[11px] font-semibold text-pink-700 dark:bg-pink-900/20 dark:text-pink-300">Inner Circle</span>}
       </div>
-      <p className="mt-3 text-xs text-gray-500">{FUNNEL_GOAL_LABELS[idea.funnelGoal]}</p>
-      {(link || idea.amazonCategory) && (
-        <p className="mt-1 text-xs text-emerald-600 dark:text-emerald-300">Amazon: {link?.productName || idea.amazonCategory}</p>
+
+      {idea.publicHook && (
+        <p className={`mt-3 text-sm font-medium text-gray-800 dark:text-gray-200 ${expanded ? "" : "line-clamp-2"}`}>
+          &quot;{idea.publicHook}&quot;
+        </p>
       )}
-      {idea.innerCircleTieIn && <p className="mt-1 text-xs text-primary-600 dark:text-primary-300">Inner Circle: {idea.innerCircleTieIn}</p>}
+
+      {expanded && (
+        <>
+          {idea.caption && <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">{idea.caption}</p>}
+          <div className="mt-3 flex flex-wrap gap-1">
+            {idea.platforms.map((platform) => (
+              <span key={platform} className="rounded-full bg-gray-100 px-2 py-1 text-[11px] font-semibold text-gray-600 dark:bg-gray-700 dark:text-gray-300">
+                {PLATFORM_LABELS[platform]}
+              </span>
+            ))}
+          </div>
+          {(link || idea.amazonCategory) && (
+            <p className="mt-3 text-xs text-emerald-600 dark:text-emerald-300">Amazon: {link?.productName || idea.amazonCategory}</p>
+          )}
+          {idea.innerCircleTieIn && <p className="mt-1 text-xs text-primary-600 dark:text-primary-300">Inner Circle: {idea.innerCircleTieIn}</p>}
+          {idea.notes && <p className="mt-2 rounded-xl bg-gray-50 p-3 text-xs leading-relaxed text-gray-500 dark:bg-gray-900/60 dark:text-gray-400">{idea.notes}</p>}
+          <select
+            value={idea.status}
+            onChange={(e) => onUpdate(idea.id, { status: e.target.value as ContentIdea["status"] })}
+            className="mt-3 w-full rounded-lg border border-gray-300 bg-white px-2 py-2 text-xs dark:border-gray-600 dark:bg-gray-900"
+          >
+            {Object.entries(CONTENT_IDEA_STATUS_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+          </select>
+        </>
+      )}
+
       <div className="mt-4 grid gap-2">
         {nextStatus && (
           <button
@@ -66,12 +92,20 @@ export const ContentIdeaCard: React.FC<Props> = ({ idea, amazonLinks, onEdit, on
           </button>
         )}
       </div>
-      <div className="mt-3 flex flex-wrap gap-2">
-        <button onClick={() => onSendToCreatePost(idea)} className="rounded-lg bg-primary-50 px-2.5 py-1.5 text-xs font-semibold text-primary-700 hover:bg-primary-100 dark:bg-primary-900/30 dark:text-primary-300">Create Post</button>
-        <button onClick={() => onPublishToMyPage(idea)} className="rounded-lg bg-pink-50 px-2.5 py-1.5 text-xs font-semibold text-pink-700 hover:bg-pink-100 dark:bg-pink-900/20 dark:text-pink-300">Post My Page</button>
-        <button onClick={() => onEdit(idea)} className="rounded-lg bg-primary-50 px-2.5 py-1.5 text-xs font-semibold text-primary-700 hover:bg-primary-100 dark:bg-primary-900/30 dark:text-primary-300">Edit</button>
-        <button onClick={() => onDelete(idea.id)} className="rounded-lg bg-red-50 px-2.5 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-100 dark:bg-red-900/20 dark:text-red-300">Delete</button>
-      </div>
+
+      {expanded ? (
+        <div className="mt-3 flex flex-wrap gap-2">
+          <button type="button" onClick={() => onSendToCreatePost(idea)} className="rounded-lg bg-primary-50 px-2.5 py-1.5 text-xs font-semibold text-primary-700 hover:bg-primary-100 dark:bg-primary-900/30 dark:text-primary-300">Create Post</button>
+          <button type="button" onClick={() => onPublishToMyPage(idea)} className="rounded-lg bg-pink-50 px-2.5 py-1.5 text-xs font-semibold text-pink-700 hover:bg-pink-100 dark:bg-pink-900/20 dark:text-pink-300">Post My Page</button>
+          <button type="button" onClick={() => onEdit(idea)} className="rounded-lg bg-primary-50 px-2.5 py-1.5 text-xs font-semibold text-primary-700 hover:bg-primary-100 dark:bg-primary-900/30 dark:text-primary-300">Edit</button>
+          <button type="button" onClick={() => onDelete(idea.id)} className="rounded-lg bg-red-50 px-2.5 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-100 dark:bg-red-900/20 dark:text-red-300">Delete</button>
+        </div>
+      ) : (
+        <div className="mt-3 flex gap-2">
+          <button type="button" onClick={() => onEdit(idea)} className="flex-1 rounded-lg bg-primary-50 px-2.5 py-1.5 text-xs font-semibold text-primary-700 hover:bg-primary-100 dark:bg-primary-900/30 dark:text-primary-300">Edit</button>
+          <button type="button" onClick={() => setExpanded(true)} className="flex-1 rounded-lg bg-gray-100 px-2.5 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-200">Details</button>
+        </div>
+      )}
     </div>
   );
 };
