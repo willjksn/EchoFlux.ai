@@ -48,6 +48,14 @@ function categoryFromQuery(query: string): string {
   return "Random but Useful";
 }
 
+function amazonSearchUrl(query: string): string {
+  const clean = query
+    .replace(/\b(trending|viral|amazon|tiktok|best|products?)\b/gi, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  return `https://www.amazon.com/s?k=${encodeURIComponent(clean || query || "amazon finds")}`;
+}
+
 export function buildAmazonTrendQueries(settings: {
   primaryAudience: PrimaryAudience;
   categories?: string[];
@@ -122,7 +130,7 @@ function trendFromResult(result: WebSearchResult, query: string, audience: Prima
         ? "Turn the car clip into a short car-talk drop inside Inner Circle."
         : "Share the closer or more personal version inside Inner Circle.",
     ownershipRecommendation: "testing_interest",
-    sourceUrl: result.link,
+    sourceUrl: amazonSearchUrl(query),
     dateFound,
     status: "new",
   };

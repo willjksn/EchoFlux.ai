@@ -44,6 +44,7 @@ import { AmazonLinkLibrary } from "../components/creator-os/AmazonLinkLibrary";
 import { AmazonLinkModal } from "../components/creator-os/AmazonLinkModal";
 import { InnerCircleFunnel } from "../components/creator-os/InnerCircleFunnel";
 import { TrendFindsPanel } from "../components/creator-os/TrendFindsPanel";
+import { ProductShotIdeaBox } from "../components/creator-os/ProductShotIdeaBox";
 
 function currentDayKey(): WeeklyPlanDayKey {
   const key = new Date().toLocaleDateString("en-US", { weekday: "long" }).toLowerCase();
@@ -412,6 +413,24 @@ export default function CreatorOSPage() {
     showToast(`Posted to My Page (${dropId}).`, "success");
   };
 
+  const saveProductShotIdea = async (ideaText: string) => {
+    const idea = await createContentIdea(uid, {
+      title: "AI product shot idea",
+      lane: "amazon_soft_mention",
+      publicHook: "random but useful",
+      caption: ideaText,
+      platforms: ["instagram_story", "instagram_reel", "tiktok"],
+      funnelGoal: "test_product_interest",
+      storyText: ideaText.split("\n").filter(Boolean).slice(0, 3),
+      innerCircleTieIn: "Use the closer version as an Inner Circle follow-up if the Story gets replies.",
+      notes: ideaText,
+      dueDate: "",
+      status: "ideas",
+    });
+    setIdeas((prev) => [idea, ...prev]);
+    showToast("Product shot idea saved.", "success");
+  };
+
   return (
     <div className="min-h-full bg-gray-50 p-4 text-gray-900 dark:bg-gray-900 dark:text-gray-100 sm:p-6">
       <div className="mx-auto max-w-7xl space-y-6">
@@ -475,6 +494,12 @@ export default function CreatorOSPage() {
                 showToast("Weekly plan saved.", "success");
               }}
               onGenerate={planMyWeek}
+            />
+
+            <ProductShotIdeaBox
+              settings={effectiveSettings}
+              amazonLinks={amazonLinks}
+              onSaveAsIdea={saveProductShotIdea}
             />
 
             <TrendFindsPanel

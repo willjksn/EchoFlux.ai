@@ -11,6 +11,29 @@ type Props = {
   onUpdate: (trendId: string, updates: Partial<CreatorOSTrend>) => void;
 };
 
+function buildAmazonSearchUrl(label: string): string {
+  const clean = label
+    .replace(/\b(trending|viral|amazon|tiktok|best|products?)\b/gi, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  const query = clean || label.trim() || "amazon finds";
+  return `https://www.amazon.com/s?k=${encodeURIComponent(query)}`;
+}
+
+function isAmazonUrl(raw: string | undefined): boolean {
+  if (!raw) return false;
+  try {
+    const host = new URL(raw).hostname.toLowerCase();
+    return host === "amazon.com" || host.endsWith(".amazon.com");
+  } catch {
+    return false;
+  }
+}
+
+function trendSourceUrl(trend: CreatorOSTrend): string {
+  return isAmazonUrl(trend.sourceUrl) ? trend.sourceUrl : buildAmazonSearchUrl(`${trend.title} ${trend.category}`);
+}
+
 export const TrendFindsPanel: React.FC<Props> = ({ trends, loading, error, onFind, onTurnIntoIdea, onSaveToLibrary, onUpdate }) => (
   <section className="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-lg dark:border-gray-700 dark:bg-gray-800">
     <div className="border-b border-primary-100 bg-gradient-to-r from-primary-50 via-white to-pink-50 p-4 text-gray-900 dark:border-gray-700 dark:from-gray-900 dark:via-gray-900 dark:to-primary-950/20 dark:text-white">
@@ -50,7 +73,7 @@ export const TrendFindsPanel: React.FC<Props> = ({ trends, loading, error, onFin
             </div>
             <p className="mt-2 text-xs text-primary-600 dark:text-primary-300">{trend.innerCircleTieIn}</p>
             <p className="mt-2 text-xs text-gray-500">Ownership: {trend.ownershipRecommendation.replace(/_/g, " ")}</p>
-            {trend.sourceUrl && <a href={trend.sourceUrl} target="_blank" rel="noreferrer" className="mt-2 block text-xs font-semibold text-primary-600 hover:underline">Source link</a>}
+            {trend.sourceUrl && <a href={trendSourceUrl(trend)} target="_blank" rel="noreferrer" className="mt-2 block text-xs font-semibold text-primary-600 hover:underline">Source link</a>}
             <div className="mt-4 flex flex-wrap gap-2 text-xs font-semibold">
               <button onClick={() => onTurnIntoIdea(trend)} className="rounded-lg bg-white px-2.5 py-1.5 text-primary-600 ring-1 ring-gray-200 hover:bg-primary-50 dark:bg-gray-800 dark:ring-gray-700">Turn into Idea</button>
               <button onClick={() => onSaveToLibrary(trend)} className="rounded-lg bg-white px-2.5 py-1.5 text-emerald-600 ring-1 ring-gray-200 hover:bg-emerald-50 dark:bg-gray-800 dark:ring-gray-700">Save Link</button>
