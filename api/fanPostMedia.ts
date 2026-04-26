@@ -13,6 +13,11 @@ function normalizeStringArray(raw: unknown): string[] {
     : [];
 }
 
+function isPublishedFanPostStatus(raw: unknown): boolean {
+  if (raw == null || raw === "") return true; // Older Fan Hub posts did not always store status.
+  return String(raw).trim().toLowerCase() === "published";
+}
+
 async function hasUnlockedPost(
   db: Firestore,
   creatorId: string,
@@ -71,6 +76,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const post = postSnap.data() as Record<string, unknown>;
     const locked = post.lockedContent as { enabled?: boolean } | undefined;
     const isCreator = decoded.uid === creatorId;
+    if (!isCreator && !isPublishedFanPostStatus(post.status)) {
+      return res.status(404).json({ error: "Post not found" });
+    }
     const canView = isCreator || !locked?.enabled || (await hasUnlockedPost(db, creatorId, decoded.uid, postId));
     if (!canView) {
       return res.status(403).json({ error: "Post is locked" });

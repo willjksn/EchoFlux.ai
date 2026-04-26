@@ -12,6 +12,11 @@ import { applyBrowserApiCors } from "./_browserApiCors.js";
 const DEFAULT_SUBSCRIPTION_CENTS = 999; // $9.99
 const PLATFORM_FEE_PERCENT = 0.10; // 10% platform fee on all fan payments
 
+function isPublishedFanPostStatus(raw: unknown): boolean {
+  if (raw == null || raw === "") return true; // Older Fan Hub posts did not always store status.
+  return String(raw).trim().toLowerCase() === "published";
+}
+
 // Platform owner creator IDs - payments go directly to EchoFlux, no Connect needed, no fee
 // Set via PLATFORM_OWNER_CREATOR_IDS env var (comma-separated)
 const PLATFORM_OWNER_IDS = (process.env.PLATFORM_OWNER_CREATOR_IDS || "").split(",").map(s => s.trim()).filter(Boolean);
@@ -469,8 +474,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return res.status(404).json({ error: "Post not found" });
       }
       const pdata = postSnap.data() as Record<string, unknown>;
-      const status = (pdata.status as string) || "published";
-      if (status === "draft") {
+      if (!isPublishedFanPostStatus(pdata.status)) {
         return res.status(404).json({ error: "Post not found" });
       }
       const lcRaw = pdata.lockedContent;

@@ -486,6 +486,11 @@ interface Post {
   liveStreamPromo?: LiveStreamPromoOnPost;
 }
 
+function isPublishedFanMemberPostStatus(raw: unknown): boolean {
+  if (raw == null || raw === "") return true; // Legacy Fan Hub posts did not always store status.
+  return String(raw).trim().toLowerCase() === "published";
+}
+
 function parseLiveStreamPromoMember(data: DocumentData): LiveStreamPromoOnPost | undefined {
   const raw = data.liveStreamPromo;
   if (!raw || typeof raw !== "object") return undefined;
@@ -751,8 +756,7 @@ function postFromFirestore(
   if (!snap.exists()) return null;
   const docId = snap.id;
   const data = snap.data();
-  const status = (data.status as string) || "published";
-  if (status === "draft") return null;
+  if (!isPublishedFanMemberPostStatus(data.status)) return null;
   const createdAt =
     data.createdAt instanceof Timestamp
       ? data.createdAt.toDate()
