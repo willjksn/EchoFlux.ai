@@ -5,6 +5,12 @@ import type { AmazonLink, CreatorOSSettings } from "../../types/creatorOS";
 type Props = {
   settings: CreatorOSSettings;
   amazonLinks: AmazonLink[];
+  creatorProfile?: {
+    creatorGender?: string;
+    niche?: string;
+    audience?: string;
+    creatorGoal?: string;
+  };
   onSaveAsIdea?: (idea: string) => void;
 };
 
@@ -44,15 +50,40 @@ function hostLabel(raw: string): string {
   }
 }
 
-export const ProductShotIdeaBox: React.FC<Props> = ({ settings, amazonLinks, onSaveAsIdea }) => {
+function cleanProductTerms(raw: string): string {
+  return raw
+    .replace(/\b(ref|sr|qid|crid|keywords|dp|gp|product|www|amazon|com)\b/gi, " ")
+    .replace(/%[0-9a-f]{2}/gi, " ")
+    .replace(/[-_+/]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 140);
+}
+
+function productNameFromUrl(raw: string): string {
+  try {
+    const parsed = new URL(normalizeUrl(raw));
+    const q = parsed.searchParams.get("k") || parsed.searchParams.get("keywords");
+    if (q?.trim()) return cleanProductTerms(decodeURIComponent(q));
+
+    const parts = parsed.pathname.split("/").filter(Boolean);
+    const dpIndex = parts.findIndex((part) => part.toLowerCase() === "dp");
+    const titlePart = dpIndex > 0 ? parts[dpIndex - 1] : parts.find((part) => /[a-z]/i.test(part) && part.length > 4);
+    return titlePart ? cleanProductTerms(decodeURIComponent(titlePart)) : "";
+  } catch {
+    return "";
+  }
+}
+
+export const ProductShotIdeaBox: React.FC<Props> = ({ settings, amazonLinks, creatorProfile, onSaveAsIdea }) => {
   const [product, setProduct] = useState("");
   const [productUrl, setProductUrl] = useState("");
+  const [productUseCase, setProductUseCase] = useState<"auto" | "creator" | "audience" | "gift" | "neutral">("auto");
   const [context, setContext] = useState("");
   const [result, setResult] = useState("");
   const [loading, setLoading] = useState(false);
   const [researching, setResearching] = useState(false);
   const [error, setError] = useState("");
-  const [researchNote, setResearchNote] = useState("");
 
   const productSuggestions = useMemo(
     () => amazonLinks.slice(0, 10).map((link) => link.productName).filter(Boolean),
@@ -76,6 +107,7 @@ export const ProductShotIdeaBox: React.FC<Props> = ({ settings, amazonLinks, onS
   const generateIdea = async () => {
     const cleanProduct = product.trim();
     const cleanProductUrl = normalizeUrl(productUrl);
+    const detectedProductName = productNameFromUrl(cleanProductUrl);
     if (!cleanProduct && !cleanProductUrl) {
       setError("Enter the product or paste a product link first.");
       return;
@@ -84,7 +116,6 @@ export const ProductShotIdeaBox: React.FC<Props> = ({ settings, amazonLinks, onS
     setLoading(true);
     setResearching(Boolean(cleanProductUrl));
     setError("");
-    setResearchNote("");
     try {
       const token = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
       const savedProductContext = amazonLinks
@@ -98,7 +129,7 @@ export const ProductShotIdeaBox: React.FC<Props> = ({ settings, amazonLinks, onS
         .slice(0, 3)
         .map((link) => `${link.productName} (${link.category}) - ${link.bestContentSituation || link.audienceFit || "No notes yet"} - ${link.amazonUrl}`)
         .join("\n");
-      const productNameForPrompt = cleanProduct || matchedSavedLink?.productName || hostLabel(cleanProductUrl) || "the linked product";
+      const productNameForPrompt = cleanProduct || matchedSavedLink?.productName || detectedProductName || "the linked product";
       let safeProductContext = "";
       if (cleanProductUrl) {
         try {
@@ -116,12 +147,9 @@ export const ProductShotIdeaBox: React.FC<Props> = ({ settings, amazonLinks, onS
           const contextData = await contextResponse.json() as ProductContextResponse;
           if (contextResponse.ok && contextData.success && contextData.productContext) {
             safeProductContext = contextData.productContext;
-            setResearchNote("Used safe public search snippets for product context. No Amazon page scraping.");
-          } else {
-            setResearchNote(contextData.note || contextData.error || "Using product name/link only. No page scraping was used.");
           }
         } catch {
-          setResearchNote("Using product name/link only. Product research was unavailable and no page scraping was used.");
+          // Product context is helpful, but the shot helper can still run from the URL/name.
         } finally {
           setResearching(false);
         }
@@ -136,11 +164,18 @@ export const ProductShotIdeaBox: React.FC<Props> = ({ settings, amazonLinks, onS
         body: JSON.stringify({
           prompt: `Create one natural, easy product shot idea for Creator OS.
 
+Creator profile:
+- Creator gender/profile: ${creatorProfile?.creatorGender || "not specified"}
+- Creator niche/content focus: ${creatorProfile?.niche || "not specified"}
+- Creator audience notes: ${creatorProfile?.audience || "not specified"}
+- Creator goal: ${creatorProfile?.creatorGoal || "not specified"}
 Creator audience: ${audienceLabel(settings.primaryAudience)}
 Creator tone: ${settings.brandTone || "casual, natural, not salesy"}
 Product: ${productNameForPrompt}
+Product name detected from URL: ${detectedProductName || "none"}
 Product link: ${cleanProductUrl || matchedSavedLink?.amazonUrl || "No product link provided."}
 Link host: ${hostLabel(cleanProductUrl || matchedSavedLink?.amazonUrl || "") || "unknown"}
+Product use angle selected by creator: ${productUseCase}
 Extra context from creator: ${context.trim() || "No extra context."}
 Saved product notes:
 ${savedProductContext || "No matching saved product notes."}
@@ -148,6 +183,14 @@ Safe public product context from search snippets:
 ${safeProductContext || "No extra public product context available."}
 
 The creator needs help with the Story/Amazon step after the public post. The shot must feel natural to mostly male followers and should not look like a hard ad.
+
+IMPORTANT CREATOR/PRODUCT FIT RULES:
+- First decide whether this product is for the creator to personally use, for her audience to use, for a gift angle, or neutral/everyday.
+- If the creator is Female and the product is clearly for men or male grooming, DO NOT tell her to film herself using it on her body/face (for example, do not tell her to shave in the mirror with a men's grooming kit).
+- For male-use products with a female creator, frame the shot as: "I found this for the men who follow me", "if you use this, this is why it makes sense", "gift for a guy", desk/car/bathroom counter flat lay, unboxing, pointing to what it does, or showing it in a realistic male-use setting without pretending she uses it personally.
+- If the product is clearly for women/female creator use, then it is okay to write the shot as her naturally using it.
+- If the product is neutral, choose the most natural creator-led shot that fits her profile and audience.
+- Never assume the creator is male just because the product is for men.
 
 Return this exact structure:
 Shot idea:
@@ -167,12 +210,16 @@ One sentence explaining why this feels natural for the audience.
 
 Rules:
 - Make it specific to the product.
+- If product details are uncertain, say what to show based on the exact detected product name instead of inventing unrelated props, pets, rooms, or use cases.
+- Do not add pets, kids, unrelated people, or random lifestyle props unless the creator specifically asks for them.
+- For accessories/parts (boat parts, car parts, tech accessories), show the product near the relevant item or in a simple unboxing/pointing/explaining shot. Do not pretend it is a finished lifestyle object if it is actually a part/accessory.
 - If a product link is provided, use only the URL, saved product notes, and safe public search snippet summary above. Do not claim you opened, scraped, or inspected the product page.
 - Do not mention prices, ratings, shipping, availability, or product claims unless they are explicitly present in the safe public context.
 - Keep it easy: phone camera, normal room/car/desk/bathroom/kitchen setup.
 - No corporate ad language.
 - No explicit sexual content.
 - Do not tell her to hold the product like an influencer ad unless that is truly the natural move.
+- Match the shot to the creator profile, not just the product.
 - Make it useful, relaxed, and believable.`,
           context: {
             goal: "product shot idea",
@@ -217,7 +264,7 @@ Rules:
           <label className="block text-sm font-semibold text-gray-800 dark:text-gray-100">
             Product
             <input
-              value={product}
+              value={product || productNameFromUrl(productUrl)}
               onChange={(e) => setProduct(e.target.value)}
               list="creator-os-product-shot-products"
               placeholder="e.g. men grooming kit, car organizer, desk light"
@@ -242,11 +289,20 @@ Rules:
               Using saved library context for {matchedSavedLink.productName}.
             </p>
           ) : null}
-          {researchNote ? (
-            <p className="rounded-xl bg-blue-50 p-2 text-xs font-medium text-blue-700 dark:bg-blue-900/25 dark:text-blue-200">
-              {researchNote}
-            </p>
-          ) : null}
+          <label className="block text-sm font-semibold text-gray-800 dark:text-gray-100">
+            Who is this product for?
+            <select
+              value={productUseCase}
+              onChange={(e) => setProductUseCase(e.target.value as typeof productUseCase)}
+              className="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-normal text-gray-900 outline-none ring-primary-500/20 focus:ring-4 dark:border-gray-700 dark:bg-gray-950 dark:text-white"
+            >
+              <option value="auto">Auto-detect from product + my profile</option>
+              <option value="audience">My audience/member should use it</option>
+              <option value="creator">I would personally use it</option>
+              <option value="gift">Gift or "for a guy" angle</option>
+              <option value="neutral">Neutral/everyday product</option>
+            </select>
+          </label>
 
           <label className="block text-sm font-semibold text-gray-800 dark:text-gray-100">
             Optional context

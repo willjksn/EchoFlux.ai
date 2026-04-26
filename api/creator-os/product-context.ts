@@ -25,20 +25,29 @@ function hostLabel(raw: string): string {
   }
 }
 
+function cleanProductTerms(raw: string): string {
+  return raw
+    .replace(/\b(ref|sr|qid|crid|keywords|dp|gp|product|www|amazon|com)\b/gi, " ")
+    .replace(/%[0-9a-f]{2}/gi, " ")
+    .replace(/[-_+/]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 160);
+}
+
 function extractLikelyProductTerms(product: string, url: string): string {
   const fromProduct = product.trim();
-  if (fromProduct) return fromProduct;
+  if (fromProduct && fromProduct.toLowerCase() !== "amazon.com") return cleanProductTerms(fromProduct);
 
   try {
     const parsed = new URL(normalizeUrl(url));
     const q = parsed.searchParams.get("k") || parsed.searchParams.get("keywords");
-    if (q?.trim()) return q.trim();
-    const pathTerms = parsed.pathname
-      .split("/")
-      .filter(Boolean)
-      .filter((part) => !["dp", "gp", "product", "s"].includes(part.toLowerCase()))
-      .find((part) => /[a-z]/i.test(part) && part.length > 3);
-    if (pathTerms) return decodeURIComponent(pathTerms).replace(/[-_+]+/g, " ").trim();
+    if (q?.trim()) return cleanProductTerms(decodeURIComponent(q));
+
+    const parts = parsed.pathname.split("/").filter(Boolean);
+    const dpIndex = parts.findIndex((part) => part.toLowerCase() === "dp");
+    const titlePart = dpIndex > 0 ? parts[dpIndex - 1] : parts.find((part) => /[a-z]/i.test(part) && part.length > 4);
+    if (titlePart) return cleanProductTerms(decodeURIComponent(titlePart));
   } catch {
     // Fall through to host label.
   }
@@ -95,7 +104,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const terms = extractLikelyProductTerms(product, productUrl);
   const host = hostLabel(productUrl);
-  const query = `${terms} product details use case quick review${host ? ` ${host}` : ""}`;
+  const query = `"${terms}" product details use case${host ? ` ${host}` : ""}`;
 
   const result = await searchWeb(query, decoded.uid, userPlan, userRole, {
     allowQuotaUserTrendSearch: true,
@@ -125,6 +134,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   return res.status(200).json({
     success: true,
+    detectedProductName: terms,
     productContext,
     sources,
     note: "Product context uses public search snippets only. It does not scrape Amazon pages or expose private data.",

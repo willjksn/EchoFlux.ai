@@ -499,6 +499,12 @@ export default function CreatorOSPage() {
             <ProductShotIdeaBox
               settings={effectiveSettings}
               amazonLinks={amazonLinks}
+              creatorProfile={{
+                creatorGender: user?.creatorGender,
+                niche: user?.niche,
+                audience: user?.audience,
+                creatorGoal: user?.creatorGoal,
+              }}
               onSaveAsIdea={saveProductShotIdea}
             />
 
