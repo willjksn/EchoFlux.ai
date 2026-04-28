@@ -39,7 +39,6 @@ export const TodaysMoveCard: React.FC<Props> = ({
           <div>
             <p className="text-xs font-bold uppercase tracking-wide text-white/80">Today's Move</p>
             <h2 className="mt-2 text-2xl font-bold">{move.publicPost}</h2>
-            <p className="mt-2 max-w-3xl text-sm text-white/85">{move.whyThisWorks}</p>
           </div>
           <div className="flex flex-wrap gap-2">
             <button onClick={onSaveAsIdea} className="rounded-lg bg-white px-3 py-2 text-sm font-semibold text-primary-700 shadow-sm transition-colors hover:bg-primary-50">Save as Idea</button>

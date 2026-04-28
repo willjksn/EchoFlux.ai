@@ -222,7 +222,7 @@ export default function CreatorOSPage() {
       caption: todaysMove.caption,
       platforms: todaysMove.platforms,
       funnelGoal: "drive_story_clicks",
-      amazonLinkId: todaysMove.suggestedAmazonLinkId,
+      ...(todaysMove.suggestedAmazonLinkId ? { amazonLinkId: todaysMove.suggestedAmazonLinkId } : {}),
       amazonCategory: todaysMove.suggestedAmazonCategory,
       storyText: todaysMove.storyLinkPlan,
       innerCircleTieIn: todaysMove.innerCircleDrop,

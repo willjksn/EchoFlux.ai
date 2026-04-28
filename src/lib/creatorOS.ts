@@ -417,7 +417,7 @@ export function generateTodaysMove(
       ? trend.storyText
       : ["why is this actually useful...", "I didn't think I needed it", "ok... I get it now"],
     suggestedAmazonCategory,
-    suggestedAmazonLinkId: link?.id,
+    ...(link?.id ? { suggestedAmazonLinkId: link.id } : {}),
     innerCircleDrop: planDay?.innerCircleDrop || (isCar ? "Post a short car-talk clip." : "Post the closer version inside Inner Circle."),
     innerCircleCaption: isCar ? "car talks are better on here anyway" : "this is the calm version... obviously",
     checklist,
