@@ -13,6 +13,7 @@ export type CreatorOrder = {
   status: string;
   createdAt: string;
   productTitle?: string;
+  fanUsername?: string | null;
   fanName?: string | null;
   fanEmail?: string;
   /** After guest→member merge (`mergeGuestTreatPurchasesIntoUid`), original `guest_*` fan id. */
@@ -129,6 +130,14 @@ function toPositiveCents(raw: unknown): number {
   return 0;
 }
 
+function stringField(raw: Record<string, unknown>, keys: string[]): string | null {
+  for (const key of keys) {
+    const value = raw[key];
+    if (typeof value === "string" && value.trim()) return value.trim();
+  }
+  return null;
+}
+
 function mapDocToOrder(docSnap: QueryDocumentSnapshot): CreatorOrder {
   const d = docSnap.data() as Record<string, unknown>;
   const inferredType = normalizeOrderType(d);
@@ -155,6 +164,7 @@ function mapDocToOrder(docSnap: QueryDocumentSnapshot): CreatorOrder {
     status: (d.status as string) ?? "paid",
     createdAt: createdAtToIso(d.createdAt),
     productTitle: (d.productTitle as string) ?? (d.productId as string) ?? undefined,
+    fanUsername: stringField(d, ["fanUsername", "memberUsername", "username"]),
     fanName: (d.fanName as string) ?? (d.tipHandle as string) ?? null,
     fanEmail: typeof d.fanEmail === "string" && d.fanEmail.trim() ? d.fanEmail.trim() : undefined,
     linkedFromGuestFanId: linkedGuest,
@@ -299,6 +309,112 @@ async function enrichLiveStreamTicketOrdersFromStreamDocs(
   }
 }
 
+async function enrichOrderFanLabels(
+  db: Firestore,
+  creatorId: string,
+  orderRows: Array<CreatorOrder & { __createdAtMs: number }>,
+): Promise<void> {
+  const fanIds = Array.from(
+    new Set(
+      orderRows
+        .map((row) => (typeof row.fanId === "string" ? row.fanId.trim() : ""))
+        .filter((fanId) => fanId && !fanId.startsWith("guest_") && !fanId.includes("@")),
+    ),
+  ).slice(0, 200);
+
+  const userDataById = new Map<string, Record<string, unknown>>();
+  const creatorFanDataById = new Map<string, Record<string, unknown>>();
+  const userDataByEmail = new Map<string, Record<string, unknown>>();
+  const creatorFanDataByEmail = new Map<string, Record<string, unknown>>();
+
+  for (let i = 0; i < fanIds.length; i += 100) {
+    const chunk = fanIds.slice(i, i + 100);
+    const userRefs = chunk.map((fanId) => db.collection("users").doc(fanId));
+    const userSnaps = await db.getAll(...userRefs).catch(() => []);
+    userSnaps.forEach((snap, idx) => {
+      if (snap.exists) userDataById.set(chunk[idx], snap.data() as Record<string, unknown>);
+    });
+
+    const creatorFanRefs = chunk.map((fanId) =>
+      db.collection("creators").doc(creatorId).collection("fans").doc(fanId),
+    );
+    const creatorFanSnaps = await db.getAll(...creatorFanRefs).catch(() => []);
+    creatorFanSnaps.forEach((snap, idx) => {
+      if (snap.exists) creatorFanDataById.set(chunk[idx], snap.data() as Record<string, unknown>);
+    });
+  }
+
+  const emails = Array.from(
+    new Set(
+      orderRows
+        .flatMap((row) => {
+          const candidates = [
+            typeof row.fanEmail === "string" ? row.fanEmail : "",
+            typeof row.fanId === "string" && row.fanId.includes("@") ? row.fanId : "",
+          ];
+          return candidates.map((value) => value.trim().toLowerCase()).filter((value) => value.includes("@"));
+        }),
+    ),
+  ).slice(0, 200);
+
+  for (let i = 0; i < emails.length; i += 10) {
+    const chunk = emails.slice(i, i + 10);
+    const [fanSnap, userSnap] = await Promise.all([
+      db
+        .collection("creators")
+        .doc(creatorId)
+        .collection("fans")
+        .where("email", "in", chunk)
+        .limit(50)
+        .get()
+        .catch(() => null),
+      db
+        .collection("users")
+        .where("email", "in", chunk)
+        .limit(50)
+        .get()
+        .catch(() => null),
+    ]);
+    fanSnap?.docs.forEach((docSnap) => {
+      const data = docSnap.data() as Record<string, unknown>;
+      const email = stringField(data, ["email", "fanEmail"])?.toLowerCase();
+      if (email && !creatorFanDataByEmail.has(email)) creatorFanDataByEmail.set(email, data);
+    });
+    userSnap?.docs.forEach((docSnap) => {
+      const data = docSnap.data() as Record<string, unknown>;
+      const email = stringField(data, ["email", "fanEmail"])?.toLowerCase();
+      if (email && !userDataByEmail.has(email)) userDataByEmail.set(email, data);
+    });
+  }
+
+  for (const row of orderRows) {
+    const fanId = typeof row.fanId === "string" ? row.fanId.trim() : "";
+    const email =
+      (typeof row.fanEmail === "string" && row.fanEmail.trim().toLowerCase()) ||
+      (fanId.includes("@") ? fanId.toLowerCase() : "");
+    if (!fanId && !email) continue;
+    const userData = userDataById.get(fanId) || (email ? userDataByEmail.get(email) : undefined);
+    const creatorFanData =
+      creatorFanDataById.get(fanId) || (email ? creatorFanDataByEmail.get(email) : undefined);
+    const username =
+      stringField(userData ?? {}, ["username", "memberUsername", "fanUsername"]) ||
+      stringField(creatorFanData ?? {}, ["username", "memberUsername", "fanUsername"]);
+    if (username && !row.fanUsername) row.fanUsername = username;
+    if (!row.fanEmail) {
+      const email =
+        stringField(userData ?? {}, ["email", "fanEmail"]) ||
+        stringField(creatorFanData ?? {}, ["email", "fanEmail"]);
+      if (email) row.fanEmail = email.toLowerCase();
+    }
+    if (!row.fanName) {
+      const name =
+        stringField(creatorFanData ?? {}, ["displayName", "fanName", "name"]) ||
+        stringField(userData ?? {}, ["displayName", "name", "fanName"]);
+      if (name) row.fanName = name;
+    }
+  }
+}
+
 /**
  * GET: List orders for the authenticated creator (creatorId = uid by default).
  * Optional query param: creatorId (admin-only cross-creator read).
@@ -378,6 +494,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       );
     }
 
+    try {
+      await enrichOrderFanLabels(db, creatorIdToQuery, orderRows);
+    } catch (fanLabelErr: unknown) {
+      console.warn(
+        "creatorOrders: fan label enrich skipped:",
+        fanLabelErr instanceof Error ? fanLabelErr.message : fanLabelErr,
+      );
+    }
+
     const earliestPurchaseAtByFanId: Record<string, string> = {};
     const earliestPurchaseAtByFanEmail: Record<string, string> = {};
     try {
@@ -439,6 +564,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             productTitle:
               (typeof raw.productName === "string" && raw.productName.trim()) ||
               (typeof raw.treatId === "string" ? raw.treatId : undefined),
+            fanUsername: stringField(raw, ["fanUsername", "memberUsername", "username"]),
             fanName:
               (typeof raw.fanName === "string" && raw.fanName.trim()) ||
               (typeof raw.tipHandle === "string" && raw.tipHandle.trim()) ||
@@ -524,6 +650,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           (typeof raw.fanName === "string" && raw.fanName.trim()) ||
           (typeof raw.tipHandle === "string" && raw.tipHandle.trim()) ||
           null;
+        const fanUsername = stringField(raw, ["username", "fanUsername", "memberUsername"]);
 
         orderRows.push({
           id: syntheticId,
@@ -535,6 +662,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           status: "paid",
           createdAt: new Date(createdMs).toISOString(),
           productTitle: "Legacy tip reconciliation",
+          fanUsername,
           fanName,
           fanEmail,
           scheduleStatus: "completed",

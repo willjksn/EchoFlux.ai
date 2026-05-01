@@ -992,6 +992,7 @@ export const OnlyFansFans: React.FC = () => {
             filtered = filtered.filter(fan =>
                 fan.name.toLowerCase().includes(query) ||
                 fan.id.toLowerCase().includes(query) ||
+                (fan.preferences.email || '').toLowerCase().includes(query) ||
                 fan.preferences.tags?.some(tag => tag.toLowerCase().includes(query))
             );
         }
@@ -1317,7 +1318,7 @@ export const OnlyFansFans: React.FC = () => {
                             type="text"
                             value={fanSearchQuery}
                             onChange={(e) => setFanSearchQuery(e.target.value)}
-                            placeholder="Search fans by name, username, or tags..."
+                            placeholder="Search fans by username, email, name, or tags..."
                             className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
                         />
                     </div>
@@ -1447,6 +1448,11 @@ export const OnlyFansFans: React.FC = () => {
                                             <h4 className="font-semibold text-gray-900 dark:text-white truncate">
                                                 {fan.name}
                                             </h4>
+                                            {prefs.email ? (
+                                                <p className="mt-0.5 truncate text-xs text-gray-500 dark:text-gray-400">
+                                                    {prefs.email}
+                                                </p>
+                                            ) : null}
 
                                             {/* Quick Stats */}
                                             <div className="mt-2 space-y-1">

@@ -109,6 +109,44 @@ function resolveConnectAccountId(creatorData: Record<string, unknown> | undefine
   return typeof id === "string" && id.trim() ? id.trim() : null;
 }
 
+function isMissingStripeResource(err: unknown): boolean {
+  const e = err as { code?: string; message?: string };
+  const msg = (e?.message || "").toLowerCase();
+  return e?.code === "resource_missing" || msg.includes("no such subscription");
+}
+
+async function retrieveSubscriptionWithFallback({
+  stripe,
+  subscriptionId,
+  preferredOptions,
+  fallbackOptions,
+}: {
+  stripe: Stripe;
+  subscriptionId: string;
+  preferredOptions: { stripeAccount?: string } | undefined;
+  fallbackOptions: { stripeAccount?: string } | undefined;
+}): Promise<{ subscription: Stripe.Response<Stripe.Subscription>; options: { stripeAccount?: string } | undefined }> {
+  const attempts: Array<{ stripeAccount?: string } | undefined> = [];
+  const pushAttempt = (opts: { stripeAccount?: string } | undefined) => {
+    const key = opts?.stripeAccount || "";
+    if (!attempts.some((existing) => (existing?.stripeAccount || "") === key)) attempts.push(opts);
+  };
+  pushAttempt(preferredOptions);
+  pushAttempt(fallbackOptions);
+
+  let lastError: unknown = null;
+  for (const options of attempts) {
+    try {
+      const subscription = await stripe.subscriptions.retrieve(subscriptionId, options);
+      return { subscription, options };
+    } catch (e) {
+      lastError = e;
+      if (!isMissingStripeResource(e)) throw e;
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error("Failed to load subscription");
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
@@ -174,9 +212,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const isPlatform = isCreatorPlatformOwner(creatorId, ownerDetection);
   const connectId = resolveConnectAccountId(creatorData);
   const stripeOpts = !isPlatform && connectId ? { stripeAccount: connectId } : undefined;
+  const fallbackStripeOpts = stripeOpts ? undefined : connectId ? { stripeAccount: connectId } : undefined;
 
   try {
-    const subscription = await stripe.subscriptions.retrieve(subscriptionId, stripeOpts);
+    const { subscription, options: resolvedStripeOpts } = await retrieveSubscriptionWithFallback({
+      stripe,
+      subscriptionId,
+      preferredOptions: stripeOpts,
+      fallbackOptions: fallbackStripeOpts,
+    });
     const periodEarly = subscriptionPeriodEndIso(subscription);
     if (subscription.cancel_at_period_end) {
       try {
@@ -191,8 +235,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
     }
 
-    await stripe.subscriptions.update(subscriptionId, { cancel_at_period_end: true }, stripeOpts);
-    const subAfter = await stripe.subscriptions.retrieve(subscriptionId, stripeOpts);
+    await stripe.subscriptions.update(subscriptionId, { cancel_at_period_end: true }, resolvedStripeOpts);
+    const subAfter = await stripe.subscriptions.retrieve(subscriptionId, resolvedStripeOpts);
     const periodEnd = subscriptionPeriodEndIso(subAfter);
     try {
       await syncFanHubFirestoreAfterScheduleCancel(db, creatorId, fanId, subAfter, periodEnd);

@@ -1634,6 +1634,13 @@ Write 2-4 sentences that are engaging and on-topic.`;
         (postData as Record<string, unknown>).overlayTextSize = overlaySize;
         (postData as Record<string, unknown>).overlayHighlight = overlayHighlight;
         (postData as Record<string, unknown>).overlayItalic = overlayItalic;
+      } else if (editingPostId) {
+        (postData as Record<string, unknown>).captionStyle = "static";
+        (postData as Record<string, unknown>).overlayText = deleteField();
+        (postData as Record<string, unknown>).overlayTextColor = deleteField();
+        (postData as Record<string, unknown>).overlayTextSize = deleteField();
+        (postData as Record<string, unknown>).overlayHighlight = deleteField();
+        (postData as Record<string, unknown>).overlayItalic = deleteField();
       }
 
       if (liveStreamPromoEnabled && creatorCanLiveStream && streamIdForPost && streamPromoScheduledIso) {
@@ -1716,6 +1723,9 @@ Write 2-4 sentences that are engaging and on-topic.`;
             ? "Post updated"
             : "Post published!";
       showToast?.(message, "success");
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent("echoflux:fan-posts-updated", { detail: { creatorId } }));
+      }
       
       // Reset form
       resetForm();

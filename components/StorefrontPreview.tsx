@@ -234,7 +234,7 @@ function isDarkBackground(hex: string): boolean {
   return luminance < 0.45;
 }
 
-const DEFAULT_SECTION_ORDER = ["feed", "treats", "tip", "messages", "about", "saved"];
+const DEFAULT_SECTION_ORDER = ["feed", "treats", "tip", "messages", "saved"];
 
 // Map for display labels
 const SECTION_LABELS: Record<string, string> = {
@@ -533,11 +533,11 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
         };
 
   // Member nav tabs from sections/sectionsOrder (Saved hidden in preview — only on live storefront)
-  const sections = config.sections ?? { feed: true, treats: true, tip: true, messages: true, about: true };
+  const sections = config.sections ?? { feed: true, treats: true, tip: true, messages: true, about: false };
   const sectionsOrder = config.sectionsOrder ?? DEFAULT_SECTION_ORDER;
   const memberTabs = useMemo(() => {
     return sectionsOrder.filter(
-      (key) => key !== "saved" && (sections as Record<string, boolean>)?.[key] !== false
+      (key) => key !== "about" && key !== "saved" && (sections as Record<string, boolean>)?.[key] !== false
     );
   }, [sections, sectionsOrder]);
   const { user, showToast } = useAppContext();
@@ -741,6 +741,7 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
   const boundaryLinesFiltered = guidelinesFromRulesOnly
     ? []
     : (landingContent.boundaryLines ?? []).filter((l) => String(l).trim());
+  const showBoundarySections = false;
   const spicyMode = config.spicyMode ?? false;
   const monetization = config.monetization ?? {};
   const monthlyPriceCents = monetization.monthlyPrice ?? 999;
@@ -1566,7 +1567,7 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
             </section>
 
             {/* The Boundary / Community guidelines — tier-style list optional; hidden if no intro and no lines */}
-            {(boundaryIntroMerged || boundaryLinesFiltered.length > 0) && (
+            {showBoundarySections && (boundaryIntroMerged || boundaryLinesFiltered.length > 0) && (
               <section
                 id="boundary-section"
                 className="storefront-landing-panel faq rounded-2xl p-4 transition-all hover:translate-y-[-2px] flex flex-col min-w-0"
@@ -1726,7 +1727,7 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
             </div>
           </section>
 
-          {/* Same as public landing: show treat promo whenever Store is enabled (guest checkout only changes CTA). */}
+          {/* Same as public landing: show the store promo whenever Store is enabled. */}
           {sections.treats !== false && (
               <section className="py-3 storefront-preview-treats-section">
                 {live?.showGuestTreatsCard ? (
@@ -2510,7 +2511,7 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
                     <p className="text-sm leading-relaxed" style={{ color: textColor }}>{bio}</p>
                   </div>
                 ) : null}
-                {(boundaryIntroMerged || boundaryLinesFiltered.length > 0) ? (
+                {showBoundarySections && (boundaryIntroMerged || boundaryLinesFiltered.length > 0) ? (
                   <div className="rounded-xl p-4" style={{ background: cardBg, border: `1px solid ${isDark ? `${primary}30` : `${primary}18`}` }}>
                     <h3 className="text-xs font-semibold mb-1.5" style={{ color: primary }}>{landingContent.boundaryTitle}</h3>
                     {boundaryIntroMerged ? (
@@ -2532,7 +2533,7 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
                     ) : null}
                   </div>
                 ) : null}
-                {!bio && !boundaryIntroMerged && boundaryLinesFiltered.length === 0 && (
+                {!bio && (!showBoundarySections || (!boundaryIntroMerged && boundaryLinesFiltered.length === 0)) && (
                   <p className="text-sm" style={{ color: `${textColor}99` }}>No about or guidelines added yet.</p>
                 )}
               </div>

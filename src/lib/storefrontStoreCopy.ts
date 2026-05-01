@@ -29,7 +29,7 @@ const DEFAULTS: ResolvedStoreCopy = {
   publicStoreOpenCtaLabel: "Open store",
   publicStoreModalTitle: "Store",
   publicStoreModalEmptyMessage:
-    "No store items are listed for guest checkout yet. Check back soon — or become a member for full access.",
+    "No store items are listed on the landing page yet. Check back soon, or become a member for full store access.",
 };
 
 function pick(lc: StorefrontLandingContent | null | undefined, key: keyof StorefrontLandingContent): string {

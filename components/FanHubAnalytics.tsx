@@ -1020,7 +1020,7 @@ export const FanHubAnalytics: React.FC = () => {
             title="Guest Tips"
             value={formatCents(revenue.guestTipsCents)}
             icon={<HeartIcon />}
-            subtitle="Tips from non-members/guest checkout"
+            subtitle="Tips from non-members"
             accentColor="indigo"
           />
           <StatCard

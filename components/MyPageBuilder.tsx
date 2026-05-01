@@ -37,9 +37,9 @@ const DEFAULT_SECTIONS: NonNullable<CreatorStorefrontSettings["sections"]> = {
   treats: true,
   tip: true,
   messages: true,
-  about: true,
+  about: false,
 };
-const DEFAULT_SECTIONS_ORDER = ["feed", "treats", "tip", "messages", "about"];
+const DEFAULT_SECTIONS_ORDER = ["feed", "treats", "tip", "messages"];
 
 // Neutral default theme - creators should customize
 const DEFAULT_THEME: NonNullable<CreatorStorefrontSettings["theme"]> = {
@@ -277,6 +277,8 @@ function stripUndefinedDeep<T>(value: T): T {
 }
 
 function normalizeForCompare(a: Partial<CreatorStorefrontSettings>): string {
+  const sections = { ...DEFAULT_SECTIONS, ...a.sections, about: false };
+  const sectionsOrder = (a.sectionsOrder ?? DEFAULT_SECTIONS_ORDER).filter((key) => key !== "about");
   return JSON.stringify({
     handle: (a.handle ?? "").replace("@", "").toLowerCase().trim(),
     displayName: a.displayName ?? "",
@@ -297,8 +299,8 @@ function normalizeForCompare(a: Partial<CreatorStorefrontSettings>): string {
     legal: a.legal ?? DEFAULT_LEGAL,
     theme: { ...DEFAULT_THEME, ...a.theme },
     heroLayout: a.heroLayout ?? "default",
-    sections: { ...DEFAULT_SECTIONS, ...a.sections },
-    sectionsOrder: a.sectionsOrder ?? DEFAULT_SECTIONS_ORDER,
+    sections,
+    sectionsOrder,
     spicyMode: a.spicyMode ?? false,
     rules: a.rules ?? {},
     monetization: a.monetization ?? {},
@@ -345,8 +347,8 @@ function buildStorefrontPreviewConfig(draft: Partial<CreatorStorefrontSettings>)
     legal: draft.legal ? { ...DEFAULT_LEGAL, ...draft.legal } : { ...DEFAULT_LEGAL },
     theme: draft.theme ? { ...DEFAULT_THEME, ...draft.theme } : { ...DEFAULT_THEME },
     heroLayout: draft.heroLayout ?? "default",
-    sections: draft.sections ? { ...DEFAULT_SECTIONS, ...draft.sections } : { ...DEFAULT_SECTIONS },
-    sectionsOrder: draft.sectionsOrder ?? DEFAULT_SECTIONS_ORDER,
+    sections: draft.sections ? { ...DEFAULT_SECTIONS, ...draft.sections, about: false } : { ...DEFAULT_SECTIONS },
+    sectionsOrder: (draft.sectionsOrder ?? DEFAULT_SECTIONS_ORDER).filter((key) => key !== "about"),
     spicyMode: draft.spicyMode ?? false,
     rules: draft.rules ?? {},
     monetization: draft.monetization ? { ...DEFAULT_MONETIZATION, ...draft.monetization } : { ...DEFAULT_MONETIZATION },
@@ -1009,8 +1011,8 @@ export const MyPageBuilder: React.FC = () => {
           data.theme ? { ...DEFAULT_THEME, ...data.theme } : { ...DEFAULT_THEME },
         ),
         heroLayout: data.heroLayout ?? "default",
-        sections: data.sections ? { ...DEFAULT_SECTIONS, ...data.sections } : { ...DEFAULT_SECTIONS },
-        sectionsOrder: data.sectionsOrder ?? DEFAULT_SECTIONS_ORDER,
+        sections: data.sections ? { ...DEFAULT_SECTIONS, ...data.sections, about: false } : { ...DEFAULT_SECTIONS },
+        sectionsOrder: (data.sectionsOrder ?? DEFAULT_SECTIONS_ORDER).filter((key) => key !== "about"),
         spicyMode: data.spicyMode ?? false,
         rules: data.rules ?? {},
         monetization: data.monetization ? { ...DEFAULT_MONETIZATION, ...data.monetization } : { ...DEFAULT_MONETIZATION },
@@ -1307,8 +1309,8 @@ export const MyPageBuilder: React.FC = () => {
         legal: draft.legal,
         theme: draft.theme,
         heroLayout: draft.heroLayout,
-        sections: draft.sections,
-        sectionsOrder: draft.sectionsOrder,
+        sections: { ...draft.sections, about: false },
+        sectionsOrder: (draft.sectionsOrder ?? DEFAULT_SECTIONS_ORDER).filter((key) => key !== "about"),
         spicyMode: draft.spicyMode,
         rules: draft.rules,
         monetization: {
@@ -1911,33 +1913,6 @@ export const MyPageBuilder: React.FC = () => {
                   <span className="text-xs text-gray-600 dark:text-gray-400">Show display name on landing page</span>
                 </label>
                 <p className="text-[11px] text-gray-400 dark:text-gray-500 mt-1 ml-6">When off, your name still appears in the header and in the feed.</p>
-              </div>
-              <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="block text-xs font-medium text-gray-500 dark:text-gray-400">About page intro</label>
-                  <TextStyleControls
-                    style={draft.textStyles?.bio}
-                    onChange={(style) => updateTextStyle('bio', style)}
-                    defaultSize="sm"
-                  />
-                </div>
-                <p className="text-[11px] text-gray-400 dark:text-gray-500 mb-1">
-                  Shown only on the About tab in the fan hub (above your boundaries / guidelines). Not on the main landing page.
-                </p>
-                <div className="relative">
-                  <textarea
-                    value={draft.bio ?? ""}
-                    onChange={(e) => updateDraft({ bio: e.target.value })}
-                    placeholder="Short intro for About — fans see this with your boundaries"
-                    rows={2}
-                    maxLength={500}
-                    className="w-full px-3 py-2 pr-12 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                  />
-                  <div className="absolute right-2 top-2">
-                    <EmojiButton includeSjHeartEmoji={includeSjHeartEmoji} onSelect={(emoji) => updateDraft({ bio: (draft.bio ?? "") + emoji })} />
-                  </div>
-                </div>
-                <p className="text-xs text-gray-500 mt-1">{(draft.bio ?? "").length}/500</p>
               </div>
               <div className="grid grid-cols-1 gap-4">
                 <div>
@@ -2734,80 +2709,6 @@ export const MyPageBuilder: React.FC = () => {
                 ) : null}
               </div>
 
-              {/* Boundary Section */}
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300">
-                    Guidelines title (landing + member About tab)
-                  </label>
-                  <TextStyleControls
-                    style={draft.textStyles?.boundaryTitle}
-                    onChange={(style) => updateTextStyle('boundaryTitle', style)}
-                    defaultSize="xl"
-                  />
-                </div>
-                <div className="flex gap-2 mb-2">
-                  <input
-                    type="text"
-                    value={draft.landingContent?.boundaryTitle ?? DEFAULT_LANDING_CONTENT.boundaryTitle}
-                    onChange={(e) => updateLandingContent("boundaryTitle", e.target.value)}
-                    placeholder="Section title"
-                    className="flex-1 px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                  />
-                  <EmojiButton includeSjHeartEmoji={includeSjHeartEmoji} onSelect={(emoji) => updateLandingContent("boundaryTitle", (draft.landingContent?.boundaryTitle ?? "") + emoji)} />
-                </div>
-                <div className="flex items-center justify-between mb-1">
-                  <span className="text-xs text-gray-500 dark:text-gray-400">Intro paragraph (optional if you use lines below)</span>
-                  <TextStyleControls
-                    style={draft.textStyles?.boundaryText}
-                    onChange={(style) => updateTextStyle('boundaryText', style)}
-                    defaultSize="sm"
-                  />
-                </div>
-                <div className="relative">
-                  <textarea
-                    value={draft.landingContent?.boundaryText ?? DEFAULT_LANDING_CONTENT.boundaryText}
-                    onChange={(e) => updateLandingContent("boundaryText", e.target.value)}
-                    placeholder="Opening copy above the list (or use lines only, like the membership card)"
-                    rows={2}
-                    className="w-full px-3 py-1.5 pr-12 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                  />
-                  <div className="absolute right-2 top-1.5">
-                    <EmojiButton includeSjHeartEmoji={includeSjHeartEmoji} onSelect={(emoji) => updateLandingContent("boundaryText", (draft.landingContent?.boundaryText ?? "") + emoji)} />
-                  </div>
-                </div>
-                <div className="mt-3 space-y-2">
-                  <label className="block text-xs font-medium text-gray-500 dark:text-gray-400">
-                    Guideline lines (one per line, optional — tier-style list under the intro)
-                  </label>
-                  <textarea
-                    rows={6}
-                    placeholder={"e.g.\nDo not screenshot.\nStay chill."}
-                    value={(draft.landingContent?.boundaryLines ?? []).join("\n")}
-                    onChange={(e) => {
-                      const raw = e.target.value;
-                      const lines = raw.length === 0 ? [] : raw.split("\n");
-                      updateLandingContent("boundaryLines", lines);
-                    }}
-                    className="w-full px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                  />
-                  <div>
-                    <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Bullet style for those lines</label>
-                    <select
-                      className="w-full px-2 py-1.5 text-xs border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                      value={draft.landingContent?.boundaryLinesMarker ?? "check"}
-                      onChange={(e) =>
-                        updateLandingContent("boundaryLinesMarker", e.target.value as LandingSectionListMarker)
-                      }
-                    >
-                      <option value="none">None — plain lines</option>
-                      <option value="heart">Heart</option>
-                      <option value="check">Check (✓)</option>
-                      <option value="dot">Dot</option>
-                    </select>
-                  </div>
-                </div>
-              </div>
             </div>
           </CollapsibleSection>
 
@@ -2822,7 +2723,6 @@ export const MyPageBuilder: React.FC = () => {
                 { key: "treats", label: "Store", desc: "Products, video calls, chat sessions" },
                 { key: "tip", label: "Tip", desc: "One-time tips from fans" },
                 { key: "messages", label: "Messages", desc: "Direct messages with fans" },
-                { key: "about", label: "About / Boundaries", desc: "Your bio and rules" },
               ] as const).map(({ key, label, desc }) => (
                 <label key={key} className="flex items-center justify-between gap-3 cursor-pointer group">
                   <div>
@@ -2855,9 +2755,9 @@ export const MyPageBuilder: React.FC = () => {
               ))}
               <label className="flex items-center justify-between gap-3 cursor-pointer group pt-2 border-t border-gray-200 dark:border-gray-600">
                 <div>
-                  <span className="text-sm text-gray-700 dark:text-gray-300">Guest checkout on landing</span>
+                  <span className="text-sm text-gray-700 dark:text-gray-300">Show store items on landing</span>
                   <p className="text-xs text-gray-400 dark:text-gray-500">
-                    The store promo already shows on your landing when Store is enabled. Enable this to let visitors buy without signing in (Stripe collects email).
+                    The store promo already shows when Store is enabled. Enable this to preview available treats on the landing page; fans buy from the member store after joining.
                   </p>
                 </div>
                 <input
@@ -3780,8 +3680,7 @@ export const MyPageBuilder: React.FC = () => {
             </div>
             <div className="overflow-y-auto px-5 py-4 pb-6">
               <p className="text-xs text-gray-500 dark:text-gray-400 m-0 mb-3">
-                Same list fans see on your live landing (published treats with “Landing store” on). Use{" "}
-                <strong>Live</strong> in the preview toolbar to test checkout.
+                Same list fans see on your live landing (published treats with “Landing store” on). Purchases happen from the member store after joining.
               </p>
               {builderLandingTreatsLoading ? (
                 <p className="text-sm m-0 text-gray-700 dark:text-gray-300">{builderGuestTreatStoreCopy.memberStoreLoadingMessage}</p>
@@ -3808,7 +3707,7 @@ export const MyPageBuilder: React.FC = () => {
                         </p>
                       </div>
                       <span className="shrink-0 text-xs font-medium text-gray-500 dark:text-gray-400 sm:text-right">
-                        Guest checkout on live page
+                        Members only
                       </span>
                     </li>
                   ))}

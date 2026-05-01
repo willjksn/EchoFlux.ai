@@ -53,6 +53,43 @@ function resolveConnectAccountId(creatorData: Record<string, unknown> | undefine
   return typeof id === "string" && id.trim() ? id.trim() : null;
 }
 
+function isMissingStripeResource(err: unknown): boolean {
+  const e = err as { code?: string; type?: string; message?: string };
+  const msg = (e?.message || "").toLowerCase();
+  return e?.code === "resource_missing" || msg.includes("no such subscription") || msg.includes("no such customer");
+}
+
+async function retrieveSubscriptionWithFallback({
+  stripe,
+  subscriptionId,
+  preferredAccountId,
+  fallbackAccountId,
+}: {
+  stripe: NonNullable<ReturnType<typeof getPlatformStripe>>;
+  subscriptionId: string;
+  preferredAccountId: string | null;
+  fallbackAccountId: string | null;
+}) {
+  const attempts: Array<string | null> = [];
+  const pushAttempt = (id: string | null) => {
+    if (!attempts.includes(id)) attempts.push(id);
+  };
+  pushAttempt(preferredAccountId);
+  pushAttempt(fallbackAccountId);
+
+  let lastError: unknown = null;
+  for (const accountId of attempts) {
+    try {
+      const subscription = await subscriptionsRetrieve(stripe, subscriptionId, accountId);
+      return { subscription, accountId };
+    } catch (e) {
+      lastError = e;
+      if (!isMissingStripeResource(e)) throw e;
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error("Could not load subscription from Stripe");
+}
+
 function sanitizeReturnUrl(input: string | undefined, fallback: string, allowLocalHttp: boolean): string {
   if (!input || typeof input !== "string") return fallback;
   try {
@@ -137,33 +174,34 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(404).json({ error: "No subscription found for this creator" });
   }
 
-  const fanRef = db.collection("creators").doc(creatorId).collection("fans").doc(fanId);
-  const fanSnap = await fanRef.get();
-  const fanData = fanSnap.exists ? (fanSnap.data() as { stripeCustomerId?: string }) : undefined;
-  let customerId =
-    typeof fanData?.stripeCustomerId === "string" && fanData.stripeCustomerId.startsWith("cus_")
-      ? fanData.stripeCustomerId
-      : "";
-
-  if (!customerId) {
-    try {
-      const sub = await subscriptionsRetrieve(stripe, subscriptionId, connectId ?? null);
-      const cust = sub.customer;
-      customerId = typeof cust === "string" ? cust : (cust as { id?: string } | null)?.id || "";
-    } catch (e) {
-      const err = e as { message?: string };
-      console.error("createFanBillingPortalSession: subscription retrieve failed", err?.message);
-      return res.status(502).json({
-        error: "Could not load subscription from Stripe. Try again or use cancel at period end in the app.",
-      });
-    }
+  let resolvedAccountId: string | null = connectedAccountIdForStripe;
+  let customerId = "";
+  try {
+    const { subscription, accountId } = await retrieveSubscriptionWithFallback({
+      stripe,
+      subscriptionId,
+      preferredAccountId: connectedAccountIdForStripe,
+      fallbackAccountId: connectedAccountIdForStripe ? null : connectId,
+    });
+    resolvedAccountId = accountId;
+    const cust = subscription.customer;
+    customerId = typeof cust === "string" ? cust : (cust as { id?: string } | null)?.id || "";
+  } catch (e) {
+    const err = e as { message?: string };
+    console.error("createFanBillingPortalSession: subscription retrieve failed", err?.message);
+    return res.status(502).json({
+      error: "Could not load subscription from Stripe. Try again or use cancel at period end in the app.",
+    });
   }
 
   if (!customerId.startsWith("cus_")) {
     return res.status(400).json({ error: "Missing Stripe customer for this membership" });
   }
 
-  if (fanSnap.exists && fanData && !fanData.stripeCustomerId) {
+  const fanRef = db.collection("creators").doc(creatorId).collection("fans").doc(fanId);
+  const fanSnap = await fanRef.get();
+  const fanData = fanSnap.exists ? (fanSnap.data() as { stripeCustomerId?: string }) : undefined;
+  if (fanSnap.exists && fanData?.stripeCustomerId !== customerId) {
     try {
       await fanRef.set({ stripeCustomerId: customerId, updatedAt: new Date().toISOString() }, { merge: true });
     } catch {
@@ -175,7 +213,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const session = await billingPortalSessionsCreate(
       stripe,
       { customer: customerId, return_url: returnUrl },
-      connectedAccountIdForStripe,
+      resolvedAccountId,
     );
     const url = session?.url;
     if (!url) {
@@ -189,6 +227,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (
       msg.includes("portal") ||
       msg.includes("billing portal") ||
+      msg.includes("configuration") ||
+      msg.includes("customer portal") ||
       err?.code === "billing_portal_configuration_inactive"
     ) {
       return res.status(503).json({

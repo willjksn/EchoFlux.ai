@@ -17,7 +17,7 @@ import {
   type QueryDocumentSnapshot,
 } from "firebase/firestore";
 import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
-import { formatFanDisplayLabel } from "../src/lib/fanHubDisplay";
+import { formatFanDisplayLabel, safeUsernameForHandle } from "../src/lib/fanHubDisplay";
 import { isJointLiveSessionProductId, jointSessionKindFromProductId } from "../src/lib/treatSessionClassification";
 import { usePremiumStudioTab } from "./PremiumStudioLayout";
 import VideoCallRoom from "./VideoCallRoom";
@@ -41,6 +41,7 @@ type Purchase = {
   email: string;
   /** Firebase auth uid when the fan checked out signed-in (not guest). */
   fanMemberId: string;
+  fanUsername: string | null;
   fanName: string | null;
   productName: string;
   treatType: string;
@@ -96,6 +97,70 @@ function isTipPurchase(p: Purchase): boolean {
   const treatType = (p.treatType || "").trim().toLowerCase();
   const productName = (p.productName || "").trim().toLowerCase();
   return orderType === "tip" || treatType === "tip" || productName === "tip";
+}
+
+function purchaseFanLabel(p: Purchase): string {
+  const username = safeUsernameForHandle(p.fanUsername);
+  const email = p.email?.trim();
+  if (username && !isEmailDerivedUsername(username, email || null)) return `@${username}`;
+  const nameLabel = formatFanDisplayLabel(
+    {
+      displayName: p.fanName,
+      name: p.fanName,
+    },
+    { fallback: "Member" },
+  );
+  if (nameLabel !== "Member") return nameLabel;
+  if (email && email.includes("@")) return email;
+  return nameLabel;
+}
+
+function emailFromUnknown(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim().toLowerCase();
+  if (!trimmed) return null;
+  const exact = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed);
+  if (exact) return trimmed;
+  const embedded = trimmed.match(/[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}/i)?.[0];
+  return embedded ? embedded.toLowerCase() : null;
+}
+
+function isEmailDerivedUsername(username: string, email: string | null): boolean {
+  if (!email) return false;
+  const normalizedUsername = username.replace(/^@/, "").trim().toLowerCase();
+  const normalizedEmail = email.trim().toLowerCase();
+  const compactEmail = normalizedEmail.replace(/[^a-z0-9_]/g, "");
+  const [local, domain = ""] = normalizedEmail.split("@");
+  const compactDomain = domain.replace(/[^a-z0-9_]/g, "");
+  return normalizedUsername === compactEmail || normalizedUsername === `${local}${compactDomain}`;
+}
+
+function usernameFromFanRecord(data: Record<string, unknown>, email: string | null): string | null {
+  for (const key of ["username", "memberUsername", "fanUsername", "handle", "instagram_handle", "instagramHandle"]) {
+    const value = data[key];
+    if (typeof value !== "string" || !value.trim()) continue;
+    const username = safeUsernameForHandle(value.replace(/^@/, ""));
+    if (username && isEmailDerivedUsername(username, email)) continue;
+    if (username) return username;
+  }
+  return null;
+}
+
+function nameFromFanRecord(data: Record<string, unknown>, email: string | null): string | null {
+  for (const key of ["displayName", "fanName", "name"]) {
+    const value = data[key];
+    if (typeof value !== "string" || !value.trim()) continue;
+    const label = formatFanDisplayLabel(
+      {
+        displayName: value,
+        name: value,
+        email,
+      },
+      { fallback: "Member" },
+    );
+    if (label !== "Member") return label;
+  }
+  return null;
 }
 
 function isSubscriptionPurchase(p: Purchase): boolean {
@@ -416,16 +481,49 @@ export const FanHubPurchases: React.FC = () => {
       if (res.ok) {
         const data = await res.json();
         const list = Array.isArray(data.orders) ? data.orders : [];
+        const fanUsernameByEmail = new Map<string, string>();
+        const fanNameByEmail = new Map<string, string>();
+        try {
+          const fansSnap = await getDocs(collection(db, "creators", user.id, "fans"));
+          fansSnap.forEach((fanDoc) => {
+            const fanData = fanDoc.data() as Record<string, unknown>;
+            const email =
+              emailFromUnknown(fanData.email) ||
+              emailFromUnknown(fanData.fanEmail) ||
+              emailFromUnknown(fanDoc.id);
+            if (!email) return;
+            if (!fanUsernameByEmail.has(email)) {
+              const username = usernameFromFanRecord(fanData, email);
+              if (username) fanUsernameByEmail.set(email, username);
+            }
+            if (!fanNameByEmail.has(email)) {
+              const fanName = nameFromFanRecord(fanData, email);
+              if (fanName) fanNameByEmail.set(email, fanName);
+            }
+          });
+        } catch (fanLookupErr) {
+          if (import.meta.env.DEV) console.warn("FanHubPurchases fan username lookup failed", fanLookupErr);
+        }
         const realPurchases: Purchase[] = list.map((o: any) => {
           const orderType = typeof o.type === "string" ? o.type : "";
           const normalizedType = orderType.trim().toLowerCase();
           const isNonDeliverableOrder = normalizedType === "tip" || normalizedType === "subscription";
           const fanIdRaw = typeof o.fanId === "string" ? o.fanId.trim() : "";
+          const email = o.fanEmail || fanIdRaw || "Unknown";
+          const emailKey = emailFromUnknown(email);
+          const apiUsername = typeof o.fanUsername === "string" && o.fanUsername.trim() ? o.fanUsername.trim() : null;
+          const fanUsername =
+            apiUsername && !isEmailDerivedUsername(apiUsername, emailKey)
+              ? apiUsername
+              : emailKey
+                ? fanUsernameByEmail.get(emailKey) || null
+                : null;
           return {
             id: o.id,
-            email: o.fanEmail || fanIdRaw || "Unknown",
+            email,
             fanMemberId: fanIdRaw && !fanIdRaw.startsWith("guest_") ? fanIdRaw : "",
-            fanName: o.fanName || null,
+            fanUsername,
+            fanName: o.fanName || (emailKey ? fanNameByEmail.get(emailKey) : null) || null,
             productName: o.productTitle || o.type || "Purchase",
             treatType: o.productId || o.type,
             amountCents: o.amountCents || 0,
@@ -633,19 +731,20 @@ export const FanHubPurchases: React.FC = () => {
               : calendarTreatType === "chat_session"
                 ? "💬 Chat Session"
                 : "🎁 Store";
+        const fanLabel = purchaseFanLabel(p);
         const payload: Record<string, unknown> = {
-          title: `${titlePrefix}: ${p.fanName || p.email}`,
+          title: `${titlePrefix}: ${fanLabel}`,
           date: scheduledAt.toISOString(),
           reminderType: "treat",
           contentType: "custom",
-          description: `${p.productName} for ${p.fanName || p.email}`,
+          description: `${p.productName} for ${fanLabel}`,
           reminderTime,
           userId: user.id,
           treatPurchaseId: p.id,
           treatType: calendarTreatType,
           treatStatus: status,
           fanId: p.email,
-          fanName: p.fanName,
+          fanName: fanLabel,
           fanEmail: p.email,
           fanMemberUid: p.fanMemberId || null,
           deliveryType: delivery?.type || null,
@@ -1538,12 +1637,19 @@ export const FanHubPurchases: React.FC = () => {
                   <div className="purchases-card-info">
                     <p className="purchases-card-product">{p.productName}</p>
                     <p className="purchases-card-meta">
-                      <span>
-                        {formatFanDisplayLabel({ displayName: p.fanName }, { fallback: "Member" })}
-                        {p.email && p.email.includes("@") && (
-                          <span className="purchases-card-meta-email"> · {p.email}</span>
-                        )}
-                      </span>
+                      {(() => {
+                        const fanLabel = purchaseFanLabel(p);
+                        const shouldShowEmail =
+                          !!p.email && p.email.includes("@") && fanLabel.toLowerCase() !== p.email.toLowerCase();
+                        return (
+                          <span>
+                            {fanLabel}
+                            {shouldShowEmail && (
+                              <span className="purchases-card-meta-email"> · {p.email}</span>
+                            )}
+                          </span>
+                        );
+                      })()}
                       <span className="purchases-card-amount">{formatAmount(p.amountCents)}</span>
                     </p>
                     <p className="purchases-card-date">

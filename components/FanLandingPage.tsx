@@ -86,12 +86,8 @@ interface FanLandingPageProps {
   isLoggedIn: boolean;
   publicTreatsOnLanding?: boolean;
   sectionsTreatsEnabled?: boolean;
-  /** When true, landing treat CTA opens guest checkout (not “sign up first”). Set from FanStorefrontView when `publicTreatsOnLanding` + public landing context. */
-  landingGuestTreatCommerceEnabled?: boolean;
   landingTreatProducts?: TreatProduct[];
   landingTreatsLoading?: boolean;
-  onGuestPurchaseTreat?: (productId: string) => void;
-  guestTreatPurchasingId?: string | null;
   treatLinkAccountMessage?: string | null;
   /** Defaults to `/{handle}/terms` and `/privacy` if omitted */
   termsHref?: string;
@@ -150,7 +146,7 @@ function buildStorefrontConfig(
       treats: sectionsTreatsEnabled && creator.sections?.treats !== false,
       tip: creator.sections?.tip !== false,
       messages: creator.sections?.messages !== false,
-      about: creator.sections?.about !== false,
+      about: false,
     },
     publicTreatsOnLanding,
     fanAuthBranding: creator.fanAuthBranding,
@@ -171,15 +167,11 @@ export const FanLandingPage: React.FC<FanLandingPageProps> = (props) => {
     sectionsTreatsEnabled = true,
     landingTreatProducts = [],
     landingTreatsLoading = false,
-    onGuestPurchaseTreat,
-    guestTreatPurchasingId = null,
     treatLinkAccountMessage = null,
     termsHref: termsHrefProp,
     privacyHref: privacyHrefProp,
     homeHref,
   } = props;
-
-  const landingGuestTreatCommerceEnabled = props.landingGuestTreatCommerceEnabled === true;
 
   const { theme, monetization, landingContent: creatorLandingContent } = creator;
   const primary = theme?.primary || "#6366f1";
@@ -213,9 +205,7 @@ export const FanLandingPage: React.FC<FanLandingPageProps> = (props) => {
   const termsHref = termsHrefProp ?? `/${creator.handle}/terms`;
   const privacyHref = privacyHrefProp ?? `/${creator.handle}/privacy`;
 
-  const showLandingTreatEntry = landingGuestTreatCommerceEnabled && !!onGuestPurchaseTreat;
-  const showLandingTreatEntryCardOnly = publicTreatsOnLanding && sectionsTreatsEnabled;
-  const showLandingTreatModal = showLandingTreatEntry || showLandingTreatEntryCardOnly;
+  const showLandingTreatModal = publicTreatsOnLanding && sectionsTreatsEnabled;
 
   const storeCopy = useMemo(() => resolveStoreCopy(creatorLandingContent), [creatorLandingContent]);
 
@@ -261,8 +251,8 @@ export const FanLandingPage: React.FC<FanLandingPageProps> = (props) => {
   }, [treatStoreOpen]);
 
   useEffect(() => {
-    if (!showLandingTreatEntry) setTreatStoreOpen(false);
-  }, [showLandingTreatEntry]);
+    if (!showLandingTreatModal) setTreatStoreOpen(false);
+  }, [showLandingTreatModal]);
 
   useEffect(() => {
     if (typeof window === "undefined" || !creator.creatorId) return;
@@ -381,7 +371,7 @@ export const FanLandingPage: React.FC<FanLandingPageProps> = (props) => {
           tipLoading,
           tipError,
           tipsEnabled,
-          showGuestTreatsCard: showLandingTreatEntry || showLandingTreatEntryCardOnly,
+          showGuestTreatsCard: showLandingTreatModal,
           onOpenGuestTreats: () => setTreatStoreOpen(true),
           landingTreatsLoading,
           landingTreatProductCount: landingTreatProducts.length,

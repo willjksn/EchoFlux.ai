@@ -5,7 +5,7 @@ import { test, expect, type Page } from "@playwright/test";
  *
  * Prerequisites:
  * - Vercel (or other) URL with working `/api/createFanCheckoutSession` and Stripe **test** keys
- * - Creator handle with `publicTreatsOnLanding`, at least one visible product with `showOnLandingPage`
+ * - Creator handle with member store enabled and at least one visible product with `showInMemberStore`
  * - Creator has Stripe Connect complete **or** is in PLATFORM_OWNER_CREATOR_IDS (platform checkout)
  *
  * Run:

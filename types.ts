@@ -290,14 +290,14 @@ export interface StorefrontLandingContent {
     storeLandingHeadline?: string;
     storeLandingDescription?: string;
     storeLandingCtaLabel?: string;
-    /** Guest checkout card on public landing */
+    /** Store preview card on public landing */
     publicStoreCardTitle?: string;
     publicStoreCardDescription?: string;
-    /** Guest "open store" button (count may be appended as " (3)") */
+    /** Public landing "open store" button (count may be appended as " (3)") */
     publicStoreOpenCtaLabel?: string;
-    /** Title of the guest store modal */
+    /** Title of the public landing store modal */
     publicStoreModalTitle?: string;
-    /** Guest modal when there are no products */
+    /** Public landing store modal when there are no products */
     publicStoreModalEmptyMessage?: string;
 
     // --- Public landing #pricing membership card (optional overrides) ---
@@ -490,7 +490,7 @@ export interface CreatorStorefrontSettings {
     };
     monetization?: CreatorMonetization;
     onboardingStatus?: string;
-    /** When true, visible store products can be purchased on the public landing page without signing in (guest Stripe checkout). */
+    /** When true, visible store products can be previewed on the public landing page. Purchases happen from the member store. */
     publicTreatsOnLanding?: boolean;
     /** Fan log in / sign up modal: community name, copy, and optional color overrides */
     fanAuthBranding?: FanAuthBranding;
@@ -617,7 +617,7 @@ export interface TreatProduct {
     archived: boolean;
     /** When false, product is hidden everywhere (unpublished) */
     visible: boolean;
-    /** When false, hidden from public landing store / guest checkout. Default true if omitted. */
+    /** When false, hidden from the public landing store preview. Default true if omitted. */
     showOnLandingPage?: boolean;
     /** When false, hidden from logged-in members’ store tab. Default true if omitted. */
     showInMemberStore?: boolean;

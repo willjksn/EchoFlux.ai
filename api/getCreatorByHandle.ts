@@ -340,9 +340,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         treats: sections.treats !== false,
         tip: sections.tip !== false,
         messages: sections.messages !== false,
-        about: sections.about !== false,
+        about: false,
       },
-      sectionsOrder: (creatorData.sectionsOrder as string[] | undefined) || ["feed", "treats", "tip", "messages", "about"],
+      sectionsOrder: ((creatorData.sectionsOrder as string[] | undefined) || ["feed", "treats", "tip", "messages"]).filter(
+        (key) => key !== "about",
+      ),
       spicyMode: !!creatorData.spicyMode,
       rules: rules.boundariesText != null ? { boundariesText: rules.boundariesText } : undefined,
       monetization,

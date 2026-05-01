@@ -295,7 +295,7 @@ export type StorefrontCreator = {
   heroLayout?: "default" | "centered" | "split" | "splitRight";
   sections: { feed: boolean; treats: boolean; tip?: boolean; messages: boolean; about?: boolean };
   sectionsOrder?: string[];
-  /** Guest-visible treats on public landing (no sign-in). */
+  /** Store items visible on the public landing page as a preview. */
   publicTreatsOnLanding?: boolean;
   rules?: { boundariesText?: string };
   spicyMode?: boolean;
@@ -701,7 +701,6 @@ const MEMBER_PATH_SLUGS = new Set([
   "messages",
   "profile",
   "saved",
-  "about",
 ]);
 
 type FanStorefrontMemberTab =
@@ -727,7 +726,6 @@ function memberPathSlugToTab(slug: string): FanStorefrontMemberTab | null {
   if (s === "messages") return "messages";
   if (s === "profile") return "profile";
   if (s === "saved") return "saved";
-  if (s === "about") return "about";
   return null;
 }
 
@@ -747,8 +745,6 @@ function memberTabToPathSlug(tab: FanStorefrontMemberTab): string | null {
       return "profile";
     case "saved":
       return "saved";
-    case "about":
-      return "about";
     default:
       return null;
   }
@@ -1208,10 +1204,9 @@ export const FanStorefrontView: React.FC = () => {
       setMemberPurchasesListCompact(false);
     }
   }, [memberPurchasesCompactStorageKey]);
-  /** Visible treats on public landing when creator enables guest checkout */
+  /** Visible treats on public landing when the creator enables landing store items. */
   const [landingTreatsProducts, setLandingTreatsProducts] = useState<TreatProduct[]>([]);
   const [landingTreatsLoading, setLandingTreatsLoading] = useState(false);
-  const [guestTreatPurchasingId, setGuestTreatPurchasingId] = useState<string | null>(null);
   const [treatLinkMessage, setTreatLinkMessage] = useState<string | null>(null);
   const pendingGuestLinkBannerShown = useRef(false);
   const [purchasingId, setPurchasingId] = useState<string | null>(null);
@@ -1603,9 +1598,11 @@ export const FanStorefrontView: React.FC = () => {
                       treats: ownSections.treats !== false,
                       tip: ownSections.tip !== false,
                       messages: ownSections.messages !== false,
-                      about: ownSections.about !== false,
+                      about: false,
                     },
-                    sectionsOrder: (own.sectionsOrder as string[] | undefined) || ["feed", "treats", "tip", "messages", "about"],
+                    sectionsOrder: ((own.sectionsOrder as string[] | undefined) || ["feed", "treats", "tip", "messages"]).filter(
+                      (key) => key !== "about",
+                    ),
                     publicTreatsOnLanding: own.publicTreatsOnLanding === true,
                     rules: ownRules.boundariesText != null ? { boundariesText: ownRules.boundariesText } : undefined,
                     spicyMode: own.spicyMode === true,
@@ -2696,12 +2693,6 @@ export const FanStorefrontView: React.FC = () => {
       !isLoggedIn ||
       !(subscribed && (creator?.monetization?.freeAccessEnabled === true || membershipType === "paid")));
 
-  /** Guest treat shop on landing: creator allows public store + viewer is not a subscribed member in hub mode (see docs/LOCAL_DEV.md). */
-  const landingGuestTreatCommerceEnabled =
-    creator?.publicTreatsOnLanding === true &&
-    onPublicLanding &&
-    creator?.sections?.treats !== false;
-
   useEffect(() => {
     if (
       !creator?.creatorId ||
@@ -2753,7 +2744,7 @@ export const FanStorefrontView: React.FC = () => {
     onPublicLanding,
   ]);
 
-  /** Guest checkout returned from Stripe but fan is not signed in yet — prompt before claim can run. */
+  /** Legacy landing-store checkout returned before sign-in; prompt before claim can run. */
   useEffect(() => {
     if (typeof window === "undefined" || isLoggedIn || pendingGuestLinkBannerShown.current) return;
     const params = new URLSearchParams(window.location.search);
@@ -2839,46 +2830,6 @@ export const FanStorefrontView: React.FC = () => {
       cancelled = true;
     };
   }, [creator?.creatorId, isLoggedIn]);
-
-  const handleGuestTreatPurchase = async (productId: string) => {
-    if (!creator?.creatorId) return;
-    const guestEmail = window.prompt("Enter your email for checkout and purchase access:");
-    const normalizedGuestEmail = (guestEmail || "").trim().toLowerCase();
-    if (!normalizedGuestEmail) return;
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedGuestEmail)) {
-      showToast?.("Enter a valid email to continue checkout.", "error");
-      return;
-    }
-    setGuestTreatPurchasingId(productId);
-    try {
-      const successUrl = buildPublicCheckoutUrl(
-        window.location.pathname,
-        "?treat_success=1&session_id={CHECKOUT_SESSION_ID}"
-      );
-      const cancelUrl = buildPublicCheckoutUrl(window.location.pathname);
-      const res = await fetch("/api/createFanCheckoutSession", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          creatorId: creator.creatorId,
-          type: "product",
-          productId,
-          guestProduct: true,
-          guestEmail: normalizedGuestEmail,
-          ...(successUrl ? { successUrl } : {}),
-          ...(cancelUrl ? { cancelUrl } : {}),
-        }),
-      });
-      const { ok, url, error } = await readFanCheckoutFetchResult(res);
-      if (!ok || !url) throw new Error(error || "Checkout failed");
-      window.location.href = url;
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : "Checkout could not start. Please try again.";
-      showToast?.(msg, "error");
-    } finally {
-      setGuestTreatPurchasingId(null);
-    }
-  };
 
   const startSubscriptionCheckout = async (opts?: { auto?: boolean }): Promise<boolean> => {
     const isAuto = opts?.auto === true;
@@ -4489,8 +4440,8 @@ export const FanStorefrontView: React.FC = () => {
   })();
   // Nav tabs: order from sectionsOrder, filtered by sections (Messages always available when section is on).
   /** `?preview=member` — show full shell like a subscribed member (ignore purchase-only / paywall nav). */
-  const baseMemberTabKeys = (sectionsOrder || ["feed", "treats", "tip", "messages", "about"])
-    .filter((key) => key !== "saved" && (sections as Record<string, boolean>)?.[key] !== false)
+  const baseMemberTabKeys = (sectionsOrder || ["feed", "treats", "tip", "messages"])
+    .filter((key) => key !== "about" && key !== "saved" && (sections as Record<string, boolean>)?.[key] !== false)
     .filter((key) => previewMember || !purchaseOnlyAccess || key === "treats" || key === "tip");
   const memberTabKeys = (() => {
     const keys = [...baseMemberTabKeys];
@@ -4702,9 +4653,6 @@ export const FanStorefrontView: React.FC = () => {
           sectionsTreatsEnabled={creator.sections?.treats !== false}
           landingTreatProducts={landingTreatsProducts}
           landingTreatsLoading={landingTreatsLoading}
-          landingGuestTreatCommerceEnabled={landingGuestTreatCommerceEnabled}
-          onGuestPurchaseTreat={undefined}
-          guestTreatPurchasingId={guestTreatPurchasingId}
           treatLinkAccountMessage={treatLinkMessage}
           termsHref={storefrontTermsPath}
           privacyHref={storefrontPrivacyPath}

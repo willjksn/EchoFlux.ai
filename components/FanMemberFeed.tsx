@@ -10,7 +10,6 @@ import {
   Timestamp,
   doc,
   getDoc,
-  runTransaction,
   setDoc,
   type DocumentData,
   type DocumentSnapshot,
@@ -1329,65 +1328,27 @@ async function fetchMemberPostById(
 
 async function voteForFanMemberPostPoll({
   creatorId,
-  fanId,
   post,
   optionIndex,
 }: {
   creatorId: string;
-  fanId: string;
   post: Post;
   optionIndex: number;
 }) {
-  if (!db) throw new Error("Database unavailable.");
   if (!post.poll || optionIndex < 0 || optionIndex >= post.poll.options.length) {
     throw new Error("That poll option is no longer available.");
   }
-  const segs = (post.feedFirestorePath || "")
-    .split("/")
-    .map((s) => s.trim())
-    .filter(Boolean);
-  const postRef =
-    segs.length >= 2 && segs.length % 2 === 0
-      ? doc(db, ...(segs as [string, ...string[]]))
-      : doc(db, "creators", creatorId, "fanPosts", post.id);
-
-  await runTransaction(db, async (tx) => {
-    const snap = await tx.get(postRef);
-    if (!snap.exists()) throw new Error("This poll is no longer available.");
-    const data = snap.data() as DocumentData;
-    const rawPoll = data.poll && typeof data.poll === "object" ? data.poll as Record<string, unknown> : null;
-    if (!rawPoll) throw new Error("This poll is no longer available.");
-    const options = Array.isArray(rawPoll.options)
-      ? rawPoll.options.filter((option): option is string => typeof option === "string" && !!option.trim())
-      : [];
-    if (optionIndex >= options.length) throw new Error("That poll option is no longer available.");
-
-    const votesByFan =
-      rawPoll.votesByFan && typeof rawPoll.votesByFan === "object"
-        ? { ...(rawPoll.votesByFan as Record<string, unknown>) }
-        : {};
-    if (typeof votesByFan[fanId] === "number") return;
-
-    const optionVotes = Array.isArray(rawPoll.optionVotes)
-      ? rawPoll.optionVotes.map((vote) => (typeof vote === "number" && Number.isFinite(vote) ? Math.max(0, Math.round(vote)) : 0))
-      : options.map(() => 0);
-    while (optionVotes.length < options.length) optionVotes.push(0);
-    optionVotes[optionIndex] = (optionVotes[optionIndex] ?? 0) + 1;
-    votesByFan[fanId] = optionIndex;
-
-    tx.set(
-      postRef,
-      {
-        poll: {
-          ...rawPoll,
-          options,
-          optionVotes: optionVotes.slice(0, options.length),
-          votesByFan,
-        },
-      },
-      { merge: true },
-    );
+  const token = auth.currentUser ? await auth.currentUser.getIdToken() : null;
+  const res = await fetch(resolveApiUrl("/api/voteFanPostPoll"), {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify({ creatorId, postId: post.id, optionIndex }),
   });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error((data as { error?: string }).error || "Could not save your vote.");
 }
 
 /** Published post payload for member “Purchases” rows (unlocked feed content). */
@@ -2298,7 +2259,7 @@ export const FanMemberFeed: React.FC<FanMemberFeedProps> = ({
         return;
       }
       try {
-        await voteForFanMemberPostPoll({ creatorId, fanId, post, optionIndex });
+        await voteForFanMemberPostPoll({ creatorId, post, optionIndex });
       } catch (e) {
         console.error("Failed to vote in poll", e);
         showToast?.(e instanceof Error ? e.message : "Couldn’t save your vote.", "error");
@@ -2948,7 +2909,7 @@ export const FanMemberSaved: React.FC<FanMemberSavedProps> = ({
         return;
       }
       try {
-        await voteForFanMemberPostPoll({ creatorId, fanId, post, optionIndex });
+        await voteForFanMemberPostPoll({ creatorId, post, optionIndex });
       } catch (e) {
         console.error("Failed to vote in poll", e);
         showToastSaved?.(e instanceof Error ? e.message : "Couldn’t save your vote.", "error");

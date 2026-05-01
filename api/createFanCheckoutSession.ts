@@ -150,8 +150,8 @@ async function syncConnectedAccountFanFacingName({
  * For regular creators: Funds go to creator's Connect account with 10% platform fee.
  * For platform owners (e.g., Stormij): Funds go directly to EchoFlux, no Connect account needed.
  * 
- * Body: { creatorId, type: 'subscription' | 'product' | 'tip' | 'post_unlock' | 'live_stream_ticket', productId?, postId?, streamId?, subscriptionPriceCents?, amountCents?, tipHandle?, successUrl?, cancelUrl?, guestProduct?: boolean }
- * guestProduct: true → guest store checkout without Firebase auth; Stripe collects email; webhook uses guest_${stripeCustomerId}.
+ * Body: { creatorId, type: 'subscription' | 'product' | 'tip' | 'post_unlock' | 'live_stream_ticket', productId?, postId?, streamId?, subscriptionPriceCents?, amountCents?, tipHandle?, successUrl?, cancelUrl? }
+ * Store products require a signed-in member account.
  * 
  * Tips can be made without authentication (anonymous tippers).
  */
@@ -228,8 +228,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   const allowGuestProduct = type === "product" && guestProduct === true;
+  if (allowGuestProduct) {
+    return res.status(403).json({ error: "Store purchases require a member account" });
+  }
 
-  // Tips can be anonymous; guest store checkout has no Firebase user (Stripe collects email).
+  // Tips can be anonymous; store purchases require a signed-in member.
   const decoded = await verifyAuth(req);
   const fanId = decoded?.uid || `anon_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`;
 
@@ -309,12 +312,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       role: creatorData?.role || creatorUserData?.role,
     };
 
-    if (allowGuestProduct) {
-      if (!(creatorData?.publicTreatsOnLanding === true || creatorUserData?.publicTreatsOnLanding === true)) {
-        return res.status(403).json({ error: "Store purchases are not available for guest checkout on this page" });
-      }
-    }
-    
     // Check if this is a platform owner (e.g., Stormij) - payments go directly to EchoFlux
     const isPlatformOwner = isCreatorPlatformOwner(creatorId, ownerDetectionData);
     

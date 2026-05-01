@@ -55,7 +55,7 @@ Used by **Fan Hub → My Page** (storefront settings) and the **fan storefront**
 | `sectionsOrder` | string[]? | Order of section keys for tab bar (e.g. `['feed','treats','messages','sessions','about']`). |
 | `spicyMode` | boolean? | 18+ / IG-like spicy content flag; policy summary shown on storefront. |
 | `rules` | object? | `boundariesText`: About/Boundaries block (markdown or plain). |
-| `landingContent` | object? | Landing copy, perks, boundaries, **store branding** (`memberStoreTitle`, `storeLandingHeadline`, guest checkout strings, etc.). See `StorefrontLandingContent` in `types.ts`. |
+| `landingContent` | object? | Landing copy, perks, boundaries, and **store branding** (`memberStoreTitle`, `storeLandingHeadline`, public store preview strings, etc.). See `StorefrontLandingContent` in `types.ts`. |
 | `monetization` | object? | `monthlyPrice`, `currency`, `lockedDefaultPrice`, `tipsEnabled`, `chatEnabled`. |
 | `onboardingStatus` | string? | Creator onboarding state. |
 | `stripeConnectAccountId` | string? | Stripe Connect Express account ID. Set by Fan Hub Payouts. |

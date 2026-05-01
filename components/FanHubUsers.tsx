@@ -1839,7 +1839,7 @@ export const FanHubUsers: React.FC = () => {
                   {newUserRole === "admin" && "Admins have full access to manage the fan page."}
                   {newUserRole === "member" && "Members are subscribers who pay through Stripe."}
                   {newUserRole === "tipper" && "Tippers can tip from the landing page without subscribing."}
-                  {newUserRole === "treat_buyer" && "Store buyers purchased from your page before subscribing; they often appear automatically from guest checkout."}
+                  {newUserRole === "treat_buyer" && "Store buyers purchased from the member store and can appear automatically after checkout."}
                 </p>
               </div>
               <div>

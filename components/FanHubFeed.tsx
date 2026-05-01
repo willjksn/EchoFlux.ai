@@ -9,6 +9,7 @@ import {
   orderBy,
   limit,
   getDocs,
+  onSnapshot,
   doc,
   runTransaction,
   getDoc,
@@ -2010,13 +2011,12 @@ export const FanHubFeed: React.FC<{
     };
   }, [creatorId]);
 
-  useEffect(() => {
-    const loadPosts = async () => {
-      if (!creatorId) {
-        setPosts(DEMO_POSTS);
-        setLoading(false);
-        return;
-      }
+  const loadPosts = useCallback(async () => {
+    if (!creatorId) {
+      setPosts(DEMO_POSTS);
+      setLoading(false);
+      return;
+    }
       
       try {
         const userQ = query(collection(db, "users", creatorId, "posts"), orderBy("createdAt", "desc"), limit(50));
@@ -2059,10 +2059,43 @@ export const FanHubFeed: React.FC<{
       } finally {
         setLoading(false);
       }
-    };
-    
-    loadPosts();
   }, [creatorId, isAdminMode]);
+
+  useEffect(() => {
+    loadPosts();
+  }, [loadPosts]);
+
+  useEffect(() => {
+    if (!creatorId) return undefined;
+    const userQ = query(collection(db, "users", creatorId, "posts"), orderBy("createdAt", "desc"), limit(50));
+    const fanQ = query(collection(db, "creators", creatorId, "fanPosts"), orderBy("createdAt", "desc"), limit(50));
+    const unsubUser = onSnapshot(
+      userQ,
+      () => void loadPosts(),
+      (err) => console.warn("Fan Hub: user posts listener failed:", err),
+    );
+    const unsubFan = onSnapshot(
+      fanQ,
+      () => void loadPosts(),
+      (err) => console.warn("Fan Hub: fanPosts listener failed:", err),
+    );
+    return () => {
+      unsubUser();
+      unsubFan();
+    };
+  }, [creatorId, loadPosts]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return undefined;
+    const handlePostsUpdated = (event: Event) => {
+      const detail = (event as CustomEvent<{ creatorId?: string }>).detail;
+      if (!detail?.creatorId || detail.creatorId === creatorId) {
+        void loadPosts();
+      }
+    };
+    window.addEventListener("echoflux:fan-posts-updated", handlePostsUpdated);
+    return () => window.removeEventListener("echoflux:fan-posts-updated", handlePostsUpdated);
+  }, [creatorId, loadPosts]);
 
   useEffect(() => {
     if (!db || !creatorId) {
