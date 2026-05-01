@@ -264,6 +264,43 @@ export const FanLandingPage: React.FC<FanLandingPageProps> = (props) => {
     if (!showLandingTreatEntry) setTreatStoreOpen(false);
   }, [showLandingTreatEntry]);
 
+  useEffect(() => {
+    if (typeof window === "undefined" || !creator.creatorId) return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("tip") !== "success" || params.get("purchase_sync") !== "1") return;
+    const sessionId = params.get("session_id");
+    if (!sessionId) return;
+
+    let cancelled = false;
+    (async () => {
+      for (let attempt = 0; attempt < 4; attempt++) {
+        try {
+          const res = await fetch("/api/syncFanCheckoutSessionPublic", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ sessionId, creatorId: creator.creatorId }),
+          });
+          if (res.ok) break;
+        } catch {
+          // Retry briefly while Stripe/webhook state catches up after redirect.
+        }
+        await new Promise((resolve) => setTimeout(resolve, 1200));
+      }
+
+      if (cancelled) return;
+      const url = new URL(window.location.href);
+      url.searchParams.delete("tip");
+      url.searchParams.delete("purchase_sync");
+      url.searchParams.delete("session_id");
+      const qs = url.searchParams.toString();
+      window.history.replaceState({}, "", url.pathname + (qs ? `?${qs}` : "") + (url.hash || ""));
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [creator.creatorId]);
+
   const startTip = async (amountCents: number) => {
     if (!amountCents || amountCents < 100 || amountCents > 100000 || tipLoading) return;
     setTipError("");

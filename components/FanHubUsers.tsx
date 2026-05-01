@@ -1401,7 +1401,6 @@ export const FanHubUsers: React.FC = () => {
   // Group users by role
   const admins = filteredUsers.filter((u) => u.role === "admin");
   const members = filteredUsers.filter((u) => u.role === "member");
-  const treatBuyers = filteredUsers.filter((u) => u.role === "treat_buyer");
   const tippers = filteredUsers.filter((u) => u.role === "tipper");
 
   // Calculate monthly totals
@@ -1721,20 +1720,6 @@ export const FanHubUsers: React.FC = () => {
                       <UserRow key={fanUser.id} fanUser={fanUser} />
                     ))}
                   </>
-                )}
-
-                {/* Store buyers (guest checkout / pre-subscribe purchases) */}
-                <SectionHeader title="Store buyers" count={treatBuyers.length} />
-                {treatBuyers.length > 0 ? (
-                  treatBuyers.map((fanUser) => (
-                    <UserRow key={fanUser.id} fanUser={fanUser} />
-                  ))
-                ) : (
-                  <tr>
-                    <td colSpan={11} className="px-4 py-4 text-sm text-gray-500 dark:text-gray-400 italic">
-                      No store buyers yet. They appear when someone buys from your store on the landing page before subscribing.
-                    </td>
-                  </tr>
                 )}
 
                 {/* Tippers Section */}
