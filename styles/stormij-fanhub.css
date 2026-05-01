@@ -1292,12 +1292,16 @@ html.dark .stormij-theme.stormij-theme--light :where(
 .feed-card-caption-overlay {
   position: absolute;
   inset: 0;
+  z-index: 7;
   display: flex;
   align-items: flex-end;
   justify-content: center;
   padding: 1rem;
   background: linear-gradient(to top, rgba(0,0,0,0.5) 0%, transparent 50%);
   pointer-events: none;
+}
+.feed-comments-modal-media-wrap .feed-card-caption-overlay {
+  padding-bottom: 4.75rem;
 }
 .feed-card-caption-overlay-text {
   color: #fff;

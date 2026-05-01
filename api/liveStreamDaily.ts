@@ -86,7 +86,7 @@ async function fanCanWatchStream(
 
 /**
  * Daily.co `user_name`: prefer EchoFlux @handle / username from Firestore, not Auth full name.
- * Host: users.username → creators.handle → then display name / JWT.
+ * Host: creators.handle → users.username → then display name / JWT.
  * Fan: users.username → then same fallbacks as Fan Hub lists (display name, etc.).
  */
 async function dailyParticipantDisplayName(
@@ -104,15 +104,15 @@ async function dailyParticipantDisplayName(
     (typeof decoded.email === "string" ? decoded.email.trim() : "") ||
     undefined;
 
-  const handle = safeUsernameForHandle(typeof u.username === "string" ? u.username : null);
-  if (handle) return `@${handle}`.slice(0, 80);
-
   if (isHost) {
     const creatorSnap = await db.collection("creators").doc(uid).get();
     const c = creatorSnap.exists ? (creatorSnap.data() as { handle?: string }) : undefined;
     const raw = typeof c?.handle === "string" ? c.handle.replace(/^@/, "").trim().toLowerCase() : "";
     if (raw) return `@${raw}`.slice(0, 80);
   }
+
+  const handle = safeUsernameForHandle(typeof u.username === "string" ? u.username : null);
+  if (handle) return `@${handle}`.slice(0, 80);
 
   const rest = fanHubListLabelFromInput(
     {
