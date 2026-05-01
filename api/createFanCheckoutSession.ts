@@ -85,6 +85,65 @@ function isCreatorPlatformOwner(
   return false;
 }
 
+function normalizeCreatorHandleForStripe(raw: unknown): string {
+  const handle = typeof raw === "string" ? raw.replace(/^@/, "").trim().toLowerCase() : "";
+  return /^[a-z0-9_]{2,32}$/.test(handle) ? handle : "";
+}
+
+function stripeDescriptorFromLabel(label: string): string {
+  const clean = label
+    .replace(/^@/, "")
+    .replace(/[^a-zA-Z0-9 ]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toUpperCase();
+  return clean.slice(0, 22);
+}
+
+function namesEqual(a: unknown, b: unknown): boolean {
+  const left = typeof a === "string" ? a.replace(/\s+/g, " ").trim().toLowerCase() : "";
+  const right = typeof b === "string" ? b.replace(/\s+/g, " ").trim().toLowerCase() : "";
+  return !!left && !!right && left === right;
+}
+
+async function syncConnectedAccountFanFacingName({
+  stripe,
+  account,
+  accountId,
+  fanFacingCreatorLabel,
+}: {
+  stripe: Stripe;
+  account: Stripe.Account;
+  accountId: string;
+  fanFacingCreatorLabel: string;
+}): Promise<void> {
+  const label = fanFacingCreatorLabel.trim();
+  if (!label || label === "Creator") return;
+
+  const legalName =
+    account.individual?.first_name && account.individual?.last_name
+      ? `${account.individual.first_name} ${account.individual.last_name}`
+      : "";
+  const currentProfileName = account.business_profile?.name;
+  const shouldUpdateProfileName =
+    !currentProfileName || namesEqual(currentProfileName, legalName) || namesEqual(currentProfileName, account.email);
+  const descriptor = stripeDescriptorFromLabel(label);
+  const currentDescriptor = account.settings?.payments?.statement_descriptor;
+  const shouldUpdateDescriptor = descriptor.length >= 5 && (!currentDescriptor || namesEqual(currentDescriptor, legalName));
+
+  if (!shouldUpdateProfileName && !shouldUpdateDescriptor) return;
+
+  try {
+    await stripe.accounts.update(accountId, {
+      ...(shouldUpdateProfileName ? { business_profile: { name: label } } : {}),
+      ...(shouldUpdateDescriptor ? { settings: { payments: { statement_descriptor: descriptor } } } : {}),
+    });
+  } catch (e) {
+    // Checkout should not fail just because Stripe disallowed a public profile update.
+    console.warn("syncConnectedAccountFanFacingName:", e);
+  }
+}
+
 /**
  * POST: Create Stripe Checkout Session for fan→creator payment (subscription, product, or tip).
  * 
@@ -277,12 +336,33 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       );
     }
 
+    /** Fan-facing checkout copy: prefer public @handle so legal / wallet names from Stripe Connect are not repeated on the line item. */
+    const normalizedHandle =
+      normalizeCreatorHandleForStripe(creatorData?.handle) ||
+      normalizeCreatorHandleForStripe(creatorUserData?.handle);
+    const fanFacingCreatorLabel = normalizedHandle
+      ? `@${normalizedHandle}`
+      : (
+          (creatorData?.displayName ||
+            creatorUserData?.displayName ||
+            creatorData?.handle ||
+            creatorUserData?.handle ||
+            "Creator") as string
+        )
+          .trim() || "Creator";
+
     if (!isPlatformOwner && connectAccountId) {
       try {
         const account = await stripe.accounts.retrieve(connectAccountId);
         if (!account.charges_enabled) {
           return res.status(400).json({ error: "Creator cannot accept payments yet" });
         }
+        await syncConnectedAccountFanFacingName({
+          stripe,
+          account,
+          accountId: connectAccountId,
+          fanFacingCreatorLabel,
+        });
       } catch (e) {
         if (isReconnectableConnectError(e)) {
           return res.status(400).json({
@@ -300,21 +380,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // For platform owners: create session on platform (no Stripe-Account header).
     // For regular creators: act as connected account. Never pass `{}` as 2nd arg — stripe-node rejects it.
     const connectIdForCheckout = isPlatformOwner ? null : connectAccountId;
-    /** Fan-facing checkout copy: prefer public @handle so legal / wallet names from Stripe Connect are not repeated on the line item. */
-    const handleRaw =
-      (typeof creatorData?.handle === "string" ? creatorData.handle : "") ||
-      (typeof creatorUserData?.handle === "string" ? creatorUserData.handle : "");
-    const normalizedHandle = handleRaw.replace(/^@/, "").trim().toLowerCase();
-    const fanFacingCreatorLabel = normalizedHandle
-      ? `@${normalizedHandle}`
-      : (
-          (creatorData?.displayName ||
-            creatorUserData?.displayName ||
-            creatorData?.handle ||
-            creatorUserData?.handle ||
-            "Creator") as string
-        )
-          .trim() || "Creator";
 
     // ==================== SUBSCRIPTION ====================
     if (type === "subscription") {
