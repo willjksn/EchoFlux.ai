@@ -1008,7 +1008,7 @@ export const Dashboard: React.FC = () => {
         const token = await auth.currentUser?.getIdToken(true);
         if (!token) return;
         const commissionRate = 0.1;
-        const res = await fetch('/api/adminFanHubRevenue?limit=5000', {
+        const res = await fetch('/api/adminFanHubRevenue?limit=5000&days=30', {
           headers: { Authorization: `Bearer ${token}` },
         });
         if (!res.ok) {
@@ -3155,14 +3155,14 @@ export const Dashboard: React.FC = () => {
             <p className="text-xs text-gray-500 dark:opacity-60 mt-1">Stripe active/trialing subs only</p>
           </div>
           <div>
-            <p className="text-sm text-gray-500 dark:opacity-70 mb-1">Fan Hub Commission</p>
+            <p className="text-sm text-gray-500 dark:opacity-70 mb-1">Fan Hub Commission (30d)</p>
             <p className="text-3xl font-bold text-emerald-600 dark:text-green-300">
               {isLoadingAdminFanHubCommission ? '…' : `$${adminFanHubCommissionUsd.toFixed(2)}`}
             </p>
-            <p className="text-xs text-gray-500 dark:opacity-60 mt-1">10% of Fan Hub gross (orders)</p>
+            <p className="text-xs text-gray-500 dark:opacity-60 mt-1">10% of Fan Hub gross, last 30 days</p>
           </div>
           <div className="border-l border-gray-200 dark:border-white/20 pl-6">
-            <p className="text-sm text-gray-500 dark:opacity-70 mb-1">Total Revenue</p>
+            <p className="text-sm text-gray-500 dark:opacity-70 mb-1">Monthly Revenue Estimate</p>
             <p className="text-3xl font-bold text-primary-600 dark:text-primary-300">
               {totalRevenueCombinedUsd != null
                 ? `$${totalRevenueCombinedUsd.toLocaleString(undefined, {
@@ -3171,7 +3171,7 @@ export const Dashboard: React.FC = () => {
                   })}`
                 : '—'}
             </p>
-            <p className="text-xs text-gray-500 dark:opacity-60 mt-1">Stripe MRR + Fan Hub commission</p>
+            <p className="text-xs text-gray-500 dark:opacity-60 mt-1">Stripe MRR + Fan Hub commission, last 30 days</p>
           </div>
         </div>
       </div>

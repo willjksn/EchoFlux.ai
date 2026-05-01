@@ -759,7 +759,7 @@ export const AdminDashboard: React.FC = () => {
                 const token = await auth.currentUser?.getIdToken(true);
                 if (!token) return;
 
-                const res = await fetch('/api/adminFanHubRevenue?limit=5000', {
+                const res = await fetch(`/api/adminFanHubRevenue?limit=5000&days=${fanHubRevenueDays}`, {
                     headers: { Authorization: `Bearer ${token}` },
                 });
                 if (!res.ok) {
@@ -836,7 +836,7 @@ export const AdminDashboard: React.FC = () => {
         };
 
         fetchFanHubRevenue();
-    }, [currentUser?.role, users]);
+    }, [currentUser?.role, fanHubRevenueDays, users]);
 
     // Fan Hub member -> subscribed creators map (admin-only).
     useEffect(() => {
@@ -2043,24 +2043,24 @@ export const AdminDashboard: React.FC = () => {
                         <div className="p-2 bg-white/20 rounded-full">
                             <HeartIcon className="w-5 h-5" />
                         </div>
-                        <p className="text-sm font-medium opacity-90">Fan Hub Revenue</p>
+                        <p className="text-sm font-medium opacity-90">Fan Hub Revenue ({fanHubRevenueDays}d)</p>
                     </div>
                     <p className="text-2xl md:text-3xl font-bold">
                         {isLoadingFanHubRevenue ? '...' : `$${fanHubRevenue.totalRevenue.toFixed(2)}`}
                     </p>
-                    <p className="text-xs opacity-75 mt-1">Creator earnings via Stripe</p>
+                    <p className="text-xs opacity-75 mt-1">Creator earnings via Stripe, last {fanHubRevenueDays} days</p>
                 </div>
                 <div className="bg-gradient-to-br from-primary-500 to-purple-600 p-4 md:p-6 rounded-xl shadow-md text-white">
                     <div className="flex items-center gap-3 mb-2">
                         <div className="p-2 bg-white/20 rounded-full">
                             <TrendingIcon className="w-5 h-5" />
                         </div>
-                        <p className="text-sm font-medium opacity-90">Fan Hub Commission</p>
+                        <p className="text-sm font-medium opacity-90">Fan Hub Commission ({fanHubRevenueDays}d)</p>
                     </div>
                     <p className="text-2xl md:text-3xl font-bold">
                         {isLoadingFanHubRevenue ? '...' : `$${fanHubRevenue.echofluxCommission.toFixed(2)}`}
                     </p>
-                    <p className="text-xs opacity-75 mt-1">{(fanHubRevenue.commissionRate * 100).toFixed(0)}% of transactions</p>
+                    <p className="text-xs opacity-75 mt-1">{(fanHubRevenue.commissionRate * 100).toFixed(0)}% of transactions, last {fanHubRevenueDays} days</p>
                 </div>
                 <button
                     type="button"
@@ -2086,14 +2086,14 @@ export const AdminDashboard: React.FC = () => {
             <div className="bg-gradient-to-r from-slate-50 via-gray-50 to-slate-100 dark:from-gray-800 dark:via-gray-800 dark:to-gray-700 p-6 rounded-xl shadow-lg border border-gray-200/80 dark:border-gray-600/50 text-gray-900 dark:text-white">
                 <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
                     <div>
-                        <h3 className="text-lg font-bold text-gray-900 dark:text-white">Total Echoflux Revenue</h3>
-                        <p className="text-sm text-gray-500 dark:opacity-70 mt-1">Stripe subscription MRR + Fan Hub commission</p>
+                        <h3 className="text-lg font-bold text-gray-900 dark:text-white">Monthly Revenue Estimate</h3>
+                        <p className="text-sm text-gray-500 dark:opacity-70 mt-1">Stripe subscription MRR + Fan Hub commission, last {fanHubRevenueDays} days</p>
                     </div>
                     <div className="text-right">
                         <p className="text-3xl md:text-4xl font-bold text-primary-600 dark:text-white">
                             ${(simulatedMRR + (isLoadingFanHubRevenue ? 0 : fanHubRevenue.echofluxCommission)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </p>
-                        <p className="text-sm text-gray-500 dark:opacity-70 mt-1">per month</p>
+                        <p className="text-sm text-gray-500 dark:opacity-70 mt-1">MRR + selected Fan Hub window</p>
                     </div>
                 </div>
             </div>

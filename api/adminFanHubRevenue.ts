@@ -73,6 +73,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const limitParam = parseInt(String(req.query.limit || "5000"), 10);
   const limit = Number.isFinite(limitParam) ? Math.min(Math.max(limitParam, 100), 10000) : 5000;
+  const daysParam = parseInt(String(req.query.days || ""), 10);
+  const days = Number.isFinite(daysParam) && daysParam > 0 ? Math.min(daysParam, 3650) : null;
+  const cutoffMs = days ? Date.now() - days * 24 * 60 * 60 * 1000 : null;
 
   try {
     let docs: QueryDocumentSnapshot[] = [];
@@ -110,6 +113,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const d = docSnap.data() as Record<string, unknown>;
       const creatorId = typeof d.creatorId === "string" ? d.creatorId : "";
       if (!creatorId) continue;
+      const ms = createdAtToMs(d.createdAt);
+      if (cutoffMs != null && ms < cutoffMs) continue;
 
       const status = typeof d.status === "string" ? d.status : "";
       if (status === "refunded") continue;
@@ -128,7 +133,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       else if (orderType === "subscription") subscriptions += amount;
       else treats += amount;
 
-      const ms = createdAtToMs(d.createdAt);
       recentTransactions.push({
         id: docSnap.id,
         creatorId,
@@ -171,6 +175,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       creatorDisplayNames,
       recentTransactions: recentSlice,
       orderCount: docs.length,
+      periodDays: days,
     });
   } catch (e: unknown) {
     console.error("adminFanHubRevenue error:", e);

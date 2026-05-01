@@ -10,6 +10,7 @@ import {
   Timestamp,
   doc,
   getDoc,
+  runTransaction,
   setDoc,
   type DocumentData,
   type DocumentSnapshot,
@@ -35,6 +36,7 @@ import { renderTextWithCustomEmoji, type SjHeartEmojiAccessContext } from "../sr
 import {
   captureFanFeedCarouselScrollSnaps,
   restoreFanFeedCarouselScrollSnaps,
+  type FanFeedScrollSnap,
 } from "../src/lib/fanFeedCarouselScrollRestore";
 import { tryFeedVideoPosterSeekOnce } from "../src/lib/feedVideoPosterSeek";
 import { resolveApiUrl } from "../src/lib/resolveApiUrl";
@@ -447,6 +449,7 @@ type FanMemberPostPoll = {
   question: string;
   options: string[];
   optionVotes?: number[];
+  votesByFan?: Record<string, number>;
 };
 
 type FanMemberPostTipGoal = {
@@ -530,10 +533,17 @@ function parseFanMemberPostPoll(data: DocumentData): FanMemberPostPoll | undefin
   const optionVotes = Array.isArray(poll.optionVotes)
     ? poll.optionVotes.map((vote) => (typeof vote === "number" && Number.isFinite(vote) ? Math.max(0, Math.round(vote)) : 0))
     : undefined;
+  const votesByFanRaw = poll.votesByFan && typeof poll.votesByFan === "object" ? poll.votesByFan as Record<string, unknown> : {};
+  const votesByFan = Object.fromEntries(
+    Object.entries(votesByFanRaw)
+      .filter(([, vote]) => typeof vote === "number" && Number.isFinite(vote))
+      .map(([fan, vote]) => [fan, Math.max(0, Math.round(vote as number))])
+  );
   return {
     question,
     options,
     ...(optionVotes ? { optionVotes: optionVotes.slice(0, options.length) } : {}),
+    ...(Object.keys(votesByFan).length > 0 ? { votesByFan } : {}),
   };
 }
 
@@ -554,10 +564,21 @@ function parseFanMemberPostTipGoal(data: DocumentData): FanMemberPostTipGoal | u
   return { description, targetCents, raisedCents };
 }
 
-function FanMemberPostPollView({ poll }: { poll?: FanMemberPostPoll }) {
+function FanMemberPostPollView({
+  poll,
+  fanId,
+  onVote,
+}: {
+  poll?: FanMemberPostPoll;
+  fanId?: string;
+  onVote?: (optionIndex: number) => void | Promise<void>;
+}) {
   if (!poll?.question || poll.options.length < 2) return null;
   const votes = poll.optionVotes ?? poll.options.map(() => 0);
   const total = votes.reduce((sum, vote) => sum + vote, 0);
+  const votedIndex = fanId ? poll.votesByFan?.[fanId] : undefined;
+  const hasVoted = typeof votedIndex === "number";
+  const canVote = !!onVote && !hasVoted;
   return (
     <div className="feed-card-poll">
       <p className="feed-card-poll-question">{poll.question}</p>
@@ -566,9 +587,23 @@ function FanMemberPostPollView({ poll }: { poll?: FanMemberPostPoll }) {
           const voteCount = votes[index] ?? 0;
           const percent = total > 0 ? Math.round((voteCount / total) * 100) : 0;
           return (
-            <li key={`${option}-${index}`} className="feed-card-poll-option">
-              <span className="feed-card-poll-option-label">{option}</span>
-              <span className="feed-card-poll-option-meta">{total > 0 ? `${percent}%` : "0%"}</span>
+            <li
+              key={`${option}-${index}`}
+              className={`feed-card-poll-option${hasVoted && votedIndex === index ? " feed-card-poll-option--selected" : ""}`}
+            >
+              <button
+                type="button"
+                className="feed-card-poll-option-button"
+                onClick={() => void onVote?.(index)}
+                disabled={!canVote}
+                aria-pressed={hasVoted && votedIndex === index}
+              >
+                <span className="feed-card-poll-option-label">{option}</span>
+                <span className="feed-card-poll-option-meta">
+                  {total > 0 ? `${percent}%` : "0%"}
+                  {hasVoted && votedIndex === index ? " · Your vote" : ""}
+                </span>
+              </button>
               {total > 0 ? <div className="feed-card-poll-option-bar" style={{ width: `${percent}%` }} aria-hidden /> : null}
             </li>
           );
@@ -607,7 +642,7 @@ function FanMemberPostTipGoalView({
             className="feed-card-send-tip"
             aria-label={`Send a tip toward ${tipGoal.description}`}
             onClick={onSendTip}
-            style={{ backgroundColor: primary }}
+            style={{ backgroundColor: primary, borderColor: primary, color: "#fff" }}
           >
             <span className="tip-currency">$</span>
             <span>SEND TIP</span>
@@ -1292,6 +1327,69 @@ async function fetchMemberPostById(
   return null;
 }
 
+async function voteForFanMemberPostPoll({
+  creatorId,
+  fanId,
+  post,
+  optionIndex,
+}: {
+  creatorId: string;
+  fanId: string;
+  post: Post;
+  optionIndex: number;
+}) {
+  if (!db) throw new Error("Database unavailable.");
+  if (!post.poll || optionIndex < 0 || optionIndex >= post.poll.options.length) {
+    throw new Error("That poll option is no longer available.");
+  }
+  const segs = (post.feedFirestorePath || "")
+    .split("/")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  const postRef =
+    segs.length >= 2 && segs.length % 2 === 0
+      ? doc(db, ...(segs as [string, ...string[]]))
+      : doc(db, "creators", creatorId, "fanPosts", post.id);
+
+  await runTransaction(db, async (tx) => {
+    const snap = await tx.get(postRef);
+    if (!snap.exists()) throw new Error("This poll is no longer available.");
+    const data = snap.data() as DocumentData;
+    const rawPoll = data.poll && typeof data.poll === "object" ? data.poll as Record<string, unknown> : null;
+    if (!rawPoll) throw new Error("This poll is no longer available.");
+    const options = Array.isArray(rawPoll.options)
+      ? rawPoll.options.filter((option): option is string => typeof option === "string" && !!option.trim())
+      : [];
+    if (optionIndex >= options.length) throw new Error("That poll option is no longer available.");
+
+    const votesByFan =
+      rawPoll.votesByFan && typeof rawPoll.votesByFan === "object"
+        ? { ...(rawPoll.votesByFan as Record<string, unknown>) }
+        : {};
+    if (typeof votesByFan[fanId] === "number") return;
+
+    const optionVotes = Array.isArray(rawPoll.optionVotes)
+      ? rawPoll.optionVotes.map((vote) => (typeof vote === "number" && Number.isFinite(vote) ? Math.max(0, Math.round(vote)) : 0))
+      : options.map(() => 0);
+    while (optionVotes.length < options.length) optionVotes.push(0);
+    optionVotes[optionIndex] = (optionVotes[optionIndex] ?? 0) + 1;
+    votesByFan[fanId] = optionIndex;
+
+    tx.set(
+      postRef,
+      {
+        poll: {
+          ...rawPoll,
+          options,
+          optionVotes: optionVotes.slice(0, options.length),
+          votesByFan,
+        },
+      },
+      { merge: true },
+    );
+  });
+}
+
 /** Published post payload for member “Purchases” rows (unlocked feed content). */
 export async function fetchFanMemberPostForPurchases(
   creatorId: string,
@@ -1512,6 +1610,7 @@ function FanMemberPostDetailModal({
   unlockingPostId,
   onUnlockPost,
   onUnlockNeedSignIn,
+  onPollVote,
   sjHeartEmojiCtx,
   fanPageAdminBypass = false,
 }: {
@@ -1551,6 +1650,7 @@ function FanMemberPostDetailModal({
   unlockingPostId?: string | null;
   onUnlockPost?: (postId: string) => void | Promise<void>;
   onUnlockNeedSignIn?: (message: string) => void;
+  onPollVote?: (post: Post, optionIndex: number) => void | Promise<void>;
   sjHeartEmojiCtx: SjHeartEmojiAccessContext;
 }) {
   useEffect(() => {
@@ -1694,7 +1794,7 @@ function FanMemberPostDetailModal({
                     <p className="fan-member-viewpost-date-inline">{formatPostCalendarDate(post.createdAt)}</p>
                   </div>
                 )}
-                <FanMemberPostPollView poll={post.poll} />
+                <FanMemberPostPollView poll={post.poll} fanId={fanId} onVote={(idx) => onPollVote?.(post, idx)} />
                 <FanMemberPostTipGoalView
                   tipGoal={post.tipGoal}
                   primary={primary}
@@ -2183,6 +2283,30 @@ export const FanMemberFeed: React.FC<FanMemberFeedProps> = ({
     [creatorId, unlockingPostId, showToast]
   );
 
+  const handlePollVote = useCallback(
+    async (post: Post, optionIndex: number) => {
+      if (!fanId) {
+        showToast?.("Sign in to vote in polls.", "error");
+        return;
+      }
+      if (post.id.startsWith("demo-")) {
+        showToast?.("Preview polls can’t be voted on.", "info");
+        return;
+      }
+      if (typeof post.poll?.votesByFan?.[fanId] === "number") {
+        showToast?.("You already voted in this poll.", "info");
+        return;
+      }
+      try {
+        await voteForFanMemberPostPoll({ creatorId, fanId, post, optionIndex });
+      } catch (e) {
+        console.error("Failed to vote in poll", e);
+        showToast?.(e instanceof Error ? e.message : "Couldn’t save your vote.", "error");
+      }
+    },
+    [creatorId, fanId, showToast]
+  );
+
   const submitComment = useCallback(
     async (postId: string, afterSuccess?: () => void | Promise<void>) => {
       const text = (commentDraft[postId] ?? "").trim();
@@ -2472,7 +2596,7 @@ export const FanMemberFeed: React.FC<FanMemberFeedProps> = ({
                   <span style={{ fontWeight: 600, color: primary, marginRight: "0.35rem" }}>{displayName}</span>
                   {renderTextWithCustomEmoji(post.content, sjHeartEmojiCtx)}
                 </p>
-                <FanMemberPostPollView poll={post.poll} />
+                <FanMemberPostPollView poll={post.poll} fanId={fanId} onVote={(idx) => handlePollVote(post, idx)} />
                 <FanMemberPostTipGoalView
                   tipGoal={post.tipGoal}
                   primary={primary}
@@ -2707,6 +2831,7 @@ export const FanMemberFeed: React.FC<FanMemberFeedProps> = ({
         unlockingPostId={unlockingPostId}
         onUnlockPost={handleUnlockPost}
         onUnlockNeedSignIn={(m) => showToast?.(m, "error")}
+        onPollVote={handlePollVote}
         sjHeartEmojiCtx={sjHeartEmojiCtx}
         fanPageAdminBypass={fanPageAdminBypass}
         unlockedLiveStreamIds={unlockedLiveStreamIdSet}
@@ -2810,6 +2935,26 @@ export const FanMemberSaved: React.FC<FanMemberSavedProps> = ({
       }
     },
     [creatorId, unlockingPostIdSaved, showToastSaved]
+  );
+
+  const handlePollVoteSaved = useCallback(
+    async (post: Post, optionIndex: number) => {
+      if (!fanId) {
+        showToastSaved?.("Sign in to vote in polls.", "error");
+        return;
+      }
+      if (typeof post.poll?.votesByFan?.[fanId] === "number") {
+        showToastSaved?.("You already voted in this poll.", "info");
+        return;
+      }
+      try {
+        await voteForFanMemberPostPoll({ creatorId, fanId, post, optionIndex });
+      } catch (e) {
+        console.error("Failed to vote in poll", e);
+        showToastSaved?.(e instanceof Error ? e.message : "Couldn’t save your vote.", "error");
+      }
+    },
+    [creatorId, fanId, showToastSaved]
   );
   const avatarCropStyle: React.CSSProperties = getAvatarCropStyle(avatarObjectPosition);
   const creatorAvatarSrc = typeof avatar === "string" && avatar.trim() ? avatar.trim() : undefined;
@@ -3144,7 +3289,7 @@ export const FanMemberSaved: React.FC<FanMemberSavedProps> = ({
                   <span style={{ fontWeight: 600, color: primary, marginRight: "0.35rem" }}>{displayName}</span>
                   {renderTextWithCustomEmoji(post.content, sjHeartEmojiCtxSaved)}
                 </p>
-                <FanMemberPostPollView poll={post.poll} />
+                <FanMemberPostPollView poll={post.poll} fanId={fanId} onVote={(idx) => handlePollVoteSaved(post, idx)} />
                 <FanMemberPostTipGoalView
                   tipGoal={post.tipGoal}
                   primary={primary}
@@ -3231,6 +3376,7 @@ export const FanMemberSaved: React.FC<FanMemberSavedProps> = ({
         unlockingPostId={unlockingPostIdSaved}
         onUnlockPost={handleUnlockPostSaved}
         onUnlockNeedSignIn={(m) => showToastSaved?.(m, "error")}
+        onPollVote={handlePollVoteSaved}
         sjHeartEmojiCtx={sjHeartEmojiCtxSaved}
         fanPageAdminBypass={fanPageAdminBypass}
         unlockedLiveStreamIds={unlockedLiveStreamIdSetSaved}
