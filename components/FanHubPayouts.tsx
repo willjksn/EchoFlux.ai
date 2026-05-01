@@ -4,10 +4,9 @@ import { useAppContext } from "./AppContext";
 import { auth, db } from "../firebaseConfig";
 import { resolveApiUrl } from "../src/lib/resolveApiUrl";
 
-/** Stripe Docs — linked from Payouts so creators know what to enter and what fans see. */
+/** Stripe Docs — linked from Payouts so creators know what fans may see. */
 const STRIPE_DOCS_STATEMENT_DESCRIPTORS =
   "https://docs.stripe.com/get-started/account/statement-descriptors";
-const STRIPE_DOCS_CONNECT_ONBOARDING = "https://docs.stripe.com/connect/onboarding";
 
 export interface StripeConnectStatus {
   stripeConnectAccountId: string | null;
@@ -24,6 +23,7 @@ export const FanHubPayouts: React.FC = () => {
   const [status, setStatus] = useState<StripeConnectStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [connecting, setConnecting] = useState(false);
+  const [openingDashboard, setOpeningDashboard] = useState(false);
   const [resetting, setResetting] = useState(false);
 
   const fetchStatus = useCallback(async () => {
@@ -178,6 +178,38 @@ export const FanHubPayouts: React.FC = () => {
     }
   };
 
+  const handleOpenStripeDashboard = async () => {
+    setOpeningDashboard(true);
+    try {
+      const token = auth.currentUser ? await auth.currentUser.getIdToken() : null;
+      const res = await fetch(resolveApiUrl("/api/stripeConnectDashboard"), {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({}),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (data.url) {
+        window.location.href = data.url;
+        return;
+      }
+      showToast?.(
+        typeof data.message === "string" && data.message.trim()
+          ? data.message
+          : typeof data.error === "string" && data.error.trim()
+            ? data.error
+            : "Could not open Stripe account settings",
+        "error",
+      );
+    } catch {
+      showToast?.("Could not open Stripe account settings", "error");
+    } finally {
+      setOpeningDashboard(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="py-8 text-center text-gray-500 dark:text-gray-400">
@@ -300,44 +332,6 @@ export const FanHubPayouts: React.FC = () => {
           <p className="text-xs text-amber-800/80 dark:text-amber-300/80 m-0 mb-4">
             If Stripe shows a sign-in to Express instead of setup steps, open the link in a private/incognito window, or sign in with the same email as your EchoFlux account.
           </p>
-          <div
-            className="mb-4 rounded-lg border border-amber-200/90 dark:border-amber-800/70 bg-white/70 dark:bg-gray-950/40 px-3 py-2.5"
-            role="note"
-          >
-            <p className="text-xs font-semibold text-amber-950 dark:text-amber-100 m-0 mb-1.5">
-              Legal name vs. what fans see on their card
-            </p>
-            <p className="text-xs text-amber-900/90 dark:text-amber-200/85 m-0 leading-relaxed">
-              Enter your <strong>real legal name</strong> wherever Stripe asks for identity or tax details—that is
-              required for verification. The line fans see on bank or card statements usually comes from your{" "}
-              <strong>statement descriptor</strong> or <strong>public business / charge description</strong> in Stripe,
-              which you can set during onboarding or later in the Stripe Dashboard; use something that matches your
-              EchoFlux <strong>@handle</strong> or stage name so charges look familiar. If you pick{" "}
-              <strong>Individual</strong>, you may not see a separate “DBA” step—that is common; business or sole
-              proprietor accounts often surface a trade or business name. Follow Stripe’s in-flow labels for where to
-              set the customer-facing name.
-            </p>
-            <p className="text-xs text-amber-900/90 dark:text-amber-200/85 m-0 mt-2 leading-relaxed">
-              <span className="font-semibold text-amber-950 dark:text-amber-100">Learn more:</span>{" "}
-              <a
-                href={STRIPE_DOCS_CONNECT_ONBOARDING}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="font-medium text-amber-900 dark:text-amber-200 underline underline-offset-2 hover:text-amber-950 dark:hover:text-amber-50"
-              >
-                Connect onboarding (what to expect)
-              </a>
-              {" · "}
-              <a
-                href={STRIPE_DOCS_STATEMENT_DESCRIPTORS}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="font-medium text-amber-900 dark:text-amber-200 underline underline-offset-2 hover:text-amber-950 dark:hover:text-amber-50"
-              >
-                Statement descriptors (what fans see)
-              </a>
-            </p>
-          </div>
           <div className="flex flex-wrap items-center gap-3">
             <button
               type="button"
@@ -446,12 +440,33 @@ export const FanHubPayouts: React.FC = () => {
                 </span>
               </li>
             </ul>
+            {!status?.reconnectRequired && (
+              <div className="rounded-lg border border-indigo-100 dark:border-indigo-900/60 bg-indigo-50/70 dark:bg-indigo-950/25 p-3">
+                <p className="text-sm font-semibold text-indigo-950 dark:text-indigo-100 m-0 mb-1">
+                  Manage your Stripe account
+                </p>
+                <p className="text-xs text-indigo-900/85 dark:text-indigo-200/80 m-0 leading-relaxed">
+                  Open Stripe to update payout details, business name, tax info, and statement details fans may see on
+                  checkout or card statements.
+                </p>
+              </div>
+            )}
             <div className="flex flex-wrap items-center gap-2">
+              {!status?.reconnectRequired && (
+                <button
+                  type="button"
+                  onClick={() => void handleOpenStripeDashboard()}
+                  disabled={openingDashboard || connecting || resetting}
+                  className="px-4 py-2 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 dark:bg-indigo-600 dark:hover:bg-indigo-500 disabled:opacity-50 text-sm font-semibold"
+                >
+                  {openingDashboard ? "Opening Stripe…" : "Manage Stripe account"}
+                </button>
+              )}
               {!paymentsReady && (
                 <button
                   type="button"
                   onClick={() => void handleConnect()}
-                  disabled={connecting}
+                  disabled={connecting || openingDashboard}
                   className="px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50"
                 >
                   {connecting ? "Opening…" : "Open Stripe to complete setup"}
@@ -460,7 +475,7 @@ export const FanHubPayouts: React.FC = () => {
               <button
                 type="button"
                 onClick={() => void handleResetSavedAccount()}
-                disabled={resetting || connecting}
+                disabled={resetting || connecting || openingDashboard}
                 className="px-4 py-2 rounded-lg border border-red-300 dark:border-red-800 text-red-700 dark:text-red-300 hover:bg-red-50 dark:hover:bg-red-950/40 disabled:opacity-50 text-sm"
               >
                 {resetting ? "Removing…" : "Remove saved account & start over"}
