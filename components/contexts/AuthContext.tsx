@@ -357,6 +357,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 const isAuthenticatedRoute = path.startsWith('/dashboard') ||
                     path.startsWith('/analytics') ||
                     path.startsWith('/settings') ||
+                    path.startsWith('/create-post') ||
                     path.startsWith('/write-captions') ||
                     path.startsWith('/compose') ||
                     path.startsWith('/my-schedule') ||
@@ -372,6 +373,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     path.startsWith('/automation') ||
                     path.startsWith('/bio-link-page') ||
                     path.startsWith('/bio') ||
+                    path.startsWith('/what-to-post') ||
                     path.startsWith('/plan-my-week') ||
                     path.startsWith('/strategy') ||
                     path.startsWith('/ads') ||

@@ -69,7 +69,7 @@ export const SendToPanel: React.FC<SendToPanelProps> = ({ payload, onSent, class
           showToast?.('Saved to Compose drafts.', 'success');
           setActivePage('compose');
           if (typeof window !== 'undefined') {
-            window.history.pushState({}, '', '/compose');
+            window.history.pushState({}, '', '/create-post');
           }
           onSent?.('draft');
           break;
@@ -115,7 +115,7 @@ export const SendToPanel: React.FC<SendToPanelProps> = ({ payload, onSent, class
           showToast?.('Added to Fan Hub Feed.', 'success');
           setActivePage('fanHub');
           if (typeof window !== 'undefined') {
-            window.history.pushState({}, '', '/fan?tab=myPage');
+            window.history.pushState({}, '', '/fan-hub?tab=myPage');
           }
           onSent?.('drop');
           break;

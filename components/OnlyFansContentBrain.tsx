@@ -5706,7 +5706,7 @@ Output format:
                                         // Store caption in localStorage for Fan Hub Posts to pick up
                                         localStorage.setItem('fanHubPendingCaption', idea);
                                         // Navigate to Fan Hub Posts tab
-                                        window.location.href = '/fan?tab=posts';
+                                        window.location.href = '/fan-hub?tab=posts';
                                     };
                                     
                                     return (

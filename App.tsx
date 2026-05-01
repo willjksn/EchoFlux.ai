@@ -56,6 +56,7 @@ import { ResetPassword } from './components/ResetPassword';
 import { InviteRequiredPage } from './components/InviteRequiredPage';
 import { isInviteOnlyMode } from './src/utils/inviteOnly';
 import { WhatToPost } from './components/WhatToPost';
+import { PremiumStudioLayout } from './components/PremiumStudioLayout';
 
 // Lazy load heavy components for code splitting
 const Strategy = lazy(() => import('./components/Strategy').then(module => ({ default: module.Strategy })));
@@ -65,9 +66,6 @@ const Dashboard = lazy(() => import('./components/Dashboard').then((m) => ({ def
 const AdminDashboard = lazy(() => import('./components/AdminDashboard').then((m) => ({ default: m.AdminDashboard })));
 const FanStorefrontView = lazy(() =>
   import('./components/FanStorefrontView').then((m) => ({ default: m.FanStorefrontView }))
-);
-const PremiumStudioLayout = lazy(() =>
-  import('./components/PremiumStudioLayout').then((m) => ({ default: m.PremiumStudioLayout }))
 );
 const PremiumStudioUpgrade = lazy(() =>
   import('./components/PremiumStudioUpgrade').then((m) => ({ default: m.PremiumStudioUpgrade }))
@@ -99,7 +97,7 @@ const pageTitles: Record<Page, string> = {
     dashboard: 'Dashboard',
     analytics: "What's Working",
     settings: 'Settings',
-    compose: 'Write Captions',
+    compose: 'Create Post',
     calendar: 'My Schedule',
     approvals: 'Approval Workflow',
     team: 'Team Management',
@@ -173,7 +171,7 @@ const MainContent: React.FC = () => {
                         <Compose />
                     </LazyBoundary>
                 );
-            // URL syncs to /compose/drafts; prop ensures Approvals shows on first paint
+            // URL syncs to /create-post/drafts; prop ensures Approvals shows on first paint
             case 'approvals':
                 return (
                     <LazyBoundary label="Loading approvals…">
@@ -301,7 +299,7 @@ const MainContent: React.FC = () => {
                 }
                 // Only set default URL if no tab param already present
                 if (typeof window !== 'undefined' && !window.location.search.includes('tab=')) {
-                    window.history.replaceState({}, '', '/fan?tab=myPage');
+                    window.history.replaceState({}, '', '/fan-hub?tab=myPage');
                 }
                 return (
                     <LazyBoundary label="Loading Fan Hub…">
@@ -497,6 +495,8 @@ const AppContent: React.FC = () => {
         const isProtectedRoute = path === '/dashboard' ||
             path === '/analytics' ||
             path === '/settings' ||
+            path === '/create-post' ||
+            path === '/create-post/drafts' ||
             path === '/write-captions' ||
             path === '/compose' ||
             path === '/compose/drafts' ||
@@ -514,6 +514,7 @@ const AppContent: React.FC = () => {
             path === '/automation' ||
             path === '/bio-link-page' ||
             path === '/bio' ||
+            path === '/what-to-post' ||
             path === '/plan-my-week' ||
             path === '/strategy' ||
             path === '/creator-os' ||

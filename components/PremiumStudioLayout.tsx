@@ -66,7 +66,7 @@ export const useFanHubTab = () => usePremiumStudioTab();
 
 interface PremiumStudioLayoutProps {
   children: React.ReactNode;
-  /** When 'fanHub', show only Fan Hub tabs (/fan?tab=...). When 'studio' or omitted, show only Premium Studio tabs (/studio?tab=...). */
+  /** When 'fanHub', show only Fan Hub tabs (/fan-hub?tab=...). When 'studio' or omitted, show only Premium Studio tabs (/studio?tab=...). */
   section?: 'studio' | 'fanHub';
 }
 
@@ -74,7 +74,7 @@ interface PremiumStudioLayoutProps {
 export const PremiumStudioLayout: React.FC<PremiumStudioLayoutProps> = ({ children, section = 'studio' }) => {
   const isFanHub = section === 'fanHub';
   const tabIds = isFanHub ? [...FAN_HUB_TAB_IDS] : [...STUDIO_TAB_IDS];
-  const pathPrefix = isFanHub ? '/fan' : '/studio';
+  const pathPrefix = isFanHub ? '/fan-hub' : '/studio';
   const defaultTab = isFanHub ? 'myPage' : 'ideas';
   const labels = isFanHub ? FAN_HUB_TAB_LABELS : STUDIO_TAB_LABELS;
 
@@ -232,7 +232,7 @@ export const PremiumStudioLayout: React.FC<PremiumStudioLayoutProps> = ({ childr
       '--fan-text': text,
       '--fan-text-muted': textMuted,
       '--fan-border': border,
-    };
+    } as React.CSSProperties;
   }, [isFanHub, effectiveFanTheme]);
 
   const fanHubShellStyle = useMemo((): React.CSSProperties => {

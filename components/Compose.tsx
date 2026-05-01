@@ -4601,7 +4601,7 @@ export const Compose: React.FC<{ approvalsWorkflow?: boolean }> = ({ approvalsWo
   const [activeTab, setActiveTab] = useState<ComposeTab>('captions');
   const [initialPrompt, setInitialPrompt] = useState<string | undefined>(undefined);
 
-  /** Drafts / approvals UI: no tab in Compose — opened via URL /compose/drafts or setActivePage('approvals'). */
+  /** Drafts / approvals UI: no tab in Create Post — opened via URL /create-post/drafts or setActivePage('approvals'). */
   const [draftsPathTick, setDraftsPathTick] = useState(0);
   useEffect(() => {
     const onPopState = () => setDraftsPathTick((n) => n + 1);
@@ -4614,11 +4614,11 @@ export const Compose: React.FC<{ approvalsWorkflow?: boolean }> = ({ approvalsWo
       typeof window !== 'undefined'
         ? (window.location.pathname || '').replace(/\/+$/, '') || '/'
         : '/';
-    return p === '/compose/drafts' || p === '/drafts';
+    return p === '/create-post/drafts' || p === '/compose/drafts' || p === '/drafts';
   }, [draftsPathTick, approvalsWorkflow]);
   useEffect(() => {
-    if (typeof window !== 'undefined' && window.location.pathname.replace(/\/+$/, '') === '/drafts') {
-      window.history.replaceState({}, '', '/compose/drafts');
+    if (typeof window !== 'undefined' && ['/drafts', '/compose/drafts'].includes(window.location.pathname.replace(/\/+$/, ''))) {
+      window.history.replaceState({}, '', '/create-post/drafts');
       setDraftsPathTick((n) => n + 1);
     }
   }, []);

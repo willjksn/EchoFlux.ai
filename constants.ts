@@ -86,6 +86,8 @@ export const KNOWN_APP_ROUTES: readonly string[] = [
   '/dashboard',
   '/analytics',
   '/settings',
+  '/create-post',
+  '/create-post/drafts',
   '/write-captions',
   '/compose',
   '/compose/drafts',
@@ -109,6 +111,7 @@ export const KNOWN_APP_ROUTES: readonly string[] = [
   '/automation',
   '/bio-link-page',
   '/bio',
+  '/what-to-post',
   '/plan-my-week',
   '/strategy',
   '/creator-os',
@@ -134,7 +137,7 @@ export const KNOWN_APP_ROUTES: readonly string[] = [
 export const STUDIO_TAB_IDS = ['persona', 'ideas', 'drops', 'dmSession', 'teasers'] as const;
 export type StudioTabId = (typeof STUDIO_TAB_IDS)[number];
 
-/** Fan Hub tab IDs only (for /fan?tab=...) */
+/** Fan Hub tab IDs only (for /fan-hub?tab=...) */
 export const FAN_HUB_TAB_IDS = ['myPage', 'posts', 'treats', 'messages', 'sessions', 'videoChats', 'fans', 'analytics', 'purchases', 'payouts', 'users'] as const;
 export type FanHubTabId = (typeof FAN_HUB_TAB_IDS)[number];
 

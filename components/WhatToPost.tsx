@@ -532,7 +532,7 @@ export const WhatToPost: React.FC<WhatToPostProps> = ({ onOpenAdvanced }) => {
         /* ignore */
       }
       setActivePage('compose');
-      if (window.history?.pushState) window.history.pushState({}, '', '/compose');
+      if (window.history?.pushState) window.history.pushState({}, '', '/create-post');
       showToast('Draft opened in Compose.', 'success');
     } catch (e) {
       showToast('Failed to open draft.', 'error');
@@ -940,7 +940,7 @@ export const WhatToPost: React.FC<WhatToPostProps> = ({ onOpenAdvanced }) => {
                       type="button"
                       onClick={() => {
                         setActivePage('strategy');
-                        if (window.history?.pushState) window.history.pushState({}, '', '/plan-my-week?tab=savedIdeas');
+                        if (window.history?.pushState) window.history.pushState({}, '', '/what-to-post?tab=savedIdeas');
                         setUseThisIdea(null);
                       }}
                       className="py-2.5 px-3 rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 text-sm font-medium hover:bg-gray-50 dark:hover:bg-gray-700"

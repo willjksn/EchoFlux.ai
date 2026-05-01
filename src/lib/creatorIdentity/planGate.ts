@@ -7,8 +7,9 @@
  */
 
 export function normalizePlanForLimitsClient(plan: string): string {
-  if (plan === 'OnlyFansStudio' || plan === 'CreatorElite') return 'Elite';
-  if (plan === 'CreatorPro') return 'Pro';
+  const normalized = String(plan || '').trim().toLowerCase();
+  if (normalized === 'onlyfansstudio' || normalized === 'creatoronlyfansstudio' || normalized === 'creatorelite') return 'Elite';
+  if (normalized === 'creatorpro') return 'Pro';
   return plan;
 }
 

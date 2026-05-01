@@ -2,8 +2,8 @@ import { useState, useEffect, useCallback } from 'react';
 
 /**
  * Syncs internal tab state with URL query param for deep linking.
- * Use on /studio and /fan pages. Supports back/forward via popstate.
- * @param pathPrefix - e.g. '/studio' or '/fan'
+ * Use on /studio and /fan-hub pages. Supports back/forward via popstate.
+ * @param pathPrefix - e.g. '/studio' or '/fan-hub'
  * @param validTabs - allowed tab id values
  * @param defaultTab - when no ?tab= or invalid
  */
@@ -44,5 +44,7 @@ export function useTabFromUrl(
     return () => window.removeEventListener('popstate', onPopState);
   }, [parseTab]);
 
-  return [tab, setTab];
+  const normalizedTab = validTabs.includes(tab) ? tab : parseTab();
+
+  return [normalizedTab, setTab];
 }

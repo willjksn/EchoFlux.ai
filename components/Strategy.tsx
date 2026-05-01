@@ -15,7 +15,7 @@ import {
     stripStrategyFormatPrefix,
     instagramPostTypeFromStrategyFormat,
 } from '../src/lib/strategyComposeHandoff';
-import { isCreatorIdentityPlanClient } from '../src/lib/creatorIdentity/planGate';
+import { isCreatorIdentityPlanClient, normalizePlanForLimitsClient } from '../src/lib/creatorIdentity/planGate';
 
 export const Strategy: React.FC<{ onBackToSimple?: () => void }> = ({ onBackToSimple }) => {
     const { 
@@ -115,8 +115,9 @@ export const Strategy: React.FC<{ onBackToSimple?: () => void }> = ({ onBackToSi
 
     // Free plan gets 1 basic strategy/month, Pro/Elite get more
     // Only show upgrade prompt for plans that don't have strategy access at all
-    const hasStrategyAccess = user?.role === 'Admin' || 
-                               ['Free', 'Pro', 'Elite'].includes(user?.plan || '');
+    const normalizedPlan = normalizePlanForLimitsClient(user?.plan || '');
+    const hasStrategyAccess = user?.role === 'Admin' ||
+                               ['Free', 'Pro', 'Elite'].includes(normalizedPlan);
 
     const hasPostIdeasInput = niche.trim().length > 0;
     const hasAudienceInput = audience.trim().length > 0;
@@ -423,7 +424,14 @@ export const Strategy: React.FC<{ onBackToSimple?: () => void }> = ({ onBackToSi
     };
 
     if (!hasStrategyAccess) {
-         return <UpgradePrompt featureName="Plan My Week" onUpgradeClick={() => setActivePage('pricing')} />;
+         return (
+             <UpgradePrompt
+                 featureName="Plan My Week"
+                 onUpgradeClick={() => setActivePage('pricing')}
+                 secondaryActionText={onBackToSimple ? "Back to What to Post" : undefined}
+                 onSecondaryActionClick={onBackToSimple}
+             />
+         );
     }
 
     const handleGenerate = async () => {

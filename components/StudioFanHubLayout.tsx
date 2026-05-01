@@ -11,7 +11,7 @@ interface StudioFanHubLayoutProps {
 }
 
 export const StudioFanHubLayout: React.FC<StudioFanHubLayoutProps> = ({ mode, children }) => {
-  const pathPrefix = mode === 'studio' ? '/studio' : '/fan';
+  const pathPrefix = mode === 'studio' ? '/studio' : '/fan-hub';
   const tabIds = mode === 'studio' ? [...STUDIO_TAB_IDS] : [...FAN_HUB_TAB_IDS];
   const defaultTab = mode === 'studio' ? 'ideas' : 'myPage';
   const labels = mode === 'studio' ? STUDIO_TAB_LABELS : FAN_HUB_TAB_LABELS;

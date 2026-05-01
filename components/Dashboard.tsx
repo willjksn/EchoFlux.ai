@@ -116,7 +116,7 @@ export const Dashboard: React.FC = () => {
       try {
         const now = new Date();
         const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-        const monthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+        const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
 
         // Fan Hub members + revenue use the same paths as Stripe webhooks: creators/{id}/fans and top-level orders (via API).
         const fansRef = collection(db, 'creators', user.id, 'fans');
@@ -237,7 +237,7 @@ export const Dashboard: React.FC = () => {
           const normalizedType = normalizeOrderType(order);
 
           if (orderDate >= weekAgo) weeklyRevCents += cents;
-          if (orderDate >= monthAgo) monthlyRevCents += cents;
+          if (orderDate >= monthStart) monthlyRevCents += cents;
 
           if (recentActivity.length >= 5) return;
 
@@ -1578,7 +1578,7 @@ export const Dashboard: React.FC = () => {
                 <p className="text-3xl font-bold">{loadingFanHub ? '–' : `$${fanHubStats.weeklyRevenue.toFixed(0)}`}</p>
               </div>
               <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4">
-                <p className="text-sm opacity-90 mb-1">Monthly Revenue</p>
+                <p className="text-sm opacity-90 mb-1">This Month</p>
                 <p className="text-3xl font-bold">{loadingFanHub ? '–' : `$${fanHubStats.monthlyRevenue.toFixed(0)}`}</p>
               </div>
             </div>
@@ -1706,7 +1706,7 @@ export const Dashboard: React.FC = () => {
                     <p className="text-gray-500 dark:text-gray-400 text-sm">No upcoming content</p>
                     {user?.plan !== 'Free' && (
                       <button onClick={() => setActivePage('strategy')} className="mt-2 text-primary-600 text-sm font-medium">
-                        Plan your week
+                        What to Post
                       </button>
                     )}
                   </div>
@@ -1800,7 +1800,7 @@ export const Dashboard: React.FC = () => {
           
           {/* Recent Activity and AI Insights Row */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
-            {/* Recent Activity */}
+            {/* App Activity */}
             {(() => {
               // Generate activity timeline from posts, messages, and campaigns
               const activities: Array<{ id: string; type: string; message: string; timestamp: Date; icon: React.ReactNode }> = [];
@@ -1853,7 +1853,7 @@ export const Dashboard: React.FC = () => {
                   hasContent ? 'p-6 min-h-[400px]' : 'p-4 py-3'
                 }`}>
                   <div className={`flex items-center justify-between ${hasContent ? 'mb-4' : 'mb-0'}`}>
-                    <h3 className="text-lg font-bold text-gray-900 dark:text-white">Recent Activity</h3>
+                    <h3 className="text-lg font-bold text-gray-900 dark:text-white">App Activity</h3>
                   </div>
                   {hasContent ? (
                     <div className="space-y-3 flex-1">
@@ -1873,7 +1873,7 @@ export const Dashboard: React.FC = () => {
                     </div>
                   ) : (
                     <div className="py-1">
-                      <p className="text-sm text-gray-500 dark:text-gray-400">No recent activity</p>
+                      <p className="text-sm text-gray-500 dark:text-gray-400">No recent app activity</p>
                     </div>
                   )}
                 </div>
