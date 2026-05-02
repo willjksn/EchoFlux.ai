@@ -37,8 +37,63 @@ if (stripeSecretKey) {
   });
 }
 
+function stripeKeyMatchesMode(key: string): boolean {
+  return useTestMode ? key.startsWith("sk_test_") : key.startsWith("sk_live_");
+}
+
+function makeStripeClientFromKey(key: string | undefined, label: string): { stripe: Stripe; label: string } | null {
+  const trimmed = typeof key === "string" ? key.trim() : "";
+  if (!trimmed) return null;
+  if (!stripeKeyMatchesMode(trimmed)) {
+    console.error(`Ignoring ${label}: key prefix does not match STRIPE_USE_TEST_MODE.`);
+    return null;
+  }
+  return {
+    label,
+    stripe: new Stripe(trimmed, {
+      apiVersion: "2024-06-20" as Stripe.LatestApiVersion,
+    }),
+  };
+}
+
 export function getPlatformStripe(): Stripe | null {
   return platformStripe;
+}
+
+/**
+ * Optional fallback Stripe clients for legacy fan memberships that were created
+ * before the current Connect/platform setup. Configure only server-side env vars.
+ */
+export function getLegacyFanSubscriptionStripeClients(): Array<{ stripe: Stripe; label: string }> {
+  const clients: Array<{ stripe: Stripe; label: string }> = [];
+  const add = (key: string | undefined, label: string) => {
+    const client = makeStripeClientFromKey(key, label);
+    if (!client) return;
+    if (clients.some((existing) => existing.label === client.label)) return;
+    clients.push(client);
+  };
+
+  add(
+    useTestMode
+      ? process.env.STRIPE_STORMIJXO_SECRET_KEY_TEST || process.env.STRIPE_STORMIJXO_SECRET_KEY
+      : process.env.STRIPE_STORMIJXO_SECRET_KEY_LIVE || process.env.STRIPE_STORMIJXO_SECRET_KEY,
+    "stormijxo",
+  );
+  add(
+    useTestMode
+      ? process.env.STRIPE_LEGACY_FAN_SECRET_KEY_TEST || process.env.STRIPE_LEGACY_FAN_SECRET_KEY
+      : process.env.STRIPE_LEGACY_FAN_SECRET_KEY_LIVE || process.env.STRIPE_LEGACY_FAN_SECRET_KEY,
+    "legacy-fan",
+  );
+
+  const more = process.env.STRIPE_LEGACY_FAN_SECRET_KEYS || "";
+  more
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .forEach((key, idx) => add(key, `legacy-fan-${idx + 1}`));
+
+  return clients;
 }
 
 /**

@@ -7,7 +7,7 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import type { Firestore } from "firebase-admin/firestore";
 import type Stripe from "stripe";
-import { getPlatformStripe } from "./_stripeConnect.js";
+import { getLegacyFanSubscriptionStripeClients, getPlatformStripe } from "./_stripeConnect.js";
 import { getAdminDb } from "./_firebaseAdmin.js";
 import { verifyAuth } from "./verifyAuth.js";
 
@@ -125,20 +125,27 @@ async function retrieveSubscriptionWithFallback({
   subscriptionId: string;
   preferredOptions: { stripeAccount?: string } | undefined;
   fallbackOptions: { stripeAccount?: string } | undefined;
-}): Promise<{ subscription: Stripe.Response<Stripe.Subscription>; options: { stripeAccount?: string } | undefined }> {
-  const attempts: Array<{ stripeAccount?: string } | undefined> = [];
+}): Promise<{ subscription: Stripe.Response<Stripe.Subscription>; stripe: Stripe; options: { stripeAccount?: string } | undefined }> {
+  const attempts: Array<{ stripe: Stripe; options: { stripeAccount?: string } | undefined }> = [];
   const pushAttempt = (opts: { stripeAccount?: string } | undefined) => {
     const key = opts?.stripeAccount || "";
-    if (!attempts.some((existing) => (existing?.stripeAccount || "") === key)) attempts.push(opts);
+    if (!attempts.some((existing) => existing.stripe === stripe && (existing.options?.stripeAccount || "") === key)) {
+      attempts.push({ stripe, options: opts });
+    }
   };
   pushAttempt(preferredOptions);
   pushAttempt(fallbackOptions);
+  for (const legacy of getLegacyFanSubscriptionStripeClients()) {
+    if (!attempts.some((existing) => existing.stripe === legacy.stripe && !existing.options?.stripeAccount)) {
+      attempts.push({ stripe: legacy.stripe, options: undefined });
+    }
+  }
 
   let lastError: unknown = null;
-  for (const options of attempts) {
+  for (const attempt of attempts) {
     try {
-      const subscription = await stripe.subscriptions.retrieve(subscriptionId, options);
-      return { subscription, options };
+      const subscription = await attempt.stripe.subscriptions.retrieve(subscriptionId, attempt.options);
+      return { subscription, stripe: attempt.stripe, options: attempt.options };
     } catch (e) {
       lastError = e;
       if (!isMissingStripeResource(e)) throw e;
@@ -215,7 +222,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const fallbackStripeOpts = stripeOpts ? undefined : connectId ? { stripeAccount: connectId } : undefined;
 
   try {
-    const { subscription, options: resolvedStripeOpts } = await retrieveSubscriptionWithFallback({
+    const { subscription, stripe: resolvedStripe, options: resolvedStripeOpts } = await retrieveSubscriptionWithFallback({
       stripe,
       subscriptionId,
       preferredOptions: stripeOpts,
@@ -235,8 +242,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
     }
 
-    await stripe.subscriptions.update(subscriptionId, { cancel_at_period_end: true }, resolvedStripeOpts);
-    const subAfter = await stripe.subscriptions.retrieve(subscriptionId, resolvedStripeOpts);
+    await resolvedStripe.subscriptions.update(subscriptionId, { cancel_at_period_end: true }, resolvedStripeOpts);
+    const subAfter = await resolvedStripe.subscriptions.retrieve(subscriptionId, resolvedStripeOpts);
     const periodEnd = subscriptionPeriodEndIso(subAfter);
     try {
       await syncFanHubFirestoreAfterScheduleCancel(db, creatorId, fanId, subAfter, periodEnd);

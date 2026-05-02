@@ -6,6 +6,7 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import {
   getPlatformStripe,
+  getLegacyFanSubscriptionStripeClients,
   billingPortalSessionsCreate,
   subscriptionsRetrieve,
 } from "./_stripeConnect.js";
@@ -70,18 +71,29 @@ async function retrieveSubscriptionWithFallback({
   preferredAccountId: string | null;
   fallbackAccountId: string | null;
 }) {
-  const attempts: Array<string | null> = [];
+  const attempts: Array<{
+    stripe: NonNullable<ReturnType<typeof getPlatformStripe>>;
+    accountId: string | null;
+    label: string;
+  }> = [];
   const pushAttempt = (id: string | null) => {
-    if (!attempts.includes(id)) attempts.push(id);
+    if (!attempts.some((attempt) => attempt.stripe === stripe && attempt.accountId === id)) {
+      attempts.push({ stripe, accountId: id, label: id ? `connect:${id}` : "platform" });
+    }
   };
   pushAttempt(preferredAccountId);
   pushAttempt(fallbackAccountId);
+  for (const legacy of getLegacyFanSubscriptionStripeClients()) {
+    if (!attempts.some((attempt) => attempt.stripe === legacy.stripe && attempt.accountId === null)) {
+      attempts.push({ stripe: legacy.stripe, accountId: null, label: legacy.label });
+    }
+  }
 
   let lastError: unknown = null;
-  for (const accountId of attempts) {
+  for (const attempt of attempts) {
     try {
-      const subscription = await subscriptionsRetrieve(stripe, subscriptionId, accountId);
-      return { subscription, accountId };
+      const subscription = await subscriptionsRetrieve(attempt.stripe, subscriptionId, attempt.accountId);
+      return { subscription, stripe: attempt.stripe, accountId: attempt.accountId, label: attempt.label };
     } catch (e) {
       lastError = e;
       if (!isMissingStripeResource(e)) throw e;
@@ -175,14 +187,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   let resolvedAccountId: string | null = connectedAccountIdForStripe;
+  let resolvedStripe = stripe;
   let customerId = "";
   try {
-    const { subscription, accountId } = await retrieveSubscriptionWithFallback({
+    const { subscription, stripe: subscriptionStripe, accountId } = await retrieveSubscriptionWithFallback({
       stripe,
       subscriptionId,
       preferredAccountId: connectedAccountIdForStripe,
       fallbackAccountId: connectedAccountIdForStripe ? null : connectId,
     });
+    resolvedStripe = subscriptionStripe;
     resolvedAccountId = accountId;
     const cust = subscription.customer;
     customerId = typeof cust === "string" ? cust : (cust as { id?: string } | null)?.id || "";
@@ -211,7 +225,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   try {
     const session = await billingPortalSessionsCreate(
-      stripe,
+      resolvedStripe,
       { customer: customerId, return_url: returnUrl },
       resolvedAccountId,
     );
