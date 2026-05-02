@@ -29,10 +29,31 @@ type FanPurchase = {
   deliveredAt?: string | null;
 };
 
-function liveStreamTicketScheduleStatusFromStreamStatus(raw: unknown): FanPurchase["scheduleStatus"] | null {
-  const status = typeof raw === "string" ? raw.trim().toLowerCase() : "";
+function unknownDateToMs(raw: unknown): number | null {
+  if (!raw) return null;
+  if (typeof (raw as { toDate?: () => Date }).toDate === "function") {
+    const t = (raw as { toDate: () => Date }).toDate().getTime();
+    return Number.isFinite(t) ? t : null;
+  }
+  if (raw instanceof Date) return raw.getTime();
+  if (typeof raw === "number" && Number.isFinite(raw)) return raw < 1e12 ? raw * 1000 : raw;
+  if (typeof raw === "string") {
+    const t = Date.parse(raw);
+    return Number.isFinite(t) ? t : null;
+  }
+  return null;
+}
+
+function liveStreamTicketScheduleStatusFromStreamData(data: Record<string, unknown> | null): FanPurchase["scheduleStatus"] | null {
+  if (!data) return "expired";
+  const status = typeof data.status === "string" ? data.status.trim().toLowerCase() : "";
   if (status === "ended") return "expired";
   if (status === "cancelled" || status === "canceled") return "cancelled";
+  if (unknownDateToMs(data.endedAt) != null) return "expired";
+  const scheduledStartMs = unknownDateToMs(data.scheduledStart);
+  if ((status === "scheduled" || status === "draft" || !status) && scheduledStartMs != null && Date.now() >= scheduledStartMs) {
+    return "expired";
+  }
   if (status === "live" || status === "scheduled" || status === "draft") return "scheduled";
   return null;
 }
@@ -187,9 +208,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         liveStreamIds.map(async (streamId) => {
           try {
             const snap = await db.collection("creators").doc(creatorId).collection("liveStreams").doc(streamId).get();
-            if (!snap.exists) return;
-            const data = snap.data() as Record<string, unknown>;
-            const scheduleStatus = liveStreamTicketScheduleStatusFromStreamStatus(data.status);
+            const data = snap.exists ? (snap.data() as Record<string, unknown>) : null;
+            const scheduleStatus = liveStreamTicketScheduleStatusFromStreamData(data);
             if (scheduleStatus) statusByStreamId.set(streamId, scheduleStatus);
           } catch (e) {
             console.warn("fanPurchases: live stream status lookup failed", streamId, e);

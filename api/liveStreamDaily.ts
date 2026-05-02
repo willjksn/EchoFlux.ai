@@ -242,6 +242,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       // endLive
       await streamRef.update({
         status: "ended",
+        endedAt: FieldValue.serverTimestamp(),
         updatedAt: FieldValue.serverTimestamp(),
       });
       await syncLiveStreamPromoStatusOnPostCollections(db, uid, streamId, "ended");
