@@ -22,7 +22,7 @@ import {
   type DocumentData,
 } from "firebase/firestore";
 import { db } from "../firebaseConfig";
-import { isProtectedLockedMediaUrl, type LockedPostContent } from "../src/lib/lockedPostMedia";
+import { isMediaSlotLocked, isProtectedLockedMediaUrl, type LockedPostContent } from "../src/lib/lockedPostMedia";
 import { getAvatarCropStyle } from "../src/lib/avatarCrop";
 import { inferIsVideoFromUrl, normalizePostMediaTypes } from "../src/lib/mediaUrlInfer";
 import { getFeedGridCoverMedia } from "../src/lib/feedGridCover";
@@ -720,6 +720,14 @@ function FeedCard({
     !!currentUrl &&
     (post.mediaTypes?.[slideIdx] === "video" || (!currentProtectedPlaceholder && inferIsVideoFromUrl(currentUrl)));
   const showMediaCarousel = mediaCount > 1;
+  const lockedCurrent =
+    isMediaSlotLocked(post.lockedContent, slideIdx, mediaCount) ||
+    (!!post.lockedContent?.enabled && currentProtectedPlaceholder);
+  const lockPriceCents = post.lockedContent?.priceCents;
+  const lockPriceText =
+    typeof lockPriceCents === "number" && Number.isFinite(lockPriceCents) && lockPriceCents > 0
+      ? `Unlock $${(lockPriceCents / 100).toFixed(2)}`
+      : "Locked";
 
   const hasTipGoal = !!(post.tipGoal && typeof post.tipGoal.targetCents === "number" && post.tipGoal.targetCents > 0);
   const mediaTotals = useMemo(() => {
@@ -1279,7 +1287,10 @@ function FeedCard({
 
       {currentUrl ? (
         currentProtectedPlaceholder ? (
-          <div ref={carouselRootRef} className={`feed-card-media-wrap${inFeedCarouselClass}`}>
+          <div
+            ref={carouselRootRef}
+            className={`feed-card-media-wrap${inFeedCarouselClass}${lockedCurrent ? " fan-feed-media-cell--locked" : ""}`}
+          >
             <div className="feed-card-media fan-feed-media-protected-placeholder" aria-hidden />
             {showCaptionOnMedia && (
               <FeedCardCaptionOverlay
@@ -1294,6 +1305,46 @@ function FeedCard({
             )}
             {renderCarouselArrows()}
             {renderCountBadge()}
+            {lockedCurrent ? (
+              <>
+                <div
+                  className="fan-feed-media-lock-overlay"
+                  role="region"
+                  aria-label="Locked media"
+                  onContextMenu={(e) => e.preventDefault()}
+                >
+                  <span className="fan-feed-media-lock-icon" aria-hidden>
+                    🔒
+                  </span>
+                  <span className="fan-feed-media-lock-hint">
+                    Fans will see the paid unlock button here.
+                  </span>
+                </div>
+                {creatorFanPreviewUrl ? (
+                  <div className="fan-feed-media-lock-unlock-hit fan-feed-media-lock-unlock-hit--solo">
+                    <div className="fan-feed-media-lock-unlock-stack">
+                      <span className="fan-feed-media-lock-unlock-label">Pay to unlock</span>
+                      <button
+                        type="button"
+                        className="fan-feed-media-lock-unlock-btn fan-feed-media-lock-unlock-btn--prominent"
+                        style={{
+                          borderColor: "#ffffff",
+                          color: "#fff",
+                          background: `linear-gradient(135deg, ${viewPostLinkColor} 0%, color-mix(in srgb, ${viewPostLinkColor} 72%, #000) 100%)`,
+                        }}
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          window.open(creatorFanPreviewUrl, "_blank", "noopener,noreferrer");
+                        }}
+                      >
+                        Preview {lockPriceText}
+                      </button>
+                    </div>
+                  </div>
+                ) : null}
+              </>
+            ) : null}
           </div>
         ) : currentIsVideo ? (
           <div

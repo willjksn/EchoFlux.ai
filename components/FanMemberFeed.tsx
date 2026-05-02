@@ -1056,7 +1056,7 @@ function FanMemberPostMedia({
 
   if (n === 0) return null;
 
-  const lockedCurrent = isMediaSlotLocked(lockedCfg, idx, n);
+  const lockedCurrent = isMediaSlotLocked(lockedCfg, idx, n) || (!!lockedCfg && currentProtectedPlaceholder);
 
   const totalSlots = mediaTotals.images + mediaTotals.videos;
   const showMultiBadge = totalSlots > 1;
