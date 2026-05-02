@@ -3075,11 +3075,7 @@ export const FanStorefrontView: React.FC = () => {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error((data as { error?: string }).error || "Failed to cancel");
-      const endDate = (data as { currentPeriodEnd?: string }).currentPeriodEnd;
-      const msg = endDate
-        ? `Membership will end on ${new Date(endDate).toLocaleDateString()}. You keep access until then.`
-        : "Membership set to cancel at the end of your billing period.";
-      setCancelMembershipMessage(msg);
+      setCancelMembershipMessage("Membership cancellation is scheduled. You keep access until the end of this billing period.");
       setMembershipManageModalOpen(false);
     } catch (e) {
       setCancelMembershipMessage(e instanceof Error ? e.message : "Failed to cancel membership.");
@@ -5212,12 +5208,6 @@ export const FanStorefrontView: React.FC = () => {
           </div>
         </div>
       </header>
-
-      {cancelMembershipMessage && (
-        <div className="storefront-cancel-message" role="alert" style={{ backgroundColor: `${primary}18`, color: theme?.text || "#1f2937" }}>
-          {cancelMembershipMessage}
-        </div>
-      )}
 
       {!entitlementLoading && (
         <div

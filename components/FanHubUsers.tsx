@@ -96,6 +96,15 @@ function formatDate(date: Date | null): string {
 const FIREBASE_UID_RE = /^[A-Za-z0-9]{20,36}$/;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+function looksDerivedFromEmailUsername(username: string | null | undefined, email: string | null | undefined): boolean {
+  const u = safeUsernameForHandle(username);
+  const e = typeof email === "string" ? email.trim().toLowerCase() : "";
+  if (!u || !e || !e.includes("@")) return false;
+  const local = e.split("@")[0]?.replace(/[^a-z0-9_]/g, "") || "";
+  const compactEmail = e.replace(/[^a-z0-9_]/g, "");
+  return u === local || u === compactEmail;
+}
+
 function formatDateTime(date: Date | null): string {
   if (!date || !Number.isFinite(date.getTime())) return "—";
   return date.toLocaleString("en-US", {
@@ -487,6 +496,13 @@ export const FanHubUsers: React.FC = () => {
         if (!existing.lastActive || orderDate > existing.lastActive) existing.lastActive = orderDate;
         if (!existing.firstOrder || orderDate < existing.firstOrder) existing.firstOrder = orderDate;
         if (!existing.email && fanEmail) existing.email = fanEmail;
+        const orderUsername = safeUsernameForHandle(o.fanUsername || o.memberUsername || o.username);
+        if (
+          orderUsername &&
+          (!existing.username || looksDerivedFromEmailUsername(existing.username, existing.email || fanEmail))
+        ) {
+          existing.username = orderUsername;
+        }
 
         userMap.set(fanId, existing);
       });
@@ -627,7 +643,12 @@ export const FanHubUsers: React.FC = () => {
           base.fanDocMembershipCents = Math.max(base.fanDocMembershipCents ?? 0, o.fanDocMembershipCents ?? 0);
           if (!base.email && o.email) base.email = o.email;
           if (!base.displayName && o.displayName) base.displayName = o.displayName;
-          if (!base.username && o.username) base.username = o.username;
+          if (
+            o.username &&
+            (!base.username || looksDerivedFromEmailUsername(base.username, base.email) || looksDerivedFromEmailUsername(base.username, o.email))
+          ) {
+            base.username = o.username;
+          }
           if (!base.storedRole && o.storedRole) base.storedRole = o.storedRole;
           if (!base.subscriptionStatus && o.subscriptionStatus) base.subscriptionStatus = o.subscriptionStatus;
           if (!base.subscribedAt && o.subscribedAt) base.subscribedAt = o.subscribedAt;
@@ -784,11 +805,20 @@ export const FanHubUsers: React.FC = () => {
                   break;
                 }
               }
+              if (!u && entry.email && EMAIL_RE.test(entry.email.trim().toLowerCase())) {
+                const emailSnap = await getDocs(
+                  query(collection(db, "users"), where("email", "==", entry.email.trim().toLowerCase()))
+                );
+                const first = emailSnap.docs[0];
+                if (first?.exists()) {
+                  u = first.data() as Record<string, unknown>;
+                }
+              }
               if (!u) return;
               const uu = safeUsernameForHandle(
                 typeof u.username === "string" ? u.username : undefined
               );
-              if (uu && !entry.username) {
+              if (uu && (!entry.username || looksDerivedFromEmailUsername(entry.username, entry.email))) {
                 entry.username = uu;
               }
               // Prefer canonical EchoFlux profile naming (`users/{uid}`) over older

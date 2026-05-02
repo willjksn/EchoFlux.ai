@@ -1,6 +1,7 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import type { Firestore, QueryDocumentSnapshot } from "firebase-admin/firestore";
 import { getAdminDb } from "./_firebaseAdmin.js";
+import { syncRecentFanHubProductCheckouts } from "./_syncRecentFanHubProductCheckouts.js";
 import { verifyAuth } from "./verifyAuth.js";
 
 export type CreatorOrder = {
@@ -447,6 +448,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return res.status(403).json({ error: "Forbidden: not authorized for this creatorId" });
       }
       creatorIdToQuery = requestedCreatorId;
+    }
+
+    try {
+      await syncRecentFanHubProductCheckouts({
+        db,
+        creatorId: creatorIdToQuery,
+        days: 90,
+        limit: 100,
+      });
+    } catch (syncErr) {
+      console.warn("creatorOrders: recent Stripe checkout sync skipped", syncErr);
     }
 
     const cap = Math.min(500, Math.max(limitNum, limitNum * 2));

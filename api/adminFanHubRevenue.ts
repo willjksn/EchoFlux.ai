@@ -2,15 +2,8 @@ import type { VercelRequest, VercelResponse } from "@vercel/node";
 import type { QueryDocumentSnapshot } from "firebase-admin/firestore";
 import { getAdminDb } from "./_firebaseAdmin.js";
 import { hasPlatformAdminAccess } from "./_platformAdminAccess.js";
+import { syncRecentFanHubCheckoutsForAdminRevenue } from "./_syncRecentFanHubProductCheckouts.js";
 import { verifyAuth } from "./verifyAuth.js";
-
-function hasPlatformAdminAccess(userData: Record<string, unknown> | undefined): boolean {
-  if (!userData) return false;
-  const role = typeof userData.role === "string" ? userData.role.trim().toLowerCase() : "";
-  if (role === "admin" || role === "superadmin" || role === "owner") return true;
-  if (userData.isAdmin === true || userData.isSuperAdmin === true || userData.isOwner === true) return true;
-  return false;
-}
 
 function createdAtToMs(createdAt: unknown): number {
   if (createdAt == null) return 0;
@@ -78,6 +71,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const cutoffMs = days ? Date.now() - days * 24 * 60 * 60 * 1000 : null;
 
   try {
+    try {
+      await syncRecentFanHubCheckoutsForAdminRevenue({
+        db,
+        days: days ?? 90,
+        limitPerAccount: 100,
+      });
+    } catch (syncErr) {
+      console.warn("adminFanHubRevenue: recent Stripe checkout sync skipped", syncErr);
+    }
+
     let docs: QueryDocumentSnapshot[] = [];
     try {
       const snap = await db.collection("orders").orderBy("createdAt", "desc").limit(limit).get();

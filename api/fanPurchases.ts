@@ -1,5 +1,6 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { getAdminDb } from "./_firebaseAdmin.js";
+import { syncRecentFanHubProductCheckouts } from "./_syncRecentFanHubProductCheckouts.js";
 import { verifyAuth } from "./verifyAuth.js";
 
 type FanPurchaseType = "product" | "post_unlock" | "unlock" | "tip" | "subscription" | "live_stream_ticket";
@@ -150,6 +151,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const email = typeof decoded.email === "string" ? decoded.email.trim().toLowerCase() : "";
     const limitNum = Math.min(Math.max(parseInt(String(req.query.limit || "80"), 10) || 80, 10), 1000);
     const docsById = new Map<string, FanPurchase>();
+
+    try {
+      await syncRecentFanHubProductCheckouts({
+        db,
+        creatorId,
+        fanId: authUid,
+        fanEmail: email,
+        days: 90,
+        limit: 100,
+      });
+    } catch (syncErr) {
+      console.warn("fanPurchases: recent Stripe checkout sync skipped", syncErr);
+    }
 
     const byFanIdPromise = db
       .collection("orders")
