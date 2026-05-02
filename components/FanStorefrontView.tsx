@@ -317,9 +317,12 @@ export type StorefrontCreator = {
     heroPromise?: TextStyle;
     perksTitle?: TextStyle;
     perksText?: TextStyle;
+    perksExtra?: TextStyle;
     previewTitle?: TextStyle;
     previewText?: TextStyle;
+    previewExtra?: TextStyle;
     energyTitle?: TextStyle;
+    energyBody?: TextStyle;
     boundaryTitle?: TextStyle;
     boundaryText?: TextStyle;
   };

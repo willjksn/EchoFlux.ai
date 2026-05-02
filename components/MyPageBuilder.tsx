@@ -492,6 +492,7 @@ const ColorPickerWithDropper: React.FC<{
 }> = ({ value, defaultColor, onChange, placeholder = "#000000", allowClear = false }) => {
   const [eyeDropperAvailable, setEyeDropperAvailable] = useState(false);
   const [dropperError, setDropperError] = useState<string | null>(null);
+  const colorInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     setEyeDropperAvailable(!!getBrowserEyeDropper());
@@ -500,7 +501,8 @@ const ColorPickerWithDropper: React.FC<{
   const pickColor = async () => {
     const EyeDropper = getBrowserEyeDropper();
     if (!EyeDropper) {
-      setDropperError("Eyedropper is not available in this browser.");
+      setDropperError("This browser does not support page eyedropper. Opening the system color picker instead.");
+      colorInputRef.current?.click();
       return;
     }
     setDropperError(null);
@@ -517,6 +519,7 @@ const ColorPickerWithDropper: React.FC<{
     <div className="space-y-1">
       <div className="flex items-center gap-2">
         <input
+          ref={colorInputRef}
           type="color"
           value={safeHexColor(value, defaultColor)}
           onChange={(e) => onChange(e.target.value)}
@@ -532,10 +535,9 @@ const ColorPickerWithDropper: React.FC<{
         <button
           type="button"
           onClick={() => void pickColor()}
-          disabled={!eyeDropperAvailable}
-          className="h-8 w-8 inline-flex items-center justify-center rounded border border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed flex-shrink-0"
-          title={eyeDropperAvailable ? "Pick exact color from the page" : "Eyedropper is not available in this browser"}
-          aria-label="Pick exact color from the page"
+          className="h-8 w-8 inline-flex items-center justify-center rounded border border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex-shrink-0"
+          title={eyeDropperAvailable ? "Pick exact color from the page" : "Open system color picker"}
+          aria-label={eyeDropperAvailable ? "Pick exact color from the page" : "Open system color picker"}
         >
           <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M15 5l4 4" />
@@ -2461,11 +2463,18 @@ export const MyPageBuilder: React.FC = () => {
                     <label className="block text-xs font-medium text-gray-500 dark:text-gray-400">
                       Under your description (optional)
                     </label>
-                    <LandingBodyModeToggle
-                      value={draft.landingContent?.perksExtraMode ?? "bullets"}
-                      onChange={setPerksExtraMode}
-                      ariaLabel="Why subscribe: bullets or paragraph"
-                    />
+                    <div className="flex items-center gap-2">
+                      <TextStyleControls
+                        style={draft.textStyles?.perksExtra}
+                        onChange={(style) => updateTextStyle("perksExtra", style)}
+                        defaultSize="sm"
+                      />
+                      <LandingBodyModeToggle
+                        value={draft.landingContent?.perksExtraMode ?? "bullets"}
+                        onChange={setPerksExtraMode}
+                        ariaLabel="Why subscribe: bullets or paragraph"
+                      />
+                    </div>
                   </div>
                   {(draft.landingContent?.perksExtraMode ?? "bullets") === "bullets" ? (
                     <>
@@ -2574,11 +2583,18 @@ export const MyPageBuilder: React.FC = () => {
                     <label className="block text-xs font-medium text-gray-500 dark:text-gray-400">
                       Under subline (optional)
                     </label>
-                    <LandingBodyModeToggle
-                      value={draft.landingContent?.previewExtraMode ?? "bullets"}
-                      onChange={setPreviewExtraMode}
-                      ariaLabel="What you get: bullets or paragraph"
-                    />
+                    <div className="flex items-center gap-2">
+                      <TextStyleControls
+                        style={draft.textStyles?.previewExtra}
+                        onChange={(style) => updateTextStyle("previewExtra", style)}
+                        defaultSize="sm"
+                      />
+                      <LandingBodyModeToggle
+                        value={draft.landingContent?.previewExtraMode ?? "bullets"}
+                        onChange={setPreviewExtraMode}
+                        ariaLabel="What you get: bullets or paragraph"
+                      />
+                    </div>
                   </div>
                   {(draft.landingContent?.previewExtraMode ?? "bullets") === "bullets" ? (
                     <>
@@ -2680,11 +2696,18 @@ export const MyPageBuilder: React.FC = () => {
                 </div>
                 <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
                   <span className="text-xs font-medium text-gray-500 dark:text-gray-400">Body under title</span>
-                  <LandingBodyModeToggle
-                    value={draft.landingContent?.energyBodyMode ?? "bullets"}
-                    onChange={setEnergyBodyMode}
-                    ariaLabel="The energy section: bullets or paragraph"
-                  />
+                  <div className="flex items-center gap-2">
+                    <TextStyleControls
+                      style={draft.textStyles?.energyBody}
+                      onChange={(style) => updateTextStyle("energyBody", style)}
+                      defaultSize="sm"
+                    />
+                    <LandingBodyModeToggle
+                      value={draft.landingContent?.energyBodyMode ?? "bullets"}
+                      onChange={setEnergyBodyMode}
+                      ariaLabel="The energy section: bullets or paragraph"
+                    />
+                  </div>
                 </div>
                 {(draft.landingContent?.energyBodyMode ?? "bullets") === "bullets" ? (
                   <>

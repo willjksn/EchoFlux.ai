@@ -166,7 +166,13 @@ const LANDING_HEADER_MAX = "max-w-[720px] mx-auto w-full";
 // Helper to generate inline styles from TextStyle
 function getTextStyleCSS(
   style?: TextStyle,
-  defaults?: { fontSize?: string; color?: string; fontFamily?: string; fontStyle?: 'normal' | 'italic' }
+  defaults?: {
+    fontSize?: string;
+    color?: string;
+    fontFamily?: string;
+    fontStyle?: 'normal' | 'italic';
+    fontWeight?: React.CSSProperties["fontWeight"];
+  }
 ): React.CSSProperties {
   const rawFontSize = style?.fontSize as unknown;
   const mappedFontSize =
@@ -183,6 +189,7 @@ function getTextStyleCSS(
     fontSize: mappedFontSize ?? customFontSize ?? defaults?.fontSize,
     color: style?.color || defaults?.color,
     fontFamily: style?.fontFamily || defaults?.fontFamily,
+    ...(defaults?.fontWeight ? { fontWeight: defaults.fontWeight } : {}),
     ...(fontStyle ? { fontStyle } : {}),
   };
 }
@@ -1357,7 +1364,7 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
                   return (
                     <p
                       className={`whitespace-pre-wrap leading-relaxed mb-2 ${live ? "text-base" : "text-sm"}`}
-                      style={{ color: landingPageText, fontFamily: globalFont, fontSize: landingCardListFs }}
+                      style={getTextStyleCSS(textStyles.perksExtra, { color: landingPageText, fontFamily: globalFont, fontSize: landingCardListFs })}
                     >
                       {landingContent.perksParagraph}
                     </p>
@@ -1369,7 +1376,7 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
                 return perkItems.length > 0 ? (
                 <ul
                   className={`list-none m-0 p-0 space-y-2.5 ${live ? "text-base" : "text-sm"}`}
-                  style={{ color: landingPageText, fontFamily: globalFont, fontSize: landingCardListFs }}
+                  style={getTextStyleCSS(textStyles.perksExtra, { color: landingPageText, fontFamily: globalFont, fontSize: landingCardListFs })}
                 >
                   {perkItems.map((item, i) =>
                     perksListMarker === "none" ? (
@@ -1388,7 +1395,7 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
               })()}
             </section>
 
-            {/* What You Get — Stormij-style: serif title, pink subline, hearts + body list, optional italic footer */}
+            {/* What You Get — uses the same default landing font; creators can override per text block. */}
             <section
               id="preview-section"
               className="storefront-landing-panel preview rounded-2xl p-4 transition-all hover:translate-y-[-2px] flex flex-col min-w-0"
@@ -1405,7 +1412,7 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
                   fontSize: landingCardPreviewSerifTitleFs,
                   fontWeight: 700,
                   color: primary,
-                  fontFamily: "'Cormorant Garamond', Georgia, 'Times New Roman', serif",
+                  fontFamily: globalFont,
                 })}
               >
                 {landingContent.previewTitle}
@@ -1430,7 +1437,7 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
                   return (
                     <p
                       className={`whitespace-pre-wrap leading-relaxed mb-2 ${live ? "text-base" : "text-sm"}`}
-                      style={{ color: landingPageText, fontFamily: globalFont, fontSize: landingCardListFs }}
+                      style={getTextStyleCSS(textStyles.previewExtra, { color: landingPageText, fontFamily: globalFont, fontSize: landingCardListFs })}
                     >
                       {landingContent.previewParagraph}
                     </p>
@@ -1442,7 +1449,7 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
                 return previewItems.length > 0 ? (
                   <ul
                     className={`list-none m-0 p-0 space-y-2.5 ${live ? "text-base" : "text-sm"}`}
-                    style={{ color: landingPageText, fontFamily: globalFont, fontSize: landingCardListFs }}
+                    style={getTextStyleCSS(textStyles.previewExtra, { color: landingPageText, fontFamily: globalFont, fontSize: landingCardListFs })}
                   >
                     {previewItems.map((item, i) =>
                       previewListMarker === "none" ? (
@@ -1509,7 +1516,7 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
                       {energyParaTrim ? (
                         <p
                           className={`whitespace-pre-wrap leading-relaxed m-0 ${live ? "text-base" : "text-sm"}`}
-                          style={{ color: landingPageText, fontFamily: globalFont, fontSize: landingCardListFs }}
+                          style={getTextStyleCSS(textStyles.energyBody, { color: landingPageText, fontFamily: globalFont, fontSize: landingCardListFs })}
                         >
                           {landingContent.energyParagraph}
                         </p>
@@ -1537,7 +1544,7 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
                         <p
                           key={i}
                           className={`leading-relaxed m-0 ${live ? "text-base" : "text-sm"}`}
-                          style={{ color: landingPageText, fontFamily: globalFont, fontSize: landingCardListFs }}
+                          style={getTextStyleCSS(textStyles.energyBody, { color: landingPageText, fontFamily: globalFont, fontSize: landingCardListFs })}
                         >
                           {line}
                         </p>
@@ -1546,7 +1553,7 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
                           <LandingListMarkerGlyph marker={energyLinesMarker} color={primary} />
                           <p
                             className={`min-w-0 flex-1 leading-relaxed m-0 ${live ? "text-base" : "text-sm"}`}
-                            style={{ color: landingPageText, fontFamily: globalFont, fontSize: landingCardListFs }}
+                            style={getTextStyleCSS(textStyles.energyBody, { color: landingPageText, fontFamily: globalFont, fontSize: landingCardListFs })}
                           >
                             {line}
                           </p>
@@ -1656,7 +1663,7 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
                   primary={primary}
                   titleStyle={{
                     color: primary,
-                    fontFamily: "'Cormorant Garamond', Georgia, 'Times New Roman', serif",
+                    fontFamily: globalFont,
                     fontSize: "1.25rem",
                     fontWeight: 700,
                   }}
