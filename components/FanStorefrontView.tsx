@@ -372,7 +372,7 @@ type FanDeliveryPurchase = {
   amountCents: number;
   status: string;
   createdAt: string;
-  scheduleStatus?: "pending" | "scheduled" | "completed" | "cancelled";
+  scheduleStatus?: "pending" | "scheduled" | "completed" | "cancelled" | "expired";
   scheduledDate?: string | null;
   scheduledTime?: string | null;
   deliveryStatus?: "pending" | "delivered";
@@ -437,7 +437,13 @@ function fanOrderScheduleFields(
   }
   const schedRaw = typeof raw.scheduleStatus === "string" ? raw.scheduleStatus.trim().toLowerCase() : "";
   let scheduleStatus: NonNullable<FanDeliveryPurchase["scheduleStatus"]>;
-  if (schedRaw === "scheduled" || schedRaw === "pending" || schedRaw === "completed" || schedRaw === "cancelled") {
+  if (
+    schedRaw === "scheduled" ||
+    schedRaw === "pending" ||
+    schedRaw === "completed" ||
+    schedRaw === "cancelled" ||
+    schedRaw === "expired"
+  ) {
     scheduleStatus = schedRaw;
   } else {
     scheduleStatus = "pending";
@@ -576,6 +582,7 @@ function fanPurchaseRowStatus(o: FanDeliveryPurchase): string {
   if (o.type === "post_unlock") return "Unlocked";
   if (o.scheduleStatus === "cancelled") return "Cancelled";
   if (o.type === "live_stream_ticket") {
+    if (o.scheduleStatus === "expired") return "Expired";
     if (o.deliveryStatus === "delivered" || o.scheduleStatus === "completed") return "Delivered";
     if (o.scheduleStatus === "scheduled") return "Scheduled";
     return "Pending";

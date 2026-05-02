@@ -19,7 +19,7 @@ type FanPurchase = {
   amountCents: number;
   status: string;
   createdAt: string;
-  scheduleStatus?: "pending" | "scheduled" | "completed" | "cancelled";
+  scheduleStatus?: "pending" | "scheduled" | "completed" | "cancelled" | "expired";
   scheduledDate?: string | null;
   scheduledTime?: string | null;
   deliveryStatus?: "pending" | "delivered";
@@ -28,6 +28,14 @@ type FanPurchase = {
   deliveryUrl?: string | null;
   deliveredAt?: string | null;
 };
+
+function liveStreamTicketScheduleStatusFromStreamStatus(raw: unknown): FanPurchase["scheduleStatus"] | null {
+  const status = typeof raw === "string" ? raw.trim().toLowerCase() : "";
+  if (status === "ended") return "expired";
+  if (status === "cancelled" || status === "canceled") return "cancelled";
+  if (status === "live" || status === "scheduled" || status === "draft") return "scheduled";
+  return null;
+}
 
 function normalizePurchaseType(d: Record<string, unknown>): FanPurchaseType {
   const rawType = typeof d.type === "string" ? d.type.trim().toLowerCase() : "";
@@ -152,7 +160,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
     }
 
-    const purchases = Array.from(docsById.values())
+    let purchases = Array.from(docsById.values())
       .filter((o) => o.status !== "refunded")
       .filter(
         (o) =>
@@ -165,6 +173,42 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       )
       .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt))
       .slice(0, limitNum);
+
+    const liveStreamIds = [
+      ...new Set(
+        purchases
+          .filter((o) => o.type === "live_stream_ticket" && typeof o.streamId === "string" && o.streamId.trim())
+          .map((o) => o.streamId!.trim()),
+      ),
+    ];
+    if (liveStreamIds.length > 0) {
+      const statusByStreamId = new Map<string, FanPurchase["scheduleStatus"]>();
+      await Promise.all(
+        liveStreamIds.map(async (streamId) => {
+          try {
+            const snap = await db.collection("creators").doc(creatorId).collection("liveStreams").doc(streamId).get();
+            if (!snap.exists) return;
+            const data = snap.data() as Record<string, unknown>;
+            const scheduleStatus = liveStreamTicketScheduleStatusFromStreamStatus(data.status);
+            if (scheduleStatus) statusByStreamId.set(streamId, scheduleStatus);
+          } catch (e) {
+            console.warn("fanPurchases: live stream status lookup failed", streamId, e);
+          }
+        }),
+      );
+      if (statusByStreamId.size > 0) {
+        purchases = purchases.map((purchase) => {
+          if (purchase.type !== "live_stream_ticket" || !purchase.streamId) return purchase;
+          const scheduleStatus = statusByStreamId.get(purchase.streamId);
+          if (!scheduleStatus) return purchase;
+          return {
+            ...purchase,
+            scheduleStatus,
+            deliveryStatus: scheduleStatus === "expired" ? "pending" : purchase.deliveryStatus,
+          };
+        });
+      }
+    }
 
     return res.status(200).json({ purchases });
   } catch (e: unknown) {
