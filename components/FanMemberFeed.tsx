@@ -2078,19 +2078,18 @@ export const FanMemberFeed: React.FC<FanMemberFeedProps> = ({
     creatorPosts: new Map(),
     userPosts: new Map(),
   });
+  const feedInitialBucketsLoadedRef = useRef<Set<MemberFeedBucketKey>>(new Set());
 
   const rebalanceMemberFeed = useCallback(() => {
+    if (feedInitialBucketsLoadedRef.current.size < 3) return;
     const list = mergeMemberFeedBuckets(feedBucketsRef.current);
-    if (list.length === 0) {
-      setPosts(previewMember ? [] : DEMO_POSTS);
-    } else {
-      setPosts(list);
-    }
+    setPosts(list);
     setLoading(false);
-  }, [previewMember]);
+  }, []);
 
   useEffect(() => {
     if (!creatorId || !db) {
+      setPosts([]);
       setLoading(false);
       return;
     }
@@ -2100,6 +2099,7 @@ export const FanMemberFeed: React.FC<FanMemberFeedProps> = ({
       creatorPosts: new Map(),
       userPosts: new Map(),
     };
+    feedInitialBucketsLoadedRef.current = new Set();
     setLoading(true);
 
     const attach = (key: MemberFeedBucketKey, path: [string, string, string]): Unsubscribe => {
@@ -2114,10 +2114,12 @@ export const FanMemberFeed: React.FC<FanMemberFeedProps> = ({
             if (p) m.set(p.id, p);
           });
           feedBucketsRef.current[key] = m;
+          feedInitialBucketsLoadedRef.current.add(key);
           rebalanceMemberFeed();
         },
         () => {
           feedBucketsRef.current[key] = new Map();
+          feedInitialBucketsLoadedRef.current.add(key);
           rebalanceMemberFeed();
         },
       );

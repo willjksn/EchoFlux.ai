@@ -1,8 +1,10 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { getAdminDb } from "./_firebaseAdmin.js";
 import { verifyAuth } from "./verifyAuth.js";
+import { applyBrowserApiCors } from "./_browserApiCors.js";
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+  if (applyBrowserApiCors(req, res)) return;
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
 
   const authed = await verifyAuth(req);
