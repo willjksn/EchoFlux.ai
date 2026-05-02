@@ -466,6 +466,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
       const priceCents = Math.max(50, Number(product.priceCents) || 0);
       const title = product.title || "Product";
+      const productCheckoutMetadata = {
+        creatorId,
+        fanId: allowGuestProduct ? "guest_pending" : fanId,
+        type: "product",
+        productId: productId!,
+        productTitle: title,
+        isPlatformOwner: isPlatformOwner ? "true" : "false",
+        ...(fanEmail ? { fanEmail } : {}),
+        ...(allowGuestProduct ? { guestCheckout: "true", entry: "landing_treats" } : {}),
+      };
       const sessionParams: Stripe.Checkout.SessionCreateParams = {
         mode: "payment",
         payment_method_types: ["card"],
@@ -485,30 +495,34 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         success_url: safeSuccessUrl,
         cancel_url: safeCancelUrl,
         client_reference_id: allowGuestProduct ? `landing_${Date.now()}_${Math.random().toString(36).slice(2, 9)}` : fanId,
-        metadata: {
-          creatorId,
-          fanId: allowGuestProduct ? "guest_pending" : fanId,
-          type: "product",
-          productId: productId!,
-          productTitle: title,
-          isPlatformOwner: isPlatformOwner ? "true" : "false",
-          ...(fanEmail ? { fanEmail } : {}),
-          ...(allowGuestProduct ? { guestCheckout: "true", entry: "landing_treats" } : {}),
-        },
-        ...(allowGuestProduct
-          ? {
-              customer_creation: "always",
-              ...(fanEmail ? { customer_email: fanEmail } : {}),
-            }
-          : {}),
+        metadata: productCheckoutMetadata,
+        customer_creation: "always",
+        ...(fanEmail ? { customer_email: fanEmail } : {}),
         // Only add application_fee_amount for regular creators (not platform owners)
-        ...(isPlatformOwner ? {} : {
-          payment_intent_data: {
-            application_fee_amount: Math.round(priceCents * PLATFORM_FEE_PERCENT),
-          },
-        }),
+        payment_intent_data: {
+          metadata: productCheckoutMetadata,
+          ...(isPlatformOwner ? {} : { application_fee_amount: Math.round(priceCents * PLATFORM_FEE_PERCENT) }),
+        },
       };
       const session = await checkoutSessionsCreate(stripe, sessionParams, connectIdForCheckout);
+      await db.collection("orders").doc(session.id).set(
+        {
+          creatorId,
+          fanId: allowGuestProduct ? "guest_pending" : fanId,
+          productId: productId!,
+          productTitle: title,
+          type: "product",
+          stripeSessionId: session.id,
+          amountCents: priceCents,
+          status: "checkout_pending",
+          fanEmail: fanEmail || null,
+          scheduleStatus: "pending",
+          ...(allowGuestProduct ? { guestCheckout: true } : {}),
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        },
+        { merge: true }
+      );
       return res.status(200).json({ url: session.url, sessionId: session.id });
     }
 

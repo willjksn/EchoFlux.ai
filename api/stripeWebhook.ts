@@ -338,10 +338,15 @@ export async function processFanHubCheckoutSessionCompleted(
   const now = new Date().toISOString();
   const dupOrder = await db.collection('orders').where('stripeSessionId', '==', session.id).limit(1).get();
   if (!dupOrder.empty) {
+    const existing = dupOrder.docs[0].data() as { status?: string; fanId?: string } | undefined;
+    const existingStatus = typeof existing?.status === 'string' ? existing.status.trim().toLowerCase() : '';
+    if (type === 'product' && existingStatus !== 'paid') {
+      // Product checkout writes a recoverable pending order at session creation.
+      // Continue so this webhook/return sync can finalize it to paid and grant access.
+    } else {
     // If this session already exists but points at a different fan id, repair to the
     // current canonical UID (common after auth-account merges/migrations).
     if (type === 'subscription') {
-      const existing = dupOrder.docs[0].data() as { fanId?: string } | undefined;
       const existingFanId = typeof existing?.fanId === 'string' ? existing.fanId : '';
       if (existingFanId && existingFanId !== fanId) {
         try {
@@ -360,6 +365,7 @@ export async function processFanHubCheckoutSessionCompleted(
     }
     console.log(`Fan hub: skip duplicate checkout.session.completed session=${session.id}`);
     return true;
+    }
   }
 
   const sessionSubscriptionId = stripeRefId(session.subscription);
@@ -502,10 +508,13 @@ export async function processFanHubCheckoutSessionCompleted(
     };
 
     /** One order row + one soldCount bump per Stripe session (race-safe vs duplicate webhooks / sync). */
-    const insertedNewOrder = await db.runTransaction(async (tx) => {
+    const finalizedOrder = await db.runTransaction(async (tx) => {
       const existingOrder = await tx.get(orderRef);
-      if (existingOrder.exists) return false;
-      tx.set(orderRef, orderPayload);
+      const existingStatus = existingOrder.exists
+        ? String((existingOrder.data() as { status?: unknown } | undefined)?.status || '').trim().toLowerCase()
+        : '';
+      if (existingOrder.exists && existingStatus === 'paid') return false;
+      tx.set(orderRef, { ...orderPayload, updatedAt: now }, { merge: true });
       const pSnap = await tx.get(productRef);
       if (pSnap.exists) {
         tx.update(productRef, {
@@ -516,7 +525,7 @@ export async function processFanHubCheckoutSessionCompleted(
       return true;
     });
 
-    if (!insertedNewOrder) {
+    if (!finalizedOrder) {
       console.log(`Fan hub: skip duplicate product checkout session=${session.id}`);
       return true;
     }
