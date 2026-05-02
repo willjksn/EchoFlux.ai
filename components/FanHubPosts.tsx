@@ -1,6 +1,6 @@
 import React, { useState, useRef, useCallback, useEffect } from "react";
 import { useAppContext } from "./AppContext";
-import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
+import { ref, uploadBytes, uploadBytesResumable, getDownloadURL } from "firebase/storage";
 import {
   collection,
   addDoc,
@@ -532,6 +532,36 @@ export const FanHubPosts: React.FC = () => {
   
   // Content Spiciness (1-10) - loaded from user settings
   const [contentSpiciness, setContentSpiciness] = useState(5);
+
+  const uploadFileWithProgress = useCallback(
+    async (
+      storagePath: string,
+      file: File,
+      fileIndex: number,
+      totalFiles: number,
+    ): Promise<string> => {
+      const storageRef = ref(storage, storagePath);
+      const uploadTask = uploadBytesResumable(storageRef, file, { contentType: file.type });
+
+      return new Promise((resolve, reject) => {
+        uploadTask.on(
+          "state_changed",
+          (snapshot) => {
+            const currentFileProgress =
+              snapshot.totalBytes > 0 ? snapshot.bytesTransferred / snapshot.totalBytes : 0;
+            const aggregateProgress = ((fileIndex + currentFileProgress) / Math.max(1, totalFiles)) * 100;
+            setUploadProgress(Math.min(99, Math.max(0, Math.round(aggregateProgress))));
+          },
+          reject,
+          () => {
+            setUploadProgress(Math.min(100, Math.round(((fileIndex + 1) / Math.max(1, totalFiles)) * 100)));
+            void getDownloadURL(uploadTask.snapshot.ref).then(resolve, reject);
+          },
+        );
+      });
+    },
+    [],
+  );
   
   // Publishing
   const [publishing, setPublishing] = useState(false);
@@ -766,10 +796,7 @@ export const FanHubPosts: React.FC = () => {
         const timestamp = Date.now();
         const fileName = `${timestamp}_${file.name}`;
         const storagePath = `users/${user.id}/media_library/${fileName}`;
-        const storageRef = ref(storage, storagePath);
-        
-        await uploadBytes(storageRef, file, { contentType: file.type });
-        const mediaUrl = await getDownloadURL(storageRef);
+        const mediaUrl = await uploadFileWithProgress(storagePath, file, i, files.length);
         
         // Save to vault (media_library collection)
         const mediaItem = {
