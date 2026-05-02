@@ -1876,9 +1876,9 @@ button.feed-card-action-count--clickable:hover {
 .feed-card-poll {
   margin-top: 1rem;
   padding: 1rem;
-  background: rgba(212, 85, 139, 0.05);
+  background: color-mix(in srgb, var(--fan-primary, #6366f1) 6%, #ffffff);
   border-radius: 12px;
-  border: 1px solid rgba(212, 85, 139, 0.12);
+  border: 1px solid color-mix(in srgb, var(--fan-primary, #6366f1) 14%, transparent);
 }
 .feed-card-poll-question {
   font-weight: 600;
@@ -1895,11 +1895,19 @@ button.feed-card-action-count--clickable:hover {
 }
 .feed-card-poll-option {
   position: relative;
-  padding: 0;
+  padding: 0.7rem 0.75rem;
   background: #fff;
   border-radius: 8px;
   border: 1px solid rgba(156, 163, 175, 0.2);
   overflow: hidden;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) max-content;
+  align-items: center;
+  column-gap: 0.75rem;
+}
+.feed-card-poll-option:has(.feed-card-poll-option-button) {
+  display: block;
+  padding: 0;
 }
 .feed-card-poll-option-button {
   position: relative;
@@ -1944,7 +1952,7 @@ button.feed-card-action-count--clickable:hover {
   left: 0;
   top: 0;
   bottom: 0;
-  background: rgba(139, 92, 246, 0.15);
+  background: color-mix(in srgb, var(--fan-primary, #6366f1) 16%, transparent);
   z-index: 0;
 }
 .feed-card-poll-option-label,
