@@ -1222,6 +1222,7 @@ export const FanStorefrontView: React.FC = () => {
   const [landingTreatsLoading, setLandingTreatsLoading] = useState(false);
   const [treatLinkMessage, setTreatLinkMessage] = useState<string | null>(null);
   const pendingGuestLinkBannerShown = useRef(false);
+  const checkoutReturnSyncInFlightRef = useRef(false);
   const [purchasingId, setPurchasingId] = useState<string | null>(null);
   const [subscribing, setSubscribing] = useState(false);
   const [joiningFree, setJoiningFree] = useState(false);
@@ -2384,14 +2385,16 @@ export const FanStorefrontView: React.FC = () => {
     const purchaseSync = params.get("purchase_sync") === "1";
     const postUnlock = params.get("post_unlock") === "1";
     const liveStreamTicket = params.get("live_stream_ticket") === "1";
-    if (params.get("treat_success") === "1" && !purchaseSync && !postUnlock && !liveStreamTicket) return;
-    if (!sid || (!purchaseSync && !postUnlock && !liveStreamTicket)) return;
+    const treatSuccess = params.get("treat_success") === "1";
+    if (!sid || (!purchaseSync && !postUnlock && !liveStreamTicket && !treatSuccess)) return;
 
     let cancelled = false;
+    checkoutReturnSyncInFlightRef.current = true;
     (async () => {
       try {
         const token = await auth.currentUser!.getIdToken(true);
         let allowPublicFallbackSync = false;
+        let allowGuestClaim = false;
         let synced = false;
         for (let attempt = 0; attempt < 4; attempt++) {
           const res = await fetch("/api/syncFanCheckoutSession", {
@@ -2414,6 +2417,10 @@ export const FanStorefrontView: React.FC = () => {
           // If auth-linked sync can't bind this session, still try public sync so tip/order analytics
           // and fan card creation are not blocked by account-id mismatches.
           const code = String((data as { code?: unknown }).code || "");
+          if (code === "USE_CLAIM_GUEST") {
+            allowGuestClaim = true;
+            break;
+          }
           if (res.status === 403 || code === "SESSION_FAN_MISMATCH" || code === "SESSION_FAN_MISSING") {
             allowPublicFallbackSync = true;
           }
@@ -2439,6 +2446,25 @@ export const FanStorefrontView: React.FC = () => {
             break;
           }
         }
+        if (!synced && allowGuestClaim) {
+          const claimRes = await fetch("/api/claimGuestPurchase", {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+            body: JSON.stringify({ sessionId: sid }),
+          });
+          const claimData = await claimRes.json().catch(() => ({}));
+          if (cancelled) return;
+          if (claimRes.ok) {
+            synced = true;
+            setTreatLinkMessage(
+              (claimData as { merged?: boolean }).merged
+                ? "Your purchase is linked to your account. You'll see it in your member area; you can still subscribe anytime for full access."
+                : "You're all set — this purchase was already linked to your account."
+            );
+          } else {
+            setTreatLinkMessage((claimData as { error?: string }).error || "Could not link purchase to your account.");
+          }
+        }
         if (!synced) {
           // Keep URL params so a refresh can retry sync.
           return;
@@ -2457,10 +2483,13 @@ export const FanStorefrontView: React.FC = () => {
       } catch (e) {
         if (!cancelled) console.warn("member checkout sync", e);
         void refetchMemberEntitlement();
+      } finally {
+        if (!cancelled) checkoutReturnSyncInFlightRef.current = false;
       }
     })();
     return () => {
       cancelled = true;
+      checkoutReturnSyncInFlightRef.current = false;
     };
   }, [creator?.creatorId, isLoggedIn, refetchMemberEntitlement]);
 
@@ -2773,9 +2802,17 @@ export const FanStorefrontView: React.FC = () => {
 
   useEffect(() => {
     if (typeof window === "undefined" || !creator?.creatorId || !isLoggedIn || !auth.currentUser) return;
+    if (checkoutReturnSyncInFlightRef.current) return;
     const params = new URLSearchParams(window.location.search);
     const sid = params.get("session_id");
     const ok = params.get("treat_success") === "1";
+    if (
+      params.get("purchase_sync") === "1" ||
+      params.get("post_unlock") === "1" ||
+      params.get("live_stream_ticket") === "1"
+    ) {
+      return;
+    }
     if (!sid || !ok) return;
 
     let cancelled = false;

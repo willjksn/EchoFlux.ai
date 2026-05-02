@@ -36,6 +36,7 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
     const [isGrantingVideoMinutes, setIsGrantingVideoMinutes] = useState(false);
     const [videoQuota, setVideoQuota] = useState<{ monthlyMinutesLimit: number; minutesUsedThisMonth: number; bonusMinutes: number } | null>(null);
     const isFanHubAccount = editedUser.accountOrigin === 'fan_hub';
+    const restrictEchoFluxAdminTools = fanHubConsumerOnly || isFanHubAccount;
 
     useEffect(() => {
         setEditedUser(user);

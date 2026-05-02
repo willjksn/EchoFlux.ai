@@ -1,7 +1,6 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import type { DocumentSnapshot, Firestore } from "firebase-admin/firestore";
-import { defaultSettings } from "../constants.js";
-import { getAdminApp, getAdminDb } from "./_firebaseAdmin.js";
+import { getAdminDb } from "./_firebaseAdmin.js";
 import { hasPlatformAdminAccess } from "./_platformAdminAccess.js";
 import { verifyAuth } from "./verifyAuth.js";
 
@@ -34,6 +33,32 @@ const ACTIVE_STATUSES = new Set(["active", "trialing", "free", "past_due"]);
 const FIREBASE_UID_RE = /^[A-Za-z0-9]{20,36}$/;
 const UID_LABEL_SUFFIX = /(?:^|[-_\s])u(?:id|di)\s*:\s*([A-Za-z0-9]{20,36})$/i;
 const EMAIL_IN_ID = /([^\s]+@[^\s]+)$/i;
+const DEFAULT_FAN_HUB_PLACEHOLDER_SETTINGS = {
+  autoReply: true,
+  autoRespond: false,
+  safeMode: true,
+  highQuality: false,
+  tone: {
+    formality: 50,
+    humor: 30,
+    empathy: 70,
+    spiciness: 0,
+  },
+  voiceMode: true,
+  prioritizedKeywords: "collaboration, pricing, question",
+  ignoredKeywords: "spam, giveaway, follow back",
+  connectedAccounts: {
+    Instagram: true,
+    TikTok: true,
+    X: true,
+    Threads: true,
+    YouTube: false,
+    LinkedIn: true,
+    Facebook: true,
+    Pinterest: false,
+    "My Page": false,
+  },
+};
 
 function toIso(value: unknown): string | null {
   if (!value) return null;
@@ -340,7 +365,7 @@ function placeholderUserForFanBuyerSummaryServer(fanKey: string, profile: FanPro
     storageUsed: 0,
     storageLimit: 0,
     mediaLibrary: [],
-    settings: defaultSettings,
+    settings: DEFAULT_FAN_HUB_PLACEHOLDER_SETTINGS,
     accountOrigin: "fan_hub",
   };
 }
@@ -421,39 +446,6 @@ async function resolveFanKeysToUserSnapsBatch(
       const doc = emailDocByEmail.get(e);
       if (doc) {
         out.set(fanId, doc);
-        break;
-      }
-    }
-  }
-
-  const authUidByEmail = new Map<string, string | null>();
-  const resolveAuthUid = async (email: string): Promise<string | null> => {
-    const e = email.trim().toLowerCase();
-    if (authUidByEmail.has(e)) return authUidByEmail.get(e)!;
-    try {
-      const auth = getAdminApp().auth();
-      const rec = await auth.getUserByEmail(e);
-      const uid = rec?.uid && FIREBASE_UID_RE.test(rec.uid) ? rec.uid : null;
-      authUidByEmail.set(e, uid);
-      return uid;
-    } catch {
-      authUidByEmail.set(e, null);
-      return null;
-    }
-  };
-
-  for (const fanId of needEmail) {
-    if (out.get(fanId)?.exists) continue;
-    const candidates: string[] = [];
-    if (fanId.includes("@")) candidates.push(fanId.trim().toLowerCase());
-    const pe = fanProfilesByFanId[fanId]?.email?.trim().toLowerCase();
-    if (pe) candidates.push(pe);
-    for (const e of candidates) {
-      const uid = await resolveAuthUid(e);
-      if (!uid) continue;
-      const snap = await db.collection("users").doc(uid).get();
-      if (snap.exists) {
-        out.set(fanId, snap);
         break;
       }
     }
@@ -711,11 +703,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       { purchasesCents: number; purchaseCount: number; tipsCents: number; tipCount: number; totalSpentCents: number }
     > = {};
     try {
-      let orderDocs = await db.collection("orders").limit(10000).get();
+      let orderDocs;
       try {
         orderDocs = await db.collection("orders").orderBy("createdAt", "desc").limit(10000).get();
       } catch {
         // Fallback to unsorted read when createdAt index/orderBy isn't available.
+        orderDocs = await db.collection("orders").limit(10000).get();
       }
       orderDocs.docs.forEach((docSnap) => {
         const d = docSnap.data() as Record<string, unknown>;
