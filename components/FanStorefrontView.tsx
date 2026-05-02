@@ -249,11 +249,12 @@ function parseFanMemberProfileFromUserDoc(
   const lastName =
     (typeof d.lastName === "string" && d.lastName.trim()) ||
     (displayNameRaw.includes(" ") ? displayNameRaw.split(/\s+/).slice(1).join(" ") : "");
-  const photoURL =
-    (typeof d.photoURL === "string" && d.photoURL.trim()) ||
-    (typeof d.avatar === "string" && d.avatar.trim()) ||
-    authPhotoURL ||
-    "";
+  const hasStoredPhotoField = Object.prototype.hasOwnProperty.call(d, "photoURL") || Object.prototype.hasOwnProperty.call(d, "avatar");
+  const photoURL = hasStoredPhotoField
+    ? ((typeof d.photoURL === "string" && d.photoURL.trim()) ||
+        (typeof d.avatar === "string" && d.avatar.trim()) ||
+        "")
+    : authPhotoURL || "";
   const username =
     (typeof d.username === "string" && d.username.trim())
       ? normalizeMemberUsername(d.username)
@@ -951,6 +952,10 @@ function buildPublicCheckoutUrl(pathname: string, search = "", hash = ""): strin
 /** Merge query params then append Stripe's literal `{CHECKOUT_SESSION_ID}` (URLSearchParams encodes `{}` and breaks substitution). */
 function buildMemberCheckoutSuccessSearch(currentSearch: string) {
   const p = new URLSearchParams(currentSearch.startsWith("?") ? currentSearch.slice(1) : currentSearch);
+  // A stale guest-checkout marker would route the return through the guest claim flow
+  // instead of the signed-in member sync that writes orders/entitlements.
+  p.delete("treat_success");
+  p.delete("checkout_cancel");
   p.set("purchase_sync", "1");
   const enc = p.toString();
   return enc ? `${enc}&session_id={CHECKOUT_SESSION_ID}` : `purchase_sync=1&session_id={CHECKOUT_SESSION_ID}`;
@@ -1183,6 +1188,7 @@ export const FanStorefrontView: React.FC = () => {
   const [fanPurchasesLoadingMore, setFanPurchasesLoadingMore] = useState(false);
   const [fanPurchasesQueryLimit, setFanPurchasesQueryLimit] = useState(80);
   const [fanPurchasesHasMore, setFanPurchasesHasMore] = useState(false);
+  const [fanPurchasesRefreshNonce, setFanPurchasesRefreshNonce] = useState(0);
   const memberPurchasesCompactStorageKey = useMemo(() => {
     const uid = fanAuthUid;
     const cid = creator?.creatorId;
@@ -1250,6 +1256,7 @@ export const FanStorefrontView: React.FC = () => {
   );
   const dmMessagesListRef = useRef<HTMLDivElement | null>(null);
   const dmAutoStickToBottomRef = useRef(true);
+  const dmForceScrollBottomRef = useRef(false);
   /** After foreground fetch the list mounts with scrollTop 0; `dmIsNearBottom` is false until we pin once. */
   const dmScrollBottomAfterForegroundLoadRef = useRef(false);
   const dmComposerFocusedRef = useRef(false);
@@ -1344,7 +1351,7 @@ export const FanStorefrontView: React.FC = () => {
     (dmPremiumSessionLive ||
       fanLiveChatSessionForThisCreator ||
       Boolean(dmPreferredSessionId?.trim()));
-  const memberMessagesTabBadgeCount = memberSuppressDmNotifications ? 0 : unreadMessageTabCount;
+  const memberMessagesTabBadgeCount = activeTab === "messages" || memberSuppressDmNotifications ? 0 : unreadMessageTabCount;
 
   const storefrontVisualScore = useCallback((data: Record<string, unknown> | null | undefined): number => {
     if (!data) return -1;
@@ -1429,7 +1436,7 @@ export const FanStorefrontView: React.FC = () => {
     const uid = auth.currentUser?.uid;
     if (activeTab !== "messages" || !uid || !creator?.creatorId) return;
     void clearNewMessageNotificationBadge(uid, creator.creatorId);
-  }, [activeTab, creator?.creatorId]);
+  }, [activeTab, creator?.creatorId, unreadMessageTabCount]);
 
   useEffect(() => {
     const parsed = parseHandleFromPath();
@@ -2373,11 +2380,11 @@ export const FanStorefrontView: React.FC = () => {
   useEffect(() => {
     if (typeof window === "undefined" || !creator?.creatorId || !isLoggedIn || !auth.currentUser) return;
     const params = new URLSearchParams(window.location.search);
-    if (params.get("treat_success") === "1") return;
     const sid = params.get("session_id");
     const purchaseSync = params.get("purchase_sync") === "1";
     const postUnlock = params.get("post_unlock") === "1";
     const liveStreamTicket = params.get("live_stream_ticket") === "1";
+    if (params.get("treat_success") === "1" && !purchaseSync && !postUnlock && !liveStreamTicket) return;
     if (!sid || (!purchaseSync && !postUnlock && !liveStreamTicket)) return;
 
     let cancelled = false;
@@ -2437,12 +2444,14 @@ export const FanStorefrontView: React.FC = () => {
           return;
         }
         await refetchMemberEntitlement();
+        setFanPurchasesRefreshNonce((n) => n + 1);
         const url = new URL(window.location.href);
         url.searchParams.delete("session_id");
         url.searchParams.delete("purchase_sync");
         url.searchParams.delete("post_unlock");
         url.searchParams.delete("live_stream_ticket");
         url.searchParams.delete("tip");
+        url.searchParams.delete("treat_success");
         const qs = url.searchParams.toString();
         window.history.replaceState({}, "", url.pathname + (qs ? `?${qs}` : "") + (url.hash || ""));
       } catch (e) {
@@ -2686,7 +2695,7 @@ export const FanStorefrontView: React.FC = () => {
     if (activeTab === "purchases" && isLoggedIn && creator?.creatorId) {
       void fetchFanPurchases(FAN_MEMBER_PURCHASES_PAGE, "initial");
     }
-  }, [activeTab, creator?.creatorId, fetchFanPurchases, isLoggedIn]);
+  }, [activeTab, creator?.creatorId, fanPurchasesRefreshNonce, fetchFanPurchases, isLoggedIn]);
 
   /** True when the signed-in Firebase user is this page's creator (handles legacy compound creatorId). */
   const isViewingOwnStorefront =
@@ -3286,8 +3295,8 @@ export const FanStorefrontView: React.FC = () => {
           displayName,
           bio: deleteField(),
           memberBio: deleteField(),
-          photoURL: profileDraft.photoURL || null,
-          avatar: profileDraft.photoURL || null,
+          photoURL: profileDraft.photoURL || "",
+          avatar: profileDraft.photoURL || "",
           updatedAt: new Date().toISOString(),
         },
         { merge: true }
@@ -3499,7 +3508,15 @@ export const FanStorefrontView: React.FC = () => {
         if (gen !== dmThreadFetchGen.current) return;
         const msgData = await msgRes.json().catch(() => ({}));
         const incomingMsgs = Array.isArray(msgData.messages) ? (msgData.messages as FanDmMessage[]) : [];
-        setDmMessages((prev) => (fanDmMessagesEqualish(prev, incomingMsgs) ? prev : incomingMsgs));
+        const shouldPinAfterUpdate =
+          dmScrollBottomAfterForegroundLoadRef.current ||
+          dmAutoStickToBottomRef.current ||
+          dmIsNearBottom(dmMessagesListRef.current);
+        setDmMessages((prev) => {
+          if (fanDmMessagesEqualish(prev, incomingMsgs)) return prev;
+          if (shouldPinAfterUpdate) dmForceScrollBottomRef.current = true;
+          return incomingMsgs;
+        });
         if (msgRes.ok) {
           setDmHasMoreOlder((msgData as { hasMoreOlder?: boolean }).hasMoreOlder === true);
           if (typeof opts?.messageLimit === "number") setDmMessageLimit(messageLimit);
@@ -3695,14 +3712,21 @@ export const FanStorefrontView: React.FC = () => {
       if (dmScrollBottomAfterForegroundLoadRef.current) dmScrollBottomAfterForegroundLoadRef.current = false;
       return;
     }
-    if (dmComposerFocusedRef.current) return;
-
     if (dmScrollBottomAfterForegroundLoadRef.current) {
       dmScrollBottomAfterForegroundLoadRef.current = false;
       listEl.scrollTop = listEl.scrollHeight;
       dmAutoStickToBottomRef.current = true;
       return;
     }
+
+    if (dmForceScrollBottomRef.current) {
+      dmForceScrollBottomRef.current = false;
+      listEl.scrollTop = listEl.scrollHeight;
+      dmAutoStickToBottomRef.current = true;
+      return;
+    }
+
+    if (dmComposerFocusedRef.current) return;
 
     if (!dmAutoStickToBottomRef.current) return;
     if (!dmIsNearBottom(listEl)) {
@@ -3758,7 +3782,8 @@ export const FanStorefrontView: React.FC = () => {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error((data as { error?: string }).error || "Failed to send");
-      await fetchDmThreadAndMessages();
+      dmForceScrollBottomRef.current = true;
+      await fetchDmThreadAndMessages({ silent: true });
       setDmPendingAttachments([]);
       dmAutoStickToBottomRef.current = true;
       requestAnimationFrame(() => {
@@ -5231,9 +5256,7 @@ export const FanStorefrontView: React.FC = () => {
                       const soldCount = Math.max(0, Number(p.soldCount || 0));
                       const remaining = hasLimit ? Math.max(0, p.quantityLimit! - soldCount) : null;
                       const soldOut = hasLimit && remaining === 0;
-                      const checkoutBusy = purchasingId != null && purchasingId !== "";
-                      const isPurchasingThis =
-                        checkoutBusy && purchasingId === productRowId;
+                      const isPurchasingThis = purchasingId === productRowId;
                       return (
                         <div
                           key={`member-treat-${productRowId}-${index}`}
@@ -5258,7 +5281,7 @@ export const FanStorefrontView: React.FC = () => {
                             ) : (
                               <button
                                 type="button"
-                                disabled={checkoutBusy || soldOut}
+                                disabled={isPurchasingThis || soldOut}
                                 onClick={() => handlePurchase(productRowId)}
                                 className="fan-member-treat-buy"
                                 style={{ backgroundColor: primary }}
@@ -5534,22 +5557,6 @@ export const FanStorefrontView: React.FC = () => {
                                       {timeStr ? (
                                         <div className={`fh-dm-bubble__foot ${isFan ? "fh-dm-bubble__foot--me" : ""}`}>
                                           {timeStr}
-                                          {isFan ? (
-                                            m.read ? (
-                                              <span className="fh-dm-bubble__receipt" title="Creator has seen this">
-                                                {" "}
-                                                — Read
-                                              </span>
-                                            ) : (
-                                              <span
-                                                className="fh-dm-bubble__receipt fh-dm-bubble__receipt--unread"
-                                                title="Not read yet"
-                                              >
-                                                {" "}
-                                                — Unread
-                                              </span>
-                                            )
-                                          ) : null}
                                         </div>
                                       ) : null}
                                     </div>
