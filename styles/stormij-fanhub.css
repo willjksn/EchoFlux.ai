@@ -1806,7 +1806,7 @@ button.feed-card-action-count--clickable:hover {
   background: linear-gradient(180deg, rgba(31, 41, 55, 0.5) 0%, rgba(17, 24, 39, 0.25) 100%);
 }
 
-.feed-card-caption { font-size: 0.95rem; line-height: 1.55; margin: 0.3rem 0; color: #374151; }
+.feed-card-caption { font-size: 0.95rem; line-height: 1.55; margin: 0.3rem 0; color: #374151; white-space: pre-wrap; }
 .feed-card-caption .caption-username { font-weight: 600; margin-right: 0.4rem; color: var(--accent, #6366f1); }
 .dark .feed-card-caption { color: #e5e7eb; }
 .dark .feed-card-caption .caption-username { color: #e8a5c0; }
