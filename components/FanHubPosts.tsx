@@ -438,6 +438,8 @@ export const FanHubPosts: React.FC = () => {
 
   const [showComposer, setShowComposer] = useState(false);
   const [editingPostId, setEditingPostId] = useState<string | null>(null);
+  const editingPostPollRef = useRef<FeedPost["poll"] | null>(null);
+  const editingPostTipGoalRef = useRef<FeedPost["tipGoal"] | null>(null);
   
   // Media state
   const [media, setMedia] = useState<MediaItem[]>([]);
@@ -1598,24 +1600,27 @@ Write 2-4 sentences that are engaging and on-topic.`;
           : undefined;
       const publicMediaUrls = publicMediaUrlsForLockedPost(uploadedUrls, lockedContentForPost);
 
-      // Build post data
-      const postData: Partial<FeedPost> & { creatorId: string; createdAt: ReturnType<typeof serverTimestamp> } = {
+      // Build post data. For edits, do not touch engagement or original publish timestamps.
+      const postData: Record<string, unknown> = {
         creatorId,
         body: caption,
         mediaUrls: publicMediaUrls,
         mediaTypes,
         // Firestore rejects `undefined`; use [] when there is no audio
         audioUrls,
-        likeCount: 0,
-        likedBy: [],
-        comments: [],
         status,
         hideLikeCounts,
         hideComments,
         hideLikes,
         showTipButton,
-        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
       };
+      if (!editingPostId) {
+        postData.likeCount = 0;
+        postData.likedBy = [];
+        postData.comments = [];
+        postData.createdAt = serverTimestamp();
+      }
       
       // Add calendar fields for all posts (for calendar view)
       (postData as Record<string, unknown>).calendarDate = calendarDate;
@@ -1626,22 +1631,33 @@ Write 2-4 sentences that are engaging and on-topic.`;
         (postData as Record<string, unknown>).scheduledAt = scheduledDateTime;
       }
       
-      if (status === "published") {
-        (postData as Record<string, unknown>).publishedAt = new Date();
+      if (status === "published" && !editingPostId) {
+        postData.publishedAt = new Date();
       }
       
       // Locked content
       if (lockedContentForPost) {
-        (postData as Record<string, unknown>).lockedContent = lockedContentForPost;
+        postData.lockedContent = lockedContentForPost;
+      } else if (editingPostId) {
+        postData.lockedContent = deleteField();
       }
       
       // Poll
       if (!liveStreamPromoEnabled && pollEnabled && pollQuestion.trim() && pollOptions.filter((o) => o.trim()).length >= 2) {
+        const cleanOptions = pollOptions.filter((o) => o.trim());
+        const previousPoll = editingPostId ? editingPostPollRef.current : null;
+        const previousVotes = Array.isArray(previousPoll?.optionVotes) ? previousPoll.optionVotes : [];
         postData.poll = {
           question: pollQuestion,
-          options: pollOptions.filter((o) => o.trim()),
-          optionVotes: pollOptions.filter((o) => o.trim()).map(() => 0),
+          options: cleanOptions,
+          optionVotes: cleanOptions.map((option, index) =>
+            previousPoll?.options?.[index]?.trim() === option.trim()
+              ? Math.max(0, Math.round(Number(previousVotes[index] || 0)))
+              : 0
+          ),
         };
+      } else if (editingPostId) {
+        postData.poll = deleteField();
       }
 
       // Tip Goal
@@ -1649,8 +1665,12 @@ Write 2-4 sentences that are engaging and on-topic.`;
         postData.tipGoal = {
           description: tipGoalDescription,
           targetCents: Math.round(parseFloat(tipGoalAmount) * 100),
-          raisedCents: 0,
+          raisedCents: editingPostId
+            ? Math.max(0, Math.round(Number(editingPostTipGoalRef.current?.raisedCents || 0)))
+            : 0,
         };
+      } else if (editingPostId) {
+        postData.tipGoal = deleteField();
       }
       
       // Text Overlay
@@ -1837,6 +1857,8 @@ Write 2-4 sentences that are engaging and on-topic.`;
     setLiveStreamBroadcast(null);
     setLiveStreamDailyBusy(false);
     liveStreamPreserveRef.current = null;
+    editingPostPollRef.current = null;
+    editingPostTipGoalRef.current = null;
     setEditingPostId(null);
   };
 
@@ -1897,6 +1919,7 @@ Write 2-4 sentences that are engaging and on-topic.`;
         : 0
     );
     setPollEnabled(!!post.poll);
+    editingPostPollRef.current = post.poll || null;
     setPollQuestion(post.poll?.question || "");
     setPollOptions(
       Array.isArray(post.poll?.options) && post.poll.options.length >= 2
@@ -1904,6 +1927,7 @@ Write 2-4 sentences that are engaging and on-topic.`;
         : ["", ""]
     );
     setTipGoalEnabled(!!post.tipGoal);
+    editingPostTipGoalRef.current = post.tipGoal || null;
     setTipGoalDescription(post.tipGoal?.description || "");
     setTipGoalAmount(
       typeof post.tipGoal?.targetCents === "number" && Number.isFinite(post.tipGoal.targetCents)

@@ -469,6 +469,96 @@ const FONT_FAMILY_OPTIONS: { value: string; label: string; style: string }[] = [
   { value: 'Fira Code, monospace', label: 'Fira Code', style: 'font-family: Fira Code, monospace' },
 ];
 
+type EyeDropperConstructor = new () => {
+  open: () => Promise<{ sRGBHex: string }>;
+};
+
+function getBrowserEyeDropper(): EyeDropperConstructor | null {
+  if (typeof window === "undefined") return null;
+  return ((window as unknown as { EyeDropper?: EyeDropperConstructor }).EyeDropper) ?? null;
+}
+
+function safeHexColor(value: string | undefined, fallback: string): string {
+  const clean = typeof value === "string" ? value.trim() : "";
+  return /^#[0-9a-fA-F]{6}$/.test(clean) ? clean : fallback;
+}
+
+const ColorPickerWithDropper: React.FC<{
+  value?: string;
+  defaultColor: string;
+  onChange: (value: string | undefined) => void;
+  placeholder?: string;
+  allowClear?: boolean;
+}> = ({ value, defaultColor, onChange, placeholder = "#000000", allowClear = false }) => {
+  const [eyeDropperAvailable, setEyeDropperAvailable] = useState(false);
+  const [dropperError, setDropperError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setEyeDropperAvailable(!!getBrowserEyeDropper());
+  }, []);
+
+  const pickColor = async () => {
+    const EyeDropper = getBrowserEyeDropper();
+    if (!EyeDropper) {
+      setDropperError("Eyedropper is not available in this browser.");
+      return;
+    }
+    setDropperError(null);
+    try {
+      const result = await new EyeDropper().open();
+      if (result?.sRGBHex) onChange(result.sRGBHex);
+    } catch (error) {
+      const name = error instanceof DOMException ? error.name : "";
+      if (name !== "AbortError") setDropperError("Could not pick a color. Try again.");
+    }
+  };
+
+  return (
+    <div className="space-y-1">
+      <div className="flex items-center gap-2">
+        <input
+          type="color"
+          value={safeHexColor(value, defaultColor)}
+          onChange={(e) => onChange(e.target.value)}
+          className="w-8 h-8 rounded cursor-pointer border border-gray-300 dark:border-gray-600 flex-shrink-0"
+        />
+        <input
+          type="text"
+          value={value || ""}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder={placeholder}
+          className="flex-1 min-w-0 px-2 py-1 text-xs border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+        />
+        <button
+          type="button"
+          onClick={() => void pickColor()}
+          disabled={!eyeDropperAvailable}
+          className="h-8 w-8 inline-flex items-center justify-center rounded border border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed flex-shrink-0"
+          title={eyeDropperAvailable ? "Pick exact color from the page" : "Eyedropper is not available in this browser"}
+          aria-label="Pick exact color from the page"
+        >
+          <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M15 5l4 4" />
+            <path d="M13 7l4 4-8.5 8.5H4.5V15.5L13 7z" />
+            <path d="M14 4l6 6" />
+          </svg>
+        </button>
+        {allowClear && value && (
+          <button
+            type="button"
+            onClick={() => onChange(undefined)}
+            className="text-xs text-gray-500 hover:text-red-500 flex-shrink-0"
+            title="Reset to default"
+          >
+            x
+          </button>
+        )}
+      </div>
+      {dropperError ? <p className="text-[11px] text-amber-600 dark:text-amber-400">{dropperError}</p> : null}
+    </div>
+  );
+};
+
 // Text style controls component
 const TextStyleControls: React.FC<{
   style?: TextStyle;
@@ -607,31 +697,12 @@ const TextStyleControls: React.FC<{
               {/* Color */}
               <div>
                 <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Color</label>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="color"
-                    value={style?.color || '#000000'}
-                    onChange={(e) => onChange({ ...style, color: e.target.value })}
-                    className="w-8 h-8 rounded cursor-pointer border border-gray-300 dark:border-gray-600"
-                  />
-                  <input
-                    type="text"
-                    value={style?.color || ''}
-                    onChange={(e) => onChange({ ...style, color: e.target.value })}
-                    placeholder="#000000"
-                    className="flex-1 px-2 py-1 text-xs border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                  />
-                  {style?.color && (
-                    <button
-                      type="button"
-                      onClick={() => onChange({ ...style, color: undefined })}
-                      className="text-xs text-gray-500 hover:text-red-500"
-                      title="Reset to default"
-                    >
-                      ✕
-                    </button>
-                  )}
-                </div>
+                <ColorPickerWithDropper
+                  value={style?.color}
+                  defaultColor="#000000"
+                  onChange={(color) => onChange({ ...style, color })}
+                  allowClear
+                />
               </div>
               {/* Italic — optional; default is normal/upright */}
               <div>
@@ -3139,108 +3210,66 @@ export const MyPageBuilder: React.FC = () => {
                   <p className="text-[10px] text-gray-400 dark:text-gray-500 mb-1.5">
                     Buttons, links & accents — choosing a color fills hover, background, text, and borders to match
                   </p>
-                  <div className="flex items-center gap-2 mt-auto">
-                    <input
-                      type="color"
+                  <div className="mt-auto">
+                    <ColorPickerWithDropper
                       value={draft.theme?.primary ?? DEFAULT_THEME.primary}
-                      onChange={(e) => updateTheme({ primary: e.target.value })}
-                      className="w-8 h-8 rounded border border-gray-300 dark:border-gray-600 cursor-pointer flex-shrink-0"
-                    />
-                    <input
-                      type="text"
-                      value={draft.theme?.primary ?? DEFAULT_THEME.primary}
-                      onChange={(e) => updateTheme({ primary: e.target.value })}
-                      className="flex-1 min-w-0 px-2 py-1 text-xs border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                      defaultColor={DEFAULT_THEME.primary}
+                      onChange={(color) => updateTheme({ primary: color || DEFAULT_THEME.primary })}
                     />
                   </div>
                 </div>
                 <div className="min-h-[72px] flex flex-col">
                   <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-0.5" title="Color for buttons and links when hovered">Accent Hover</label>
                   <p className="text-[10px] text-gray-400 dark:text-gray-500 mb-1.5">Buttons & links on hover</p>
-                  <div className="flex items-center gap-2 mt-auto">
-                    <input
-                      type="color"
+                  <div className="mt-auto">
+                    <ColorPickerWithDropper
                       value={draft.theme?.accentHover ?? DEFAULT_THEME.accentHover}
-                      onChange={(e) => updateTheme({ accentHover: e.target.value })}
-                      className="w-8 h-8 rounded border border-gray-300 dark:border-gray-600 cursor-pointer flex-shrink-0"
-                    />
-                    <input
-                      type="text"
-                      value={draft.theme?.accentHover ?? DEFAULT_THEME.accentHover}
-                      onChange={(e) => updateTheme({ accentHover: e.target.value })}
-                      className="flex-1 min-w-0 px-2 py-1 text-xs border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                      defaultColor={DEFAULT_THEME.accentHover}
+                      onChange={(color) => updateTheme({ accentHover: color || DEFAULT_THEME.accentHover })}
                     />
                   </div>
                 </div>
                 <div className="min-h-[72px] flex flex-col">
                   <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-0.5" title="Page and card background">Background</label>
                   <p className="text-[10px] text-gray-400 dark:text-gray-500 mb-1.5">Page & card background</p>
-                  <div className="flex items-center gap-2 mt-auto">
-                    <input
-                      type="color"
+                  <div className="mt-auto">
+                    <ColorPickerWithDropper
                       value={draft.theme?.background ?? DEFAULT_THEME.background}
-                      onChange={(e) => updateTheme({ background: e.target.value })}
-                      className="w-8 h-8 rounded border border-gray-300 dark:border-gray-600 cursor-pointer flex-shrink-0"
-                    />
-                    <input
-                      type="text"
-                      value={draft.theme?.background ?? DEFAULT_THEME.background}
-                      onChange={(e) => updateTheme({ background: e.target.value })}
-                      className="flex-1 min-w-0 px-2 py-1 text-xs border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                      defaultColor={DEFAULT_THEME.background}
+                      onChange={(color) => updateTheme({ background: color || DEFAULT_THEME.background })}
                     />
                   </div>
                 </div>
                 <div className="min-h-[72px] flex flex-col">
                   <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-0.5" title="Main body text color">Text</label>
                   <p className="text-[10px] text-gray-400 dark:text-gray-500 mb-1.5">Main body text</p>
-                  <div className="flex items-center gap-2 mt-auto">
-                    <input
-                      type="color"
+                  <div className="mt-auto">
+                    <ColorPickerWithDropper
                       value={draft.theme?.text ?? DEFAULT_THEME.text}
-                      onChange={(e) => updateTheme({ text: e.target.value })}
-                      className="w-8 h-8 rounded border border-gray-300 dark:border-gray-600 cursor-pointer flex-shrink-0"
-                    />
-                    <input
-                      type="text"
-                      value={draft.theme?.text ?? DEFAULT_THEME.text}
-                      onChange={(e) => updateTheme({ text: e.target.value })}
-                      className="flex-1 min-w-0 px-2 py-1 text-xs border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                      defaultColor={DEFAULT_THEME.text}
+                      onChange={(color) => updateTheme({ text: color || DEFAULT_THEME.text })}
                     />
                   </div>
                 </div>
                 <div className="min-h-[72px] flex flex-col">
                   <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-0.5" title="Secondary text for captions and hints">Muted Text</label>
                   <p className="text-[10px] text-gray-400 dark:text-gray-500 mb-1.5">Secondary text (captions, hints)</p>
-                  <div className="flex items-center gap-2 mt-auto">
-                    <input
-                      type="color"
+                  <div className="mt-auto">
+                    <ColorPickerWithDropper
                       value={draft.theme?.textMuted ?? DEFAULT_THEME.textMuted}
-                      onChange={(e) => updateTheme({ textMuted: e.target.value })}
-                      className="w-8 h-8 rounded border border-gray-300 dark:border-gray-600 cursor-pointer flex-shrink-0"
-                    />
-                    <input
-                      type="text"
-                      value={draft.theme?.textMuted ?? DEFAULT_THEME.textMuted}
-                      onChange={(e) => updateTheme({ textMuted: e.target.value })}
-                      className="flex-1 min-w-0 px-2 py-1 text-xs border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                      defaultColor={DEFAULT_THEME.textMuted}
+                      onChange={(color) => updateTheme({ textMuted: color || DEFAULT_THEME.textMuted })}
                     />
                   </div>
                 </div>
                 <div className="min-h-[72px] flex flex-col">
                   <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-0.5" title="Dividers and card outlines">Border</label>
                   <p className="text-[10px] text-gray-400 dark:text-gray-500 mb-1.5">Dividers & card outlines</p>
-                  <div className="flex items-center gap-2 mt-auto">
-                    <input
-                      type="color"
+                  <div className="mt-auto">
+                    <ColorPickerWithDropper
                       value={draft.theme?.border ?? DEFAULT_THEME.border}
-                      onChange={(e) => updateTheme({ border: e.target.value })}
-                      className="w-8 h-8 rounded border border-gray-300 dark:border-gray-600 cursor-pointer flex-shrink-0"
-                    />
-                    <input
-                      type="text"
-                      value={draft.theme?.border ?? DEFAULT_THEME.border}
-                      onChange={(e) => updateTheme({ border: e.target.value })}
-                      className="flex-1 min-w-0 px-2 py-1 text-xs border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                      defaultColor={DEFAULT_THEME.border}
+                      onChange={(color) => updateTheme({ border: color || DEFAULT_THEME.border })}
                     />
                   </div>
                 </div>
