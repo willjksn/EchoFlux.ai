@@ -427,6 +427,26 @@ function getSocialIconStyle(key: string, fallback: string): React.CSSProperties 
   }
 }
 
+/** Digits + optional single `.` + up to 2 decimals — avoids `type="number"` browser chrome in pills. */
+function sanitizeTipUsdDraft(raw: string): string {
+  let out = "";
+  let dotSeen = false;
+  let fracLen = 0;
+  for (const ch of raw) {
+    if (ch >= "0" && ch <= "9") {
+      if (dotSeen) {
+        if (fracLen >= 2) continue;
+        fracLen++;
+      }
+      out += ch;
+    } else if (ch === "." && !dotSeen) {
+      dotSeen = true;
+      out += ".";
+    }
+  }
+  return out;
+}
+
 export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
   config,
   previewMode,
@@ -1933,20 +1953,28 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
                 <p className="text-xs mb-2" style={{ color: landingFaint }}>
                   Or enter an amount (USD)
                 </p>
-                <div className="flex gap-2 max-w-[280px] mx-auto">
-                  <div className="flex-1 flex items-center overflow-hidden rounded-full border-2 px-3" style={{ borderColor: `${primary}40` }}>
-                    <span className="text-sm font-medium" style={{ color: landingFaint }}>
+                <div className="flex gap-2 max-w-[280px] mx-auto items-center justify-center">
+                  <div className="relative shrink-0 w-[168px]">
+                    <span
+                      className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-medium pointer-events-none select-none z-[1]"
+                      style={{ color: landingFaint }}
+                      aria-hidden
+                    >
                       $
                     </span>
                     <input
-                      type="number"
+                      type="text"
                       inputMode="decimal"
-                      className="flex-1 min-w-0 py-2 px-1 text-sm bg-transparent border-0 shadow-none outline-none ring-0 focus:border-0 focus:outline-none focus:ring-0 focus-visible:outline-none [-moz-appearance:textfield] [&::-webkit-outer-spin-button]:[-webkit-appearance:none] [&::-webkit-outer-spin-button]:m-0 [&::-webkit-inner-spin-button]:[-webkit-appearance:none] [&::-webkit-inner-spin-button]:m-0"
+                      autoComplete="off"
+                      spellCheck={false}
+                      aria-label="Custom tip amount in USD"
+                      className="w-full min-w-0 text-sm rounded-lg border px-3 py-2 pl-7 tabular-nums"
                       placeholder="e.g. 25"
                       value={live ? live.tipCustomAmount : tipAmount}
-                      onChange={(e) =>
-                        live ? live.onTipCustomAmountChange(e.target.value) : setTipAmount(e.target.value)
-                      }
+                      onChange={(e) => {
+                        const v = sanitizeTipUsdDraft(e.target.value);
+                        live ? live.onTipCustomAmountChange(v) : setTipAmount(v);
+                      }}
                       onKeyDown={
                         live
                           ? (e) => {
@@ -1957,7 +1985,11 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
                             }
                           : undefined
                       }
-                      style={{ color: landingPageText }}
+                      style={{
+                        borderColor: `${primary}30`,
+                        color: landingPageText,
+                        ...(fanDark ? { background: "rgba(255,255,255,0.06)" } : {}),
+                      }}
                       disabled={live ? live.tipLoading : false}
                     />
                   </div>
