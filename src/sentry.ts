@@ -42,6 +42,9 @@ export function initSentry() {
       "Network request failed",
       "Failed to fetch",
       "Load failed",
+      // Stale tab after deploy: chunk URL returns SPA HTML (auto-reload in index.tsx)
+      "Failed to fetch dynamically imported module",
+      "'text/html' is not a valid JavaScript MIME type",
       // Firebase errors that are expected
       "auth/popup-closed-by-user",
       "auth/cancelled-popup-request",

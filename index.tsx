@@ -59,6 +59,41 @@ import './styles/fan-landing-feed.css';
   proto.__echofluxPatchedRemoveChild = true;
 })();
 
+/** Max automatic reloads when a stale tab requests JS chunks removed by a new deploy (SPA serves HTML → MIME error). */
+const CHUNK_RECOVER_ATTEMPTS_KEY = 'echoflux:chunk-recover-attempts';
+
+(() => {
+  if (typeof window === 'undefined') return;
+
+  function shouldRecover(reason: unknown): boolean {
+    const msg = String((reason as Error)?.message ?? (typeof reason === 'string' ? reason : ''));
+    const name = String((reason as Error)?.name ?? '');
+    const blob = `${name} ${msg}`;
+    return (
+      blob.includes('MIME type') ||
+      blob.includes('Failed to fetch dynamically imported module') ||
+      blob.includes('Importing a module script failed')
+    );
+  }
+
+  function tryRecover(reason: unknown): boolean {
+    if (!shouldRecover(reason)) return false;
+    try {
+      const n = Number(sessionStorage.getItem(CHUNK_RECOVER_ATTEMPTS_KEY) || '0');
+      if (n >= 2) return false;
+      sessionStorage.setItem(CHUNK_RECOVER_ATTEMPTS_KEY, String(n + 1));
+    } catch {
+      return false;
+    }
+    queueMicrotask(() => window.location.reload());
+    return true;
+  }
+
+  window.addEventListener('unhandledrejection', (e) => {
+    if (tryRecover(e.reason)) e.preventDefault();
+  });
+})();
+
 function MissingFirebaseEnv() {
   return (
     <div
