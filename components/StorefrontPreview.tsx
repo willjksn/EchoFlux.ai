@@ -1934,13 +1934,14 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
                   Or enter an amount (USD)
                 </p>
                 <div className="flex gap-2 max-w-[280px] mx-auto">
-                  <div className="flex-1 flex items-center rounded-full border-2 px-3" style={{ borderColor: `${primary}40` }}>
+                  <div className="flex-1 flex items-center overflow-hidden rounded-full border-2 px-3" style={{ borderColor: `${primary}40` }}>
                     <span className="text-sm font-medium" style={{ color: landingFaint }}>
                       $
                     </span>
                     <input
                       type="number"
-                      className="flex-1 py-2 px-1 text-sm bg-transparent outline-none"
+                      inputMode="decimal"
+                      className="flex-1 min-w-0 py-2 px-1 text-sm bg-transparent border-0 shadow-none outline-none ring-0 focus:border-0 focus:outline-none focus:ring-0 focus-visible:outline-none [-moz-appearance:textfield] [&::-webkit-outer-spin-button]:[-webkit-appearance:none] [&::-webkit-outer-spin-button]:m-0 [&::-webkit-inner-spin-button]:[-webkit-appearance:none] [&::-webkit-inner-spin-button]:m-0"
                       placeholder="e.g. 25"
                       value={live ? live.tipCustomAmount : tipAmount}
                       onChange={(e) =>
