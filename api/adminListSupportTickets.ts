@@ -3,14 +3,6 @@ import { verifyAuth } from "./verifyAuth.js";
 import { getAdminDb } from "./_firebaseAdmin.js";
 import { hasPlatformAdminAccess } from "./_platformAdminAccess.js";
 
-function hasPlatformAdminAccess(userData: Record<string, unknown> | undefined): boolean {
-  if (!userData) return false;
-  const role = typeof userData.role === "string" ? userData.role.trim().toLowerCase() : "";
-  if (role === "admin" || role === "superadmin" || role === "owner") return true;
-  if (userData.isAdmin === true || userData.isSuperAdmin === true || userData.isOwner === true) return true;
-  return false;
-}
-
 function updatedAtToMs(v: unknown): number {
   if (v == null) return 0;
   if (typeof (v as { toDate?: () => Date }).toDate === "function") {

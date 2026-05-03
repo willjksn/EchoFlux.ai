@@ -1,6 +1,7 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { getAdminDb } from "./_firebaseAdmin.js";
 import { verifyAuth } from "./verifyAuth.js";
+import { enforceRateLimit } from "./_rateLimit.js";
 import { FAN_DM_THREADS } from "./_fanDmHelpers.js";
 import { resolveFanPartyDisplayLabel } from "./_fanDmLabels.js";
 
@@ -29,6 +30,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (!decoded?.uid) {
     return res.status(401).json({ error: "Unauthorized" });
   }
+
+  const rlOk = await enforceRateLimit({
+    req,
+    res,
+    keyPrefix: "fanDmThreads",
+    limit: 60,
+    windowMs: 60_000,
+    identifier: decoded.uid,
+  });
+  if (!rlOk) return;
 
   const as = (req.query.as as string) || "fan"; // "fan" | "creator"
   const uid = decoded.uid;

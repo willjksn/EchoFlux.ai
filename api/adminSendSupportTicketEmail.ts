@@ -5,14 +5,6 @@ import { hasPlatformAdminAccess } from "./_platformAdminAccess.js";
 import { sendEmail, isMailerConfigured } from "./_mailer.js";
 import { logEmailHistory } from "./_emailHistory.js";
 
-function hasPlatformAdminAccess(userData: Record<string, unknown> | undefined): boolean {
-  if (!userData) return false;
-  const role = typeof userData.role === "string" ? userData.role.trim().toLowerCase() : "";
-  if (role === "admin" || role === "superadmin" || role === "owner") return true;
-  if (userData.isAdmin === true || userData.isSuperAdmin === true || userData.isOwner === true) return true;
-  return false;
-}
-
 function messageTimeMs(data: Record<string, unknown>): number {
   const c = data.createdAt;
   if (c && typeof (c as { toDate?: () => Date }).toDate === "function") {

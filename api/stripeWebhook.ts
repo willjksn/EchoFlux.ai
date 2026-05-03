@@ -964,15 +964,20 @@ async function processFanHubSubscriptionUpdated(
     { merge: true },
   );
 
+  const stripeCustomerId = stripeRefId(subscription.customer);
   const fanRef = db.collection('creators').doc(creatorId).collection('fans').doc(fanId);
   const fanSnap = await fanRef.get();
   if (fanSnap.exists) {
-    await fanRef.update({
+    const fanPatch: Record<string, unknown> = {
       subscriptionStatus: subStatus,
       cancelAtPeriodEnd,
       subscriptionCurrentPeriodEnd,
       updatedAt: now,
-    });
+    };
+    if (stripeCustomerId && stripeCustomerId.startsWith('cus_')) {
+      fanPatch.stripeCustomerId = stripeCustomerId;
+    }
+    await fanRef.update(fanPatch as any);
     try {
       await reconcileFanHubFanPreferenceForMember(db, creatorId, fanId, now, 'stripe_subscription_updated');
     } catch (e) {

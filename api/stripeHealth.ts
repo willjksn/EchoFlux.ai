@@ -48,6 +48,11 @@ export default function handler(req: VercelRequest, res: VercelResponse) {
       webhookSecretConfigured: !!process.env.STRIPE_WEBHOOK_SECRET,
       connectWebhookSecretConfigured: !!process.env.STRIPE_CONNECT_WEBHOOK_SECRET,
       appUrlConfigured: !!process.env.NEXT_PUBLIC_APP_URL,
+      /** Connect Fan Hub subscriptions need their own signing secret if events are delivered as Connect webhooks. */
+      connectWebhookRecommended:
+        !!stripe &&
+        !!process.env.STRIPE_WEBHOOK_SECRET &&
+        !process.env.STRIPE_CONNECT_WEBHOOK_SECRET,
     },
     hint:
       !stripe && useTestMode
@@ -55,8 +60,8 @@ export default function handler(req: VercelRequest, res: VercelResponse) {
         : !stripe && !useTestMode
           ? "Live mode: set STRIPE_SECRET_KEY_LIVE (or STRIPE_SECRET_KEY) to sk_live_..."
           : !process.env.STRIPE_WEBHOOK_SECRET
-            ? "Set STRIPE_WEBHOOK_SECRET from Stripe Dashboard → Webhooks → signing secret."
-            : useTestMode && activeKeyKind === "sk_live"
+          ? "Set STRIPE_WEBHOOK_SECRET from Stripe Dashboard → Webhooks → signing secret."
+          : useTestMode && activeKeyKind === "sk_live"
               ? "STRIPE_USE_TEST_MODE is true but the active key looks like sk_live_; use sk_test_ or turn off test mode."
               : !useTestMode && activeKeyKind === "sk_test"
                 ? "STRIPE_USE_TEST_MODE is false but the active key looks like sk_test_; use sk_live_ or enable test mode."

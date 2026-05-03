@@ -187,7 +187,7 @@ ${isAdmin ? 'If the user asks about current events, trends, or time-sensitive in
           parts: [{ text: prompt }],
         },
       ],
-      tools: tools,
+      tools: tools as any,
     });
 
     // Handle function calls for admin users

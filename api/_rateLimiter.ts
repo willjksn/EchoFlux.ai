@@ -16,13 +16,15 @@ interface RateLimitStore {
 }
 const rateLimitStore: RateLimitStore = {};
 
-// Initialize Upstash Redis if credentials are available
+// Initialize Upstash Redis if credentials are available.
 let redisClient: Redis | null = null;
-let ratelimit: Ratelimit | null = null;
+const ratelimitCache = new Map<string, Ratelimit>();
 
-function initRedis() {
-  if (redisClient && ratelimit) {
-    return { redisClient, ratelimit };
+function initRedis(maxRequests: number, windowMs: number) {
+  const cacheKey = `${maxRequests}:${windowMs}`;
+  const cached = ratelimitCache.get(cacheKey);
+  if (redisClient && cached) {
+    return { redisClient, ratelimit: cached };
   }
 
   const upstashUrl = process.env.UPSTASH_REDIS_REST_URL;
@@ -35,12 +37,14 @@ function initRedis() {
         token: upstashToken,
       });
 
-      ratelimit = new Ratelimit({
+      const windowSeconds = Math.max(1, Math.ceil(windowMs / 1000));
+      const ratelimit = new Ratelimit({
         redis: redisClient,
-        limiter: Ratelimit.slidingWindow,
+        limiter: Ratelimit.slidingWindow(maxRequests, `${windowSeconds} s`),
         analytics: true,
       });
 
+      ratelimitCache.set(cacheKey, ratelimit);
       return { redisClient, ratelimit };
     } catch (error) {
       console.warn('Failed to initialize Upstash Redis, falling back to in-memory rate limiting:', error);
@@ -62,16 +66,12 @@ export async function checkRateLimit(
   maxRequests: number = 10,
   windowMs: number = 60000 // 1 minute default
 ): Promise<{ allowed: boolean; remaining: number; resetTime: number }> {
-  const { ratelimit } = initRedis();
+  const { ratelimit } = initRedis(maxRequests, windowMs);
 
   // Use Upstash Redis if available
   if (ratelimit) {
     try {
-      const windowSeconds = Math.floor(windowMs / 1000);
-      const result = await ratelimit.limit(identifier, {
-        rate: maxRequests,
-        window: `${windowSeconds}s`,
-      });
+      const result = await ratelimit.limit(identifier);
 
       const now = Date.now();
       return {
@@ -143,11 +143,11 @@ export function withRateLimit(
   maxRequests: number = 10,
   windowMs: number = 60000
 ) {
-  return (req: any, res: any, next: () => void) => {
+  return async (req: any, res: any, next: () => void) => {
     // Get identifier (user ID if authenticated, IP otherwise)
     const identifier = req.user?.uid || req.headers['x-forwarded-for'] || 'anonymous';
     
-    const rateLimit = checkRateLimit(identifier, maxRequests, windowMs);
+    const rateLimit = await checkRateLimit(identifier, maxRequests, windowMs);
     
     // Add rate limit headers
     Object.entries(getRateLimitHeaders(rateLimit.remaining, rateLimit.resetTime, maxRequests)).forEach(

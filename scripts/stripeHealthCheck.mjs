@@ -35,4 +35,10 @@ if (json.env && !json.env.webhookSecretConfigured) {
   process.exit(1);
 }
 
+if (json.env?.connectWebhookRecommended) {
+  console.warn(
+    "\nNote: STRIPE_CONNECT_WEBHOOK_SECRET is unset. If creators use Stripe Connect checkouts, add the Connect webhook signing secret (same endpoint URL) — see /api/stripeHealth env.connectWebhookRecommended.",
+  );
+}
+
 process.exit(0);

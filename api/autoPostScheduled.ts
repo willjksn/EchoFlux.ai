@@ -12,7 +12,7 @@ import { publishXPost } from "./platforms/x/publish.js";
 export default async function handler(
   req: VercelRequest,
   res: VercelResponse
-): Promise<void> {
+): Promise<VercelResponse | void> {
   if (req.method !== "GET" && req.method !== "POST") {
     res.status(405).json({ error: "Method not allowed" });
     return;
@@ -115,7 +115,7 @@ export default async function handler(
         const result = await publishXPost({
           userId,
           db,
-          socialAccount,
+          socialAccount: socialAccount as any,
           socialAccountRef,
           text: post.content || "",
           mediaUrl: post.mediaUrl,

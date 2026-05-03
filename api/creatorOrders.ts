@@ -582,16 +582,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
               (typeof raw.tipHandle === "string" && raw.tipHandle.trim()) ||
               null,
             fanEmail,
-            scheduleStatus: inferredType === "tip" || inferredType === "subscription"
+            scheduleStatus: inferredType === "tip"
               ? "completed"
               : (typeof raw.scheduleStatus === "string" && raw.scheduleStatus.trim() ? raw.scheduleStatus : "pending"),
-            scheduledDate: inferredType === "tip" || inferredType === "subscription"
+            scheduledDate: inferredType === "tip"
               ? null
               : (typeof raw.scheduledDate === "string" ? raw.scheduledDate : null),
-            scheduledTime: inferredType === "tip" || inferredType === "subscription"
+            scheduledTime: inferredType === "tip"
               ? null
               : (typeof raw.scheduledTime === "string" ? raw.scheduledTime : null),
-            deliveryStatus: inferredType === "tip" || inferredType === "subscription"
+            deliveryStatus: inferredType === "tip"
               ? "delivered"
               : (raw.deliveryStatus === "delivered" ? "delivered" : "pending"),
             deliveryType:

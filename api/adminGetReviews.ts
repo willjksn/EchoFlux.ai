@@ -29,7 +29,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
       snap = { docs } as any;
     }
-    const items = snap.docs.map((doc) => {
+    const items = snap.docs.map((doc: any) => {
       const data = doc.data() as any;
       return {
         id: doc.id,

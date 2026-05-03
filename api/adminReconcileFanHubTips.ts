@@ -18,14 +18,6 @@ type OrderRow = {
   createdAt: string;
 };
 
-function hasPlatformAdminAccess(userData: Record<string, unknown> | undefined): boolean {
-  if (!userData) return false;
-  const role = typeof userData.role === "string" ? userData.role.trim().toLowerCase() : "";
-  if (role === "admin" || role === "superadmin" || role === "owner") return true;
-  if (userData.isAdmin === true || userData.isSuperAdmin === true || userData.isOwner === true) return true;
-  return false;
-}
-
 function createdAtToMs(createdAt: unknown): number {
   if (createdAt == null) return 0;
   if (typeof (createdAt as { toDate?: () => Date }).toDate === "function") {

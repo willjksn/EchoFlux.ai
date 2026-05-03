@@ -99,7 +99,7 @@ function buildPlanPriceIds(flags: StripeModeFlags): Record<string, { monthly: st
   };
 }
 
-export async function runCreateCheckoutSession(req: VercelRequest, res: VercelResponse): Promise<void> {
+export async function runCreateCheckoutSession(req: VercelRequest, res: VercelResponse): Promise<VercelResponse | void> {
   const [{ verifyAuth }, { getAdminDb }, { default: StripeCtor }] = await Promise.all([
     import('./verifyAuth.js'),
     import('./_firebaseAdmin.js'),

@@ -214,7 +214,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       type: currentInterval === targetInterval ? 'upgrade_prorated_preview' : 'upgrade_cross_interval_prorated_preview',
       amount_due: upcoming.amount_due,
       currency: upcoming.currency,
-      lines: (upcoming.lines?.data || []).map((l) => ({
+      lines: (upcoming.lines?.data || []).map((l: any) => ({
         description: l.description,
         amount: l.amount,
         proration: l.proration,
