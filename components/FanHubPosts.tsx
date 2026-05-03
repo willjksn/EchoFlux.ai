@@ -792,7 +792,6 @@ export const FanHubPosts: React.FC = () => {
     const loadSpiciness = async () => {
       if (!user?.id) return;
       try {
-        const userDoc = await getDocs(query(collection(db, "users"), limit(1)));
         const { doc: docRef, getDoc } = await import('firebase/firestore');
         const userDocRef = docRef(db, 'users', user.id);
         const userSnapshot = await getDoc(userDocRef);
@@ -800,6 +799,8 @@ export const FanHubPosts: React.FC = () => {
           const data = userSnapshot.data();
           if (data.explicitnessLevel !== undefined) {
             setContentSpiciness(data.explicitnessLevel);
+          } else if (typeof data.settings?.tone?.spiciness === "number") {
+            setContentSpiciness(Math.max(0, Math.min(10, Math.round(data.settings.tone.spiciness / 10))));
           }
         }
       } catch (error) {

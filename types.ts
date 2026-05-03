@@ -66,6 +66,7 @@ export interface Settings {
       formality: number;
       humor: number;
       empathy: number;
+      /** 0-100: caption flirtiness / boldness / adult edge. */
       spiciness?: number;
       emojiLevel?: number;
       profanity?: number;
@@ -863,6 +864,8 @@ export interface User {
   creatorGoal?: string;
   /** Creator profile line from onboarding / Settings (e.g. Female, Male) */
   creatorGender?: string;
+  /** Legacy Fan Hub scale, 0-10. Kept in sync from settings.tone.spiciness for Fan Hub caption generation. */
+  explicitnessLevel?: number;
   hasCompletedOnboarding?: boolean;
   hasAutopilot?: boolean; 
   notifications: {

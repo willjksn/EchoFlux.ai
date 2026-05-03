@@ -34,6 +34,14 @@ function audienceLabel(audience: CreatorOSSettings["primaryAudience"]): string {
   return "mostly men";
 }
 
+function spicinessPrompt(value: number | undefined): string {
+  const level = Math.max(0, Math.min(100, Math.round(value ?? 30)));
+  if (level < 25) return `Spiciness ${level}/100: keep it clean, useful, and casual.`;
+  if (level < 55) return `Spiciness ${level}/100: add light flirtiness and teasing curiosity, but keep it tasteful.`;
+  if (level < 80) return `Spiciness ${level}/100: make the hook more flirty, confident, and provocative without turning the product shot into explicit sexual content.`;
+  return `Spiciness ${level}/100: use a bold, borderline-explicit edge for captions/overlays where appropriate, while keeping the product shot safe and not graphic.`;
+}
+
 function normalizeUrl(raw: string): string {
   const value = raw.trim();
   if (!value) return "";
@@ -171,6 +179,7 @@ Creator profile:
 - Creator goal: ${creatorProfile?.creatorGoal || "not specified"}
 Creator audience: ${audienceLabel(settings.primaryAudience)}
 Creator tone: ${settings.brandTone || "casual, natural, not salesy"}
+Creator spiciness: ${spicinessPrompt(settings.spicinessLevel)}
 Product: ${productNameForPrompt}
 Product name detected from URL: ${detectedProductName || "none"}
 Product link: ${cleanProductUrl || matchedSavedLink?.amazonUrl || "No product link provided."}
@@ -217,7 +226,7 @@ Rules:
 - Do not mention prices, ratings, shipping, availability, or product claims unless they are explicitly present in the safe public context.
 - Keep it easy: phone camera, normal room/car/desk/bathroom/kitchen setup.
 - No corporate ad language.
-- No explicit sexual content.
+- Match the creator spiciness setting above. Flirty/bold wording is allowed when the setting is high, but do not make the product shot graphic or unsafe.
 - Do not tell her to hold the product like an influencer ad unless that is truly the natural move.
 - Match the shot to the creator profile, not just the product.
 - Make it useful, relaxed, and believable.`,

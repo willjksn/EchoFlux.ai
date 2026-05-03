@@ -475,6 +475,19 @@ export const Settings: React.FC = () => {
 
     const updateToneSetting = <K extends keyof AppSettings['tone']>(key: K, value: AppSettings['tone'][K]) => {
         setSettings(prev => ({ ...prev, tone: { ...prev.tone, [key]: value } }));
+        if (key === 'spiciness' && typeof value === 'number' && user && setUser) {
+            void setUser({
+                ...user,
+                explicitnessLevel: Math.max(0, Math.min(10, Math.round(value / 10))),
+                settings: {
+                    ...settings,
+                    tone: {
+                        ...settings.tone,
+                        spiciness: value,
+                    },
+                },
+            });
+        }
     };
 
     const handleConnectAccount = async (platform: Platform) => {
@@ -1276,17 +1289,13 @@ Return only the rewritten personality description.
                                 description="Low for clean language, high for casual swearing in captions & chat."
                             />
                             
-                            {user && (user.plan === 'Free' || user.plan === 'Caption' || user.plan === 'Pro' || user.plan === 'Elite' || user.plan === 'Agency' || user.role === 'Admin' || !user.plan) && (
-                                <>
-                                    <hr className="border-gray-200 dark:border-gray-700 my-4" />
-                                    <ToneSlider 
-                                        label="Spiciness 🌶️" 
-                                        value={settings.tone.spiciness || 0} 
-                                        onChange={(val) => updateToneSetting('spiciness', val)} 
-                                        description="Control the level of bold or edgy language."
-                                    />
-                                </>
-                            )}
+                            <hr className="border-gray-200 dark:border-gray-700 my-4" />
+                            <ToneSlider
+                                label="Spiciness"
+                                value={settings.tone.spiciness || 0}
+                                onChange={(val) => updateToneSetting('spiciness', val)}
+                                description="Low for clean captions, mid for flirty teasing, high for bold/borderline explicit wording where allowed."
+                            />
                         </SettingsSection>
 
                         {/* Voice Clones section hidden in AI Content Studio mode */}

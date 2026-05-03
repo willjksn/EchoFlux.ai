@@ -73,7 +73,8 @@ export default function CreatorOSPage() {
   const [linkModalOpen, setLinkModalOpen] = useState(false);
   const [editingLink, setEditingLink] = useState<AmazonLink | null>(null);
 
-  const effectiveSettings = settings || defaultCreatorOSSettings();
+  const globalSpiciness = user?.settings?.tone?.spiciness ?? 30;
+  const effectiveSettings = { ...(settings || defaultCreatorOSSettings()), spicinessLevel: globalSpiciness };
 
   const recomputeTodaysMove = useCallback((nextSettings = effectiveSettings, plan = weeklyPlan, links = amazonLinks, trendList = trends) => {
     const move = generateTodaysMove(nextSettings, plan, links, trendList);
@@ -151,11 +152,13 @@ export default function CreatorOSPage() {
   }
 
   const saveSettings = async (next: CreatorOSSettings) => {
-    await saveCreatorOSSettings(uid, next);
-    const plan = generateDefaultWeeklyPlan(next, trends, amazonLinks);
-    const move = generateTodaysMove(next, plan, amazonLinks, trends);
+    const { spicinessLevel: _globalOnly, ...settingsToSave } = next;
+    const withGlobalTone = { ...settingsToSave, spicinessLevel: globalSpiciness };
+    await saveCreatorOSSettings(uid, settingsToSave);
+    const plan = generateDefaultWeeklyPlan(withGlobalTone, trends, amazonLinks);
+    const move = generateTodaysMove(withGlobalTone, plan, amazonLinks, trends);
     await Promise.all([saveWeeklyPlan(uid, plan), saveTodaysMove(uid, move)]);
-    setSettings(next);
+    setSettings(settingsToSave);
     setWeeklyPlan(plan);
     setTodaysMove(move);
     showToast("Creator OS setup saved.", "success");

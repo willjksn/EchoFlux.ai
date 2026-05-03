@@ -422,7 +422,15 @@ export const WhatToPost: React.FC<WhatToPostProps> = ({ onOpenAdvanced }) => {
             tone: s.tone,
             useTrends: true, // Always use trends - integrated into idea generation
             includeTrendContext: true, // Include trend context in response for display
-            spicyMode: s.spicyMode ?? false,
+            spicyMode: (s.spicyMode ?? false) || (user.settings?.tone?.spiciness ?? 0) > 0,
+            toneSettings: {
+              formality: user.settings?.tone?.formality,
+              humor: user.settings?.tone?.humor,
+              empathy: user.settings?.tone?.empathy,
+              spiciness: user.settings?.tone?.spiciness ?? 0,
+              profanity: user.settings?.tone?.profanity,
+              emojiLevel: user.settings?.tone?.emojiLevel,
+            },
             swapId: opts.swapId,
             existingIdeas: opts.existingIdeas,
             // For Instagram, generate one idea per format when format is 'auto'

@@ -38,6 +38,14 @@ function slug(input: string): string {
     .slice(0, 80);
 }
 
+function spicinessTrendNote(raw: unknown): string {
+  const level = typeof raw === "number" && Number.isFinite(raw) ? Math.max(0, Math.min(100, Math.round(raw))) : 30;
+  if (level < 25) return "Keep the angle clean and useful.";
+  if (level < 55) return "Add light flirtiness where natural.";
+  if (level < 80) return "Use a flirty, body-confident angle where it fits.";
+  return "Use a bold, borderline-explicit caption edge only where safe and non-graphic.";
+}
+
 function categoryFromQuery(query: string): string {
   const q = query.toLowerCase();
   if (q.includes("car")) return "Car / Driving";
@@ -101,7 +109,7 @@ export function buildAmazonTrendQueries(settings: {
   ].slice(0, 8);
 }
 
-function trendFromResult(result: WebSearchResult, query: string, audience: PrimaryAudience, index: number): TrendSuggestion {
+function trendFromResult(result: WebSearchResult, query: string, audience: PrimaryAudience, index: number, spiceNote: string): TrendSuggestion {
   const category = categoryFromQuery(query);
   const audienceFit =
     audience === "mostly_men"
@@ -119,8 +127,8 @@ function trendFromResult(result: WebSearchResult, query: string, audience: Prima
     audienceFit,
     contentAngle:
       category === "Car / Driving"
-        ? "Use this as a soft mention during your next driving clip."
-        : "Use this as a quick Story mention after a curiosity post.",
+        ? `Use this as a soft mention during your next driving clip. ${spiceNote}`
+        : `Use this as a quick Story mention after a curiosity post. ${spiceNote}`,
     storyText:
       category === "Car / Driving"
         ? ["why is this actually useful...", "I didn't think I needed it", "ok... I get it now"]
@@ -176,6 +184,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const primaryAudience = normalizeAudience(body.primaryAudience);
   const categories = asStringArray(body.categories);
+  const spiceNote = spicinessTrendNote(body.spicinessLevel);
   const queries = buildAmazonTrendQueries({ primaryAudience, categories });
   const trends: TrendSuggestion[] = [];
   const notes: string[] = [];
@@ -194,7 +203,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     result.results.slice(0, 2).forEach((item, index) => {
-      trends.push(trendFromResult(item, query, primaryAudience, trends.length + index));
+      trends.push(trendFromResult(item, query, primaryAudience, trends.length + index, spiceNote));
     });
   }
 

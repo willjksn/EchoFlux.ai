@@ -916,7 +916,14 @@ CRITICAL: Ensure all captions respect the character limits and hashtag counts sp
 EMOJI GUIDELINES (ALL SOCIAL PLATFORMS):
 ${getEmojiInstructions({ enabled: emojiEnabled !== false, intensity: emojiIntensity ?? 5 })}${emojiEnabled !== false ? ` Choose emojis that match the tone (examples: ${getEmojiExamplesForTone(tone)}). Emojis should enhance the caption naturally.` : ''}
 ` : ''}
-${toneSettings ? `
+${toneSettings ? usePersonalityOverrideBool ? `
+🎨 WRITING STYLE PREFERENCES (PERSONALITY OVERRIDE ACTIVE):
+- Personality Override is primary for voice, vocabulary, profanity, flirtiness, and spicy/bold language.
+- Ignore formality, humor, empathy, spiciness, and profanity sliders whenever they conflict with the personality.
+- If the personality is calm, quiet, soft, classy, gentle, reserved, clean, wholesome, or similar, do NOT add profanity, aggressive flirtiness, or spicy wording.
+- Only use flirtiness or profanity if the personality itself clearly calls for it.
+${toneSettings.randomSeed !== undefined ? `- Random seed: ${toneSettings.randomSeed}` : ''}
+` : `
 🎨 WRITING STYLE PREFERENCES (Apply to ALL generated content):
 ${toneSettings.formality !== undefined ? `- Formality Level (${toneSettings.formality}/100): ${toneSettings.formality < 30 ? 'Very casual, use slang and informal language' : toneSettings.formality < 50 ? 'Casual and conversational' : toneSettings.formality < 70 ? 'Balanced, slightly professional' : 'Professional and polished language'}` : ''}
 ${toneSettings.humor !== undefined ? `- Humor Level (${toneSettings.humor}/100): ${toneSettings.humor < 30 ? 'Keep it serious, minimal humor' : toneSettings.humor < 50 ? 'Light occasional humor' : toneSettings.humor < 70 ? 'Witty and playful throughout' : 'Very funny, comedic tone with jokes'}` : ''}
@@ -963,6 +970,8 @@ PERSONALITY OVERRIDE (ENABLED):
 - The creator turned ON Personality Override. This text is the PRIMARY authority for voice, vocabulary, attitude, humor level, formality, and brand style in the captions.
 - On Elite, Creator Identity (if present above) is BACKGROUND only when it conflicts—always follow this override for voice.
 - The selected tone label (${sanitizedTone || tone || "friendly"}), PRIMARY GOAL voice-framing, emoji "match tone" examples, and ALL tone sliders (formality, humor, empathy, spiciness, profanity) are SECONDARY. If any of them conflict with the override text, follow the override—not the tone label or sliders.
+- If this personality reads calm, quiet, soft, reserved, classy, clean, or gentle, do NOT add profanity, heavy flirtiness, or spicy/bold wording just because sliders are high.
+- Only use profanity or flirtiness when the personality itself clearly supports that style.
 - User-provided caption instructions (USER INSTRUCTIONS / Extra instructions) still define topic, angle, and must-haves; write those in the same authentic voice as the override.
 - Use ONLY the personality override text above for THIS user. Never use example or placeholder data as if it were this user's data.
 - Do NOT force physical attributes into every caption—only when the user asks or the content naturally needs it (roleplay, outfit fit, etc.).

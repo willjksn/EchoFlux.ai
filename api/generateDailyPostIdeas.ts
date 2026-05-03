@@ -46,6 +46,14 @@ export interface GenerateDailyPostIdeasBody {
   creatorHint?: string;
   /** When true and profile has personality text, personality overrides tone + tone sliders for voice. */
   prioritizeCreatorPersonality?: boolean;
+  toneSettings?: {
+    formality?: number;
+    humor?: number;
+    empathy?: number;
+    spiciness?: number;
+    profanity?: number;
+    emojiLevel?: number;
+  };
 }
 
 const CONTENT_POLICY_SAFE = `
@@ -158,14 +166,16 @@ function buildPrompt(opts: {
     opts.prioritizeCreatorPersonality && creatorContext.trim(),
   );
 
-  // When personality leads, slider formality/humor/warmth often flatten the creator's voice — keep emoji + profanity only.
+  // When personality leads, the personality text is the source of truth for voice and boundaries.
   const toneStyleGuidance = toneSettings
     ? personalityPrimary
       ? `
-WRITING STYLE (personality-first — follow emoji & profanity strictly; CREATOR PERSONALITY block defines all other voice traits):
-${toneSettings.profanity !== undefined && toneSettings.profanity > 0 ? `- Profanity (${toneSettings.profanity}/100): ${toneSettings.profanity < 30 ? 'Very mild swearing OK' : toneSettings.profanity < 50 ? 'Moderate casual swearing' : 'Frequent swearing acceptable'}` : '- Keep language clean, no swearing'}
+WRITING STYLE (personality-first — CREATOR PERSONALITY block defines voice and boundaries):
 ${toneSettings.emojiLevel !== undefined ? `- Emoji usage (${toneSettings.emojiLevel}/100): ${toneSettings.emojiLevel < 20 ? 'No emojis in hook/captionStarter' : toneSettings.emojiLevel < 40 ? 'At most 1-2 emojis total' : toneSettings.emojiLevel < 60 ? 'Moderate emojis (a few, purposeful)' : 'Liberal, expressive emoji use that matches the voice'}` : ''}
-- Ignore formality/humor/warmth slider numbers for voice — mirror the personality text instead. Do not sanitize hooks to sound generic.
+- Ignore formality/humor/warmth/profanity/spiciness slider numbers when they conflict with personality.
+- If the personality is calm, quiet, soft, classy, gentle, reserved, wholesome, or similar, DO NOT add profanity, aggressive flirtiness, or spicy language.
+- Only use flirtiness or profanity if the personality itself clearly calls for it.
+- Mirror the personality text instead. Do not sanitize hooks to sound generic.
 `
       : `
 WRITING STYLE PREFERENCES (apply to hook and captionStarter):
@@ -176,6 +186,21 @@ ${toneSettings.profanity !== undefined && toneSettings.profanity > 0 ? `- Profan
 ${toneSettings.emojiLevel !== undefined ? `- Emoji usage (${toneSettings.emojiLevel}/100): ${toneSettings.emojiLevel < 20 ? 'No emojis in hook/captionStarter' : toneSettings.emojiLevel < 40 ? 'At most 1-2 emojis total' : toneSettings.emojiLevel < 60 ? 'Moderate emojis (a few, purposeful)' : 'Liberal, expressive emoji use that matches the voice'}` : ''}
 `
     : "";
+
+  const spice = typeof toneSettings?.spiciness === "number" ? Math.max(0, Math.min(100, Math.round(toneSettings.spiciness))) : 0;
+  const spicinessGuidance = spice > 0 && !personalityPrimary ? `
+SPICINESS / BORDERLINE EXPLICITNESS (${spice}/100):
+- ${spice < 35 ? "Light flirtiness only: suggestive wording is subtle, tasteful, and still mainstream-safe." : spice < 70 ? "Noticeable flirtiness: hooks can be teasing, body-confident, and a little provocative without becoming explicit." : "Bold edge: hooks can be provocative and boundary-pushing for creator-owned spaces, while avoiding illegal content, harassment, or platform-banned claims."}
+- Keep the level consistent across title, hook, captionStarter, and shotList. Do not randomly sanitize spicy requests into generic lifestyle content.
+` : "";
+
+  const contentPolicyBlock = personalityPrimary ? `
+CONTENT POLICY (PERSONALITY OVERRIDE):
+- Let the creator personality define how spicy, flirty, clean, quiet, profane, or reserved the copy should be.
+- If the personality clearly says flirty, sensual, bold, spicy, or provocative, you may use tasteful flirtiness that fits it.
+- If the personality says calm, quiet, soft, classy, gentle, reserved, clean, wholesome, or similar, keep ideas clean and do NOT add profanity or flirtiness.
+- Never become explicit or unsafe unless the personality clearly asks for an adult edge and the platform/context allows it.
+` : spicyMode ? CONTENT_POLICY_SPICY : CONTENT_POLICY_SAFE;
 
   const ideaCount = swapOnly ? "ONE" : opts.generateAllFormats ? "exactly 4 (one per format: Reel, Carousel, Photo, Story)" : "exactly 3";
   
@@ -227,14 +252,16 @@ PREFERRED FORMAT: ${format}. ${formatGuidance}
 ${platformFormatGuidance}
 TONE: ${tone}.${personalityPrimary ? " SECONDARY for voice — creator personality block below overrides this label (and tone sliders) when they conflict." : " Keep hooks and copy in this voice."}
 ${toneStyleGuidance}
-${spicyMode ? CONTENT_POLICY_SPICY : CONTENT_POLICY_SAFE}
+${spicinessGuidance}
+${contentPolicyBlock}
 
 ${creatorContext ? `CREATOR PERSONALITY & NICHE (IMPORTANT - reflect this in ALL ideas):
 ${creatorContext}
 ${personalityPrimary ? `VOICE PRIORITY (PERSONALITY FIRST — TOGGLE ON):
 - This personality text is PRIMARY for voice, attitude, hooks, and caption style. Every hook must sound like THIS creator typing — not a strategist or generic influencer.
 - TRENDS (below) inform topics only — do not import trend-speak into hooks.
-- WRITING STYLE above: emoji + profanity only; all other traits come from this personality block.
+- WRITING STYLE above: emoji guidance may apply, but personality overrides all tone, profanity, and spiciness sliders.
+- If the personality is calm/quiet/reserved, avoid profanity and flirtiness even if global sliders are high.
 - Still align topics and CTAs with GOAL: ${goal} — express them in this brand voice.
 ` : ""}Generate ideas that match this personality - the tone, style, and content should feel authentic to who this creator is.
 ` : "No creator profile provided; use broad, relatable angles."}
@@ -340,6 +367,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
     analyzeMyPageEngagement = false,
     creatorHint = "",
     prioritizeCreatorPersonality = false,
+    toneSettings: requestToneSettings,
   } = (req.body || {}) as GenerateDailyPostIdeasBody;
 
   // Map balanced_followers_engagement to goal with engagement bias
@@ -463,7 +491,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
       trendContext,
       swapOnly,
       existingIdeasForContext: existingIdeas,
-      toneSettings: userToneSettings,
+      toneSettings: { ...userToneSettings, ...(requestToneSettings || {}) },
       generateAllFormats: Boolean(generateAllFormats),
       analyzeMyPageEngagement: Boolean(analyzeMyPageEngagement),
       fanHubAnalytics,

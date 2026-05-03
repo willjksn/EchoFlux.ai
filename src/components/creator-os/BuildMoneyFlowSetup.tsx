@@ -97,7 +97,7 @@ export const BuildMoneyFlowSetup: React.FC<Props> = ({ open, settings, onClose, 
   const submit = async () => {
     setSaving(true);
     try {
-      await onSave(draft);
+      await onSave({ ...defaultCreatorOSSettings(), ...draft });
       onClose();
     } finally {
       setSaving(false);

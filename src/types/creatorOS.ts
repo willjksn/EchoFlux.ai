@@ -64,6 +64,8 @@ export interface CreatorOSSettings {
   weeklyInnerCircleDropsTarget: number;
   weeklyAmazonLinksTarget: number;
   brandTone: string;
+  /** 0-100: clean to flirty to bold/borderline explicit Creator OS copy. */
+  spicinessLevel?: number;
   filmingDays: string[];
   mainMonetization: string[];
   createdAt?: unknown;

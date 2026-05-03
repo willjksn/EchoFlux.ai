@@ -309,6 +309,14 @@ function day(publicPost: string, storyLink: string, innerCircleDrop: string): We
   };
 }
 
+function spicinessGuidance(settings: CreatorOSSettings): string {
+  const value = Math.max(0, Math.min(100, Math.round(settings.spicinessLevel ?? 30)));
+  if (value < 25) return "Keep the copy clean, casual, and personality-led.";
+  if (value < 55) return "Add light flirtiness and teasing curiosity without getting explicit.";
+  if (value < 80) return "Make hooks more flirty, body-confident, and provocative while staying tasteful.";
+  return "Use a bold, borderline-explicit edge for creator-owned/member spaces while avoiding unsafe or platform-banned language.";
+}
+
 export function generateDefaultWeeklyPlan(
   settings: CreatorOSSettings,
   trends: CreatorOSTrend[] = [],
@@ -318,8 +326,9 @@ export function generateDefaultWeeklyPlan(
   const usefulTrend = trends.find((t) => t.status !== "ignored")?.title || "a useful Amazon product your audience would actually ask about";
   const wantsInnerCircle = settings.monetizationPaths.includes("inner_circle_subscriptions");
   const wantsTreats = settings.monetizationPaths.includes("treats");
+  const spicePlan = spicinessGuidance(settings);
   const innerCirclePlan = wantsInnerCircle
-    ? "End with a soft Inner Circle tease: tell them the fuller version, behind-the-scenes note, or calmer/private follow-up is inside Inner Circle."
+    ? `End with an Inner Circle tease that matches the spice level: ${spicePlan} Tell them the fuller version, behind-the-scenes note, or calmer/private follow-up is inside Inner Circle.`
     : "If Inner Circle is not active yet, save this as a future subscriber-only drop or use it as a My Page teaser.";
   const treatPlan = wantsTreats
     ? "Add a light Treat CTA only if the post gets replies: 'if you want to make my day, Treats are open.'"
@@ -330,32 +339,32 @@ export function generateDefaultWeeklyPlan(
     weekStartDate: weekStartId(),
     days: {
       monday: day(
-        "Public post: Film a simple relatable work/computer or everyday-life clip. Keep it low effort: 6-10 seconds, natural face/body language, and one curiosity hook like 'this is how my day is going.' Post it to Instagram Reels/TikTok to get attention, not to sell hard.",
+        `Public post: Film a simple relatable work/computer or everyday-life clip. Keep it low effort: 6-10 seconds, natural face/body language, and one curiosity hook like 'this is how my day is going.' ${spicePlan} Post it to Instagram Reels/TikTok to get attention, not to sell hard.`,
         "Story/Amazon: Follow with 2-3 Stories. Story 1: quick behind-the-scenes. Story 2: show one desk/everyday item and say why you use it. Story 3: add the link or question sticker: 'want the link?'",
         `${innerCirclePlan} Keep it light today: post one private thought, voice note, or extra photo connected to the public clip. ${treatPlan}`,
       ),
       tuesday: day(
-        "Public post: Film a smirk/curiosity clip around one useful thing or small moment. The goal is clicks and replies. Use a hook like 'I did not think I needed this but...' and keep the caption short.",
+        `Public post: Film a smirk/curiosity clip around one useful thing or small moment. The goal is clicks and replies. Use a hook like 'I did not think I needed this but...' and keep the caption short. ${spicePlan}`,
         `Story/Amazon: Test product interest with: ${usefulTrend}. Do not over-sell it. Use a three-story flow: show it, explain the real-life use, then ask 'should I link it?' or add the Amazon link if ready.`,
         `${innerCirclePlan} Inside Inner Circle, share the more personal reason you like it or the unfiltered version of the clip.`,
       ),
       wednesday: day(
-        "Public post: Use a lighter day. Repost the best-performing clip from Monday/Tuesday or post a casual real-life check-in. The goal is retention and consistency, not a big production day.",
+        `Public post: Use a lighter day. Repost the best-performing clip from Monday/Tuesday or post a casual real-life check-in. The goal is retention and consistency, not a big production day. ${spicePlan}`,
         "Story/Amazon: Put up a behind-the-scenes Story and ask one simple question: 'which kind of posts do you want more of this week?' Use replies to decide Friday/Saturday content.",
         `${innerCirclePlan} Give paid members a small retention drop: a check-in, a private update, or a 'what I am filming next' note.`,
       ),
       thursday: day(
-        "Public post: Film a car/driving or movement clip if it fits your brand. Keep it natural and repeatable: car angle, quick look, short caption. This is your attention post for the second half of the week.",
+        `Public post: Film a car/driving or movement clip if it fits your brand. Keep it natural and repeatable: car angle, quick look, short caption. This is your attention post for the second half of the week. ${spicePlan}`,
         `Story/Amazon: Tie the Story to ${carLink}. Mention it naturally: 'this is the thing I keep in my car' or 'this made driving easier.' Add link only after the first Story gives context.`,
         `${innerCirclePlan} Make the Inner Circle drop feel like a continuation: car talk, behind-the-scenes thought, or the calmer/private version of the public post.`,
       ),
       friday: day(
-        "Public post: Post a controlled curiosity clip that creates replies before the weekend. Use a hook like 'be honest...' or 'I need opinions on this.' The goal is attention plus conversation.",
+        `Public post: Post a controlled curiosity clip that creates replies before the weekend. Use a hook like 'be honest...' or 'I need opinions on this.' The goal is attention plus conversation. ${spicePlan}`,
         "Story/Amazon: Use the replies to test a random useful product or Treat angle. Story flow: poll/question, product mention, then link or support CTA depending on engagement.",
         `${innerCirclePlan} Add a closer post inside Inner Circle with the answer, longer story, or more personal version. ${treatPlan}`,
       ),
       saturday: day(
-        "Public post: Post a lifestyle clip: outside, pool, errands, car, outfit, or casual day-in-the-life. Make it easy to consume and slightly aspirational.",
+        `Public post: Post a lifestyle clip: outside, pool, errands, car, outfit, or casual day-in-the-life. Make it easy to consume and slightly aspirational. ${spicePlan}`,
         "Story/Amazon: Use a soft weekend Story CTA. Mention one product, outfit, car item, or lifestyle link without making the whole day feel like an ad.",
         `${innerCirclePlan} Add an optional lifestyle drop for subscribers: extra photo, voice note, weekend thought, or 'what I did not post publicly.'`,
       ),
@@ -396,7 +405,11 @@ export function generateTodaysMove(
     amazonLinks.find((l) => l.performanceStatus !== "retired");
   const trend = trends.find((t) => t.status === "new" || t.status === "tested");
   const isCar = lane === "car_driving";
-  const hook = isCar ? "I spend too much time in here" : trend?.contentAngle || "why is this actually useful...";
+  const spicePlan = spicinessGuidance(settings);
+  const isSpicy = (settings.spicinessLevel ?? 30) >= 55;
+  const hook = isCar
+    ? isSpicy ? "I spend too much time in here... behave" : "I spend too much time in here"
+    : trend?.contentAngle || (isSpicy ? "why is this actually kind of dangerous..." : "why is this actually useful...");
   const suggestedAmazonCategory = link?.category || (isCar ? "Car / Driving" : trend?.category || "Random but Useful");
   const checklist: TodaysMoveChecklistItem[] = [
     { id: "film", label: "Film clip", completed: false },
@@ -411,7 +424,9 @@ export function generateTodaysMove(
     date: todaysDateId(),
     publicPost: planDay?.publicPost || (isCar ? "Post a car/driving clip on IG Reels and TikTok." : "Post one curiosity clip on IG Reels and TikTok."),
     hook,
-    caption: isCar ? "it's fine" : "ok I get it now",
+    caption: isCar
+      ? isSpicy ? "it's fine... unless you make it weird" : "it's fine"
+      : isSpicy ? "ok I get it now... maybe too much" : "ok I get it now",
     platforms: ["instagram_reel", "tiktok"],
     storyLinkPlan: trend?.storyText?.length
       ? trend.storyText
@@ -419,9 +434,11 @@ export function generateTodaysMove(
     suggestedAmazonCategory,
     ...(link?.id ? { suggestedAmazonLinkId: link.id } : {}),
     innerCircleDrop: planDay?.innerCircleDrop || (isCar ? "Post a short car-talk clip." : "Post the closer version inside Inner Circle."),
-    innerCircleCaption: isCar ? "car talks are better on here anyway" : "this is the calm version... obviously",
+    innerCircleCaption: isCar
+      ? isSpicy ? "car talks are better when I do not have to behave" : "car talks are better on here anyway"
+      : isSpicy ? "this is the less behaved version... obviously" : "this is the calm version... obviously",
     checklist,
-    whyThisWorks: `This matches ${audiencePhrase(settings.primaryAudience)} and runs the full weekly money flow: get attention, earn Story clicks, drive Inner Circle, test Amazon/Treat interest, and retain subscribers.`,
+    whyThisWorks: `This matches ${audiencePhrase(settings.primaryAudience)} and runs the full weekly money flow: get attention, earn Story clicks, drive Inner Circle, test Amazon/Treat interest, and retain subscribers. ${spicePlan}`,
     completed: false,
   };
 }
@@ -470,6 +487,7 @@ export async function findAmazonProductTrends(uid: string, settings: CreatorOSSe
       monetizationPaths: settings.monetizationPaths,
       categories,
       brandTone: settings.brandTone,
+      spicinessLevel: settings.spicinessLevel ?? 30,
     }),
   });
   const data = await res.json().catch(() => ({}));
