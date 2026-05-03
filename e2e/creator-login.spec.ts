@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { signInCreatorFromLanding } from "./helpers/signInCreator";
 
 /**
  * Optional: Firebase email/password sign-in for the EchoFlux creator app (landing → LoginModal).
@@ -17,16 +18,7 @@ test.describe("creator email login (optional)", () => {
 
     test.setTimeout(90_000);
 
-    await page.goto("/");
-    await expect(page.getByRole("heading", { level: 1, name: /Build your brand/i })).toBeVisible();
-
-    await page.getByRole("button", { name: "Sign in" }).click();
-    await expect(page.getByRole("heading", { name: "Welcome back" })).toBeVisible();
-
-    await page.locator("#echoflux-login-email").fill(email!);
-    await page.locator("#echoflux-login-password").fill(String(password));
-
-    await page.locator('button[type="submit"]').filter({ hasText: "Log In" }).click();
+    await signInCreatorFromLanding(page, email!, String(password));
 
     const dashboard = page.getByRole("button", { name: "Dashboard" });
     const inviteRequired = page.getByRole("heading", { name: "Invite Required" });

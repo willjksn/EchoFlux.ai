@@ -24,16 +24,14 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Production build
-        run: npm run build
-
-      - name: Typecheck app (informational)
-        continue-on-error: true
+      - name: Typecheck app
         run: npm run typecheck:app
 
-      - name: Typecheck API (informational)
-        continue-on-error: true
+      - name: Typecheck API
         run: npm run typecheck:api
+
+      - name: Production build
+        run: npm run build
 
       - name: Install Playwright Chromium
         run: npx playwright install --with-deps chromium
