@@ -1549,15 +1549,15 @@
 .fan-feed-media-lock-unlock-hit--modal {
   bottom: 2.7rem;
 }
-/* Single media: center the CTA vertically */
+/* Single media: sit below the lock message instead of covering it */
 .fan-feed-media-lock-unlock-hit--solo {
   bottom: auto;
-  top: 50%;
+  top: calc(50% + 3.6rem);
   transform: translateY(-50%);
 }
 .fan-feed-media-lock-unlock-hit--modal.fan-feed-media-lock-unlock-hit--solo {
   bottom: auto;
-  top: 50%;
+  top: calc(50% + 4rem);
 }
 .fan-feed-media-lock-unlock-stack {
   display: flex;

@@ -452,6 +452,7 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
   const accentHover = theme.accentHover ?? primary;
   const background = theme.background || DEFAULT_BG;
   const textColor = theme.text || DEFAULT_TEXT;
+  const buttonStyle = theme.buttonStyle || "solid";
   const isDark = isDarkBackground(background);
   const live = liveLanding;
   const liveAuthScale = 1;
@@ -538,6 +539,36 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
           border: `1px solid ${primary}`,
           boxShadow: `0 12px 34px ${primary}3d, 0 0 0 1px ${primary}14`,
         };
+
+  const landingButtonRadius = buttonStyle === "pill" ? "9999px" : "0.75rem";
+  const landingButtonChrome = (variant: "primary" | "soft" = "primary"): React.CSSProperties => {
+    const outline = buttonStyle === "outline";
+    if (outline) {
+      return {
+        background: fanDark || isDark ? "rgba(255,255,255,0.04)" : "transparent",
+        color: primary,
+        border: `2px solid ${primary}`,
+        borderRadius: landingButtonRadius,
+        boxShadow: "none",
+      };
+    }
+    if (variant === "soft") {
+      return {
+        background: `${primary}15`,
+        color: primary,
+        border: `2px solid ${primary}`,
+        borderRadius: landingButtonRadius,
+        boxShadow: "none",
+      };
+    }
+    return {
+      background: `linear-gradient(135deg, ${primary} 0%, ${accentHover} 100%)`,
+      color: "#fff",
+      border: "2px solid transparent",
+      borderRadius: landingButtonRadius,
+      boxShadow: `0 6px 20px ${primary}45`,
+    };
+  };
 
   // Member nav tabs from sections/sectionsOrder (Saved hidden in preview — only on live storefront)
   const sections = config.sections ?? { feed: true, treats: true, tip: true, messages: true, about: false };
@@ -1640,7 +1671,7 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
                     <button
                       type="button"
                       className="w-full sm:w-auto px-5 py-2.5 text-sm font-semibold rounded-lg text-white"
-                      style={{ background: `linear-gradient(135deg, ${primary} 0%, ${primary}dd 100%)` }}
+                      style={landingButtonChrome("primary")}
                       onClick={live.onTreatLinkSignIn}
                     >
                       Sign in or create account
@@ -1696,10 +1727,7 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
                 <button
                   type="button"
                   className="w-full py-3.5 rounded-full text-sm font-bold text-white transition-transform hover:scale-[1.01] disabled:opacity-60"
-                  style={{
-                    background: primary,
-                    boxShadow: `0 6px 20px ${primary}55`,
-                  }}
+                  style={landingButtonChrome("primary")}
                   disabled={live ? live.subscribing || live.joiningFree : false}
                   onClick={
                     live
@@ -1775,10 +1803,7 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
                     </p>
                     <div
                       className="flex w-full justify-center items-center py-2.5 rounded-xl text-sm font-semibold text-white pointer-events-none"
-                      style={{
-                        background: `linear-gradient(135deg, ${primary} 0%, ${primary}dd 100%)`,
-                        boxShadow: `0 4px 14px ${primary}40`,
-                      }}
+                      style={landingButtonChrome("primary")}
                       aria-hidden
                     >
                       {live.landingTreatsLoading
@@ -1823,10 +1848,7 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
                     </p>
                     <div
                       className="flex w-full justify-center items-center py-2.5 rounded-xl text-sm font-semibold text-white pointer-events-none"
-                      style={{
-                        background: `linear-gradient(135deg, ${primary} 0%, ${primary}dd 100%)`,
-                        boxShadow: `0 4px 14px ${primary}40`,
-                      }}
+                      style={landingButtonChrome("primary")}
                       aria-hidden
                     >
                       {storeCopy.storeLandingCtaLabel}
@@ -1853,10 +1875,7 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
                     </p>
                     <div
                       className="w-full py-2.5 rounded-xl text-sm font-semibold text-white opacity-90"
-                      style={{
-                        background: `linear-gradient(135deg, ${primary} 0%, ${primary}dd 100%)`,
-                        boxShadow: `0 4px 14px ${primary}40`,
-                      }}
+                      style={landingButtonChrome("primary")}
                       aria-hidden
                     >
                       {storeCopy.storeLandingCtaLabel}
@@ -1902,7 +1921,7 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
                         key={d}
                         type="button"
                         className="px-5 py-2 rounded-full text-sm font-semibold transition-all hover:scale-[1.03] disabled:opacity-50"
-                        style={{ background: `${primary}15`, color: primary, border: `2px solid ${primary}` }}
+                        style={landingButtonChrome(buttonStyle === "solid" ? "soft" : "primary")}
                         disabled={live ? live.tipLoading : false}
                         onClick={live ? () => live.onTipPresetDollars(d) : undefined}
                       >
@@ -1944,7 +1963,7 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
                   <button
                     type="button"
                     className="px-5 py-2 rounded-full text-sm font-semibold text-white transition-all hover:scale-[1.03] disabled:opacity-50"
-                    style={{ backgroundColor: primary }}
+                    style={landingButtonChrome("primary")}
                     disabled={live ? live.tipLoading : false}
                     onClick={live ? live.onTipCustomSubmit : undefined}
                   >

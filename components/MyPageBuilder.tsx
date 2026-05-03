@@ -49,6 +49,7 @@ const DEFAULT_THEME: NonNullable<CreatorStorefrontSettings["theme"]> = {
   textMuted: "#6b7280",
   border: "#e5e7eb",
   accentHover: "#4f46e5",
+  fontFamily: "Inter, sans-serif",
   buttonStyle: "solid",
 };
 
@@ -469,6 +470,14 @@ const FONT_FAMILY_OPTIONS: { value: string; label: string; style: string }[] = [
   { value: 'Fira Code, monospace', label: 'Fira Code', style: 'font-family: Fira Code, monospace' },
 ];
 
+function fontFamilyLabel(fontFamily: string | undefined): string {
+  const normalized = (fontFamily || DEFAULT_THEME.fontFamily || "Inter, sans-serif").replace(/\s+/g, " ").trim();
+  const match = FONT_FAMILY_OPTIONS.find(
+    (font) => font.value.replace(/\s+/g, " ").trim().toLowerCase() === normalized.toLowerCase(),
+  );
+  return match?.label || normalized.split(",")[0]?.replace(/^['"]|['"]$/g, "") || "Inter";
+}
+
 type EyeDropperConstructor = new () => {
   open: () => Promise<{ sRGBHex: string }>;
 };
@@ -481,6 +490,16 @@ function getBrowserEyeDropper(): EyeDropperConstructor | null {
 function safeHexColor(value: string | undefined, fallback: string): string {
   const clean = typeof value === "string" ? value.trim() : "";
   return /^#[0-9a-fA-F]{6}$/.test(clean) ? clean : fallback;
+}
+
+function openNativeColorPicker(input: HTMLInputElement | null): void {
+  if (!input) return;
+  const inputWithPicker = input as HTMLInputElement & { showPicker?: () => void };
+  if (typeof inputWithPicker.showPicker === "function") {
+    inputWithPicker.showPicker();
+    return;
+  }
+  input.click();
 }
 
 const ColorPickerWithDropper: React.FC<{
@@ -501,8 +520,8 @@ const ColorPickerWithDropper: React.FC<{
   const pickColor = async () => {
     const EyeDropper = getBrowserEyeDropper();
     if (!EyeDropper) {
-      setDropperError("This browser does not support page eyedropper. Opening the system color picker instead.");
-      colorInputRef.current?.click();
+      setDropperError("This browser does not support page eyedropper. Opening your browser's color picker instead.");
+      openNativeColorPicker(colorInputRef.current);
       return;
     }
     setDropperError(null);
@@ -566,11 +585,13 @@ const TextStyleControls: React.FC<{
   style?: TextStyle;
   onChange: (style: TextStyle) => void;
   defaultSize?: PresetFontSize;
-}> = ({ style, onChange, defaultSize = 'base' }) => {
+  defaultFontFamily?: string;
+}> = ({ style, onChange, defaultSize = 'base', defaultFontFamily = DEFAULT_THEME.fontFamily }) => {
   const [showControls, setShowControls] = useState(false);
   const isPresetFontSize = (value?: string): value is PresetFontSize =>
     Boolean(value && FONT_SIZE_OPTIONS.some((opt) => opt.value === value));
   const customFontSize = isPresetFontSize(style?.fontSize) ? "" : (style?.fontSize ?? "");
+  const defaultFontLabel = fontFamilyLabel(defaultFontFamily);
   
   return (
     <div className="relative inline-flex items-center">
@@ -625,7 +646,7 @@ const TextStyleControls: React.FC<{
                   onChange={(e) => onChange({ ...style, fontFamily: e.target.value || undefined })}
                   className="w-full px-2 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                 >
-                  <option value="">Default</option>
+                  <option value="">Default ({defaultFontLabel})</option>
                   <optgroup label="Sans-serif">
                     {FONT_FAMILY_OPTIONS.filter(f => f.value.includes('sans-serif')).map((font) => (
                       <option key={font.value} value={font.value} style={{ fontFamily: font.value }}>
@@ -1871,6 +1892,8 @@ export const MyPageBuilder: React.FC = () => {
     (typeof lcDraftForStore.publicStoreOpenCtaLabel === "string" && lcDraftForStore.publicStoreOpenCtaLabel.trim()) ||
     (typeof lcDraftForStore.storeLandingCtaLabel === "string" && lcDraftForStore.storeLandingCtaLabel.trim()) ||
     "";
+  const currentLandingFontFamily = draft.theme?.fontFamily || DEFAULT_THEME.fontFamily || "Inter, sans-serif";
+  const currentLandingFontLabel = fontFamilyLabel(currentLandingFontFamily);
 
   if (loading) {
     return (
@@ -1964,6 +1987,7 @@ export const MyPageBuilder: React.FC = () => {
                     style={draft.textStyles?.displayName}
                     onChange={(style) => updateTextStyle('displayName', style)}
                     defaultSize="2xl"
+                    defaultFontFamily={currentLandingFontFamily}
                   />
                 </div>
                 <div className="flex gap-2">
@@ -2243,6 +2267,7 @@ export const MyPageBuilder: React.FC = () => {
                     style={draft.textStyles?.heroTagline}
                     onChange={(style) => updateTextStyle('heroTagline', style)}
                     defaultSize="lg"
+                    defaultFontFamily={currentLandingFontFamily}
                   />
                 </div>
                 <div className="flex gap-2">
@@ -2263,6 +2288,7 @@ export const MyPageBuilder: React.FC = () => {
                     style={draft.textStyles?.heroPromise}
                     onChange={(style) => updateTextStyle('heroPromise', style)}
                     defaultSize="base"
+                    defaultFontFamily={currentLandingFontFamily}
                   />
                 </div>
                 <div className="flex gap-2">
@@ -2283,6 +2309,7 @@ export const MyPageBuilder: React.FC = () => {
                     style={draft.textStyles?.heroSubline}
                     onChange={(style) => updateTextStyle('heroSubline', style)}
                     defaultSize="sm"
+                    defaultFontFamily={currentLandingFontFamily}
                   />
                 </div>
                 <p className="text-[11px] text-gray-400 dark:text-gray-500 mb-1">Extra line of text shown under the promise on the landing hero.</p>
@@ -2304,6 +2331,7 @@ export const MyPageBuilder: React.FC = () => {
                     style={draft.textStyles?.heroSubline2}
                     onChange={(style) => updateTextStyle("heroSubline2", style)}
                     defaultSize="sm"
+                    defaultFontFamily={currentLandingFontFamily}
                   />
                 </div>
                 <p className="text-[11px] text-gray-400 dark:text-gray-500 mb-1">
@@ -2426,6 +2454,7 @@ export const MyPageBuilder: React.FC = () => {
                     style={draft.textStyles?.perksTitle}
                     onChange={(style) => updateTextStyle('perksTitle', style)}
                     defaultSize="xl"
+                    defaultFontFamily={currentLandingFontFamily}
                   />
                 </div>
                 <div className="flex gap-2 mb-2">
@@ -2444,6 +2473,7 @@ export const MyPageBuilder: React.FC = () => {
                     style={draft.textStyles?.perksText}
                     onChange={(style) => updateTextStyle('perksText', style)}
                     defaultSize="sm"
+                    defaultFontFamily={currentLandingFontFamily}
                   />
                 </div>
                 <div className="relative">
@@ -2468,6 +2498,7 @@ export const MyPageBuilder: React.FC = () => {
                         style={draft.textStyles?.perksExtra}
                         onChange={(style) => updateTextStyle("perksExtra", style)}
                         defaultSize="sm"
+                        defaultFontFamily={currentLandingFontFamily}
                       />
                       <LandingBodyModeToggle
                         value={draft.landingContent?.perksExtraMode ?? "bullets"}
@@ -2546,6 +2577,7 @@ export const MyPageBuilder: React.FC = () => {
                     style={draft.textStyles?.previewTitle}
                     onChange={(style) => updateTextStyle('previewTitle', style)}
                     defaultSize="xl"
+                    defaultFontFamily={currentLandingFontFamily}
                   />
                 </div>
                 <div className="flex gap-2 mb-2">
@@ -2564,6 +2596,7 @@ export const MyPageBuilder: React.FC = () => {
                     style={draft.textStyles?.previewText}
                     onChange={(style) => updateTextStyle('previewText', style)}
                     defaultSize="sm"
+                    defaultFontFamily={currentLandingFontFamily}
                   />
                 </div>
                 <div className="relative">
@@ -2588,6 +2621,7 @@ export const MyPageBuilder: React.FC = () => {
                         style={draft.textStyles?.previewExtra}
                         onChange={(style) => updateTextStyle("previewExtra", style)}
                         defaultSize="sm"
+                        defaultFontFamily={currentLandingFontFamily}
                       />
                       <LandingBodyModeToggle
                         value={draft.landingContent?.previewExtraMode ?? "bullets"}
@@ -2682,6 +2716,7 @@ export const MyPageBuilder: React.FC = () => {
                     style={draft.textStyles?.energyTitle}
                     onChange={(style) => updateTextStyle('energyTitle', style)}
                     defaultSize="xl"
+                    defaultFontFamily={currentLandingFontFamily}
                   />
                 </div>
                 <div className="flex gap-2 mb-2">
@@ -2701,6 +2736,7 @@ export const MyPageBuilder: React.FC = () => {
                       style={draft.textStyles?.energyBody}
                       onChange={(style) => updateTextStyle("energyBody", style)}
                       defaultSize="sm"
+                      defaultFontFamily={currentLandingFontFamily}
                     />
                     <LandingBodyModeToggle
                       value={draft.landingContent?.energyBodyMode ?? "bullets"}
@@ -3230,9 +3266,11 @@ export const MyPageBuilder: React.FC = () => {
               </div>
               {/* Global font */}
               <div>
-                <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Global font</label>
+                <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+                  Global font (default: {fontFamilyLabel(DEFAULT_THEME.fontFamily)})
+                </label>
                 <select
-                  value={draft.theme?.fontFamily ?? "Inter, sans-serif"}
+                  value={currentLandingFontFamily}
                   onChange={(e) => updateTheme({ fontFamily: e.target.value })}
                   className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                 >
@@ -3240,6 +3278,9 @@ export const MyPageBuilder: React.FC = () => {
                     <option key={f.value} value={f.value}>{f.label}</option>
                   ))}
                 </select>
+                <p className="mt-1 text-[11px] text-gray-500 dark:text-gray-400">
+                  Current landing default: {currentLandingFontLabel}
+                </p>
               </div>
               {/* Theme colors — each cell: label, description, color + hex input */}
               <div className="grid grid-cols-3 gap-4">
