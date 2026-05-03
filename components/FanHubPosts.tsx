@@ -401,6 +401,52 @@ async function resolveFanHubCaptionMedia(
   return null;
 }
 
+function fanHubCaptionMediaFingerprint(items: MediaItem[]): string {
+  const visual = items.filter((m) => m.type === "image" || m.type === "video");
+  if (visual.length === 0) return "no-visual-media";
+  return visual
+    .map((item, index) => {
+      const file = item.file;
+      const fileKey = file
+        ? `${file.name}:${file.size}:${file.lastModified}:${file.type}`
+        : "";
+      const urlKey = item.url ? item.url.split("?")[0].slice(-140) : "";
+      return `${index}:${item.type}:${fileKey || urlKey || "unknown"}`;
+    })
+    .join("|");
+}
+
+const FAN_HUB_CAPTION_HISTORY_STORAGE_KEY = "echoflux:fan-hub-caption-history:v1";
+
+function readStoredFanHubCaptionHistory(mediaFingerprint: string): string[] {
+  if (typeof window === "undefined" || !mediaFingerprint) return [];
+  try {
+    const raw = window.localStorage.getItem(FAN_HUB_CAPTION_HISTORY_STORAGE_KEY);
+    const parsed = raw ? (JSON.parse(raw) as Record<string, unknown>) : {};
+    const captions = parsed[mediaFingerprint];
+    return Array.isArray(captions)
+      ? captions.filter((c): c is string => typeof c === "string" && c.trim()).slice(-8)
+      : [];
+  } catch {
+    return [];
+  }
+}
+
+function rememberStoredFanHubCaption(mediaFingerprint: string, caption: string) {
+  if (typeof window === "undefined" || !mediaFingerprint || !caption.trim()) return;
+  try {
+    const raw = window.localStorage.getItem(FAN_HUB_CAPTION_HISTORY_STORAGE_KEY);
+    const parsed = raw ? (JSON.parse(raw) as Record<string, string[]>) : {};
+    const merged = [...(Array.isArray(parsed[mediaFingerprint]) ? parsed[mediaFingerprint] : []), caption]
+      .filter((c): c is string => typeof c === "string" && c.trim())
+      .slice(-12);
+    const nextEntries = Object.entries({ ...parsed, [mediaFingerprint]: merged }).slice(-80);
+    window.localStorage.setItem(FAN_HUB_CAPTION_HISTORY_STORAGE_KEY, JSON.stringify(Object.fromEntries(nextEntries)));
+  } catch {
+    /* local storage should never block caption generation */
+  }
+}
+
 async function fetchCreatorFanPostMedia(creatorId: string, postId: string): Promise<{
   mediaUrls: string[];
   mediaTypes: ("image" | "video")[];
@@ -483,6 +529,7 @@ export const FanHubPosts: React.FC = () => {
   const [customTone, setCustomTone] = useState("");
   const [usePersonality, setUsePersonality] = useState(true);
   const [generating, setGenerating] = useState(false);
+  const generatedCaptionHistoryRef = useRef<Map<string, string[]>>(new Map());
   
   // Locked content
   const [lockEnabled, setLockEnabled] = useState(false);
@@ -1218,6 +1265,13 @@ Write 2-4 sentences that are engaging and on-topic.`;
 
       let mediaPayload = await resolveFanHubCaptionMedia(media);
       const regenerationNonce = Date.now();
+      const mediaFingerprint = fanHubCaptionMediaFingerprint(media);
+      const avoidCaptions = Array.from(
+        new Set([
+          ...readStoredFanHubCaptionHistory(mediaFingerprint),
+          ...(generatedCaptionHistoryRef.current.get(mediaFingerprint) ?? []),
+        ]),
+      ).slice(-8);
 
       const visualForCaption = media.filter((m) => m.type === "image" || m.type === "video");
       const singleVideoOnly =
@@ -1268,7 +1322,12 @@ Write 2-4 sentences that are engaging and on-topic.`;
           tone: effectiveTone,
           usePersonality,
           useFavoriteHashtags: false,
-          creatorPersonality: user?.settings?.creatorPersonality?.trim() || undefined,
+          creatorPersonality:
+            user?.settings?.creatorPersonality?.trim() ||
+            ((user as { creatorPersonality?: string } | null | undefined)?.creatorPersonality?.trim()) ||
+            undefined,
+          mediaFingerprint,
+          avoidCaptions,
           toneSettings: {
             spiciness: spicyLevel * 10,
             randomSeed: regenerationNonce,
@@ -1350,6 +1409,9 @@ Write 2-4 sentences that are engaging and on-topic.`;
       if (generatedCaption) {
         // Always replace the caption, don't append
         setCaption(generatedCaption);
+        const previous = generatedCaptionHistoryRef.current.get(mediaFingerprint) ?? [];
+        generatedCaptionHistoryRef.current.set(mediaFingerprint, [...previous, generatedCaption].slice(-12));
+        rememberStoredFanHubCaption(mediaFingerprint, generatedCaption);
         showToast?.("Caption generated!", "success");
       } else {
         throw new Error(
@@ -1363,7 +1425,7 @@ Write 2-4 sentences that are engaging and on-topic.`;
     } finally {
       setGenerating(false);
     }
-  }, [caption, aiTone, customTone, usePersonality, contentSpiciness, showToast, user?.settings?.creatorPersonality, media]);
+  }, [caption, aiTone, customTone, usePersonality, contentSpiciness, showToast, user, media]);
 
   // Poll handlers
   const addPollOption = () => {

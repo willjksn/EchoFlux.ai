@@ -332,6 +332,8 @@ async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
     useFavoriteHashtags,
     creatorPersonality,
     favoriteHashtags,
+    mediaFingerprint,
+    avoidCaptions,
     toneSettings, // Full tone settings from user preferences
   }: {
     mediaUrl?: string;
@@ -347,6 +349,8 @@ async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
     useFavoriteHashtags?: boolean;
     creatorPersonality?: string;
     favoriteHashtags?: string;
+    mediaFingerprint?: string;
+    avoidCaptions?: string[];
     toneSettings?: {
       formality?: number;
       humor?: number;
@@ -393,6 +397,16 @@ async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
   /** Pro & Elite: when true, saved Creator Personality strongly guides this run (Personality Override). */
   const usePersonalityOverrideBool = Boolean(usePersonality && personalityForPrompt?.trim());
   const sanitizedFavoriteHashtags = favoriteHashtags ? sanitizeForAI(favoriteHashtags, 500) : undefined;
+  const sanitizedMediaFingerprint =
+    typeof mediaFingerprint === "string" && mediaFingerprint.trim()
+      ? sanitizeForAI(mediaFingerprint.trim(), 500)
+      : undefined;
+  const sanitizedAvoidCaptions = Array.isArray(avoidCaptions)
+    ? avoidCaptions
+        .map((c) => (typeof c === "string" ? sanitizeForAI(c.trim(), 500) : ""))
+        .filter(Boolean)
+        .slice(-8)
+    : [];
 
   const normalizedPlatformsEarly = Array.isArray(platforms)
     ? platforms.map((p) => String(p).toLowerCase().trim())
@@ -718,8 +732,9 @@ ONLYFANS EXPLICIT MODE (HIGH INTENSITY):
       ? isFanHubCaption
         ? `
 MEDIA + CAPTION STRATEGY (Fan Hub / My Page — members already here):
-- Media may be attached; the caption does not have to be a literal scene description if a stronger angle fits the PRIMARY GOAL, trends (weekly + any live research above), and (when enabled) creator personality.
-- Prefer hooks that fit an existing member feed: mood, story, questions, appreciation — not recruiting followers or public-platform growth. When personality is on, that voice wins over generic social tactics.
+- Media is attached; the caption must be grounded in what is visible while still sounding natural for the member feed.
+- Prefer hooks that fit an existing member feed: mood, story, questions, appreciation — not recruiting followers or public-platform growth.
+- When personality is on, that voice wins over generic social tactics, but it still must connect to this exact media.
 `
         : `
 MEDIA + CAPTION STRATEGY (general / non-explicit):
@@ -733,9 +748,23 @@ MEDIA + CAPTION STRATEGY (general / non-explicit):
       ? `
 FAN HUB — FRESH GENERATION (must differ from prior runs):
 - regenerationNonce: ${String(toneSettings?.randomSeed ?? 0)}
+- mediaFingerprint: ${sanitizedMediaFingerprint || "not provided"}
 - Do NOT output a generic filler caption (e.g. repeated "thanks for being here" / "your support means everything" as the whole post).
 - Change hook, structure, emoji placement, and optional question or on-page CTA — never follow / follow-for-more / recruit-new-fan phrasing.
 - If media is attached, include at least one concrete detail grounded in what is shown (action, setting, mood, outfit, lighting, or vibe).
+`
+      : "";
+
+  const fanHubAvoidRepeatBlock =
+    isFanHubCaption && sanitizedAvoidCaptions.length > 0
+      ? `
+NEVER REPEAT THESE PRIOR CAPTIONS FOR THIS SAME MEDIA:
+${sanitizedAvoidCaptions.map((c, i) => `${i + 1}. "${c}"`).join("\n")}
+
+HARD REQUIREMENT:
+- The new caption must be meaningfully different from every prior caption above.
+- Do not reuse the same opening words, core sentence, CTA, emoji pattern, or emotional angle.
+- If you cannot find a new angle, re-analyze the media and choose a different visible detail, mood, or creator POV.
 `
       : "";
 
@@ -761,10 +790,24 @@ NATURAL SOCIAL CAPTION STYLE (Instagram / TikTok / public socials):
     isFanHubCaption && usePersonalityOverrideBool
       ? `
 FAN HUB / MY PAGE WITH PERSONALITY ENABLED:
-- The uploaded image is context, but the creator personality is the main voice. Do not write a caption based only on visual description.
+- The creator personality is the main voice, but the uploaded image/video is REQUIRED context.
+- Blend the personality with at least one concrete visual detail from the media (action, setting, mood, outfit, lighting, expression, object, movement, or vibe).
+- Do not write a caption based only on generic personality language; it must feel like it belongs to this exact image/video.
 - Do NOT use CTA-style endings such as "comment below", "tell me", "subscribe", "join", "tip", "DM me", "check my story", or "link in bio".
 - Make it feel like a natural member-page post from this creator: personal, close, relaxed, and worth reading without asking the fan to do something.
 - A subtle reflective line is OK; avoid marketing language.
+`
+      : "";
+
+  const fanHubNoPersonalityMediaBlock =
+    isFanHubCaption && !usePersonalityOverrideBool && (Boolean(finalMedia) || finalMediaList.length > 0)
+      ? `
+FAN HUB / MY PAGE WITHOUT PERSONALITY OVERRIDE:
+- Personality Override is OFF or empty. The media analysis is the primary source of truth.
+- Look closely at the image/video and write a detailed, engaging caption grounded in what is actually visible.
+- Mention at least one specific visual detail: setting, colors, lighting, outfit, pose/action, expression, object, camera angle, movement, or overall vibe.
+- Do NOT fall back to generic member-community filler. The caption should not be able to fit any random image/video.
+- Keep it natural and ready to post; do not sound like an image-analysis report.
 `
       : "";
 
@@ -774,8 +817,10 @@ FAN HUB / MY PAGE WITH PERSONALITY ENABLED:
   const prompt = `
 ${strategicMediaCaptionHint}
 ${fanHubVarietyBlock}
+${fanHubAvoidRepeatBlock}
 ${naturalSocialCaptionBlock}
 ${fanHubPersonalityBlock}
+${fanHubNoPersonalityMediaBlock}
 ${sanitizedPromptText ? `
 🚨 USER INSTRUCTIONS ARE PRIMARY (MUST FOLLOW FIRST) 🚨
 - The user provided specific instructions or suggestions for what they want in the caption (see "Extra instructions" / USER INSTRUCTIONS below).
@@ -1205,8 +1250,8 @@ ${includeAiHashtags
         contents: [{ role: "user", parts }],
         generationConfig: {
           responseMimeType: "application/json",
-          temperature: 0.7,
-          topP: 0.9,
+          temperature: isFanHubCaption && hasRandomSeed ? 0.95 : 0.7,
+          topP: isFanHubCaption && hasRandomSeed ? 0.98 : 0.9,
           topK: 40,
         },
       },

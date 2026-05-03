@@ -3129,27 +3129,42 @@ export const MyPageBuilder: React.FC = () => {
                         <label className="block text-[10px] font-medium text-gray-500 dark:text-gray-400 mb-0.5">
                           Icon or text (default if left empty: 💖)
                         </label>
-                        <input
-                          type="text"
-                          className="w-full max-w-xs px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                          placeholder="e.g. 🙏 🔥 ✨"
-                          value={
-                            draft.landingContent?.tipSectionFooterEmoji === undefined
-                              ? ""
-                              : (draft.landingContent.tipSectionFooterEmoji ?? "")
-                          }
-                          onChange={(e) => {
-                            const v = e.target.value;
-                            if (v.trim() === "") {
-                              updateLandingContent("tipSectionFooterEmoji", undefined);
-                            } else {
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="text"
+                            className="w-full max-w-xs px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                            placeholder="e.g. 🙏 🔥 ✨"
+                            value={
+                              draft.landingContent?.tipSectionFooterEmoji === undefined
+                                ? ""
+                                : (draft.landingContent.tipSectionFooterEmoji ?? "")
+                            }
+                            onChange={(e) => {
+                              const v = e.target.value;
+                              if (v.trim() === "") {
+                                updateLandingContent("tipSectionFooterEmoji", undefined);
+                              } else {
+                                updateLandingContent(
+                                  "tipSectionFooterEmoji",
+                                  Array.from(v).slice(0, 32).join(""),
+                                );
+                              }
+                            }}
+                          />
+                          <EmojiButton
+                            includeSjHeartEmoji={includeSjHeartEmoji}
+                            onSelect={(emoji) => {
+                              const current =
+                                draft.landingContent?.tipSectionFooterEmoji === undefined
+                                  ? ""
+                                  : (draft.landingContent.tipSectionFooterEmoji ?? "");
                               updateLandingContent(
                                 "tipSectionFooterEmoji",
-                                Array.from(v).slice(0, 32).join(""),
+                                Array.from(current + emoji).slice(0, 32).join(""),
                               );
-                            }
-                          }}
-                        />
+                            }}
+                          />
+                        </div>
                       </div>
                     ) : null}
                   </div>
