@@ -750,7 +750,7 @@ export const OnlyFansSextingSession: React.FC = () => {
     setSessionPaused(false);
     setMessages([]);
     lastFetchedMessageCountRef.current = 0;
-    lastChatBotRepliedCountRef.current = 0;
+    lastChatBotRepliedFanMessageIdRef.current = null;
     setAutoSuggestions([]);
     showToast?.('Session started!', 'success');
   }, [selectedUid, durationPreset, customDurationInput, customDurationMinutes, sessionDurationMinutes, showToast, getToken, customChatTypeValue]);

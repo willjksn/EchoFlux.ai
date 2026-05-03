@@ -519,7 +519,7 @@ export const MediaLibrary: React.FC = () => {
       
       mediaRecorder.onstop = async () => {
         setVoiceMeterStream(null);
-        stream.getTracks().forEach((t) => t.stop());
+        stream?.getTracks().forEach((t) => t.stop());
         const blobType = effectiveBlobType(mediaRecorder, requestedMime);
         const audioBlob = new Blob(audioChunksRef.current, { type: blobType });
         

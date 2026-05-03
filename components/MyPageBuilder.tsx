@@ -330,7 +330,7 @@ function buildStorefrontPreviewConfig(draft: Partial<CreatorStorefrontSettings>)
     handle: draft.handle ?? "",
     displayName: draft.displayName ?? "",
     bio: draft.bio ?? "",
-    avatar: draft.avatar ?? (draft as Record<string, unknown>).avatarUrl,
+    avatar: draft.avatar ?? ((draft as Record<string, unknown>).avatarUrl as string | undefined),
     avatarObjectPosition: draft.avatarObjectPosition,
     showDisplayNameOnLanding: draft.showDisplayNameOnLanding !== false,
     heroImage: draft.heroImage ?? "",
@@ -1082,9 +1082,9 @@ export const MyPageBuilder: React.FC = () => {
         handle: data.handle ?? "",
         displayName: data.displayName ?? "",
         bio: data.bio ?? "",
-        avatar: data.avatar ?? (data as Record<string, unknown>).avatarUrl,
+        avatar: data.avatar ?? ((data as Record<string, unknown>).avatarUrl as string | undefined),
         avatarObjectPosition: data.avatarObjectPosition,
-        banner: data.banner ?? (data as Record<string, unknown>).bannerUrl,
+        banner: data.banner ?? ((data as Record<string, unknown>).bannerUrl as string | undefined),
         showDisplayNameOnLanding: (data as Record<string, unknown>).showDisplayNameOnLanding !== false,
         heroImage: data.heroImage ?? "",
         heroMedia: Array.isArray(data.heroMedia) && data.heroMedia.length > 0
@@ -1092,7 +1092,7 @@ export const MyPageBuilder: React.FC = () => {
           : (data.heroImage ? [{ url: data.heroImage, size: "medium" as const }] : []),
         heroTagline: data.heroTagline ?? "",
         heroPromise: data.heroPromise ?? "",
-        heroSubline: (data as Record<string, unknown>).heroSubline ?? "",
+        heroSubline: ((data as Record<string, unknown>).heroSubline as string | undefined) ?? "",
         heroSubline2: data.heroSubline2 ?? "",
         logo:
           (data.logo && String(data.logo).trim()) ||
@@ -3303,7 +3303,7 @@ export const MyPageBuilder: React.FC = () => {
                   <div className="mt-auto">
                     <ColorPickerWithDropper
                       value={draft.theme?.accentHover ?? DEFAULT_THEME.accentHover}
-                      defaultColor={DEFAULT_THEME.accentHover}
+                      defaultColor={DEFAULT_THEME.accentHover || DEFAULT_THEME.primary}
                       onChange={(color) => updateTheme({ accentHover: color || DEFAULT_THEME.accentHover })}
                     />
                   </div>
@@ -3325,7 +3325,7 @@ export const MyPageBuilder: React.FC = () => {
                   <div className="mt-auto">
                     <ColorPickerWithDropper
                       value={draft.theme?.text ?? DEFAULT_THEME.text}
-                      defaultColor={DEFAULT_THEME.text}
+                      defaultColor={DEFAULT_THEME.text || "#1f2937"}
                       onChange={(color) => updateTheme({ text: color || DEFAULT_THEME.text })}
                     />
                   </div>
@@ -3336,7 +3336,7 @@ export const MyPageBuilder: React.FC = () => {
                   <div className="mt-auto">
                     <ColorPickerWithDropper
                       value={draft.theme?.textMuted ?? DEFAULT_THEME.textMuted}
-                      defaultColor={DEFAULT_THEME.textMuted}
+                      defaultColor={DEFAULT_THEME.textMuted || "#6b7280"}
                       onChange={(color) => updateTheme({ textMuted: color || DEFAULT_THEME.textMuted })}
                     />
                   </div>
@@ -3347,7 +3347,7 @@ export const MyPageBuilder: React.FC = () => {
                   <div className="mt-auto">
                     <ColorPickerWithDropper
                       value={draft.theme?.border ?? DEFAULT_THEME.border}
-                      defaultColor={DEFAULT_THEME.border}
+                      defaultColor={DEFAULT_THEME.border || "#e5e7eb"}
                       onChange={(color) => updateTheme({ border: color || DEFAULT_THEME.border })}
                     />
                   </div>

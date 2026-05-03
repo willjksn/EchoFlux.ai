@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAppContext } from './AppContext';
 import { CheckCircleIcon, RocketIcon, UserIcon } from './icons/UIIcons';
+import type { ReferralReward } from '../types';
 
 // Temporary icons until added to UIIcons
 const CopyIcon: React.FC<{ className?: string }> = ({ className }) => (

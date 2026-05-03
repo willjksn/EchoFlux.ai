@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useAppContext } from './AppContext';
 import { CreditCardIcon, VisaIcon, MastercardIcon, CheckCircleIcon } from './icons/UIIcons';
-import { PaymentPlan, User } from '../types';
+import { PaymentPlan, Plan, User, UserType } from '../types';
 import { doc, setDoc, deleteField } from 'firebase/firestore';
 import { db } from '../firebaseConfig';
 import { createAccountFromPendingSignup } from '../src/utils/createAccountFromPendingSignup';
@@ -140,7 +140,7 @@ export const PaymentModal: React.FC = () => {
                     client.id === selectedClient.id
                         ? {
                             ...client,
-                            plan: paymentPlan.name as User['plan'],
+                            plan: paymentPlan.name as Plan,
                             monthlyCaptionGenerationsUsed: 0,
                             monthlyImageGenerationsUsed: 0,
                             monthlyVideoGenerationsUsed: 0,
@@ -574,7 +574,7 @@ export const PaymentModal: React.FC = () => {
                             </div>
                         ) : (
                             (() => {
-                              const isAnnual = paymentPlan.cycle === 'annually' || paymentPlan.cycle === 'annual' || paymentPlan.cycle === 'yearly';
+                              const isAnnual = paymentPlan.cycle === 'annually';
                               const dueToday = isAnnual ? paymentPlan.price * 12 : paymentPlan.price;
                               const cycleLabel = isAnnual ? 'yr' : 'mo';
                               return (

@@ -408,6 +408,8 @@ export interface CreatorStorefrontSettings {
     /** CSS object-position for avatar when shown in circular crop (e.g. full-background hero). E.g. `40% 20%`. */
     avatarObjectPosition?: string;
     logo?: string;   // image URL - shown in header (like Stormij XO logo)
+    /** Legacy top banner image field used by early My Page drafts. */
+    banner?: string;
     /** Alternate field for the same asset (some docs / migrations use `logoUrl`) */
     logoUrl?: string;
     /** When false, hide display name from landing hero (still shown in header and feed) */
@@ -480,10 +482,10 @@ export interface CreatorStorefrontSettings {
     /** Hero section layout on landing: default (image + text stack) | centered (compact) | split (image left, text right) */
     heroLayout?: 'default' | 'centered' | 'split' | 'splitRight';
     sections?: {
-        feed: boolean;
-        treats: boolean;
-        tip: boolean;
-        messages: boolean;
+        feed?: boolean;
+        treats?: boolean;
+        tip?: boolean;
+        messages?: boolean;
         about?: boolean;
     };
     /** Order of section keys for tab bar (e.g. ['feed','treats','messages','about']) */
@@ -844,16 +846,21 @@ export interface ReferralStats {
 }
 
 export interface User {
+  /** Firebase Auth uid alias used by some older components. Prefer `id` in new code. */
+  uid?: string;
   id: string;
   name: string;
+  displayName?: string;
   email: string;
   avatar: string;
+  photoURL?: string;
   /** CSS object-position for circular profile avatar (e.g. "40% 60%"). */
   avatarObjectPosition?: string;
   bio: string;
   plan: Plan | null; // null when payment is pending
   role: 'Admin' | 'User';
   signupDate: string;
+  createdAt?: string;
   userType?: UserType;
   businessName?: string;
   businessType?: string;
@@ -920,6 +927,15 @@ export interface User {
     amount: number;
     claimedAt: string;
   }>;
+  referralCode?: string;
+  referralStats?: ReferralStats;
+  manualReferralRewards?: Array<{
+    rewardType: 'extra_generations' | 'strategy_generations' | 'free_month' | 'storage_boost' | string;
+    rewardAmount: number;
+    grantedAt: string;
+    grantedBy: string;
+    reason?: string;
+  }>;
   /** Global fan / member handle (lowercase); set only via `api/claimMemberUsername` */
   username?: string;
   /** How this auth profile was first provisioned. */
@@ -938,7 +954,7 @@ export interface Announcement {
   id: string;
   title: string;
   body: string;
-  type: 'info' | 'warning' | 'success';
+  type: 'info' | 'warning' | 'success' | 'error';
   isActive: boolean;
   isBanner: boolean; // show as top banner if true
   isPublic?: boolean; // if true, show to unauthenticated visitors (landing page)
@@ -982,7 +998,7 @@ export interface PaymentPlan {
 
 export interface Toast {
   message: string;
-  type: 'success' | 'error' | 'info';
+  type: 'success' | 'error' | 'info' | 'warning';
 }
 
 export interface Activity {
@@ -1200,6 +1216,8 @@ export interface Post {
     publishedAt?: string;
     comments: PostComment[];
     clientId?: string; 
+    postGoal?: string;
+    postTone?: string;
 }
 
 export interface DayPlan {
@@ -1215,15 +1233,27 @@ export interface DayPlan {
     linkedPostId?: string; // Links to actual Post when created
     caption?: string; // Caption for the post
     suggestedMediaType?: 'image' | 'video'; // Suggested type of media to upload
+    description?: string;
+    angle?: string;
+    cta?: string;
+    platforms?: Platform[];
+    postType?: 'Post' | 'Story' | 'Reel' | 'Email' | string;
+    postIdea?: string;
+    day?: string;
 }
 
 export interface WeekPlan {
     weekNumber: number;
     theme: string;
     content: DayPlan[];
+    /** Legacy alias used by older services. */
+    week?: number;
+    /** Legacy alias used by older services. */
+    days?: DayPlan[];
 }
 
 export interface StrategyPlan {
+    overview?: string;
     weeks: WeekPlan[];
     metrics?: {
         primaryKPI?: string;
@@ -1344,7 +1374,7 @@ export interface AppContextType {
   endTour: () => void;
   openPaymentModal: (plan: PaymentPlan) => void;
   closePaymentModal: () => void;
-  showToast: (message: string, type: 'success' | 'error' | 'info') => void;
+  showToast: (message: string, type: 'success' | 'error' | 'info' | 'warning') => void;
   setUserBaseImage: React.Dispatch<React.SetStateAction<{ data: string; mimeType: string } | null>>;
   setUserCustomVoices: React.Dispatch<React.SetStateAction<CustomVoice[]>>;
   setMessages: React.Dispatch<React.SetStateAction<Message[]>>;
@@ -1388,6 +1418,7 @@ export interface SocialAccount {
   accountId?: string; // Platform-specific user/account ID
   accountName?: string; // Display name from platform
   accountUsername?: string; // Username/handle from platform
+  followers?: number;
   lastSyncedAt?: string; // Last time we fetched data from this platform
 }
 

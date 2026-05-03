@@ -332,7 +332,7 @@ export const MassEmailComposer: React.FC<MassEmailComposerProps> = ({ isOpen, on
               className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
             />
             <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-              Use {'{name}'} to personalize (e.g., "Hi {name}, welcome!")
+              Use {"{name}"} to personalize (e.g., &quot;Hi {"{name}"}, welcome!&quot;)
             </p>
           </div>
 

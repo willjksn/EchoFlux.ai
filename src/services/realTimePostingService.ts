@@ -98,7 +98,6 @@ async function fetchFromRealTimeSources(
       case 'TikTok':
         return await fetchTikTokPostingData(contentType);
       case 'X':
-      case 'Twitter':
         return await fetchTwitterPostingData(contentType);
       case 'LinkedIn':
         return await fetchLinkedInPostingData(contentType);

@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { useAppContext } from './AppContext';
-import { ApprovalStatus, Post, Platform } from '../types';
+import { ApprovalStatus, CalendarEvent, MediaLibraryItem, Post, Platform } from '../types';
 import { CheckCircleIcon, MobileIcon, SendIcon, TrashIcon, EditIcon, ChatIcon, UserIcon, XMarkIcon, SparklesIcon, ClipboardCheckIcon, CalendarIcon, HeartIcon } from './icons/UIIcons';
 import { InstagramIcon, TikTokIcon, XIcon, ThreadsIcon, YouTubeIcon, LinkedInIcon, FacebookIcon, PinterestIcon } from './icons/PlatformIcons';
 import { MobilePreviewModal } from './MobilePreviewModal';
@@ -176,9 +176,6 @@ export const Approvals: React.FC = () => {
         items: filteredPosts.filter(p => {
             // Match exact status
             if (p.status === status) return true;
-            
-            // Handle status variations
-            if (status === 'In Review' && (p.status === 'Pending Review' || p.status === 'Review')) return true;
             
             return false;
         })
@@ -863,7 +860,7 @@ ${p.content}
                                                             await updatePostInDb({ ...activePost, status: 'Scheduled', scheduledDate: scheduledDateISO });
                                                             
                                                             // Create calendar event
-                                                            const calendarEvent = {
+                                                            const calendarEvent: CalendarEvent = {
                                                                 id: `cal-${activePost.id}`,
                                                                 title: activePost.content.substring(0, 50) + (activePost.content.length > 50 ? '...' : ''),
                                                                 date: scheduledDateISO,

@@ -1042,13 +1042,13 @@ export const Settings: React.FC = () => {
                                   <div className="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
                                       <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Current Account Type</p>
                                       <p className="text-lg font-bold text-primary-600 dark:text-primary-400">
-                                          {user.userType === 'Business' ? 'Business' : user.userType === 'Creator' ? 'Creator' : 'Not Set'}
+                                          {user?.userType === 'Business' ? 'Business' : user?.userType === 'Creator' ? 'Creator' : 'Not Set'}
                                       </p>
                                       <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                                          Your plan: <span className="font-semibold">{user.plan}</span>
+                                          Your plan: <span className="font-semibold">{user?.plan}</span>
                                       </p>
                                   </div>
-                                  {user.userType === 'Business' && (
+                                  {user?.userType === 'Business' && (
                                       <button 
                                           onClick={handleSwitchToCreator} 
                                           className="w-full px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 transition-colors text-sm font-medium"
@@ -1056,7 +1056,7 @@ export const Settings: React.FC = () => {
                                           Switch to Creator Mode
                                       </button>
                                   )}
-                                  {user.userType === 'Creator' && (
+                                  {user?.userType === 'Creator' && (
                                       <button 
                                           onClick={handleSwitchToBusiness} 
                                           className="w-full px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 transition-colors text-sm font-medium"

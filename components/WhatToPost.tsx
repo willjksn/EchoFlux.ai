@@ -556,7 +556,7 @@ export const WhatToPost: React.FC<WhatToPostProps> = ({ onOpenAdvanced }) => {
     const dateStr = `${scheduleDate}T${scheduleTime}:00.000Z`;
     
     // Map format to calendar type
-    const formatToType: Record<string, string> = {
+    const formatToType: Record<string, CalendarEvent['type']> = {
       reel: 'Reel',
       carousel: 'Post',
       photo: 'Post',
@@ -585,7 +585,7 @@ export const WhatToPost: React.FC<WhatToPostProps> = ({ onOpenAdvanced }) => {
       status: 'Draft',
       description: `POST IDEA:\n${idea.hook}\n\nWHAT TO SHOW:\n${idea.shotList?.join('\n• ') || ''}\n\n${idea.captionStarter || ''}`,
     };
-    addCalendarEvent(event).then(() => {
+    Promise.resolve(addCalendarEvent(event)).then(() => {
       showToast('Added to calendar as a draft reminder.', 'success');
       setUseThisIdea(null);
       setScheduleDate('');

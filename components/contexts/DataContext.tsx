@@ -450,7 +450,14 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // User ID changed - update and set up new listeners
     setLastUserId(effectiveUserId);
 
-    const subcollections = [
+    type UserSubcollectionListener = {
+      name: string;
+      setter: React.Dispatch<React.SetStateAction<any[]>> | ((items: any[]) => void);
+      seed?: any[];
+      seedIdField?: string;
+    };
+
+    const subcollections: UserSubcollectionListener[] = [
       { name: "messages", setter: setMessages }, // No seed - users start with empty inbox
       { name: "posts", setter: setPosts }, // No seed - users start with empty posts
       { name: "calendar_events", setter: setCalendarEvents },

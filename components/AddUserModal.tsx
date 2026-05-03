@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { User } from '../types';
+import { Plan, User } from '../types';
 import { auth } from '../firebaseConfig';
 
 interface AddUserModalProps {
@@ -7,7 +7,7 @@ interface AddUserModalProps {
     onSuccess: () => void;
 }
 
-const PLAN_OPTIONS: User['plan'][] = ['Pro', 'Elite'];
+const PLAN_OPTIONS: Plan[] = ['Pro', 'Elite'];
 
 export const AddUserModal: React.FC<AddUserModalProps> = ({ onClose, onSuccess }) => {
     const [email, setEmail] = useState('');
@@ -169,7 +169,7 @@ export const AddUserModal: React.FC<AddUserModalProps> = ({ onClose, onSuccess }
                             </label>
                             <select
                                 id="add-user-plan"
-                                value={plan || 'Pro'}
+                                value={plan ?? 'Pro'}
                                 onChange={e => setPlan((e.target.value || 'Pro') as User['plan'])}
                                 className="mt-1 block w-full pl-3 pr-10 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500 dark:text-white"
                                 disabled={isLoading}

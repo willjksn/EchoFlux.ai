@@ -149,7 +149,7 @@ export const Opportunities: React.FC = () => {
                 setLastScanDate(scanDate);
                 
                 // Save to localStorage for persistence
-                localStorage.setItem(`opportunities_scan_${user.id}`, JSON.stringify({
+                localStorage.setItem(`opportunities_scan_${user!.id}`, JSON.stringify({
                     niche,
                     results: trends,
                     scanDate
@@ -333,7 +333,7 @@ Generate multiple compelling captions (at least 5) that leverage this trend. Eac
             contextDescription: `Create content around: ${selectedOpportunity.title}\n\n${selectedOpportunity.description || ''}${selectedOpportunity.bestPractices ? `\n\nBest practices: ${selectedOpportunity.bestPractices}` : ''}${selectedOpportunity.relatedHashtags?.length ? `\n\nRelated hashtags: ${selectedOpportunity.relatedHashtags.join(', ')}` : ''}`
         };
         
-        localStorage.setItem(`opportunity_for_strategy_${user.id}`, JSON.stringify(opportunityData));
+        localStorage.setItem(`opportunity_for_strategy_${user!.id}`, JSON.stringify(opportunityData));
         
         setShowContentModal(false);
         // Navigate to Strategy (Advanced Planner) page
@@ -465,7 +465,7 @@ Generate multiple compelling captions (at least 5) that leverage this trend. Eac
                                                             setNiche(scan.niche || '');
                                                             setLastScanDate(scan.scannedAt?.toDate ? scan.scannedAt.toDate().toISOString() : null);
                                                             // Update localStorage
-                                                            localStorage.setItem(`opportunities_scan_${user.id}`, JSON.stringify({
+                                                            localStorage.setItem(`opportunities_scan_${user!.id}`, JSON.stringify({
                                                                 niche: scan.niche,
                                                                 results: scan.results,
                                                                 scanDate: scan.scannedAt?.toDate ? scan.scannedAt.toDate().toISOString() : null
@@ -481,7 +481,7 @@ Generate multiple compelling captions (at least 5) that leverage this trend. Eac
                                                         onClick={async () => {
                                                             if (window.confirm('Delete this scan from history?')) {
                                                                 try {
-                                                                    await deleteDoc(doc(db, 'users', user.id, 'opportunities_history', scan.id));
+                                                                    await deleteDoc(doc(db, 'users', user!.id, 'opportunities_history', scan.id));
                                                                     await loadScanHistory();
                                                                     showToast('Scan deleted', 'success');
                                                                 } catch (error) {
@@ -514,7 +514,7 @@ Generate multiple compelling captions (at least 5) that leverage this trend. Eac
                                 className="flex-1 p-3 border rounded-lg bg-gray-50 dark:bg-gray-700 border-gray-300 dark:border-gray-600 dark:text-white dark:placeholder-gray-400 focus:ring-2 focus:ring-primary-500"
                             />
                             <button
-                                onClick={handleFindTrends}
+                                onClick={() => handleFindTrends()}
                                 disabled={!niche.trim() || isLoading}
                                 className="flex items-center justify-center px-6 py-3 text-base font-medium text-white bg-gradient-to-r from-primary-600 to-primary-500 rounded-lg hover:from-primary-700 hover:to-primary-600 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap shadow-sm transition-all"
                             >
@@ -563,7 +563,7 @@ Generate multiple compelling captions (at least 5) that leverage this trend. Eac
                                 <button
                                     onClick={() => {
                                         setSelectedOpportunity(null);
-                                        localStorage.removeItem(`selected_opportunity_${user.id}`);
+                                        localStorage.removeItem(`selected_opportunity_${user!.id}`);
                                     }}
                                     className="px-3 py-1 text-xs text-primary-600 dark:text-primary-400 hover:bg-primary-100 dark:hover:bg-primary-900/30 rounded"
                                 >

@@ -132,9 +132,9 @@ interface Fan {
     /** From creators/.../fans subscription mirror: paid period ended (grey card; fan row kept for renewals). */
     hubMembershipExpired?: boolean;
     preferences: {
-        preferredTone?: 'soft' | 'dominant' | 'playful' | 'dirty' | 'Bold';
+        preferredTone?: 'soft' | 'dominant' | 'playful' | 'dirty' | 'Bold' | 'Very Explicit';
         favoriteSessionType?: string;
-        communicationStyle?: 'casual' | 'formal' | 'flirty' | 'direct' | 'like Bold';
+        communicationStyle?: 'casual' | 'formal' | 'flirty' | 'direct' | 'like Bold' | 'like Explicit';
         totalSessions?: number;
         spendingLevel?: number;
         subscriptionTier?: 'Free' | 'Paid';
@@ -143,12 +143,17 @@ interface Fan {
         isRegular?: boolean;
         isLoyalFan?: boolean;
         isBigSpender?: boolean;
-        lastSessionDate?: string;
+        lastSessionDate?: any;
         notes?: string;
         reminders?: Array<{ id: string; text: string; date: string }>;
         tags?: string[];
         email?: string;
         customContentNotes?: Record<string, string>;
+        languagePreferences?: string;
+        suggestedFlow?: string;
+        pastNotes?: string;
+        boundaries?: string;
+        boundariesChecklist?: Record<string, boolean>;
         engagementHistory?: Array<{
             sessionId: string;
             date: string;
@@ -212,11 +217,13 @@ export const OnlyFansFans: React.FC = () => {
     const [newFanSpendingLevel, setNewFanSpendingLevel] = useState<number>(0);
     const [newFanTier, setNewFanTier] = useState<'Free' | 'Paid'>('Free');
     const [newFanType, setNewFanType] = useState<'Whale' | 'VIP' | 'Regular' | ''>('');
+    const setNewFanIsVIP = (isVip: boolean) => setNewFanType(isVip ? 'VIP' : '');
     const [newFanNotes, setNewFanNotes] = useState('');
     const [newFanPreferredTone, setNewFanPreferredTone] = useState<string>('');
     const [newFanFavoriteSessionType, setNewFanFavoriteSessionType] = useState<string>('');
     const [newFanCommunicationStyle, setNewFanCommunicationStyle] = useState<string>('');
     const [newFanLanguagePreferences, setNewFanLanguagePreferences] = useState<string>('');
+    const setNewFanPreferredLanguage = setNewFanLanguagePreferences;
     const [newFanSuggestedFlow, setNewFanSuggestedFlow] = useState<string>('');
     const [newFanPastNotes, setNewFanPastNotes] = useState<string>('');
     const [newFanBoundaries, setNewFanBoundaries] = useState<string>('');
@@ -438,7 +445,7 @@ export const OnlyFansFans: React.FC = () => {
                     return Number.isFinite(t);
                 });
 
-            let orderItems: typeof calendarItems = [];
+            let orderItems: typeof customContent = [];
             try {
                 const token = auth.currentUser ? await auth.currentUser.getIdToken() : null;
                 const res = await fetch('/api/creatorOrders?limit=1000', {

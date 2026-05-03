@@ -425,7 +425,7 @@ function readStoredFanHubCaptionHistory(mediaFingerprint: string): string[] {
     const parsed = raw ? (JSON.parse(raw) as Record<string, unknown>) : {};
     const captions = parsed[mediaFingerprint];
     return Array.isArray(captions)
-      ? captions.filter((c): c is string => typeof c === "string" && c.trim()).slice(-8)
+      ? captions.filter((c): c is string => typeof c === "string" && c.trim().length > 0).slice(-8)
       : [];
   } catch {
     return [];
@@ -438,7 +438,7 @@ function rememberStoredFanHubCaption(mediaFingerprint: string, caption: string) 
     const raw = window.localStorage.getItem(FAN_HUB_CAPTION_HISTORY_STORAGE_KEY);
     const parsed = raw ? (JSON.parse(raw) as Record<string, string[]>) : {};
     const merged = [...(Array.isArray(parsed[mediaFingerprint]) ? parsed[mediaFingerprint] : []), caption]
-      .filter((c): c is string => typeof c === "string" && c.trim())
+      .filter((c): c is string => typeof c === "string" && c.trim().length > 0)
       .slice(-12);
     const nextEntries = Object.entries({ ...parsed, [mediaFingerprint]: merged }).slice(-80);
     window.localStorage.setItem(FAN_HUB_CAPTION_HISTORY_STORAGE_KEY, JSON.stringify(Object.fromEntries(nextEntries)));
@@ -958,7 +958,7 @@ export const FanHubPosts: React.FC = () => {
 
         rec.onstop = async () => {
           setVoiceMeterStream(null);
-          stream.getTracks().forEach((t) => t.stop());
+          stream?.getTracks().forEach((t) => t.stop());
           const blobType = effectiveBlobType(rec, requestedMime);
           const audioBlob = new Blob(audioChunksRef.current, { type: blobType });
 
@@ -1696,6 +1696,10 @@ Write 2-4 sentences that are engaging and on-topic.`;
       
       if (status === "published" && !editingPostId) {
         postData.publishedAt = new Date();
+      }
+      // Merge writes must not overwrite first-publish time when editing an existing post.
+      if (editingPostId) {
+        delete (postData as Record<string, unknown>).publishedAt;
       }
       
       // Locked content

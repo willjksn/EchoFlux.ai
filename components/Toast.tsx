@@ -3,7 +3,7 @@ import { CheckCircleIcon } from './icons/UIIcons';
 
 interface ToastProps {
     message: string;
-    type: 'success' | 'error' | 'info';
+    type: 'success' | 'error' | 'info' | 'warning';
 }
 
 const InfoIcon: React.FC = () => (
@@ -16,12 +16,13 @@ const InfoIcon: React.FC = () => (
 export const Toast: React.FC<ToastProps> = ({ message, type }) => {
     const isSuccess = type === 'success';
     const isInfo = type === 'info';
+    const isWarning = type === 'warning';
 
     return (
         <div 
             className="fixed top-6 left-1/2 -translate-x-1/2 z-[1001] flex items-center p-4 rounded-full shadow-lg animate-fade-in-down"
             style={{ 
-                backgroundColor: isSuccess ? '#4CAF50' : isInfo ? '#2196F3' : '#F44336', 
+                backgroundColor: isSuccess ? '#4CAF50' : isInfo ? '#2196F3' : isWarning ? '#F59E0B' : '#F44336',
                 color: 'white' 
             }}
             role="alert"

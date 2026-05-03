@@ -7,9 +7,10 @@ interface UpgradePromptProps {
     secondaryActionText?: string;
     onSecondaryActionClick?: () => void;
     userType?: 'Creator' | 'Business';
+    description?: string;
 }
 
-export const UpgradePrompt: React.FC<UpgradePromptProps> = ({ featureName, onUpgradeClick, secondaryActionText, onSecondaryActionClick, userType }) => {
+export const UpgradePrompt: React.FC<UpgradePromptProps> = ({ featureName, onUpgradeClick, secondaryActionText, onSecondaryActionClick, userType, description }) => {
     // Determine the appropriate message based on user type and feature
   const getUpgradeMessage = () => {
     return 'This premium feature is available on our Pro and Elite plans.';
@@ -22,7 +23,7 @@ export const UpgradePrompt: React.FC<UpgradePromptProps> = ({ featureName, onUpg
             </div>
             <h2 className="mt-4 text-2xl font-bold text-gray-900 dark:text-white">Upgrade to Unlock {featureName}</h2>
             <p className="mt-2 text-gray-600 dark:text-gray-400">
-                {getUpgradeMessage()}
+                {description || getUpgradeMessage()}
             </p>
             <div className="mt-6 flex flex-col sm:flex-row justify-center items-center gap-4">
                 <button 

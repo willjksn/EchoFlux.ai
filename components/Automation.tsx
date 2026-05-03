@@ -349,6 +349,16 @@ export const Automation: React.FC = () => {
     }
   }, [user, goal, tone, showToast]);
 
+  const handleClear = useCallback(() => {
+    setUploadedFiles([]);
+    setScheduledPosts([]);
+    setSelectedIndices(new Set());
+    setProcessingIndex(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  }, []);
+
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
@@ -490,6 +500,8 @@ export const Automation: React.FC = () => {
 
           const scheduledDate = scheduledDates[0] || new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
           updatedMedia.scheduledDate = scheduledDate;
+          const mediaMimeType = media.file?.type || media.mimeType || "";
+          const scheduledMediaType = mediaMimeType.startsWith('video/') ? 'video' : 'image';
 
           // Create Post
           const postId = `auto-${Date.now()}-${i}`;
@@ -497,7 +509,7 @@ export const Automation: React.FC = () => {
             id: postId,
             content: updatedMedia.caption + '\n\n' + updatedMedia.hashtags.join(' '),
             mediaUrl: updatedMedia.mediaUrl,
-            mediaType: media.file.type.startsWith('video/') ? 'video' : 'image',
+            mediaType: scheduledMediaType,
             platforms: updatedMedia.platforms,
             status: 'Scheduled',
             author: { name: user.name, avatar: user.avatar },
@@ -516,7 +528,7 @@ export const Automation: React.FC = () => {
             id: `cal-${postId}`,
             title: updatedMedia.caption.substring(0, 30) + (updatedMedia.caption.length > 30 ? '...' : ''),
             date: scheduledDate,
-            type: media.file.type.startsWith('video/') ? 'Reel' : 'Post',
+            type: scheduledMediaType === 'video' ? 'Reel' : 'Post',
             platform: updatedMedia.platforms[0],
             status: 'Scheduled',
             thumbnail: updatedMedia.mediaUrl,
@@ -810,7 +822,7 @@ export const Automation: React.FC = () => {
               Plan for Platform (Select One)
             </label>
             <div className="flex flex-wrap gap-2">
-              {(Object.keys(platformIcons) as Platform[]).filter(p => p !== 'OnlyFans').map((platform) => (
+              {(Object.keys(platformIcons) as Platform[]).map((platform) => (
                 <button
                   key={platform}
                   onClick={() => setSelectedPlatform(platform)}

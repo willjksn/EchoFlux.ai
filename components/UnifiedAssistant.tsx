@@ -615,7 +615,7 @@ Just ask me how to do something or what you'd like to learn about!`;
                 }
               }
             ]
-          }]
+          }] as any
         } : {})
       }
     });

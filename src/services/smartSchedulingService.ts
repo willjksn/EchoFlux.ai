@@ -220,7 +220,7 @@ export function scheduleMultiplePosts(
 
   for (let i = 0; i < count; i++) {
     let attempts = 0;
-    let scheduledDate: Date;
+    let scheduledDate: Date | null = null;
 
     while (attempts < optimalTimes.length * 2) {
       const optimalTime = optimalTimes[timeIndex % optimalTimes.length];
@@ -243,8 +243,9 @@ export function scheduleMultiplePosts(
       scheduledDate.setHours(optimalTime.hour, optimalTime.minute, 0, 0);
 
       // Check if this time conflicts with previously scheduled posts
+      const candidateDate = scheduledDate;
       if (!avoidClumping || usedTimes.every(used => {
-        const hoursDiff = Math.abs(scheduledDate.getTime() - used.getTime()) / (1000 * 60 * 60);
+        const hoursDiff = Math.abs(candidateDate.getTime() - used.getTime()) / (1000 * 60 * 60);
         return hoursDiff >= minHoursBetween;
       })) {
         break; // Found a good time

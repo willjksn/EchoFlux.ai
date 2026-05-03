@@ -125,16 +125,18 @@ export const Profile: React.FC = () => {
     const handleNameEmojiSelect = (emoji: string) => {
         if (nameInputRef.current && editableUser) {
             const { selectionStart, selectionEnd } = nameInputRef.current;
+            const start = selectionStart ?? (editableUser.name || '').length;
+            const end = selectionEnd ?? start;
             const currentName = editableUser.name || '';
             const newName =
-                currentName.substring(0, selectionStart) +
+                currentName.substring(0, start) +
                 emoji +
-                currentName.substring(selectionEnd);
+                currentName.substring(end);
             setEditableUser({ ...editableUser, name: newName });
             setTimeout(() => {
                 if (nameInputRef.current) {
                     nameInputRef.current.focus();
-                    const newCursorPosition = selectionStart + emoji.length;
+                    const newCursorPosition = start + emoji.length;
                     nameInputRef.current.setSelectionRange(newCursorPosition, newCursorPosition);
                 }
             }, 0);
@@ -144,16 +146,18 @@ export const Profile: React.FC = () => {
     const handleBioEmojiSelect = (emoji: string) => {
         if (bioTextareaRef.current && editableUser) {
             const { selectionStart, selectionEnd } = bioTextareaRef.current;
+            const start = selectionStart ?? (editableUser.bio || '').length;
+            const end = selectionEnd ?? start;
             const currentBio = editableUser.bio || '';
             const newBio =
-                currentBio.substring(0, selectionStart) +
+                currentBio.substring(0, start) +
                 emoji +
-                currentBio.substring(selectionEnd);
+                currentBio.substring(end);
             setEditableUser({ ...editableUser, bio: newBio });
             setTimeout(() => {
                 if (bioTextareaRef.current) {
                     bioTextareaRef.current.focus();
-                    const newCursorPosition = selectionStart + emoji.length;
+                    const newCursorPosition = start + emoji.length;
                     bioTextareaRef.current.setSelectionRange(newCursorPosition, newCursorPosition);
                 }
             }, 0);
@@ -325,7 +329,7 @@ export const Profile: React.FC = () => {
         }
     }
 
-    const planColorMap: Record<Plan, string> = {
+    const planColorMap: Partial<Record<Plan, string>> = {
         Free: 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200',
         Pro: 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-200',
         Elite: 'bg-purple-100 text-purple-800 dark:bg-purple-900/50 dark:text-purple-200',
@@ -452,7 +456,7 @@ export const Profile: React.FC = () => {
                                 <div>
                                     <p className="text-sm text-gray-500 dark:text-gray-400">Current Plan</p>
                                     <div className="flex items-center gap-2 mt-1">
-                                        <span className={`px-3 py-1 text-xs font-semibold rounded-full ${planColorMap[user.plan]}`}>
+                                        <span className={`px-3 py-1 text-xs font-semibold rounded-full ${user.plan ? planColorMap[user.plan] || planColorMap.Free : planColorMap.Free}`}>
                                             {user.plan}
                                         </span>
                                         <button 

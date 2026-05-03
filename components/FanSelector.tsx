@@ -295,7 +295,7 @@ export const FanSelector: React.FC<FanSelectorProps> = ({
                                                 {fan.preferences?.subscriptionTier && (
                                                     <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
                                                         {fan.preferences.subscriptionTier}
-                                                        {fan.preferences.spendingLevel > 0 && ` • Level ${fan.preferences.spendingLevel}`}
+                                                        {(fan.preferences.spendingLevel ?? 0) > 0 && ` • Level ${fan.preferences.spendingLevel}`}
                                                     </div>
                                                 )}
                                             </div>

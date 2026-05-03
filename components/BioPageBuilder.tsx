@@ -170,7 +170,7 @@ const BioPreview: React.FC<{ config: any }> = ({ config }) => {
                     {config?.teaserImages && config.teaserImages.length > 0 && (
                         <div className="w-full mb-6 px-4">
                             <div className="grid grid-cols-2 gap-2">
-                                {config.teaserImages.map((imageUrl, index) => (
+                                {config.teaserImages.map((imageUrl: string, index: number) => (
                                     <img
                                         key={index}
                                         src={imageUrl}
@@ -367,17 +367,19 @@ export const BioPageBuilder: React.FC = () => {
     const handleNameEmojiSelect = (emoji: string) => {
         if (nameInputRef.current) {
             const { selectionStart, selectionEnd } = nameInputRef.current;
+            const start = selectionStart ?? (bioPage.displayName || '').length;
+            const end = selectionEnd ?? start;
             const currentName = bioPage.displayName || '';
             const newName =
-                currentName.substring(0, selectionStart) +
+                currentName.substring(0, start) +
                 emoji +
-                currentName.substring(selectionEnd);
+                currentName.substring(end);
             setBioPage({ ...bioPage, displayName: newName });
             
             setTimeout(() => {
                 if (nameInputRef.current) {
                     nameInputRef.current.focus();
-                    const newCursorPosition = selectionStart + emoji.length;
+                    const newCursorPosition = start + emoji.length;
                     nameInputRef.current.setSelectionRange(newCursorPosition, newCursorPosition);
                 }
             }, 0);
@@ -387,17 +389,19 @@ export const BioPageBuilder: React.FC = () => {
     const handleBioEmojiSelect = (emoji: string) => {
         if (bioTextareaRef.current) {
             const { selectionStart, selectionEnd } = bioTextareaRef.current;
+            const start = selectionStart ?? (bioPage.bio || '').length;
+            const end = selectionEnd ?? start;
             const currentBio = bioPage.bio || '';
             const newBio =
-                currentBio.substring(0, selectionStart) +
+                currentBio.substring(0, start) +
                 emoji +
-                currentBio.substring(selectionEnd);
+                currentBio.substring(end);
             setBioPage({ ...bioPage, bio: newBio });
             
             setTimeout(() => {
                 if (bioTextareaRef.current) {
                     bioTextareaRef.current.focus();
-                    const newCursorPosition = selectionStart + emoji.length;
+                    const newCursorPosition = start + emoji.length;
                     bioTextareaRef.current.setSelectionRange(newCursorPosition, newCursorPosition);
                 }
             }, 0);

@@ -33,6 +33,8 @@ export const OnlyFansRoleplay: React.FC<{ initialTab?: RoleplayTab; singleTabMod
     const [isHelpingLongRatingPrompt, setIsHelpingLongRatingPrompt] = useState(false);
     const [isHelpingScenarioContext, setIsHelpingScenarioContext] = useState(false);
     const [creatorPersonality, setCreatorPersonality] = useState('');
+    const aiToneSetting = (user as any)?.aiTone || (user as any)?.settings?.tone?.formality || '';
+    const explicitnessLevelSetting = (user as any)?.explicitnessLevel ?? Math.round((((user as any)?.settings?.tone?.spiciness ?? 70) / 10));
     const [useCreatorPersonalityScenario, setUseCreatorPersonalityScenario] = useState(false);
     const [useCreatorPersonalityRatings, setUseCreatorPersonalityRatings] = useState(false);
     const [useCreatorPersonalityInteractive, setUseCreatorPersonalityInteractive] = useState(false);
@@ -94,7 +96,7 @@ export const OnlyFansRoleplay: React.FC<{ initialTab?: RoleplayTab; singleTabMod
             if (!user?.id) return;
             
             try {
-                const userDoc = await getDoc(doc(db, 'users', user.id));
+                const userDoc = await getDoc(doc(db, 'users', user!.id));
                 if (userDoc.exists()) {
                     const data = userDoc.data();
                     setCreatorGender(data.creatorGender || '');
@@ -169,7 +171,7 @@ export const OnlyFansRoleplay: React.FC<{ initialTab?: RoleplayTab; singleTabMod
             let targetAudienceGender = '';
             let explicitnessLevel = 7;
             try {
-                const userDoc = await getDoc(doc(db, 'users', user.id));
+                const userDoc = await getDoc(doc(db, 'users', user!.id));
                 if (userDoc.exists()) {
                     const userData = userDoc.data();
                     aiPersonality = userData?.aiPersonality || '';
@@ -262,7 +264,7 @@ NATURAL PERSONALIZATION GUIDELINES:
             }
             
             // Load emoji settings
-            const emojiSettings = await loadEmojiSettings(user.id);
+            const emojiSettings = await loadEmojiSettings(user!.id);
             
             const response = await fetch('/api/generateText', {
                 method: 'POST',
@@ -672,7 +674,7 @@ Make it creative, engaging, explicit, EXTENSIVE, and tailored for adult content 
             let aiTone = '';
             let explicitnessLevel = 7;
             try {
-                const userDoc = await getDoc(doc(db, 'users', user.id));
+                const userDoc = await getDoc(doc(db, 'users', user!.id));
                 if (userDoc.exists()) {
                     const userData = userDoc.data();
                     aiPersonality = userData?.aiPersonality || '';
@@ -690,7 +692,7 @@ Make it creative, engaging, explicit, EXTENSIVE, and tailored for adult content 
             ].filter(Boolean).join('\n');
             
             // Load emoji settings
-            const emojiSettings = await loadEmojiSettings(user.id);
+            const emojiSettings = await loadEmojiSettings(user!.id);
             
             const response = await fetch('/api/generateText', {
                 method: 'POST',
@@ -780,7 +782,7 @@ Make it detailed, consistent, explicit, and engaging for adult content monetizat
             let targetAudienceGender = '';
             let explicitnessLevel = 7;
             try {
-                const userDoc = await getDoc(doc(db, 'users', user.id));
+                const userDoc = await getDoc(doc(db, 'users', user!.id));
                 if (userDoc.exists()) {
                     const userData = userDoc.data();
                     aiPersonality = userData?.aiPersonality || '';
@@ -859,7 +861,7 @@ NATURAL PERSONALIZATION GUIDELINES:
             }
             
             // Load emoji settings
-            const emojiSettings = await loadEmojiSettings(user.id);
+            const emojiSettings = await loadEmojiSettings(user!.id);
             
             const response = await fetch('/api/generateText', {
                 method: 'POST',
@@ -975,7 +977,7 @@ Format as a numbered list (1-10) with engaging, interactive, explicit prompts fr
             const data = await response.json();
             const text = data.text || data.caption || '';
             // Parse numbered list
-            const ratings = text.split(/\d+[\.)]/).filter(item => item.trim()).map(item => item.trim());
+            const ratings = text.split(/\d+[\.)]/).filter((item: string) => item.trim()).map((item: string) => item.trim());
             setGeneratedRatings(ratings.length > 0 ? ratings : [text]);
             showToast('Rating prompts generated successfully!', 'success');
         } catch (error: any) {
@@ -999,7 +1001,7 @@ Format as a numbered list (1-10) with engaging, interactive, explicit prompts fr
             let aiTone = '';
             let explicitnessLevel = 7;
             try {
-                const userDoc = await getDoc(doc(db, 'users', user.id));
+                const userDoc = await getDoc(doc(db, 'users', user!.id));
                 if (userDoc.exists()) {
                     const userData = userDoc.data();
                     aiPersonality = userData?.aiPersonality || '';
@@ -1063,7 +1065,7 @@ NATURAL PERSONALIZATION GUIDELINES:
             }
             
             // Load emoji settings
-            const emojiSettings = await loadEmojiSettings(user.id);
+            const emojiSettings = await loadEmojiSettings(user!.id);
 
             const response = await fetch('/api/generateText', {
                 method: 'POST',
@@ -1239,7 +1241,7 @@ CRITICAL REQUIREMENTS:
             let aiTone = '';
             let explicitnessLevel = 7;
             try {
-                const userDoc = await getDoc(doc(db, 'users', user.id));
+                const userDoc = await getDoc(doc(db, 'users', user!.id));
                 if (userDoc.exists()) {
                     const userData = userDoc.data();
                     aiPersonality = userData?.aiPersonality || '';
@@ -1304,7 +1306,7 @@ NATURAL PERSONALIZATION GUIDELINES:
             }
             
             // Load emoji settings for interactive ideas
-            const emojiSettings = await loadEmojiSettings(user.id);
+            const emojiSettings = await loadEmojiSettings(user!.id);
             
             const response = await fetch('/api/generateText', {
                 method: 'POST',
@@ -1379,7 +1381,7 @@ Format as a numbered list with detailed post concepts including captions and eng
             const data = await response.json();
             const text = data.text || data.caption || '';
             // Parse numbered list
-            const ideas = text.split(/\d+[\.)]/).filter(item => item.trim()).map(item => item.trim());
+            const ideas = text.split(/\d+[\.)]/).filter((item: string) => item.trim()).map((item: string) => item.trim());
             setGeneratedInteractive(ideas.length > 0 ? ideas : [text]);
             showToast('Interactive post ideas generated successfully!', 'success');
         } catch (error: any) {

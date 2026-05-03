@@ -185,7 +185,7 @@ export async function executeAutopilotCampaign(
             id: `${postId}-${platform}`,
             workflowId: campaign.id,
             generatedAt: new Date().toISOString(),
-            type: getApprovalItemType(dayPlan.postType),
+            type: getApprovalItemType(dayPlan.postType || dayPlan.format || 'Post'),
             content: {
               text: generatedPost.caption,
               hashtags: generatedPost.hashtags,

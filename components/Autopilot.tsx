@@ -101,10 +101,10 @@ const Autopilot: React.FC = () => {
     if (user.role === 'Admin') return true;
     if (isBusiness) {
       // Marketing Manager: All Business plans (Starter, Growth, Agency)
-      return ['Starter', 'Growth', 'Agency'].includes(user.plan);
+      return ['Starter', 'Growth', 'Agency'].includes(user.plan || '');
     }
     // AI Autopilot for Creators: Pro, Elite, Agency plans
-    return ['Pro', 'Elite', 'Agency'].includes(user.plan);
+    return ['Pro', 'Elite', 'Agency'].includes(user.plan || '');
   })();
 
   // Show upgrade prompt if user doesn't have access

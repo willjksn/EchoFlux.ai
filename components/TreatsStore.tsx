@@ -34,7 +34,7 @@ function treatProductToPriceDollarString(product: TreatProduct | null | undefine
 }
 
 /** Firestore rejects `undefined` in update payloads. */
-function firestoreSafePatch(raw: Record<string, unknown>): Record<string, unknown> {
+function firestoreSafePatch(raw: Record<string, unknown>): Record<string, any> {
   const out: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(raw)) {
     if (v !== undefined) out[k] = v;
@@ -1095,6 +1095,7 @@ const InlineEditForm: React.FC<{
     title: string;
     description?: string;
     priceCents: number;
+    mediaUrl?: string;
     imageUrl?: string;
     visible: boolean;
     quantityLimit?: number;
@@ -1218,7 +1219,7 @@ const ProductForm: React.FC<{
   onClose: () => void;
   saving: boolean;
 }> = ({ product, onSave, onClose, saving }) => {
-  const type: TreatProductType = "custom";
+  const type: TreatProductType = product?.type ?? "custom";
   const [title, setTitle] = useState(() => product?.title ?? "");
   const [description, setDescription] = useState(() => product?.description ?? "");
   /** Dollar string while typing — do not normalize on every keystroke (breaks cursor / decimals). */

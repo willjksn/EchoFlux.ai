@@ -13,8 +13,9 @@
  * - "own_posts_only": Only works on user's own posts
  * - "channels_only": Only works in channels (not DMs)
  */
+import type { Platform } from '../../types';
 
-export type CapabilityValue = boolean | "limited" | "paid_api" | "bot_opt_in" | "own_posts_only" | "channels_only" | "basic" | "custom" | "external_only" | "moderator_features_optional" | "manual";
+export type CapabilityValue = boolean | "limited" | "paid_api" | "bot_opt_in" | "own_posts_only" | "channels_only" | "basic" | "custom" | "external_only" | "public_search" | "moderator_features_optional" | "manual";
 
 export interface PlatformCapabilities {
   publishing: boolean | "manual";
@@ -25,13 +26,12 @@ export interface PlatformCapabilities {
   dm_auto_reply: boolean | "limited" | "paid_api" | "bot_opt_in";
   analytics: boolean | "limited" | "paid_api" | "basic" | "custom";
   trend_detection: boolean | "limited" | "external_only" | "public_search";
-  community_features: boolean | "moderator_features_optional";
+  community_features: boolean | "moderator_features_optional" | "manual";
   notes?: string; // Additional context about limitations
 }
 
-// Platform type is imported from types.ts to avoid duplication
-// Re-export for convenience
-export type { Platform } from '../../types';
+// Platform type is imported from types.ts to avoid duplication.
+export type { Platform };
 
 /**
  * Platform Capability Matrix
@@ -103,6 +103,7 @@ export const PLATFORM_CAPABILITIES: Record<Platform, PlatformCapabilities> = {
     publishing: true,
     inbox: false,
     comments: false,
+    dm_auto_reply: false,
     analytics: false,
     trend_detection: false,
     community_features: false,
@@ -118,6 +119,16 @@ export const PLATFORM_CAPABILITIES: Record<Platform, PlatformCapabilities> = {
     community_features: false,
     notes: "Visual search engine - evergreen content strategy. Focus on SEO, keywords, and traffic metrics (saves/clicks). Optimal posting: 3-5 pins/week."
   },
+  "My Page": {
+    publishing: "manual",
+    inbox: false,
+    comments: false,
+    dm_auto_reply: false,
+    analytics: "basic",
+    trend_detection: false,
+    community_features: "manual",
+    notes: "Owned Fan Hub surface managed inside EchoFlux.",
+  },
 };
 
 /**
@@ -130,7 +141,7 @@ export function hasCapability(
   const caps = PLATFORM_CAPABILITIES[platform];
   if (!caps) return false;
   
-  const value = caps[capability];
+  const value = caps[capability] as CapabilityValue | undefined;
   // true means fully supported
   if (value === true) return true;
   // "manual" means supported via manual workflow
@@ -138,7 +149,7 @@ export function hasCapability(
   // false means not supported
   if (value === false) return false;
   // Any other value means partially/conditionally supported
-  return value !== false && value !== undefined;
+  return value !== undefined;
 }
 
 /**
@@ -148,7 +159,8 @@ export function getCapability(
   platform: Platform,
   capability: keyof PlatformCapabilities
 ): CapabilityValue | undefined {
-  return PLATFORM_CAPABILITIES[platform]?.[capability];
+  if (capability === "notes") return undefined;
+  return PLATFORM_CAPABILITIES[platform]?.[capability] as CapabilityValue | undefined;
 }
 
 /**
@@ -193,7 +205,7 @@ export function getCapabilityDescription(
   if (value === "basic") return "Basic support";
   if (value === "custom") return "Custom implementation";
   if (value === "external_only") return "External tools required";
-  if (value === "public_search") return "Public search only";
+  if ((value as CapabilityValue) === "public_search") return "Public search only";
   if (value === "moderator_features_optional") return "Moderator features available";
   if (value === "manual") return "Manual workflow";
   return "Unknown";

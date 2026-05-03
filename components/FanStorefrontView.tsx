@@ -272,6 +272,7 @@ export type StorefrontCreator = {
   avatarObjectPosition?: string;
   logo?: string;
   logoUrl?: string;
+  showDisplayNameOnLanding?: boolean;
   heroImage?: string;
   heroImageUrl?: string;
   heroTagline?: string;
@@ -1653,6 +1654,12 @@ export const FanStorefrontView: React.FC = () => {
           resolved = data as StorefrontCreator;
           setGeoBlocked(false);
         }
+        if (!resolved) {
+          setError("Creator not found");
+          setCreator(null);
+          setLoading(false);
+          return;
+        }
 
         const missingVisuals =
           !String(resolved.logo ?? "").trim() &&
@@ -1722,7 +1729,9 @@ export const FanStorefrontView: React.FC = () => {
                     (typeof best.heroSubline2 === "string" ? best.heroSubline2 : undefined),
                   displayName:
                     resolved.displayName ||
-                    (typeof best.displayName === "string" ? best.displayName : undefined),
+                    (typeof best.displayName === "string" ? best.displayName : undefined) ||
+                    resolved.handle ||
+                    handle,
                   bio:
                     resolved.bio ||
                     (typeof best.bio === "string" ? best.bio : undefined),
@@ -1821,7 +1830,9 @@ export const FanStorefrontView: React.FC = () => {
                     (typeof own.heroSubline2 === "string" ? own.heroSubline2 : undefined),
                   displayName:
                     resolved.displayName ||
-                    (typeof own.displayName === "string" ? own.displayName : undefined),
+                    (typeof own.displayName === "string" ? own.displayName : undefined) ||
+                    resolved.handle ||
+                    handle,
                   bio:
                     resolved.bio ||
                     (typeof own.bio === "string" ? own.bio : undefined),
@@ -1894,7 +1905,7 @@ export const FanStorefrontView: React.FC = () => {
                     ...resolved,
                     logo: ownLogo,
                     logoUrl: ownLogo,
-                  };
+                  } as StorefrontCreator;
                 }
               }
             } catch {
@@ -1905,9 +1916,9 @@ export const FanStorefrontView: React.FC = () => {
         const resolvedLogo = String((resolved as { logo?: string }).logo ?? "").trim();
         const resolvedLogoUrl = String((resolved as { logoUrl?: string }).logoUrl ?? "").trim();
         if (!resolvedLogo && resolvedLogoUrl) {
-          resolved = { ...resolved, logo: resolvedLogoUrl };
+          resolved = { ...resolved, logo: resolvedLogoUrl } as StorefrontCreator;
         } else if (resolvedLogo && !resolvedLogoUrl) {
-          resolved = { ...resolved, logoUrl: resolvedLogo };
+          resolved = { ...resolved, logoUrl: resolvedLogo } as StorefrontCreator;
         }
         setCreator(resolved);
         setError(null);
@@ -2347,6 +2358,21 @@ export const FanStorefrontView: React.FC = () => {
     if (params.get("session_id")) return;
     void refetchMemberEntitlement();
     params.delete("live_stream_ticket");
+    const qs = params.toString();
+    window.history.replaceState(
+      {},
+      "",
+      window.location.pathname + (qs ? `?${qs}` : "") + (window.location.hash || "")
+    );
+  }, [creator?.creatorId, isLoggedIn, refetchMemberEntitlement]);
+
+  /** Stripe Billing Portal return: refetch membership (cancel @ period end, payment method, resume). */
+  useEffect(() => {
+    if (typeof window === "undefined" || !creator?.creatorId || !isLoggedIn) return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("billing_sync") !== "1") return;
+    void refetchMemberEntitlement();
+    params.delete("billing_sync");
     const qs = params.toString();
     window.history.replaceState(
       {},
@@ -3105,9 +3131,14 @@ export const FanStorefrontView: React.FC = () => {
     setBillingPortalError(null);
     try {
       const token = await auth.currentUser.getIdToken(true);
+      /** Stripe portal does not pass session_id; flag lets us refetch entitlement immediately on return (webhook latency). */
       const returnUrl =
         typeof window !== "undefined"
-          ? `${window.location.origin}${window.location.pathname}${window.location.search || ""}`
+          ? (() => {
+              const u = new URL(window.location.href);
+              u.searchParams.set("billing_sync", "1");
+              return u.toString();
+            })()
           : "";
       const res = await fetch("/api/createFanBillingPortalSession", {
         method: "POST",
@@ -3660,7 +3691,7 @@ export const FanStorefrontView: React.FC = () => {
       return;
     }
     let cancelled = false;
-    let timeoutId: ReturnType<typeof setTimeout> | undefined;
+    let timeoutId: number | undefined;
 
     const isSessionLive = (s: DmLiveSession | null) =>
       s != null && (s.status === "active" || s.status === "paused");

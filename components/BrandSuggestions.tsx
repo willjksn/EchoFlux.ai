@@ -42,7 +42,7 @@ export const BrandSuggestions: React.FC = () => {
         setIsLoading(true);
         try {
             const profile = selectedClient || user;
-            const results = await generateBrandSuggestions({
+            const results: any = await generateBrandSuggestions({
                 niche: niche.trim(),
                 audience: profile?.name || 'General Audience',
                 userType: user?.userType || 'Creator'

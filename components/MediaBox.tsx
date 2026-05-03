@@ -186,6 +186,22 @@ export const MediaBox: React.FC<MediaBoxProps> = ({
   creatorIdentityActive = false,
 }) => {
   const { user, setUser, showToast, setActivePage, socialAccounts } = useAppContext();
+  /** Compose passes per-session sliders; fill gaps from Settings → Tone so spiciness (etc.) applies globally. */
+  const toneSettingsForGeneration = useMemo(() => {
+    const base: Record<string, number> = { ...(toneSettings || {}) };
+    const g = user?.settings?.tone;
+    if (g && typeof g === "object") {
+      for (const key of ["formality", "humor", "empathy", "spiciness", "profanity"] as const) {
+        const gv = g[key];
+        if ((base[key] === undefined || base[key] === null) && typeof gv === "number") {
+          base[key] = gv;
+        }
+      }
+    }
+    return Object.keys(base).length > 0
+      ? (base as { formality?: number; humor?: number; empathy?: number; spiciness?: number; profanity?: number })
+      : null;
+  }, [toneSettings, user?.settings?.tone]);
   const creatorHandleFromDoc = useCreatorHandle(user?.id);
   const allowSjHeartEmoji = canUseSjHeartEmoji({
     creatorHandle: creatorHandleFromDoc,
@@ -491,7 +507,7 @@ export const MediaBox: React.FC<MediaBoxProps> = ({
       creatorPersonality: usePersonality ? creatorPersonality || null : null,
       favoriteHashtags: useFavoriteHashtags ? favoriteHashtags || null : null,
       emojiIntensity: emojiIntensity ?? 50,
-      toneSettings: toneSettings || null,
+      toneSettings: toneSettingsForGeneration,
     });
 
     const results = normalizeCaptionResults(res);
@@ -606,7 +622,7 @@ export const MediaBox: React.FC<MediaBoxProps> = ({
         creatorPersonality: usePersonality ? creatorPersonality || null : null,
         favoriteHashtags: useFavoriteHashtags ? favoriteHashtags || null : null,
         emojiIntensity: emojiIntensity ?? 50,
-        toneSettings: toneSettings || null,
+        toneSettings: toneSettingsForGeneration,
       });
 
       const generatedResults = normalizeCaptionResults(res);
@@ -751,6 +767,8 @@ ${contextLines || 'None'}
         useFavoriteHashtags: useFavoriteHashtags && favoriteHashtags ? true : false,
         creatorPersonality: usePersonality ? creatorPersonality || null : null,
         favoriteHashtags: useFavoriteHashtags ? favoriteHashtags || null : null,
+        emojiIntensity: emojiIntensity ?? 50,
+        toneSettings: toneSettingsForGeneration,
       });
 
       const generatedResults = normalizeCaptionResults(res);

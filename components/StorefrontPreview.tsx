@@ -1921,7 +1921,7 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
                         key={d}
                         type="button"
                         className="px-5 py-2 rounded-full text-sm font-semibold transition-all hover:scale-[1.03] disabled:opacity-50"
-                        style={landingButtonChrome(buttonStyle === "solid" ? "soft" : "primary")}
+                        style={landingButtonChrome("soft")}
                         disabled={live ? live.tipLoading : false}
                         onClick={live ? () => live.onTipPresetDollars(d) : undefined}
                       >

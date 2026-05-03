@@ -1254,7 +1254,92 @@ const AppContent: React.FC = () => {
                 </>
             );
         }
-        
+
+        /** Guest deep links (/privacy, /terms, …): URL sync sets `activePage` but landing-only branch hid these pages. */
+        const standaloneGuestPages: readonly Page[] = ['privacy', 'terms', 'faq', 'dataDeletion', 'pricing'];
+        if (standaloneGuestPages.includes(activePage)) {
+            const guestStandaloneMain =
+                activePage === 'privacy' ? (
+                    <Privacy />
+                ) : activePage === 'terms' ? (
+                    <Terms />
+                ) : activePage === 'faq' ? (
+                    <FAQ />
+                ) : activePage === 'dataDeletion' ? (
+                    <DataDeletion />
+                ) : (
+                    <Pricing
+                        onGetStartedClick={() => {
+                            setLoginModalInitialView('signup');
+                            setIsLoginModalOpen(true);
+                        }}
+                        onNavigateRequest={handleNavigateRequest}
+                    />
+                );
+
+            return (
+                <>
+                    <PublicAnnouncementBanner />
+                    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex flex-col">
+                        <header className="border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-4 sm:px-6 py-4 shrink-0">
+                            <div className="max-w-6xl mx-auto flex flex-wrap items-center justify-between gap-3">
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        try {
+                                            window.history.replaceState({}, '', '/');
+                                        } catch {
+                                            /* ignore */
+                                        }
+                                        setActivePage('dashboard');
+                                    }}
+                                    className="text-lg font-bold text-primary-600 hover:text-primary-700 dark:text-primary-400"
+                                >
+                                    EchoFlux.ai
+                                </button>
+                                <div className="flex items-center gap-3">
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setLoginModalInitialView('login');
+                                            setIsLoginModalOpen(true);
+                                        }}
+                                        className="text-sm font-medium text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white"
+                                    >
+                                        Sign in
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setLoginModalInitialView('signup');
+                                            setIsLoginModalOpen(true);
+                                        }}
+                                        className="text-sm font-medium px-3 py-2 rounded-md bg-primary-600 text-white hover:bg-primary-700"
+                                    >
+                                        Get Started
+                                    </button>
+                                </div>
+                            </div>
+                        </header>
+                        <main className="flex-1 p-4 sm:p-6">{guestStandaloneMain}</main>
+                    </div>
+                    {isLoginModalOpen && (
+                        <LoginModal
+                            isOpen={isLoginModalOpen}
+                            onClose={() => {
+                                setIsLoginModalOpen(false);
+                                if (!isAuthenticated) {
+                                    setSelectedPlan(null);
+                                }
+                            }}
+                            initialView={loginModalInitialView}
+                            selectedPlan={selectedPlan || undefined}
+                        />
+                    )}
+                </>
+            );
+        }
+
         return (
             <>
                 <PublicAnnouncementBanner />
