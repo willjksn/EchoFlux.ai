@@ -5318,6 +5318,9 @@ export const FanStorefrontView: React.FC = () => {
                       const remaining = hasLimit ? Math.max(0, p.quantityLimit! - soldCount) : null;
                       const soldOut = hasLimit && remaining === 0;
                       const isPurchasingThis = purchasingId === productRowId;
+                      /** Entitlement includes prior purchase; fans may buy again until quantity sells out (server-enforced). */
+                      const buyLabel =
+                        isPurchasingThis ? "Processing…" : owned ? "Buy again" : "Purchase";
                       return (
                         <div
                           key={`member-treat-${productRowId}-${index}`}
@@ -5335,19 +5338,17 @@ export const FanStorefrontView: React.FC = () => {
                             </p>
                           ) : null}
                           <div className="fan-member-treat-action">
-                            {owned ? (
-                              <span className="fan-member-treat-owned">Purchased</span>
-                            ) : soldOut ? (
+                            {soldOut ? (
                               <span className="fan-member-treat-owned">Sold out</span>
                             ) : (
                               <button
                                 type="button"
-                                disabled={isPurchasingThis || soldOut}
+                                disabled={isPurchasingThis}
                                 onClick={() => handlePurchase(productRowId)}
                                 className="fan-member-treat-buy"
                                 style={{ backgroundColor: primary }}
                               >
-                                {isPurchasingThis ? "Processing…" : "Purchase"}
+                                {buyLabel}
                               </button>
                             )}
                           </div>

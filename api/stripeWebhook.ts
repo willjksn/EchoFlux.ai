@@ -509,13 +509,12 @@ export async function processFanHubCheckoutSessionCompleted(
 
     /** One order row + one soldCount bump per Stripe session (race-safe vs duplicate webhooks / sync). */
     const finalizedOrder = await db.runTransaction(async (tx) => {
-      const existingOrder = await tx.get(orderRef);
+      const [existingOrder, pSnap] = await Promise.all([tx.get(orderRef), tx.get(productRef)]);
       const existingStatus = existingOrder.exists
         ? String((existingOrder.data() as { status?: unknown } | undefined)?.status || '').trim().toLowerCase()
         : '';
       if (existingOrder.exists && existingStatus === 'paid') return false;
       tx.set(orderRef, { ...orderPayload, updatedAt: now }, { merge: true });
-      const pSnap = await tx.get(productRef);
       if (pSnap.exists) {
         tx.update(productRef, {
           soldCount: FieldValue.increment(1),
