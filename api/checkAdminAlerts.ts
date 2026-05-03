@@ -6,6 +6,51 @@ import { hasPlatformAdminAccess } from './_platformAdminAccess.js';
 import { checkAdminAlerts } from '../src/utils/adminNotifications.js';
 import { sendEmail } from './_mailer.js';
 
+/** Same-origin `/api` base for server-side fetch (never use client loopback Origin on Vercel). */
+const CANONICAL_PUBLIC_ORIGIN = 'https://echoflux.ai';
+
+function stripTrailingSlash(u: string): string {
+  return u.replace(/\/$/, '');
+}
+
+function isLoopbackOrigin(raw: string): boolean {
+  try {
+    const u = new URL(raw);
+    const h = u.hostname.toLowerCase();
+    return h === 'localhost' || h === '127.0.0.1' || h === '::1' || h === '0.0.0.0';
+  } catch {
+    return false;
+  }
+}
+
+function resolveSelfApiOrigin(req: VercelRequest): string {
+  const internal = process.env.INTERNAL_API_BASE_URL?.trim();
+  if (internal && !isLoopbackOrigin(internal)) {
+    return stripTrailingSlash(internal);
+  }
+
+  const appBase = process.env.APP_BASE_URL?.trim();
+  if (appBase && !isLoopbackOrigin(appBase)) {
+    return stripTrailingSlash(appBase);
+  }
+
+  if (process.env.VERCEL_URL) {
+    return stripTrailingSlash(`https://${process.env.VERCEL_URL}`);
+  }
+
+  const nextPublic = process.env.NEXT_PUBLIC_APP_URL?.trim();
+  if (nextPublic && !isLoopbackOrigin(nextPublic)) {
+    return stripTrailingSlash(nextPublic);
+  }
+
+  const origin = typeof req.headers.origin === 'string' ? req.headers.origin.trim() : '';
+  if (origin && !isLoopbackOrigin(origin)) {
+    return stripTrailingSlash(origin);
+  }
+
+  return CANONICAL_PUBLIC_ORIGIN;
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
@@ -44,8 +89,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         throw new Error('No authorization header');
       }
 
-      // Fetch analytics using the same auth token
-      const baseUrl = req.headers.origin || process.env.NEXT_PUBLIC_APP_URL || 'https://engagesuite.ai';
+      // Fetch analytics using the same auth token (avoid Origin=http://127.0.0.1 when admin UI is local).
+      const baseUrl = resolveSelfApiOrigin(req);
       const analyticsResponse = await fetch(`${baseUrl}/api/getModelUsageAnalytics?days=7`, {
         headers: {
           Authorization: authHeader,

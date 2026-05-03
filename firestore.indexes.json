@@ -93,6 +93,14 @@
       ]
     },
     {
+      "collectionGroup": "reviews",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "isFeatured", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "billing_events",
       "queryScope": "COLLECTION",
       "fields": [
@@ -109,11 +117,6 @@
         { "fieldPath": "scheduledFor", "order": "ASCENDING" },
         { "fieldPath": "__name__", "order": "ASCENDING" }
       ]
-    },
-    {
-      "collectionGroup": "fans",
-      "queryScope": "COLLECTION_GROUP",
-      "fields": [{ "fieldPath": "creatorId", "order": "ASCENDING" }]
     }
   ],
   "fieldOverrides": [
@@ -192,6 +195,16 @@
       "collectionGroup": "orders",
       "fieldPath": "stripePaymentIntentId",
       "indexes": [{ "order": "ASCENDING", "queryScope": "COLLECTION" }]
+    },
+    {
+      "collectionGroup": "liveVideoChats",
+      "fieldPath": "status",
+      "indexes": [{ "order": "ASCENDING", "queryScope": "COLLECTION_GROUP" }]
+    },
+    {
+      "collectionGroup": "fans",
+      "fieldPath": "creatorId",
+      "indexes": [{ "order": "ASCENDING", "queryScope": "COLLECTION_GROUP" }]
     }
   ]
 }
