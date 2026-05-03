@@ -1,17 +1,10 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
+import { isPlaceholderAdminCreatorDisplay } from "./_adminCreatorLabel.js";
 import { verifyAuth } from "./verifyAuth.js";
 import { getAdminDb } from "./_firebaseAdmin.js";
 import { hasPlatformAdminAccess } from "./_platformAdminAccess.js";
 import { checkApiKeys } from "./_errorHandler.js";
 import { getModelForTask } from "./_modelRouter.js";
-
-function hasPlatformAdminAccess(userData: Record<string, unknown> | undefined): boolean {
-  if (!userData) return false;
-  const role = typeof userData.role === "string" ? userData.role.trim().toLowerCase() : "";
-  if (role === "admin" || role === "superadmin" || role === "owner") return true;
-  if (userData.isAdmin === true || userData.isSuperAdmin === true || userData.isOwner === true) return true;
-  return false;
-}
 
 function sanitizeForPrompt(s: string, max: number): string {
   const t = String(s || "")
@@ -108,8 +101,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   const msgsSnap = await ticketRef.collection("messages").get();
-  const sorted = msgsSnap.docs
-    .map((d) => ({ id: d.id, ...(d.data() as Record<string, unknown>) }))
+  type SupportTicketMessageRow = {
+    id: string;
+    senderKind?: unknown;
+    senderName?: unknown;
+    content?: unknown;
+    createdAt?: unknown;
+  };
+
+  const sorted: SupportTicketMessageRow[] = msgsSnap.docs
+    .map((d): SupportTicketMessageRow => ({ id: d.id, ...(d.data() as Record<string, unknown>) }))
     .sort((a, b) => messageTimeMs(a) - messageTimeMs(b));
 
   const threadText = sorted
@@ -127,12 +128,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const preview = sanitizeForPrompt(typeof t.preview === "string" ? t.preview : "", 800);
   const reporterKind = t.reporterKind === "creator" ? "creator" : "fan";
-  const creatorLabel =
-    typeof t.creatorDisplayName === "string" && t.creatorDisplayName.trim()
-      ? t.creatorDisplayName.trim()
-      : typeof t.creatorHandle === "string" && t.creatorHandle.trim()
-        ? `@${t.creatorHandle.replace(/^@/, "")}`
-        : "Platform / unassigned";
+  const handleRaw =
+    typeof t.creatorHandle === "string" ? t.creatorHandle.trim().replace(/^@/, "") : "";
+  const handle = handleRaw ? `@${handleRaw}` : "";
+  const dnRaw = typeof t.creatorDisplayName === "string" ? t.creatorDisplayName.trim() : "";
+  const dn = !isPlaceholderAdminCreatorDisplay(dnRaw) ? dnRaw : "";
+  const creatorLabel = handle || dn || "Platform / unassigned";
 
   const prompt = `You are EchoFlux platform support (echoflux.ai). Write the BODY of a resolution email only (plain text, no subject line, no "Subject:" line).
 

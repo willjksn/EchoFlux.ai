@@ -1,5 +1,6 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import type { DocumentSnapshot, Firestore } from "firebase-admin/firestore";
+import { adminCreatorLabelFromCreatorDoc } from "./_adminCreatorLabel.js";
 import { getAdminDb } from "./_firebaseAdmin.js";
 import { hasPlatformAdminAccess } from "./_platformAdminAccess.js";
 import { verifyAuth } from "./verifyAuth.js";
@@ -678,10 +679,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             monetization?: { monthlyPrice?: number };
             monthlyPrice?: number;
           } | undefined;
-          const handle = typeof d?.handle === "string" && d.handle.trim() ? d.handle.trim() : null;
-          const name =
-            (typeof d?.displayName === "string" && d.displayName.trim()) ||
-            (handle ? `@${handle.replace(/^@/, "")}` : "Unknown Creator");
+          const handle = typeof d?.handle === "string" && d.handle.trim() ? d.handle.trim().replace(/^@/, "") : null;
+          const name = adminCreatorLabelFromCreatorDoc(d as Record<string, unknown> | undefined) || "Unknown Creator";
           const monthlyPriceRaw =
             (typeof d?.monetization?.monthlyPrice === "number" && Number.isFinite(d.monetization.monthlyPrice))
               ? d.monetization.monthlyPrice

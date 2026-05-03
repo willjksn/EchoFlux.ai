@@ -1,5 +1,6 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import type { QueryDocumentSnapshot } from "firebase-admin/firestore";
+import { resolveAdminCreatorLabels } from "./_adminCreatorLabel.js";
 import { getAdminDb } from "./_firebaseAdmin.js";
 import { hasPlatformAdminAccess } from "./_platformAdminAccess.js";
 import { syncRecentFanHubCheckoutsForAdminRevenue } from "./_syncRecentFanHubProductCheckouts.js";
@@ -149,24 +150,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const recentSlice = recentTransactions.slice(0, 50);
 
     const creatorIds = [...new Set(Object.keys(byCreatorId))];
-    const creatorDisplayNames: Record<string, string> = {};
-    const chunkSize = 10;
-    for (let i = 0; i < creatorIds.length; i += chunkSize) {
-      const chunk = creatorIds.slice(i, i + chunkSize);
-      const refs = chunk.map((id) => db.collection("creators").doc(id));
-      const snaps = await db.getAll(...refs);
-      snaps.forEach((snap, j) => {
-        const id = chunk[j];
-        if (!snap.exists) {
-          creatorDisplayNames[id] = "Unknown Creator";
-          return;
-        }
-        const cd = snap.data() as Record<string, unknown>;
-        const handle = typeof cd.handle === "string" ? cd.handle.trim() : "";
-        const dn = typeof cd.displayName === "string" ? cd.displayName.trim() : "";
-        creatorDisplayNames[id] = dn || handle || "Unknown Creator";
-      });
-    }
+    const { labels: creatorDisplayNames } = await resolveAdminCreatorLabels(db, creatorIds);
 
     return res.status(200).json({
       totalRevenue,

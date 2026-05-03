@@ -1,15 +1,8 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
+import { adminCreatorLabelFromCreatorDoc } from "./_adminCreatorLabel.js";
 import { getAdminDb } from "./_firebaseAdmin.js";
 import { hasPlatformAdminAccess } from "./_platformAdminAccess.js";
 import { verifyAuth } from "./verifyAuth.js";
-
-function hasPlatformAdminAccess(userData: Record<string, unknown> | undefined): boolean {
-    if (!userData) return false;
-    const role = typeof userData.role === "string" ? userData.role.trim().toLowerCase() : "";
-    if (role === "admin" || role === "superadmin" || role === "owner") return true;
-    if (userData.isAdmin === true || userData.isSuperAdmin === true || userData.isOwner === true) return true;
-    return false;
-}
 
 function normalizeHandle(raw: unknown): string {
     if (typeof raw !== "string") return "";
@@ -57,11 +50,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
         for (const d of creatorsSnap.docs) {
             const data = d.data() as Record<string, unknown>;
             const h = normalizeHandle(data.handle);
-            const dn =
-                typeof data.displayName === "string" && data.displayName.trim()
-                    ? data.displayName.trim()
-                    : null;
-            displayNameByCreatorId.set(d.id, dn);
+            const label = adminCreatorLabelFromCreatorDoc(data);
+            displayNameByCreatorId.set(d.id, label || null);
             if (h) {
                 if (!byHandle.has(h)) byHandle.set(h, []);
                 byHandle.get(h)!.push(d.id);

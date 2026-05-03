@@ -1,16 +1,8 @@
-import type { Firestore } from "firebase-admin/firestore";
 import type { VercelRequest, VercelResponse } from "@vercel/node";
+import { resolveAdminCreatorLabels } from "./_adminCreatorLabel.js";
 import { getAdminDb } from "./_firebaseAdmin.js";
 import { hasPlatformAdminAccess } from "./_platformAdminAccess.js";
 import { verifyAuth } from "./verifyAuth.js";
-
-function hasPlatformAdminAccess(userData: Record<string, unknown> | undefined): boolean {
-  if (!userData) return false;
-  const role = typeof userData.role === "string" ? userData.role.trim().toLowerCase() : "";
-  if (role === "admin" || role === "superadmin" || role === "owner") return true;
-  if (userData.isAdmin === true || userData.isSuperAdmin === true || userData.isOwner === true) return true;
-  return false;
-}
 
 function parseCreatorIdFromLiveStreamPath(path: string): string | null {
   const m = /^creators\/([^/]+)\/liveStreams\//.exec(path);
@@ -38,57 +30,6 @@ function orderCreatedAtMs(value: unknown): number {
 }
 
 const STATUS_KEYS = ["draft", "scheduled", "live", "ended", "cancelled"] as const;
-
-/**
- * Prefer @handle (storefront identity), then display name, then short uid.
- * Returns labels and count of document reads performed (for cost estimate).
- */
-async function resolveCreatorLabels(
-  db: Firestore,
-  ids: string[],
-): Promise<{ labels: Record<string, string>; profileDocReads: number }> {
-  const unique = [...new Set(ids.filter((x) => x.trim()))];
-  const out: Record<string, string> = {};
-  let profileDocReads = 0;
-  if (unique.length === 0) return { labels: out, profileDocReads: 0 };
-
-  const chunkSize = 30;
-  for (let i = 0; i < unique.length; i += chunkSize) {
-    const chunk = unique.slice(i, i + chunkSize);
-    profileDocReads += chunk.length;
-    const snaps = await db.getAll(...chunk.map((id) => db.collection("creators").doc(id)));
-    snaps.forEach((snap, j) => {
-      const id = chunk[j]!;
-      if (snap.exists) {
-        const cd = snap.data() as Record<string, unknown>;
-        const handle = typeof cd.handle === "string" ? cd.handle.trim().replace(/^@/, "") : "";
-        const dn = typeof cd.displayName === "string" ? cd.displayName.trim() : "";
-        out[id] = (handle ? `@${handle}` : "") || dn || "";
-      } else {
-        out[id] = "";
-      }
-    });
-  }
-
-  const missing = unique.filter((id) => !out[id]);
-  for (let i = 0; i < missing.length; i += chunkSize) {
-    const chunk = missing.slice(i, i + chunkSize);
-    profileDocReads += chunk.length;
-    const snaps = await db.getAll(...chunk.map((id) => db.collection("users").doc(id)));
-    snaps.forEach((snap, j) => {
-      const id = chunk[j]!;
-      if (snap.exists) {
-        const ud = snap.data() as Record<string, unknown>;
-        const dn = typeof ud.displayName === "string" ? ud.displayName.trim() : "";
-        const un = typeof ud.username === "string" ? ud.username.trim().replace(/^@/, "") : "";
-        out[id] = (un ? `@${un}` : "") || dn || "";
-      }
-      if (!out[id]) out[id] = `${id.slice(0, 8)}…`;
-    });
-  }
-
-  return { labels: out, profileDocReads };
-}
 
 /** US multi-region list price order of magnitude; indicative only (see Firebase console). */
 const FIRESTORE_DOC_READ_USD = 0.06 / 100_000;
@@ -200,7 +141,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     recentBuffer.sort((a, b) => b.updatedAtMs - a.updatedAtMs);
     const recentSlice = recentBuffer.slice(0, 200);
-    const { labels: labelById, profileDocReads } = await resolveCreatorLabels(
+    const { labels: labelById, profileDocReads } = await resolveAdminCreatorLabels(
       db,
       recentSlice.map((r) => r.creatorId),
     );
