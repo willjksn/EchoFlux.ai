@@ -11,6 +11,7 @@ import {
 import { pickLatestMemberAccessEnd, formatRemainingAccessForFanRow } from "../src/lib/memberAccessEnd";
 import { authUidFromFanDocId, parseCompoundFanDocumentId } from "../src/lib/compoundFanDocId";
 import { buildCreatorImageUrlSet, fanAvatarUrlOrUndefined } from "../src/lib/fanAvatar";
+import { classifyFanHubOrderLedgerKind, isGuestCheckoutFanId } from "../src/lib/fanHubOrderLedger";
 
 type UserRole = "admin" | "member" | "tipper" | "treat_buyer";
 
@@ -453,7 +454,7 @@ export const FanHubUsers: React.FC = () => {
         const fanId = o.fanId || o.fanEmail || "unknown";
         const fanEmail = o.fanEmail || null;
         const amount = o.amountCents || 0;
-        const type = String(o.type || o.productType || "").trim().toLowerCase();
+        const kind = classifyFanHubOrderLedgerKind(o as Record<string, unknown>);
         const orderDate = new Date(o.createdAt);
 
         const existing = userMap.get(fanId) || {
@@ -480,16 +481,16 @@ export const FanHubUsers: React.FC = () => {
           profileSignupAt: null as Date | null,
         };
 
-        if (type === "tip") existing.tips += amount;
-        else if (type === "unlock" || type === "unlock_media" || type === "post_unlock") existing.unlocks += amount;
-        else if (type === "subscription") existing.membership += amount;
+        if (kind === "tip") existing.tips += amount;
+        else if (kind === "unlock") existing.unlocks += amount;
+        else if (kind === "subscription") existing.membership += amount;
         else existing.treats += amount;
         existing.total += amount;
 
         if (isInCurrentMonth(orderDate)) {
-          if (type === "tip") existing.mtdTips += amount;
-          else if (type === "unlock" || type === "unlock_media" || type === "post_unlock") existing.mtdUnlocks += amount;
-          else if (type === "subscription") existing.mtdMembership += amount;
+          if (kind === "tip") existing.mtdTips += amount;
+          else if (kind === "unlock") existing.mtdUnlocks += amount;
+          else if (kind === "subscription") existing.mtdMembership += amount;
           else existing.mtdTreats += amount;
         }
 
@@ -902,7 +903,7 @@ export const FanHubUsers: React.FC = () => {
           (data.membership ?? 0) === 0;
         if (!hasMembershipStatus && !data.storedRole && !data.subscriptionStatus && onlyTips) {
           role = "tipper";
-        } else if (!hasMembershipStatus && !data.storedRole && String(data.id).startsWith("guest_")) {
+        } else if (!hasMembershipStatus && !data.storedRole && isGuestCheckoutFanId(String(data.id))) {
           role = "treat_buyer";
         }
 

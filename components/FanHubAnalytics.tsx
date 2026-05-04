@@ -12,6 +12,7 @@ import {
 import { formatFanDisplayLabel } from "../src/lib/fanHubDisplay";
 import { inferIsAudioFromUrl, inferIsVideoFromUrl, normalizePostMediaTypes } from "../src/lib/mediaUrlInfer";
 import { hasLiveStreamAccess } from "../src/utils/planAccess";
+import { classifyFanHubOrderLedgerKind, isGuestCheckoutFanId } from "../src/lib/fanHubOrderLedger";
 
 type DateRange = "7d" | "30d" | "90d" | "all";
 
@@ -304,13 +305,7 @@ function csvEscapeCell(value: string | number): string {
 }
 
 function normalizeAnalyticsOrderType(order: Record<string, unknown>): "tip" | "unlock" | "subscription" | "treat" {
-  const raw = String(order.type ?? order.productType ?? "").trim().toLowerCase();
-  if (raw === "tip") return "tip";
-  if (raw === "unlock" || raw === "unlock_media" || raw === "post_unlock") return "unlock";
-  if (raw === "subscription") return "subscription";
-  // Legacy/backfill safety: some tip rows are typed inconsistently but still carry tipHandle.
-  if (typeof order.tipHandle === "string" && order.tipHandle.trim()) return "tip";
-  return "treat";
+  return classifyFanHubOrderLedgerKind(order);
 }
 
 /** Creator-facing export labels (not internal order types). */
@@ -682,7 +677,7 @@ export const FanHubAnalytics: React.FC = () => {
         const amount = order.amountCents || 0;
         const type = normalizeAnalyticsOrderType(order as Record<string, unknown>);
         const fanId = typeof order.fanId === "string" ? order.fanId : "";
-        const isGuest = fanId.startsWith("guest_") || fanId.startsWith("guest_tip_") || fanId.startsWith("guest_session_") || fanId.startsWith("anon_");
+        const isGuest = typeof fanId === "string" && isGuestCheckoutFanId(fanId);
         
         if (type === "tip") {
           tipsCents += amount;
@@ -746,7 +741,7 @@ export const FanHubAnalytics: React.FC = () => {
           return ({
           id: o.id,
           type: normalizedType as Transaction["type"],
-          isGuest: typeof o.fanId === "string" && (o.fanId.startsWith("guest_") || o.fanId.startsWith("guest_tip_") || o.fanId.startsWith("guest_session_") || o.fanId.startsWith("anon_")),
+          isGuest: typeof o.fanId === "string" && isGuestCheckoutFanId(o.fanId),
           amountCents: o.amountCents || 0,
           fanName: o.fanName || null,
           fanEmail: o.fanEmail || o.fanId || "Unknown",
