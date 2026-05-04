@@ -41,6 +41,36 @@ async function getGeminiShared() {
 type MediaData = { data: string; mimeType: string };
 type CaptionResult = { caption: string; hashtags: string[] };
 
+/** Ordered carousel / mixed remote + inline payloads from Fan Hub compose (max 6 slots). */
+type CaptionMediaSlot =
+  | { kind: "url"; url: string }
+  | { kind: "inline"; data: string; mimeType: string };
+
+function normalizeCaptionMediaSlots(raw: unknown): CaptionMediaSlot[] {
+  if (!Array.isArray(raw)) return [];
+  const out: CaptionMediaSlot[] = [];
+  for (const item of raw.slice(0, 6)) {
+    if (!item || typeof item !== "object") continue;
+    const o = item as { type?: unknown; url?: unknown; mediaData?: unknown };
+    const t = typeof o.type === "string" ? o.type.toLowerCase().trim() : "";
+    if (t === "url") {
+      const url = typeof o.url === "string" ? o.url.trim() : "";
+      if (url.startsWith("http://") || url.startsWith("https://")) {
+        out.push({ kind: "url", url });
+      }
+    } else if (t === "inline") {
+      const md = o.mediaData;
+      if (md && typeof md === "object") {
+        const mdo = md as { data?: unknown; mimeType?: unknown };
+        const data = typeof mdo.data === "string" ? mdo.data : "";
+        const mimeType = typeof mdo.mimeType === "string" ? mdo.mimeType : "";
+        if (data && mimeType) out.push({ kind: "inline", data, mimeType });
+      }
+    }
+  }
+  return out;
+}
+
 /** Remove #hashtag tokens from caption body when AI must not use hashtags (My Page / Facebook / X without enhancement). */
 function stripHashtagTokensFromCaption(text: string): string {
   if (!text || typeof text !== "string") return text;
@@ -322,6 +352,7 @@ async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
     mediaUrl,
     mediaUrls,
     mediaData,
+    mediaSlots,
     goal,
     tone,
     promptText,
@@ -339,6 +370,8 @@ async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
     mediaUrl?: string;
     mediaUrls?: string[];
     mediaData?: MediaData;
+    /** Ordered slots: `{ type: "url", url }` or `{ type: "inline", mediaData }` — used when URLs + blobs are mixed or multiple locals. */
+    mediaSlots?: unknown;
     goal?: string;
     tone?: string;
     promptText?: string;
@@ -360,6 +393,8 @@ async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
       randomSeed?: number;
     };
   } = req.body || {};
+
+  const normalizedCaptionMediaSlots = normalizeCaptionMediaSlots(mediaSlots);
 
   const rawVideoDur = (req.body as { videoDurationSec?: unknown })?.videoDurationSec;
   let videoDurationSec: number | undefined;
@@ -452,7 +487,8 @@ async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
     !hasRandomSeed &&
     !mediaData &&
     !mediaUrl &&
-    (!mediaUrls || mediaUrls.length === 0);
+    (!mediaUrls || mediaUrls.length === 0) &&
+    normalizedCaptionMediaSlots.length === 0;
   const creatorIdentityVersion =
     creatorIdentityDoc && typeof (creatorIdentityDoc as { version?: unknown }).version === "number"
       ? (creatorIdentityDoc as { version: number }).version
@@ -529,38 +565,66 @@ async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
   let finalMedia: MediaData | undefined;
   let finalMediaList: MediaData[] = [];
 
-  const normalizedMediaUrls = Array.isArray(mediaUrls)
+  if (normalizedCaptionMediaSlots.length > 0) {
+    for (const slot of normalizedCaptionMediaSlots) {
+      if (slot.kind === "url") {
+        const fetched = await fetchMediaFromUrlWithVideoTrim(slot.url);
+        if (fetched) finalMediaList.push(fetched);
+      } else {
+        const dataSizeMB = (slot.data.length * 3) / 4 / 1024 / 1024;
+        const isVideoFile = slot.mimeType.startsWith("video/");
+        const maxSizeMB = isVideoFile ? 20 : 4;
+        if (dataSizeMB > maxSizeMB) {
+          res.status(413).json({
+            error: isVideoFile ? "Video too large" : "Image too large",
+            note: `Please upload ${isVideoFile ? "videos" : "images"} smaller than ${maxSizeMB}MB or use a URL instead.`,
+          });
+          return;
+        }
+        finalMediaList.push({ data: slot.data, mimeType: slot.mimeType });
+      }
+    }
+  } else {
+    const normalizedMediaUrls = Array.isArray(mediaUrls)
+      ? mediaUrls
+          .map((u) => (typeof u === "string" ? u.trim() : ""))
+          .filter(Boolean)
+          .slice(0, 6)
+      : [];
+
+    if (normalizedMediaUrls.length > 0) {
+      // Carousel: fetch each media item (trim remote videos to first 60s when Cloudinary is configured)
+      for (const u of normalizedMediaUrls) {
+        const fetched = await fetchMediaFromUrlWithVideoTrim(u);
+        if (fetched) finalMediaList.push(fetched);
+      }
+    } else if (mediaUrl) {
+      const fetched = await fetchMediaFromUrlWithVideoTrim(mediaUrl);
+      if (fetched) finalMedia = fetched;
+    } else if (mediaData?.data && mediaData?.mimeType) {
+      // Only use mediaData if no URL provided (for backwards compatibility)
+      // Check size - videos can be larger, images have stricter limits
+      const dataSizeMB = (mediaData.data.length * 3) / 4 / 1024 / 1024;
+      const isVideoFile = mediaData.mimeType.startsWith("video/");
+      const maxSizeMB = isVideoFile ? 20 : 4; // Videos can be up to 20MB, images 4MB
+
+      if (dataSizeMB > maxSizeMB) {
+        res.status(413).json({
+          error: isVideoFile ? "Video too large" : "Image too large",
+          note: `Please upload ${isVideoFile ? "videos" : "images"} smaller than ${maxSizeMB}MB or use a URL instead.`,
+        });
+        return;
+      }
+      finalMedia = mediaData;
+    }
+  }
+
+  const normalizedMediaUrlsForVideoHint = Array.isArray(mediaUrls)
     ? mediaUrls
         .map((u) => (typeof u === "string" ? u.trim() : ""))
         .filter(Boolean)
         .slice(0, 6)
     : [];
-
-  if (normalizedMediaUrls.length > 0) {
-    // Carousel: fetch each media item (trim remote videos to first 60s when Cloudinary is configured)
-    for (const u of normalizedMediaUrls) {
-      const fetched = await fetchMediaFromUrlWithVideoTrim(u);
-      if (fetched) finalMediaList.push(fetched);
-    }
-  } else if (mediaUrl) {
-    const fetched = await fetchMediaFromUrlWithVideoTrim(mediaUrl);
-    if (fetched) finalMedia = fetched;
-  } else if (mediaData?.data && mediaData?.mimeType) {
-    // Only use mediaData if no URL provided (for backwards compatibility)
-    // Check size - videos can be larger, images have stricter limits
-    const dataSizeMB = (mediaData.data.length * 3) / 4 / 1024 / 1024;
-    const isVideoFile = mediaData.mimeType.startsWith('video/');
-    const maxSizeMB = isVideoFile ? 20 : 4; // Videos can be up to 20MB, images 4MB
-    
-    if (dataSizeMB > maxSizeMB) {
-      res.status(413).json({
-        error: isVideoFile ? "Video too large" : "Image too large",
-        note: `Please upload ${isVideoFile ? 'videos' : 'images'} smaller than ${maxSizeMB}MB or use a URL instead.`,
-      });
-      return;
-    }
-    finalMedia = mediaData;
-  }
 
   // Detect if media is video or image (after finalMedia is determined)
   const isCarousel = finalMediaList.length > 1;
@@ -571,7 +635,14 @@ async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
     (finalMediaList.some((m) => m.mimeType?.startsWith("video/")) || false) ||
     // Also check if mediaUrl contains video file extensions as fallback
     (mediaUrl && /\.(mp4|mov|avi|wmv|flv|webm|mkv|m4v)$/i.test(mediaUrl)) ||
-    (normalizedMediaUrls.some((u) => /\.(mp4|mov|avi|wmv|flv|webm|mkv|m4v)$/i.test(u)));
+    (normalizedMediaUrlsForVideoHint.some((u) =>
+      /\.(mp4|mov|avi|wmv|flv|webm|mkv|m4v)$/i.test(u),
+    )) ||
+    normalizedCaptionMediaSlots.some(
+      (s) =>
+        (s.kind === "url" && /\.(mp4|mov|avi|wmv|flv|webm|mkv|m4v)$/i.test(s.url)) ||
+        (s.kind === "inline" && s.mimeType.startsWith("video/")),
+    );
   
   // Log video detection for debugging
   if (isVideo) {

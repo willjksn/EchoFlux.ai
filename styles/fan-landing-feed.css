@@ -1551,13 +1551,14 @@
 }
 /* Single media: sit below the lock message instead of covering it */
 .fan-feed-media-lock-unlock-hit--solo {
-  bottom: auto;
-  top: calc(50% + 3.6rem);
-  transform: translateY(-50%);
+  bottom: 2.85rem;
+  top: auto;
+  transform: none;
 }
 .fan-feed-media-lock-unlock-hit--modal.fan-feed-media-lock-unlock-hit--solo {
-  bottom: auto;
-  top: calc(50% + 4rem);
+  bottom: 2.7rem;
+  top: auto;
+  transform: none;
 }
 .fan-feed-media-lock-unlock-stack {
   display: flex;
@@ -1584,14 +1585,19 @@
 }
 .fan-feed-media-lock-hint {
   display: block;
-  max-width: 16rem;
+  box-sizing: border-box;
+  width: 100%;
+  max-width: min(100%, 26rem);
   margin-top: 0.15rem;
+  padding-inline: 0.35rem;
   font-size: 0.78rem;
   font-weight: 600;
-  line-height: 1.35;
+  line-height: 1.45;
   color: rgba(255, 255, 255, 0.92);
   text-shadow: 0 1px 4px rgba(0, 0, 0, 0.65);
   text-align: center;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 .fan-feed-media-lock-unlock-btn--prominent {
   min-height: 44px;
@@ -1622,14 +1628,14 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
   gap: 0.35rem;
   background: linear-gradient(180deg, rgba(0, 0, 0, 0.35) 0%, rgba(0, 0, 0, 0.72) 100%);
   color: #fff;
   font-weight: 700;
   font-size: 0.9rem;
   text-align: center;
-  padding: 0.65rem 0.75rem;
+  padding: 1rem 1rem 5.75rem;
   /* Block drags/clicks from reaching blurred media underneath (carousel controls stay above at z-index 4+). */
   pointer-events: auto;
   user-select: none;
@@ -2316,6 +2322,17 @@
   color: var(--fan-text);
   font-size: 0.85rem;
   margin-right: 0.5rem;
+}
+
+.fan-feed-comment-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.fan-feed-comment-row .fan-feed-comment-author {
+  margin-right: 0;
 }
 
 .fan-feed-comment-text {

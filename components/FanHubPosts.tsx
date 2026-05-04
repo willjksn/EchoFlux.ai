@@ -352,53 +352,71 @@ async function fanHubBlobUrlToBase64(blobUrl: string): Promise<{ data: string; m
 }
 
 /**
- * First image/video for caption generation — same pattern as Compose (server fetches URL and attaches to Gemini).
+ * Resolve attached Fan Hub media for caption generation: preserves composer order, supports
+ * multiple locals/blobs (via `mediaSlots`) and multiple HTTPS URLs (`mediaUrls`).
  */
 async function resolveFanHubCaptionMedia(
-  items: MediaItem[]
+  items: MediaItem[],
 ): Promise<
   | { mediaUrl: string }
   | { mediaUrls: string[] }
   | { mediaData: { data: string; mimeType: string } }
+  | {
+      mediaSlots: Array<
+        | { type: "url"; url: string }
+        | { type: "inline"; mediaData: { data: string; mimeType: string } }
+      >;
+    }
   | null
 > {
-  const visual = items.filter((m) => m.type === "image" || m.type === "video");
+  const visual = items.filter((m) => m.type === "image" || m.type === "video").slice(0, 6);
   if (visual.length === 0) return null;
 
-  const httpUrls = [
-    ...new Set(
-      visual
-        .map((m) => (typeof m.url === "string" ? m.url.trim() : ""))
-        .filter((u) => u.startsWith("https://") || u.startsWith("http://"))
-    ),
-  ];
+  const slots: Array<
+    | { type: "url"; url: string }
+    | { type: "inline"; mediaData: { data: string; mimeType: string } }
+  > = [];
 
-  if (httpUrls.length > 1) {
-    return { mediaUrls: httpUrls.slice(0, 6) };
-  }
-  if (httpUrls.length === 1) {
-    return { mediaUrl: httpUrls[0]! };
-  }
-
-  const first = visual[0]!;
-  if (first.file) {
-    const mime =
-      first.file.type || (first.type === "video" ? "video/mp4" : "image/jpeg");
-    const data = await fanHubFileToBase64Data(first.file);
-    return { mediaData: { data, mimeType: mime } };
-  }
-  if (typeof first.url === "string" && first.url.startsWith("blob:")) {
-    const { data, mimeType: blobMime } = await fanHubBlobUrlToBase64(first.url);
-    const mime =
-      blobMime && blobMime !== "application/octet-stream"
-        ? blobMime
-        : first.type === "video"
-          ? "video/mp4"
-          : "image/jpeg";
-    return { mediaData: { data, mimeType: mime } };
+  for (const m of visual) {
+    const url = typeof m.url === "string" ? m.url.trim() : "";
+    if (url.startsWith("https://") || url.startsWith("http://")) {
+      slots.push({ type: "url", url });
+      continue;
+    }
+    if (m.file) {
+      const mime = m.file.type || (m.type === "video" ? "video/mp4" : "image/jpeg");
+      const data = await fanHubFileToBase64Data(m.file);
+      slots.push({ type: "inline", mediaData: { data, mimeType: mime } });
+      continue;
+    }
+    if (url.startsWith("blob:")) {
+      const { data, mimeType: blobMime } = await fanHubBlobUrlToBase64(url);
+      const mime =
+        blobMime && blobMime !== "application/octet-stream"
+          ? blobMime
+          : m.type === "video"
+            ? "video/mp4"
+            : "image/jpeg";
+      slots.push({ type: "inline", mediaData: { data, mimeType: mime } });
+      continue;
+    }
+    return null;
   }
 
-  return null;
+  if (slots.length === 0) return null;
+
+  if (slots.length === 1) {
+    const s = slots[0]!;
+    if (s.type === "url") return { mediaUrl: s.url };
+    return { mediaData: s.mediaData };
+  }
+
+  const allUrl = slots.every((x) => x.type === "url");
+  if (allUrl) {
+    return { mediaUrls: slots.map((s) => (s as { type: "url"; url: string }).url) };
+  }
+
+  return { mediaSlots: slots };
 }
 
 function fanHubCaptionMediaFingerprint(items: MediaItem[]): string {
