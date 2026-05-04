@@ -24,7 +24,7 @@ import {
 } from "../src/lib/lockedPostMedia";
 import { getAvatarCropStyle } from "../src/lib/avatarCrop";
 import { inferIsVideoFromUrl, normalizePostMediaTypes } from "../src/lib/mediaUrlInfer";
-import { getFeedGridCoverMedia } from "../src/lib/feedGridCover";
+import { getFeedGridCoverMedia, isFeedGridCoverLockedForViewer } from "../src/lib/feedGridCover";
 import { DmAudioPlayer } from "./DmAudioPlayer";
 import { ViewPostModalVideo } from "./ViewPostModalVideo";
 import { FeedVideoPlaybackErrorOverlay } from "./FeedVideoPlaybackError";
@@ -76,6 +76,31 @@ const feedVideoDownloadGuardProps = {
   controlsList: "nodownload noplaybackrate noremoteplayback" as const,
   onContextMenu: (e: React.MouseEvent<HTMLVideoElement>) => e.preventDefault(),
 };
+
+/** Same tap threshold as FanHubFeed feed-card video */
+const FEED_VIDEO_TAP_MAX_PX = 14;
+
+const MemberFeedVideoPlayIcon = () => (
+  <svg className="feed-card-play-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+    <path d="M8 5v14l11-7L8 5z" />
+  </svg>
+);
+
+const MemberFeedVolumeOnIcon = () => (
+  <svg className="feed-card-sound-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+    <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+    <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
+    <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />
+  </svg>
+);
+
+const MemberFeedVolumeOffIcon = () => (
+  <svg className="feed-card-sound-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+    <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+    <line x1="23" y1="9" x2="17" y2="15" />
+    <line x1="17" y1="9" x2="23" y2="15" />
+  </svg>
+);
 
 const SAVED_BY_CREATOR_KEY = "savedPostIdsByCreator";
 const INLINE_COMMENT_PREVIEW_MAX = 120;
@@ -322,6 +347,28 @@ function getInlineCommentPreview(text: string): { preview: string; truncated: bo
     return { preview: raw, truncated: false };
   }
   return { preview: `${raw.slice(0, INLINE_COMMENT_PREVIEW_MAX).trimEnd()}...`, truncated: true };
+}
+
+/** Same `white-space: pre-wrap` + caption styling as Fan Hub `FeedCard`. */
+function MemberFeedCaptionBody({
+  displayName,
+  primary,
+  content,
+  sjHeartEmojiCtx,
+}: {
+  displayName: string;
+  primary: string;
+  content: string | undefined;
+  sjHeartEmojiCtx: SjHeartEmojiAccessContext;
+}) {
+  return (
+    <p className="feed-card-caption">
+      <span className="caption-username" style={{ color: primary }}>
+        {displayName}
+      </span>
+      {renderTextWithCustomEmoji(content ?? "", sjHeartEmojiCtx)}
+    </p>
+  );
 }
 
 /** Same icons as FanHubFeed / stormij-fanhub — multi-media count badge */
@@ -1049,14 +1096,129 @@ function FanMemberPostMedia({
   const activeVideoSrcKey =
     currentIsVideo && currentUrl ? (currentUrl.split("#")[0]?.trim() ?? "") : "";
 
+  const lockedCurrent =
+    n === 0
+      ? false
+      : isMediaSlotLocked(lockedCfg, idx, n) || (!!lockedCfg && currentProtectedPlaceholder);
+
+  const useInteractiveMemberFeedVideo =
+    !splitModal &&
+    variant === "feed" &&
+    n > 0 &&
+    currentIsVideo &&
+    !lockedCurrent &&
+    !currentProtectedPlaceholder;
+
+  const memberFeedVideoRef = useRef<HTMLVideoElement | null>(null);
+  const memberFeedVideoTouchStartRef = useRef<{ x: number; y: number; pointerId: number } | null>(null);
+  const memberFeedVideoSuppressClickRef = useRef(false);
+  const [memberFeedVideoPlaying, setMemberFeedVideoPlaying] = useState(false);
+  const [memberFeedVideoMuted, setMemberFeedVideoMuted] = useState(true);
+  const [memberFeedVideoHover, setMemberFeedVideoHover] = useState(false);
+
   useEffect(() => {
     videoPosterSeekDoneRef.current = false;
     setMemberVideoDecodeError(false);
   }, [idx, activeVideoSrcKey]);
 
-  if (n === 0) return null;
+  useEffect(() => {
+    const v = memberFeedVideoRef.current;
+    if (!v) return;
+    v.muted = memberFeedVideoMuted;
+  }, [memberFeedVideoMuted]);
 
-  const lockedCurrent = isMediaSlotLocked(lockedCfg, idx, n) || (!!lockedCfg && currentProtectedPlaceholder);
+  useEffect(() => {
+    void memberFeedVideoRef.current?.pause();
+    setMemberFeedVideoPlaying(false);
+    setMemberFeedVideoHover(false);
+  }, [idx]);
+
+  useEffect(() => {
+    if (!currentIsVideo) setMemberFeedVideoHover(false);
+  }, [currentIsVideo]);
+
+  useEffect(() => {
+    if (!useInteractiveMemberFeedVideo || memberVideoDecodeError) {
+      const v = memberFeedVideoRef.current;
+      if (v && !v.paused) v.pause();
+      setMemberFeedVideoPlaying(false);
+      setMemberFeedVideoHover(false);
+      return;
+    }
+    const v = memberFeedVideoRef.current;
+    if (!v) return;
+    if (memberFeedVideoHover) {
+      void v.play().catch(() => {});
+    } else {
+      v.pause();
+      setMemberFeedVideoPlaying(false);
+      try {
+        v.currentTime = 0;
+      } catch {
+        /* ignore */
+      }
+      videoPosterSeekDoneRef.current = false;
+      tryFeedVideoPosterSeekOnce(v, videoPosterSeekDoneRef);
+    }
+  }, [memberFeedVideoHover, useInteractiveMemberFeedVideo, activeVideoSrcKey, idx, memberVideoDecodeError]);
+
+  const toggleMemberFeedVideoPlay = useCallback(() => {
+    if (memberVideoDecodeError) return;
+    const v = memberFeedVideoRef.current;
+    if (!v) return;
+    if (v.paused) void v.play();
+    else v.pause();
+  }, [memberVideoDecodeError]);
+
+  const memberVideoAreaClick = useCallback(
+    (e: React.MouseEvent) => {
+      if (memberFeedVideoSuppressClickRef.current) {
+        memberFeedVideoSuppressClickRef.current = false;
+        e.preventDefault();
+        e.stopPropagation();
+        return;
+      }
+      e.preventDefault();
+      toggleMemberFeedVideoPlay();
+    },
+    [toggleMemberFeedVideoPlay],
+  );
+
+  const memberVideoAreaPointerDown = useCallback((e: React.PointerEvent) => {
+    if (e.pointerType !== "touch" && e.pointerType !== "pen") return;
+    memberFeedVideoTouchStartRef.current = { x: e.clientX, y: e.clientY, pointerId: e.pointerId };
+  }, []);
+
+  const memberVideoAreaPointerUp = useCallback(
+    (e: React.PointerEvent) => {
+      if (e.pointerType !== "touch" && e.pointerType !== "pen") return;
+      const start = memberFeedVideoTouchStartRef.current;
+      memberFeedVideoTouchStartRef.current = null;
+      if (!start || start.pointerId !== e.pointerId) return;
+      const dx = Math.abs(e.clientX - start.x);
+      const dy = Math.abs(e.clientY - start.y);
+      if (dx > FEED_VIDEO_TAP_MAX_PX || dy > FEED_VIDEO_TAP_MAX_PX) return;
+      e.preventDefault();
+      memberFeedVideoSuppressClickRef.current = true;
+      toggleMemberFeedVideoPlay();
+    },
+    [toggleMemberFeedVideoPlay],
+  );
+
+  const memberVideoAreaPointerCancel = useCallback(() => {
+    memberFeedVideoTouchStartRef.current = null;
+  }, []);
+
+  const memberVideoAreaKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      if (e.key !== "Enter" && e.key !== " ") return;
+      e.preventDefault();
+      toggleMemberFeedVideoPlay();
+    },
+    [toggleMemberFeedVideoPlay],
+  );
+
+  if (n === 0) return null;
 
   const totalSlots = mediaTotals.images + mediaTotals.videos;
   const showMultiBadge = totalSlots > 1;
@@ -1102,11 +1264,35 @@ function FanMemberPostMedia({
   return (
     <div
       ref={carouselRootRef}
-      role={showCarousel ? "group" : undefined}
+      role={
+        showCarousel ? "group" : useInteractiveMemberFeedVideo ? "button" : undefined
+      }
       aria-roledescription={showCarousel ? "carousel" : undefined}
-      aria-label={showCarousel ? `Post media, ${slideLabel}` : undefined}
-      tabIndex={showCarousel ? 0 : undefined}
-      onKeyDown={showCarousel ? onCarouselKeyDown : undefined}
+      aria-label={
+        showCarousel
+          ? `Post media, ${slideLabel}`
+          : useInteractiveMemberFeedVideo
+            ? memberVideoDecodeError
+              ? "Video cannot be played in this browser"
+              : memberFeedVideoPlaying
+                ? "Pause video"
+                : "Play video"
+            : undefined
+      }
+      tabIndex={showCarousel || useInteractiveMemberFeedVideo ? 0 : undefined}
+      onKeyDown={(e) => {
+        if (useInteractiveMemberFeedVideo && (e.key === "Enter" || e.key === " ")) {
+          memberVideoAreaKeyDown(e);
+          return;
+        }
+        if (showCarousel) onCarouselKeyDown(e);
+      }}
+      onMouseEnter={useInteractiveMemberFeedVideo ? () => setMemberFeedVideoHover(true) : undefined}
+      onMouseLeave={useInteractiveMemberFeedVideo ? () => setMemberFeedVideoHover(false) : undefined}
+      onClick={useInteractiveMemberFeedVideo ? memberVideoAreaClick : undefined}
+      onPointerDown={useInteractiveMemberFeedVideo ? memberVideoAreaPointerDown : undefined}
+      onPointerUp={useInteractiveMemberFeedVideo ? memberVideoAreaPointerUp : undefined}
+      onPointerCancel={useInteractiveMemberFeedVideo ? memberVideoAreaPointerCancel : undefined}
       className={rootClass}
     >
       {showCarousel ? (
@@ -1114,30 +1300,60 @@ function FanMemberPostMedia({
           {slideLabel}
         </span>
       ) : null}
-      {currentProtectedPlaceholder ? (
+      {currentProtectedPlaceholder || lockedCurrent ? (
         <div
           className={splitModal ? "feed-comments-modal-media fan-feed-media-protected-placeholder" : "feed-card-media fan-feed-media-protected-placeholder"}
           aria-hidden
         />
       ) : currentIsVideo ? (
-        lockedCurrent ? (
-          <video
-            key={`${post.id}-v-${idx}`}
-            src={currentUrl.split("#")[0]}
-            controls={false}
-            className={splitModal ? "feed-comments-modal-media feed-comments-modal-media-video" : "feed-card-media feed-card-media-video"}
-            playsInline
-            preload="metadata"
-            onLoadedMetadata={(e) => {
-              tryFeedVideoPosterSeekOnce(e.currentTarget, videoPosterSeekDoneRef);
-            }}
-          />
-        ) : splitModal ? (
+        splitModal ? (
           <ViewPostModalVideo
             src={currentUrl}
             videoKey={`${post.id}-member-modal-v-${idx}`}
             accentHex={primary}
           />
+        ) : useInteractiveMemberFeedVideo ? (
+          <>
+            <video
+              ref={memberFeedVideoRef}
+              key={`${post.id}-v-${idx}`}
+              src={currentUrl.split("#")[0]}
+              muted={memberFeedVideoMuted}
+              loop
+              playsInline
+              className="feed-card-media feed-card-media-video"
+              preload="metadata"
+              {...feedVideoDownloadGuardProps}
+              onLoadedMetadata={(e) => {
+                tryFeedVideoPosterSeekOnce(e.currentTarget, videoPosterSeekDoneRef);
+              }}
+              onError={() => setMemberVideoDecodeError(true)}
+              onPlay={() => setMemberFeedVideoPlaying(true)}
+              onPause={() => setMemberFeedVideoPlaying(false)}
+              onVolumeChange={(e) => setMemberFeedVideoMuted(e.currentTarget.muted)}
+            />
+            {!memberVideoDecodeError && !memberFeedVideoPlaying && (
+              <span className="feed-card-play-overlay" aria-hidden>
+                <MemberFeedVideoPlayIcon />
+              </span>
+            )}
+            {!memberVideoDecodeError && (
+              <button
+                type="button"
+                className={`feed-card-sound-toggle${memberFeedVideoMuted ? " muted" : ""}`}
+                aria-label={memberFeedVideoMuted ? "Unmute video" : "Mute video"}
+                title={memberFeedVideoMuted ? "Unmute" : "Mute"}
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setMemberFeedVideoMuted((prev) => !prev);
+                }}
+              >
+                {memberFeedVideoMuted ? <MemberFeedVolumeOffIcon /> : <MemberFeedVolumeOnIcon />}
+              </button>
+            )}
+            {memberVideoDecodeError && currentUrl ? <FeedVideoPlaybackErrorOverlay videoSrc={currentUrl} /> : null}
+          </>
         ) : (
           <>
             <video
@@ -1169,22 +1385,60 @@ function FanMemberPostMedia({
       <FanMemberCaptionOverlay post={post} sjHeartEmojiCtx={sjHeartEmojiCtx} />
       {lockedCurrent && (
         <div
-          className="fan-feed-media-lock-overlay"
+          className={`fan-feed-media-lock-overlay${
+            unlockOfferEligible ? " fan-feed-media-lock-overlay--center-unlock" : ""
+          }`}
           role="region"
-          aria-label="Locked media"
+          aria-label={unlockOfferEligible ? "Locked media — pay to unlock" : "Locked media"}
           onContextMenu={(e) => e.preventDefault()}
         >
-          <span className="fan-feed-media-lock-icon" aria-hidden>
-            🔒
-          </span>
           {!unlockOfferEligible ? (
-            <span className="fan-feed-media-lock-text" style={{ color: primary }}>
-              {lockPriceText ?? (isDemoPost ? "Preview (demo)" : "Locked")}
-            </span>
+            <>
+              <span className="fan-feed-media-lock-icon" aria-hidden>
+                🔒
+              </span>
+              <span className="fan-feed-media-lock-text" style={{ color: primary }}>
+                {lockPriceText ?? (isDemoPost ? "Preview (demo)" : "Locked")}
+              </span>
+            </>
           ) : (
-            <span className="fan-feed-media-lock-hint">
-              {showCarousel ? "Extra photos & videos are locked" : "This content is locked"}
-            </span>
+            <div className="fan-feed-media-lock-unlock-stack fan-feed-media-lock-unlock-stack--overlay-center">
+              <span className="fan-feed-media-lock-icon fan-feed-media-lock-icon--in-stack" aria-hidden>
+                🔒
+              </span>
+              <span className="fan-feed-media-lock-unlock-label">Pay to unlock</span>
+              <button
+                type="button"
+                className="fan-feed-media-lock-unlock-btn fan-feed-media-lock-unlock-btn--prominent"
+                style={{
+                  borderColor: "#ffffff",
+                  color: "#fff",
+                  background: `linear-gradient(135deg, ${primary} 0%, color-mix(in srgb, ${primary} 72%, #000) 100%)`,
+                }}
+                disabled={unlockingPostId === post.id}
+                aria-label={`Unlock for ${(post.lockedContent!.priceCents / 100).toFixed(2)} dollars`}
+                onPointerDownCapture={(e) => e.stopPropagation()}
+                onMouseDown={(e) => {
+                  e.stopPropagation();
+                  e.preventDefault();
+                }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  e.preventDefault();
+                  if (!fanId) {
+                    onUnlockNeedSignIn?.("Sign in to unlock this post.");
+                    return;
+                  }
+                  void onUnlockPost!(post.id);
+                }}
+              >
+                {unlockingPostId === post.id
+                  ? "Unlock…"
+                  : !fanId
+                    ? "Sign in to unlock"
+                    : `Unlock $${(post.lockedContent!.priceCents / 100).toFixed(2)}`}
+              </button>
+            </div>
           )}
         </div>
       )}
@@ -1240,48 +1494,6 @@ function FanMemberPostMedia({
           </div>
         </>
       )}
-      {lockedCurrent && unlockOfferEligible ? (
-        <div
-          className={`fan-feed-media-lock-unlock-hit${splitModal ? " fan-feed-media-lock-unlock-hit--modal" : ""}${
-            !showCarousel ? " fan-feed-media-lock-unlock-hit--solo" : ""
-          }`}
-        >
-          <div className="fan-feed-media-lock-unlock-stack">
-            <span className="fan-feed-media-lock-unlock-label">Pay to unlock</span>
-            <button
-              type="button"
-              className="fan-feed-media-lock-unlock-btn fan-feed-media-lock-unlock-btn--prominent"
-              style={{
-                borderColor: "#ffffff",
-                color: "#fff",
-                background: `linear-gradient(135deg, ${primary} 0%, color-mix(in srgb, ${primary} 72%, #000) 100%)`,
-              }}
-              disabled={unlockingPostId === post.id}
-              aria-label={`Unlock for ${(post.lockedContent!.priceCents / 100).toFixed(2)} dollars`}
-              onPointerDownCapture={(e) => e.stopPropagation()}
-              onMouseDown={(e) => {
-                e.stopPropagation();
-                e.preventDefault();
-              }}
-              onClick={(e) => {
-                e.stopPropagation();
-                e.preventDefault();
-                if (!fanId) {
-                  onUnlockNeedSignIn?.("Sign in to unlock this post.");
-                  return;
-                }
-                void onUnlockPost!(post.id);
-              }}
-            >
-              {unlockingPostId === post.id
-                ? "Unlock…"
-                : !fanId
-                  ? "Sign in to unlock"
-                  : `Unlock $${(post.lockedContent!.priceCents / 100).toFixed(2)}`}
-            </button>
-          </div>
-        </div>
-      ) : null}
       {showMultiBadge && (
         <span className="feed-card-count" aria-label={badgeAria}>
           {mediaTotals.images > 0 && (
@@ -1747,7 +1959,7 @@ function FanMemberPostDetailModal({
                 ) : null}
                 {post.content?.trim() ? (
                   <div className="feed-comments-modal-post-body">
-                    <p>{renderTextWithCustomEmoji(post.content, sjHeartEmojiCtx)}</p>
+                    <p className="feed-card-caption m-0">{renderTextWithCustomEmoji(post.content, sjHeartEmojiCtx)}</p>
                     <p className="fan-member-viewpost-date-inline">{formatPostCalendarDate(post.createdAt)}</p>
                   </div>
                 ) : (
@@ -2555,10 +2767,12 @@ export const FanMemberFeed: React.FC<FanMemberFeedProps> = ({
               </div>
 
               <div className="feed-card-body">
-                <p>
-                  <span style={{ fontWeight: 600, color: primary, marginRight: "0.35rem" }}>{displayName}</span>
-                  {renderTextWithCustomEmoji(post.content, sjHeartEmojiCtx)}
-                </p>
+                <MemberFeedCaptionBody
+                  displayName={displayName}
+                  primary={primary}
+                  content={post.content}
+                  sjHeartEmojiCtx={sjHeartEmojiCtx}
+                />
                 <FanMemberPostPollView poll={post.poll} fanId={fanId} onVote={(idx) => handlePollVote(post, idx)} />
                 <FanMemberPostTipGoalView
                   tipGoal={post.tipGoal}
@@ -2587,7 +2801,7 @@ export const FanMemberFeed: React.FC<FanMemberFeedProps> = ({
                     const expanded = expandedInlineCommentKeys.has(inlineKey);
                     const { preview, truncated } = getInlineCommentPreview(c.text);
                     return (
-                    <p key={inlineKey} className="m-0 text-sm" style={{ color: "var(--fan-text, #1f2937)" }}>
+                    <p key={inlineKey} className="fan-feed-inline-comment-preview m-0 text-sm" style={{ color: "var(--fan-text, #1f2937)" }}>
                       <span style={{ fontWeight: 600, marginRight: "0.35rem" }}>{c.author}</span>
                       {expanded || !truncated
                         ? renderTextWithCustomEmoji(c.text, sjHeartEmojiCtx)
@@ -2635,7 +2849,37 @@ export const FanMemberFeed: React.FC<FanMemberFeedProps> = ({
                     sjHeartEmojiCtx={sjHeartEmojiCtx}
                   />
                   <div className="fan-feed-comments-list">
-                    <p className="fan-feed-no-comments">No comments yet. Be the first!</p>
+                    {!(post.commentsList && post.commentsList.length > 0) ? (
+                      <p className="fan-feed-no-comments">No comments yet. Be the first!</p>
+                    ) : (
+                      post.commentsList.map((c, cidx) => {
+                        const isCreatorComment =
+                          !!c.isCreatorReply ||
+                          (!!creatorId &&
+                            typeof c.authorId === "string" &&
+                            c.authorId.length > 0 &&
+                            c.authorId === creatorId);
+                        return (
+                          <div key={`${post.id}-exp-${cidx}`} className="fan-feed-comment">
+                            <div className="fan-feed-comment-row">
+                              <span className="fan-feed-comment-author">{c.author}</span>
+                              <span
+                                className={
+                                  isCreatorComment
+                                    ? "feed-comments-modal-role-badge feed-comments-modal-role-badge--creator"
+                                    : "feed-comments-modal-role-badge feed-comments-modal-role-badge--fan"
+                                }
+                              >
+                                {isCreatorComment ? "Creator" : "Fan"}
+                              </span>
+                            </div>
+                            <p className="fan-feed-comment-text m-0 mt-1">
+                              {renderTextWithCustomEmoji(c.text, sjHeartEmojiCtx)}
+                            </p>
+                          </div>
+                        );
+                      })
+                    )}
                   </div>
                 </div>
               )}
@@ -2653,6 +2897,9 @@ export const FanMemberFeed: React.FC<FanMemberFeedProps> = ({
             <div className="feed-grid">
               {posts.map((post) => {
                 const { url: coverUrl, isVideo: coverIsVideo } = getFeedGridCoverMedia(post);
+                const coverEntitled =
+                  fanPageAdminBypass || unlockedFanPostIdSet.has(post.id);
+                const coverLockedTile = isFeedGridCoverLockedForViewer(post, coverEntitled);
                 return (
                   <button
                     key={post.id}
@@ -2660,11 +2907,15 @@ export const FanMemberFeed: React.FC<FanMemberFeedProps> = ({
                     className="feed-grid-item"
                     onClick={() => setViewPostId(post.id)}
                     onMouseEnter={() => {
-                      if (coverIsVideo) setGridHoveredVideoPostId(post.id);
+                      if (coverIsVideo && !coverLockedTile) setGridHoveredVideoPostId(post.id);
                     }}
                     onMouseLeave={() => setGridHoveredVideoPostId(null)}
                   >
-                    {coverUrl ? (
+                    {coverLockedTile ? (
+                      <div className="feed-grid-item-locked-cover" aria-hidden>
+                        <span className="feed-grid-item-locked-cover-icon">🔒</span>
+                      </div>
+                    ) : coverUrl ? (
                       coverIsVideo ? (
                         <MemberFeedGridVideoThumbnail
                           src={coverUrl}
@@ -3248,10 +3499,12 @@ export const FanMemberSaved: React.FC<FanMemberSavedProps> = ({
                 </button>
               </div>
               <div className="fan-feed-post-content">
-                <p>
-                  <span style={{ fontWeight: 600, color: primary, marginRight: "0.35rem" }}>{displayName}</span>
-                  {renderTextWithCustomEmoji(post.content, sjHeartEmojiCtxSaved)}
-                </p>
+                <MemberFeedCaptionBody
+                  displayName={displayName}
+                  primary={primary}
+                  content={post.content}
+                  sjHeartEmojiCtx={sjHeartEmojiCtxSaved}
+                />
                 <FanMemberPostPollView poll={post.poll} fanId={fanId} onVote={(idx) => handlePollVoteSaved(post, idx)} />
                 <FanMemberPostTipGoalView
                   tipGoal={post.tipGoal}
@@ -3278,7 +3531,7 @@ export const FanMemberSaved: React.FC<FanMemberSavedProps> = ({
                     const expanded = expandedInlineCommentKeys.has(inlineKey);
                     const { preview, truncated } = getInlineCommentPreview(c.text);
                     return (
-                    <p key={inlineKey} className="m-0 text-sm" style={{ color: "var(--fan-text, #1f2937)" }}>
+                    <p key={inlineKey} className="fan-feed-inline-comment-preview m-0 text-sm" style={{ color: "var(--fan-text, #1f2937)" }}>
                       <span style={{ fontWeight: 600, marginRight: "0.35rem" }}>{c.author}</span>
                       {expanded || !truncated
                         ? renderTextWithCustomEmoji(c.text, sjHeartEmojiCtxSaved)

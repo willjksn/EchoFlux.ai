@@ -1642,6 +1642,23 @@
   cursor: default;
 }
 
+/* Member feed: lock icon + Pay to unlock + CTA centered (no redundant hint line). */
+.fan-feed-media-lock-overlay--center-unlock {
+  justify-content: center;
+  padding: 1rem 1.25rem;
+  gap: 0;
+}
+
+.fan-feed-media-lock-unlock-stack--overlay-center {
+  gap: 0.5rem;
+  max-width: min(100%, 20rem);
+}
+
+.fan-feed-media-lock-icon--in-stack {
+  font-size: 1.35rem;
+  line-height: 1;
+}
+
 .fan-feed-media-lock-icon {
   font-size: 1.5rem;
   filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.4));
