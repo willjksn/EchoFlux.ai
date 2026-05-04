@@ -1389,7 +1389,7 @@ function FanMemberPostMedia({
             unlockOfferEligible ? " fan-feed-media-lock-overlay--center-unlock" : ""
           }`}
           role="region"
-          aria-label={unlockOfferEligible ? "Locked media — pay to unlock" : "Locked media"}
+          aria-label="Locked media"
           onContextMenu={(e) => e.preventDefault()}
         >
           {!unlockOfferEligible ? (
@@ -1406,7 +1406,6 @@ function FanMemberPostMedia({
               <span className="fan-feed-media-lock-icon fan-feed-media-lock-icon--in-stack" aria-hidden>
                 🔒
               </span>
-              <span className="fan-feed-media-lock-unlock-label">Pay to unlock</span>
               <button
                 type="button"
                 className="fan-feed-media-lock-unlock-btn fan-feed-media-lock-unlock-btn--prominent"

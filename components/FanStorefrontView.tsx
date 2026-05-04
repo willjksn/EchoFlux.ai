@@ -348,6 +348,13 @@ type SupportThread = {
   lastMessage?: string;
 };
 
+/** Firestore uses `done` on IT tickets; member UI uses closed vs open. */
+function supportThreadUiStatusFromFirestore(data: Record<string, unknown>): "open" | "closed" {
+  const raw = typeof data.status === "string" ? data.status.trim().toLowerCase() : "";
+  if (raw === "closed" || raw === "done") return "closed";
+  return "open";
+}
+
 type SupportMessage = {
   id: string;
   senderType: "fan" | "support";
@@ -2050,7 +2057,7 @@ export const FanStorefrontView: React.FC = () => {
           return {
             id: d.id,
             title: typeof data.title === "string" && data.title.trim() ? data.title.trim() : "Problem report",
-            status: data.status === "closed" ? "closed" : "open",
+            status: supportThreadUiStatusFromFirestore(data),
             createdAt: typeof data.createdAt === "string" ? data.createdAt : undefined,
             updatedAt: typeof data.updatedAt === "string" ? data.updatedAt : undefined,
             lastMessage: typeof data.lastMessage === "string" ? data.lastMessage : undefined,
