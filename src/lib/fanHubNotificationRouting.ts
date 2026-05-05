@@ -26,6 +26,9 @@ export function resolveFanHubNotificationTarget(
   if (t === 'purchase_confirmed' || t === 'content_unlocked' || t === 'creator_new_purchase') {
     return { tab: 'purchases' };
   }
+  if (t === 'new_member') {
+    return { tab: 'fans' };
+  }
   if (d.threadId?.trim()) {
     return { tab: 'messages', threadId: d.threadId.trim() };
   }

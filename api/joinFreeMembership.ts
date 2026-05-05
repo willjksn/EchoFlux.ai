@@ -5,6 +5,7 @@ import {
   reconcileFanHubFanPreferenceForMember,
   ensureFanDmThreadForMember,
 } from "./_syncFanHubFanPreference.js";
+import { notifyCreatorNewFanMemberJoined } from "./_fanNotifications.js";
 
 /**
  * POST: Join a creator's fan page for free (no payment required).
@@ -85,6 +86,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
     };
 
+    let notifyCreatorNewMembership = false;
+
     if (fanSnap.exists) {
       const existingData = fanSnap.data() as { subscriptionStatus?: string };
       // If already an active subscriber, just return success
@@ -97,6 +100,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           membershipType: existingData.subscriptionStatus === 'free' ? 'free' : 'paid'
         });
       }
+      notifyCreatorNewMembership = true;
       // Update existing record to free membership
       await fanRef.update({
         subscriptionStatus: 'free',
@@ -105,6 +109,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
       await syncMemberUsernameToFan();
     } else {
+      notifyCreatorNewMembership = true;
       // Create new free member record
       await fanRef.set({
         id: fanId,
@@ -146,6 +151,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       totalMembers: (stats?.totalMembers ?? 0) + 1,
       updatedAt: now,
     }, { merge: true });
+
+    if (notifyCreatorNewMembership) {
+      try {
+        await notifyCreatorNewFanMemberJoined({ creatorId, fanId });
+      } catch (e) {
+        console.warn("notifyCreatorNewFanMemberJoined (free join):", e);
+      }
+    }
 
     console.log(`Free membership joined: creator=${creatorId} fan=${fanId}`);
 

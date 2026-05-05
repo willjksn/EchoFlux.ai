@@ -10,7 +10,7 @@ import {
   ensureFanDmThreadForMember,
 } from './_syncFanHubFanPreference.js';
 import { mergeGuestTreatPurchasesIntoUid } from './_mergeGuestFanPurchases.js';
-import { sendCreatorHubNotification } from './_fanNotifications.js';
+import { notifyCreatorNewFanMemberJoined, sendCreatorHubNotification } from './_fanNotifications.js';
 import { syncLiveStreamTicketOrdersForStream } from './_syncLiveStreamTicketOrders.js';
 
 // Check STRIPE_USE_TEST_MODE toggle first, then select appropriate key
@@ -406,6 +406,13 @@ export async function processFanHubCheckoutSessionCompleted(
     const fanName = getCheckoutSessionName(session);
     const fanRef = db.collection('creators').doc(creatorId).collection('fans').doc(fanId);
     const fanSnap = await fanRef.get();
+    const prevSubRaw = fanSnap.exists
+      ? (fanSnap.data() as { subscriptionStatus?: string | null }).subscriptionStatus
+      : '';
+    const prevSubNorm =
+      typeof prevSubRaw === 'string' ? prevSubRaw.trim().toLowerCase() : '';
+    const hadActivePaidMembership =
+      prevSubNorm === 'active' || prevSubNorm === 'trialing';
     let memberUsername: string | null = null;
     try {
       const uSnap = await db.collection('users').doc(fanId).get();
@@ -470,6 +477,18 @@ export async function processFanHubCheckoutSessionCompleted(
       await mergeGuestTreatPurchasesIntoUid(db, creatorId, fanId, cust, now);
     } catch (e) {
       console.warn('mergeGuestTreatPurchasesIntoUid (subscription checkout):', e);
+    }
+
+    if (!hadActivePaidMembership) {
+      try {
+        await notifyCreatorNewFanMemberJoined({
+          creatorId,
+          fanId,
+          displayNameHint: fanName || null,
+        });
+      } catch (e) {
+        console.warn('notifyCreatorNewFanMemberJoined (subscription checkout):', e);
+      }
     }
 
     console.log(`Fan hub: subscription checkout creator=${creatorId} fan=${fanId}`);
