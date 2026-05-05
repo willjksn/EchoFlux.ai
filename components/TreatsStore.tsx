@@ -23,6 +23,9 @@ import {
   getTreatProductTypeDisplayLabel,
   TREAT_PRODUCT_TYPE_DISPLAY_MAX_LEN,
 } from "../src/lib/treatProductTypeLabel";
+import { EmojiButton } from "./EmojiPicker";
+import { canUseSjHeartEmoji } from "../src/lib/customEmoji";
+import { useCreatorHandle } from "../src/hooks/useCreatorHandle";
 
 function formatPrice(cents: number | null | undefined): string {
   const n = Number(cents);
@@ -214,6 +217,15 @@ export const TreatsStore: React.FC = () => {
   const [viewMode, setViewMode] = useState<ViewMode>("fan");
   const [purchaseLoading, setPurchaseLoading] = useState<string | null>(null);
   const storeCopy = useCreatorStoreCopy(creatorId);
+  const creatorHandleFromDoc = useCreatorHandle(creatorId);
+  const includeSjHeartEmoji = useMemo(
+    () =>
+      canUseSjHeartEmoji({
+        creatorHandle: creatorHandleFromDoc,
+        viewerIsAdmin: user?.role === "Admin",
+      }),
+    [creatorHandleFromDoc, user?.role],
+  );
 
   const [scheduledTreats, setScheduledTreats] = useState<ScheduledPurchase[]>([]);
   const [upcomingSessions, setUpcomingSessions] = useState<UpcomingSession[]>([]);
@@ -1087,6 +1099,7 @@ export const TreatsStore: React.FC = () => {
                       <InlineEditForm
                         key={p.id}
                         product={p}
+                        includeSjHeartEmoji={includeSjHeartEmoji}
                         onSave={(payload) =>
                           handleUpdate(p.id, {
                             type: payload.type,
@@ -1230,6 +1243,7 @@ export const TreatsStore: React.FC = () => {
         <ProductForm
           key="treats-add-product"
           product={null}
+          includeSjHeartEmoji={includeSjHeartEmoji}
           onSave={handleCreate}
           onClose={() => {
             setShowForm(false);
@@ -1243,6 +1257,7 @@ export const TreatsStore: React.FC = () => {
 
 const InlineEditForm: React.FC<{
   product: TreatProduct;
+  includeSjHeartEmoji: boolean;
   onSave: (payload: {
     type: TreatProductType;
     title: string;
@@ -1256,7 +1271,7 @@ const InlineEditForm: React.FC<{
   }) => Promise<void>;
   onCancel: () => void;
   saving: boolean;
-}> = ({ product, onSave, onCancel, saving }) => {
+}> = ({ product, includeSjHeartEmoji, onSave, onCancel, saving }) => {
   const [title, setTitle] = useState(product.title);
   const [priceDollars, setPriceDollars] = useState(() => treatProductToPriceDollarString(product));
   const [description, setDescription] = useState(product.description ?? "");
@@ -1300,23 +1315,39 @@ const InlineEditForm: React.FC<{
     <form onSubmit={handleSubmit} className="treat-inline-form">
       <div className="treat-inline-field">
         <label>Name</label>
-        <input
-          type="text"
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          required
-          placeholder="Product name"
-        />
+        <div className="treat-inline-input-row">
+          <input
+            type="text"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            required
+            placeholder="Product name"
+          />
+          <EmojiButton
+            includeSjHeartEmoji={includeSjHeartEmoji}
+            onSelect={(emoji) => setTitle((t) => t + emoji)}
+          />
+        </div>
       </div>
       <div className="treat-inline-field">
         <label>Card category line (optional)</label>
-        <input
-          type="text"
-          value={typeDisplayLabel}
-          maxLength={TREAT_PRODUCT_TYPE_DISPLAY_MAX_LEN}
-          onChange={(e) => setTypeDisplayLabel(e.target.value)}
-          placeholder={`e.g. ${defaultTreatProductTypeLabel(product.type)}`}
-        />
+        <div className="treat-inline-input-row">
+          <input
+            type="text"
+            value={typeDisplayLabel}
+            maxLength={TREAT_PRODUCT_TYPE_DISPLAY_MAX_LEN}
+            onChange={(e) => setTypeDisplayLabel(e.target.value)}
+            placeholder={`e.g. ${defaultTreatProductTypeLabel(product.type)}`}
+          />
+          <EmojiButton
+            includeSjHeartEmoji={includeSjHeartEmoji}
+            onSelect={(emoji) =>
+              setTypeDisplayLabel((prev) =>
+                `${prev}${emoji}`.slice(0, TREAT_PRODUCT_TYPE_DISPLAY_MAX_LEN),
+              )
+            }
+          />
+        </div>
         <p className="treat-inline-hint">
           Optional line above the title on landing and member store. Leave blank to hide it.
         </p>
@@ -1334,12 +1365,20 @@ const InlineEditForm: React.FC<{
       </div>
       <div className="treat-inline-field">
         <label>Description</label>
-        <textarea
-          value={description}
-          onChange={(e) => setDescription(e.target.value)}
-          rows={2}
-          placeholder="What does the fan get?"
-        />
+        <div className="treat-inline-input-row treat-inline-input-row--multiline">
+          <textarea
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            rows={2}
+            placeholder="What does the fan get?"
+          />
+          <span className="treat-inline-emoji-anchor">
+            <EmojiButton
+              includeSjHeartEmoji={includeSjHeartEmoji}
+              onSelect={(emoji) => setDescription((d) => d + emoji)}
+            />
+          </span>
+        </div>
       </div>
       <div className="treat-inline-field">
         <label>Card image URL (optional)</label>
@@ -1375,6 +1414,7 @@ const InlineEditForm: React.FC<{
 
 const ProductForm: React.FC<{
   product: TreatProduct | null;
+  includeSjHeartEmoji: boolean;
   onSave: (payload: {
     type: TreatProductType;
     title: string;
@@ -1389,7 +1429,7 @@ const ProductForm: React.FC<{
   }) => Promise<void>;
   onClose: () => void;
   saving: boolean;
-}> = ({ product, onSave, onClose, saving }) => {
+}> = ({ product, includeSjHeartEmoji, onSave, onClose, saving }) => {
   const type: TreatProductType = product?.type ?? "custom";
   const [title, setTitle] = useState(() => product?.title ?? "");
   const [description, setDescription] = useState(() => product?.description ?? "");
@@ -1449,35 +1489,59 @@ const ProductForm: React.FC<{
         <form onSubmit={handleSubmit} className="treats-form-body">
           <div className="treats-form-field">
             <label>Title *</label>
-            <input
-              type="text"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              required
-              placeholder="e.g. 30-Second Voice Note"
-            />
+            <div className="treat-inline-input-row">
+              <input
+                type="text"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                required
+                placeholder="e.g. 30-Second Voice Note"
+              />
+              <EmojiButton
+                includeSjHeartEmoji={includeSjHeartEmoji}
+                onSelect={(emoji) => setTitle((t) => t + emoji)}
+              />
+            </div>
           </div>
           <div className="treats-form-field">
             <label>Card category line (optional)</label>
-            <input
-              type="text"
-              value={typeDisplayLabel}
-              maxLength={TREAT_PRODUCT_TYPE_DISPLAY_MAX_LEN}
-              onChange={(e) => setTypeDisplayLabel(e.target.value)}
-              placeholder={`e.g. ${defaultTreatProductTypeLabel(type)}`}
-            />
+            <div className="treat-inline-input-row">
+              <input
+                type="text"
+                value={typeDisplayLabel}
+                maxLength={TREAT_PRODUCT_TYPE_DISPLAY_MAX_LEN}
+                onChange={(e) => setTypeDisplayLabel(e.target.value)}
+                placeholder={`e.g. ${defaultTreatProductTypeLabel(type)}`}
+              />
+              <EmojiButton
+                includeSjHeartEmoji={includeSjHeartEmoji}
+                onSelect={(emoji) =>
+                  setTypeDisplayLabel((prev) =>
+                    `${prev}${emoji}`.slice(0, TREAT_PRODUCT_TYPE_DISPLAY_MAX_LEN),
+                  )
+                }
+              />
+            </div>
             <p className="treat-inline-hint">
               Leave blank to hide the line above the title on landing and member store.
             </p>
           </div>
           <div className="treats-form-field">
             <label>Description</label>
-            <textarea
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              rows={2}
-              placeholder="What does the fan get?"
-            />
+            <div className="treat-inline-input-row treat-inline-input-row--multiline">
+              <textarea
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                rows={2}
+                placeholder="What does the fan get?"
+              />
+              <span className="treat-inline-emoji-anchor">
+                <EmojiButton
+                  includeSjHeartEmoji={includeSjHeartEmoji}
+                  onSelect={(emoji) => setDescription((d) => d + emoji)}
+                />
+              </span>
+            </div>
           </div>
           <div className="treats-form-row">
             <div className="treats-form-field">

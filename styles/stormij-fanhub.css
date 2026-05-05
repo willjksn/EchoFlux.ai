@@ -5644,6 +5644,24 @@ button.treat-card:hover:not(:disabled) .treat-card-cta {
   min-height: 60px;
 }
 
+.treat-inline-input-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.treat-inline-input-row--multiline {
+  align-items: flex-start;
+}
+.treat-inline-input-row input,
+.treat-inline-input-row textarea {
+  flex: 1;
+  min-width: 0;
+}
+.treat-inline-emoji-anchor {
+  flex-shrink: 0;
+  padding-top: 0.55rem;
+}
+
 .treat-inline-hint {
   font-size: 0.75rem;
   line-height: 1.4;
