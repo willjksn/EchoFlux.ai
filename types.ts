@@ -592,6 +592,8 @@ export interface CreatorFanHubPostFirestore {
   mediaTypes?: ("image" | "video")[];
   audioUrls?: string[];
   lockedContent?: FanHubPostLockedContent;
+  /** CSS blur (px) on image/video in the feed (optional paywall teaser rules apply when locked). Omit or 0 = none. */
+  mediaPreviewBlurPx?: number;
   likeCount?: number;
   likesCount?: number;
   likedBy?: string[];

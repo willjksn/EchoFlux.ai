@@ -41,6 +41,12 @@ import {
   restoreFanFeedCarouselScrollSnaps,
 } from "../src/lib/fanFeedCarouselScrollRestore";
 import { tryFeedVideoPosterSeekOnce } from "../src/lib/feedVideoPosterSeek";
+import {
+  feedSlideMediaBlurStyle,
+  mediaPreviewBlurFilterStyle,
+  normalizeMediaPreviewBlurPx,
+} from "../src/lib/feedMediaPreviewBlur";
+import { fetchCreatorFanPostMedia } from "../src/lib/fetchCreatorFanPostMedia";
 import type { FanHubPostKind, LiveStreamPromoOnPost } from "../types";
 import { LiveStreamPromoBanner, type LiveStreamCreatorBroadcastProps } from "./LiveStreamPromoBanner";
 
@@ -165,6 +171,8 @@ export type FeedPost = {
   poll?: { question: string; options: string[]; optionVotes?: number[] };
   tipGoal?: { description: string; targetCents: number; raisedCents: number };
   lockedContent?: LockedPostContent;
+  /** Optional blur on image/video (see `feedSlideMediaBlurStyle`). */
+  mediaPreviewBlurPx?: number;
   status?: "published" | "scheduled" | "draft";
   pinned?: boolean;
   pinnedAt?: { toDate: () => Date } | string;
@@ -280,6 +288,10 @@ function firestoreDocToFeedPost(docSnap: QueryDocumentSnapshot<DocumentData>, is
     poll: d.poll as FeedPost["poll"] | undefined,
     tipGoal: d.tipGoal as FeedPost["tipGoal"] | undefined,
     lockedContent: d.lockedContent as FeedPost["lockedContent"] | undefined,
+    mediaPreviewBlurPx: (() => {
+      const b = normalizeMediaPreviewBlurPx(d.mediaPreviewBlurPx);
+      return b > 0 ? b : undefined;
+    })(),
     status,
     pinned: !!d.pinned,
     pinnedAt: d.pinnedAt as FeedPost["pinnedAt"],
@@ -729,6 +741,37 @@ function FeedCard({
       ? `Unlock $${(lockPriceCents / 100).toFixed(2)}`
       : "Locked";
 
+  const blurPxNorm = normalizeMediaPreviewBlurPx(post.mediaPreviewBlurPx);
+  const [adminResolvedMedia, setAdminResolvedMedia] = useState<{
+    mediaUrls: string[];
+    mediaTypes: ("image" | "video")[];
+  } | null>(null);
+
+  useEffect(() => {
+    if (!isAdminMode || !currentUserId || !post.lockedContent?.enabled || blurPxNorm <= 0) {
+      setAdminResolvedMedia(null);
+      return;
+    }
+    let cancelled = false;
+    void fetchCreatorFanPostMedia(currentUserId, post.id).then((res) => {
+      if (cancelled || !res?.mediaUrls?.length) return;
+      setAdminResolvedMedia({ mediaUrls: res.mediaUrls, mediaTypes: res.mediaTypes });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [isAdminMode, currentUserId, post.id, post.lockedContent?.enabled, blurPxNorm]);
+
+  const adminRevealUrl = adminResolvedMedia?.mediaUrls[slideIdx];
+  const adminRevealType = adminResolvedMedia?.mediaTypes[slideIdx];
+  const showAdminLockedBlurPreview =
+    isAdminMode &&
+    blurPxNorm > 0 &&
+    !!adminRevealUrl &&
+    !isProtectedLockedMediaUrl(adminRevealUrl);
+  const adminPlaceholderBlurStyle =
+    showAdminLockedBlurPreview && blurPxNorm > 0 ? mediaPreviewBlurFilterStyle(blurPxNorm) : undefined;
+
   const hasTipGoal = !!(post.tipGoal && typeof post.tipGoal.targetCents === "number" && post.tipGoal.targetCents > 0);
   const mediaTotals = useMemo(() => {
     const items = urls;
@@ -997,6 +1040,22 @@ function FeedCard({
   const modalUrl = urls[modalIdx];
   const modalIsVideo =
     !!modalUrl && (post.mediaTypes?.[modalIdx] === "video" || inferIsVideoFromUrl(modalUrl));
+
+  const lockedCfgForBlur = post.lockedContent?.enabled ? post.lockedContent : undefined;
+  const feedSlideBlurStyle = feedSlideMediaBlurStyle(
+    post.mediaPreviewBlurPx,
+    lockedCfgForBlur,
+    false,
+    slideIdx,
+    urls,
+  );
+  const modalSlideBlurStyle = feedSlideMediaBlurStyle(
+    post.mediaPreviewBlurPx,
+    lockedCfgForBlur,
+    false,
+    modalIdx,
+    urls,
+  );
 
   const toggleFeedVideoPlay = useCallback(() => {
     if (feedVideoDecodeError) return;
@@ -1291,7 +1350,34 @@ function FeedCard({
             ref={carouselRootRef}
             className={`feed-card-media-wrap${inFeedCarouselClass}${lockedCurrent ? " fan-feed-media-cell--locked" : ""}`}
           >
-            <div className="feed-card-media fan-feed-media-protected-placeholder" aria-hidden />
+            {showAdminLockedBlurPreview && adminRevealUrl ? (
+              adminRevealType === "video" ? (
+                <video
+                  key={`${post.id}-admin-blur-v-${slideIdx}`}
+                  src={adminRevealUrl.split("#")[0]}
+                  muted
+                  playsInline
+                  preload="metadata"
+                  className="feed-card-media feed-card-media-video"
+                  style={adminPlaceholderBlurStyle}
+                  aria-hidden
+                  {...feedVideoDownloadGuardProps}
+                />
+              ) : (
+                <img
+                  key={`${post.id}-admin-blur-i-${slideIdx}`}
+                  src={adminRevealUrl}
+                  alt=""
+                  className="feed-card-media"
+                  style={adminPlaceholderBlurStyle}
+                  loading={slideIdx === 0 ? "lazy" : "eager"}
+                  aria-hidden
+                  {...feedImageDownloadGuardProps}
+                />
+              )
+            ) : (
+              <div className="feed-card-media fan-feed-media-protected-placeholder" aria-hidden />
+            )}
             {showCaptionOnMedia && (
               <FeedCardCaptionOverlay
                 caption={overlayCaption}
@@ -1308,7 +1394,7 @@ function FeedCard({
             {lockedCurrent ? (
               <>
                 <div
-                  className="fan-feed-media-lock-overlay"
+                  className={`fan-feed-media-lock-overlay${blurPxNorm > 0 ? " fan-feed-media-lock-overlay--teaser-blur" : ""}`}
                   role="region"
                   aria-label="Locked media"
                   onContextMenu={(e) => e.preventDefault()}
@@ -1375,6 +1461,7 @@ function FeedCard({
               loop
               playsInline
               className="feed-card-media feed-card-media-video"
+              style={feedSlideBlurStyle}
               preload="metadata"
               {...feedVideoDownloadGuardProps}
               onLoadedMetadata={(e) => {
@@ -1427,6 +1514,7 @@ function FeedCard({
               src={currentUrl}
               alt=""
               className="feed-card-media"
+              style={feedSlideBlurStyle}
               loading={slideIdx === 0 ? "lazy" : "eager"}
               {...feedImageDownloadGuardProps}
             />
@@ -1711,6 +1799,7 @@ function FeedCard({
                         src={modalUrl}
                         videoKey={`${post.id}-modal-v-${modalIdx}`}
                         accentHex={viewPostLinkColor}
+                        mediaBlurStyle={modalSlideBlurStyle}
                       />
                     ) : (
                       <img
@@ -1718,6 +1807,7 @@ function FeedCard({
                         src={modalUrl}
                         alt=""
                         className="feed-comments-modal-media"
+                        style={modalSlideBlurStyle}
                         loading="eager"
                         {...feedImageDownloadGuardProps}
                       />

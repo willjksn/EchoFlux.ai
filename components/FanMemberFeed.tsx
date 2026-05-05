@@ -22,6 +22,7 @@ import {
   isProtectedLockedMediaUrl,
   type LockedPostContent,
 } from "../src/lib/lockedPostMedia";
+import { feedSlideMediaBlurStyle, normalizeMediaPreviewBlurPx } from "../src/lib/feedMediaPreviewBlur";
 import { getAvatarCropStyle } from "../src/lib/avatarCrop";
 import { inferIsVideoFromUrl, normalizePostMediaTypes } from "../src/lib/mediaUrlInfer";
 import { getFeedGridCoverMedia, isFeedGridCoverLockedForViewer } from "../src/lib/feedGridCover";
@@ -533,6 +534,8 @@ interface Post {
   feedFirestorePath?: string;
   postKind?: FanHubPostKind;
   liveStreamPromo?: LiveStreamPromoOnPost;
+  /** Teaser blur on public preview while locked for this viewer */
+  mediaPreviewBlurPx?: number;
 }
 
 function isPublishedFanMemberPostStatus(raw: unknown): boolean {
@@ -921,6 +924,10 @@ function postFromFirestore(
     feedFirestorePath: snap.ref.path,
     postKind,
     liveStreamPromo,
+    mediaPreviewBlurPx: (() => {
+      const b = normalizeMediaPreviewBlurPx(data.mediaPreviewBlurPx);
+      return b > 0 ? b : undefined;
+    })(),
   };
 }
 
@@ -1101,6 +1108,15 @@ function FanMemberPostMedia({
       ? false
       : isMediaSlotLocked(lockedCfg, idx, n) || (!!lockedCfg && currentProtectedPlaceholder);
 
+  const postHasPaywallLock = !!post.lockedContent?.enabled;
+  const viewerUnlockedPaywall = postHasPaywallLock && postUnlocked;
+
+  const teaserBlurStyle = useMemo(
+    () =>
+      feedSlideMediaBlurStyle(post.mediaPreviewBlurPx, lockedCfg, viewerUnlockedPaywall, idx, urls),
+    [post.mediaPreviewBlurPx, lockedCfg, viewerUnlockedPaywall, idx, urls],
+  );
+
   const useInteractiveMemberFeedVideo =
     !splitModal &&
     variant === "feed" &&
@@ -1248,6 +1264,7 @@ function FanMemberPostMedia({
   const hasLockPriceLabel =
     typeof lockPriceCents === "number" && Number.isFinite(lockPriceCents) && lockPriceCents > 0;
   const lockPriceText = hasLockPriceLabel ? `Unlock $${(lockPriceCents / 100).toFixed(2)}` : null;
+  const lockBlurOverlayPx = normalizeMediaPreviewBlurPx(post.mediaPreviewBlurPx);
 
   const rootClass = splitModal
     ? `feed-comments-modal-media-wrap fan-feed-media-carousel${
@@ -1311,6 +1328,7 @@ function FanMemberPostMedia({
             src={currentUrl}
             videoKey={`${post.id}-member-modal-v-${idx}`}
             accentHex={primary}
+            mediaBlurStyle={teaserBlurStyle}
           />
         ) : useInteractiveMemberFeedVideo ? (
           <>
@@ -1322,6 +1340,7 @@ function FanMemberPostMedia({
               loop
               playsInline
               className="feed-card-media feed-card-media-video"
+              style={teaserBlurStyle}
               preload="metadata"
               {...feedVideoDownloadGuardProps}
               onLoadedMetadata={(e) => {
@@ -1361,6 +1380,7 @@ function FanMemberPostMedia({
               src={currentUrl.split("#")[0]}
               controls
               className="feed-card-media feed-card-media-video"
+              style={teaserBlurStyle}
               playsInline
               preload="metadata"
               {...feedVideoDownloadGuardProps}
@@ -1378,6 +1398,7 @@ function FanMemberPostMedia({
           src={currentUrl}
           alt=""
           className={splitModal ? "feed-comments-modal-media" : "feed-card-media"}
+          style={teaserBlurStyle}
           loading={idx === 0 ? "lazy" : "eager"}
           {...feedImageDownloadGuardProps}
         />
@@ -1385,8 +1406,8 @@ function FanMemberPostMedia({
       <FanMemberCaptionOverlay post={post} sjHeartEmojiCtx={sjHeartEmojiCtx} />
       {lockedCurrent && (
         <div
-          className={`fan-feed-media-lock-overlay${
-            unlockOfferEligible ? " fan-feed-media-lock-overlay--center-unlock" : ""
+          className={`fan-feed-media-lock-overlay${unlockOfferEligible ? " fan-feed-media-lock-overlay--center-unlock" : ""}${
+            lockBlurOverlayPx > 0 ? " fan-feed-media-lock-overlay--teaser-blur" : ""
           }`}
           role="region"
           aria-label="Locked media"

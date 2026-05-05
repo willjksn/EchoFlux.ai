@@ -1642,6 +1642,11 @@
   cursor: default;
 }
 
+/* Lighter scrim when the post uses media blur so the blurred teaser stays visible */
+.fan-feed-media-lock-overlay--teaser-blur {
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.2) 0%, rgba(0, 0, 0, 0.46) 100%);
+}
+
 /* Member feed: lock icon + Pay to unlock + CTA centered (no redundant hint line). */
 .fan-feed-media-lock-overlay--center-unlock {
   justify-content: center;

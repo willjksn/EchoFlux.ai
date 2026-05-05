@@ -9,11 +9,14 @@ export function ViewPostModalVideo({
   src,
   videoKey,
   accentHex,
+  mediaBlurStyle,
 }: {
   src: string;
   videoKey: string;
   /** Theme primary (hex) for scrubber fill */
   accentHex?: string;
+  /** Optional CSS blur on teaser preview video */
+  mediaBlurStyle?: React.CSSProperties;
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const trackRef = useRef<HTMLDivElement>(null);
@@ -103,6 +106,7 @@ export function ViewPostModalVideo({
         muted={muted}
         playsInline
         preload="metadata"
+        style={mediaBlurStyle}
         onContextMenu={(e) => e.preventDefault()}
         onLoadedMetadata={onMeta}
         onDurationChange={onMeta}

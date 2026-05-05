@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback, useEffect } from "react";
+import React, { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import { useAppContext } from "./AppContext";
 import { ref, uploadBytes, uploadBytesResumable, getDownloadURL } from "firebase/storage";
 import {
@@ -47,10 +47,15 @@ import type { LiveStreamEventStatus, LiveStreamPromoOnPost } from "../types";
 import { hasLiveStreamAccess } from "../src/utils/planAccess";
 import { LiveStreamWatchRoom } from "./LiveStreamWatchRoom";
 import {
-  isProtectedLockedMediaUrl,
   publicMediaUrlsForLockedPost,
   type LockedPostContent,
 } from "../src/lib/lockedPostMedia";
+import {
+  MEDIA_PREVIEW_BLUR_MAX_PX,
+  mediaPreviewBlurFilterStyle,
+  normalizeMediaPreviewBlurPx,
+} from "../src/lib/feedMediaPreviewBlur";
+import { fetchCreatorFanPostMedia } from "../src/lib/fetchCreatorFanPostMedia";
 
 const LIVE_STREAM_DOC_STATUSES: LiveStreamEventStatus[] = ["draft", "scheduled", "live", "ended", "cancelled"];
 
@@ -157,6 +162,64 @@ interface VaultItem {
   path: string;
   name: string;
   type: "image" | "video" | "audio";
+}
+
+/** Live thumbnail for blur strength while composing (first image or video on the post). */
+function FanHubComposerBlurPreview({
+  preview,
+  blurPx,
+  variant = "neutral",
+}: {
+  preview: { url: string; type: "image" | "video" } | null;
+  blurPx: number;
+  variant?: "neutral" | "primary";
+}) {
+  const px = normalizeMediaPreviewBlurPx(blurPx);
+  const blurStyle = mediaPreviewBlurFilterStyle(px);
+  const shell =
+    variant === "primary"
+      ? "border border-primary-200/90 dark:border-primary-800 bg-primary-50/40 dark:bg-primary-950/25"
+      : "border border-gray-200 dark:border-gray-600 bg-gray-50/80 dark:bg-gray-900/40";
+  const caption =
+    variant === "primary"
+      ? "text-[10px] font-medium uppercase tracking-wide text-primary-700 dark:text-primary-300 border-b border-primary-200/80 dark:border-primary-800 bg-primary-50/90 dark:bg-primary-950/40"
+      : "text-[10px] font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400 border-b border-gray-200/80 dark:border-gray-600 bg-gray-100/90 dark:bg-gray-800/80";
+
+  if (!preview?.url) {
+    return (
+      <p className={`text-[11px] m-0 leading-snug ${variant === "primary" ? "text-primary-600/90 dark:text-primary-400/90" : "text-gray-500 dark:text-gray-400"}`}>
+        Attach an image or video to see how blur looks.
+      </p>
+    );
+  }
+
+  return (
+    <div className={`rounded-lg overflow-hidden max-w-[220px] ${shell}`}>
+      <p className={`px-2.5 py-1.5 ${caption}`}>Blur preview</p>
+      <div className="relative aspect-video max-h-[132px] w-full bg-black/10 dark:bg-black/30">
+        {preview.type === "image" ? (
+          <img
+            src={preview.url}
+            alt=""
+            className="absolute inset-0 h-full w-full object-cover"
+            style={blurStyle}
+          />
+        ) : (
+          <video
+            src={preview.url}
+            muted
+            playsInline
+            preload="metadata"
+            className="absolute inset-0 h-full w-full object-cover"
+            style={blurStyle}
+          />
+        )}
+      </div>
+      <p className={`text-[10px] px-2 py-1.5 m-0 ${variant === "primary" ? "text-primary-600/85 dark:text-primary-400/85" : "text-gray-500 dark:text-gray-400"}`}>
+        Matches fan feed blur (~{px}px).
+      </p>
+    </div>
+  );
 }
 
 const AI_TONES: { id: AiTone; label: string }[] = [
@@ -465,27 +528,6 @@ function rememberStoredFanHubCaption(mediaFingerprint: string, caption: string) 
   }
 }
 
-async function fetchCreatorFanPostMedia(creatorId: string, postId: string): Promise<{
-  mediaUrls: string[];
-  mediaTypes: ("image" | "video")[];
-} | null> {
-  const token = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
-  if (!token) return null;
-  const qs = new URLSearchParams({ creatorId, postId });
-  const res = await fetch(resolveApiUrl(`/api/fanPostMedia?${qs.toString()}`), {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  if (!res.ok) return null;
-  const data = await res.json().catch(() => null) as { mediaUrls?: unknown; mediaTypes?: unknown } | null;
-  const mediaUrls = Array.isArray(data?.mediaUrls)
-    ? data.mediaUrls.filter((u): u is string => typeof u === "string" && !!u.trim())
-    : [];
-  const rawTypes = Array.isArray(data?.mediaTypes)
-    ? data.mediaTypes.filter((t): t is string => typeof t === "string")
-    : [];
-  return { mediaUrls, mediaTypes: rawTypes.map((t) => (t === "video" ? "video" : "image")) };
-}
-
 export const FanHubPosts: React.FC = () => {
   const { user, showToast, setActivePage } = useAppContext();
   const premiumTab = usePremiumStudioTab();
@@ -554,6 +596,26 @@ export const FanHubPosts: React.FC = () => {
   const [lockPrice, setLockPrice] = useState("");
   /** Which attached media index is the public teaser when post is locked (multi-media only). */
   const [lockPreviewMediaIndex, setLockPreviewMediaIndex] = useState(0);
+  /** Teaser / stylistic blur on image & video (optional; works with or without pay-to-unlock). */
+  const [mediaPreviewBlurPx, setMediaPreviewBlurPx] = useState(0);
+  const [mediaPreviewBlurEnabled, setMediaPreviewBlurEnabled] = useState(false);
+
+  /** Frame shown in blur slider preview (teaser slot when paywall + multi-media). */
+  const blurPreviewMediaSource = useMemo((): { url: string; type: "image" | "video" } | null => {
+    const visualEntries = media.filter((item) => item.type === "image" || item.type === "video");
+    if (!visualEntries.length) return null;
+
+    if (lockEnabled && media.length > 1) {
+      const idx = Math.min(Math.max(0, lockPreviewMediaIndex), media.length - 1);
+      const picked = media[idx];
+      if (picked && (picked.type === "image" || picked.type === "video")) {
+        return { url: picked.url, type: picked.type };
+      }
+    }
+
+    const first = visualEntries[0]!;
+    return { url: first.url, type: first.type };
+  }, [media, lockEnabled, lockPreviewMediaIndex]);
   
   // Poll
   const [pollEnabled, setPollEnabled] = useState(false);
@@ -1726,6 +1788,19 @@ Write 2-4 sentences that are engaging and on-topic.`;
       } else if (editingPostId) {
         postData.lockedContent = deleteField();
       }
+
+      const blurPxCandidate =
+        mediaPreviewBlurEnabled &&
+        uploadedUrls.length > 0 &&
+        media.some((m) => m.type === "image" || m.type === "video")
+          ? normalizeMediaPreviewBlurPx(mediaPreviewBlurPx)
+          : 0;
+      const blurForSave = blurPxCandidate > 0 ? blurPxCandidate : 0;
+      if (blurForSave > 0) {
+        postData.mediaPreviewBlurPx = blurForSave;
+      } else if (editingPostId) {
+        postData.mediaPreviewBlurPx = deleteField();
+      }
       
       // Poll
       if (!liveStreamPromoEnabled && pollEnabled && pollQuestion.trim() && pollOptions.filter((o) => o.trim()).length >= 2) {
@@ -1912,6 +1987,8 @@ Write 2-4 sentences that are engaging and on-topic.`;
     setLockEnabled(false);
     setLockPrice("");
     setLockPreviewMediaIndex(0);
+    setMediaPreviewBlurPx(0);
+    setMediaPreviewBlurEnabled(false);
     setPollEnabled(false);
     setPollQuestion("");
     setPollOptions(["", ""]);
@@ -1964,11 +2041,15 @@ Write 2-4 sentences that are engaging and on-topic.`;
 
     let urls = Array.isArray(post.mediaUrls) ? post.mediaUrls : [];
     let types = Array.isArray(post.mediaTypes) ? post.mediaTypes : [];
-    if (user?.uid && post.lockedContent?.enabled && urls.some(isProtectedLockedMediaUrl)) {
-      const resolved = await fetchCreatorFanPostMedia(user.uid, post.id).catch(() => null);
-      if (resolved?.mediaUrls.length) {
+    /** Same as publish path (`user?.uid || user?.id`); `uid` alone is often missing on app user objects. */
+    const ownerUid = user?.uid || user?.id;
+    if (ownerUid && post.lockedContent?.enabled) {
+      const resolved = await fetchCreatorFanPostMedia(ownerUid, post.id).catch(() => null);
+      if (resolved?.mediaUrls?.length) {
         urls = resolved.mediaUrls;
-        types = resolved.mediaTypes;
+        types = urls.map((_, index) =>
+          resolved.mediaTypes[index] === "video" ? "video" : "image"
+        );
       }
     }
     const mediaFromPost: MediaItem[] = urls
@@ -2003,6 +2084,9 @@ Write 2-4 sentences that are engaging and on-topic.`;
         ? Math.max(0, post.lockedContent.previewMediaIndex)
         : 0
     );
+    const blurPxLoaded = normalizeMediaPreviewBlurPx(post.mediaPreviewBlurPx);
+    setMediaPreviewBlurPx(blurPxLoaded);
+    setMediaPreviewBlurEnabled(blurPxLoaded > 0);
     setPollEnabled(!!post.poll);
     editingPostPollRef.current = post.poll || null;
     setPollQuestion(post.poll?.question || "");
@@ -2515,6 +2599,48 @@ Write 2-4 sentences that are engaging and on-topic.`;
                   </div>
                 )}
               </div>
+
+              {/* Optional blur on images/videos (does not require pay-to-unlock) */}
+              {media.some((m) => m.type === "image" || m.type === "video") && (
+                <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700 space-y-3">
+                  <FanHubSwitchRow
+                    labelId="fanhub-media-blur-enabled-label"
+                    label="Blur image / video"
+                    checked={mediaPreviewBlurEnabled}
+                    onCheckedChange={(next) => {
+                      setMediaPreviewBlurEnabled(next);
+                      if (next && mediaPreviewBlurPx <= 0) {
+                        setMediaPreviewBlurPx(Math.min(8, MEDIA_PREVIEW_BLUR_MAX_PX));
+                      }
+                    }}
+                  />
+                  {mediaPreviewBlurEnabled && (
+                    <>
+                      <div>
+                        <label htmlFor="fanhub-media-blur-range" className="text-xs text-gray-600 dark:text-gray-400 block mb-1">
+                          Strength ({mediaPreviewBlurPx}px)
+                        </label>
+                        <input
+                          id="fanhub-media-blur-range"
+                          type="range"
+                          min={1}
+                          max={MEDIA_PREVIEW_BLUR_MAX_PX}
+                          step={1}
+                          value={Math.min(MEDIA_PREVIEW_BLUR_MAX_PX, Math.max(1, mediaPreviewBlurPx))}
+                          onChange={(e) => setMediaPreviewBlurPx(Number(e.target.value))}
+                          className="w-full max-w-md accent-primary-500"
+                          aria-valuetext={`${mediaPreviewBlurPx} pixels blur`}
+                        />
+                      </div>
+                      <FanHubComposerBlurPreview preview={blurPreviewMediaSource} blurPx={mediaPreviewBlurPx} variant="neutral" />
+                      <p className="text-[11px] text-gray-500 dark:text-gray-400 m-0 leading-snug">
+                        Fans see this blur until you turn it off and save again.
+                        With <strong>Pay to unlock</strong>, blur follows the same preview rules as before (clears after purchase).
+                      </p>
+                    </>
+                  )}
+                </div>
+              )}
 
               {/* Live stream — Elite; Pro sees upgrade + non-interactive control */}
               {creatorCanLiveStream || liveStreamPromoEnabled ? (
