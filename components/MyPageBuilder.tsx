@@ -32,6 +32,7 @@ import { creatorIdFirestoreQueryVariants, normalizeCreatorId } from "../src/lib/
 import { FAN_HUB_STOREFRONT_THEME_SAVED_EVENT } from "../src/hooks/useCreatorFanHubTheme";
 import { deriveFanHubThemeFromPrimary } from "../src/lib/fanHubThemeFromPrimary";
 import { normalizeTreatProductsFromApi } from "../src/lib/treatProductsNormalize";
+import { getTreatProductTypeDisplayLabel } from "../src/lib/treatProductTypeLabel";
 
 const DEFAULT_SECTIONS: NonNullable<CreatorStorefrontSettings["sections"]> = {
   feed: true,
@@ -1192,10 +1193,11 @@ export const MyPageBuilder: React.FC = () => {
                   (typeof best.heroImageUrl === "string" && best.heroImageUrl.trim()) ||
                   "";
               }
-              if (!String(merged.heroTagline ?? "").trim() && typeof best.heroTagline === "string") merged.heroTagline = best.heroTagline;
-              if (!String(merged.heroPromise ?? "").trim() && typeof best.heroPromise === "string") merged.heroPromise = best.heroPromise;
-              if (!String(merged.heroSubline ?? "").trim() && typeof best.heroSubline === "string") merged.heroSubline = best.heroSubline;
-              if (!String(merged.heroSubline2 ?? "").trim() && typeof best.heroSubline2 === "string") merged.heroSubline2 = best.heroSubline2;
+              // Only backfill hero copy when the primary creator doc never stored that field (avoid overwriting intentional blanks).
+              if (!(typeof data.heroTagline === "string") && typeof best.heroTagline === "string") merged.heroTagline = best.heroTagline;
+              if (!(typeof data.heroPromise === "string") && typeof best.heroPromise === "string") merged.heroPromise = best.heroPromise;
+              if (!(typeof data.heroSubline === "string") && typeof best.heroSubline === "string") merged.heroSubline = best.heroSubline;
+              if (!(typeof data.heroSubline2 === "string") && typeof best.heroSubline2 === "string") merged.heroSubline2 = best.heroSubline2;
             }
           }
         } catch {
@@ -4202,17 +4204,21 @@ export const MyPageBuilder: React.FC = () => {
                 <p className="text-sm italic m-0 text-gray-500 dark:text-gray-400">{builderGuestTreatStoreCopy.publicStoreModalEmptyMessage}</p>
               ) : (
                 <ul className="space-y-3 list-none m-0 p-0">
-                  {builderLandingTreatsProducts.map((p) => (
+                  {builderLandingTreatsProducts.map((p) => {
+                    const categoryLine = getTreatProductTypeDisplayLabel(p);
+                    return (
                     <li
                       key={p.id}
                       className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 rounded-xl p-3 border bg-gray-50 dark:bg-gray-800/80"
                       style={{ borderColor: `${builderGuestTreatPrimary}30` }}
                     >
                       <div>
-                        <p className="text-xs font-medium uppercase tracking-wide m-0" style={{ color: builderGuestTreatPrimary }}>
-                          {p.type.replace(/_/g, " ")}
-                        </p>
-                        <p className="font-semibold m-0 mt-0.5">{p.title}</p>
+                        {categoryLine ? (
+                          <p className="text-xs font-medium uppercase tracking-wide m-0" style={{ color: builderGuestTreatPrimary }}>
+                            {categoryLine}
+                          </p>
+                        ) : null}
+                        <p className={`font-semibold m-0 ${categoryLine ? "mt-0.5" : ""}`}>{p.title}</p>
                         {p.description ? (
                           <p className="text-xs mt-1 mb-0 text-gray-600 dark:text-gray-400">{p.description}</p>
                         ) : null}
@@ -4224,7 +4230,8 @@ export const MyPageBuilder: React.FC = () => {
                         Members only
                       </span>
                     </li>
-                  ))}
+                    );
+                  })}
                 </ul>
               )}
             </div>

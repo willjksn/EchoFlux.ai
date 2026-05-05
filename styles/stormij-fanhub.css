@@ -4537,6 +4537,19 @@ button.treat-card:hover:not(:disabled) .treat-card-cta {
     0 0 36px -6px color-mix(in srgb, var(--fan-primary, #6366f1) 14%, transparent);
 }
 
+.treats-stormij-card-type {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--fan-primary, #6366f1);
+  margin: 0 0 0.45rem;
+}
+
+.dark .treats-stormij-card-type {
+  color: color-mix(in srgb, var(--fan-primary, #6366f1) 88%, #ffffff);
+}
+
 .treats-stormij-card-row1 {
   display: flex;
   justify-content: space-between;
@@ -5345,6 +5358,20 @@ button.treat-card:hover:not(:disabled) .treat-card-cta {
   flex: 1;
   min-width: 0;
 }
+
+.treat-manage-card-kind {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--fan-primary, #6366f1);
+  margin: 0 0 0.35rem;
+}
+
+.dark .treat-manage-card-kind {
+  color: color-mix(in srgb, var(--fan-primary, #6366f1) 92%, #ffffff);
+}
+
 .treat-manage-card-title {
   font-family: "Playfair Display", Georgia, serif;
   font-size: 1.25rem;
@@ -5615,6 +5642,16 @@ button.treat-card:hover:not(:disabled) .treat-card-cta {
 .treat-inline-field textarea {
   resize: vertical;
   min-height: 60px;
+}
+
+.treat-inline-hint {
+  font-size: 0.75rem;
+  line-height: 1.4;
+  color: #6b7280;
+  margin: 0;
+}
+.dark .treat-inline-hint {
+  color: #9ca3af;
 }
 
 .treat-inline-actions {

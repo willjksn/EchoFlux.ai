@@ -1,4 +1,5 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
+import type { DocumentReference } from "firebase-admin/firestore";
 import { getAdminDb } from "./_firebaseAdmin.js";
 import { verifyAuth } from "./verifyAuth.js";
 
@@ -110,16 +111,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (handleChanged) {
       await db.runTransaction(async (tx) => {
         const txPayload = omitUndefinedDeep(payload) as Record<string, unknown>;
-        if (oldHandle && HANDLE_REGEX.test(oldHandle)) {
-          const oldHandleRef = db.collection("creatorHandles").doc(oldHandle);
+        /** Firestore requires every read before any write (delete/set). */
+        let deleteOldHandleRef: DocumentReference | null = null;
+        const oldHandleRef =
+          oldHandle && HANDLE_REGEX.test(oldHandle) ? db.collection("creatorHandles").doc(oldHandle) : null;
+        const newHandleRef = handle ? db.collection("creatorHandles").doc(handle) : null;
+
+        if (oldHandleRef) {
           const oldSnap = await tx.get(oldHandleRef);
           if (oldSnap.exists) {
             const data = oldSnap.data() as { creatorId?: string };
-            if (data?.creatorId === creatorId) tx.delete(oldHandleRef);
+            if (data?.creatorId === creatorId) deleteOldHandleRef = oldHandleRef;
           }
         }
-        if (handle) {
-          const newHandleRef = db.collection("creatorHandles").doc(handle);
+        if (handle && newHandleRef) {
           const newHandleSnap = await tx.get(newHandleRef);
           if (newHandleSnap.exists) {
             const mapped = (newHandleSnap.data() as { creatorId?: string } | undefined)?.creatorId;
@@ -132,6 +137,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           if (reservedUsernameSnap.exists) {
             throw new Error("HANDLE_RESERVED_BY_USERNAME");
           }
+        }
+
+        if (deleteOldHandleRef) tx.delete(deleteOldHandleRef);
+        if (handle && newHandleRef) {
           tx.set(newHandleRef, { creatorId });
         }
         tx.set(creatorRef, txPayload, { merge: true });

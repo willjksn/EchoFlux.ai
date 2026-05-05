@@ -37,6 +37,7 @@ import type {
   LandingSectionListMarker,
 } from "../types";
 import { normalizeTreatProductsFromApi } from "../src/lib/treatProductsNormalize";
+import { getTreatProductTypeDisplayLabel } from "../src/lib/treatProductTypeLabel";
 import { FanLandingPage } from "./FanLandingPage";
 import { FanAuthModal } from "./FanAuthModal";
 import { FanMemberFeed, FanMemberSaved, fetchFanMemberPostForPurchases } from "./FanMemberFeed";
@@ -5308,12 +5309,13 @@ export const FanStorefrontView: React.FC = () => {
                       /** Entitlement includes prior purchase; fans may buy again until quantity sells out (server-enforced). */
                       const buyLabel =
                         isPurchasingThis ? "Processing…" : owned ? "Buy again" : "Purchase";
+                      const categoryLine = getTreatProductTypeDisplayLabel(p);
                       return (
                         <div
                           key={`member-treat-${productRowId}-${index}`}
                           className="fan-member-treat-card"
                         >
-                          <p className="fan-member-treat-type">{p.type.replace(/_/g, " ")}</p>
+                          {categoryLine ? <p className="fan-member-treat-type">{categoryLine}</p> : null}
                           <h3 className="fan-member-treat-title">{p.title}</h3>
                           {p.description && (
                             <p className="fan-member-treat-desc">{p.description}</p>
@@ -5410,10 +5412,14 @@ export const FanStorefrontView: React.FC = () => {
                         </div>
                       </details>
                     ))}
-                    {legacyUnlockedTreatPurchases.map((p) => (
+                    {legacyUnlockedTreatPurchases.map((p) => {
+                      const categoryLine = getTreatProductTypeDisplayLabel(p);
+                      return (
                       <details key={p.id} className="fan-member-purchase-compact">
                         <summary className="fan-member-purchase-compact-summary">
-                          <span className="fan-member-purchase-compact-type">{p.type.replace(/_/g, " ")}</span>
+                          {categoryLine ? (
+                            <span className="fan-member-purchase-compact-type">{categoryLine}</span>
+                          ) : null}
                           <span className="fan-member-purchase-compact-title">{p.title}</span>
                           <span className="fan-member-purchase-compact-status">Purchased</span>
                           <span className="fan-member-purchase-compact-price">{formatPrice(p.priceCents)}</span>
@@ -5434,7 +5440,8 @@ export const FanStorefrontView: React.FC = () => {
                           </button>
                         </div>
                       </details>
-                    ))}
+                      );
+                    })}
                   </div>
                 ) : (
                   <div className="fan-member-treats-grid">
@@ -5455,9 +5462,11 @@ export const FanStorefrontView: React.FC = () => {
                         />
                       </div>
                     ))}
-                    {legacyUnlockedTreatPurchases.map((p) => (
+                    {legacyUnlockedTreatPurchases.map((p) => {
+                      const categoryLine = getTreatProductTypeDisplayLabel(p);
+                      return (
                       <div key={p.id} className="fan-member-treat-card">
-                        <p className="fan-member-treat-type">{p.type.replace(/_/g, " ")}</p>
+                        {categoryLine ? <p className="fan-member-treat-type">{categoryLine}</p> : null}
                         <h3 className="fan-member-treat-title">{p.title}</h3>
                         {p.description ? (
                           <p className="fan-member-treat-desc">{p.description}</p>
@@ -5475,7 +5484,8 @@ export const FanStorefrontView: React.FC = () => {
                           </button>
                         </div>
                       </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
                 {isLoggedIn && fanPurchasesHasMore && fanPurchases.length > 0 ? (

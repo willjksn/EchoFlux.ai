@@ -18,6 +18,7 @@ import type {
 import { StorefrontPreview } from "./StorefrontPreview";
 import { resolveStoreCopy } from "../src/lib/storefrontStoreCopy";
 import { readFanCheckoutFetchResult, FAN_TIP_CHECKOUT_SUCCESS_QS } from "../src/lib/fanCheckoutResponse";
+import { getTreatProductTypeDisplayLabel } from "../src/lib/treatProductTypeLabel";
 
 interface FanLandingPageProps {
   creator: {
@@ -470,7 +471,9 @@ export const FanLandingPage: React.FC<FanLandingPageProps> = (props) => {
                 </p>
               ) : (
                 <ul className="space-y-3 list-none m-0 p-0">
-                  {landingTreatProducts.map((p) => (
+                  {landingTreatProducts.map((p) => {
+                    const categoryLine = getTreatProductTypeDisplayLabel(p);
+                    return (
                     <li
                       key={p.id}
                       className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 rounded-xl p-3"
@@ -480,10 +483,12 @@ export const FanLandingPage: React.FC<FanLandingPageProps> = (props) => {
                       }}
                     >
                       <div>
-                        <p className="text-xs font-medium uppercase tracking-wide m-0" style={{ color: primary }}>
-                          {p.type.replace(/_/g, " ")}
-                        </p>
-                        <p className="font-semibold m-0 mt-0.5" style={{ color: effectiveText }}>
+                        {categoryLine ? (
+                          <p className="text-xs font-medium uppercase tracking-wide m-0" style={{ color: primary }}>
+                            {categoryLine}
+                          </p>
+                        ) : null}
+                        <p className={`font-semibold m-0 ${categoryLine ? "mt-0.5" : ""}`} style={{ color: effectiveText }}>
                           {p.title}
                         </p>
                         {p.description ? (
@@ -503,7 +508,8 @@ export const FanLandingPage: React.FC<FanLandingPageProps> = (props) => {
                         Members only
                       </div>
                     </li>
-                  ))}
+                    );
+                  })}
                 </ul>
               )}
             </div>

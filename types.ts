@@ -612,6 +612,11 @@ export interface TreatProduct {
     id: string;
     creatorId: string;
     type: TreatProductType;
+    /**
+     * Optional short label above the title on landing/member treat cards (e.g. "Voice note").
+     * Omit or empty — the category row is hidden (no fallback to product type).
+     */
+    typeDisplayLabel?: string;
     title: string;
     description?: string;
     /** Price in cents (e.g. 499 = $4.99) */

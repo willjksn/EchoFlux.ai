@@ -18,6 +18,11 @@ import type { TreatProduct, TreatProductType } from "../types";
 import { SparklesIcon, CalendarIcon, ArrowUpIcon, ArrowDownIcon } from "./icons/UIIcons";
 import { useCreatorStoreCopy } from "../src/hooks/useCreatorStoreCopy";
 import { creatorIdFirestoreQueryVariants, normalizeCreatorId } from "../src/lib/creatorIdNormalize";
+import {
+  defaultTreatProductTypeLabel,
+  getTreatProductTypeDisplayLabel,
+  TREAT_PRODUCT_TYPE_DISPLAY_MAX_LEN,
+} from "../src/lib/treatProductTypeLabel";
 
 function formatPrice(cents: number | null | undefined): string {
   const n = Number(cents);
@@ -48,6 +53,9 @@ function toFirestoreProductPatch(updates: Record<string, unknown>, updatedAtIso:
   const next = { ...updates, updatedAt: updatedAtIso };
   if (next.quantityLimit === null) {
     next.quantityLimit = deleteField();
+  }
+  if (next.typeDisplayLabel === null) {
+    next.typeDisplayLabel = deleteField();
   }
   return firestoreSafePatch(next);
 }
@@ -470,6 +478,7 @@ export const TreatsStore: React.FC = () => {
       showOnLandingPage?: boolean;
       showInMemberStore?: boolean;
       quantityLimit?: number;
+      typeDisplayLabel?: string | null;
     }) => {
       if (!db || !creatorId || !auth.currentUser) return false;
       const now = new Date().toISOString();
@@ -493,6 +502,11 @@ export const TreatsStore: React.FC = () => {
       if (payload.quantityLimit != null && Number.isFinite(payload.quantityLimit)) {
         docData.quantityLimit = Math.max(0, Math.floor(payload.quantityLimit));
       }
+      const label =
+        typeof payload.typeDisplayLabel === "string"
+          ? payload.typeDisplayLabel.trim().slice(0, TREAT_PRODUCT_TYPE_DISPLAY_MAX_LEN)
+          : "";
+      if (label) docData.typeDisplayLabel = label;
       await addDoc(collection(db, "products"), docData);
       return true;
     },
@@ -509,10 +523,15 @@ export const TreatsStore: React.FC = () => {
     showOnLandingPage?: boolean;
     showInMemberStore?: boolean;
     quantityLimit?: number;
+    typeDisplayLabel?: string | null;
   }) => {
     if (!creatorId) return;
     setSaving(true);
-    const body = JSON.stringify({
+    const labelTrim =
+      typeof payload.typeDisplayLabel === "string"
+        ? payload.typeDisplayLabel.trim().slice(0, TREAT_PRODUCT_TYPE_DISPLAY_MAX_LEN)
+        : "";
+    const bodyObj: Record<string, unknown> = {
       creatorId,
       type: payload.type,
       title: payload.title,
@@ -523,7 +542,9 @@ export const TreatsStore: React.FC = () => {
       showOnLandingPage: payload.showOnLandingPage !== false,
       showInMemberStore: payload.showInMemberStore !== false,
       quantityLimit: payload.quantityLimit,
-    });
+    };
+    if (labelTrim) bodyObj.typeDisplayLabel = labelTrim;
+    const body = JSON.stringify(bodyObj);
 
     const finishOk = (msg: string) => {
       showToast?.(msg, "success");
@@ -583,6 +604,7 @@ export const TreatsStore: React.FC = () => {
       showInMemberStore: boolean;
       archived: boolean;
       type: TreatProductType;
+      typeDisplayLabel: string | null;
       /** Pass null to clear limit (unlimited). Omit field only when not changing quantity. */
       quantityLimit: number | null;
       sortOrder: number;
@@ -628,6 +650,11 @@ export const TreatsStore: React.FC = () => {
             if (Object.prototype.hasOwnProperty.call(updates, "quantityLimit")) {
               const ql = data.product!.quantityLimit;
               merged.quantityLimit = ql != null && typeof ql === "number" ? ql : undefined;
+            }
+            if (Object.prototype.hasOwnProperty.call(updates, "typeDisplayLabel")) {
+              const lab = data.product!.typeDisplayLabel;
+              merged.typeDisplayLabel =
+                typeof lab === "string" && lab.trim() ? lab.trim().slice(0, TREAT_PRODUCT_TYPE_DISPLAY_MAX_LEN) : undefined;
             }
             return merged;
           })
@@ -952,11 +979,13 @@ export const TreatsStore: React.FC = () => {
                     const sold = toOptionalNonNegativeInt(p.soldCount) ?? 0;
                     const soldOut = typeof limit === "number" && limit > 0 && sold >= limit;
                     const qtyLeft = typeof limit === "number" && limit > 0 ? Math.max(0, limit - sold) : null;
+                    const cardCategory = getTreatProductTypeDisplayLabel(p);
                     return (
                       <article
                         key={p.id}
                         className={`treats-stormij-card${soldOut ? " treats-stormij-card--sold-out" : ""}`}
                       >
+                        {cardCategory ? <p className="treats-stormij-card-type">{cardCategory}</p> : null}
                         <div className="treats-stormij-card-row1">
                           <h3 className="treats-stormij-card-title">{p.title}</h3>
                           <div className="treats-stormij-card-price-block">
@@ -1047,6 +1076,7 @@ export const TreatsStore: React.FC = () => {
                 const reorderBusy = saving || patchingId !== null;
                 const atFirst = cardIndex === 0;
                 const atLast = cardIndex >= displayedProducts.length - 1;
+                const cardCategory = getTreatProductTypeDisplayLabel(p);
 
                 return (
                   <div
@@ -1066,6 +1096,7 @@ export const TreatsStore: React.FC = () => {
                             imageUrl: payload.imageUrl,
                             visible: payload.visible,
                             quantityLimit: payload.quantityLimit,
+                            typeDisplayLabel: payload.typeDisplayLabel,
                           })
                         }
                         onCancel={() => setEditing(null)}
@@ -1094,6 +1125,7 @@ export const TreatsStore: React.FC = () => {
                           </button>
                         </div>
                         <div className="treat-manage-card-content">
+                          {cardCategory ? <p className="treat-manage-card-kind">{cardCategory}</p> : null}
                           <h3 className="treat-manage-card-title">{p.title}</h3>
                           <div className="treat-manage-card-meta">
                             <span className="treat-manage-card-price">{formatPrice(p.priceCents)}</span>
@@ -1220,6 +1252,7 @@ const InlineEditForm: React.FC<{
     imageUrl?: string;
     visible: boolean;
     quantityLimit?: number | null;
+    typeDisplayLabel?: string | null;
   }) => Promise<void>;
   onCancel: () => void;
   saving: boolean;
@@ -1229,6 +1262,7 @@ const InlineEditForm: React.FC<{
   const [description, setDescription] = useState(product.description ?? "");
   const [imageUrl, setImageUrl] = useState(product.imageUrl ?? "");
   const [quantityLimit, setQuantityLimit] = useState(() => treatProductQuantityString(product));
+  const [typeDisplayLabel, setTypeDisplayLabel] = useState(() => product.typeDisplayLabel ?? "");
 
   const onInlinePriceChange = (raw: string) => {
     if (raw === "") {
@@ -1257,6 +1291,8 @@ const InlineEditForm: React.FC<{
       imageUrl: imageUrl.trim() || undefined,
       visible: product.visible,
       quantityLimit: parseTreatQuantityLimitInput(quantityLimit),
+      typeDisplayLabel:
+        typeDisplayLabel.trim().slice(0, TREAT_PRODUCT_TYPE_DISPLAY_MAX_LEN) || null,
     });
   };
 
@@ -1271,6 +1307,19 @@ const InlineEditForm: React.FC<{
           required
           placeholder="Product name"
         />
+      </div>
+      <div className="treat-inline-field">
+        <label>Card category line (optional)</label>
+        <input
+          type="text"
+          value={typeDisplayLabel}
+          maxLength={TREAT_PRODUCT_TYPE_DISPLAY_MAX_LEN}
+          onChange={(e) => setTypeDisplayLabel(e.target.value)}
+          placeholder={`e.g. ${defaultTreatProductTypeLabel(product.type)}`}
+        />
+        <p className="treat-inline-hint">
+          Optional line above the title on landing and member store. Leave blank to hide it.
+        </p>
       </div>
       <div className="treat-inline-field">
         <label>Price ($)</label>
@@ -1336,6 +1385,7 @@ const ProductForm: React.FC<{
     showOnLandingPage?: boolean;
     showInMemberStore?: boolean;
     quantityLimit?: number | null;
+    typeDisplayLabel?: string | null;
   }) => Promise<void>;
   onClose: () => void;
   saving: boolean;
@@ -1347,6 +1397,7 @@ const ProductForm: React.FC<{
   const [priceDollars, setPriceDollars] = useState(() => treatProductToPriceDollarString(product));
   const [mediaUrl, setMediaUrl] = useState(() => (product?.mediaUrl != null ? String(product.mediaUrl) : ""));
   const [quantityLimit, setQuantityLimit] = useState(() => treatProductQuantityString(product));
+  const [typeDisplayLabel, setTypeDisplayLabel] = useState(() => product?.typeDisplayLabel ?? "");
 
   const onPriceDollarsChange = (raw: string) => {
     if (raw === "") {
@@ -1381,6 +1432,8 @@ const ProductForm: React.FC<{
       mediaUrl: String(mediaUrl ?? "").trim() || undefined,
       visible: true,
       quantityLimit: parseTreatQuantityLimitInput(quantityLimit),
+      typeDisplayLabel:
+        typeDisplayLabel.trim().slice(0, TREAT_PRODUCT_TYPE_DISPLAY_MAX_LEN) || null,
     });
   };
 
@@ -1403,6 +1456,19 @@ const ProductForm: React.FC<{
               required
               placeholder="e.g. 30-Second Voice Note"
             />
+          </div>
+          <div className="treats-form-field">
+            <label>Card category line (optional)</label>
+            <input
+              type="text"
+              value={typeDisplayLabel}
+              maxLength={TREAT_PRODUCT_TYPE_DISPLAY_MAX_LEN}
+              onChange={(e) => setTypeDisplayLabel(e.target.value)}
+              placeholder={`e.g. ${defaultTreatProductTypeLabel(type)}`}
+            />
+            <p className="treat-inline-hint">
+              Leave blank to hide the line above the title on landing and member store.
+            </p>
           </div>
           <div className="treats-form-field">
             <label>Description</label>

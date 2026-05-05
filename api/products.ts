@@ -40,6 +40,16 @@ function toOptionalNonNegativeInt(v: unknown): number | undefined {
   return undefined;
 }
 
+const TYPE_DISPLAY_MAX = 48;
+
+function sanitizeTypeDisplayLabelInput(v: unknown): string | null | undefined {
+  if (v === undefined) return undefined;
+  if (v === null) return null;
+  if (typeof v !== "string") return undefined;
+  const t = v.trim().slice(0, TYPE_DISPLAY_MAX);
+  return t === "" ? null : t;
+}
+
 function toProduct(doc: FirebaseFirestore.DocumentSnapshot): TreatProduct {
   const d = doc.data() as Record<string, unknown>;
   const q = toOptionalNonNegativeInt(d.quantityLimit);
@@ -64,6 +74,10 @@ function toProduct(doc: FirebaseFirestore.DocumentSnapshot): TreatProduct {
     /** Explicit null serializes in JSON so PATCH merges clear unlimited without stale limits. */
     quantityLimit: q === undefined ? null : q,
     soldCount: s,
+    typeDisplayLabel:
+      typeof d.typeDisplayLabel === "string" && d.typeDisplayLabel.trim()
+        ? String(d.typeDisplayLabel).trim().slice(0, TYPE_DISPLAY_MAX)
+        : undefined,
     createdAt,
     updatedAt,
   };
@@ -166,6 +180,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
     const priceCents = Math.max(0, Number(body.priceCents) || 0);
     const description = typeof body.description === "string" ? body.description.trim() : undefined;
+    const typeDisplayLabelRaw = sanitizeTypeDisplayLabelInput(body.typeDisplayLabel);
     const mediaUrl = typeof body.mediaUrl === "string" ? body.mediaUrl.trim() : undefined;
     const imageUrl = typeof body.imageUrl === "string" ? body.imageUrl.trim() : undefined;
     const visible = body.visible !== false;
@@ -199,6 +214,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         createdAt: now,
         updatedAt: now,
       };
+      if (typeDisplayLabelRaw) doc.typeDisplayLabel = typeDisplayLabelRaw;
       if (quantityLimit !== undefined) doc.quantityLimit = quantityLimit;
       await ref.set(doc);
       const product = toProduct(await ref.get());
@@ -250,6 +266,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             : Math.max(0, Math.floor(Number(body.quantityLimit)));
       }
       if (typeof body.imageUrl === "string") updates.imageUrl = body.imageUrl.trim() || null;
+      if (body.typeDisplayLabel !== undefined) {
+        const next = sanitizeTypeDisplayLabelInput(body.typeDisplayLabel);
+        if (next !== undefined) {
+          updates.typeDisplayLabel = next === null ? FieldValue.delete() : next;
+        }
+      }
 
       await ref.update(updates);
       const product = toProduct(await ref.get());

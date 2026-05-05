@@ -735,11 +735,9 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
     (typeof config.heroImage === "string" && config.heroImage.trim() ? config.heroImage.trim() : undefined) ??
     (typeof cfgHeroUrl === "string" && cfgHeroUrl.trim() ? cfgHeroUrl.trim() : undefined);
   const heroTagline = config.heroTagline ?? "";
-  /** Empty string from forms/Firestore should fall back like the public page. */
+  /** Trimmed hero promise; empty means hide the line (no placeholder copy). */
   const heroPromise =
-    typeof config.heroPromise === "string" && config.heroPromise.trim() !== ""
-      ? config.heroPromise.trim()
-      : "Demo hero promise text";
+    typeof config.heroPromise === "string" ? config.heroPromise.trim() : "";
   const heroSubline = config.heroSubline ?? "";
   const heroSubline2 = config.heroSubline2 ?? "";
   const heroLayout = config.heroLayout ?? "default";
@@ -1273,24 +1271,26 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
                       {renderTextWithCustomEmoji(heroTagline, sjHeartEmojiCtx)}
                     </p>
                   )}
-                  <p
-                    className={`mb-2 ${isHeroSplit ? "text-balance whitespace-normal md:whitespace-nowrap" : ""}`}
-                    style={scaleHeroSplitTextStyle(
-                      getTextStyleCSS(textStyles.heroPromise, {
-                        fontSize:
-                          live && isHeroSplit
-                            ? "2.37rem"
-                            : !live && isHeroSplit
-                              ? "1.125rem"
-                              : "0.875rem",
-                        color: primary,
-                        ...heroTextBase,
-                      }),
-                      Boolean(textStyles.heroPromise?.fontSize)
-                    )}
-                  >
-                    {renderTextWithCustomEmoji(heroPromise, sjHeartEmojiCtx)}
-                  </p>
+                  {heroPromise ? (
+                    <p
+                      className={`mb-2 ${isHeroSplit ? "text-balance whitespace-normal md:whitespace-nowrap" : ""}`}
+                      style={scaleHeroSplitTextStyle(
+                        getTextStyleCSS(textStyles.heroPromise, {
+                          fontSize:
+                            live && isHeroSplit
+                              ? "2.37rem"
+                              : !live && isHeroSplit
+                                ? "1.125rem"
+                                : "0.875rem",
+                          color: primary,
+                          ...heroTextBase,
+                        }),
+                        Boolean(textStyles.heroPromise?.fontSize)
+                      )}
+                    >
+                      {renderTextWithCustomEmoji(heroPromise, sjHeartEmojiCtx)}
+                    </p>
+                  ) : null}
                   {heroSubline && (
                     <p
                       className={heroSubline2 ? "mb-1" : "mb-3"}
@@ -1357,7 +1357,9 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
                   {heroTagline && (
                     <p className="text-xs mb-0.5" style={getTextStyleCSS(textStyles.heroTagline, { fontSize: "0.75rem", color: landingPageMuted, ...heroTextBase })}>{renderTextWithCustomEmoji(heroTagline, sjHeartEmojiCtx)}</p>
                   )}
-                  <p className="text-xs" style={getTextStyleCSS(textStyles.heroPromise, { fontSize: "0.75rem", color: primary, ...heroTextBase })}>{renderTextWithCustomEmoji(heroPromise, sjHeartEmojiCtx)}</p>
+                  {heroPromise ? (
+                    <p className="text-xs" style={getTextStyleCSS(textStyles.heroPromise, { fontSize: "0.75rem", color: primary, ...heroTextBase })}>{renderTextWithCustomEmoji(heroPromise, sjHeartEmojiCtx)}</p>
+                  ) : null}
                   {heroSubline && (
                     <p className="text-[11px] mt-0.5 mb-0.5" style={getTextStyleCSS(textStyles.heroSubline, { color: landingPageMutedStrong, ...heroTextBase })}>{renderTextWithCustomEmoji(heroSubline, sjHeartEmojiCtx)}</p>
                   )}
