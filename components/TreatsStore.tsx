@@ -11,6 +11,7 @@ import {
   updateDoc,
   addDoc,
   deleteDoc,
+  deleteField,
   type QueryDocumentSnapshot,
 } from "firebase/firestore";
 import type { TreatProduct, TreatProductType } from "../types";
@@ -42,11 +43,28 @@ function firestoreSafePatch(raw: Record<string, unknown>): Record<string, any> {
   return out;
 }
 
+/** Direct Firestore updates: unlimited = remove field (same semantics as API PATCH). */
+function toFirestoreProductPatch(updates: Record<string, unknown>, updatedAtIso: string): Record<string, unknown> {
+  const next = { ...updates, updatedAt: updatedAtIso };
+  if (next.quantityLimit === null) {
+    next.quantityLimit = deleteField();
+  }
+  return firestoreSafePatch(next);
+}
+
 function treatProductQuantityString(product: TreatProduct | null | undefined): string {
   if (product == null) return "";
   const q = product.quantityLimit;
   if (q == null) return "";
   return String(q);
+}
+
+/** Blank → unlimited (`null`). Use `null` (not `undefined`) in PATCH bodies so JSON includes the key. */
+function parseTreatQuantityLimitInput(raw: string): number | null {
+  const t = raw.trim();
+  if (t === "") return null;
+  const n = parseInt(t, 10);
+  return Number.isFinite(n) ? Math.max(0, n) : null;
 }
 
 function toOptionalNonNegativeInt(v: unknown): number | undefined {
@@ -553,7 +571,8 @@ export const TreatsStore: React.FC = () => {
       showInMemberStore: boolean;
       archived: boolean;
       type: TreatProductType;
-      quantityLimit: number;
+      /** Pass null to clear limit (unlimited). Omit field only when not changing quantity. */
+      quantityLimit: number | null;
     }>,
     options?: { useGlobalSaving?: boolean }
   ) => {
@@ -574,7 +593,7 @@ export const TreatsStore: React.FC = () => {
         });
       } catch {
         if (db) {
-          const patch = firestoreSafePatch({ ...updates, updatedAt: new Date().toISOString() });
+          const patch = toFirestoreProductPatch({ ...updates }, new Date().toISOString());
           await updateDoc(doc(db, "products", productId), patch);
           if (useGlobalSaving) showToast?.("Updated (direct database — API unreachable)", "success");
           setEditing(null);
@@ -585,7 +604,18 @@ export const TreatsStore: React.FC = () => {
       }
       const data = (await res.json().catch(() => ({}))) as { product?: TreatProduct; error?: string };
       if (res.ok && data.product) {
-        setProducts((prev) => prev.map((pr) => (pr.id === productId ? { ...pr, ...data.product! } : pr)));
+        setProducts((prev) =>
+          prev.map((pr) => {
+            if (pr.id !== productId) return pr;
+            const merged = { ...pr, ...data.product! } as TreatProduct;
+            // Avoid stale limit when unlimited: JSON may omit undefined; always honor PATCH intent.
+            if (Object.prototype.hasOwnProperty.call(updates, "quantityLimit")) {
+              const ql = data.product!.quantityLimit;
+              merged.quantityLimit = ql != null && typeof ql === "number" ? ql : undefined;
+            }
+            return merged;
+          })
+        );
         if (useGlobalSaving) showToast?.("Updated", "success");
         setEditing(null);
         return;
@@ -597,7 +627,7 @@ export const TreatsStore: React.FC = () => {
         return;
       }
       if ((res.status >= 500 || res.status === 404) && db) {
-        const patch = firestoreSafePatch({ ...updates, updatedAt: new Date().toISOString() });
+        const patch = toFirestoreProductPatch({ ...updates }, new Date().toISOString());
         await updateDoc(doc(db, "products", productId), patch);
         if (useGlobalSaving) showToast?.("Updated (direct database)", "success");
         setEditing(null);
@@ -955,6 +985,7 @@ export const TreatsStore: React.FC = () => {
                   >
                     {isEditing ? (
                       <InlineEditForm
+                        key={p.id}
                         product={p}
                         onSave={(payload) =>
                           handleUpdate(p.id, {
@@ -1098,7 +1129,7 @@ const InlineEditForm: React.FC<{
     mediaUrl?: string;
     imageUrl?: string;
     visible: boolean;
-    quantityLimit?: number;
+    quantityLimit?: number | null;
   }) => Promise<void>;
   onCancel: () => void;
   saving: boolean;
@@ -1135,7 +1166,7 @@ const InlineEditForm: React.FC<{
       mediaUrl: product.mediaUrl,
       imageUrl: imageUrl.trim() || undefined,
       visible: product.visible,
-      quantityLimit: quantityLimit ? parseInt(quantityLimit, 10) : undefined,
+      quantityLimit: parseTreatQuantityLimitInput(quantityLimit),
     });
   };
 
@@ -1214,7 +1245,7 @@ const ProductForm: React.FC<{
     visible: boolean;
     showOnLandingPage?: boolean;
     showInMemberStore?: boolean;
-    quantityLimit?: number;
+    quantityLimit?: number | null;
   }) => Promise<void>;
   onClose: () => void;
   saving: boolean;
@@ -1259,7 +1290,7 @@ const ProductForm: React.FC<{
       priceCents: cents,
       mediaUrl: String(mediaUrl ?? "").trim() || undefined,
       visible: true,
-      quantityLimit: quantityLimit.trim() ? parseInt(quantityLimit, 10) : undefined,
+      quantityLimit: parseTreatQuantityLimitInput(quantityLimit),
     });
   };
 

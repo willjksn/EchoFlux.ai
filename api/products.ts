@@ -1,4 +1,5 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
+import { FieldValue } from "firebase-admin/firestore";
 import { getAdminDb } from "./_firebaseAdmin.js";
 import { verifyAuth } from "./verifyAuth.js";
 import type { TreatProduct, TreatProductType } from "../types";
@@ -60,7 +61,8 @@ function toProduct(doc: FirebaseFirestore.DocumentSnapshot): TreatProduct {
     showOnLandingPage: d.showOnLandingPage !== false,
     showInMemberStore: d.showInMemberStore !== false,
     sortOrder: d.sortOrder as number | undefined,
-    quantityLimit: q,
+    /** Explicit null serializes in JSON so PATCH merges clear unlimited without stale limits. */
+    quantityLimit: q === undefined ? null : q,
     soldCount: s,
     createdAt,
     updatedAt,
@@ -243,7 +245,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (body.quantityLimit !== undefined) {
         updates.quantityLimit =
           body.quantityLimit === null || body.quantityLimit === ""
-            ? null
+            ? FieldValue.delete()
             : Math.max(0, Math.floor(Number(body.quantityLimit)));
       }
       if (typeof body.imageUrl === "string") updates.imageUrl = body.imageUrl.trim() || null;

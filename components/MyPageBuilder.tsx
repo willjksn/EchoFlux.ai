@@ -1878,19 +1878,32 @@ export const MyPageBuilder: React.FC = () => {
     storefrontPreviewConfig.theme?.primary || DEFAULT_THEME.primary;
 
   const lcDraftForStore = draft.landingContent ?? DEFAULT_LANDING_CONTENT;
+  // Do not .trim() here — controlled inputs need trailing/leading spaces while typing.
   const unifiedStoreTitleDraft =
-    (typeof lcDraftForStore.memberStoreTitle === "string" && lcDraftForStore.memberStoreTitle.trim()) ||
-    (typeof lcDraftForStore.storeLandingHeadline === "string" && lcDraftForStore.storeLandingHeadline.trim()) ||
-    (typeof lcDraftForStore.publicStoreCardTitle === "string" && lcDraftForStore.publicStoreCardTitle.trim()) ||
+    (typeof lcDraftForStore.memberStoreTitle === "string"
+      ? lcDraftForStore.memberStoreTitle
+      : undefined) ??
+    (typeof lcDraftForStore.storeLandingHeadline === "string"
+      ? lcDraftForStore.storeLandingHeadline
+      : undefined) ??
+    (typeof lcDraftForStore.publicStoreCardTitle === "string" ? lcDraftForStore.publicStoreCardTitle : "") ??
     "";
   const unifiedStoreSubtitleDraft =
-    (typeof lcDraftForStore.memberStoreSubtitle === "string" && lcDraftForStore.memberStoreSubtitle.trim()) ||
-    (typeof lcDraftForStore.storeLandingDescription === "string" && lcDraftForStore.storeLandingDescription.trim()) ||
-    (typeof lcDraftForStore.publicStoreCardDescription === "string" && lcDraftForStore.publicStoreCardDescription.trim()) ||
+    (typeof lcDraftForStore.memberStoreSubtitle === "string"
+      ? lcDraftForStore.memberStoreSubtitle
+      : undefined) ??
+    (typeof lcDraftForStore.storeLandingDescription === "string"
+      ? lcDraftForStore.storeLandingDescription
+      : undefined) ??
+    (typeof lcDraftForStore.publicStoreCardDescription === "string"
+      ? lcDraftForStore.publicStoreCardDescription
+      : "") ??
     "";
   const unifiedStoreOpenCtaDraft =
-    (typeof lcDraftForStore.publicStoreOpenCtaLabel === "string" && lcDraftForStore.publicStoreOpenCtaLabel.trim()) ||
-    (typeof lcDraftForStore.storeLandingCtaLabel === "string" && lcDraftForStore.storeLandingCtaLabel.trim()) ||
+    (typeof lcDraftForStore.publicStoreOpenCtaLabel === "string"
+      ? lcDraftForStore.publicStoreOpenCtaLabel
+      : undefined) ??
+    (typeof lcDraftForStore.storeLandingCtaLabel === "string" ? lcDraftForStore.storeLandingCtaLabel : "") ??
     "";
   const currentLandingFontFamily = draft.theme?.fontFamily || DEFAULT_THEME.fontFamily || "Inter, sans-serif";
   const currentLandingFontLabel = fontFamilyLabel(currentLandingFontFamily);

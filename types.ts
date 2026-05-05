@@ -630,8 +630,8 @@ export interface TreatProduct {
     sortOrder?: number;
     /** For live_video types: duration in minutes */
     durationMinutes?: number;
-    /** Quantity limit (sold out when soldCount >= quantityLimit) */
-    quantityLimit?: number;
+    /** Quantity limit (sold out when soldCount >= quantityLimit). Omit or null = unlimited. */
+    quantityLimit?: number | null;
     /** Number sold */
     soldCount?: number;
     createdAt: Date | string;  // ISO or Date
