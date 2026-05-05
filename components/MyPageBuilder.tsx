@@ -23,7 +23,7 @@ import {
   parseObjectPositionPercentPair,
   formatObjectPositionPercentPair,
 } from "../src/lib/objectPositionPan";
-import { StorefrontPreview, type StorefrontPreviewLiveLanding } from "./StorefrontPreview";
+import { StorefrontPreview, getTextStyleCSS, type StorefrontPreviewLiveLanding } from "./StorefrontPreview";
 import { resolveStoreCopy } from "../src/lib/storefrontStoreCopy";
 import { UserIcon, ImageIcon, GlobeIcon } from "./icons/UIIcons";
 import { EmojiButton } from "./EmojiPicker";
@@ -587,7 +587,9 @@ const TextStyleControls: React.FC<{
   onChange: (style: TextStyle) => void;
   defaultSize?: PresetFontSize;
   defaultFontFamily?: string;
-}> = ({ style, onChange, defaultSize = 'base', defaultFontFamily = DEFAULT_THEME.fontFamily }) => {
+  /** When set, font/size inputs in the popover use storefront theme typography (My Page builder). */
+  pickerTypography?: { fontFamily: string; color: string };
+}> = ({ style, onChange, defaultSize = 'base', defaultFontFamily = DEFAULT_THEME.fontFamily, pickerTypography }) => {
   const [showControls, setShowControls] = useState(false);
   const isPresetFontSize = (value?: string): value is PresetFontSize =>
     Boolean(value && FONT_SIZE_OPTIONS.some((opt) => opt.value === value));
@@ -645,7 +647,17 @@ const TextStyleControls: React.FC<{
                 <select
                   value={style?.fontFamily || ''}
                   onChange={(e) => onChange({ ...style, fontFamily: e.target.value || undefined })}
-                  className="w-full px-2 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                  className={`w-full px-2 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 ${
+                    pickerTypography ? "" : "text-gray-900 dark:text-white"
+                  }`}
+                  style={
+                    pickerTypography
+                      ? {
+                          fontFamily: style?.fontFamily || pickerTypography.fontFamily,
+                          color: pickerTypography.color,
+                        }
+                      : undefined
+                  }
                 >
                   <option value="">Default ({defaultFontLabel})</option>
                   <optgroup label="Sans-serif">
@@ -711,7 +723,14 @@ const TextStyleControls: React.FC<{
                       onChange({ ...style, fontSize: raw || undefined });
                     }}
                     placeholder="Custom size (e.g. 22px, 1.35rem)"
-                    className="w-full px-2 py-1.5 text-xs border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                    className={`w-full px-2 py-1.5 text-xs border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 ${
+                      pickerTypography ? "" : "text-gray-900 dark:text-white"
+                    }`}
+                    style={
+                      pickerTypography
+                        ? { fontFamily: pickerTypography.fontFamily, color: pickerTypography.color }
+                        : undefined
+                    }
                   />
                   <p className="mt-1 text-[11px] text-gray-500 dark:text-gray-400">
                     Supports px, rem, em, %, vw, vh
@@ -1915,6 +1934,24 @@ export const MyPageBuilder: React.FC = () => {
     "";
   const currentLandingFontFamily = draft.theme?.fontFamily || DEFAULT_THEME.fontFamily || "Inter, sans-serif";
   const currentLandingFontLabel = fontFamilyLabel(currentLandingFontFamily);
+  /** Match StorefrontPreview landing cards when liveLanding is set (live) and fan dark mode is off (builder preview). */
+  const landingPreviewThemeText = draft.theme?.text ?? DEFAULT_THEME.text ?? "#1f2937";
+  const landingPreviewMutedStrong = `${landingPreviewThemeText}cc`;
+  const landingPreviewPrimary = draft.theme?.primary ?? DEFAULT_THEME.primary;
+  const landingPreviewCardBodyFs = "1.0625rem";
+  const landingPreviewCardListFs = "1rem";
+  const landingPreviewCardPreviewSubFs = "1rem";
+  const landingPreviewCardSerifTitleFs = "1.625rem";
+  const landingPreviewMuted = `${landingPreviewThemeText}99`;
+  const landingPreviewFooterFs = "0.875rem";
+  /** Hero column — match StorefrontPreview live landing (`live` + non–fan-dark). */
+  const landingPreviewHeroNameFs = "1.125rem";
+  const landingPreviewHeroTaglineFs = "0.75rem";
+  const landingPreviewHeroPromiseFs = "0.75rem";
+  const landingPreviewHeroSublineFs = "11px";
+  const landingPreviewHeroSubline2Fs = "10px";
+  const landingEditorControlClass =
+    "border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 leading-relaxed placeholder:text-gray-400 dark:placeholder:text-gray-500";
 
   if (loading) {
     return (
@@ -1941,7 +1978,12 @@ export const MyPageBuilder: React.FC = () => {
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Handle (witme URL)</label>
             <div className="space-y-2">
               <div className="flex flex-col sm:flex-row sm:items-center gap-2 min-w-0">
-                <span className="text-gray-500 dark:text-gray-400 shrink-0">witme.io/</span>
+                <span
+                  className="text-gray-500 dark:text-gray-400 shrink-0"
+                  style={{ fontFamily: currentLandingFontFamily }}
+                >
+                  witme.io/
+                </span>
                 <input
                   type="text"
                   value={handleInput}
@@ -1951,7 +1993,12 @@ export const MyPageBuilder: React.FC = () => {
                     updateDraft({ handle: v.slice(0, 20) });
                   }}
                   placeholder="your_handle"
-                  className="flex-1 min-w-0 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                  className={`flex-1 min-w-0 px-3 py-2 ${landingEditorControlClass}`}
+                  style={{
+                    fontFamily: currentLandingFontFamily,
+                    color: landingPreviewThemeText,
+                    fontSize: "0.875rem",
+                  }}
                   maxLength={20}
                 />
                 <button
@@ -2008,7 +2055,7 @@ export const MyPageBuilder: React.FC = () => {
                     style={draft.textStyles?.displayName}
                     onChange={(style) => updateTextStyle('displayName', style)}
                     defaultSize="2xl"
-                    defaultFontFamily={currentLandingFontFamily}
+                    defaultFontFamily={currentLandingFontFamily} pickerTypography={{ fontFamily: currentLandingFontFamily, color: landingPreviewThemeText }}
                   />
                 </div>
                 <div className="flex gap-2">
@@ -2017,7 +2064,13 @@ export const MyPageBuilder: React.FC = () => {
                     value={draft.displayName ?? ""}
                     onChange={(e) => updateDraft({ displayName: e.target.value })}
                     placeholder="Your name"
-                    className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                    className={`flex-1 px-3 py-2 ${landingEditorControlClass}`}
+                    style={getTextStyleCSS(draft.textStyles?.displayName, {
+                      fontSize: landingPreviewHeroNameFs,
+                      color: landingPreviewThemeText,
+                      fontFamily: currentLandingFontFamily,
+                      fontWeight: 700,
+                    })}
                   />
                   <EmojiButton includeSjHeartEmoji={includeSjHeartEmoji} onSelect={(emoji) => updateDraft({ displayName: (draft.displayName ?? "") + emoji })} />
                 </div>
@@ -2135,7 +2188,11 @@ export const MyPageBuilder: React.FC = () => {
                           <select
                             value={item.size ?? "medium"}
                             onChange={(e) => setHeroMediaItemSize(index, e.target.value as "small" | "medium" | "large" | "fullBackground")}
-                            className="w-full text-xs px-2 py-1.5 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                            className={`w-full text-xs px-2 py-1.5 ${landingEditorControlClass}`}
+                            style={{
+                              fontFamily: currentLandingFontFamily,
+                              color: landingPreviewThemeText,
+                            }}
                           >
                             {HERO_MEDIA_SIZE_OPTIONS.map((opt) => (
                               <option key={opt.value} value={opt.value}>{opt.label}</option>
@@ -2169,7 +2226,11 @@ export const MyPageBuilder: React.FC = () => {
                   <select
                     value={draft.heroLayout ?? "default"}
                     onChange={(e) => updateDraft({ heroLayout: e.target.value as "default" | "centered" | "split" | "splitRight" })}
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
+                    className={`w-full px-3 py-2 ${landingEditorControlClass} text-sm`}
+                    style={{
+                      fontFamily: currentLandingFontFamily,
+                      color: landingPreviewThemeText,
+                    }}
                   >
                     {HERO_LAYOUT_OPTIONS.map((opt) => (
                       <option key={opt.value} value={opt.value}>
@@ -2288,7 +2349,7 @@ export const MyPageBuilder: React.FC = () => {
                     style={draft.textStyles?.heroTagline}
                     onChange={(style) => updateTextStyle('heroTagline', style)}
                     defaultSize="lg"
-                    defaultFontFamily={currentLandingFontFamily}
+                    defaultFontFamily={currentLandingFontFamily} pickerTypography={{ fontFamily: currentLandingFontFamily, color: landingPreviewThemeText }}
                   />
                 </div>
                 <div className="flex gap-2">
@@ -2297,7 +2358,12 @@ export const MyPageBuilder: React.FC = () => {
                     value={draft.heroTagline ?? ""}
                     onChange={(e) => updateDraft({ heroTagline: e.target.value })}
                     placeholder="e.g., Content creator & model"
-                    className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                    className={`flex-1 px-3 py-2 ${landingEditorControlClass}`}
+                    style={getTextStyleCSS(draft.textStyles?.heroTagline, {
+                      fontSize: landingPreviewHeroTaglineFs,
+                      color: landingPreviewMuted,
+                      fontFamily: currentLandingFontFamily,
+                    })}
                   />
                   <EmojiButton includeSjHeartEmoji={includeSjHeartEmoji} onSelect={(emoji) => updateDraft({ heroTagline: (draft.heroTagline ?? "") + emoji })} />
                 </div>
@@ -2309,7 +2375,7 @@ export const MyPageBuilder: React.FC = () => {
                     style={draft.textStyles?.heroPromise}
                     onChange={(style) => updateTextStyle('heroPromise', style)}
                     defaultSize="base"
-                    defaultFontFamily={currentLandingFontFamily}
+                    defaultFontFamily={currentLandingFontFamily} pickerTypography={{ fontFamily: currentLandingFontFamily, color: landingPreviewThemeText }}
                   />
                 </div>
                 <div className="flex gap-2">
@@ -2318,7 +2384,12 @@ export const MyPageBuilder: React.FC = () => {
                     value={draft.heroPromise ?? ""}
                     onChange={(e) => updateDraft({ heroPromise: e.target.value })}
                     placeholder="e.g., Your access to the real me"
-                    className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                    className={`flex-1 px-3 py-2 ${landingEditorControlClass}`}
+                    style={getTextStyleCSS(draft.textStyles?.heroPromise, {
+                      fontSize: landingPreviewHeroPromiseFs,
+                      color: landingPreviewPrimary,
+                      fontFamily: currentLandingFontFamily,
+                    })}
                   />
                   <EmojiButton includeSjHeartEmoji={includeSjHeartEmoji} onSelect={(emoji) => updateDraft({ heroPromise: (draft.heroPromise ?? "") + emoji })} />
                 </div>
@@ -2330,7 +2401,7 @@ export const MyPageBuilder: React.FC = () => {
                     style={draft.textStyles?.heroSubline}
                     onChange={(style) => updateTextStyle('heroSubline', style)}
                     defaultSize="sm"
-                    defaultFontFamily={currentLandingFontFamily}
+                    defaultFontFamily={currentLandingFontFamily} pickerTypography={{ fontFamily: currentLandingFontFamily, color: landingPreviewThemeText }}
                   />
                 </div>
                 <p className="text-[11px] text-gray-400 dark:text-gray-500 mb-1">Extra line of text shown under the promise on the landing hero.</p>
@@ -2340,7 +2411,12 @@ export const MyPageBuilder: React.FC = () => {
                     value={draft.heroSubline ?? ""}
                     onChange={(e) => updateDraft({ heroSubline: e.target.value })}
                     placeholder="e.g., Join for exclusive content and DMs"
-                    className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                    className={`flex-1 px-3 py-2 ${landingEditorControlClass}`}
+                    style={getTextStyleCSS(draft.textStyles?.heroSubline, {
+                      fontSize: landingPreviewHeroSublineFs,
+                      color: landingPreviewMutedStrong,
+                      fontFamily: currentLandingFontFamily,
+                    })}
                   />
                   <EmojiButton includeSjHeartEmoji={includeSjHeartEmoji} onSelect={(emoji) => updateDraft({ heroSubline: (draft.heroSubline ?? "") + emoji })} />
                 </div>
@@ -2352,7 +2428,7 @@ export const MyPageBuilder: React.FC = () => {
                     style={draft.textStyles?.heroSubline2}
                     onChange={(style) => updateTextStyle("heroSubline2", style)}
                     defaultSize="sm"
-                    defaultFontFamily={currentLandingFontFamily}
+                    defaultFontFamily={currentLandingFontFamily} pickerTypography={{ fontFamily: currentLandingFontFamily, color: landingPreviewThemeText }}
                   />
                 </div>
                 <p className="text-[11px] text-gray-400 dark:text-gray-500 mb-1">
@@ -2364,7 +2440,12 @@ export const MyPageBuilder: React.FC = () => {
                     value={draft.heroSubline2 ?? ""}
                     onChange={(e) => updateDraft({ heroSubline2: e.target.value })}
                     placeholder="e.g., Cancel anytime · Secure checkout"
-                    className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                    className={`flex-1 px-3 py-2 ${landingEditorControlClass}`}
+                    style={getTextStyleCSS(draft.textStyles?.heroSubline2, {
+                      fontSize: landingPreviewHeroSubline2Fs,
+                      color: landingPreviewMuted,
+                      fontFamily: currentLandingFontFamily,
+                    })}
                   />
                   <EmojiButton includeSjHeartEmoji={includeSjHeartEmoji} onSelect={(emoji) => updateDraft({ heroSubline2: (draft.heroSubline2 ?? "") + emoji })} />
                 </div>
@@ -2390,7 +2471,12 @@ export const MyPageBuilder: React.FC = () => {
                     value={draft.socialLinks?.[key]?.url ?? ""}
                     onChange={(e) => updateSocialLink(key, "url", e.target.value)}
                     placeholder={placeholder}
-                    className="flex-1 px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                    className={`flex-1 px-3 py-1.5 ${landingEditorControlClass}`}
+                    style={{
+                      fontFamily: currentLandingFontFamily,
+                      color: landingPreviewThemeText,
+                      fontSize: "0.875rem",
+                    }}
                   />
                   <button
                     type="button"
@@ -2417,14 +2503,24 @@ export const MyPageBuilder: React.FC = () => {
                     value={link.name}
                     onChange={(e) => updateCustomSocialLink(index, "name", e.target.value)}
                     placeholder="Platform name"
-                    className="w-24 px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                    className={`w-24 px-3 py-1.5 ${landingEditorControlClass}`}
+                    style={{
+                      fontFamily: currentLandingFontFamily,
+                      color: landingPreviewThemeText,
+                      fontSize: "0.875rem",
+                    }}
                   />
                   <input
                     type="url"
                     value={link.url}
                     onChange={(e) => updateCustomSocialLink(index, "url", e.target.value)}
                     placeholder="https://..."
-                    className="flex-1 px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                    className={`flex-1 px-3 py-1.5 ${landingEditorControlClass}`}
+                    style={{
+                      fontFamily: currentLandingFontFamily,
+                      color: landingPreviewThemeText,
+                      fontSize: "0.875rem",
+                    }}
                   />
                   <button
                     type="button"
@@ -2475,7 +2571,7 @@ export const MyPageBuilder: React.FC = () => {
                     style={draft.textStyles?.perksTitle}
                     onChange={(style) => updateTextStyle('perksTitle', style)}
                     defaultSize="xl"
-                    defaultFontFamily={currentLandingFontFamily}
+                    defaultFontFamily={currentLandingFontFamily} pickerTypography={{ fontFamily: currentLandingFontFamily, color: landingPreviewThemeText }}
                   />
                 </div>
                 <div className="flex gap-2 mb-2">
@@ -2484,7 +2580,12 @@ export const MyPageBuilder: React.FC = () => {
                     value={draft.landingContent?.perksTitle ?? DEFAULT_LANDING_CONTENT.perksTitle}
                     onChange={(e) => updateLandingContent("perksTitle", e.target.value)}
                     placeholder="Section title"
-                    className="flex-1 px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                    className={`flex-1 px-3 py-1.5 ${landingEditorControlClass}`}
+                    style={getTextStyleCSS(draft.textStyles?.perksTitle, {
+                      fontSize: landingPreviewCardBodyFs,
+                      color: landingPreviewPrimary,
+                      fontFamily: currentLandingFontFamily,
+                    })}
                   />
                   <EmojiButton includeSjHeartEmoji={includeSjHeartEmoji} onSelect={(emoji) => updateLandingContent("perksTitle", (draft.landingContent?.perksTitle ?? "") + emoji)} />
                 </div>
@@ -2494,7 +2595,7 @@ export const MyPageBuilder: React.FC = () => {
                     style={draft.textStyles?.perksText}
                     onChange={(style) => updateTextStyle('perksText', style)}
                     defaultSize="sm"
-                    defaultFontFamily={currentLandingFontFamily}
+                    defaultFontFamily={currentLandingFontFamily} pickerTypography={{ fontFamily: currentLandingFontFamily, color: landingPreviewThemeText }}
                   />
                 </div>
                 <div className="relative">
@@ -2503,7 +2604,12 @@ export const MyPageBuilder: React.FC = () => {
                     onChange={(e) => updateLandingContent("perksText", e.target.value)}
                     placeholder="Main text"
                     rows={2}
-                    className="w-full px-3 py-1.5 pr-12 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                    className={`w-full px-3 py-1.5 pr-12 ${landingEditorControlClass}`}
+                    style={getTextStyleCSS(draft.textStyles?.perksText, {
+                      fontSize: landingPreviewCardBodyFs,
+                      color: landingPreviewMutedStrong,
+                      fontFamily: currentLandingFontFamily,
+                    })}
                   />
                   <div className="absolute right-2 top-1.5">
                     <EmojiButton includeSjHeartEmoji={includeSjHeartEmoji} onSelect={(emoji) => updateLandingContent("perksText", (draft.landingContent?.perksText ?? "") + emoji)} />
@@ -2519,7 +2625,7 @@ export const MyPageBuilder: React.FC = () => {
                         style={draft.textStyles?.perksExtra}
                         onChange={(style) => updateTextStyle("perksExtra", style)}
                         defaultSize="sm"
-                        defaultFontFamily={currentLandingFontFamily}
+                        defaultFontFamily={currentLandingFontFamily} pickerTypography={{ fontFamily: currentLandingFontFamily, color: landingPreviewThemeText }}
                       />
                       <LandingBodyModeToggle
                         value={draft.landingContent?.perksExtraMode ?? "bullets"}
@@ -2540,7 +2646,12 @@ export const MyPageBuilder: React.FC = () => {
                             const lines = raw.length === 0 ? [] : raw.split("\n");
                             updateLandingContent("perksList", lines);
                           }}
-                          className="w-full px-3 py-1.5 pr-12 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                          className={`w-full px-3 py-1.5 pr-12 ${landingEditorControlClass}`}
+                          style={getTextStyleCSS(draft.textStyles?.perksExtra, {
+                            fontSize: landingPreviewCardListFs,
+                            color: landingPreviewThemeText,
+                            fontFamily: currentLandingFontFamily,
+                          })}
                         />
                         <div className="absolute right-2 top-1.5">
                           <EmojiButton
@@ -2568,7 +2679,11 @@ export const MyPageBuilder: React.FC = () => {
                           Bullet style
                         </label>
                         <select
-                          className="w-full px-2 py-1.5 text-xs border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                          className={`w-full px-2 py-1.5 text-xs ${landingEditorControlClass}`}
+                          style={{
+                            fontFamily: currentLandingFontFamily,
+                            color: landingPreviewThemeText,
+                          }}
                           value={draft.landingContent?.perksListMarker ?? "none"}
                           onChange={(e) =>
                             updateLandingContent("perksListMarker", e.target.value as LandingSectionListMarker)
@@ -2588,7 +2703,12 @@ export const MyPageBuilder: React.FC = () => {
                         placeholder="Full paragraph under your description. Line breaks are kept on the live page."
                         value={draft.landingContent?.perksParagraph ?? ""}
                         onChange={(e) => updateLandingContent("perksParagraph", e.target.value)}
-                        className="w-full px-3 py-1.5 pr-12 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                        className={`w-full px-3 py-1.5 pr-12 ${landingEditorControlClass}`}
+                        style={getTextStyleCSS(draft.textStyles?.perksExtra, {
+                          fontSize: landingPreviewCardListFs,
+                          color: landingPreviewThemeText,
+                          fontFamily: currentLandingFontFamily,
+                        })}
                       />
                       <div className="absolute right-2 top-1.5">
                         <EmojiButton
@@ -2620,7 +2740,7 @@ export const MyPageBuilder: React.FC = () => {
                     style={draft.textStyles?.previewTitle}
                     onChange={(style) => updateTextStyle('previewTitle', style)}
                     defaultSize="xl"
-                    defaultFontFamily={currentLandingFontFamily}
+                    defaultFontFamily={currentLandingFontFamily} pickerTypography={{ fontFamily: currentLandingFontFamily, color: landingPreviewThemeText }}
                   />
                 </div>
                 <div className="flex gap-2 mb-2">
@@ -2629,7 +2749,13 @@ export const MyPageBuilder: React.FC = () => {
                     value={draft.landingContent?.previewTitle ?? DEFAULT_LANDING_CONTENT.previewTitle}
                     onChange={(e) => updateLandingContent("previewTitle", e.target.value)}
                     placeholder="Section title"
-                    className="flex-1 px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                    className={`flex-1 px-3 py-1.5 ${landingEditorControlClass}`}
+                    style={getTextStyleCSS(draft.textStyles?.previewTitle, {
+                      fontSize: landingPreviewCardSerifTitleFs,
+                      color: landingPreviewPrimary,
+                      fontFamily: currentLandingFontFamily,
+                      fontWeight: 700,
+                    })}
                   />
                   <EmojiButton includeSjHeartEmoji={includeSjHeartEmoji} onSelect={(emoji) => updateLandingContent("previewTitle", (draft.landingContent?.previewTitle ?? "") + emoji)} />
                 </div>
@@ -2639,7 +2765,7 @@ export const MyPageBuilder: React.FC = () => {
                     style={draft.textStyles?.previewText}
                     onChange={(style) => updateTextStyle('previewText', style)}
                     defaultSize="sm"
-                    defaultFontFamily={currentLandingFontFamily}
+                    defaultFontFamily={currentLandingFontFamily} pickerTypography={{ fontFamily: currentLandingFontFamily, color: landingPreviewThemeText }}
                   />
                 </div>
                 <div className="relative">
@@ -2648,7 +2774,13 @@ export const MyPageBuilder: React.FC = () => {
                     onChange={(e) => updateLandingContent("previewText", e.target.value)}
                     placeholder="Inside the Inner Circle:"
                     rows={2}
-                    className="w-full px-3 py-1.5 pr-12 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                    className={`w-full px-3 py-1.5 pr-12 ${landingEditorControlClass}`}
+                    style={getTextStyleCSS(draft.textStyles?.previewText, {
+                      fontSize: landingPreviewCardPreviewSubFs,
+                      color: landingPreviewPrimary,
+                      fontFamily: currentLandingFontFamily,
+                      fontWeight: 600,
+                    })}
                   />
                   <div className="absolute right-2 top-1.5">
                     <EmojiButton includeSjHeartEmoji={includeSjHeartEmoji} onSelect={(emoji) => updateLandingContent("previewText", (draft.landingContent?.previewText ?? "") + emoji)} />
@@ -2664,7 +2796,7 @@ export const MyPageBuilder: React.FC = () => {
                         style={draft.textStyles?.previewExtra}
                         onChange={(style) => updateTextStyle("previewExtra", style)}
                         defaultSize="sm"
-                        defaultFontFamily={currentLandingFontFamily}
+                        defaultFontFamily={currentLandingFontFamily} pickerTypography={{ fontFamily: currentLandingFontFamily, color: landingPreviewThemeText }}
                       />
                       <LandingBodyModeToggle
                         value={draft.landingContent?.previewExtraMode ?? "bullets"}
@@ -2685,7 +2817,12 @@ export const MyPageBuilder: React.FC = () => {
                             const lines = raw.length === 0 ? [] : raw.split("\n");
                             updateLandingContent("previewList", lines);
                           }}
-                          className="w-full px-3 py-1.5 pr-12 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                          className={`w-full px-3 py-1.5 pr-12 ${landingEditorControlClass}`}
+                          style={getTextStyleCSS(draft.textStyles?.previewExtra, {
+                            fontSize: landingPreviewCardListFs,
+                            color: landingPreviewThemeText,
+                            fontFamily: currentLandingFontFamily,
+                          })}
                         />
                         <div className="absolute right-2 top-1.5">
                           <EmojiButton
@@ -2713,7 +2850,11 @@ export const MyPageBuilder: React.FC = () => {
                           Bullet style
                         </label>
                         <select
-                          className="w-full px-2 py-1.5 text-xs border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                          className={`w-full px-2 py-1.5 text-xs ${landingEditorControlClass}`}
+                          style={{
+                            fontFamily: currentLandingFontFamily,
+                            color: landingPreviewThemeText,
+                          }}
                           value={draft.landingContent?.previewListMarker ?? "heart"}
                           onChange={(e) =>
                             updateLandingContent("previewListMarker", e.target.value as LandingSectionListMarker)
@@ -2733,7 +2874,12 @@ export const MyPageBuilder: React.FC = () => {
                         placeholder="Full paragraph under your subline. Line breaks are kept on the live page."
                         value={draft.landingContent?.previewParagraph ?? ""}
                         onChange={(e) => updateLandingContent("previewParagraph", e.target.value)}
-                        className="w-full px-3 py-1.5 pr-12 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                        className={`w-full px-3 py-1.5 pr-12 ${landingEditorControlClass}`}
+                        style={getTextStyleCSS(draft.textStyles?.previewExtra, {
+                          fontSize: landingPreviewCardListFs,
+                          color: landingPreviewThemeText,
+                          fontFamily: currentLandingFontFamily,
+                        })}
                       />
                       <div className="absolute right-2 top-1.5">
                         <EmojiButton
@@ -2769,7 +2915,12 @@ export const MyPageBuilder: React.FC = () => {
                         const lines = raw.length === 0 ? [] : raw.split("\n");
                         updateLandingContent("previewFooterLines", lines);
                       }}
-                      className="w-full px-3 py-1.5 pr-12 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                      className={`w-full px-3 py-1.5 pr-12 italic ${landingEditorControlClass}`}
+                      style={{
+                        fontSize: landingPreviewFooterFs,
+                        color: landingPreviewMuted,
+                        fontFamily: currentLandingFontFamily,
+                      }}
                     />
                     <div className="absolute right-2 top-1.5">
                       <EmojiButton
@@ -2803,7 +2954,7 @@ export const MyPageBuilder: React.FC = () => {
                     style={draft.textStyles?.energyTitle}
                     onChange={(style) => updateTextStyle('energyTitle', style)}
                     defaultSize="xl"
-                    defaultFontFamily={currentLandingFontFamily}
+                    defaultFontFamily={currentLandingFontFamily} pickerTypography={{ fontFamily: currentLandingFontFamily, color: landingPreviewThemeText }}
                   />
                 </div>
                 <div className="flex gap-2 mb-2">
@@ -2812,7 +2963,13 @@ export const MyPageBuilder: React.FC = () => {
                     value={draft.landingContent?.energyTitle ?? DEFAULT_LANDING_CONTENT.energyTitle}
                     onChange={(e) => updateLandingContent("energyTitle", e.target.value)}
                     placeholder="Section title"
-                    className="flex-1 px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                    className={`flex-1 px-3 py-1.5 ${landingEditorControlClass}`}
+                    style={getTextStyleCSS(draft.textStyles?.energyTitle, {
+                      fontSize: landingPreviewCardBodyFs,
+                      color: landingPreviewPrimary,
+                      fontFamily: currentLandingFontFamily,
+                      fontWeight: 700,
+                    })}
                   />
                   <EmojiButton includeSjHeartEmoji={includeSjHeartEmoji} onSelect={(emoji) => updateLandingContent("energyTitle", (draft.landingContent?.energyTitle ?? "") + emoji)} />
                 </div>
@@ -2823,7 +2980,7 @@ export const MyPageBuilder: React.FC = () => {
                       style={draft.textStyles?.energyBody}
                       onChange={(style) => updateTextStyle("energyBody", style)}
                       defaultSize="sm"
-                      defaultFontFamily={currentLandingFontFamily}
+                      defaultFontFamily={currentLandingFontFamily} pickerTypography={{ fontFamily: currentLandingFontFamily, color: landingPreviewThemeText }}
                     />
                     <LandingBodyModeToggle
                       value={draft.landingContent?.energyBodyMode ?? "bullets"}
@@ -2840,7 +2997,12 @@ export const MyPageBuilder: React.FC = () => {
                         onChange={(e) => updateLandingContent("energyLines", e.target.value.split("\n"))}
                         placeholder="One bullet per line (e.g. Playful and honest.)"
                         rows={6}
-                        className="w-full px-3 py-1.5 pr-12 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                        className={`w-full px-3 py-1.5 pr-12 ${landingEditorControlClass}`}
+                        style={getTextStyleCSS(draft.textStyles?.energyBody, {
+                          fontSize: landingPreviewCardListFs,
+                          color: landingPreviewThemeText,
+                          fontFamily: currentLandingFontFamily,
+                        })}
                       />
                       <div className="absolute right-2 top-1.5">
                         <EmojiButton
@@ -2868,7 +3030,11 @@ export const MyPageBuilder: React.FC = () => {
                         Bullet style
                       </label>
                       <select
-                        className="w-full px-2 py-1.5 text-xs border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                        className={`w-full px-2 py-1.5 text-xs ${landingEditorControlClass}`}
+                        style={{
+                          fontFamily: currentLandingFontFamily,
+                          color: landingPreviewThemeText,
+                        }}
                         value={draft.landingContent?.energyLinesMarker ?? "heart"}
                         onChange={(e) =>
                           updateLandingContent("energyLinesMarker", e.target.value as LandingSectionListMarker)
@@ -2888,7 +3054,12 @@ export const MyPageBuilder: React.FC = () => {
                       onChange={(e) => updateLandingContent("energyParagraph", e.target.value)}
                       placeholder="Full paragraph for this section. Line breaks are kept on the live page."
                       rows={6}
-                      className="w-full px-3 py-1.5 pr-12 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                      className={`w-full px-3 py-1.5 pr-12 ${landingEditorControlClass}`}
+                      style={getTextStyleCSS(draft.textStyles?.energyBody, {
+                        fontSize: landingPreviewCardListFs,
+                        color: landingPreviewThemeText,
+                        fontFamily: currentLandingFontFamily,
+                      })}
                     />
                     <div className="absolute right-2 top-1.5">
                       <EmojiButton
@@ -2919,7 +3090,13 @@ export const MyPageBuilder: React.FC = () => {
                       value={draft.landingContent?.energyClosingLine ?? ""}
                       onChange={(e) => updateLandingContent("energyClosingLine", e.target.value)}
                       placeholder='e.g. And that is different.'
-                      className="flex-1 min-w-0 px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                      className={`flex-1 min-w-0 px-3 py-1.5 ${landingEditorControlClass}`}
+                      style={{
+                        fontSize: landingPreviewCardListFs,
+                        color: landingPreviewPrimary,
+                        fontFamily: currentLandingFontFamily,
+                        fontWeight: 700,
+                      }}
                     />
                     <EmojiButton
                       includeSjHeartEmoji={includeSjHeartEmoji}
@@ -3074,7 +3251,11 @@ export const MyPageBuilder: React.FC = () => {
                           (e.target as HTMLInputElement).blur();
                         }
                       }}
-                      className="w-full pl-7 pr-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                      className="w-full pl-7 pr-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 tabular-nums"
+                      style={{
+                        fontFamily: currentLandingFontFamily,
+                        color: landingPreviewThemeText,
+                      }}
                     />
                   </div>
                   <p className="text-xs text-gray-400 mt-1">What fans pay each month for membership (before platform fees).</p>
@@ -3091,7 +3272,12 @@ export const MyPageBuilder: React.FC = () => {
                     <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Checkmark lines (one per line)</label>
                     <textarea
                       rows={3}
-                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
+                      className={`w-full px-3 py-2 ${landingEditorControlClass} text-sm`}
+                      style={{
+                        fontFamily: currentLandingFontFamily,
+                        color: landingPreviewThemeText,
+                        fontSize: "0.875rem",
+                      }}
                       placeholder={"Exclusive content\nCancel anytime"}
                       value={(draft.landingContent?.pricingCardBullets ?? []).join("\n")}
                       onChange={(e) => {
@@ -3117,7 +3303,11 @@ export const MyPageBuilder: React.FC = () => {
                       </p>
                       <input
                         type="text"
-                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
+                        className={`w-full px-3 py-2 ${landingEditorControlClass} text-sm font-semibold`}
+                        style={{
+                          fontFamily: currentLandingFontFamily,
+                          color: landingPreviewThemeText,
+                        }}
                         placeholder="Sign up to Subscribe"
                         value={draft.landingContent?.pricingCtaGuestPaid ?? ""}
                         onChange={(e) =>
@@ -3139,7 +3329,11 @@ export const MyPageBuilder: React.FC = () => {
                       </p>
                       <input
                         type="text"
-                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
+                        className={`w-full px-3 py-2 ${landingEditorControlClass} text-sm font-semibold`}
+                        style={{
+                          fontFamily: currentLandingFontFamily,
+                          color: landingPreviewThemeText,
+                        }}
                         placeholder={`Join - $${((draft.monetization?.monthlyPrice ?? DEFAULT_MONETIZATION.monthlyPrice) / 100).toFixed(2)}/mo`}
                         value={draft.landingContent?.pricingCtaLoggedInPaid ?? ""}
                         onChange={(e) =>
@@ -3172,7 +3366,13 @@ export const MyPageBuilder: React.FC = () => {
                       value={unifiedStoreTitleDraft}
                       onChange={(e) => updateUnifiedStoreTitle(e.target.value)}
                       placeholder="e.g. Store, Treats, Shop"
-                      className="w-full px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                      className={`w-full px-3 py-1.5 ${landingEditorControlClass}`}
+                      style={{
+                        fontFamily: currentLandingFontFamily,
+                        color: landingPreviewThemeText,
+                        fontSize: "0.875rem",
+                        fontWeight: 600,
+                      }}
                     />
                   </div>
                   <div>
@@ -3181,7 +3381,12 @@ export const MyPageBuilder: React.FC = () => {
                       value={unifiedStoreSubtitleDraft}
                       onChange={(e) => updateUnifiedStoreSubtitle(e.target.value)}
                       rows={3}
-                      className="w-full px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                      className={`w-full px-3 py-1.5 ${landingEditorControlClass}`}
+                      style={{
+                        fontFamily: currentLandingFontFamily,
+                        color: `${landingPreviewThemeText}aa`,
+                        fontSize: "0.75rem",
+                      }}
                     />
                   </div>
                   <div>
@@ -3193,7 +3398,12 @@ export const MyPageBuilder: React.FC = () => {
                       value={unifiedStoreOpenCtaDraft}
                       onChange={(e) => updateUnifiedStoreOpenCta(e.target.value)}
                       placeholder="Open store"
-                      className="w-full px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                      className={`w-full px-3 py-1.5 ${landingEditorControlClass} font-semibold`}
+                      style={{
+                        fontFamily: currentLandingFontFamily,
+                        color: landingPreviewPrimary,
+                        fontSize: "0.875rem",
+                      }}
                     />
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -3203,7 +3413,12 @@ export const MyPageBuilder: React.FC = () => {
                         type="text"
                         value={draft.landingContent?.memberStoreLoadingMessage ?? DEFAULT_LANDING_CONTENT.memberStoreLoadingMessage}
                         onChange={(e) => updateLandingContent("memberStoreLoadingMessage", e.target.value)}
-                        className="w-full px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                        className={`w-full px-3 py-1.5 ${landingEditorControlClass}`}
+                        style={{
+                          fontFamily: currentLandingFontFamily,
+                          color: landingPreviewThemeText,
+                          fontSize: "0.875rem",
+                        }}
                       />
                     </div>
                     <div>
@@ -3212,7 +3427,12 @@ export const MyPageBuilder: React.FC = () => {
                         type="text"
                         value={draft.landingContent?.memberStoreEmptyMessage ?? DEFAULT_LANDING_CONTENT.memberStoreEmptyMessage}
                         onChange={(e) => updateLandingContent("memberStoreEmptyMessage", e.target.value)}
-                        className="w-full px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                        className={`w-full px-3 py-1.5 ${landingEditorControlClass}`}
+                        style={{
+                          fontFamily: currentLandingFontFamily,
+                          color: landingPreviewThemeText,
+                          fontSize: "0.875rem",
+                        }}
                       />
                     </div>
                   </div>
@@ -3226,7 +3446,12 @@ export const MyPageBuilder: React.FC = () => {
                         value={draft.landingContent?.publicStoreModalTitle ?? ""}
                         onChange={(e) => updateLandingContent("publicStoreModalTitle", e.target.value)}
                         placeholder="Leave blank to use store title"
-                        className="w-full px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                        className={`w-full px-3 py-1.5 ${landingEditorControlClass}`}
+                        style={{
+                          fontFamily: currentLandingFontFamily,
+                          color: landingPreviewThemeText,
+                          fontSize: "0.875rem",
+                        }}
                       />
                     </div>
                     <div>
@@ -3235,7 +3460,12 @@ export const MyPageBuilder: React.FC = () => {
                         type="text"
                         value={draft.landingContent?.publicStoreModalEmptyMessage ?? DEFAULT_LANDING_CONTENT.publicStoreModalEmptyMessage}
                         onChange={(e) => updateLandingContent("publicStoreModalEmptyMessage", e.target.value)}
-                        className="w-full px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                        className={`w-full px-3 py-1.5 ${landingEditorControlClass}`}
+                        style={{
+                          fontFamily: currentLandingFontFamily,
+                          color: landingPreviewThemeText,
+                          fontSize: "0.875rem",
+                        }}
                       />
                     </div>
                   </div>
@@ -3250,7 +3480,13 @@ export const MyPageBuilder: React.FC = () => {
                 <div className="space-y-2">
                   <input
                     type="text"
-                    className="w-full px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                    className={`w-full px-3 py-1.5 ${landingEditorControlClass}`}
+                    style={{
+                      fontFamily: currentLandingFontFamily,
+                      color: landingPreviewThemeText,
+                      fontSize: "1rem",
+                      fontWeight: 600,
+                    }}
                     placeholder="Section heading"
                     value={draft.landingContent?.tipSectionHeading ?? ""}
                     onChange={(e) => updateLandingContent("tipSectionHeading", e.target.value)}
@@ -3260,7 +3496,12 @@ export const MyPageBuilder: React.FC = () => {
                       <label className="block text-[10px] font-medium text-gray-500 dark:text-gray-400 mb-0.5">Guest (landing)</label>
                       <input
                         type="text"
-                        className="w-full px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                        className={`w-full px-3 py-1.5 ${landingEditorControlClass}`}
+                        style={{
+                          fontFamily: currentLandingFontFamily,
+                          color: landingPreviewMuted,
+                          fontSize: "0.875rem",
+                        }}
                         placeholder="One-time tip — no subscription"
                         value={draft.landingContent?.tipSectionSublineGuest ?? ""}
                         onChange={(e) => updateLandingContent("tipSectionSublineGuest", e.target.value)}
@@ -3270,7 +3511,12 @@ export const MyPageBuilder: React.FC = () => {
                       <label className="block text-[10px] font-medium text-gray-500 dark:text-gray-400 mb-0.5">Member (Tip tab)</label>
                       <input
                         type="text"
-                        className="w-full px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                        className={`w-full px-3 py-1.5 ${landingEditorControlClass}`}
+                        style={{
+                          fontFamily: currentLandingFontFamily,
+                          color: landingPreviewMuted,
+                          fontSize: "0.875rem",
+                        }}
                         placeholder="No minimum — send what you like."
                         value={draft.landingContent?.tipSectionSublineMember ?? ""}
                         onChange={(e) => updateLandingContent("tipSectionSublineMember", e.target.value)}
@@ -3301,7 +3547,12 @@ export const MyPageBuilder: React.FC = () => {
                         <div className="flex items-center gap-2">
                           <input
                             type="text"
-                            className="w-full max-w-xs px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                            className={`w-full max-w-xs px-3 py-1.5 ${landingEditorControlClass}`}
+                            style={{
+                              fontFamily: currentLandingFontFamily,
+                              color: landingPreviewThemeText,
+                              fontSize: "0.875rem",
+                            }}
                             placeholder="e.g. 🙏 🔥 ✨"
                             value={
                               draft.landingContent?.tipSectionFooterEmoji === undefined
@@ -3405,7 +3656,12 @@ export const MyPageBuilder: React.FC = () => {
                 <select
                   value={currentLandingFontFamily}
                   onChange={(e) => updateTheme({ fontFamily: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                  className={`w-full px-3 py-2 ${landingEditorControlClass}`}
+                  style={{
+                    fontFamily: currentLandingFontFamily,
+                    color: landingPreviewThemeText,
+                    fontSize: "0.875rem",
+                  }}
                 >
                   {FONT_FAMILY_OPTIONS.slice(0, 18).map((f) => (
                     <option key={f.value} value={f.value}>{f.label}</option>
@@ -3491,7 +3747,12 @@ export const MyPageBuilder: React.FC = () => {
                 <select
                   value={draft.theme?.buttonStyle ?? "solid"}
                   onChange={(e) => updateTheme({ buttonStyle: e.target.value as StorefrontButtonStyle })}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                  className={`w-full px-3 py-2 ${landingEditorControlClass}`}
+                  style={{
+                    fontFamily: currentLandingFontFamily,
+                    color: landingPreviewThemeText,
+                    fontSize: "0.875rem",
+                  }}
                 >
                   <option value="solid">Solid</option>
                   <option value="outline">Outline</option>
@@ -3537,7 +3798,11 @@ export const MyPageBuilder: React.FC = () => {
                         },
                       });
                     }}
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
+                    className={`w-full px-3 py-2 ${landingEditorControlClass} text-sm`}
+                    style={{
+                      fontFamily: currentLandingFontFamily,
+                      color: landingPreviewThemeText,
+                    }}
                   />
                 </div>
                 <div>
@@ -3563,7 +3828,11 @@ export const MyPageBuilder: React.FC = () => {
                         },
                       });
                     }}
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
+                    className={`w-full px-3 py-2 ${landingEditorControlClass} text-sm`}
+                    style={{
+                      fontFamily: currentLandingFontFamily,
+                      color: landingPreviewThemeText,
+                    }}
                   />
                 </div>
               </div>
@@ -3666,7 +3935,11 @@ export const MyPageBuilder: React.FC = () => {
                       },
                     });
                   }}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm font-mono"
+                  className={`w-full px-3 py-2 ${landingEditorControlClass} text-sm font-mono`}
+                  style={{
+                    fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
+                    color: landingPreviewThemeText,
+                  }}
                 />
               </div>
             </div>
@@ -4036,8 +4309,11 @@ export const MyPageBuilder: React.FC = () => {
                   ? "Enter your terms of service...\n\nClick 'Load recommended default' above to start with our pre-written terms that protect your content."
                   : "Enter your privacy policy...\n\nClick 'Load recommended default' above to start with our pre-written policy."}
                 rows={18}
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm leading-relaxed"
-                style={{ fontFamily: "system-ui, -apple-system, sans-serif" }}
+                className={`w-full px-3 py-2 ${landingEditorControlClass} text-sm leading-relaxed`}
+                style={{
+                  fontFamily: currentLandingFontFamily,
+                  color: landingPreviewThemeText,
+                }}
               />
               
               {/* Info box */}

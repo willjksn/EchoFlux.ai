@@ -163,8 +163,8 @@ const LANDING_MAIN_MAX = "max-w-[720px] mx-auto w-full";
 /** Builder preview header row. */
 const LANDING_HEADER_MAX = "max-w-[720px] mx-auto w-full";
 
-// Helper to generate inline styles from TextStyle
-function getTextStyleCSS(
+// Helper to generate inline styles from TextStyle (exported for My Page builder WYSIWYG fields)
+export function getTextStyleCSS(
   style?: TextStyle,
   defaults?: {
     fontSize?: string;
