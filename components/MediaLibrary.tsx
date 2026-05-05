@@ -18,8 +18,87 @@ import {
 } from '../src/lib/browserMediaRecording';
 import { AudioLevelMeter } from './AudioLevelMeter';
 import { RecordingDurationLabel } from './RecordingDurationLabel';
+import { tryFeedVideoPosterSeekOnce } from '../src/lib/feedVideoPosterSeek';
 
 const GENERAL_FOLDER_ID = 'general';
+
+/** Muted loop preview while pointer is over the tile (matches Fan Hub grid thumbnails). */
+function VaultHoverVideoThumb({
+  src,
+  hoverActive,
+  videoClassName,
+}: {
+  src: string;
+  hoverActive: boolean;
+  videoClassName: string;
+}) {
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const posterSeekDoneRef = useRef(false);
+  const clean = src.split('#')[0]?.trim() || src;
+  const [hidePlayOverlay, setHidePlayOverlay] = useState(false);
+
+  useEffect(() => {
+    posterSeekDoneRef.current = false;
+  }, [clean]);
+
+  useEffect(() => {
+    const v = videoRef.current;
+    if (!v) return;
+    let cancelled = false;
+    if (hoverActive) {
+      void v
+        .play()
+        .then(() => {
+          if (!cancelled) setHidePlayOverlay(true);
+        })
+        .catch(() => {});
+    } else {
+      v.pause();
+      setHidePlayOverlay(false);
+      try {
+        v.currentTime = 0;
+      } catch {
+        /* ignore */
+      }
+      posterSeekDoneRef.current = false;
+      tryFeedVideoPosterSeekOnce(v, posterSeekDoneRef);
+    }
+    return () => {
+      cancelled = true;
+    };
+  }, [hoverActive, clean]);
+
+  return (
+    <div className="relative w-full h-full min-h-0">
+      <video
+        ref={videoRef}
+        src={clean}
+        muted
+        loop
+        playsInline
+        preload="metadata"
+        className={videoClassName}
+        controlsList="nodownload noplaybackrate noremoteplayback"
+        onContextMenu={(e) => e.preventDefault()}
+        onLoadedMetadata={(e) => {
+          tryFeedVideoPosterSeekOnce(e.currentTarget, posterSeekDoneRef);
+        }}
+      />
+      <span
+        className={`pointer-events-none absolute inset-0 flex items-center justify-center bg-black/15 transition-opacity duration-150 ${
+          hidePlayOverlay ? 'opacity-0' : 'opacity-100'
+        }`}
+        aria-hidden
+      >
+        <span className="rounded-full bg-black/50 p-2 text-white shadow-md">
+          <svg className="w-5 h-5 sm:w-6 sm:h-6" fill="currentColor" viewBox="0 0 20 20">
+            <path d="M6.3 2.841A1.5 1.5 0 004 4.11V15.89a1.5 1.5 0 002.3 1.269l9.344-5.89a1.5 1.5 0 000-2.538L6.3 2.84z" />
+          </svg>
+        </span>
+      </span>
+    </div>
+  );
+}
 
 export const MediaLibrary: React.FC = () => {
   const { user, showToast, setActivePage } = useAppContext();
@@ -29,6 +108,7 @@ export const MediaLibrary: React.FC = () => {
   const [isUploading, setIsUploading] = useState(false);
   const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const [vaultHoverVideoId, setVaultHoverVideoId] = useState<string | null>(null);
   const [filterType, setFilterType] = useState<'all' | 'image' | 'video' | 'audio'>('all');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const dropZoneRef = useRef<HTMLDivElement>(null);
@@ -921,6 +1001,10 @@ export const MediaLibrary: React.FC = () => {
                         ? 'border-primary-500 ring-2 ring-primary-200 dark:ring-primary-800'
                         : 'border-gray-200 dark:border-gray-700 hover:border-primary-300 dark:hover:border-primary-600'
                     } ${viewMode === 'grid' ? 'aspect-square' : 'flex items-center gap-4'}`}
+                    onMouseEnter={() => {
+                      if (item.type === 'video') setVaultHoverVideoId(item.id);
+                    }}
+                    onMouseLeave={() => setVaultHoverVideoId(null)}
                     onClick={() => setViewingItem(item)}
                   >
                     {item.type === 'audio' ? (
@@ -935,21 +1019,19 @@ export const MediaLibrary: React.FC = () => {
                         />
                       </div>
                     ) : item.type === 'video' ? (
-                      <video
-                        src={item.url}
-                        className={`${viewMode === 'grid' ? 'w-full h-full' : 'w-24 h-24'} object-contain bg-gray-100 dark:bg-gray-700`}
-                        controls={false}
-                        preload="metadata"
-                        playsInline
-                        muted
-                        onLoadedMetadata={(e) => {
-                          const video = e.currentTarget;
-                          if (video.duration && video.duration > 0) {
-                            const previewTime = Math.min(1, video.duration * 0.1);
-                            video.currentTime = previewTime;
-                          }
-                        }}
-                      />
+                      <div
+                        className={
+                          viewMode === 'grid'
+                            ? 'relative h-full w-full min-h-0'
+                            : 'relative h-24 w-24 shrink-0 overflow-hidden rounded-md'
+                        }
+                      >
+                        <VaultHoverVideoThumb
+                          src={item.url}
+                          hoverActive={vaultHoverVideoId === item.id}
+                          videoClassName="absolute inset-0 h-full w-full object-contain bg-gray-100 dark:bg-gray-700"
+                        />
+                      </div>
                     ) : (
                       <img
                         src={item.url}
