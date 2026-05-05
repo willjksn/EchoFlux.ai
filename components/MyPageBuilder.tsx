@@ -2509,17 +2509,39 @@ export const MyPageBuilder: React.FC = () => {
                   </div>
                   {(draft.landingContent?.perksExtraMode ?? "bullets") === "bullets" ? (
                     <>
-                      <textarea
-                        rows={6}
-                        placeholder="One bullet per line. Leave empty for description only."
-                        value={(draft.landingContent?.perksList ?? []).join("\n")}
-                        onChange={(e) => {
-                          const raw = e.target.value;
-                          const lines = raw.length === 0 ? [] : raw.split("\n");
-                          updateLandingContent("perksList", lines);
-                        }}
-                        className="w-full px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                      />
+                      <div className="relative">
+                        <textarea
+                          rows={6}
+                          placeholder="One bullet per line. Leave empty for description only."
+                          value={(draft.landingContent?.perksList ?? []).join("\n")}
+                          onChange={(e) => {
+                            const raw = e.target.value;
+                            const lines = raw.length === 0 ? [] : raw.split("\n");
+                            updateLandingContent("perksList", lines);
+                          }}
+                          className="w-full px-3 py-1.5 pr-12 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                        />
+                        <div className="absolute right-2 top-1.5">
+                          <EmojiButton
+                            includeSjHeartEmoji={includeSjHeartEmoji}
+                            onSelect={(emoji) => {
+                              setDraft((prev) => {
+                                const lc = prev.landingContent ?? DEFAULT_LANDING_CONTENT;
+                                const lines = [...(lc.perksList ?? [])];
+                                if (lines.length > 0) {
+                                  lines[lines.length - 1] = lines[lines.length - 1] + emoji;
+                                } else {
+                                  lines.push(emoji);
+                                }
+                                return {
+                                  ...prev,
+                                  landingContent: { ...lc, perksList: lines },
+                                };
+                              });
+                            }}
+                          />
+                        </div>
+                      </div>
                       <div>
                         <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
                           Bullet style
@@ -2632,17 +2654,39 @@ export const MyPageBuilder: React.FC = () => {
                   </div>
                   {(draft.landingContent?.previewExtraMode ?? "bullets") === "bullets" ? (
                     <>
-                      <textarea
-                        rows={6}
-                        placeholder="One bullet per line under your subline."
-                        value={(draft.landingContent?.previewList ?? []).join("\n")}
-                        onChange={(e) => {
-                          const raw = e.target.value;
-                          const lines = raw.length === 0 ? [] : raw.split("\n");
-                          updateLandingContent("previewList", lines);
-                        }}
-                        className="w-full px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                      />
+                      <div className="relative">
+                        <textarea
+                          rows={6}
+                          placeholder="One bullet per line under your subline."
+                          value={(draft.landingContent?.previewList ?? []).join("\n")}
+                          onChange={(e) => {
+                            const raw = e.target.value;
+                            const lines = raw.length === 0 ? [] : raw.split("\n");
+                            updateLandingContent("previewList", lines);
+                          }}
+                          className="w-full px-3 py-1.5 pr-12 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                        />
+                        <div className="absolute right-2 top-1.5">
+                          <EmojiButton
+                            includeSjHeartEmoji={includeSjHeartEmoji}
+                            onSelect={(emoji) => {
+                              setDraft((prev) => {
+                                const lc = prev.landingContent ?? DEFAULT_LANDING_CONTENT;
+                                const lines = [...(lc.previewList ?? [])];
+                                if (lines.length > 0) {
+                                  lines[lines.length - 1] = lines[lines.length - 1] + emoji;
+                                } else {
+                                  lines.push(emoji);
+                                }
+                                return {
+                                  ...prev,
+                                  landingContent: { ...lc, previewList: lines },
+                                };
+                              });
+                            }}
+                          />
+                        </div>
+                      </div>
                       <div>
                         <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
                           Bullet style
@@ -2694,17 +2738,39 @@ export const MyPageBuilder: React.FC = () => {
                   <label className="block text-xs font-medium text-gray-500 dark:text-gray-400">
                     Footer lines (italic, below list — one per line)
                   </label>
-                  <textarea
-                    rows={3}
-                    placeholder={"Nothing explicit.\nNothing fake.\nNothing forced."}
-                    value={(draft.landingContent?.previewFooterLines ?? []).join("\n")}
-                    onChange={(e) => {
-                      const raw = e.target.value;
-                      const lines = raw.length === 0 ? [] : raw.split("\n");
-                      updateLandingContent("previewFooterLines", lines);
-                    }}
-                    className="w-full px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                  />
+                  <div className="relative">
+                    <textarea
+                      rows={3}
+                      placeholder={"Nothing explicit.\nNothing fake.\nNothing forced."}
+                      value={(draft.landingContent?.previewFooterLines ?? []).join("\n")}
+                      onChange={(e) => {
+                        const raw = e.target.value;
+                        const lines = raw.length === 0 ? [] : raw.split("\n");
+                        updateLandingContent("previewFooterLines", lines);
+                      }}
+                      className="w-full px-3 py-1.5 pr-12 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                    />
+                    <div className="absolute right-2 top-1.5">
+                      <EmojiButton
+                        includeSjHeartEmoji={includeSjHeartEmoji}
+                        onSelect={(emoji) => {
+                          setDraft((prev) => {
+                            const lc = prev.landingContent ?? DEFAULT_LANDING_CONTENT;
+                            const lines = [...(lc.previewFooterLines ?? [])];
+                            if (lines.length > 0) {
+                              lines[lines.length - 1] = lines[lines.length - 1] + emoji;
+                            } else {
+                              lines.push(emoji);
+                            }
+                            return {
+                              ...prev,
+                              landingContent: { ...lc, previewFooterLines: lines },
+                            };
+                          });
+                        }}
+                      />
+                    </div>
+                  </div>
                 </div>
               </div>
 
@@ -2826,13 +2892,30 @@ export const MyPageBuilder: React.FC = () => {
                   <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
                     Closing line (bold, accent color — optional)
                   </label>
-                  <input
-                    type="text"
-                    value={draft.landingContent?.energyClosingLine ?? ""}
-                    onChange={(e) => updateLandingContent("energyClosingLine", e.target.value)}
-                    placeholder='e.g. And that is different.'
-                    className="w-full px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                  />
+                  <div className="flex gap-2 items-center">
+                    <input
+                      type="text"
+                      value={draft.landingContent?.energyClosingLine ?? ""}
+                      onChange={(e) => updateLandingContent("energyClosingLine", e.target.value)}
+                      placeholder='e.g. And that is different.'
+                      className="flex-1 min-w-0 px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                    />
+                    <EmojiButton
+                      includeSjHeartEmoji={includeSjHeartEmoji}
+                      onSelect={(emoji) => {
+                        setDraft((prev) => {
+                          const lc = prev.landingContent ?? DEFAULT_LANDING_CONTENT;
+                          return {
+                            ...prev,
+                            landingContent: {
+                              ...lc,
+                              energyClosingLine: (lc.energyClosingLine ?? "") + emoji,
+                            },
+                          };
+                        });
+                      }}
+                    />
+                  </div>
                 </div>
                 {(draft.landingContent?.energyBodyMode ?? "bullets") === "bullets" ? (
                   <p className="text-xs text-gray-400 mt-1">Bullets: one row per line in the box above.</p>
@@ -3003,22 +3086,51 @@ export const MyPageBuilder: React.FC = () => {
                       }}
                     />
                   </div>
-                  <div>
-                    <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Primary button label (My Page preview)</label>
-                    <input
-                      type="text"
-                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
-                      placeholder="Join - $9.99/mo"
-                      value={draft.landingContent?.pricingCtaLoggedInPaid ?? ""}
-                      onChange={(e) =>
-                        updateDraft({
-                          landingContent: {
-                            ...draft.landingContent,
-                            pricingCtaLoggedInPaid: e.target.value.trim() ? e.target.value : undefined,
-                          },
-                        })
-                      }
-                    />
+                  <div className="space-y-3">
+                    <div>
+                      <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+                        Pricing button — visitor (signed out)
+                      </label>
+                      <p className="text-[11px] text-gray-500 dark:text-gray-400 mb-1 leading-snug">
+                        This is what the embedded landing preview shows (guest state). Public page matches when fans are not logged in.
+                      </p>
+                      <input
+                        type="text"
+                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
+                        placeholder="Sign up to Subscribe"
+                        value={draft.landingContent?.pricingCtaGuestPaid ?? ""}
+                        onChange={(e) =>
+                          updateDraft({
+                            landingContent: {
+                              ...draft.landingContent,
+                              pricingCtaGuestPaid: e.target.value.trim() ? e.target.value : undefined,
+                            },
+                          })
+                        }
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+                        Pricing button — signed-in fan
+                      </label>
+                      <p className="text-[11px] text-gray-500 dark:text-gray-400 mb-1 leading-snug">
+                        Shown after they log in on your live page when joining paid membership.
+                      </p>
+                      <input
+                        type="text"
+                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
+                        placeholder={`Join - $${((draft.monetization?.monthlyPrice ?? DEFAULT_MONETIZATION.monthlyPrice) / 100).toFixed(2)}/mo`}
+                        value={draft.landingContent?.pricingCtaLoggedInPaid ?? ""}
+                        onChange={(e) =>
+                          updateDraft({
+                            landingContent: {
+                              ...draft.landingContent,
+                              pricingCtaLoggedInPaid: e.target.value.trim() ? e.target.value : undefined,
+                            },
+                          })
+                        }
+                      />
+                    </div>
                   </div>
                   <p className="text-xs text-gray-500 dark:text-gray-400">
                     Trust line under the button is fixed: secure Stripe checkout and cancel anytime.
