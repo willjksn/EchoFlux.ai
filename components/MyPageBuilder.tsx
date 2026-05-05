@@ -31,6 +31,7 @@ import { canUseSjHeartEmoji } from "../src/lib/customEmoji";
 import { creatorIdFirestoreQueryVariants, normalizeCreatorId } from "../src/lib/creatorIdNormalize";
 import { FAN_HUB_STOREFRONT_THEME_SAVED_EVENT } from "../src/hooks/useCreatorFanHubTheme";
 import { deriveFanHubThemeFromPrimary } from "../src/lib/fanHubThemeFromPrimary";
+import { normalizeTreatProductsFromApi } from "../src/lib/treatProductsNormalize";
 
 const DEFAULT_SECTIONS: NonNullable<CreatorStorefrontSettings["sections"]> = {
   feed: true,
@@ -843,6 +844,7 @@ export const MyPageBuilder: React.FC = () => {
   const [builderGuestTreatModalOpen, setBuilderGuestTreatModalOpen] = useState(false);
   const [builderLandingTreatsProducts, setBuilderLandingTreatsProducts] = useState<TreatProduct[]>([]);
   const [builderLandingTreatsLoading, setBuilderLandingTreatsLoading] = useState(false);
+  const [builderLandingTreatsRefreshNonce, setBuilderLandingTreatsRefreshNonce] = useState(0);
   const [monthlySubscriptionInput, setMonthlySubscriptionInput] = useState("");
   const [lastGeneratedInviteCode, setLastGeneratedInviteCode] = useState("");
 
@@ -916,6 +918,11 @@ export const MyPageBuilder: React.FC = () => {
   }, [draft.publicTreatsOnLanding, draft.sections?.treats]);
 
   useEffect(() => {
+    if (!builderGuestTreatModalOpen) return;
+    setBuilderLandingTreatsRefreshNonce((n) => n + 1);
+  }, [builderGuestTreatModalOpen]);
+
+  useEffect(() => {
     if (!creatorId || previewMode !== "landing") {
       setBuilderLandingTreatsProducts([]);
       setBuilderLandingTreatsLoading(false);
@@ -931,22 +938,23 @@ export const MyPageBuilder: React.FC = () => {
     (async () => {
       try {
         const res = await fetch(
-          `/api/products?creatorId=${encodeURIComponent(creatorId)}&context=landing`
+          `/api/products?creatorId=${encodeURIComponent(creatorId)}&context=landing`,
+          { cache: "no-store" }
         );
         if (res.ok) {
           if (cancelled) return;
           const data = await res.json();
           if (!cancelled) {
-            setBuilderLandingTreatsProducts(Array.isArray(data.products) ? data.products : []);
+            setBuilderLandingTreatsProducts(normalizeTreatProductsFromApi(data.products));
           }
           return;
         }
         const fallback = await loadLandingTreatProductsViaFirestore(creatorId);
-        if (!cancelled) setBuilderLandingTreatsProducts(fallback);
+        if (!cancelled) setBuilderLandingTreatsProducts(normalizeTreatProductsFromApi(fallback));
       } catch {
         try {
           const fallback = await loadLandingTreatProductsViaFirestore(creatorId);
-          if (!cancelled) setBuilderLandingTreatsProducts(fallback);
+          if (!cancelled) setBuilderLandingTreatsProducts(normalizeTreatProductsFromApi(fallback));
         } catch {
           if (!cancelled) setBuilderLandingTreatsProducts([]);
         }
@@ -957,7 +965,7 @@ export const MyPageBuilder: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, [creatorId, previewMode, draft.publicTreatsOnLanding, draft.sections?.treats]);
+  }, [creatorId, previewMode, draft.publicTreatsOnLanding, draft.sections?.treats, builderLandingTreatsRefreshNonce]);
 
   useEffect(() => {
     if (!builderGuestTreatModalOpen) return;

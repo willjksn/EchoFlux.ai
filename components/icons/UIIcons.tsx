@@ -80,6 +80,10 @@ export const ArrowUpIcon: React.FC<{ className?: string }> = ({ className }) => 
     <svg className={className || "w-4 h-4 mr-1"} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 10l7-7m0 0l7 7m-7-7v18" /></svg>
 );
 
+export const ArrowDownIcon: React.FC<{ className?: string }> = ({ className }) => (
+    <svg className={className || "w-4 h-4 mr-1"} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" /></svg>
+);
+
 export const SparklesIcon: React.FC<{ className?: string }> = ({ className }) => (
     <svg className={className || "w-5 h-5 mr-2"} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M19 3v4M17 5h4M14 11l-1.5-1.5-1.5 1.5-1.5-1.5 1.5-1.5L12 5l1.5 1.5 1.5-1.5 1.5 1.5-1.5 1.5L14 11zM12 21l-1.5-1.5-1.5 1.5-1.5-1.5 1.5-1.5L8 15l1.5 1.5 1.5-1.5 1.5 1.5-1.5 1.5L12 21z" /></svg>
 );

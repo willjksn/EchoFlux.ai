@@ -91,6 +91,8 @@ interface FanLandingPageProps {
   sectionsTreatsEnabled?: boolean;
   landingTreatProducts?: TreatProduct[];
   landingTreatsLoading?: boolean;
+  /** Called right before opening the guest store modal — refetch products so names match after edits. */
+  onRefreshLandingTreats?: () => void;
   treatLinkAccountMessage?: string | null;
   /** Defaults to `/{handle}/terms` and `/privacy` if omitted */
   termsHref?: string;
@@ -170,6 +172,7 @@ export const FanLandingPage: React.FC<FanLandingPageProps> = (props) => {
     sectionsTreatsEnabled = true,
     landingTreatProducts = [],
     landingTreatsLoading = false,
+    onRefreshLandingTreats,
     treatLinkAccountMessage = null,
     termsHref: termsHrefProp,
     privacyHref: privacyHrefProp,
@@ -375,7 +378,10 @@ export const FanLandingPage: React.FC<FanLandingPageProps> = (props) => {
           tipError,
           tipsEnabled,
           showGuestTreatsCard: showLandingTreatModal,
-          onOpenGuestTreats: () => setTreatStoreOpen(true),
+          onOpenGuestTreats: () => {
+            onRefreshLandingTreats?.();
+            setTreatStoreOpen(true);
+          },
           landingTreatsLoading,
           landingTreatProductCount: landingTreatProducts.length,
           treatLinkAccountMessage,

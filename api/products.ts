@@ -136,6 +136,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const bTime = b.createdAt ? new Date(b.createdAt).getTime() : 0;
         return bTime - aTime; // descending
       });
+      res.setHeader("Cache-Control", "private, no-store, max-age=0");
       return res.status(200).json({ products });
     } catch (e: unknown) {
       console.error("products list error:", e);

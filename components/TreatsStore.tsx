@@ -15,7 +15,7 @@ import {
   type QueryDocumentSnapshot,
 } from "firebase/firestore";
 import type { TreatProduct, TreatProductType } from "../types";
-import { SparklesIcon, CalendarIcon } from "./icons/UIIcons";
+import { SparklesIcon, CalendarIcon, ArrowUpIcon, ArrowDownIcon } from "./icons/UIIcons";
 import { useCreatorStoreCopy } from "../src/hooks/useCreatorStoreCopy";
 import { creatorIdFirestoreQueryVariants, normalizeCreatorId } from "../src/lib/creatorIdNormalize";
 
@@ -50,6 +50,18 @@ function toFirestoreProductPatch(updates: Record<string, unknown>, updatedAtIso:
     next.quantityLimit = deleteField();
   }
   return firestoreSafePatch(next);
+}
+
+function compareTreatProducts(a: TreatProduct, b: TreatProduct): number {
+  const orderDiff = (a.sortOrder ?? 0) - (b.sortOrder ?? 0);
+  if (orderDiff !== 0) return orderDiff;
+  const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+  const bTime = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+  return bTime - aTime;
+}
+
+function sortTreatProducts(list: TreatProduct[]): TreatProduct[] {
+  return [...list].sort(compareTreatProducts);
 }
 
 function treatProductQuantityString(product: TreatProduct | null | undefined): string {
@@ -573,12 +585,16 @@ export const TreatsStore: React.FC = () => {
       type: TreatProductType;
       /** Pass null to clear limit (unlimited). Omit field only when not changing quantity. */
       quantityLimit: number | null;
+      sortOrder: number;
     }>,
-    options?: { useGlobalSaving?: boolean }
+    options?: { useGlobalSaving?: boolean; quietUi?: boolean }
   ) => {
+    const quietUi = options?.quietUi === true;
     const useGlobalSaving = options?.useGlobalSaving !== false;
-    if (useGlobalSaving) setSaving(true);
-    else setPatchingId(productId);
+    if (!quietUi) {
+      if (useGlobalSaving) setSaving(true);
+      else setPatchingId(productId);
+    }
     try {
       const token = auth.currentUser ? await auth.currentUser.getIdToken() : null;
       let res: Response;
@@ -596,7 +612,7 @@ export const TreatsStore: React.FC = () => {
           const patch = toFirestoreProductPatch({ ...updates }, new Date().toISOString());
           await updateDoc(doc(db, "products", productId), patch);
           if (useGlobalSaving) showToast?.("Updated (direct database — API unreachable)", "success");
-          setEditing(null);
+          if (!quietUi) setEditing(null);
           void fetchProducts({ quiet: !useGlobalSaving });
           return;
         }
@@ -617,30 +633,76 @@ export const TreatsStore: React.FC = () => {
           })
         );
         if (useGlobalSaving) showToast?.("Updated", "success");
-        setEditing(null);
+        if (!quietUi) setEditing(null);
         return;
       }
       if (res.ok) {
         void fetchProducts({ quiet: true });
         if (useGlobalSaving) showToast?.("Updated", "success");
-        setEditing(null);
+        if (!quietUi) setEditing(null);
         return;
       }
       if ((res.status >= 500 || res.status === 404) && db) {
         const patch = toFirestoreProductPatch({ ...updates }, new Date().toISOString());
         await updateDoc(doc(db, "products", productId), patch);
         if (useGlobalSaving) showToast?.("Updated (direct database)", "success");
-        setEditing(null);
+        if (!quietUi) setEditing(null);
         void fetchProducts({ quiet: true });
         return;
       }
       throw new Error(data.error || "Failed to update");
     } catch (e) {
-      showToast?.(e instanceof Error ? e.message : "Failed to update", "error");
+      if (!quietUi) {
+        showToast?.(e instanceof Error ? e.message : "Failed to update", "error");
+        void fetchProducts({ quiet: true });
+      }
+      throw e;
+    } finally {
+      if (!quietUi) {
+        setSaving(false);
+        setPatchingId(null);
+      }
+    }
+  };
+
+  const reorderDisplayedProduct = async (productId: string, delta: -1 | 1) => {
+    if (editing != null) return;
+    const filtered = showArchived ? products : products.filter((p) => !p.archived);
+    const sorted = sortTreatProducts(filtered);
+    const idx = sorted.findIndex((p) => p.id === productId);
+    const j = idx + delta;
+    if (idx < 0 || j < 0 || j >= sorted.length) return;
+
+    const row = [...sorted];
+    [row[idx], row[j]] = [row[j], row[idx]];
+
+    const patches = row
+      .map((p, i) => ({ id: p.id, sortOrder: i }))
+      .filter(({ id, sortOrder }) => {
+        const p = products.find((x) => x.id === id);
+        return (p?.sortOrder ?? 0) !== sortOrder;
+      });
+
+    if (patches.length === 0) return;
+
+    setProducts((prev) =>
+      prev.map((p) => {
+        const patch = patches.find((x) => x.id === p.id);
+        return patch ? { ...p, sortOrder: patch.sortOrder } : p;
+      })
+    );
+
+    setSaving(true);
+    try {
+      for (const { id, sortOrder } of patches) {
+        await handleUpdate(id, { sortOrder }, { useGlobalSaving: false, quietUi: true });
+      }
+      showToast?.("Order saved", "success");
+    } catch {
+      showToast?.("Could not save order", "error");
       void fetchProducts({ quiet: true });
     } finally {
       setSaving(false);
-      setPatchingId(null);
     }
   };
 
@@ -746,7 +808,7 @@ export const TreatsStore: React.FC = () => {
 
   const displayedProducts = useMemo(() => {
     const filtered = showArchived ? products : products.filter((p) => !p.archived);
-    return filtered;
+    return sortTreatProducts(filtered);
   }, [products, showArchived]);
 
   const visibleProducts = useMemo(
@@ -762,9 +824,11 @@ export const TreatsStore: React.FC = () => {
   const displayTreats = visibleProducts;
   const nonArchivedProducts = useMemo(() => products.filter((p) => !p.archived), [products]);
   const fanStoreGridItems = useMemo(() => {
-    if (displayTreats.length > 0) return displayTreats;
-    if (nonArchivedProducts.length > 0) return nonArchivedProducts;
-    return displayTreats;
+    let base: TreatProduct[];
+    if (displayTreats.length > 0) base = displayTreats;
+    else if (nonArchivedProducts.length > 0) base = nonArchivedProducts;
+    else base = displayTreats;
+    return sortTreatProducts(base);
   }, [displayTreats, nonArchivedProducts]);
 
   if (!creatorId) {
@@ -948,6 +1012,9 @@ export const TreatsStore: React.FC = () => {
               Add product
             </button>
           </div>
+          <p className="treats-reorder-hint">
+            In <strong>Manage</strong>, use the arrows on each card to set the order fans see in the store preview and on your live page.
+          </p>
 
           {loading ? (
             <p className="treats-loading">Loading…</p>
@@ -971,12 +1038,15 @@ export const TreatsStore: React.FC = () => {
             </div>
           ) : (
             <div className="treats-manage-list">
-              {displayedProducts.map((p) => {
+              {displayedProducts.map((p, cardIndex) => {
                 const isEditing = editing?.id === p.id;
                 const limit = toOptionalNonNegativeInt(p.quantityLimit);
                 const sold = toOptionalNonNegativeInt(p.soldCount) ?? 0;
                 const qtyLeft =
                   typeof limit === "number" && limit > 0 ? Math.max(0, limit - sold) : null;
+                const reorderBusy = saving || patchingId !== null;
+                const atFirst = cardIndex === 0;
+                const atLast = cardIndex >= displayedProducts.length - 1;
 
                 return (
                   <div
@@ -1003,6 +1073,26 @@ export const TreatsStore: React.FC = () => {
                       />
                     ) : (
                       <>
+                        <div className="treat-manage-card-order" aria-label="Reorder product">
+                          <button
+                            type="button"
+                            className="treat-manage-card-order-btn"
+                            title="Move up"
+                            disabled={reorderBusy || atFirst}
+                            onClick={() => void reorderDisplayedProduct(p.id, -1)}
+                          >
+                            <ArrowUpIcon className="w-4 h-4" />
+                          </button>
+                          <button
+                            type="button"
+                            className="treat-manage-card-order-btn"
+                            title="Move down"
+                            disabled={reorderBusy || atLast}
+                            onClick={() => void reorderDisplayedProduct(p.id, 1)}
+                          >
+                            <ArrowDownIcon className="w-4 h-4" />
+                          </button>
+                        </div>
                         <div className="treat-manage-card-content">
                           <h3 className="treat-manage-card-title">{p.title}</h3>
                           <div className="treat-manage-card-meta">

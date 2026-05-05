@@ -36,6 +36,7 @@ import type {
   FanAuthBranding,
   LandingSectionListMarker,
 } from "../types";
+import { normalizeTreatProductsFromApi } from "../src/lib/treatProductsNormalize";
 import { FanLandingPage } from "./FanLandingPage";
 import { FanAuthModal } from "./FanAuthModal";
 import { FanMemberFeed, FanMemberSaved, fetchFanMemberPostForPurchases } from "./FanMemberFeed";
@@ -125,33 +126,6 @@ function toOptionalNonNegativeInt(v: unknown): number | undefined {
   const n = typeof v === "number" ? v : Number(v);
   if (!Number.isFinite(n)) return undefined;
   return Math.max(0, Math.floor(n));
-}
-
-function normalizeMemberTreatProducts(raw: unknown): TreatProduct[] {
-  if (!Array.isArray(raw)) return [];
-  const out: TreatProduct[] = [];
-  const seen = new Set<string>();
-  for (const item of raw) {
-    if (!item || typeof item !== "object") continue;
-    const p = item as Partial<TreatProduct> & { id?: unknown };
-    const sid =
-      typeof p.id === "string"
-        ? p.id.trim()
-        : p.id != null && String(p.id).trim() !== ""
-          ? String(p.id).trim()
-          : "";
-    if (!sid || seen.has(sid)) continue;
-    seen.add(sid);
-    const quantityLimit = toOptionalNonNegativeInt((p as { quantityLimit?: unknown }).quantityLimit);
-    const soldCount = toOptionalNonNegativeInt((p as { soldCount?: unknown }).soldCount);
-    out.push({
-      ...(p as TreatProduct),
-      id: sid,
-      quantityLimit,
-      soldCount,
-    });
-  }
-  return out;
 }
 
 async function loadTreatProductsViaFirestore(
@@ -1231,6 +1205,8 @@ export const FanStorefrontView: React.FC = () => {
   /** Visible treats on public landing when the creator enables landing store items. */
   const [landingTreatsProducts, setLandingTreatsProducts] = useState<TreatProduct[]>([]);
   const [landingTreatsLoading, setLandingTreatsLoading] = useState(false);
+  /** Bumps when guest opens landing store modal so titles/prices match Firestore after edits. */
+  const [landingTreatsRefreshNonce, setLandingTreatsRefreshNonce] = useState(0);
   const [treatLinkMessage, setTreatLinkMessage] = useState<string | null>(null);
   const pendingGuestLinkBannerShown = useRef(false);
   const checkoutReturnSyncInFlightRef = useRef(false);
@@ -2586,19 +2562,20 @@ export const FanStorefrontView: React.FC = () => {
     setTreatsLoading(true);
     try {
       const res = await fetch(
-        `/api/products?creatorId=${encodeURIComponent(creator.creatorId)}&context=member`
+        `/api/products?creatorId=${encodeURIComponent(creator.creatorId)}&context=member`,
+        { cache: "no-store" }
       );
       if (res.ok) {
         const data = await res.json();
-        setTreatsProducts(normalizeMemberTreatProducts(data.products));
+        setTreatsProducts(normalizeTreatProductsFromApi(data.products));
         return;
       }
       const fallback = await loadTreatProductsViaFirestore(creator.creatorId, "member");
-      setTreatsProducts(normalizeMemberTreatProducts(fallback));
+      setTreatsProducts(normalizeTreatProductsFromApi(fallback));
     } catch {
       try {
         const fallback = await loadTreatProductsViaFirestore(creator.creatorId, "member");
-        setTreatsProducts(normalizeMemberTreatProducts(fallback));
+        setTreatsProducts(normalizeTreatProductsFromApi(fallback));
       } catch {
         setTreatsProducts([]);
       }
@@ -2790,24 +2767,25 @@ export const FanStorefrontView: React.FC = () => {
     (async () => {
       try {
         const res = await fetch(
-          `/api/products?creatorId=${encodeURIComponent(creator.creatorId)}&context=landing`
+          `/api/products?creatorId=${encodeURIComponent(creator.creatorId)}&context=landing`,
+          { cache: "no-store" }
         );
         if (res.ok) {
           if (cancelled) return;
           const data = await res.json();
           if (!cancelled) {
-            setLandingTreatsProducts(Array.isArray(data.products) ? data.products : []);
+            setLandingTreatsProducts(normalizeTreatProductsFromApi(data.products));
           }
           return;
         }
         const fallback = await loadTreatProductsViaFirestore(creator.creatorId, "landing");
         if (!cancelled) {
-          setLandingTreatsProducts(normalizeMemberTreatProducts(fallback));
+          setLandingTreatsProducts(normalizeTreatProductsFromApi(fallback));
         }
       } catch {
         try {
           const fallback = await loadTreatProductsViaFirestore(creator.creatorId, "landing");
-          if (!cancelled) setLandingTreatsProducts(normalizeMemberTreatProducts(fallback));
+          if (!cancelled) setLandingTreatsProducts(normalizeTreatProductsFromApi(fallback));
         } catch {
           if (!cancelled) setLandingTreatsProducts([]);
         }
@@ -2823,6 +2801,7 @@ export const FanStorefrontView: React.FC = () => {
     creator?.sections?.treats,
     creator?.publicTreatsOnLanding,
     onPublicLanding,
+    landingTreatsRefreshNonce,
   ]);
 
   /** Legacy landing-store checkout returned before sign-in; prompt before claim can run. */
@@ -4759,6 +4738,7 @@ export const FanStorefrontView: React.FC = () => {
           sectionsTreatsEnabled={creator.sections?.treats !== false}
           landingTreatProducts={landingTreatsProducts}
           landingTreatsLoading={landingTreatsLoading}
+          onRefreshLandingTreats={() => setLandingTreatsRefreshNonce((n) => n + 1)}
           treatLinkAccountMessage={treatLinkMessage}
           termsHref={storefrontTermsPath}
           privacyHref={storefrontPrivacyPath}
