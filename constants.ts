@@ -188,11 +188,15 @@ export const HERO_LAYOUT_OPTIONS: { value: 'default' | 'centered' | 'split' | 's
 ];
 
 /** Hero media size options (for multiple hero images) */
-export const HERO_MEDIA_SIZE_OPTIONS: { value: 'small' | 'medium' | 'large' | 'fullBackground'; label: string }[] = [
+export const HERO_MEDIA_SIZE_OPTIONS: {
+  value: 'small' | 'medium' | 'large' | 'fullBackground' | 'fullBackgroundPortrait';
+  label: string;
+}[] = [
   { value: 'small', label: 'Small' },
   { value: 'medium', label: 'Medium' },
   { value: 'large', label: 'Large' },
-  { value: 'fullBackground', label: 'Full background' },
+  { value: 'fullBackground', label: 'Full background (banner)' },
+  { value: 'fullBackgroundPortrait', label: 'Full background (portrait)' },
 ];
 
 /** Full-background hero: which part of the image is visible (maps to CSS background-position) */

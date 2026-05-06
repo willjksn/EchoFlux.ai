@@ -17,6 +17,7 @@ import type {
   StorefrontGeoAccessSettings,
 } from "../types";
 import { STOREFRONT_CONTENT_POLICY, DEFAULT_PRIVACY_POLICY, DEFAULT_TERMS_OF_SERVICE, FAN_HUB_THEME_PRESETS, HERO_LAYOUT_OPTIONS, HERO_MEDIA_SIZE_OPTIONS } from "../constants";
+import { isFullBleedHeroMediaSize } from "../src/lib/storefrontHeroNormalize";
 import { getAvatarCropStyle } from "../src/lib/avatarCrop";
 import {
   clampPan,
@@ -317,6 +318,11 @@ function normalizeForCompare(a: Partial<CreatorStorefrontSettings>): string {
   });
 }
 
+function normalizeHeroLayoutValue(v: unknown): "default" | "centered" | "split" | "splitRight" {
+  if (v === "default" || v === "centered" || v === "split" || v === "splitRight") return v;
+  return "default";
+}
+
 /**
  * Same normalization as `loadSettings` → preview always matches what Firestore save / public API return,
  * even when `draft` only has partial updates from individual fields.
@@ -349,7 +355,7 @@ function buildStorefrontPreviewConfig(draft: Partial<CreatorStorefrontSettings>)
     landingContent: draft.landingContent ? { ...DEFAULT_LANDING_CONTENT, ...draft.landingContent } : { ...DEFAULT_LANDING_CONTENT },
     legal: draft.legal ? { ...DEFAULT_LEGAL, ...draft.legal } : { ...DEFAULT_LEGAL },
     theme: draft.theme ? { ...DEFAULT_THEME, ...draft.theme } : { ...DEFAULT_THEME },
-    heroLayout: draft.heroLayout ?? "default",
+    heroLayout: normalizeHeroLayoutValue(draft.heroLayout),
     sections: draft.sections ? { ...DEFAULT_SECTIONS, ...draft.sections, about: false } : { ...DEFAULT_SECTIONS },
     sectionsOrder: (draft.sectionsOrder ?? DEFAULT_SECTIONS_ORDER).filter((key) => key !== "about"),
     spicyMode: draft.spicyMode ?? false,
@@ -808,7 +814,7 @@ const CollapsibleSection: React.FC<{
   }, [defaultOpen, storageKey]);
 
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+    <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700">
       <button
         type="button"
         onClick={() => {
@@ -913,11 +919,11 @@ export const MyPageBuilder: React.FC = () => {
   // PremiumStudioLayout back to a stale useCreatorFanHubTheme snapshot.
 
   const heroGridSlotCount = useMemo(
-    () => (draft.heroMedia ?? []).filter((m) => m.size !== "fullBackground").length,
+    () => (draft.heroMedia ?? []).filter((m) => !isFullBleedHeroMediaSize(m.size)).length,
     [draft.heroMedia]
   );
   const heroHasFullBackground = useMemo(
-    () => (draft.heroMedia ?? []).some((m) => m.size === "fullBackground"),
+    () => (draft.heroMedia ?? []).some((m) => isFullBleedHeroMediaSize(m.size)),
     [draft.heroMedia]
   );
 
@@ -1080,7 +1086,7 @@ export const MyPageBuilder: React.FC = () => {
   );
 
   useEffect(() => {
-    const gridCount = (draft.heroMedia ?? []).filter((m) => m.size !== "fullBackground").length;
+    const gridCount = (draft.heroMedia ?? []).filter((m) => !isFullBleedHeroMediaSize(m.size)).length;
     setPreviewFocusPhotoSlot((s) => (gridCount > 0 && s >= gridCount ? 0 : s));
   }, [draft.heroMedia]);
 
@@ -1134,7 +1140,7 @@ export const MyPageBuilder: React.FC = () => {
         theme: normalizeThemePresetId(
           data.theme ? { ...DEFAULT_THEME, ...data.theme } : { ...DEFAULT_THEME },
         ),
-        heroLayout: data.heroLayout ?? "default",
+        heroLayout: normalizeHeroLayoutValue(data.heroLayout),
         sections: data.sections ? { ...DEFAULT_SECTIONS, ...data.sections, about: false } : { ...DEFAULT_SECTIONS },
         sectionsOrder: (data.sectionsOrder ?? DEFAULT_SECTIONS_ORDER).filter((key) => key !== "about"),
         spicyMode: data.spicyMode ?? false,
@@ -1626,7 +1632,10 @@ export const MyPageBuilder: React.FC = () => {
     const current = draft.heroMedia ?? [];
     updateDraft({ heroMedia: current.filter((_, i) => i !== index) });
   };
-  const setHeroMediaItemSize = (index: number, size: "small" | "medium" | "large" | "fullBackground") => {
+  const setHeroMediaItemSize = (
+    index: number,
+    size: "small" | "medium" | "large" | "fullBackground" | "fullBackgroundPortrait"
+  ) => {
     const current = [...(draft.heroMedia ?? [])];
     if (current[index]) {
       current[index] = { ...current[index], size };
@@ -2186,7 +2195,9 @@ export const MyPageBuilder: React.FC = () => {
             <div className="space-y-4 pt-4">
               <div>
                 <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-2">Hero images</label>
-                <p className="text-xs text-gray-400 mb-2">Add one or more images. Portrait (4:5) recommended. Use &quot;Full background&quot; for a banner-style hero.</p>
+                <p className="text-xs text-gray-400 mb-2">
+                  Add one or more images. Portrait (4:5) recommended. Use full background (banner) for a short strip or full background (portrait) for a tall hero similar to Fanfix-style profiles.
+                </p>
                 {(draft.heroMedia ?? []).length > 0 && (
                   <ul className="space-y-3 mb-3">
                     {(draft.heroMedia ?? []).map((item, index) => (
@@ -2197,7 +2208,12 @@ export const MyPageBuilder: React.FC = () => {
                         <div className="flex-1 min-w-0 space-y-1.5">
                           <select
                             value={item.size ?? "medium"}
-                            onChange={(e) => setHeroMediaItemSize(index, e.target.value as "small" | "medium" | "large" | "fullBackground")}
+                            onChange={(e) =>
+                              setHeroMediaItemSize(
+                                index,
+                                e.target.value as "small" | "medium" | "large" | "fullBackground" | "fullBackgroundPortrait"
+                              )
+                            }
                             className={`w-full text-xs px-2 py-1.5 ${landingEditorControlClass}`}
                             style={{
                               fontFamily: currentLandingFontFamily,
@@ -2229,14 +2245,22 @@ export const MyPageBuilder: React.FC = () => {
                 {heroMediaUploading && <p className="text-xs text-gray-500 mt-1">Uploading…</p>}
 
                 <div className="mt-4">
-                  <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Hero layout (landing page)</label>
+                  <label htmlFor="my-page-hero-layout" className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+                    Hero layout (landing page)
+                  </label>
                   <p className="text-[11px] text-gray-400 dark:text-gray-500 mb-1.5">
-                    Put your hero photo on the left or right with text beside it — same as the live landing preview.
+                    Controls photo + text on the landing hero. With a full-width hero background, this still applies (alignment, text side, and default avatar position unless you use Pan avatar).
                   </p>
                   <select
-                    value={draft.heroLayout ?? "default"}
-                    onChange={(e) => updateDraft({ heroLayout: e.target.value as "default" | "centered" | "split" | "splitRight" })}
-                    className={`w-full px-3 py-2 ${landingEditorControlClass} text-sm`}
+                    id="my-page-hero-layout"
+                    aria-label="Hero layout"
+                    value={normalizeHeroLayoutValue(draft.heroLayout)}
+                    onChange={(e) =>
+                      updateDraft({
+                        heroLayout: e.target.value as "default" | "centered" | "split" | "splitRight",
+                      })
+                    }
+                    className={`w-full px-3 py-2 ${landingEditorControlClass} text-sm cursor-pointer relative z-10`}
                     style={{
                       fontFamily: currentLandingFontFamily,
                       color: landingPreviewThemeText,

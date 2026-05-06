@@ -36,7 +36,7 @@ interface FanLandingPageProps {
     heroImageUrl?: string;
     heroMedia?: {
       url: string;
-      size?: "small" | "medium" | "large" | "fullBackground";
+      size?: "small" | "medium" | "large" | "fullBackground" | "fullBackgroundPortrait";
       backgroundPosition?: string;
       objectPosition?: string;
       landingAvatarLeft?: string;

@@ -1,14 +1,14 @@
 /** Keep in sync with `src/lib/storefrontHeroNormalize.ts` */
 export type NormalizedHeroItem = {
   url: string;
-  size?: "small" | "medium" | "large" | "fullBackground";
+  size?: "small" | "medium" | "large" | "fullBackground" | "fullBackgroundPortrait";
   backgroundPosition?: string;
   objectPosition?: string;
   landingAvatarLeft?: string;
   landingAvatarBottom?: string;
 };
 
-const SIZE_SET = new Set(["small", "medium", "large", "fullBackground"]);
+const SIZE_SET = new Set(["small", "medium", "large", "fullBackground", "fullBackgroundPortrait"]);
 
 export function normalizeHeroMediaForStorefront(
   heroMediaRaw: unknown,

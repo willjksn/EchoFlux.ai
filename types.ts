@@ -419,17 +419,17 @@ export interface CreatorStorefrontSettings {
     heroImage?: string;         // Legacy: single hero image URL (used if heroMedia is empty)
     /** Some migrated docs use this instead of `heroImage` */
     heroImageUrl?: string;
-    /** Multiple hero images with optional size. fullBackground = one image as section background. */
+    /** Multiple hero images with optional size. fullBackground / fullBackgroundPortrait = one image as section background. */
     heroMedia?: {
         url: string;
-        size?: 'small' | 'medium' | 'large' | 'fullBackground';
-        /** When size is fullBackground: which part of the image is visible (CSS background-position, e.g. `45% 30%`). */
+        size?: 'small' | 'medium' | 'large' | 'fullBackground' | 'fullBackgroundPortrait';
+        /** When size is full-bleed: which part of the image is visible (CSS background-position, e.g. `45% 30%`). */
         backgroundPosition?: string;
         /** For grid hero images: focal point (CSS object-position, e.g. `50% 25%`). */
         objectPosition?: string;
-        /** fullBackground only: avatar overlay horizontal offset (CSS length, e.g. `1rem` or `24px`). */
+        /** Full-bleed heroes only: avatar overlay horizontal offset (CSS length, e.g. `1rem` or `24px`). */
         landingAvatarLeft?: string;
-        /** fullBackground only: avatar offset from section bottom (CSS length, often negative e.g. `-48px`). */
+        /** Full-bleed heroes only: avatar offset from section bottom (CSS length, often negative e.g. `-48px`). */
         landingAvatarBottom?: string;
     }[];
     heroTagline?: string;       // Short tagline under display name

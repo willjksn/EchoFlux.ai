@@ -5,14 +5,19 @@
 
 export type NormalizedHeroItem = {
   url: string;
-  size?: "small" | "medium" | "large" | "fullBackground";
+  size?: "small" | "medium" | "large" | "fullBackground" | "fullBackgroundPortrait";
   backgroundPosition?: string;
   objectPosition?: string;
   landingAvatarLeft?: string;
   landingAvatarBottom?: string;
 };
 
-const SIZE_SET = new Set(["small", "medium", "large", "fullBackground"]);
+const SIZE_SET = new Set(["small", "medium", "large", "fullBackground", "fullBackgroundPortrait"]);
+
+/** Hero slots that use the image as a full-bleed section background (banner vs tall portrait). */
+export function isFullBleedHeroMediaSize(size: string | undefined): boolean {
+  return size === "fullBackground" || size === "fullBackgroundPortrait";
+}
 
 export function normalizeHeroMediaForStorefront(
   heroMediaRaw: unknown,

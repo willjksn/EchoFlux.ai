@@ -61,7 +61,7 @@ import {
 import { resolveStoreCopy } from "../src/lib/storefrontStoreCopy";
 import { resolvePricingLandingCopy } from "../src/lib/pricingLandingCopy";
 import { resolveTipFooterEmoji, resolveTipSectionCopy } from "../src/lib/tipSectionCopy";
-import { normalizeHeroMediaForStorefront } from "../src/lib/storefrontHeroNormalize";
+import { normalizeHeroMediaForStorefront, isFullBleedHeroMediaSize } from "../src/lib/storefrontHeroNormalize";
 import { WitmeHeaderLogo } from "./WitmeHeaderLogo";
 import { renderTextWithCustomEmoji, type SjHeartEmojiAccessContext } from "../src/lib/customEmoji";
 
@@ -715,20 +715,24 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
     [config.heroMedia, config.heroImage, cfgHeroUrl]
   );
   const fullBgIndex = useMemo(
-    () => heroMedia.findIndex((m) => m.size === "fullBackground"),
+    () => heroMedia.findIndex((m) => isFullBleedHeroMediaSize(m.size)),
     [heroMedia]
   );
   const fullBgItem = fullBgIndex >= 0 ? heroMedia[fullBgIndex] : undefined;
+  const isFullBgPortrait = fullBgItem?.size === "fullBackgroundPortrait";
   const isFullBgLayout = Boolean(fullBgItem);
-  const heroImages = heroMedia.filter((m) => m.size !== "fullBackground");
+  const heroImages = heroMedia.filter((m) => !isFullBleedHeroMediaSize(m.size));
   const heroSlots = useMemo(
-    () => heroMedia.map((m, idx) => ({ m, idx })).filter((x) => x.m.size !== "fullBackground"),
+    () => heroMedia.map((m, idx) => ({ m, idx })).filter((x) => !isFullBleedHeroMediaSize(x.m.size)),
     [heroMedia]
   );
   const framingInteractionsEnabled =
     previewMode === "landing" &&
     previewFraming != null &&
     Boolean(onHeroMediaItemPatch || onAvatarObjectPositionChange);
+  /** Inner hero content stacks above the dim overlay (portrait); lift overlay when panning so it receives drags. */
+  const heroBgPanActive =
+    framingInteractionsEnabled && framingTool === "panBg" && Boolean(fullBgItem);
 
   const heroImage =
     heroImages[0]?.url ??
@@ -776,6 +780,32 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
     if (n === 4) return `${base} grid-cols-2 max-w-[420px] mx-auto w-full`;
     return `${base} grid-cols-3 max-w-[480px] mx-auto w-full`;
   }, [heroSlots.length, isHeroSplit]);
+  /** Full-bleed hero: mirror hero layout for text + avatar (layout was ignored before when background image mode was on). */
+  const fullBleedAvatarFrameStyle = useMemo((): React.CSSProperties => {
+    if (!fullBgItem) return {};
+    const bottom =
+      fullBgItem.landingAvatarBottom ?? (isFullBgPortrait ? "2.25rem" : "-3rem");
+    const customLeft = fullBgItem.landingAvatarLeft;
+    if (typeof customLeft === "string" && customLeft.trim() !== "") {
+      return { left: customLeft, right: "auto", bottom, transform: undefined };
+    }
+    if (heroLayoutEffective === "centered") {
+      return { left: "50%", right: "auto", bottom, transform: "translateX(-50%)" };
+    }
+    if (heroLayoutEffective === "splitRight") {
+      return {
+        left: "auto",
+        right: live ? "max(0.75rem, calc(50% - 360px + 0.75rem))" : "1rem",
+        bottom,
+      };
+    }
+    return {
+      left: live ? "max(0.75rem, calc(50% - 360px + 0.75rem))" : "1rem",
+      right: "auto",
+      bottom,
+    };
+  }, [fullBgItem, heroLayoutEffective, isFullBgPortrait, live]);
+
   const textStyles = config.textStyles ?? {};
   
   const landingContent = { ...DEFAULT_LANDING_CONTENT, ...config.landingContent };
@@ -1086,24 +1116,38 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
             </div>
           </header>
 
-          {/* Hero Section — fullBackground = avatar-only overlay on left; else auto-layout grid for 1–6 images */}
+          {/* Hero Section — full-bleed sizes = avatar overlay + text; portrait uses a tall Fanfix-style panel */}
           <section
             ref={heroSectionRef}
-            className={`px-4 py-6 relative overflow-visible rounded-b-lg ${fullBgItem ? "pb-0" : ""}`}
+            className={`px-4 py-6 relative overflow-visible rounded-b-lg ${fullBgItem ? `pb-0 ${isFullBgPortrait ? "flex flex-col min-h-0" : ""}` : ""}`}
             style={
               fullBgItem
                 ? {
                     backgroundImage: `url(${fullBgItem.url})`,
                     backgroundSize: "cover",
                     backgroundPosition: fullBgItem.backgroundPosition ?? "center",
-                    minHeight: "160px",
+                    minHeight: isFullBgPortrait
+                      ? live
+                        ? "clamp(420px, min(96vw, 88vh), 760px)"
+                        : "clamp(260px, 60vmin, 460px)"
+                      : "160px",
                   }
                 : undefined
             }
           >
             {fullBgItem && (
               <div
-                className={`absolute inset-0 rounded-b-lg ${framingTool === "panBg" ? "bg-black/40 cursor-grab active:cursor-grabbing touch-none" : "bg-black/40 pointer-events-none"}`}
+                className={`absolute inset-0 rounded-b-lg ${
+                  heroBgPanActive ? "z-[30]" : "z-[1]"
+                } ${
+                  isFullBgPortrait
+                    ? heroBgPanActive
+                      ? "bg-gradient-to-t from-black/80 via-black/45 to-black/15 cursor-grab active:cursor-grabbing touch-none"
+                      : "bg-gradient-to-t from-black/80 via-black/45 to-black/15 pointer-events-none"
+                    : heroBgPanActive
+                      ? "bg-black/40 cursor-grab active:cursor-grabbing touch-none"
+                      : "bg-black/40 pointer-events-none"
+                }`}
                 aria-hidden
                 onPointerDown={handleBgPointerDown}
                 onPointerMove={handleBgPointerMove}
@@ -1111,7 +1155,15 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
                 onPointerCancel={handleBgPointerUp}
               />
             )}
-            <div className={`${landingMainMaxClass} min-w-0`}>
+            <div
+              className={[
+                `${landingMainMaxClass} min-w-0`,
+                fullBgItem && isFullBgPortrait ? "relative z-20 flex flex-col flex-1 justify-end min-h-0" : false,
+                heroBgPanActive ? "pointer-events-none" : false,
+              ]
+                .filter(Boolean)
+                .join(" ")}
+            >
             {fullBgItem && (
               <div
                 className={`absolute z-10 w-24 h-24 rounded-full overflow-hidden border-4 border-white shadow-lg bg-gray-100 ${
@@ -1120,12 +1172,7 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
                     : ""
                 }`}
                 style={{
-                  left:
-                    fullBgItem.landingAvatarLeft ??
-                    (live
-                      ? "max(0.75rem, calc(50% - 360px + 0.75rem))"
-                      : "1rem"),
-                  bottom: fullBgItem.landingAvatarBottom ?? "-3rem",
+                  ...fullBleedAvatarFrameStyle,
                   ...(framingTool === "panAvatar" && framingInteractionsEnabled
                     ? { boxShadow: `0 0 0 3px ${primary}99, 0 8px 24px rgba(0,0,0,0.2)` }
                     : {}),
@@ -1349,8 +1396,24 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
               </div>
             )}
             {fullBgItem && (
-              <div className={`flex gap-3 pt-14 ${live ? "pl-36" : "pl-28"} pr-4 pb-14`}>
-                <div className="flex-1 min-w-0">
+              <div
+                className={
+                  heroLayoutEffective === "centered"
+                    ? `w-full flex flex-col items-center text-center px-4 ${isFullBgPortrait ? "pt-8 pb-10 md:pb-12" : "pt-14 pb-14"}`
+                    : heroLayoutEffective === "splitRight"
+                      ? `flex gap-3 w-full ${isFullBgPortrait ? "pt-8 pb-10 md:pb-12" : "pt-14"} ${live ? "pr-32 pl-4" : "pr-24 pl-4"} ${isFullBgPortrait ? "" : "pb-14"}`
+                      : `flex gap-3 w-full ${isFullBgPortrait ? "pt-8 pb-10 md:pb-12" : "pt-14"} ${live ? "pl-36" : "pl-28"} pr-4 ${isFullBgPortrait ? "" : "pb-14"}`
+                }
+              >
+                <div
+                  className={
+                    heroLayoutEffective === "centered"
+                      ? "w-full max-w-xl flex flex-col items-center text-center"
+                      : heroLayoutEffective === "splitRight"
+                        ? "flex-1 min-w-0 text-right"
+                        : "flex-1 min-w-0"
+                  }
+                >
                   {showDisplayNameOnLanding && (
                     <h1 className="font-bold mb-0.5" style={getTextStyleCSS(textStyles.displayName, { fontSize: "1.125rem", color: landingPageText, ...heroTextBase })}>{displayName}</h1>
                   )}
@@ -1367,7 +1430,15 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
                     <p className="text-[10px] mb-1" style={getTextStyleCSS(textStyles.heroSubline2, { color: landingPageMuted, ...heroTextBase })}>{renderTextWithCustomEmoji(heroSubline2, sjHeartEmojiCtx)}</p>
                   )}
                   {socialLinks.length > 0 && (
-                    <div className="flex gap-2 mt-1">
+                    <div
+                      className={`flex gap-2 mt-1 ${
+                        heroLayoutEffective === "centered"
+                          ? "justify-center"
+                          : heroLayoutEffective === "splitRight"
+                            ? "justify-end"
+                            : ""
+                      }`}
+                    >
                       {socialLinks.map((link) => (
                         <a key={link.key} href={link.url} target="_blank" rel="noopener noreferrer" className="w-6 h-6 rounded flex items-center justify-center" style={getSocialIconStyle(link.key, primary)}>{link.icon}</a>
                       ))}
