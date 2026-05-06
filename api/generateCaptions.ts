@@ -416,18 +416,29 @@ async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
   const sanitizedPromptText = promptText ? sanitizeForAI(promptText, 2000) : undefined;
   const sanitizedTone = tone ? sanitizeForAI(tone, 100) : undefined;
   const sanitizedGoal = goal ? sanitizeForAI(goal, 100) : undefined;
-  let personalityForPrompt =
+
+  const personalityFromBody =
     creatorPersonality && String(creatorPersonality).trim()
       ? sanitizeForAI(String(creatorPersonality).trim(), 1000)
       : undefined;
-  if (usePersonality && !personalityForPrompt?.trim() && firestoreUserData) {
+  let personalityFromFirestore: string | undefined;
+  if (firestoreUserData) {
     const fromRoot =
       typeof firestoreUserData.creatorPersonality === "string" ? firestoreUserData.creatorPersonality.trim() : "";
     const settingsBlock = (firestoreUserData.settings || {}) as { creatorPersonality?: string };
     const fromSettings =
       typeof settingsBlock.creatorPersonality === "string" ? settingsBlock.creatorPersonality.trim() : "";
     const raw = fromRoot || fromSettings;
-    if (raw) personalityForPrompt = sanitizeForAI(raw, 1000);
+    if (raw) personalityFromFirestore = sanitizeForAI(raw, 1000);
+  }
+  /** When ON: prefer Firestore (authoritative) over client body so empty/stale React state cannot drop personality. When OFF: omit entirely. */
+  let personalityForPrompt: string | undefined;
+  if (usePersonality) {
+    const fsText = personalityFromFirestore?.trim();
+    const bodyText = personalityFromBody?.trim();
+    personalityForPrompt = (fsText ? personalityFromFirestore : undefined) ?? (bodyText ? personalityFromBody : undefined);
+  } else {
+    personalityForPrompt = undefined;
   }
   /** Pro & Elite: when true, saved Creator Personality strongly guides this run (Personality Override). */
   const usePersonalityOverrideBool = Boolean(usePersonality && personalityForPrompt?.trim());
@@ -440,7 +451,7 @@ async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
     ? avoidCaptions
         .map((c) => (typeof c === "string" ? sanitizeForAI(c.trim(), 500) : ""))
         .filter(Boolean)
-        .slice(-8)
+        .slice(-16)
     : [];
 
   const normalizedPlatformsEarly = Array.isArray(platforms)
@@ -814,6 +825,14 @@ MEDIA + CAPTION STRATEGY (general / non-explicit):
 `
       : "";
 
+  const fanHubStockPhraseBan = `
+FAN HUB — NO STOCK INFLUENCER / SLANG CLICHÉS (unless the PERSONALITY OVERRIDE text below explicitly uses that exact phrase):
+- Do NOT use: "spill the tea", "spilling the tea", "say less", "it's giving", "main character energy", "understood the assignment", "rent free", "living rent free", "low-key obsessed", "obsessed with this", "tell me you're … without telling me", "this is your sign", "that's it, that's the post", "don't mind me just …", "felt cute might delete", "IYKYK", "no thoughts just vibes", "chef's kiss", "ate and left no crumbs", "slay", "periodt", "bestie", "the way I …", "not me …", "POV:" (as a hackneyed opener).
+- Avoid recycled TikTok/Twitter cadence; write like this creator on their member page, not a generic viral caption bot.
+`;
+
+  const fanHubAntiClicheBlock = isFanHubCaption ? fanHubStockPhraseBan : "";
+
   const fanHubVarietyBlock =
     isFanHubCaption && hasRandomSeed
       ? `
@@ -833,8 +852,9 @@ NEVER REPEAT THESE PRIOR CAPTIONS FOR THIS SAME MEDIA:
 ${sanitizedAvoidCaptions.map((c, i) => `${i + 1}. "${c}"`).join("\n")}
 
 HARD REQUIREMENT:
-- The new caption must be meaningfully different from every prior caption above.
-- Do not reuse the same opening words, core sentence, CTA, emoji pattern, or emotional angle.
+- The new caption must be meaningfully different from every prior caption above (not a light rewrite — different hook and angle).
+- Do not reuse the same first line, same opening 6+ words, same core metaphor, same CTA, same emoji pattern, or same emotional angle.
+- Avoid near-duplicates: if a prior caption mentions a specific joke or comparison, pick a different comparison entirely.
 - If you cannot find a new angle, re-analyze the media and choose a different visible detail, mood, or creator POV.
 `
       : "";
@@ -860,7 +880,8 @@ NATURAL SOCIAL CAPTION STYLE (Instagram / TikTok / public socials):
   const fanHubPersonalityBlock =
     isFanHubCaption && usePersonalityOverrideBool
       ? `
-FAN HUB / MY PAGE WITH PERSONALITY ENABLED:
+FAN HUB / MY PAGE WITH PERSONALITY OVERRIDE ENABLED:
+- The PERSONALITY OVERRIDE block below is PRIMARY for vocabulary, cadence, humor, flirt level, and attitude — do not layer generic influencer slang on top of it.
 - The creator personality is the main voice, but the uploaded image/video is REQUIRED context.
 - Blend the personality with at least one concrete visual detail from the media (action, setting, mood, outfit, lighting, expression, object, movement, or vibe).
 - Do not write a caption based only on generic personality language; it must feel like it belongs to this exact image/video.
@@ -887,6 +908,7 @@ FAN HUB / MY PAGE WITHOUT PERSONALITY OVERRIDE:
   // For carousels, we generate the same number of variants, but each must summarize all media.
   const prompt = `
 ${strategicMediaCaptionHint}
+${fanHubAntiClicheBlock}
 ${fanHubVarietyBlock}
 ${fanHubAvoidRepeatBlock}
 ${naturalSocialCaptionBlock}
@@ -1330,7 +1352,7 @@ ${includeAiHashtags
         contents: [{ role: "user", parts }],
         generationConfig: {
           responseMimeType: "application/json",
-          temperature: isFanHubCaption && hasRandomSeed ? 0.95 : 0.7,
+          temperature: isFanHubCaption ? (hasRandomSeed ? 0.96 : 0.9) : 0.7,
           topP: isFanHubCaption && hasRandomSeed ? 0.98 : 0.9,
           topK: 40,
         },

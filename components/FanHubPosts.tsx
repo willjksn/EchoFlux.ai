@@ -506,7 +506,7 @@ function readStoredFanHubCaptionHistory(mediaFingerprint: string): string[] {
     const parsed = raw ? (JSON.parse(raw) as Record<string, unknown>) : {};
     const captions = parsed[mediaFingerprint];
     return Array.isArray(captions)
-      ? captions.filter((c): c is string => typeof c === "string" && c.trim().length > 0).slice(-8)
+      ? captions.filter((c): c is string => typeof c === "string" && c.trim().length > 0).slice(-16)
       : [];
   } catch {
     return [];
@@ -520,7 +520,7 @@ function rememberStoredFanHubCaption(mediaFingerprint: string, caption: string) 
     const parsed = raw ? (JSON.parse(raw) as Record<string, string[]>) : {};
     const merged = [...(Array.isArray(parsed[mediaFingerprint]) ? parsed[mediaFingerprint] : []), caption]
       .filter((c): c is string => typeof c === "string" && c.trim().length > 0)
-      .slice(-12);
+      .slice(-16);
     const nextEntries = Object.entries({ ...parsed, [mediaFingerprint]: merged }).slice(-80);
     window.localStorage.setItem(FAN_HUB_CAPTION_HISTORY_STORAGE_KEY, JSON.stringify(Object.fromEntries(nextEntries)));
   } catch {
@@ -1352,7 +1352,7 @@ Write 2-4 sentences that are engaging and on-topic.`;
           ...readStoredFanHubCaptionHistory(mediaFingerprint),
           ...(generatedCaptionHistoryRef.current.get(mediaFingerprint) ?? []),
         ]),
-      ).slice(-8);
+      ).slice(-16);
 
       const visualForCaption = media.filter((m) => m.type === "image" || m.type === "video");
       const singleVideoOnly =
@@ -1491,7 +1491,7 @@ Write 2-4 sentences that are engaging and on-topic.`;
         // Always replace the caption, don't append
         setCaption(generatedCaption);
         const previous = generatedCaptionHistoryRef.current.get(mediaFingerprint) ?? [];
-        generatedCaptionHistoryRef.current.set(mediaFingerprint, [...previous, generatedCaption].slice(-12));
+        generatedCaptionHistoryRef.current.set(mediaFingerprint, [...previous, generatedCaption].slice(-16));
         rememberStoredFanHubCaption(mediaFingerprint, generatedCaption);
         showToast?.("Caption generated!", "success");
       } else {
@@ -2598,49 +2598,51 @@ Write 2-4 sentences that are engaging and on-topic.`;
                     )}
                   </div>
                 )}
+                {media.some((m) => m.type === "image" || m.type === "video") ? (
+                  <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-700 space-y-3">
+                    <FanHubSwitchRow
+                      labelId="fanhub-media-blur-enabled-label"
+                      label="Blur image / video"
+                      checked={mediaPreviewBlurEnabled}
+                      onCheckedChange={(next) => {
+                        setMediaPreviewBlurEnabled(next);
+                        if (next && mediaPreviewBlurPx <= 0) {
+                          setMediaPreviewBlurPx(Math.min(8, MEDIA_PREVIEW_BLUR_MAX_PX));
+                        }
+                      }}
+                    />
+                    {mediaPreviewBlurEnabled && (
+                      <>
+                        <div>
+                          <label htmlFor="fanhub-media-blur-range" className="text-xs text-gray-600 dark:text-gray-400 block mb-1">
+                            Strength ({mediaPreviewBlurPx}px)
+                          </label>
+                          <input
+                            id="fanhub-media-blur-range"
+                            type="range"
+                            min={1}
+                            max={MEDIA_PREVIEW_BLUR_MAX_PX}
+                            step={1}
+                            value={Math.min(MEDIA_PREVIEW_BLUR_MAX_PX, Math.max(1, mediaPreviewBlurPx))}
+                            onChange={(e) => setMediaPreviewBlurPx(Number(e.target.value))}
+                            className="w-full max-w-md accent-primary-500"
+                            aria-valuetext={`${mediaPreviewBlurPx} pixels blur`}
+                          />
+                        </div>
+                        <FanHubComposerBlurPreview preview={blurPreviewMediaSource} blurPx={mediaPreviewBlurPx} variant="neutral" />
+                        <p className="text-[11px] text-gray-500 dark:text-gray-400 m-0 leading-snug">
+                          Fans see this blur until you turn it off and save again.
+                          With <strong>Pay to unlock</strong>, blur follows the same preview rules as before (clears after purchase).
+                        </p>
+                      </>
+                    )}
+                  </div>
+                ) : media.length > 0 ? (
+                  <p className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-700 text-[11px] text-gray-500 dark:text-gray-400 m-0">
+                    Add an image or video to enable blur (audio-only attachments cannot be blurred).
+                  </p>
+                ) : null}
               </div>
-
-              {/* Optional blur on images/videos (does not require pay-to-unlock) */}
-              {media.some((m) => m.type === "image" || m.type === "video") && (
-                <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700 space-y-3">
-                  <FanHubSwitchRow
-                    labelId="fanhub-media-blur-enabled-label"
-                    label="Blur image / video"
-                    checked={mediaPreviewBlurEnabled}
-                    onCheckedChange={(next) => {
-                      setMediaPreviewBlurEnabled(next);
-                      if (next && mediaPreviewBlurPx <= 0) {
-                        setMediaPreviewBlurPx(Math.min(8, MEDIA_PREVIEW_BLUR_MAX_PX));
-                      }
-                    }}
-                  />
-                  {mediaPreviewBlurEnabled && (
-                    <>
-                      <div>
-                        <label htmlFor="fanhub-media-blur-range" className="text-xs text-gray-600 dark:text-gray-400 block mb-1">
-                          Strength ({mediaPreviewBlurPx}px)
-                        </label>
-                        <input
-                          id="fanhub-media-blur-range"
-                          type="range"
-                          min={1}
-                          max={MEDIA_PREVIEW_BLUR_MAX_PX}
-                          step={1}
-                          value={Math.min(MEDIA_PREVIEW_BLUR_MAX_PX, Math.max(1, mediaPreviewBlurPx))}
-                          onChange={(e) => setMediaPreviewBlurPx(Number(e.target.value))}
-                          className="w-full max-w-md accent-primary-500"
-                          aria-valuetext={`${mediaPreviewBlurPx} pixels blur`}
-                        />
-                      </div>
-                      <FanHubComposerBlurPreview preview={blurPreviewMediaSource} blurPx={mediaPreviewBlurPx} variant="neutral" />
-                      <p className="text-[11px] text-gray-500 dark:text-gray-400 m-0 leading-snug">
-                        Fans see this blur until you turn it off and save again.
-                        With <strong>Pay to unlock</strong>, blur follows the same preview rules as before (clears after purchase).
-                      </p>
-                    </>
-                  )}
-                </div>
-              )}
 
               {/* Live stream — Elite; Pro sees upgrade + non-interactive control */}
               {creatorCanLiveStream || liveStreamPromoEnabled ? (

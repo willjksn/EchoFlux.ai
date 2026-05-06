@@ -26,6 +26,7 @@ import {
 import { EmojiButton } from "./EmojiPicker";
 import { canUseSjHeartEmoji } from "../src/lib/customEmoji";
 import { useCreatorHandle } from "../src/hooks/useCreatorHandle";
+import { renderTitleWithEmojiSpans } from "../src/lib/renderTitleWithEmojiSpans";
 
 function formatPrice(cents: number | null | undefined): string {
   const n = Number(cents);
@@ -999,7 +1000,9 @@ export const TreatsStore: React.FC = () => {
                       >
                         {cardCategory ? <p className="treats-stormij-card-type">{cardCategory}</p> : null}
                         <div className="treats-stormij-card-row1">
-                          <h3 className="treats-stormij-card-title">{p.title}</h3>
+                          <h3 className="treats-stormij-card-title">
+                            {renderTitleWithEmojiSpans(p.title, "treats-stormij-card-title-emoji")}
+                          </h3>
                           <div className="treats-stormij-card-price-block">
                             <span className="treats-stormij-card-price">{formatPrice(p.priceCents)}</span>
                             <span className="treats-stormij-card-heart" aria-hidden>

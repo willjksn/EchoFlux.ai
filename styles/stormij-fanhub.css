@@ -4575,6 +4575,15 @@ button.treat-card:hover:not(:disabled) .treat-card-cta {
   color: #f3f4f6;
 }
 
+/* Emoji-only spans (see renderTitleWithEmojiSpans); parent keeps Cormorant + italic + tracking */
+.treats-stormij-card-title .treats-stormij-card-title-emoji {
+  font-family: "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", emoji;
+  font-style: normal;
+  letter-spacing: normal;
+  font-synthesis: none;
+  display: inline;
+}
+
 .treats-stormij-card-price-block {
   display: flex;
   align-items: flex-start;
