@@ -5386,6 +5386,7 @@ button.treat-card:hover:not(:disabled) .treat-card-cta {
   font-family: "Playfair Display", Georgia, serif;
   font-size: 1.25rem;
   font-weight: 600;
+  font-style: normal;
   color: #1f2937;
   margin: 0 0 0.25rem 0;
 }
@@ -5393,11 +5394,17 @@ button.treat-card:hover:not(:disabled) .treat-card-cta {
   color: #f3f4f6;
 }
 
+.stormij-theme .treat-manage-card-title {
+  font-style: normal;
+}
+
 /* Emoji graphemes (renderTitleWithEmojiSpans); keeps Playfair for text, native color emoji for symbols */
 .treat-manage-card-title .treat-manage-card-title-emoji {
   font-family: "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", emoji;
   font-style: normal;
   font-weight: normal;
+  font-variant: normal;
+  font-variation-settings: normal;
   letter-spacing: normal;
   font-synthesis: none;
   display: inline;

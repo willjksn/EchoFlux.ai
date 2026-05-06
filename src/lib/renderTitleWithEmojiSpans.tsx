@@ -1,16 +1,10 @@
 import React from "react";
 
-function isEmojiGrapheme(g: string): boolean {
-  const s = g.normalize("NFC");
-  if (!s) return false;
-  return /\p{Extended_Pictographic}/u.test(s) || /\p{Regional_Indicator}/u.test(s);
-}
-
-/** When `Intl.Segmenter` is missing, still wrap common emoji clusters for emoji-capable font CSS. */
-function renderTitleWithEmojiSpansRegexFallback(
-  title: string,
-  emojiSpanClassName: string
-): React.ReactNode {
+/**
+ * Split title into text vs emoji runs using Unicode regex so emoji spans always get
+ * emoji-capable fonts (Segmenter-only paths omitted — avoids prod inconsistencies).
+ */
+function splitTitleIntoTextAndEmojiSpans(title: string, emojiSpanClassName: string): React.ReactNode {
   const pattern =
     /\p{Extended_Pictographic}(?:\uFE0F|\uFE0E)?(?:\u200d\p{Extended_Pictographic}(?:\uFE0F|\uFE0E)?)*|\p{Regional_Indicator}\p{Regional_Indicator}/gu;
   const out: React.ReactNode[] = [];
@@ -45,37 +39,5 @@ export function renderTitleWithEmojiSpans(
   emojiSpanClassName: string
 ): React.ReactNode {
   if (!title) return null;
-  if (typeof Intl === "undefined" || !("Segmenter" in Intl)) {
-    return renderTitleWithEmojiSpansRegexFallback(title, emojiSpanClassName);
-  }
-
-  const segmenter = new Intl.Segmenter(undefined, { granularity: "grapheme" });
-  const out: React.ReactNode[] = [];
-  let textBuf = "";
-  let emojiKey = 0;
-
-  const flushText = () => {
-    if (textBuf.length > 0) {
-      out.push(textBuf);
-      textBuf = "";
-    }
-  };
-
-  for (const { segment } of segmenter.segment(title)) {
-    if (isEmojiGrapheme(segment)) {
-      flushText();
-      out.push(
-        <span key={`emoji-${emojiKey++}`} className={emojiSpanClassName}>
-          {segment}
-        </span>
-      );
-    } else {
-      textBuf += segment;
-    }
-  }
-  flushText();
-
-  if (out.length === 0) return null;
-  if (out.length === 1) return out[0];
-  return <>{out}</>;
+  return splitTitleIntoTextAndEmojiSpans(title, emojiSpanClassName);
 }
