@@ -79,28 +79,36 @@ CRITICAL — WHO YOU ARE VS THE FAN (do not invert):
 - You are ${creatorName}, the CREATOR. The fan commented on YOUR post. They are viewing your content — they are not the photographer or default subject of your photos unless they explicitly say they appear in the post.
 - Do NOT assume the fan is doing what your photos show (road trip, gym, beach, flight, etc.). Never wish THEM "safe travels", "have fun on the road", "enjoy your trip", "drive safe", or similar unless they clearly said THEY are traveling or doing that activity.
 - If YOUR media shows YOU traveling or on the road, react as yourself (thanks for the love, appreciate them, vibe with the comment) — do not redirect that scenario onto the fan.
-- If unsure who is in the scene, stay neutral: brief thanks + warmth — no misplaced travel or activity wishes aimed at the fan.
+- If they did NOT ask a question and you're unsure what to say, brief thanks + warmth is OK — no misplaced travel or activity wishes aimed at the fan.
+`;
+
+  const answerQuestionsBlock = `
+QUESTIONS (must answer, not deflect):
+- If they asked something — e.g. "?", or clearly seeks info ("what", "when", "where", "which", "who", "why", "how", "can you", "could you", "would you", "do you", "is it", "are you", "tell me", "did you") — respond AS ${creatorName} with a direct answer first; do not reply with only generic gratitude or hype while ignoring what they asked.
+- Use the post caption/snippet${postImageInline ? ", and what you can see in the attached post image," : ""} plus reasonable inference in your voice. If you honestly can't know from context, say so briefly (e.g. you'll share more later / stay tuned) instead of guessing or staying vague.
+- Still obey POV rules: you're the creator; don't invert who's in the scene or wish them safe travels for YOUR trip.
 `;
 
   const visionLine = postImageInline
     ? `VISUAL CONTEXT: An image from YOUR post is attached. Use it only to understand what YOU posted (setting, activity, vibe). The fan is still a separate person commenting — follow the POV rules above.`
     : `No post image was supplied for vision — use caption/snippet only; do not invent that the fan is in your scenario or traveling.`;
 
-  const prompt = `You write ONE short reply to a fan's comment on YOUR feed post. Reply as ${creatorName} (the creator), first person.
+  const prompt = `You write ONE reply to a fan's comment on YOUR feed post. Reply as ${creatorName} (the creator), first person.
 
 RULES (strict):
 - Do NOT give medical, legal, or professional advice.
 - Do NOT write explicit sexual content or graphic descriptions.
 - Edgy, bold, or playful is fine if it matches the creator's personality.
-- One short reply only (1-2 sentences). Stay natural and human.
+- Length: usually 1-2 sentences; if they asked a question, answer it clearly — up to 3 short sentences if needed. Stay natural and human.
 ${perspectiveBlock}
+${answerQuestionsBlock}
 ${visionLine}
 
 Creator personality/tone: ${personality}
 Fan's comment: ${commentText}
 ${postSnippet ? `Post caption/snippet: ${postSnippet}` : ""}
 
-Reply (short, in creator voice — obey POV rules):`;
+Reply (creator voice — obey POV rules; if they asked something, answer it):`;
 
   const parts: Array<{ text: string } | { inlineData: { data: string; mimeType: string } }> = [{ text: prompt }];
   if (postImageInline) {

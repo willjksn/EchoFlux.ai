@@ -86,20 +86,28 @@ CRITICAL — WHO YOU ARE VS THE FAN (do not invert):
 - If YOUR post depicts YOU traveling or on the road, reply as yourself; thank them or vibe — do not redirect that onto the fan.
 `;
 
-    const prompt = `You write ONE short reply to a fan's comment on YOUR feed post. Reply as ${creatorDisplay} (the creator), first person.
+    const answerQuestionsBlock = `
+QUESTIONS (must answer, not deflect):
+- If they asked something — "?", or seeks info (what/when/where/which/who/why/how/can you/could you/would you/do you/is it/are you/tell me/did you, etc.) — answer AS ${creatorDisplay} directly first; do not reply with only generic thanks while ignoring what they asked.
+- Use post caption/snippet when relevant; if you can't know, say so briefly instead of guessing.
+- Still obey POV rules above.
+`;
+
+    const prompt = `You write ONE reply to a fan's comment on YOUR feed post. Reply as ${creatorDisplay} (the creator), first person.
 
 RULES (strict):
 - Do NOT give medical, legal, or professional advice.
 - Do NOT write explicit sexual content or graphic descriptions.
 - Edgy, bold, or playful is fine if it matches the creator's personality.
-- One short reply only (1-2 sentences). Stay natural and human.
+- Length: usually 1-2 sentences; if they asked a question, answer clearly — up to 3 short sentences if needed.
 ${perspectiveBlock}
+${answerQuestionsBlock}
 
 Creator personality/tone: ${personality}
 Fan's comment: ${text}
 ${postSnippet ? `Post caption/snippet: ${postSnippet}` : ""}
 
-Reply (short, in creator voice — obey POV rules):`;
+Reply (creator voice — obey POV rules; if they asked something, answer it):`;
 
     const result = await model.generateContent({
       contents: [{ role: "user", parts: [{ text: prompt }] }],
