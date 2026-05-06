@@ -135,7 +135,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           const reservedUsernameRef = db.collection("usernames").doc(handle);
           const reservedUsernameSnap = await tx.get(reservedUsernameRef);
           if (reservedUsernameSnap.exists) {
-            throw new Error("HANDLE_RESERVED_BY_USERNAME");
+            const owner =
+              typeof (reservedUsernameSnap.data() as { uid?: unknown } | undefined)?.uid === "string"
+                ? String((reservedUsernameSnap.data() as { uid: string }).uid).trim()
+                : "";
+            if (!owner || owner !== creatorId) {
+              throw new Error("HANDLE_RESERVED_BY_USERNAME");
+            }
           }
         }
 
@@ -153,7 +159,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const reservedUsernameRef = db.collection("usernames").doc(handle);
         const reservedUsernameSnap = await tx.get(reservedUsernameRef);
         if (reservedUsernameSnap.exists) {
-          throw new Error("HANDLE_RESERVED_BY_USERNAME");
+          const owner =
+            typeof (reservedUsernameSnap.data() as { uid?: unknown } | undefined)?.uid === "string"
+              ? String((reservedUsernameSnap.data() as { uid: string }).uid).trim()
+              : "";
+          if (!owner || owner !== creatorId) {
+            throw new Error("HANDLE_RESERVED_BY_USERNAME");
+          }
         }
         const handleRef = db.collection("creatorHandles").doc(handle);
         const handleSnap = await tx.get(handleRef);

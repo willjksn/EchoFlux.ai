@@ -49,12 +49,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     // 1b) Global namespace lock: member usernames reserve creator handles too.
+    // Same Firebase user may hold usernames/{handle} as their fan username while switching creator handles.
     const usernameDoc = await db.collection("usernames").doc(cleanHandle).get();
     if (usernameDoc.exists) {
-      return res.status(200).json({
-        available: false,
-        message: "This handle is already taken",
-      });
+      const ownerUid =
+        typeof (usernameDoc.data() as { uid?: unknown } | undefined)?.uid === "string"
+          ? String((usernameDoc.data() as { uid: string }).uid).trim()
+          : "";
+      if (!excludeCreatorId || !ownerUid || ownerUid !== excludeCreatorId) {
+        return res.status(200).json({
+          available: false,
+          message: "This handle is already taken",
+        });
+      }
+      // Self-owned username doc: not a conflict for this creator reclaiming this handle string.
     }
 
     // 2) Fallback: creators where handle == cleanHandle

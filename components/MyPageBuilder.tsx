@@ -853,6 +853,8 @@ export const MyPageBuilder: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [handleSaving, setHandleSaving] = useState(false);
+  /** Ignore stale async results from handle availability checks (fast typing / saved.handle updates). */
+  const handleAvailReqSeqRef = useRef(0);
   const [avatarUploading, setAvatarUploading] = useState(false);
   const [previewMode, setPreviewMode] = useState<"landing" | "member">("landing");
   const [saveBtnHover, setSaveBtnHover] = useState(false);
@@ -1239,6 +1241,7 @@ export const MyPageBuilder: React.FC = () => {
         setHandleCheckMessage("Your current handle");
         return;
       }
+      const seqAtStart = ++handleAvailReqSeqRef.current;
       setHandleCheckStatus("checking");
       setHandleCheckMessage("");
       try {
@@ -1251,6 +1254,7 @@ export const MyPageBuilder: React.FC = () => {
         } catch {
           data = {};
         }
+        if (seqAtStart !== handleAvailReqSeqRef.current) return;
         if (res.ok && data.available === true) {
           setHandleCheckStatus("available");
           setHandleCheckMessage("Available");
@@ -1265,6 +1269,7 @@ export const MyPageBuilder: React.FC = () => {
         if (!res.ok && db) {
           try {
             const snap = await getDoc(doc(db, "creatorHandles", clean));
+            if (seqAtStart !== handleAvailReqSeqRef.current) return;
             if (!snap.exists()) {
               setHandleCheckStatus("available");
               setHandleCheckMessage("Available (local check)");
@@ -1280,6 +1285,7 @@ export const MyPageBuilder: React.FC = () => {
             setHandleCheckMessage("This handle is already taken");
             return;
           } catch {
+            if (seqAtStart !== handleAvailReqSeqRef.current) return;
             setHandleCheckStatus("idle");
             setHandleCheckMessage(
               res.status === 404
@@ -1289,9 +1295,11 @@ export const MyPageBuilder: React.FC = () => {
             return;
           }
         }
+        if (seqAtStart !== handleAvailReqSeqRef.current) return;
         setHandleCheckStatus("idle");
         setHandleCheckMessage("Could not check availability");
       } catch {
+        if (seqAtStart !== handleAvailReqSeqRef.current) return;
         setHandleCheckStatus("idle");
         setHandleCheckMessage("Could not check availability");
       }
