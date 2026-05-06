@@ -1001,7 +1001,9 @@ export const TreatsStore: React.FC = () => {
                         {cardCategory ? <p className="treats-stormij-card-type">{cardCategory}</p> : null}
                         <div className="treats-stormij-card-row1">
                           <h3 className="treats-stormij-card-title">
-                            {renderTitleWithEmojiSpans(p.title, "treats-stormij-card-title-emoji")}
+                            {renderTitleWithEmojiSpans(p.title, "treats-stormij-card-title-emoji", {
+                              textClassName: "treats-stormij-card-title-text",
+                            })}
                           </h3>
                           <div className="treats-stormij-card-price-block">
                             <span className="treats-stormij-card-price">{formatPrice(p.priceCents)}</span>

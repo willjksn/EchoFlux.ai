@@ -4558,11 +4558,12 @@ button.treat-card:hover:not(:disabled) .treat-card-cta {
   margin-bottom: 0.55rem;
 }
 
+/* Title container stays upright so emoji aren’t shear-slanted by italic; italic only on .treats-stormij-card-title-text */
 .treats-stormij-card-title {
   font-family: "Cormorant Garamond", Georgia, serif;
   font-size: clamp(1.42rem, 2.4vw, 1.65rem);
   font-weight: 700;
-  font-style: italic;
+  font-style: normal;
   color: var(--stormij-text);
   margin: 0;
   line-height: 1.2;
@@ -4571,15 +4572,21 @@ button.treat-card:hover:not(:disabled) .treat-card-cta {
   letter-spacing: -0.015em;
 }
 
+.treats-stormij-card-title-text {
+  font-style: italic;
+}
+
 .dark .treats-stormij-card-title {
   color: #f3f4f6;
 }
 
-/* Emoji-only spans (see renderTitleWithEmojiSpans); parent keeps Cormorant + italic + tracking */
+/* Emoji spans (renderTitleWithEmojiSpans); outside italic text wrapper */
 .treats-stormij-card-title .treats-stormij-card-title-emoji {
   font-family: "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", emoji;
   font-style: normal;
   font-weight: normal;
+  font-variant: normal;
+  font-variation-settings: normal;
   letter-spacing: normal;
   font-synthesis: none;
   display: inline;
