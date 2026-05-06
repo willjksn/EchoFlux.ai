@@ -67,23 +67,39 @@ async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
   const personality = sanitizeForAI(String(creatorPersonality || userData.creatorPersonality || tone || "friendly"), 1500) || "friendly, authentic";
   const postSnippet = sanitizeForAI(String(postBody ?? ""), 500);
 
+  const storefrontSnap = await db.collection("creators").doc(tokenUser.uid).get();
+  const storefrontData = storefrontSnap.exists ? storefrontSnap.data() || {} : {};
+  const creatorDisplay =
+    (typeof userData.displayName === "string" && userData.displayName.trim()) ||
+    (typeof (storefrontData as { displayName?: string }).displayName === "string" &&
+      (storefrontData as { displayName: string }).displayName.trim()) ||
+    "Creator";
+
   try {
     const getModelForTask = await getModelRouter();
     const model = await getModelForTask("reply", tokenUser.uid);
 
-    const prompt = `You write a single short reply to a fan's comment on a creator's feed post. Reply as the creator, in their voice.
+    const perspectiveBlock = `
+CRITICAL — WHO YOU ARE VS THE FAN (do not invert):
+- You are ${creatorDisplay}, the CREATOR. The fan commented on YOUR post — they are not the default subject of your photos unless they say they appear in the post.
+- Do NOT assume the fan is doing what your photos show. Never wish THEM safe travels / fun on the road / enjoy your trip unless they clearly said THEY are traveling.
+- If YOUR post depicts YOU traveling or on the road, reply as yourself; thank them or vibe — do not redirect that onto the fan.
+`;
+
+    const prompt = `You write ONE short reply to a fan's comment on YOUR feed post. Reply as ${creatorDisplay} (the creator), first person.
 
 RULES (strict):
 - Do NOT give medical, legal, or professional advice.
 - Do NOT write explicit sexual content or graphic descriptions.
 - Edgy, bold, or playful is fine if it matches the creator's personality.
-- One short reply only (1-2 sentences). No greetings unless the fan asked a question. Stay natural and human.
+- One short reply only (1-2 sentences). Stay natural and human.
+${perspectiveBlock}
 
 Creator personality/tone: ${personality}
 Fan's comment: ${text}
-${postSnippet ? `Post caption/snippet (for context): ${postSnippet}` : ""}
+${postSnippet ? `Post caption/snippet: ${postSnippet}` : ""}
 
-Reply (short, in creator voice):`;
+Reply (short, in creator voice — obey POV rules):`;
 
     const result = await model.generateContent({
       contents: [{ role: "user", parts: [{ text: prompt }] }],

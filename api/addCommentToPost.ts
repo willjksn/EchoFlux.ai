@@ -11,6 +11,46 @@ import { normalizePlanForLimits } from "./_planLimits.js";
 
 type Comment = { username?: string; author?: string; text: string; hidden?: boolean; authorId?: string; isCreatorReply?: boolean };
 
+const INLINE_POST_IMAGE_MAX_BYTES = 4 * 1024 * 1024;
+
+function collectPostMediaHttpsUrls(postData: Record<string, unknown>): string[] {
+  const out: string[] = [];
+  const push = (u: unknown) => {
+    if (typeof u !== "string") return;
+    const t = u.trim();
+    if (t.startsWith("https://") || t.startsWith("http://")) out.push(t);
+  };
+  if (Array.isArray(postData.mediaUrls)) {
+    for (const u of postData.mediaUrls) push(u);
+  }
+  push(postData.mediaUrl);
+  return [...new Set(out)];
+}
+
+/** Prefer a still image URL for cheap multimodal context (skip obvious video extensions). */
+function pickFirstStillImageUrlForReply(urls: string[]): string | null {
+  const videoLike = /\.(mp4|mov|webm|m4v|mkv|avi)(\?|#|$)/i;
+  for (const u of urls) {
+    if (!videoLike.test(u)) return u;
+  }
+  return null;
+}
+
+async function fetchPostImageInlineForGemini(url: string): Promise<{ data: string; mimeType: string } | null> {
+  try {
+    const mediaRes = await fetch(url);
+    if (!mediaRes.ok) return null;
+    const mimeType = (mediaRes.headers.get("content-type") || "image/jpeg").split(";")[0].trim();
+    if (!mimeType.startsWith("image/")) return null;
+    const arr = await mediaRes.arrayBuffer();
+    if (arr.byteLength > INLINE_POST_IMAGE_MAX_BYTES) return null;
+    return { data: Buffer.from(arr).toString("base64"), mimeType };
+  } catch (e) {
+    console.warn("addCommentToPost: fetch post image for AI reply skipped:", e);
+    return null;
+  }
+}
+
 function countCreatorRepliesToFan(comments: Comment[], fanAuthorId: string): number {
   let count = 0;
   for (let i = 0; i < comments.length; i++) {
@@ -24,7 +64,8 @@ async function generateReplyInline(
   creatorId: string,
   commentText: string,
   postBody: string | undefined,
-  creatorName: string
+  creatorName: string,
+  postImageInline: { data: string; mimeType: string } | null
 ): Promise<string> {
   const userSnap = await db.collection("users").doc(creatorId).get();
   const userData = userSnap.data() || {};
@@ -32,22 +73,44 @@ async function generateReplyInline(
   const postSnippet = sanitizeForAI(String(postBody ?? ""), 500);
   const getModelForTask = await getModelRouter();
   const model = await getModelForTask("reply", creatorId);
-  const prompt = `You write a single short reply to a fan's comment on a creator's feed post. Reply as the creator, in their voice.
+
+  const perspectiveBlock = `
+CRITICAL — WHO YOU ARE VS THE FAN (do not invert):
+- You are ${creatorName}, the CREATOR. The fan commented on YOUR post. They are viewing your content — they are not the photographer or default subject of your photos unless they explicitly say they appear in the post.
+- Do NOT assume the fan is doing what your photos show (road trip, gym, beach, flight, etc.). Never wish THEM "safe travels", "have fun on the road", "enjoy your trip", "drive safe", or similar unless they clearly said THEY are traveling or doing that activity.
+- If YOUR media shows YOU traveling or on the road, react as yourself (thanks for the love, appreciate them, vibe with the comment) — do not redirect that scenario onto the fan.
+- If unsure who is in the scene, stay neutral: brief thanks + warmth — no misplaced travel or activity wishes aimed at the fan.
+`;
+
+  const visionLine = postImageInline
+    ? `VISUAL CONTEXT: An image from YOUR post is attached. Use it only to understand what YOU posted (setting, activity, vibe). The fan is still a separate person commenting — follow the POV rules above.`
+    : `No post image was supplied for vision — use caption/snippet only; do not invent that the fan is in your scenario or traveling.`;
+
+  const prompt = `You write ONE short reply to a fan's comment on YOUR feed post. Reply as ${creatorName} (the creator), first person.
 
 RULES (strict):
 - Do NOT give medical, legal, or professional advice.
 - Do NOT write explicit sexual content or graphic descriptions.
 - Edgy, bold, or playful is fine if it matches the creator's personality.
-- One short reply only (1-2 sentences). No greetings unless the fan asked a question. Stay natural and human.
+- One short reply only (1-2 sentences). Stay natural and human.
+${perspectiveBlock}
+${visionLine}
 
 Creator personality/tone: ${personality}
-Creator display name: ${creatorName}
 Fan's comment: ${commentText}
-${postSnippet ? `Post caption/snippet (for context): ${postSnippet}` : ""}
+${postSnippet ? `Post caption/snippet: ${postSnippet}` : ""}
 
-Reply (short, in creator voice):`;
+Reply (short, in creator voice — obey POV rules):`;
+
+  const parts: Array<{ text: string } | { inlineData: { data: string; mimeType: string } }> = [{ text: prompt }];
+  if (postImageInline) {
+    parts.push({
+      inlineData: { data: postImageInline.data, mimeType: postImageInline.mimeType },
+    });
+  }
+
   const result = await model.generateContent({
-    contents: [{ role: "user", parts: [{ text: prompt }] }],
+    contents: [{ role: "user", parts }],
   });
   return result.response.text().trim().slice(0, 500);
 }
@@ -94,9 +157,18 @@ async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
   }
 
   const db = getAdminDb();
-  const creatorSnap = await db.collection("users").doc(creatorIdStr).get();
-  const creatorData = creatorSnap.data() || {};
-  const creatorName = String(creatorData.displayName ?? authorDisplayName ?? "Creator").trim() || "Creator";
+  const [creatorUserSnap, creatorProfileSnap] = await Promise.all([
+    db.collection("users").doc(creatorIdStr).get(),
+    db.collection("creators").doc(creatorIdStr).get(),
+  ]);
+  const creatorData = creatorUserSnap.data() || {};
+  const storefrontData = creatorProfileSnap.exists ? creatorProfileSnap.data() || {} : {};
+  const dnFromUser =
+    typeof creatorData.displayName === "string" ? creatorData.displayName.trim() : "";
+  const dnFromStorefront =
+    typeof storefrontData.displayName === "string" ? storefrontData.displayName.trim() : "";
+  /** Never use request authorDisplayName here — that is the fan's name and broke AI reply attribution. */
+  const creatorName = dnFromUser || dnFromStorefront || "Creator";
 
   // Resolve post across fan hub paths (Fan Hub Posts composer → creators/.../fanPosts; legacy → users/.../posts, creators/.../posts)
   const candidateRefs = [
@@ -179,7 +251,17 @@ async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
     const wouldReply = repliesToThisFan < 2 && (isTipperOrBuyer || Math.random() * 100 < autoReplyChance);
     if (wouldReply) {
       try {
-        const replyText = await generateReplyInline(db, creatorIdStr, text, postBody, creatorName);
+        const mediaUrls = collectPostMediaHttpsUrls(postData);
+        const stillUrl = pickFirstStillImageUrlForReply(mediaUrls);
+        const postImageInline = stillUrl ? await fetchPostImageInlineForGemini(stillUrl) : null;
+        const replyText = await generateReplyInline(
+          db,
+          creatorIdStr,
+          text,
+          postBody,
+          creatorName,
+          postImageInline
+        );
         nextComments.push({
           authorId: creatorIdStr,
           author: creatorName,
