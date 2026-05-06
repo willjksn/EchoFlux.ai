@@ -1145,7 +1145,9 @@ export const TreatsStore: React.FC = () => {
                         <div className="treat-manage-card-content">
                           {cardCategory ? <p className="treat-manage-card-kind">{cardCategory}</p> : null}
                           <h3 className="treat-manage-card-title">
-                            {renderTitleWithEmojiSpans(p.title, "treat-manage-card-title-emoji")}
+                            {renderTitleWithEmojiSpans(p.title, "treat-manage-card-title-emoji", {
+                              textClassName: "treat-manage-card-title-text",
+                            })}
                           </h3>
                           <div className="treat-manage-card-meta">
                             <span className="treat-manage-card-price">{formatPrice(p.priceCents)}</span>

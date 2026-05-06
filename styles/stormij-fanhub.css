@@ -5397,6 +5397,12 @@ button.treat-card:hover:not(:disabled) .treat-card-cta {
   color: #1f2937;
   margin: 0 0 0.25rem 0;
 }
+
+/* Italic only on text segments; emoji stay direct children (upright + correct font). */
+.treat-manage-card-title-text {
+  font-style: italic;
+}
+
 .dark .treat-manage-card-title {
   color: #f3f4f6;
 }
