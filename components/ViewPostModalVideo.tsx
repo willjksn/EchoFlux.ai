@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { FeedVideoPlaybackErrorOverlay } from "./FeedVideoPlaybackError";
+import { tryFeedVideoPosterSeekOnce } from "../src/lib/feedVideoPosterSeek";
 
 /**
  * View-post modal video: click-to-play (muted by default) + scrubber + play/pause + mute.
@@ -20,6 +21,7 @@ export function ViewPostModalVideo({
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const trackRef = useRef<HTMLDivElement>(null);
+  const posterSeekDoneRef = useRef(false);
   const [muted, setMuted] = useState(true);
   const [playing, setPlaying] = useState(false);
   const [duration, setDuration] = useState(0);
@@ -81,16 +83,23 @@ export function ViewPostModalVideo({
         : `#${accentHex}`
       : "rgba(255, 255, 255, 0.92)";
 
+  const syncPosterFrame = useCallback(() => {
+    const v = videoRef.current;
+    if (!v) return;
+    tryFeedVideoPosterSeekOnce(v, posterSeekDoneRef);
+  }, []);
+
   const onMeta = () => {
     const v = videoRef.current;
     if (v && Number.isFinite(v.duration) && v.duration > 0) setDuration(v.duration);
+    syncPosterFrame();
   };
 
   useEffect(() => {
-    const v = videoRef.current;
-    if (!v) return;
-    v.pause();
-    v.currentTime = 0;
+    /** New slide / URL: allow poster seek again. Do not set `video.currentTime = 0` here — it runs after
+     * `loadedmetadata` on fast/cached loads and wipes the poster-frame seek (black video until play on mobile).
+     */
+    posterSeekDoneRef.current = false;
     setCurrent(0);
     setPlaying(false);
     setDecodeError(false);
@@ -100,15 +109,17 @@ export function ViewPostModalVideo({
     <div className="feed-comments-modal-video-shell">
       <video
         ref={videoRef}
-        key={videoKey}
+        key={`${videoKey}:${cleanSrc}`}
         src={cleanSrc}
         className="feed-comments-modal-media feed-comments-modal-media-video feed-comments-modal-media-video--loop"
         muted={muted}
         playsInline
-        preload="metadata"
+        preload="auto"
         style={mediaBlurStyle}
         onContextMenu={(e) => e.preventDefault()}
         onLoadedMetadata={onMeta}
+        onLoadedData={syncPosterFrame}
+        onCanPlay={syncPosterFrame}
         onDurationChange={onMeta}
         onError={() => setDecodeError(true)}
         onPlay={() => setPlaying(true)}

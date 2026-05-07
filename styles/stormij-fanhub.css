@@ -2308,6 +2308,69 @@ button.feed-card-action-count--clickable:hover {
   flex: 1;
   min-height: 0;
 }
+/* Mobile view post: fixed modal height + inner scroll on comments (iOS / touch).
+ * Avoid one giant outer scroll over media + panel; nested overflow:auto breaks less often than flex + max-height alone.
+ */
+@media (max-width: 768px) {
+  .feed-comments-modal.feed-comments-modal--stack {
+    height: min(94vh, 960px);
+    max-height: min(94vh, 960px);
+    height: min(94dvh, 960px);
+    max-height: min(94dvh, 960px);
+  }
+
+  .feed-comments-modal-content.feed-comments-modal-content--stack:not(.no-media) {
+    overflow: hidden;
+    flex: 1;
+    min-height: 0;
+  }
+
+  .feed-comments-modal-content--stack:not(.no-media) .feed-comments-modal-media-wrap {
+    flex-shrink: 0;
+    max-height: min(48vh, 420px);
+    max-height: min(48dvh, 420px);
+    min-height: 0;
+  }
+
+  .feed-comments-modal-content--stack:not(.no-media) .feed-comments-modal-media,
+  .feed-comments-modal-content--stack:not(.no-media) .feed-comments-modal-media-video {
+    max-height: min(48vh, 420px);
+    max-height: min(48dvh, 420px);
+  }
+
+  .feed-comments-modal-content--stack:not(.no-media) .feed-comments-modal-video-shell {
+    min-height: min(36vh, 260px);
+    min-height: min(36dvh, 260px);
+    max-height: min(48vh, 420px);
+    max-height: min(48dvh, 420px);
+  }
+
+  .feed-comments-modal-content--stack:not(.no-media) .feed-comments-modal-panel {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .feed-comments-modal-content--stack:not(.no-media) .feed-comments-modal-post-body {
+    flex-shrink: 0;
+    max-height: min(24vh, 168px);
+    max-height: min(24dvh, 168px);
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .feed-comments-modal-content--stack:not(.no-media) .feed-comments-modal-list {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    touch-action: pan-y;
+  }
+
+  .feed-comments-modal-content--stack:not(.no-media) .feed-comments-modal-compose {
+    flex-shrink: 0;
+  }
+}
 @media (min-width: 769px) {
   .feed-comments-modal-content.feed-comments-modal-content--stack:not(.no-media) {
     flex-direction: row;
