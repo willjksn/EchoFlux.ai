@@ -928,6 +928,29 @@ export async function processFanHubCheckoutSessionCompleted(
       }
     }
 
+    try {
+      const amountLabel = (amountTotal / 100).toFixed(2);
+      const buyerLabel =
+        (fanName && String(fanName).trim()) ||
+        (typeof tipHandle === 'string' && tipHandle.trim()) ||
+        fanEmail ||
+        'A fan';
+      await sendCreatorHubNotification({
+        creatorId,
+        type: 'creator_new_purchase',
+        title: 'New tip',
+        body: `${buyerLabel} sent a tip of $${amountLabel}.`,
+        data: {
+          orderId: session.id,
+          destination: 'purchases',
+          kind: 'tip',
+          ...(tipPostId ? { postId: tipPostId } : {}),
+        },
+      });
+    } catch (e) {
+      console.warn('sendCreatorHubNotification (tip checkout):', e);
+    }
+
     console.log(`Fan hub: tip creator=${creatorId} fan=${fanId} amount=${amountTotal} handle=${tipHandle}`);
     return true;
   }

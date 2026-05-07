@@ -126,16 +126,20 @@ export async function upsertFanHubFanPreferenceFromMember(
   const prefRef = db.collection("users").doc(creatorId).collection("onlyfans_fan_preferences").doc(fanId);
   const prefSnap = await prefRef.get();
   const totalSpent = typeof fanRow.totalSpentCents === "number" ? fanRow.totalSpentCents : 0;
+  /** Dollars — matches `OnlyFansFans` fallback: ceil(totalSpent / 200) uses dollars. */
+  const spendingLevel =
+    totalSpent <= 0 ? 0 : Math.min(5, Math.max(1, Math.ceil(totalSpent / 20000)));
   const patch: Record<string, unknown> = {
     name: listName,
     email,
     subscriptionTier,
     memberSource: source,
     updatedAt: nowIso,
+    totalSpent: totalSpent / 100,
+    spendingLevel,
   };
   if (!prefSnap.exists) {
     patch.createdAt = nowIso;
-    patch.spendingLevel = Math.min(5, Math.floor(totalSpent / 10000));
     patch.totalSessions = 0;
     patch.notes = "";
     patch.tags = [];

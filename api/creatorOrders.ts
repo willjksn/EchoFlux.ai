@@ -17,6 +17,10 @@ export type CreatorOrder = {
   fanUsername?: string | null;
   fanName?: string | null;
   fanEmail?: string;
+  /** Stripe PI when present — used to dedupe ledger rows vs legacy `purchases`. */
+  stripePaymentIntentId?: string | null;
+  /** Checkout session id (`cs_`) when present. */
+  stripeSessionId?: string | null;
   /** After guest→member merge (`mergeGuestTreatPurchasesIntoUid`), original `guest_*` fan id. */
   linkedFromGuestFanId?: string | null;
   scheduleStatus?: string;
@@ -155,6 +159,16 @@ function mapDocToOrder(docSnap: QueryDocumentSnapshot): CreatorOrder {
     typeof d.linkedFromGuestFanId === "string" && d.linkedFromGuestFanId.trim()
       ? d.linkedFromGuestFanId.trim()
       : null;
+  const stripePiRaw =
+    typeof d.stripePaymentIntentId === "string" ? d.stripePaymentIntentId.trim() : "";
+  const stripeSessionRaw =
+    typeof d.stripeSessionId === "string" ? d.stripeSessionId.trim() : "";
+  const stripePaymentIntentId = stripePiRaw.startsWith("pi_") ? stripePiRaw : null;
+  const stripeSessionId = stripeSessionRaw.startsWith("cs_")
+    ? stripeSessionRaw
+    : docSnap.id.startsWith("cs_")
+      ? docSnap.id
+      : null;
   return {
     id: docSnap.id,
     creatorId: (d.creatorId as string) ?? "",
@@ -168,6 +182,8 @@ function mapDocToOrder(docSnap: QueryDocumentSnapshot): CreatorOrder {
     fanUsername: stringField(d, ["fanUsername", "memberUsername", "username"]),
     fanName: (d.fanName as string) ?? (d.tipHandle as string) ?? null,
     fanEmail: typeof d.fanEmail === "string" && d.fanEmail.trim() ? d.fanEmail.trim() : undefined,
+    stripePaymentIntentId,
+    stripeSessionId,
     linkedFromGuestFanId: linkedGuest,
     scheduleStatus: isNonDeliverable ? "completed" : ((d.scheduleStatus as string) || "pending"),
     scheduledDate: isNonDeliverable ? null : ((d.scheduledDate as string) ?? null),
@@ -187,6 +203,63 @@ function mapDocToOrder(docSnap: QueryDocumentSnapshot): CreatorOrder {
     deliveredBy: typeof d.deliveredBy === "string" ? d.deliveredBy : null,
     streamId: streamIdRaw || null,
   };
+}
+
+type CreatorOrderLedgerRow = CreatorOrder & { __createdAtMs: number };
+
+/** Tips sometimes appear twice (`orders/{cs_*}` + legacy `purchases`, or duplicate fingerprints). Prefer Stripe checkout docs. */
+function dedupeFanHubTipLedgerRows(rows: CreatorOrderLedgerRow[]): CreatorOrderLedgerRow[] {
+  const nonTips: CreatorOrderLedgerRow[] = [];
+  const tipPick = new Map<string, CreatorOrderLedgerRow>();
+
+  const priority = (id: string): number => {
+    if (id.startsWith("cs_")) return 100;
+    if (id.startsWith("legacy_purchase_")) return 40;
+    if (id.startsWith("synthetic_tip_")) return 15;
+    return 55;
+  };
+
+  const fingerprint = (row: CreatorOrderLedgerRow): string | null => {
+    const typ = (row.type || "").trim().toLowerCase();
+    if (typ !== "tip") return null;
+    const st = (row.status || "").trim().toLowerCase();
+    if (st === "refunded") return null;
+
+    const pi =
+      typeof row.stripePaymentIntentId === "string" && row.stripePaymentIntentId.startsWith("pi_")
+        ? row.stripePaymentIntentId
+        : null;
+    if (pi) return `pi:${pi}`;
+
+    const sid =
+      typeof row.stripeSessionId === "string" && row.stripeSessionId.startsWith("cs_")
+        ? row.stripeSessionId
+        : row.id.startsWith("cs_")
+          ? row.id
+          : null;
+    if (sid) return `cs:${sid}`;
+
+    const email = (row.fanEmail || "").trim().toLowerCase();
+    const amt = Math.round(row.amountCents || 0);
+    const ms = row.__createdAtMs || 0;
+    const bucket = Math.floor(ms / 180000);
+    const fid = (row.fanId || "").trim();
+    if (email && amt > 0) return `e:${email}:${amt}:${bucket}`;
+    if (fid && amt > 0) return `f:${fid}:${amt}:${bucket}`;
+    return `id:${row.id}`;
+  };
+
+  for (const row of rows) {
+    const fp = fingerprint(row);
+    if (!fp) {
+      nonTips.push(row);
+      continue;
+    }
+    const prev = tipPick.get(fp);
+    if (!prev || priority(row.id) > priority(prev.id)) tipPick.set(fp, row);
+  }
+
+  return [...nonTips, ...tipPick.values()];
 }
 
 /** UTC date/time parts for purchases UI — mirrors api/_syncLiveStreamTicketOrders.ts */
@@ -489,7 +562,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       docs = docs.slice(0, limitNum);
     }
 
-    const orderRows: Array<CreatorOrder & { __createdAtMs: number }> = docs.map((docSnap) => {
+    let orderRows: Array<CreatorOrder & { __createdAtMs: number }> = docs.map((docSnap) => {
       const row = mapDocToOrder(docSnap);
       return {
         ...row,
@@ -562,6 +635,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             : undefined;
         const createdAtIso = new Date(ms).toISOString();
         const legacyId = `legacy_purchase_${p.id}`;
+        const legacyPi =
+          typeof raw.stripePaymentIntentId === "string" && raw.stripePaymentIntentId.startsWith("pi_")
+            ? raw.stripePaymentIntentId.trim()
+            : typeof raw.paymentIntentId === "string" && raw.paymentIntentId.startsWith("pi_")
+              ? raw.paymentIntentId.trim()
+              : null;
+        const legacySession =
+          typeof raw.stripeSessionId === "string" && raw.stripeSessionId.startsWith("cs_")
+            ? raw.stripeSessionId.trim()
+            : typeof raw.checkoutSessionId === "string" && raw.checkoutSessionId.startsWith("cs_")
+              ? raw.checkoutSessionId.trim()
+              : null;
         const exists = orderRows.some((o) => o.id === legacyId);
         if (!exists) {
           orderRows.push({
@@ -572,6 +657,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             type: inferredType,
             amountCents,
             status: "paid",
+            stripePaymentIntentId: legacyPi,
+            stripeSessionId: legacySession,
             createdAt: createdAtIso,
             productTitle:
               (typeof raw.productName === "string" && raw.productName.trim()) ||
@@ -629,11 +716,27 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         .get();
 
       const tipByFanFromOrders = new Map<string, number>();
+      /** Tips keyed under guest_* vs merged UID share checkout email — credit fan-doc reconciliation both ways */
+      const tipByEmailFromOrders = new Map<string, number>();
       for (const row of orderRows) {
         if (row.type !== "tip" || row.status === "refunded") continue;
-        const key = typeof row.fanId === "string" ? row.fanId.trim() : "";
-        if (!key) continue;
-        tipByFanFromOrders.set(key, (tipByFanFromOrders.get(key) || 0) + Math.max(0, Math.round(row.amountCents || 0)));
+        const amt = Math.max(0, Math.round(row.amountCents || 0));
+        if (amt <= 0) continue;
+
+        const fid = typeof row.fanId === "string" ? row.fanId.trim() : "";
+        if (fid) {
+          tipByFanFromOrders.set(fid, (tipByFanFromOrders.get(fid) || 0) + amt);
+        }
+        const linked =
+          typeof row.linkedFromGuestFanId === "string" ? row.linkedFromGuestFanId.trim() : "";
+        if (linked && linked !== fid) {
+          tipByFanFromOrders.set(linked, (tipByFanFromOrders.get(linked) || 0) + amt);
+        }
+        const rowEmail =
+          typeof row.fanEmail === "string" ? row.fanEmail.trim().toLowerCase() : "";
+        if (rowEmail) {
+          tipByEmailFromOrders.set(rowEmail, (tipByEmailFromOrders.get(rowEmail) || 0) + amt);
+        }
       }
 
       for (const fanDoc of fanSnap.docs) {
@@ -641,10 +744,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const fanId = (typeof raw.id === "string" && raw.id.trim()) || fanDoc.id;
         if (!fanId) continue;
 
+        const fanEmail =
+          typeof raw.email === "string" && raw.email.trim()
+            ? raw.email.trim().toLowerCase()
+            : "";
+
         const fanTipsCents = toPositiveCents(raw.totalTipsCents);
         if (fanTipsCents <= 0) continue;
 
-        const existingTipCents = tipByFanFromOrders.get(fanId) || 0;
+        let existingTipCents = tipByFanFromOrders.get(fanId) || 0;
+        if (fanEmail) {
+          existingTipCents = Math.max(existingTipCents, tipByEmailFromOrders.get(fanEmail) || 0);
+        }
         const missingTipCents = fanTipsCents - existingTipCents;
         if (missingTipCents <= 0) continue;
 
@@ -653,10 +764,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const syntheticId = `synthetic_tip_${fanDoc.id}`;
         if (orderRows.some((o) => o.id === syntheticId)) continue;
 
-        const fanEmail =
-          typeof raw.email === "string" && raw.email.trim()
-            ? raw.email.trim().toLowerCase()
-            : undefined;
         const fanName =
           (typeof raw.displayName === "string" && raw.displayName.trim()) ||
           (typeof raw.fanName === "string" && raw.fanName.trim()) ||
@@ -672,11 +779,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           type: "tip",
           amountCents: missingTipCents,
           status: "paid",
+          stripePaymentIntentId: null,
+          stripeSessionId: null,
           createdAt: new Date(createdMs).toISOString(),
           productTitle: "Legacy tip reconciliation",
           fanUsername,
           fanName,
-          fanEmail,
+          fanEmail: fanEmail || undefined,
           scheduleStatus: "completed",
           scheduledDate: null,
           scheduledTime: null,
@@ -695,6 +804,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         fanLedgerErr instanceof Error ? fanLedgerErr.message : fanLedgerErr
       );
     }
+
+    orderRows = dedupeFanHubTipLedgerRows(orderRows);
 
     try {
       const subSnap = await db
