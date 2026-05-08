@@ -5376,6 +5376,13 @@ export const FanStorefrontView: React.FC = () => {
                 tipsEnabled={creator.sections?.tip !== false}
                 tipHeading={tipMemberCopy.heading}
                 tipSubline={tipMemberCopy.subline}
+                hubViewerComposeAvatarUrl={
+                  fanAuthUid
+                    ? memberProfilePhotoLoadFailed || !(memberAvatar || "").trim()
+                      ? ""
+                      : memberAvatar.trim()
+                    : undefined
+                }
               />
             )}
             {activeTab === "saved" && (
@@ -5394,6 +5401,13 @@ export const FanStorefrontView: React.FC = () => {
                 fanPageAdminBypass={fanPageAdminBypass}
                 previewMember={previewMember}
                 onBackToFeed={() => setActiveTabWithUrl("feed")}
+                hubViewerComposeAvatarUrl={
+                  fanAuthUid
+                    ? memberProfilePhotoLoadFailed || !(memberAvatar || "").trim()
+                      ? ""
+                      : memberAvatar.trim()
+                    : undefined
+                }
               />
             )}
             {activeTab === "treats" &&

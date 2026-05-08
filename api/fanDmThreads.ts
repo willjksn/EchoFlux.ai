@@ -4,6 +4,7 @@ import { verifyAuth } from "./verifyAuth.js";
 import { enforceRateLimit } from "./_rateLimit.js";
 import { FAN_DM_THREADS } from "./_fanDmHelpers.js";
 import { resolveFanPartyDisplayLabel } from "./_fanDmLabels.js";
+import { buildCreatorImageUrlSet, fanAvatarUrlOrUndefined } from "../src/lib/fanAvatar.js";
 
 type ThreadDoc = {
   creatorId: string;
@@ -56,6 +57,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       .limit(100)
       .get();
 
+    let creatorInboxImageUrls = new Set<string>();
+    if (as === "creator") {
+      const [creatorUserSnap, creatorDocSnap] = await Promise.all([
+        db.collection("users").doc(uid).get(),
+        db.collection("creators").doc(uid).get(),
+      ]);
+      creatorInboxImageUrls = buildCreatorImageUrlSet(
+        creatorUserSnap.exists ? (creatorUserSnap.data() as Record<string, unknown>) : undefined,
+        creatorDocSnap.exists ? (creatorDocSnap.data() as Record<string, unknown>) : undefined
+      );
+    }
+
     /** Enrich all threads in parallel — sequential awaits were very slow for large inboxes. */
     const threads: Array<ThreadDoc & { id: string }> = await Promise.all(
       snap.docs.map(async (d) => {
@@ -101,8 +114,26 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             ]);
             thread.otherPartyDisplayName = fanLabel;
             if (userSnap.exists) {
-              const u = userSnap.data() as { avatar?: string };
-              thread.otherPartyAvatar = u?.avatar;
+              const u = userSnap.data() as {
+                avatar?: string;
+                photoURL?: string;
+                photoUrl?: string;
+                avatarUrl?: string;
+              };
+              const rawAvatar =
+                (typeof u.avatarUrl === "string" && u.avatarUrl.trim()) ||
+                (typeof u.photoURL === "string" && u.photoURL.trim()) ||
+                (typeof u.photoUrl === "string" && u.photoUrl.trim()) ||
+                (typeof u.avatar === "string" && u.avatar.trim()) ||
+                "";
+              thread.otherPartyAvatar =
+                rawAvatar
+                  ? fanAvatarUrlOrUndefined(rawAvatar, {
+                      fanAuthUid: data.fanId,
+                      creatorId: data.creatorId,
+                      creatorImageUrls: creatorInboxImageUrls,
+                    })
+                  : undefined;
             }
           }
         } catch {

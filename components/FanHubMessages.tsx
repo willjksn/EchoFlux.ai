@@ -14,6 +14,7 @@ import {
   formatDmRelativeShort,
   formatCreatorDmBubblePrimaryLine,
   formatCreatorDmBubbleSecondaryLine,
+  initialsFromFanLabel,
 } from "../src/lib/fanHubDisplay";
 import { uploadFanDmAttachment, type DmAttachmentKind } from "../src/lib/dmMediaUpload";
 import {
@@ -158,6 +159,45 @@ const MenuIconMute = () => (
 );
 
 type MemberRow = { fanId: string; label: string };
+
+/** Match Fan Hub user table initials disk when there is no safe photo URL. */
+function dmThreadRowAvatarBg(name: string): string {
+  const colors = [
+    "bg-indigo-500",
+    "bg-blue-500",
+    "bg-teal-500",
+    "bg-green-500",
+    "bg-amber-500",
+    "bg-orange-500",
+    "bg-cyan-500",
+    "bg-violet-500",
+  ];
+  const idx = (name.trim().charCodeAt(0) || 77) % colors.length;
+  return colors[idx]!;
+}
+
+function FanHubDmThreadRowAvatar({ name, avatarUrl }: { name: string; avatarUrl?: string }) {
+  const [failed, setFailed] = useState(false);
+  const url = typeof avatarUrl === "string" && avatarUrl.trim() && !failed ? avatarUrl.trim() : "";
+  if (url) {
+    return (
+      <img
+        src={url}
+        alt=""
+        className="w-8 h-8 rounded-full object-cover shrink-0"
+        onError={() => setFailed(true)}
+      />
+    );
+  }
+  return (
+    <div
+      className={`w-8 h-8 shrink-0 rounded-full flex items-center justify-center text-white font-semibold text-xs ${dmThreadRowAvatarBg(name)}`}
+      aria-hidden
+    >
+      {initialsFromFanLabel(name)}
+    </div>
+  );
+}
 
 /** Vite’s /api proxy often returns plain text on 502 — res.json() hides the real message. */
 async function parseApiBody(res: Response): Promise<{ json: Record<string, unknown>; plainTextHint: string | null }> {
@@ -1173,38 +1213,44 @@ export const FanHubMessages: React.FC = () => {
                       setThreadRowMenuOpenId(null);
                       setSelectedThread(t);
                     }}
-                    className={`fh-dm-thread-row__main transition ${
+                    className={`fh-dm-thread-row__main flex items-start gap-3 transition ${
                       selectedThread?.id === t.id ? "fh-selected-soft" : ""
                     }`}
                   >
-                    <div className="fh-dm-thread-row__top">
-                      <span className="flex items-center gap-1.5 min-w-0">
-                        {t.creatorMarkedUnread ? (
-                          <span className="fh-dm-thread-unread-dot" aria-hidden />
+                    <FanHubDmThreadRowAvatar
+                      name={t.otherPartyDisplayName || "Member"}
+                      avatarUrl={t.otherPartyAvatar}
+                    />
+                    <div className="min-w-0 flex-1">
+                      <div className="fh-dm-thread-row__top">
+                        <span className="flex items-center gap-1.5 min-w-0">
+                          {t.creatorMarkedUnread ? (
+                            <span className="fh-dm-thread-unread-dot" aria-hidden />
+                          ) : null}
+                          <p className="font-medium text-gray-900 dark:text-white truncate">
+                            {t.otherPartyDisplayName || "Member"}
+                          </p>
+                          {t.creatorInboxPinned ? (
+                            <span className="text-[10px] font-bold text-pink-600 shrink-0" title="Pinned">
+                              PIN
+                            </span>
+                          ) : null}
+                          {t.creatorInboxMuted ? (
+                            <span className="text-[10px] font-semibold text-gray-400 shrink-0" title="Muted">
+                              MUTED
+                            </span>
+                          ) : null}
+                        </span>
+                        {t.lastMessageAt ? (
+                          <span className="fh-dm-thread-row__time">{formatDmRelativeShort(t.lastMessageAt)}</span>
                         ) : null}
-                        <p className="font-medium text-gray-900 dark:text-white truncate">
-                          {t.otherPartyDisplayName || "Member"}
+                      </div>
+                      {t.lastMessagePreview ? (
+                        <p className="text-sm text-gray-500 dark:text-gray-400 truncate mt-0.5 text-left">
+                          {t.lastMessagePreview}
                         </p>
-                        {t.creatorInboxPinned ? (
-                          <span className="text-[10px] font-bold text-pink-600 shrink-0" title="Pinned">
-                            PIN
-                          </span>
-                        ) : null}
-                        {t.creatorInboxMuted ? (
-                          <span className="text-[10px] font-semibold text-gray-400 shrink-0" title="Muted">
-                            MUTED
-                          </span>
-                        ) : null}
-                      </span>
-                      {t.lastMessageAt ? (
-                        <span className="fh-dm-thread-row__time">{formatDmRelativeShort(t.lastMessageAt)}</span>
                       ) : null}
                     </div>
-                    {t.lastMessagePreview ? (
-                      <p className="text-sm text-gray-500 dark:text-gray-400 truncate mt-0.5 text-left">
-                        {t.lastMessagePreview}
-                      </p>
-                    ) : null}
                   </button>
                   <div className="fh-dm-thread-menu-root fh-dm-thread-menu-anchor">
                     <button
@@ -1293,9 +1339,15 @@ export const FanHubMessages: React.FC = () => {
           ) : (
             <>
               <div className="p-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between gap-2">
-                <p className="font-semibold text-gray-900 dark:text-white truncate min-w-0">
-                  {selectedThread.otherPartyDisplayName || "Member"}
-                </p>
+                <div className="flex items-center gap-3 min-w-0 flex-1">
+                  <FanHubDmThreadRowAvatar
+                    name={selectedThread.otherPartyDisplayName || "Member"}
+                    avatarUrl={selectedThread.otherPartyAvatar}
+                  />
+                  <p className="font-semibold text-gray-900 dark:text-white truncate min-w-0">
+                    {selectedThread.otherPartyDisplayName || "Member"}
+                  </p>
+                </div>
                 <div className="flex items-center gap-2 shrink-0">
                   <button
                     type="button"

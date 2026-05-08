@@ -23,6 +23,7 @@ import {
   type LockedPostContent,
 } from "../src/lib/lockedPostMedia";
 import { feedSlideMediaBlurStyle, normalizeMediaPreviewBlurPx } from "../src/lib/feedMediaPreviewBlur";
+import { resolveFanMemberCommentComposePhotoFromUserDoc } from "../src/lib/fanMemberHubCommentAvatar";
 import { getAvatarCropStyle } from "../src/lib/avatarCrop";
 import { inferIsVideoFromUrl, normalizePostMediaTypes } from "../src/lib/mediaUrlInfer";
 import { getFeedGridCoverMedia, isFeedGridCoverLockedForViewer } from "../src/lib/feedGridCover";
@@ -769,6 +770,11 @@ interface FanMemberFeedProps {
   /** Same heading/subline as the full Tip tab (from My Page / resolveTipSectionCopy). */
   tipHeading?: string;
   tipSubline?: string;
+  /**
+   * When provided (possibly `""`), comment compose avatar uses this URL instead of resolving `users/{fanId}` internally.
+   * Parent should pass FanStorefrontView `memberAvatar` (and treat failed loads like the header).
+   */
+  hubViewerComposeAvatarUrl?: string;
 }
 
 const DEMO_POSTS: Post[] = [
@@ -2174,6 +2180,7 @@ export const FanMemberFeed: React.FC<FanMemberFeedProps> = ({
   tipsEnabled = true,
   tipHeading = "Support this creator",
   tipSubline = "Choose an amount to send support.",
+  hubViewerComposeAvatarUrl,
 }) => {
   const allowCreatorTestLivePromos = fanPageAdminBypass || previewMember;
   const { showToast, user } = useAppContext();
@@ -2240,7 +2247,9 @@ export const FanMemberFeed: React.FC<FanMemberFeedProps> = ({
   const [fanPublicProfile, setFanPublicProfile] = useState<{ photoURL?: string; displayName?: string }>({});
 
   const fanPhotoResolved =
-    fanPublicProfile.photoURL?.trim() || auth.currentUser?.photoURL?.trim() || undefined;
+    hubViewerComposeAvatarUrl !== undefined
+      ? hubViewerComposeAvatarUrl.trim() || undefined
+      : fanPublicProfile.photoURL?.trim() || undefined;
   const fanNameResolved =
     fanPublicProfile.displayName?.trim() ||
     auth.currentUser?.displayName?.trim() ||
@@ -2379,37 +2388,45 @@ export const FanMemberFeed: React.FC<FanMemberFeedProps> = ({
       return;
     }
     let cancelled = false;
-    getDoc(doc(db, "users", fanId))
-      .then((snap) => {
-        if (cancelled) return;
-        if (!snap.exists()) {
-          setFanPublicProfile({});
-          setBookmarkedPosts(new Set());
-          return;
-        }
-        const data = snap.data() as Record<string, unknown>;
-        if (creatorId) {
-          const byCreator = (data[SAVED_BY_CREATOR_KEY] as Record<string, string[]>) || {};
-          const ids = byCreator[creatorId];
-          setBookmarkedPosts(new Set(Array.isArray(ids) ? ids : []));
-        } else {
-          setBookmarkedPosts(new Set());
-        }
-        const photo =
-          typeof data.photoURL === "string" && data.photoURL.trim()
-            ? data.photoURL.trim()
-            : typeof data.avatar === "string" && data.avatar.trim()
-              ? data.avatar.trim()
-              : undefined;
+    const userRef = doc(db, "users", fanId);
+    const unsub = onSnapshot(userRef, (snap) => {
+      if (cancelled) return;
+      if (!snap.exists()) {
+        setBookmarkedPosts(new Set());
+        const photo = resolveFanMemberCommentComposePhotoFromUserDoc(
+          false,
+          {},
+          auth.currentUser?.photoURL
+        );
         const name =
-          typeof data.displayName === "string" && data.displayName.trim()
-            ? data.displayName.trim()
+          typeof auth.currentUser?.displayName === "string" && auth.currentUser.displayName.trim()
+            ? auth.currentUser.displayName.trim()
             : undefined;
         setFanPublicProfile({ photoURL: photo, displayName: name });
-      })
-      .catch(() => {});
+        return;
+      }
+      const data = snap.data() as Record<string, unknown>;
+      if (creatorId) {
+        const byCreator = (data[SAVED_BY_CREATOR_KEY] as Record<string, string[]>) || {};
+        const ids = byCreator[creatorId];
+        setBookmarkedPosts(new Set(Array.isArray(ids) ? ids : []));
+      } else {
+        setBookmarkedPosts(new Set());
+      }
+      const photo = resolveFanMemberCommentComposePhotoFromUserDoc(
+        true,
+        data,
+        auth.currentUser?.photoURL
+      );
+      const name =
+        typeof data.displayName === "string" && data.displayName.trim()
+          ? data.displayName.trim()
+          : undefined;
+      setFanPublicProfile({ photoURL: photo, displayName: name });
+    });
     return () => {
       cancelled = true;
+      unsub();
     };
   }, [fanId, creatorId]);
 
@@ -3107,6 +3124,10 @@ interface FanMemberSavedProps {
   previewMember?: boolean;
   /** Navigate back to the home feed from the Saved tab. */
   onBackToFeed: () => void;
+  /**
+   * When provided (possibly `""`), comment compose avatar uses this URL instead of resolving `users/{fanId}` internally.
+   */
+  hubViewerComposeAvatarUrl?: string;
 }
 
 export const FanMemberSaved: React.FC<FanMemberSavedProps> = ({
@@ -3124,6 +3145,7 @@ export const FanMemberSaved: React.FC<FanMemberSavedProps> = ({
   fanPageAdminBypass = false,
   previewMember = false,
   onBackToFeed,
+  hubViewerComposeAvatarUrl,
 }) => {
   const allowCreatorTestLivePromosSaved = fanPageAdminBypass || previewMember;
   const { showToast: showToastSaved, user: userSaved } = useAppContext();
@@ -3277,28 +3299,42 @@ export const FanMemberSaved: React.FC<FanMemberSavedProps> = ({
       return;
     }
     let cancelled = false;
-    getDoc(doc(db, "users", fanId))
-      .then((snap) => {
-        if (cancelled || !snap.exists()) return;
-        const d = snap.data() as Record<string, unknown>;
-        const photo =
-          typeof d.photoURL === "string" && d.photoURL.trim()
-            ? d.photoURL.trim()
-            : typeof d.avatar === "string" && d.avatar.trim()
-              ? d.avatar.trim()
-              : undefined;
+    const userRef = doc(db, "users", fanId);
+    const unsub = onSnapshot(userRef, (snap) => {
+      if (cancelled) return;
+      if (!snap.exists()) {
+        const photo = resolveFanMemberCommentComposePhotoFromUserDoc(
+          false,
+          {},
+          auth.currentUser?.photoURL
+        );
         const name =
-          typeof d.displayName === "string" && d.displayName.trim() ? d.displayName.trim() : undefined;
+          typeof auth.currentUser?.displayName === "string" && auth.currentUser.displayName.trim()
+            ? auth.currentUser.displayName.trim()
+            : undefined;
         setFanPublicProfile({ photoURL: photo, displayName: name });
-      })
-      .catch(() => {});
+        return;
+      }
+      const d = snap.data() as Record<string, unknown>;
+      const photo = resolveFanMemberCommentComposePhotoFromUserDoc(
+        true,
+        d,
+        auth.currentUser?.photoURL
+      );
+      const name =
+        typeof d.displayName === "string" && d.displayName.trim() ? d.displayName.trim() : undefined;
+      setFanPublicProfile({ photoURL: photo, displayName: name });
+    });
     return () => {
       cancelled = true;
+      unsub();
     };
   }, [fanId]);
 
   const fanPhotoResolved =
-    fanPublicProfile.photoURL?.trim() || auth.currentUser?.photoURL?.trim() || undefined;
+    hubViewerComposeAvatarUrl !== undefined
+      ? hubViewerComposeAvatarUrl.trim() || undefined
+      : fanPublicProfile.photoURL?.trim() || undefined;
   const fanNameResolved =
     fanPublicProfile.displayName?.trim() ||
     auth.currentUser?.displayName?.trim() ||
