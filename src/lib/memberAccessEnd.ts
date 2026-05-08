@@ -154,8 +154,103 @@ export function formatRemainingAccessForFanRow(input: {
 }
 
 /**
+ * Rank mirrored subscription status when merging duplicate `creators/.../fans/*` docs:
+ * prefer rows that still reflect Stripe “still entitled” states over stale `canceled` copies.
+ */
+export function subscriptionStatusRankForFanMirror(st: string | null | undefined): number {
+  const t = String(st || "").toLowerCase();
+  if (t === "active" || t === "trialing") return 3;
+  if (t === "past_due") return 2;
+  return 1;
+}
+
+function subscriptionStatusFromFanMirrorRow(fd: Record<string, unknown>): string | null {
+  const s = fd.subscriptionStatus ?? fd.subscription_status;
+  return typeof s === "string" && s.trim() ? s.trim() : null;
+}
+
+function cancelAtPeriodEndFromFanMirrorRow(d: Record<string, unknown>): boolean {
+  const raw = d.cancelAtPeriodEnd ?? d.cancel_at_period_end;
+  if (raw === true) return true;
+  if (raw === false || raw == null) return false;
+  if (typeof raw === "string") {
+    const t = raw.trim().toLowerCase();
+    return t === "true" || t === "1" || t === "yes";
+  }
+  if (typeof raw === "number") return raw === 1;
+  return false;
+}
+
+/**
+ * Merge duplicate Fan Hub mirror docs (same person, different doc ids). Access continues until the
+ * latest known billing period end; status prefers active/trialing over canceled so scheduled cancels
+ * are not treated as ended early when one row is stale.
+ */
+export function mergeFanHubFanMirrorRowsForAccess(rows: Record<string, unknown>[]): {
+  subscriptionStatus: string | null;
+  cancelAtPeriodEnd: boolean;
+  accessEnd: Date | null;
+  canceledAt: Date | null;
+} {
+  if (rows.length === 0) {
+    return { subscriptionStatus: null, cancelAtPeriodEnd: false, accessEnd: null, canceledAt: null };
+  }
+
+  let mergedStatus: string | null = null;
+  let mergedCancelAtPeriodEnd = false;
+  let mergedCanceledAt: Date | null = null;
+
+  for (const fd of rows) {
+    const st = subscriptionStatusFromFanMirrorRow(fd);
+    if (subscriptionStatusRankForFanMirror(st) > subscriptionStatusRankForFanMirror(mergedStatus)) {
+      mergedStatus = st;
+    }
+    if (cancelAtPeriodEndFromFanMirrorRow(fd)) mergedCancelAtPeriodEnd = true;
+    const ca = parseDateLike(fd.canceledAt);
+    if (ca && (!mergedCanceledAt || ca.getTime() > mergedCanceledAt.getTime())) mergedCanceledAt = ca;
+  }
+
+  const mergedRank = subscriptionStatusRankForFanMirror(mergedStatus);
+
+  let mergedAccessEnd: Date | null = null;
+  for (const fd of rows) {
+    if (subscriptionStatusRankForFanMirror(subscriptionStatusFromFanMirrorRow(fd)) !== mergedRank) continue;
+    const end = pickLatestMemberAccessEnd(fd);
+    if (end && (!mergedAccessEnd || end.getTime() > mergedAccessEnd.getTime())) mergedAccessEnd = end;
+  }
+
+  /** When the winning rows never mirrored period end, fall back only for terminal statuses (not active/trialing). */
+  if (mergedAccessEnd == null) {
+    const stLow = String(mergedStatus || "").toLowerCase();
+    const terminal =
+      stLow === "canceled" ||
+      stLow === "cancelled" ||
+      stLow === "expired" ||
+      stLow === "unpaid" ||
+      stLow === "incomplete_expired";
+    if (terminal) {
+      for (const fd of rows) {
+        const end = pickLatestMemberAccessEnd(fd);
+        if (end && (!mergedAccessEnd || end.getTime() > mergedAccessEnd.getTime())) mergedAccessEnd = end;
+      }
+    }
+  }
+
+  return {
+    subscriptionStatus: mergedStatus,
+    cancelAtPeriodEnd: mergedCancelAtPeriodEnd,
+    accessEnd: mergedAccessEnd,
+    canceledAt: mergedCanceledAt,
+  };
+}
+
+/**
  * True when Stripe-mirrored fan doc shows paid access has ended (aligns with User Management “Expired on …”).
  * Used for UI such as greyed fan cards; does not delete or hide the fan record.
+ *
+ * `canceled` / `cancelled`: expiry follows **billing period end** only. If period end is missing on the
+ * doc, we do **not** infer access ended from `canceledAt` (that timestamp is often cancel-at-period-end
+ * bookkeeping, not when paid access stops).
  */
 export function isHubMembershipAccessExpired(input: {
   subscriptionStatus: string | null | undefined;
@@ -170,17 +265,12 @@ export function isHubMembershipAccessExpired(input: {
     input.accessEnd && Number.isFinite(input.accessEnd.getTime())
       ? input.accessEnd.getTime()
       : null;
-  const canceledAtMs =
-    input.canceledAt && Number.isFinite(input.canceledAt.getTime())
-      ? input.canceledAt.getTime()
-      : null;
 
   if (st === "expired" || st === "unpaid" || st === "incomplete_expired") return true;
 
   if (st === "canceled" || st === "cancelled") {
     if (endMs != null) return endMs <= now;
-    if (canceledAtMs != null) return canceledAtMs <= now;
-    return true;
+    return false;
   }
   if (st === "active" || st === "trialing") {
     /** Period end in the past ends paid access even if cancel_at_period_end never synced. */

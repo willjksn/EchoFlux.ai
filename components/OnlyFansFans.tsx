@@ -21,7 +21,7 @@ import {
     fanHubSpendingTierBandLabel,
 } from '../src/lib/fanHubSpendingLevel';
 import { buildCreatorImageUrlSet, fanAvatarUrlOrUndefined } from '../src/lib/fanAvatar';
-import { isHubMembershipAccessExpired, parseDateLike, pickLatestMemberAccessEnd } from '../src/lib/memberAccessEnd';
+import { isHubMembershipAccessExpired, mergeFanHubFanMirrorRowsForAccess, parseDateLike, pickLatestMemberAccessEnd } from '../src/lib/memberAccessEnd';
 
 function usernameFromFanDoc(fd: Record<string, unknown>): string | null {
   const keys = ['username', 'memberUsername', 'handle', 'instagram_handle', 'instagramHandle'] as const;
@@ -721,21 +721,17 @@ export const OnlyFansFans: React.FC = () => {
                                 }
 
                                 let fSnap: Awaited<ReturnType<typeof getDoc>> | null = null;
+                                const hubFanMirrorRows: Record<string, unknown>[] = [];
                                 for (const cand of fanDocCandidates) {
                                     const s = await getDoc(doc(db, 'creators', user.id, 'fans', cand));
                                     if (!s.exists()) continue;
-                                    const fd = s.data() as Record<string, unknown>;
-                                    if (
-                                        isHubMembershipAccessExpired({
-                                            subscriptionStatus: subscriptionStatusFromFanDoc(fd),
-                                            cancelAtPeriodEnd: parseCancelAtPeriodEndFromFanDoc(fd),
-                                            accessEnd: pickLatestMemberAccessEnd(fd),
-                                            canceledAt: parseDateLike(fd.canceledAt),
-                                        })
-                                    ) {
-                                        hubMembershipExpired = true;
-                                    }
+                                    hubFanMirrorRows.push(s.data() as Record<string, unknown>);
                                     if (!fSnap) fSnap = s;
+                                }
+                                if (hubFanMirrorRows.length > 0) {
+                                    hubMembershipExpired = isHubMembershipAccessExpired(
+                                        mergeFanHubFanMirrorRowsForAccess(hubFanMirrorRows)
+                                    );
                                 }
                                 if (fSnap?.exists()) {
                                     const fd = fSnap.data() as Record<string, unknown>;
@@ -1562,7 +1558,7 @@ export const OnlyFansFans: React.FC = () => {
                                     }}
                                     title={
                                         accessExpired
-                                            ? 'Paid membership ended. Card stays for history; it updates if they resubscribe.'
+                                            ? 'Paid access ended when their billing period ended. Card stays for history; it updates if they resubscribe.'
                                             : undefined
                                     }
                                     className={`relative p-4 rounded-lg border-2 transition-all ${
@@ -1858,7 +1854,7 @@ export const OnlyFansFans: React.FC = () => {
 
                     {selectedFan.hubMembershipExpired ? (
                         <p className="mb-4 rounded-lg border border-gray-200 bg-gray-100/80 px-3 py-2 text-sm text-gray-700 dark:border-gray-600 dark:bg-gray-800/80 dark:text-gray-300">
-                            Paid membership has ended for this fan (per your hub billing data). They are not removed so
+                            Paid access ended when their billing period ended (per hub billing data). They are not removed so
                             history stays intact and the card will return to normal if they renew.
                         </p>
                     ) : null}
