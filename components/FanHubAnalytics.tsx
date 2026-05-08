@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { useAppContext } from "./AppContext";
 import { auth, db } from "../firebaseConfig";
 import {
@@ -67,7 +67,7 @@ interface MonthlyRow {
   newMembers: number;
 }
 
-/** Tips + subscriptions by Stripe billing country (selected date range). */
+/** Tips + subscriptions by country on the charge (selected date range). */
 interface CountrySpendRow {
   code: string;
   label: string;
@@ -75,6 +75,9 @@ interface CountrySpendRow {
   subscriptionsCents: number;
   tipsCents: number;
   totalCents: number;
+  chargeCount: number;
+  averageChargeCents: number;
+  medianChargeCents: number;
 }
 
 interface EngagementHighlight {
@@ -336,9 +339,18 @@ function countryFlagEmoji(iso2: string): string {
   );
 }
 
-/** Tips + memberships in range, grouped by Stripe billing country on the order. */
+/** Median charge in cents from a sorted-low-to-high list of charge amounts. */
+function medianChargeCentsSorted(sortedAsc: number[]): number {
+  const n = sortedAsc.length;
+  if (n === 0) return 0;
+  const mid = Math.floor(n / 2);
+  if (n % 2 === 1) return sortedAsc[mid]!;
+  return Math.round((sortedAsc[mid - 1]! + sortedAsc[mid]!) / 2);
+}
+
+/** Tips + memberships in range, grouped by country on the order record. */
 function buildCountrySpendRows(orders: Array<Record<string, unknown>>): CountrySpendRow[] {
-  const agg = new Map<string, { subscriptionsCents: number; tipsCents: number }>();
+  const agg = new Map<string, { subscriptionsCents: number; tipsCents: number; chargeAmountsCents: number[] }>();
   const regionNames =
     typeof Intl !== "undefined" && typeof Intl.DisplayNames !== "undefined"
       ? new Intl.DisplayNames(["en"], { type: "region" })
@@ -351,25 +363,35 @@ function buildCountrySpendRows(orders: Array<Record<string, unknown>>): CountryS
     if (amount <= 0) continue;
     const raw = typeof o.billingCountry === "string" ? o.billingCountry.trim().toUpperCase() : "";
     const code = /^[A-Z]{2}$/.test(raw) ? raw : UNKNOWN_BILLING_COUNTRY;
-    const cur = agg.get(code) || { subscriptionsCents: 0, tipsCents: 0 };
+    const cur = agg.get(code) || {
+      subscriptionsCents: 0,
+      tipsCents: 0,
+      chargeAmountsCents: [] as number[],
+    };
     if (typ === "tip") cur.tipsCents += amount;
     else cur.subscriptionsCents += amount;
+    cur.chargeAmountsCents.push(amount);
     agg.set(code, cur);
   }
 
   return [...agg.entries()]
     .map(([code, v]) => {
-      const label =
-        code === UNKNOWN_BILLING_COUNTRY
-          ? "Unknown (no billing country on file)"
-          : regionNames?.of(code) || code;
+      const label = code === UNKNOWN_BILLING_COUNTRY ? "Unknown" : regionNames?.of(code) || code;
+      const totalCents = v.subscriptionsCents + v.tipsCents;
+      const sorted = [...v.chargeAmountsCents].sort((a, b) => a - b);
+      const chargeCount = sorted.length;
+      const averageChargeCents = chargeCount > 0 ? Math.round(totalCents / chargeCount) : 0;
+      const medianChargeCents = medianChargeCentsSorted(sorted);
       return {
         code,
         label,
         flag: code === UNKNOWN_BILLING_COUNTRY ? "🌍" : countryFlagEmoji(code),
         subscriptionsCents: v.subscriptionsCents,
         tipsCents: v.tipsCents,
-        totalCents: v.subscriptionsCents + v.tipsCents,
+        totalCents,
+        chargeCount,
+        averageChargeCents,
+        medianChargeCents,
       };
     })
     .sort((a, b) => b.totalCents - a.totalCents);
@@ -652,6 +674,8 @@ export const FanHubAnalytics: React.FC = () => {
   /** Orders in selected date range (for CSV export). */
   const [rangeOrders, setRangeOrders] = useState<Record<string, unknown>[]>([]);
   const [countrySpendRows, setCountrySpendRows] = useState<CountrySpendRow[]>([]);
+  /** Filter table to one ISO row when multiple countries appear; "all" shows every row. */
+  const [countryTableFilter, setCountryTableFilter] = useState<string>("all");
   const [liveStreamBiz, setLiveStreamBiz] = useState<LiveStreamBizMetrics>(DEFAULT_LIVE_STREAM_BIZ);
   const [monthlyRows, setMonthlyRows] = useState<MonthlyRow[]>([]);
   const [engagement, setEngagement] = useState<EngagementStats>({
@@ -662,6 +686,22 @@ export const FanHubAnalytics: React.FC = () => {
   });
   const [showLast12, setShowLast12] = useState(true);
   const creatorId = auth.currentUser?.uid ?? user?.id ?? "";
+
+  const countrySpendRowsDisplayed = useMemo(() => {
+    if (countryTableFilter === "all") return countrySpendRows;
+    return countrySpendRows.filter((r) => r.code === countryTableFilter);
+  }, [countrySpendRows, countryTableFilter]);
+
+  const countrySpendGrandTotalCents = useMemo(
+    () => countrySpendRows.reduce((sum, r) => sum + r.totalCents, 0),
+    [countrySpendRows],
+  );
+
+  useEffect(() => {
+    setCountryTableFilter((prev) =>
+      prev === "all" || countrySpendRows.some((r) => r.code === prev) ? prev : "all",
+    );
+  }, [countrySpendRows]);
 
   const handleExportTransactionsCsv = useCallback(() => {
     if (rangeOrders.length === 0) {
@@ -676,7 +716,7 @@ export const FanHubAnalytics: React.FC = () => {
       "Fan email",
       "Product",
       "Order ID",
-      "Billing country (ISO)",
+      "Country (ISO)",
     ];
     const lines = rangeOrders.map((o) => {
       const rec = o as Record<string, unknown>;
@@ -689,11 +729,11 @@ export const FanHubAnalytics: React.FC = () => {
       const fanEmail = String(rec.fanEmail ?? rec.fanId ?? "");
       const product = String(rec.productTitle ?? rec.productId ?? "");
       const id = String(rec.id ?? "");
-      const billing =
+      const country =
         typeof rec.billingCountry === "string" && /^[a-z]{2}$/i.test(rec.billingCountry.trim())
           ? rec.billingCountry.trim().toUpperCase()
           : "";
-      return [date, type, amt, fanName, fanEmail, product, id, billing].map(csvEscapeCell).join(",");
+      return [date, type, amt, fanName, fanEmail, product, id, country].map(csvEscapeCell).join(",");
     });
     const csv = [header.map(csvEscapeCell).join(","), ...lines].join("\n");
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
@@ -1125,21 +1165,41 @@ export const FanHubAnalytics: React.FC = () => {
         </div>
       </div>
 
-      {/* Billing country — tips + subscriptions (Stripe billing / card locality) */}
+      {/* Tips + memberships by country */}
       <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md border border-gray-100 dark:border-gray-700 overflow-hidden">
         <div className="p-5 border-b border-gray-100 dark:border-gray-700">
           <h2 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
             <GlobeIcon />
-            Tips & memberships by billing country
+            Tips & memberships by country
           </h2>
           <p className="text-sm text-gray-500 dark:text-gray-400 mt-1 max-w-3xl">
-            Uses Stripe billing data from checkout or renewals (card / billing address), not guessed physical location.
-            Older orders may show as Unknown until fans pay again. Store unlocks are excluded here.
+            Stripe checkout and renewals. Store unlocks excluded.
           </p>
+          {countrySpendRows.length > 1 && (
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <label htmlFor="fan-hub-country-filter" className="text-sm text-gray-600 dark:text-gray-400">
+                Filter
+              </label>
+              <select
+                id="fan-hub-country-filter"
+                className="text-sm rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-gray-900 shadow-sm dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100"
+                value={countryTableFilter}
+                onChange={(e) => setCountryTableFilter(e.target.value)}
+              >
+                <option value="all">All countries</option>
+                {countrySpendRows.map((r) => (
+                  <option key={r.code} value={r.code}>
+                    {r.label}
+                    {r.code !== UNKNOWN_BILLING_COUNTRY ? ` (${r.code})` : ""}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
         </div>
         {countrySpendRows.length === 0 ? (
           <p className="p-6 text-sm text-gray-500 dark:text-gray-400">
-            No tips or subscription charges with billing country in this period.
+            No tips or subscription charges with country in this period.
           </p>
         ) : (
           <div className="overflow-x-auto">
@@ -1147,28 +1207,110 @@ export const FanHubAnalytics: React.FC = () => {
               <thead className="bg-gray-50 dark:bg-gray-900/60 text-gray-600 dark:text-gray-300">
                 <tr>
                   <th className="text-left px-4 py-3 font-semibold">Country</th>
+                  <th
+                    className="text-right px-4 py-3 font-semibold whitespace-nowrap"
+                    title="Share of all tips and memberships in this period (all countries)"
+                  >
+                    Share
+                  </th>
+                  <th
+                    className="text-right px-4 py-3 font-semibold min-w-[7.5rem]"
+                    title="Tips vs memberships by amount for this country"
+                  >
+                    Tips / subs
+                  </th>
                   <th className="text-right px-4 py-3 font-semibold">Subscriptions</th>
                   <th className="text-right px-4 py-3 font-semibold">Tips</th>
                   <th className="text-right px-4 py-3 font-semibold">Total</th>
+                  <th
+                    className="text-right px-4 py-3 font-semibold whitespace-nowrap"
+                    title="Average amount per tip or membership charge"
+                  >
+                    Avg
+                  </th>
+                  <th
+                    className="text-right px-4 py-3 font-semibold whitespace-nowrap"
+                    title="Median amount per tip or membership charge"
+                  >
+                    Median
+                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
-                {countrySpendRows.map((row) => (
-                  <tr key={row.code} className="text-gray-800 dark:text-gray-200">
-                    <td className="px-4 py-3 whitespace-nowrap">
-                      <span className="mr-2" aria-hidden>
-                        {row.flag}
-                      </span>
-                      <span className="font-medium">{row.label}</span>
-                      {row.code !== UNKNOWN_BILLING_COUNTRY ? (
-                        <span className="ml-2 text-xs text-gray-400 dark:text-gray-500">{row.code}</span>
-                      ) : null}
-                    </td>
-                    <td className="text-right px-4 py-3 tabular-nums">{formatCents(row.subscriptionsCents)}</td>
-                    <td className="text-right px-4 py-3 tabular-nums">{formatCents(row.tipsCents)}</td>
-                    <td className="text-right px-4 py-3 font-semibold tabular-nums">{formatCents(row.totalCents)}</td>
-                  </tr>
-                ))}
+                {countrySpendRowsDisplayed.map((row) => {
+                  const sharePct =
+                    countrySpendGrandTotalCents > 0
+                      ? Math.min(100, (100 * row.totalCents) / countrySpendGrandTotalCents)
+                      : 0;
+                  const tipsMixPct = row.totalCents > 0 ? (100 * row.tipsCents) / row.totalCents : 0;
+                  const subsMixPct = row.totalCents > 0 ? (100 * row.subscriptionsCents) / row.totalCents : 0;
+                  return (
+                    <tr key={row.code} className="text-gray-800 dark:text-gray-200">
+                      <td className="px-4 py-3 whitespace-nowrap">
+                        <span className="mr-2" aria-hidden>
+                          {row.flag}
+                        </span>
+                        <span className="font-medium">{row.label}</span>
+                        {row.code !== UNKNOWN_BILLING_COUNTRY ? (
+                          <span className="ml-2 text-xs text-gray-400 dark:text-gray-500">{row.code}</span>
+                        ) : null}
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <div className="inline-flex flex-col items-end gap-1 min-w-[5.5rem]">
+                          <div
+                            className="h-2 w-20 rounded-full bg-gray-200 dark:bg-gray-700 overflow-hidden"
+                            role="img"
+                            aria-label={`${formatPercentage(sharePct)} of period tips and memberships`}
+                          >
+                            <div
+                              className="h-full rounded-full bg-indigo-500 dark:bg-indigo-400"
+                              style={{ width: `${sharePct}%` }}
+                            />
+                          </div>
+                          <span className="text-xs tabular-nums text-gray-600 dark:text-gray-400">
+                            {formatPercentage(sharePct)}
+                          </span>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <div className="inline-flex flex-col items-end gap-1">
+                          <div
+                            className="flex h-2 w-[7rem] rounded-full overflow-hidden bg-gray-100 dark:bg-gray-800"
+                            role="img"
+                            aria-label={`Tips ${formatPercentage(tipsMixPct)}, memberships ${formatPercentage(subsMixPct)}`}
+                          >
+                            {subsMixPct > 0 ? (
+                              <div
+                                className="h-full bg-emerald-500 dark:bg-emerald-600 shrink-0"
+                                style={{ width: `${subsMixPct}%` }}
+                                title={`Memberships ${formatPercentage(subsMixPct)}`}
+                              />
+                            ) : null}
+                            {tipsMixPct > 0 ? (
+                              <div
+                                className="h-full bg-amber-400 dark:bg-amber-500 shrink-0"
+                                style={{ width: `${tipsMixPct}%` }}
+                                title={`Tips ${formatPercentage(tipsMixPct)}`}
+                              />
+                            ) : null}
+                          </div>
+                          <span className="text-[10px] leading-tight text-gray-500 dark:text-gray-400 max-w-[7rem] text-right">
+                            {formatPercentage(tipsMixPct)} tips · {formatPercentage(subsMixPct)} subs
+                          </span>
+                        </div>
+                      </td>
+                      <td className="text-right px-4 py-3 tabular-nums">{formatCents(row.subscriptionsCents)}</td>
+                      <td className="text-right px-4 py-3 tabular-nums">{formatCents(row.tipsCents)}</td>
+                      <td className="text-right px-4 py-3 font-semibold tabular-nums">{formatCents(row.totalCents)}</td>
+                      <td className="text-right px-4 py-3 tabular-nums text-gray-700 dark:text-gray-300">
+                        {row.chargeCount > 0 ? formatCents(row.averageChargeCents) : "—"}
+                      </td>
+                      <td className="text-right px-4 py-3 tabular-nums text-gray-700 dark:text-gray-300">
+                        {row.chargeCount > 0 ? formatCents(row.medianChargeCents) : "—"}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
