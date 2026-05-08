@@ -8,7 +8,7 @@ import {
   parseFanMemberRoleFromFirestore,
   safeUsernameForHandle,
 } from "../src/lib/fanHubDisplay";
-import { pickLatestMemberAccessEnd, formatRemainingAccessForFanRow } from "../src/lib/memberAccessEnd";
+import { pickLatestMemberAccessEnd, formatRemainingAccessForFanRow, isHubMembershipAccessExpired } from "../src/lib/memberAccessEnd";
 import { authUidFromFanDocId, parseCompoundFanDocumentId } from "../src/lib/compoundFanDocId";
 import { buildCreatorImageUrlSet, fanAvatarUrlOrUndefined } from "../src/lib/fanAvatar";
 import { classifyFanHubOrderLedgerKind, isGuestCheckoutFanId } from "../src/lib/fanHubOrderLedger";
@@ -46,6 +46,8 @@ interface FanUser {
   avatarUrl?: string;
   /** Firebase Auth uid (from plain fan doc id or parsed from `uid-email@…` ids) */
   authUid?: string;
+  /** Paid hub membership ended (billing period ended). Mirrors Fans grid — false while cancel-at-period-end with future period end. */
+  membershipAccessExpired?: boolean;
 }
 
 const PlusIcon = () => (
@@ -195,27 +197,31 @@ function FanTableAvatar({
   avatarUrl,
   sizeClass = "w-8 h-8",
   textClass = "text-xs",
+  muted = false,
 }: {
   name: string;
   avatarUrl?: string;
   sizeClass?: string;
   textClass?: string;
+  /** Paid membership ended — match muted fan cards */
+  muted?: boolean;
 }) {
   const [failed, setFailed] = useState(false);
   const url = typeof avatarUrl === "string" && avatarUrl.trim() && !failed ? avatarUrl.trim() : "";
+  const muteCls = muted ? "opacity-[0.85] grayscale-[0.55]" : "";
   if (url) {
     return (
       <img
         src={url}
         alt=""
-        className={`${sizeClass} rounded-full object-cover shrink-0`}
+        className={`${sizeClass} rounded-full object-cover shrink-0 ${muteCls}`}
         onError={() => setFailed(true)}
       />
     );
   }
   return (
     <div
-      className={`${sizeClass} shrink-0 rounded-full flex items-center justify-center text-white font-semibold ${textClass} ${getAvatarColor(name)}`}
+      className={`${sizeClass} shrink-0 rounded-full flex items-center justify-center text-white font-semibold ${textClass} ${getAvatarColor(name)} ${muteCls}`}
     >
       {initialsFromFanLabel(name)}
     </div>
@@ -971,6 +977,14 @@ export const FanHubUsers: React.FC = () => {
           data.profileSignupAt ??
           null;
         const authUid = authUidFromFanDocId(data.id);
+        const membershipAccessExpired =
+          role === "member" &&
+          isHubMembershipAccessExpired({
+            subscriptionStatus: data.subscriptionStatus,
+            cancelAtPeriodEnd: cancelAtEnd,
+            accessEnd: data.subscriptionCurrentPeriodEnd ?? null,
+            canceledAt: data.canceledAt ?? null,
+          });
         return {
           id: data.id,
           name,
@@ -995,6 +1009,7 @@ export const FanHubUsers: React.FC = () => {
           lastLoginAt: null,
           avatarUrl: data.avatarUrl,
           authUid,
+          membershipAccessExpired,
         };
       });
 
@@ -1454,11 +1469,23 @@ export const FanHubUsers: React.FC = () => {
   const UserRow: React.FC<{ fanUser: FanUser; showActions?: boolean }> = ({ fanUser, showActions = true }) => {
     const planBadgeClass = fanUser.plan ? planStatusBadgeClass(fanUser.plan) : null;
     const accessBadgeClass = planStatusBadgeClass(fanUser.remainingAccess);
+    const rowMuted = fanUser.role === "member" && fanUser.membershipAccessExpired === true;
     return (
-    <tr className="hover:bg-gray-50 dark:hover:bg-gray-800/40 transition-colors">
+    <tr
+      className={`transition-colors ${
+        rowMuted
+          ? "opacity-[0.82] grayscale-[0.55] bg-gray-50/95 dark:bg-gray-900/80 hover:bg-gray-100/90 dark:hover:bg-gray-900/85"
+          : "hover:bg-gray-50 dark:hover:bg-gray-800/40"
+      }`}
+      title={
+        rowMuted
+          ? "Paid access ended when their billing period ended. Row stays for history; it updates if they resubscribe."
+          : undefined
+      }
+    >
       <td className="px-4 py-3">
         <div className="flex items-center gap-3">
-          <FanTableAvatar name={fanUser.name} avatarUrl={fanUser.avatarUrl} />
+          <FanTableAvatar name={fanUser.name} avatarUrl={fanUser.avatarUrl} muted={rowMuted} />
           <div>
             <div className="flex items-center gap-2">
               <span className="font-medium text-gray-900 dark:text-white">{fanUser.name}</span>
@@ -1933,6 +1960,9 @@ export const FanHubUsers: React.FC = () => {
                   avatarUrl={selectedUser.avatarUrl}
                   sizeClass="w-14 h-14"
                   textClass="text-lg"
+                  muted={
+                    selectedUser.role === "member" && selectedUser.membershipAccessExpired === true
+                  }
                 />
                 <div>
                   <h4 className="text-lg font-semibold text-gray-900 dark:text-white">{selectedUser.name}</h4>
