@@ -35,6 +35,7 @@ import {
 } from "../src/lib/feedCommentLabel";
 import { renderTextWithCustomEmoji, type SjHeartEmojiAccessContext } from "../src/lib/customEmoji";
 import { EmojiIcon } from "./icons/UIIcons";
+import { FeedCommentListAvatar } from "./FeedCommentAvatar";
 import { useFanFeedCommentEmojiPicker } from "./fanFeedCommentEmojiPicker";
 import {
   captureFanFeedCarouselScrollSnaps,
@@ -157,7 +158,15 @@ export type FeedPost = {
   createdAt?: { toDate: () => Date } | string;
   likeCount: number;
   likedBy?: string[];
-  comments: { username?: string; author?: string; text: string; hidden?: boolean; authorId?: string; isCreatorReply?: boolean }[];
+  comments: {
+    username?: string;
+    author?: string;
+    text: string;
+    hidden?: boolean;
+    authorId?: string;
+    isCreatorReply?: boolean;
+    authorPhotoURL?: string;
+  }[];
   captionStyle?: "static" | "scroll-up" | "scroll-across" | "dissolve";
   overlayText?: string;
   overlayTextColor?: string;
@@ -1216,7 +1225,19 @@ function FeedCard({
         if (!snap.exists()) throw new Error("Post not found.");
         const data = snap.data() as Record<string, unknown>;
         const existing = Array.isArray(data.comments) ? (data.comments as FeedPost["comments"]) : [];
-        nextComments = [...existing, { username, author: username, text: text.slice(0, 500), authorId: currentUserId, isCreatorReply: true }];
+        nextComments = [
+          ...existing,
+          {
+            username,
+            author: username,
+            text: text.slice(0, 500),
+            authorId: currentUserId,
+            isCreatorReply: true,
+            ...(typeof creatorAvatar === "string" && creatorAvatar.trim()
+              ? { authorPhotoURL: creatorAvatar.trim() }
+              : {}),
+          },
+        ];
         tx.update(postRef, { comments: nextComments });
       });
       onCommentsUpdated?.(post.id, nextComments);
@@ -1900,9 +1921,7 @@ function FeedCard({
                             c.authorId === currentUserId);
                         return (
                           <div className="feed-comments-modal-item" key={`${idx}-${c.text.slice(0, 12)}`}>
-                            <div className="feed-comments-modal-item-avatar" aria-hidden>
-                              <span>{feedCommentAuthorInitial(authorName)}</span>
-                            </div>
+                            <FeedCommentListAvatar authorLabel={authorName} photoURL={c.authorPhotoURL} />
                             <div className="feed-comments-modal-item-body">
                               <p className="feed-comments-modal-text">
                                 <span className="feed-comments-modal-comment-author-row">

@@ -27,10 +27,11 @@ import { resolveFanMemberCommentComposePhotoFromUserDoc } from "../src/lib/fanMe
 import { getAvatarCropStyle } from "../src/lib/avatarCrop";
 import { inferIsVideoFromUrl, normalizePostMediaTypes } from "../src/lib/mediaUrlInfer";
 import { getFeedGridCoverMedia, isFeedGridCoverLockedForViewer } from "../src/lib/feedGridCover";
+import { FeedCommentListAvatar } from "./FeedCommentAvatar";
 import { DmAudioPlayer } from "./DmAudioPlayer";
 import { ViewPostModalVideo } from "./ViewPostModalVideo";
 import { FeedVideoPlaybackErrorOverlay } from "./FeedVideoPlaybackError";
-import { feedCommentAuthorLabel, feedCommentAuthorInitial } from "../src/lib/feedCommentLabel";
+import { feedCommentAuthorLabel } from "../src/lib/feedCommentLabel";
 import { readFanCheckoutFetchResult, FAN_TIP_CHECKOUT_SUCCESS_QS } from "../src/lib/fanCheckoutResponse";
 import { useAppContext } from "./AppContext";
 import { renderTextWithCustomEmoji, type SjHeartEmojiAccessContext } from "../src/lib/customEmoji";
@@ -491,6 +492,8 @@ export type FanMemberPostComment = {
   text: string;
   authorId?: string;
   isCreatorReply?: boolean;
+  /** From Firestore when present (HTTPS); client shows initials if missing/failed load */
+  authorPhotoURL?: string;
 };
 
 type FanMemberPostPoll = {
@@ -874,11 +877,18 @@ function postFromFirestore(
       author: typeof o.author === "string" ? o.author : undefined,
       isCreatorReply: !!o.isCreatorReply,
     });
+    const authorPhotoRaw =
+      (typeof (o as { authorPhotoURL?: string }).authorPhotoURL === "string" &&
+        (o as { authorPhotoURL?: string }).authorPhotoURL!.trim()) ||
+      (typeof o.photoURL === "string" && o.photoURL.trim()) ||
+      (typeof o.avatarUrl === "string" && o.avatarUrl.trim()) ||
+      "";
     commentsList.push({
       author,
       text,
       ...(typeof o.authorId === "string" && o.authorId.trim() ? { authorId: o.authorId.trim() } : {}),
       isCreatorReply: !!o.isCreatorReply,
+      ...(authorPhotoRaw ? { authorPhotoURL: authorPhotoRaw } : {}),
     });
   }
   const lc = parseLockedContent(data.lockedContent);
@@ -2022,9 +2032,7 @@ function FanMemberPostDetailModal({
                               c.authorId === creatorId);
                           return (
                             <div className="feed-comments-modal-item" key={`${post.id}-c-${idx}`}>
-                              <div className="feed-comments-modal-item-avatar" aria-hidden>
-                                <span>{feedCommentAuthorInitial(c.author)}</span>
-                              </div>
+                              <FeedCommentListAvatar authorLabel={c.author} photoURL={c.authorPhotoURL} />
                               <div className="feed-comments-modal-item-body">
                                 <p className="feed-comments-modal-text">
                                   <span className="feed-comments-modal-comment-author-row">

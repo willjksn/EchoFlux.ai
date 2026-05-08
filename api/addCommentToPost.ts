@@ -8,8 +8,18 @@ import { enforceRateLimit } from "./_rateLimit.js";
 import { checkApiKeys } from "./_errorHandler.js";
 import { sendCreatorHubNotification } from "./_fanNotifications.js";
 import { normalizePlanForLimits } from "./_planLimits.js";
+import { buildCreatorImageUrlSet, fanAvatarUrlOrUndefined } from "../src/lib/fanAvatar.js";
 
-type Comment = { username?: string; author?: string; text: string; hidden?: boolean; authorId?: string; isCreatorReply?: boolean };
+type Comment = {
+  username?: string;
+  author?: string;
+  text: string;
+  hidden?: boolean;
+  authorId?: string;
+  isCreatorReply?: boolean;
+  /** Persisted HTTPS URL safe to show beside the comment when available */
+  authorPhotoURL?: string;
+};
 
 const INLINE_POST_IMAGE_MAX_BYTES = 4 * 1024 * 1024;
 
@@ -205,8 +215,17 @@ async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
 
   const fanUserSnap = await db.collection("users").doc(tokenUser.uid).get();
   const fanUser = fanUserSnap.data() || {};
-  const firstString = (...values: unknown[]): string =>
-    values.find((v) => typeof v === "string" && v.trim()) as string;
+  const firstString = (...values: unknown[]): string => {
+    for (const v of values) {
+      if (typeof v === "string" && v.trim()) return v.trim();
+    }
+    return "";
+  };
+
+  const creatorImageUrls = buildCreatorImageUrlSet(
+    creatorUserSnap.exists ? (creatorUserSnap.data() as Record<string, unknown>) : undefined,
+    creatorProfileSnap.exists ? (creatorProfileSnap.data() as Record<string, unknown>) : undefined
+  );
 
   const memberHandleCandidate = firstString(
     fanUser.username,
@@ -219,14 +238,21 @@ async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
     .trim()
     .toLowerCase();
   const usernamePublic = /^[a-z0-9_]{2,32}$/i.test(memberHandleRaw) ? memberHandleRaw : "";
-  const displayFromAuth = String(
-    firstString(authorDisplayName, fanUser.displayName, tokenUser.displayName, fanUser.name) ?? ""
-  ).trim();
+  const displayFromAuth = firstString(authorDisplayName, fanUser.displayName, tokenUser.displayName, fanUser.name);
+  const fanRawPhoto = firstString(fanUser.avatarUrl, fanUser.photoURL, fanUser.photoUrl, fanUser.avatar);
+  const safeFanAvatar = fanRawPhoto
+    ? fanAvatarUrlOrUndefined(fanRawPhoto, {
+        fanAuthUid: tokenUser.uid,
+        creatorId: creatorIdStr,
+        creatorImageUrls,
+      })
+    : undefined;
   const fanComment: Comment = {
     authorId: tokenUser.uid,
     author: displayFromAuth || (usernamePublic ? `@${usernamePublic}` : "Fan"),
     username: usernamePublic || undefined,
     text,
+    ...(safeFanAvatar ? { authorPhotoURL: safeFanAvatar } : {}),
   };
   let nextComments: Comment[] = [...existingComments, fanComment];
 
@@ -270,12 +296,21 @@ async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
           creatorName,
           postImageInline
         );
+        const creatorAvatarUrl = firstString(
+          storefrontData.avatar,
+          storefrontData.avatarUrl,
+          creatorData.photoURL,
+          creatorData.photoUrl,
+          creatorData.avatar,
+          (creatorData as { imageUrl?: string }).imageUrl
+        );
         nextComments.push({
           authorId: creatorIdStr,
           author: creatorName,
           username: creatorName,
           text: replyText,
           isCreatorReply: true,
+          ...(creatorAvatarUrl ? { authorPhotoURL: creatorAvatarUrl } : {}),
         });
       } catch (err) {
         console.error("addCommentToPost: AI reply failed", err);
