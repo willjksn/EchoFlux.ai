@@ -100,6 +100,8 @@ interface FanLandingPageProps {
   privacyHref?: string;
   /** Logo link target (custom domain usually `/`) */
   homeHref?: string;
+  /** Full page reload loses React state — prime landing intent when the Witme logo points at the same storefront (creator preview). */
+  primeLandingIntentBeforeLogoNavigation?: boolean;
 }
 
 function buildStorefrontConfig(
@@ -178,6 +180,7 @@ export const FanLandingPage: React.FC<FanLandingPageProps> = (props) => {
     termsHref: termsHrefProp,
     privacyHref: privacyHrefProp,
     homeHref,
+    primeLandingIntentBeforeLogoNavigation = false,
   } = props;
 
   const { theme, monetization, landingContent: creatorLandingContent } = creator;
@@ -369,6 +372,7 @@ export const FanLandingPage: React.FC<FanLandingPageProps> = (props) => {
           termsHref,
           privacyHref,
           bio: creator.bio,
+          primeLandingIntentBeforeHomeNavigation: primeLandingIntentBeforeLogoNavigation,
           tipHandle,
           onTipHandleChange: setTipHandle,
           tipCustomAmount,

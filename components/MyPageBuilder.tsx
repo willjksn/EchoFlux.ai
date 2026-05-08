@@ -34,6 +34,7 @@ import { FAN_HUB_STOREFRONT_THEME_SAVED_EVENT } from "../src/hooks/useCreatorFan
 import { deriveFanHubThemeFromPrimary } from "../src/lib/fanHubThemeFromPrimary";
 import { normalizeTreatProductsFromApi } from "../src/lib/treatProductsNormalize";
 import { getTreatProductTypeDisplayLabel } from "../src/lib/treatProductTypeLabel";
+import { primeFanStorefrontPublicLandingIntentFromAbsoluteUrl } from "../src/lib/fanStorefrontLandingIntent";
 
 const DEFAULT_SECTIONS: NonNullable<CreatorStorefrontSettings["sections"]> = {
   feed: true,
@@ -1835,7 +1836,6 @@ export const MyPageBuilder: React.FC = () => {
 
   const normalizedHandle = (draft.handle as string | undefined)?.replace("@", "").toLowerCase().trim() || "";
   const previewUrl = normalizedHandle ? `https://witme.io/${normalizedHandle}` : "";
-  const previewLandingUrl = previewUrl ? `${previewUrl}?landing=1` : "";
   const previewMemberUrl = previewUrl ? `${previewUrl}?preview=member` : "";
 
   const handleCleanForCheck = handleInput.replace("@", "").toLowerCase().trim();
@@ -4159,9 +4159,13 @@ export const MyPageBuilder: React.FC = () => {
                 <>
                   <button
                     type="button"
-                    onClick={() => window.open(previewLandingUrl, "_blank")}
+                    onClick={() => {
+                      if (!previewUrl) return;
+                      primeFanStorefrontPublicLandingIntentFromAbsoluteUrl(previewUrl);
+                      window.open(previewUrl, "_blank");
+                    }}
                     className="px-2 py-1.5 rounded-lg text-xs font-medium bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700"
-                    title="Open public landing (?landing=1 — use while signed in to preview like a visitor)"
+                    title="Open public landing on witme.io (clean URL — signed-in preview uses guest CTAs)"
                   >
                     Live
                   </button>

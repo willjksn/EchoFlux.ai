@@ -43,10 +43,10 @@ const CUSTOM_SF_MEMBER_SEGS =
 
 /**
  * True when this path on this host should render the fan storefront (custom domain only).
- * - `/`, `/terms`, `/privacy` (legacy `/p` is rewritten to `/?landing=1` in FanStorefrontView)
+ * - `/`, `/terms`, `/privacy` (legacy `/p` → canonical URL + landing intent session in FanStorefrontView)
  * - `/{memberTab}` at root hub (e.g. `/messages`, `/store`)
  * - `/{handle}` where handle matches My Page slug `[a-z0-9_]+`
- * - `/{handle}/{memberTab}` or `/{handle}/terms|privacy` (legacy `/{handle}/p` → query)
+ * - `/{handle}/{memberTab}` or `/{handle}/terms|privacy` (legacy `/{handle}/p` merged to canonical path)
  */
 export function isCustomDomainStorefrontPath(pathname: string, hostname: string): boolean {
   if (!isConfiguredCustomStorefrontHost(hostname)) return false;

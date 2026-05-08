@@ -44,6 +44,8 @@ export interface StorefrontPreviewLiveLanding {
   landingTreatProductCount: number;
   treatLinkAccountMessage: string | null;
   onTreatLinkSignIn?: () => void;
+  /** Before navigating to `homeHref`, prime sessionStorage so a full reload keeps public-landing preview for signed-in creators. */
+  primeLandingIntentBeforeHomeNavigation?: boolean;
 }
 import { getAvatarCropStyle } from "../src/lib/avatarCrop";
 import {
@@ -61,6 +63,7 @@ import {
 import { resolveStoreCopy } from "../src/lib/storefrontStoreCopy";
 import { resolvePricingLandingCopy } from "../src/lib/pricingLandingCopy";
 import { resolveTipFooterEmoji, resolveTipSectionCopy } from "../src/lib/tipSectionCopy";
+import { primeFanStorefrontPublicLandingIntent } from "../src/lib/fanStorefrontLandingIntent";
 import { normalizeHeroMediaForStorefront, isFullBleedHeroMediaSize } from "../src/lib/storefrontHeroNormalize";
 import { WitmeHeaderLogo } from "./WitmeHeaderLogo";
 import { renderTextWithCustomEmoji, type SjHeartEmojiAccessContext } from "../src/lib/customEmoji";
@@ -1055,6 +1058,19 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
               <a
                 href={live.homeHref ?? "/"}
                 className="flex items-center gap-2 min-h-[56px] min-w-0 flex-1 no-underline text-inherit"
+                onClick={() => {
+                  if (!live.primeLandingIntentBeforeHomeNavigation) return;
+                  const raw = live.homeHref ?? "/";
+                  try {
+                    const u = new URL(raw, typeof window !== "undefined" ? window.location.origin : "https://witme.io");
+                    primeFanStorefrontPublicLandingIntent(
+                      u.hostname,
+                      u.pathname.replace(/\/+$/, "") || "/"
+                    );
+                  } catch {
+                    /* ignore */
+                  }
+                }}
               >
                 <WitmeHeaderLogo color={primary} className="h-10 w-auto max-w-[220px] flex-shrink-0 sm:h-11" />
               </a>

@@ -102,6 +102,12 @@ import { readFanCheckoutFetchResult, FAN_TIP_CHECKOUT_SUCCESS_QS } from "../src/
 import { WitmeHeaderLogo } from "./WitmeHeaderLogo";
 import { formatFanStorefrontDocumentTitle, getFanFacingSiteTitle } from "../src/lib/fanFacingSiteTitle";
 import {
+  consumeFanStorefrontPublicLandingIntent,
+  peekFanStorefrontPublicLandingIntent,
+  primeFanStorefrontPublicLandingIntentForNormalizedPath,
+  stripFanStorefrontLandingQueryParam,
+} from "../src/lib/fanStorefrontLandingIntent";
+import {
   applyWitmeTabIcons,
   isWitmePublicSiteHostname,
   restoreEchoFluxTabIcons,
@@ -833,7 +839,7 @@ function applyFanStorefrontMemberUrl(
   window.history.replaceState(null, "", path + (qs ? `?${qs}` : "") + hash);
 }
 
-/** Former path segment `/p` (equals `?landing=1`). Migrated URLs strip `/p` and set `landing=1` when missing. */
+/** Legacy `/p` implied public landing. Rewrite to canonical path, prime landing intent without putting `landing=1` in the URL. */
 const LEGACY_PUBLIC_LANDING_PATH_SEGMENT = "p";
 
 function normalizeLegacyFanStorefrontPublicLandingPath(): void {
@@ -865,9 +871,10 @@ function normalizeLegacyFanStorefrontPublicLandingPath(): void {
   if (nextPathname == null) return;
 
   const params = new URLSearchParams(window.location.search);
-  if (!params.has("landing")) params.set("landing", "1");
+  params.delete("landing");
   const query = params.toString() ? `?${params.toString()}` : "";
   window.history.replaceState(null, "", nextPathname + query + (window.location.hash || ""));
+  primeFanStorefrontPublicLandingIntentForNormalizedPath(nextPathname);
 }
 
 /**
@@ -1373,10 +1380,39 @@ export const FanStorefrontView: React.FC = () => {
   const [supportSending, setSupportSending] = useState(false);
   const customDomainHandleCacheRef = useRef<{ host: string; handle: string | null } | null>(null);
 
+  const [landingEntryActive, setLandingEntryActive] = useState(() => {
+    if (typeof window === "undefined") return false;
+    const parsed = parseHandleFromPath();
+    if (parsed.memberNavSlug) return false;
+    const path = window.location.pathname.replace(/\/+$/, "") || "/";
+    if (new URLSearchParams(window.location.search).get("landing") === "1") return true;
+    return peekFanStorefrontPublicLandingIntent(window.location.hostname, path);
+  });
+
+  useLayoutEffect(() => {
+    if (typeof window === "undefined") return;
+    const parsed = parseHandleFromPath();
+    const path = window.location.pathname.replace(/\/+$/, "") || "/";
+    if (parsed.memberNavSlug) {
+      setLandingEntryActive(false);
+      stripFanStorefrontLandingQueryParam();
+      return;
+    }
+    const urlLanding = new URLSearchParams(window.location.search).get("landing") === "1";
+    const sessionConsumed = consumeFanStorefrontPublicLandingIntent(window.location.hostname, path);
+    if (urlLanding || sessionConsumed) {
+      setLandingEntryActive(true);
+    }
+    stripFanStorefrontLandingQueryParam();
+  }, [pathname]);
+
   const urlParams = typeof window !== "undefined" ? new URLSearchParams(window.location.search) : null;
   const previewMember = urlParams?.get("preview") === "member";
-  /** Logged-in members normally skip landing; use `?landing=1` to force the public marketing page. */
-  const forcePublicLanding = urlParams?.get("landing") === "1";
+  /**
+   * Signed-in creators previewing landing (Live / legacy `/p` / optional `?landing=1`).
+   * Query is stripped for a clean address bar; `landingEntryActive` keeps behavior until member hub tabs.
+   */
+  const forcePublicLanding = landingEntryActive || urlParams?.get("landing") === "1";
 
   const unreadMessageTabCount = useUnreadNewMessageNotificationCount(
     isLoggedIn && creator ? creator.creatorId : false
@@ -4655,7 +4691,7 @@ export const FanStorefrontView: React.FC = () => {
 
   // Creator-facing live preview should present guest auth CTAs (Sign up / Log in),
   // not the creator's existing session state.
-  // Do not force guest CTAs for normal fan sessions just because `?landing=1` is present.
+  // Do not force guest CTAs for normal fan sessions just because landing-preview flag is active.
   const showGuestAuthCtasOnLanding = isViewingOwnStorefront && forcePublicLanding;
 
   // Render legal pages (Terms/Privacy) if subpage is set
@@ -4779,7 +4815,7 @@ export const FanStorefrontView: React.FC = () => {
   const storefrontHomePath =
     typeof window !== "undefined" && isConfiguredCustomStorefrontHost(window.location.hostname)
       ? "/"
-      : `/${creator.handle}?landing=1`;
+      : `/${creator.handle}`;
 
   if (holdForAuthResolution || holdForEntitlementBootstrap) {
     return (
@@ -4814,6 +4850,7 @@ export const FanStorefrontView: React.FC = () => {
           joiningFree={joiningFree}
           isLoggedIn={showGuestAuthCtasOnLanding ? false : isLoggedIn}
           onLogout={showGuestAuthCtasOnLanding ? undefined : handleLogout}
+          primeLandingIntentBeforeLogoNavigation={showGuestAuthCtasOnLanding}
           publicTreatsOnLanding={creator.publicTreatsOnLanding === true}
           sectionsTreatsEnabled={creator.sections?.treats !== false}
           landingTreatProducts={landingTreatsProducts}
