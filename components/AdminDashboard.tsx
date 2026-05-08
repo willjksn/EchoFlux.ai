@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
-import { User, Activity } from '../types';
+import { User } from '../types';
 import { UserManagementModal } from './UserManagementModal';
 import { AddUserModal } from './AddUserModal';
 import { ReferralRewardsConfig } from './ReferralRewardsConfig';
@@ -14,7 +14,7 @@ import { AdminITSupportPanel } from './AdminITSupportPanel';
 import { InviteCodeManager } from './InviteCodeManager';
 import { WaitlistManager } from './WaitlistManager';
 import { EmailCenterPage } from './EmailCenterPage';
-import { TeamIcon, DollarSignIcon, UserPlusIcon, ArrowUpCircleIcon, ImageIcon, VideoIcon, LockIcon, TrendingIcon, TrashIcon, HeartIcon, StarIcon, ChatIcon, GlobeIcon, SparklesIcon } from './icons/UIIcons';
+import { TeamIcon, DollarSignIcon, UserPlusIcon, ImageIcon, VideoIcon, LockIcon, TrendingIcon, TrashIcon, HeartIcon, StarIcon, ChatIcon, GlobeIcon, SparklesIcon } from './icons/UIIcons';
 import { db, auth } from '../firebaseConfig';
 import { collection, query, orderBy, onSnapshot, setDoc, doc, getDoc, deleteField, getDocs } from 'firebase/firestore';
 import { useAppContext } from './AppContext';
@@ -23,6 +23,9 @@ import { getModelUsageAnalytics, type ModelUsageStats } from '../src/services/mo
 import { hasActiveStripeEchofluxSubscription } from '../src/lib/echofluxStripeMrr';
 import { safeUsernameForHandle } from '../src/lib/fanHubDisplay';
 import { normalizePlanForLimitsClient } from '../src/lib/creatorIdentity/planGate';
+
+const ADMIN_ECHOFLUX_SIGNUP_LIST_CAP = 120;
+const ADMIN_ECHOFLUX_SIGNUP_PREVIEW = 3;
 
 /** Gemini text models always listed in Requests by Model (0 when unused) so 2.5 / 2.0 / 1.5 show like other rows. */
 const GEMINI_TEXT_MODEL_DISPLAY_ORDER = [
@@ -43,6 +46,41 @@ function buildRequestsByModelRows(requestsByModel: Record<string, number>): [str
         .filter(([k]) => !(GEMINI_TEXT_MODEL_DISPLAY_ORDER as readonly string[]).includes(k))
         .sort((a, b) => b[1] - a[1]);
     return [...geminiRows, ...otherRows];
+}
+
+function resolveAdminDashboardAvatarUrl(user: User | Record<string, unknown>): string {
+    const d = user as Record<string, unknown>;
+    const pick = (k: string): string => {
+        const v = d[k];
+        return typeof v === "string" && v.trim() ? v.trim() : "";
+    };
+    return pick("avatar") || pick("photoURL") || pick("photoUrl") || pick("avatarUrl") || pick("imageUrl");
+}
+
+/** Admin tables: Firestore often has `photoURL` but not legacy `avatar`. */
+function AdminDashboardUserPhoto({ user, className }: { user: User; className: string }) {
+    const [broken, setBroken] = useState(false);
+    const url = resolveAdminDashboardAvatarUrl(user);
+    const showImg = Boolean(url && !broken);
+    const initial = (user.name || user.email || "?").trim().charAt(0).toUpperCase() || "?";
+    if (!showImg) {
+        return (
+            <div
+                className={`${className} flex shrink-0 items-center justify-center bg-slate-200 text-sm font-semibold text-slate-700 dark:bg-slate-600 dark:text-slate-100`}
+                aria-hidden
+            >
+                {initial}
+            </div>
+        );
+    }
+    return <img src={url} alt="" className={className} onError={() => setBroken(true)} />;
+}
+
+/** EchoFlux workspace directory only — excludes Fan Hub consumer accounts. */
+function isEchoFluxWorkspaceSignupCandidate(u: User): boolean {
+    if (u.role === "Admin") return false;
+    if (u.accountOrigin === "fan_hub") return false;
+    return true;
 }
 
 /** Admin live-stream table status column — matches Model Usage Analytics color language */
@@ -528,7 +566,6 @@ export const AdminDashboard: React.FC = () => {
     const { user: currentUser, showToast, setActivePage } = useAppContext();
     const [users, setUsers] = useState<User[]>([]);
     const [creatorIds, setCreatorIds] = useState<Set<string>>(new Set());
-    const [activityFeed, setActivityFeed] = useState<Activity[]>([]);
     const [editingUser, setEditingUser] = useState<User | null>(null);
     const [grantingRewardToUser, setGrantingRewardToUser] = useState<User | null>(null);
     const [searchTerm, setSearchTerm] = useState('');
@@ -551,6 +588,10 @@ export const AdminDashboard: React.FC = () => {
     const [creatorStorefrontDiagLoading, setCreatorStorefrontDiagLoading] = useState(false);
     /** When false, hide the long scan output but keep the panel header + run control. */
     const [creatorStorefrontHealthResultsExpanded, setCreatorStorefrontHealthResultsExpanded] = useState(true);
+
+    /** When false, each signup list shows only the first few rows; expand for full list (capped in useMemo). */
+    const [expandPaidWorkspaceSignups, setExpandPaidWorkspaceSignups] = useState(false);
+    const [expandIncompleteSignups, setExpandIncompleteSignups] = useState(false);
 
     // Fan Hub Revenue State
     const [fanHubRevenue, setFanHubRevenue] = useState<{
@@ -1001,16 +1042,6 @@ export const AdminDashboard: React.FC = () => {
                 const usersList = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })) as User[];
                 setUsers(usersList);
 
-                if (usersList.length > 0) {
-                    const activity: Activity[] = usersList.slice(0, 5).map(user => ({
-                        id: user.id,
-                        type: 'New User',
-                        user: { name: user.name, avatar: user.avatar },
-                        details: 'joined EchoFlux.ai',
-                        timestamp: new Date(user.signupDate).toLocaleString(),
-                    }));
-                    setActivityFeed(activity);
-                }
                 setIsLoading(false);
             }, (error) => {
                 console.warn("Error fetching real admin data, falling back to mock data:", error);
@@ -1038,15 +1069,6 @@ export const AdminDashboard: React.FC = () => {
 
                 setUsers(mockUsers);
 
-                const mockActivity: Activity[] = mockUsers.slice(0, 6).map(u => ({
-                    id: `act-${u.id}`,
-                    type: Math.random() > 0.5 ? 'New User' : 'Plan Upgrade',
-                    user: { name: u.name, avatar: u.avatar },
-                    details: Math.random() > 0.5 ? 'joined EchoFlux.ai' : `upgraded to ${u.plan}`,
-                    timestamp: 'Just now'
-                }));
-                setActivityFeed(mockActivity);
-                
                 setAccessError("Demo Mode: Using sample data (Firestore permissions restricted).");
                 setIsLoading(false);
             });
@@ -1803,12 +1825,41 @@ export const AdminDashboard: React.FC = () => {
             topUsers: sortedUsers.slice(0, 3)
         };
     }, [users]);
-    
 
-    const activityIcons: Record<Activity['type'], React.ReactNode> = {
-        'New User': <UserPlusIcon />,
-        'Plan Upgrade': <ArrowUpCircleIcon />,
-    };
+    /** Active EchoFlux Stripe subscribers who signed up in the last 30 days (excludes Fan Hub–only accounts). */
+    const dashboardRecentPaidWorkspaceSignups = useMemo(() => {
+        const cutoff = new Date();
+        cutoff.setDate(cutoff.getDate() - 30);
+        const t = cutoff.getTime();
+        return [...users]
+            .filter(
+                (u) =>
+                    isEchoFluxWorkspaceSignupCandidate(u) &&
+                    hasActiveStripeEchofluxSubscription(u) &&
+                    new Date(u.signupDate).getTime() > t,
+            )
+            .sort((a, b) => new Date(b.signupDate).getTime() - new Date(a.signupDate).getTime())
+            .slice(0, ADMIN_ECHOFLUX_SIGNUP_LIST_CAP);
+    }, [users]);
+
+    /**
+     * EchoFlux-intent accounts (not Fan Hub consumer-only) from the last 30 days with no active paid Stripe subscription.
+     * Typical: registered or started checkout but billing not completed.
+     */
+    const dashboardIncompleteStripeSignups = useMemo(() => {
+        const cutoff = new Date();
+        cutoff.setDate(cutoff.getDate() - 30);
+        const t = cutoff.getTime();
+        return [...users]
+            .filter(
+                (u) =>
+                    isEchoFluxWorkspaceSignupCandidate(u) &&
+                    !hasActiveStripeEchofluxSubscription(u) &&
+                    new Date(u.signupDate).getTime() > t,
+            )
+            .sort((a, b) => new Date(b.signupDate).getTime() - new Date(a.signupDate).getTime())
+            .slice(0, ADMIN_ECHOFLUX_SIGNUP_LIST_CAP);
+    }, [users]);
 
     /** Optional: mark Fan Buyer Summary rows where Firestore `accountOrigin` is still `echoflux` but the fan has storefront memberships. */
     const getUserOriginBadge = (user: User, opts?: { fanHubConsumerInSummary?: boolean }) => {
@@ -2208,38 +2259,121 @@ export const AdminDashboard: React.FC = () => {
                     )}
                 </div>
 
-                {/* Recent New Users */}
+                {/* EchoFlux workspace signups vs Stripe completion */}
                 <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-md">
-                    <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-4">Recent Signups</h3>
-                    <ul className="space-y-3">
-                        {activityFeed.length > 0 ? activityFeed.slice(0, 6).map(activity => (
-                            <li key={activity.id} className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
-                                <div className="p-2 bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 rounded-full">
+                    <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-1">EchoFlux signups (last 30 days)</h3>
+                    <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+                        Active Stripe subscribers vs. no active sub yet. Fan Hub–only accounts excluded.
+                    </p>
+                    <div className="space-y-6">
+                        <div>
+                            <h4 className="text-sm font-semibold text-gray-800 dark:text-gray-200 mb-2 flex items-center gap-2">
+                                <span className="inline-flex p-1.5 rounded-full bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300">
                                     <UserPlusIcon />
-                                </div>
-                                <div className="flex-1">
-                                    {(() => {
-                                        const matchedUser = users.find((u) => u.id === activity.id);
-                                        const label = adminUserDisplayLabel({
-                                            name: matchedUser?.name ?? activity.user.name,
-                                            email: matchedUser?.email ?? null,
-                                            username: (matchedUser as unknown as { username?: string | null })?.username ?? null,
-                                            handle: (matchedUser as unknown as { handle?: string | null })?.handle ?? null,
-                                            memberUsername: (matchedUser as unknown as { memberUsername?: string | null })?.memberUsername ?? null,
-                                        });
-                                        return (
-                                    <p className="font-semibold text-gray-900 dark:text-white">
-                                        {label}
+                                </span>
+                                New subscribers (active billing)
+                            </h4>
+                            <ul className="space-y-3">
+                                {dashboardRecentPaidWorkspaceSignups.length > 0 ? (
+                                    (expandPaidWorkspaceSignups
+                                        ? dashboardRecentPaidWorkspaceSignups
+                                        : dashboardRecentPaidWorkspaceSignups.slice(0, ADMIN_ECHOFLUX_SIGNUP_PREVIEW)
+                                    ).map((u) => (
+                                        <li key={u.id} className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+                                            <div className="p-2 bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 rounded-full">
+                                                <UserPlusIcon />
+                                            </div>
+                                            <div className="flex-1 min-w-0">
+                                                <p className="font-semibold text-gray-900 dark:text-white truncate">
+                                                    {adminUserDisplayLabel({
+                                                        name: u.name,
+                                                        email: u.email,
+                                                        username: (u as unknown as { username?: string | null }).username ?? null,
+                                                        handle: (u as unknown as { handle?: string | null }).handle ?? null,
+                                                        memberUsername: (u as unknown as { memberUsername?: string | null }).memberUsername ?? null,
+                                                    })}
+                                                </p>
+                                                <p className="text-xs text-gray-500 dark:text-gray-400">
+                                                    {new Date(u.signupDate).toLocaleString()} · Plan {u.plan ?? "—"}
+                                                </p>
+                                            </div>
+                                        </li>
+                                    ))
+                                ) : (
+                                    <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-3 border border-dashed border-gray-200 dark:border-gray-600 rounded-lg">
+                                        No new paying workspace subscribers in the last 30 days.
                                     </p>
-                                        );
-                                    })()}
-                                    <p className="text-xs text-gray-500 dark:text-gray-400">{activity.timestamp}</p>
-                                </div>
-                            </li>
-                        )) : (
-                            <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-4">No recent signups.</p>
-                        )}
-                    </ul>
+                                )}
+                            </ul>
+                            {dashboardRecentPaidWorkspaceSignups.length > ADMIN_ECHOFLUX_SIGNUP_PREVIEW && (
+                                <button
+                                    type="button"
+                                    onClick={() => setExpandPaidWorkspaceSignups((v) => !v)}
+                                    className="mt-2 text-sm text-primary-600 dark:text-primary-400 hover:underline"
+                                >
+                                    {expandPaidWorkspaceSignups
+                                        ? "Show less"
+                                        : `Show all (${dashboardRecentPaidWorkspaceSignups.length})`}
+                                </button>
+                            )}
+                        </div>
+                        <div>
+                            <h4 className="text-sm font-semibold text-gray-800 dark:text-gray-200 mb-2 flex items-center gap-2">
+                                <span className="inline-flex p-1.5 rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300">
+                                    <LockIcon />
+                                </span>
+                                Signed up — no active EchoFlux subscription yet
+                            </h4>
+                            <ul className="space-y-3">
+                                {dashboardIncompleteStripeSignups.length > 0 ? (
+                                    (expandIncompleteSignups
+                                        ? dashboardIncompleteStripeSignups
+                                        : dashboardIncompleteStripeSignups.slice(0, ADMIN_ECHOFLUX_SIGNUP_PREVIEW)
+                                    ).map((u) => (
+                                        <li key={u.id} className="flex items-center gap-3 p-3 bg-amber-50/60 dark:bg-amber-950/20 rounded-lg border border-amber-100/80 dark:border-amber-900/40">
+                                            <div className="p-2 bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 rounded-full">
+                                                <LockIcon />
+                                            </div>
+                                            <div className="flex-1 min-w-0">
+                                                <p className="font-semibold text-gray-900 dark:text-white truncate">
+                                                    {adminUserDisplayLabel({
+                                                        name: u.name,
+                                                        email: u.email,
+                                                        username: (u as unknown as { username?: string | null }).username ?? null,
+                                                        handle: (u as unknown as { handle?: string | null }).handle ?? null,
+                                                        memberUsername: (u as unknown as { memberUsername?: string | null }).memberUsername ?? null,
+                                                    })}
+                                                </p>
+                                                <p className="text-xs text-gray-500 dark:text-gray-400">
+                                                    {new Date(u.signupDate).toLocaleString()}
+                                                    {u.plan ? ` · Plan field: ${u.plan}` : ""}
+                                                    {typeof (u as unknown as { stripeCustomerId?: string }).stripeCustomerId === "string" &&
+                                                    (u as unknown as { stripeCustomerId?: string }).stripeCustomerId?.trim()
+                                                        ? " · Stripe customer record"
+                                                        : " · No active subscription"}
+                                                </p>
+                                            </div>
+                                        </li>
+                                    ))
+                                ) : (
+                                    <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-3 border border-dashed border-gray-200 dark:border-gray-600 rounded-lg">
+                                        No incomplete EchoFlux signups in the last 30 days.
+                                    </p>
+                                )}
+                            </ul>
+                            {dashboardIncompleteStripeSignups.length > ADMIN_ECHOFLUX_SIGNUP_PREVIEW && (
+                                <button
+                                    type="button"
+                                    onClick={() => setExpandIncompleteSignups((v) => !v)}
+                                    className="mt-2 text-sm text-primary-600 dark:text-primary-400 hover:underline"
+                                >
+                                    {expandIncompleteSignups
+                                        ? "Show less"
+                                        : `Show all (${dashboardIncompleteStripeSignups.length})`}
+                                </button>
+                            )}
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -3243,7 +3377,10 @@ export const AdminDashboard: React.FC = () => {
                                                             <tr className="border-b border-gray-200 dark:border-gray-700 bg-blue-50/30 dark:bg-blue-900/10">
                                                                 <td className="p-3">
                                                                     <div className="flex items-center space-x-3">
-                                                                        <img src={user.avatar} alt={user.name} className="w-10 h-10 rounded-full border-2 border-blue-500"/>
+                                                                        <AdminDashboardUserPhoto
+                                                                            user={user}
+                                                                            className="w-10 h-10 rounded-full border-2 border-blue-500"
+                                                                        />
                                                                         <div>
                                                                             <p className="font-bold text-gray-900 dark:text-white flex items-center gap-2">
                                                                                 {user.name}
@@ -3330,7 +3467,7 @@ export const AdminDashboard: React.FC = () => {
                                                             <tr className="border-b border-gray-200 dark:border-gray-700">
                                                                 <td className="p-3">
                                                                     <div className="flex items-center space-x-3">
-                                                                        <img src={user.avatar} alt={user.name} className="w-10 h-10 rounded-full" />
+                                                                        <AdminDashboardUserPhoto user={user} className="w-10 h-10 rounded-full" />
                                                                         <div>
                                                                             <p className="font-bold text-gray-900 dark:text-white flex items-center gap-2">
                                                                                 {user.name}
@@ -3406,9 +3543,8 @@ export const AdminDashboard: React.FC = () => {
                                                                 <tr className="border-b border-gray-200 dark:border-gray-700 bg-blue-50/30 dark:bg-blue-900/10">
                                                                     <td className="p-3">
                                                                         <div className="flex items-center space-x-3">
-                                                                            <img
-                                                                                src={user.avatar}
-                                                                                alt={user.name}
+                                                                            <AdminDashboardUserPhoto
+                                                                                user={user}
                                                                                 className="w-10 h-10 rounded-full border-2 border-blue-500"
                                                                             />
                                                                             <div>
@@ -3475,7 +3611,7 @@ export const AdminDashboard: React.FC = () => {
                                                                 <tr className="border-b border-gray-200 dark:border-gray-700">
                                                                     <td className="p-3">
                                                                         <div className="flex items-center space-x-3">
-                                                                            <img src={user.avatar} alt={user.name} className="w-10 h-10 rounded-full" />
+                                                                            <AdminDashboardUserPhoto user={user} className="w-10 h-10 rounded-full" />
                                                                             <div>
                                                                                 <p className="font-bold text-gray-900 dark:text-white flex items-center gap-2">
                                                                                     {user.name}
@@ -3601,11 +3737,7 @@ export const AdminDashboard: React.FC = () => {
                                                                                         <tr className="border-t border-cyan-100 dark:border-cyan-900/30">
                                                                                             <td className="p-3">
                                                                                                 <div className="flex items-center space-x-3">
-                                                                                                    <img
-                                                                                                        src={row.user.avatar}
-                                                                                                        alt={fanHubMemberTableLabel(row.user, fanHubProfileFor(row.user))}
-                                                                                                        className="w-10 h-10 rounded-full"
-                                                                                                    />
+                                                                                                    <AdminDashboardUserPhoto user={row.user} className="w-10 h-10 rounded-full" />
                                                                                                     <div>
                                                                                                         <p className="font-bold text-gray-900 dark:text-white flex items-center gap-2">
                                                                                                             {fanHubMemberTableLabel(row.user, fanHubProfileFor(row.user))}
@@ -3685,11 +3817,7 @@ export const AdminDashboard: React.FC = () => {
                                                                                         <tr key={`fanhub-unassigned-${user.id}`} className="border-t border-cyan-100 dark:border-cyan-900/30 bg-amber-50/30 dark:bg-amber-900/10">
                                                                                             <td className="p-3">
                                                                                                 <div className="flex items-center space-x-3">
-                                                                                                    <img
-                                                                                                        src={user.avatar}
-                                                                                                        alt={fanHubMemberTableLabel(user, fanHubProfileFor(user))}
-                                                                                                        className="w-10 h-10 rounded-full"
-                                                                                                    />
+                                                                                                    <AdminDashboardUserPhoto user={user} className="w-10 h-10 rounded-full" />
                                                                                                     <div>
                                                                                                         <p className="font-bold text-gray-900 dark:text-white flex items-center gap-2">
                                                                                                             {fanHubMemberTableLabel(user, fanHubProfileFor(user))}
