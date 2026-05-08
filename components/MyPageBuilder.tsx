@@ -1835,7 +1835,7 @@ export const MyPageBuilder: React.FC = () => {
 
   const normalizedHandle = (draft.handle as string | undefined)?.replace("@", "").toLowerCase().trim() || "";
   const previewUrl = normalizedHandle ? `https://witme.io/${normalizedHandle}` : "";
-  const previewLandingUrl = previewUrl ? `${previewUrl}/p` : "";
+  const previewLandingUrl = previewUrl ? `${previewUrl}?landing=1` : "";
   const previewMemberUrl = previewUrl ? `${previewUrl}?preview=member` : "";
 
   const handleCleanForCheck = handleInput.replace("@", "").toLowerCase().trim();
@@ -4161,7 +4161,7 @@ export const MyPageBuilder: React.FC = () => {
                     type="button"
                     onClick={() => window.open(previewLandingUrl, "_blank")}
                     className="px-2 py-1.5 rounded-lg text-xs font-medium bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700"
-                    title="Open public landing (/p — use while signed in to preview like a visitor)"
+                    title="Open public landing (?landing=1 — use while signed in to preview like a visitor)"
                   >
                     Live
                   </button>

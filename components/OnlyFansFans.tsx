@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { Fragment, useState, useEffect, useRef, useCallback } from 'react';
 import { useAppContext } from './AppContext';
 import { usePremiumStudioTab, type PendingFansTabSelection } from './PremiumStudioLayout';
 import { UserIcon, SearchIcon, StarIcon, SparklesIcon, TrashIcon, EditIcon, PlusIcon, XMarkIcon } from './icons/UIIcons';
@@ -1478,6 +1478,9 @@ export const OnlyFansFans: React.FC = () => {
             : null;
 
     const filteredFans = getFilteredAndSortedFans();
+    /** Active Fan Hub billing/mirror vs expired (`hubMembershipExpired`); grouped separately in the UI. */
+    const activeFilteredFans = filteredFans.filter((f) => f.hubMembershipExpired !== true);
+    const expiredFilteredFans = filteredFans.filter((f) => f.hubMembershipExpired === true);
     const last5Activity = selectedFanActivity.slice(0, 5);
 
     const stats = {
@@ -1491,6 +1494,235 @@ export const OnlyFansFans: React.FC = () => {
         customContentTypeFilter === 'all'
             ? customContent
             : customContent.filter((item) => inferDeliveryType(item) === customContentTypeFilter);
+
+    const renderFanCard = (fan: Fan): React.ReactElement => {
+        const prefs = fan.preferences;
+        const isSelected = selectedFan?.id === fan.id;
+        const accessExpired = fan.hubMembershipExpired === true;
+
+        return (
+            <div
+                onClick={() => {
+                    if (!accessExpired) setSelectedFan(fan);
+                }}
+                title={
+                    accessExpired
+                        ? 'Paid access ended when their billing period ended. Card stays for history; it updates if they resubscribe.'
+                        : undefined
+                }
+                className={`relative h-full min-h-[11rem] flex flex-col p-4 rounded-lg border-2 transition-all ${
+                    accessExpired
+                        ? 'cursor-not-allowed opacity-[0.82] grayscale-[0.55] hover:shadow-none'
+                        : 'cursor-pointer hover:shadow-lg'
+                } ${
+                    isSelected
+                        ? accessExpired
+                            ? 'border-gray-400 dark:border-gray-500 bg-gray-100 dark:bg-gray-800/95 ring-1 ring-gray-300/80 dark:ring-gray-600/80'
+                            : 'border-primary-500 bg-primary-50 dark:bg-primary-900/20'
+                        : accessExpired
+                          ? 'border-gray-300 dark:border-gray-600 bg-gray-100/95 dark:bg-gray-900/85 shadow-inner'
+                          : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 hover:border-primary-300 dark:hover:border-primary-700'
+                }`}
+            >
+                <div className="absolute top-2 right-2 z-10 flex min-h-[1.75rem] items-start justify-end gap-1">
+                    {(accessExpired || prefs.subscriptionTier) && (
+                        <span
+                            className={`px-2 py-1 text-xs font-semibold text-white rounded-full ${getTierColor(prefs.subscriptionTier, accessExpired)}`}
+                        >
+                            {accessExpired ? 'Expired' : prefs.subscriptionTier}
+                        </span>
+                    )}
+                    <button
+                        onClick={(e) => handleEditFan(fan, e)}
+                        className="p-1.5 bg-yellow-600 text-white rounded-md hover:bg-yellow-700 transition-colors"
+                        title="Edit Fan"
+                        type="button"
+                    >
+                        <EditIcon className="w-4 h-4" />
+                    </button>
+                    <button
+                        onClick={(e) => handleScheduleSession(fan, e)}
+                        className="p-1.5 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+                        title="Schedule Session"
+                        type="button"
+                    >
+                        <PlusIcon className="w-4 h-4" />
+                    </button>
+                    <button
+                        onClick={(e) => handleDeleteFan(fan.id, fan.name, e)}
+                        className="p-1.5 bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors"
+                        title="Delete Fan"
+                        type="button"
+                    >
+                        <TrashIcon className="w-4 h-4" />
+                    </button>
+                </div>
+
+                <div className="flex min-h-0 flex-1 flex-col pr-44">
+                    <div className="flex min-h-0 flex-1 items-start gap-3">
+                        <FanGridAvatar avatarUrl={fan.avatarUrl} name={fan.name} muted={accessExpired} />
+
+                        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+                            <h4 className="font-semibold text-gray-900 dark:text-white truncate">{fan.name}</h4>
+                            {prefs.email ? (
+                                <p className="mt-0.5 truncate text-xs text-gray-500 dark:text-gray-400">{prefs.email}</p>
+                            ) : null}
+
+                            <div className="mt-2 space-y-1">
+                                {prefs.totalSessions !== undefined && prefs.totalSessions > 0 && (
+                                    <button
+                                        onClick={async (e) => {
+                                            e.stopPropagation();
+                                            if (accessExpired) return;
+                                            if (!isSelected) {
+                                                setSelectedFan(fan);
+                                                setTimeout(() => {
+                                                    loadSessionHistory(fan.id, true);
+                                                }, 100);
+                                            } else {
+                                                loadSessionHistory(fan.id, true);
+                                            }
+                                        }}
+                                        className="flex items-center gap-2 text-xs text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 cursor-pointer underline"
+                                        type="button"
+                                    >
+                                        <span className="font-medium">{prefs.totalSessions}</span>
+                                        <span>sessions</span>
+                                    </button>
+                                )}
+                                {(() => {
+                                    const spendLvl = fanSpendLoading
+                                        ? prefs.spendingLevel || 0
+                                        : deriveFanAutoSpendingLevel(fan, fanSpendSummaries);
+                                    return spendLvl > 0 ? (
+                                        <div className="flex items-center gap-1 text-xs text-gray-600 dark:text-gray-400">
+                                            <span className="font-medium">Spending:</span>
+                                            <span className="flex items-center gap-0.5">
+                                                {Array.from({ length: spendLvl }).map((_, i) => (
+                                                    <span key={i} className="text-green-600 dark:text-green-400">
+                                                        💰
+                                                    </span>
+                                                ))}
+                                            </span>
+                                        </div>
+                                    ) : null;
+                                })()}
+                                {prefs.lastSessionDate && (
+                                    <div className="text-xs text-gray-500 dark:text-gray-500">
+                                        Last:{' '}
+                                        {(() => {
+                                            try {
+                                                const date = prefs.lastSessionDate?.toDate
+                                                    ? prefs.lastSessionDate.toDate()
+                                                    : new Date(prefs.lastSessionDate);
+                                                return date.toLocaleDateString();
+                                            } catch {
+                                                return 'Invalid date';
+                                            }
+                                        })()}
+                                    </div>
+                                )}
+                                {fan.purchaseIdentity && (
+                                    <div className="mt-2 pt-2 border-t border-gray-100 dark:border-gray-700/80">
+                                        <div className="text-[10px] font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">
+                                            Fan Hub revenue
+                                        </div>
+                                        {fanSpendLoading ? (
+                                            <span className="text-[10px] text-gray-400">Loading…</span>
+                                        ) : (
+                                            <div className="grid grid-cols-2 gap-x-2 gap-y-0.5 mt-1 text-[10px] text-gray-700 dark:text-gray-300">
+                                                {(() => {
+                                                    const s = fanSpendSummaries[fan.id];
+                                                    if (!s) {
+                                                        return (
+                                                            <span className="text-gray-400 col-span-2">No ledger match yet</span>
+                                                        );
+                                                    }
+                                                    const rows: [string, number][] = [
+                                                        ['Tips', s.tipsCents],
+                                                        ['Unlocks', s.unlocksCents],
+                                                        ['Subs', s.subscriptionsCents],
+                                                        ['Store', s.storeCents],
+                                                    ];
+                                                    return (
+                                                        <>
+                                                            {rows.flatMap(([label, cents]) => [
+                                                                <span key={`${label}-l`}>{label}</span>,
+                                                                <span
+                                                                    key={`${label}-v`}
+                                                                    className="tabular-nums text-right font-medium"
+                                                                >
+                                                                    {formatUsdFromCents(cents)}
+                                                                </span>,
+                                                            ])}
+                                                        </>
+                                                    );
+                                                })()}
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+
+                            {(prefs.favoriteSessionType || prefs.preferredTone || prefs.communicationStyle) && (
+                                <div className="mt-2 flex flex-wrap gap-1">
+                                    {prefs.favoriteSessionType && (
+                                        <span className="text-xs bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 px-1.5 py-0.5 rounded">
+                                            ⭐{' '}
+                                            {prefs.favoriteSessionType === 'Explicit'
+                                                ? 'Bold'
+                                                : prefs.favoriteSessionType.split(' ')[0]}
+                                        </span>
+                                    )}
+                                    {prefs.preferredTone && (
+                                        <span className="text-xs bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 px-1.5 py-0.5 rounded">
+                                            🎭 {prefs.preferredTone === 'Very Explicit' ? 'Bold' : prefs.preferredTone}
+                                        </span>
+                                    )}
+                                    {prefs.communicationStyle && (
+                                        <span className="text-xs bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 px-1.5 py-0.5 rounded">
+                                            💬{' '}
+                                            {prefs.communicationStyle === 'like Explicit'
+                                                ? 'Like Bold'
+                                                : prefs.communicationStyle}
+                                        </span>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+                    </div>
+
+                    <div className="mt-auto flex min-h-[1.25rem] shrink-0 flex-wrap gap-1 border-t border-gray-100 pt-3 dark:border-gray-700/50">
+                        {(() => {
+                            const fanType = prefs.isWhale
+                                ? 'Whale'
+                                : prefs.isVIP
+                                  ? 'VIP'
+                                  : prefs.isRegular
+                                    ? 'Regular'
+                                    : prefs.isBigSpender
+                                      ? 'Whale'
+                                      : prefs.isLoyalFan
+                                        ? 'Regular'
+                                        : null;
+                            if (!fanType) return null;
+                            const badgeClass =
+                                fanType === 'Whale'
+                                    ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300'
+                                    : fanType === 'VIP'
+                                      ? 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300'
+                                      : 'bg-pink-100 dark:bg-pink-900/30 text-pink-700 dark:text-pink-300';
+                            return (
+                                <span className={`text-xs px-2 py-0.5 rounded font-semibold ${badgeClass}`}>
+                                    {fanType}
+                                </span>
+                            );
+                        })()}
+                    </div>
+                </div>
+            </div>
+        );
+    };
 
     return (
         <div className="max-w-7xl mx-auto">
@@ -1575,240 +1807,59 @@ export const OnlyFansFans: React.FC = () => {
                 </div>
             </div>
 
-            {/* Fan grid */}
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {isLoading ? (
-                        <div className="col-span-full text-center py-8 text-gray-500 dark:text-gray-400">Loading fans...</div>
-                    ) : filteredFans.length === 0 ? (
-                        <div className="col-span-full text-center py-8 text-gray-500 dark:text-gray-400">
-                            {fanSearchQuery || fanFilter !== 'all' ? 'No fans match your filters' : 'No fans yet. Start a session in Scripts & Roleplay to create your first fan card!'}
-                        </div>
-                    ) : (
-                        filteredFans.map((fan) => {
-                            const prefs = fan.preferences;
-                            const isSelected = selectedFan?.id === fan.id;
-                            const accessExpired = fan.hubMembershipExpired === true;
-
-                            return (
-                                <div
-                                    key={fan.id}
-                                    onClick={() => {
-                                        if (!accessExpired) setSelectedFan(fan);
-                                    }}
-                                    title={
-                                        accessExpired
-                                            ? 'Paid access ended when their billing period ended. Card stays for history; it updates if they resubscribe.'
-                                            : undefined
-                                    }
-                                    className={`relative p-4 rounded-lg border-2 transition-all ${
-                                        accessExpired
-                                            ? 'cursor-not-allowed opacity-[0.82] grayscale-[0.55] hover:shadow-none'
-                                            : 'cursor-pointer hover:shadow-lg'
-                                    } ${
-                                        isSelected
-                                            ? accessExpired
-                                                ? 'border-gray-400 dark:border-gray-500 bg-gray-100 dark:bg-gray-800/95 ring-1 ring-gray-300/80 dark:ring-gray-600/80'
-                                                : 'border-primary-500 bg-primary-50 dark:bg-primary-900/20'
-                                            : accessExpired
-                                              ? 'border-gray-300 dark:border-gray-600 bg-gray-100/95 dark:bg-gray-900/85 shadow-inner'
-                                              : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 hover:border-primary-300 dark:hover:border-primary-700'
-                                    }`}
-                                >
-                                    {/* Action Buttons - Top Right */}
-                                    <div className="absolute top-2 right-2 flex gap-1 z-10">
-                                        {(accessExpired || prefs.subscriptionTier) && (
-                                            <span
-                                                className={`px-2 py-1 text-xs font-semibold text-white rounded-full ${getTierColor(prefs.subscriptionTier, accessExpired)}`}
-                                            >
-                                                {accessExpired ? 'Expired' : prefs.subscriptionTier}
-                                            </span>
-                                        )}
-                                        <button
-                                            onClick={(e) => handleEditFan(fan, e)}
-                                            className="p-1.5 bg-yellow-600 text-white rounded-md hover:bg-yellow-700 transition-colors"
-                                            title="Edit Fan"
-                                        >
-                                            <EditIcon className="w-4 h-4" />
-                                        </button>
-                                        <button
-                                            onClick={(e) => handleScheduleSession(fan, e)}
-                                            className="p-1.5 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
-                                            title="Schedule Session"
-                                        >
-                                            <PlusIcon className="w-4 h-4" />
-                                        </button>
-                                        <button
-                                            onClick={(e) => handleDeleteFan(fan.id, fan.name, e)}
-                                            className="p-1.5 bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors"
-                                            title="Delete Fan"
-                                        >
-                                            <TrashIcon className="w-4 h-4" />
-                                        </button>
-                                    </div>
-
-                                    <div className="flex items-start gap-3">
-                                        <FanGridAvatar avatarUrl={fan.avatarUrl} name={fan.name} muted={accessExpired} />
-
-                                        {/* Fan Info */}
-                                        <div className="flex-1 min-w-0">
-                                            <h4 className="font-semibold text-gray-900 dark:text-white truncate">
-                                                {fan.name}
-                                            </h4>
-                                            {prefs.email ? (
-                                                <p className="mt-0.5 truncate text-xs text-gray-500 dark:text-gray-400">
-                                                    {prefs.email}
-                                                </p>
-                                            ) : null}
-
-                                            {/* Quick Stats */}
-                                            <div className="mt-2 space-y-1">
-                                                {prefs.totalSessions !== undefined && prefs.totalSessions > 0 && (
-                                                    <button
-                                                        onClick={async (e) => {
-                                                            e.stopPropagation();
-                                                            if (accessExpired) return;
-                                                            // Select the fan first if not already selected
-                                                            if (!isSelected) {
-                                                                setSelectedFan(fan);
-                                                                // Wait a moment for the selection to take effect, then load sessions
-                                                                setTimeout(() => {
-                                                                    loadSessionHistory(fan.id, true);
-                                                                }, 100);
-                                                            } else {
-                                                                // Fan already selected, just load/expand sessions
-                                                                loadSessionHistory(fan.id, true);
-                                                            }
-                                                        }}
-                                                        className="flex items-center gap-2 text-xs text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 cursor-pointer underline"
-                                                    >
-                                                        <span className="font-medium">{prefs.totalSessions}</span>
-                                                        <span>sessions</span>
-                                                    </button>
-                                                )}
-                                                {(() => {
-                                                    const spendLvl = fanSpendLoading
-                                                        ? prefs.spendingLevel || 0
-                                                        : deriveFanAutoSpendingLevel(fan, fanSpendSummaries);
-                                                    return spendLvl > 0 ? (
-                                                    <div className="flex items-center gap-1 text-xs text-gray-600 dark:text-gray-400">
-                                                        <span className="font-medium">Spending:</span>
-                                                        <span className="flex items-center gap-0.5">
-                                                            {Array.from({ length: spendLvl }).map((_, i) => (
-                                                                <span key={i} className="text-green-600 dark:text-green-400">
-                                                                    💰
-                                                                </span>
-                                                            ))}
-                                                        </span>
-                                                    </div>
-                                                    ) : null;
-                                                })()}
-                                                {prefs.lastSessionDate && (
-                                                    <div className="text-xs text-gray-500 dark:text-gray-500">
-                                                        Last: {(() => {
-                                                            try {
-                                                                const date = prefs.lastSessionDate?.toDate ? prefs.lastSessionDate.toDate() : new Date(prefs.lastSessionDate);
-                                                                return date.toLocaleDateString();
-                                                            } catch {
-                                                                return 'Invalid date';
-                                                            }
-                                                        })()}
-                                                    </div>
-                                                )}
-                                                {fan.purchaseIdentity && (
-                                                    <div className="mt-2 pt-2 border-t border-gray-100 dark:border-gray-700/80">
-                                                        <div className="text-[10px] font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">
-                                                            Fan Hub revenue
-                                                        </div>
-                                                        {fanSpendLoading ? (
-                                                            <span className="text-[10px] text-gray-400">Loading…</span>
-                                                        ) : (
-                                                            <div className="grid grid-cols-2 gap-x-2 gap-y-0.5 mt-1 text-[10px] text-gray-700 dark:text-gray-300">
-                                                                {(() => {
-                                                                    const s = fanSpendSummaries[fan.id];
-                                                                    if (!s) {
-                                                                        return (
-                                                                            <span className="text-gray-400 col-span-2">No ledger match yet</span>
-                                                                        );
-                                                                    }
-                                                                    const rows: [string, number][] = [
-                                                                        ['Tips', s.tipsCents],
-                                                                        ['Unlocks', s.unlocksCents],
-                                                                        ['Subs', s.subscriptionsCents],
-                                                                        ['Store', s.storeCents],
-                                                                    ];
-                                                                    return (
-                                                                        <>
-                                                                            {rows.flatMap(([label, cents]) => [
-                                                                                <span key={`${label}-l`}>{label}</span>,
-                                                                                <span key={`${label}-v`} className="tabular-nums text-right font-medium">
-                                                                                    {formatUsdFromCents(cents)}
-                                                                                </span>,
-                                                                            ])}
-                                                                        </>
-                                                                    );
-                                                                })()}
-                                                            </div>
-                                                        )}
-                                                    </div>
-                                                )}
-                                            </div>
-
-                                            {/* Favorite Tags */}
-                                            {(prefs.favoriteSessionType || prefs.preferredTone || prefs.communicationStyle) && (
-                                                <div className="mt-2 flex flex-wrap gap-1">
-                                                    {prefs.favoriteSessionType && (
-                                                        <span className="text-xs bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 px-1.5 py-0.5 rounded">
-                                                            ⭐ {prefs.favoriteSessionType === 'Explicit' ? 'Bold' : prefs.favoriteSessionType.split(' ')[0]}
-                                                        </span>
-                                                    )}
-                                                    {prefs.preferredTone && (
-                                                        <span className="text-xs bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 px-1.5 py-0.5 rounded">
-                                                            🎭 {prefs.preferredTone === 'Very Explicit' ? 'Bold' : prefs.preferredTone}
-                                                        </span>
-                                                    )}
-                                                    {prefs.communicationStyle && (
-                                                        <span className="text-xs bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 px-1.5 py-0.5 rounded">
-                                                            💬 {prefs.communicationStyle === 'like Explicit' ? 'Like Bold' : prefs.communicationStyle}
-                                                        </span>
-                                                    )}
-                                                </div>
-                                            )}
-                                        </div>
-                                    </div>
-
-                                    {/* Badge */}
-                                    <div className="mt-2 flex gap-1">
-                                        {(() => {
-                                            const fanType = prefs.isWhale
-                                                ? 'Whale'
-                                                : prefs.isVIP
-                                                ? 'VIP'
-                                                : prefs.isRegular
-                                                ? 'Regular'
-                                                : prefs.isBigSpender
-                                                ? 'Whale'
-                                                : prefs.isLoyalFan
-                                                ? 'Regular'
-                                                : null;
-                                            if (!fanType) return null;
-                                            const badgeClass =
-                                                fanType === 'Whale'
-                                                    ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300'
-                                                    : fanType === 'VIP'
-                                                    ? 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300'
-                                                    : 'bg-pink-100 dark:bg-pink-900/30 text-pink-700 dark:text-pink-300';
-                                            return (
-                                                <span className={`text-xs px-2 py-0.5 rounded font-semibold ${badgeClass}`}>
-                                                    {fanType}
-                                                </span>
-                                            );
-                                        })()}
-                                    </div>
-                                </div>
-                            );
-                        })
-                    )}
+            {/* Fan cards: active access first, then expired (never mixed). */}
+            {isLoading ? (
+                <div className="text-center py-8 text-gray-500 dark:text-gray-400">Loading fans...</div>
+            ) : filteredFans.length === 0 ? (
+                <div className="text-center py-8 text-gray-500 dark:text-gray-400">
+                    {fanSearchQuery || fanFilter !== 'all'
+                        ? 'No fans match your filters'
+                        : 'No fans yet. Start a session in Scripts & Roleplay to create your first fan card!'}
                 </div>
+            ) : (
+                <div className="space-y-10">
+                    {activeFilteredFans.length > 0 ? (
+                        <section className="space-y-4" aria-label="Fans with active access">
+                            <div>
+                                <h2 className="text-lg font-semibold tracking-tight text-gray-900 dark:text-white">
+                                    Active access
+                                    <span className="ml-2 text-base font-normal text-gray-500 dark:text-gray-400">
+                                        ({activeFilteredFans.length})
+                                    </span>
+                                </h2>
+                                <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
+                                    Current Fan Hub billing access (not expired on the Stripe mirror).
+                                </p>
+                            </div>
+                            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3 items-stretch">
+                                {activeFilteredFans.map((fan) => (
+                                    <Fragment key={fan.id}>{renderFanCard(fan)}</Fragment>
+                                ))}
+                            </div>
+                        </section>
+                    ) : null}
+                    {expiredFilteredFans.length > 0 ? (
+                        <section className="space-y-4" aria-label="Fans with expired access">
+                            <div>
+                                <h2 className="text-lg font-semibold tracking-tight text-gray-700 dark:text-gray-200">
+                                    Expired access
+                                    <span className="ml-2 text-base font-normal text-gray-500 dark:text-gray-400">
+                                        ({expiredFilteredFans.length})
+                                    </span>
+                                </h2>
+                                <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
+                                    Paid billing period ended. Cards stay for your records and update if they resubscribe.
+                                </p>
+                            </div>
+                            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3 items-stretch">
+                                {expiredFilteredFans.map((fan) => (
+                                    <Fragment key={fan.id}>{renderFanCard(fan)}</Fragment>
+                                ))}
+                            </div>
+                        </section>
+                    ) : null}
+                </div>
+            )}
 
             {/* Selected Fan Details Panel */}
             {selectedFan && (
