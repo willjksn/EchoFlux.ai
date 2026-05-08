@@ -291,34 +291,15 @@ export const FanHubUsers: React.FC = () => {
       const token = auth.currentUser ? await auth.currentUser.getIdToken() : null;
       const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
 
-      // Fetch orders for spend calculation
-      const ordersRes = await fetch(
-        `/api/creatorOrders?limit=1000&creatorId=${encodeURIComponent(creatorId)}`,
-        { headers }
-      );
-      let orders: any[] = [];
-      let earliestPurchaseAtByFanId: Record<string, string> = {};
-      let earliestPurchaseAtByFanEmail: Record<string, string> = {};
-      let subscriptionSpendByFanId: Record<string, number> = {};
-      let subscriptionSpendByFanEmail: Record<string, number> = {};
-      if (ordersRes.ok) {
-        const data = await ordersRes.json();
-        orders = data.orders || [];
-        earliestPurchaseAtByFanId = (data.earliestPurchaseAtByFanId as Record<string, string>) || {};
-        earliestPurchaseAtByFanEmail = (data.earliestPurchaseAtByFanEmail as Record<string, string>) || {};
-        subscriptionSpendByFanId = (data.subscriptionSpendByFanId as Record<string, number>) || {};
-        subscriptionSpendByFanEmail = (data.subscriptionSpendByFanEmail as Record<string, number>) || {};
-      } else if (import.meta.env.DEV && (ordersRes.status === 404 || ordersRes.status === 502)) {
-        console.warn(
-          `[FanHubUsers] /api/creatorOrders returned ${ordersRes.status}. ` +
-            "Vite does not run serverless routes locally unless you proxy: add DEV_API_PROXY=https://your-app.vercel.app to .env.local (see docs/LOCAL_DEV.md). User list still loads from Firestore; store spend columns may be incomplete."
-        );
-      }
-
-      // Build user map - start with fans collection (primary source)
+      // Build user map - start with fans collection (Stripe subscribers and purchasers).
       const firestoreDate = (v: unknown): Date | null => {
         if (v == null || v === "") return null;
-        if (typeof v === "object" && v !== null && "toDate" in v && typeof (v as { toDate: () => Date }).toDate === "function") {
+        if (
+          typeof v === "object" &&
+          v !== null &&
+          "toDate" in v &&
+          typeof (v as { toDate: () => Date }).toDate === "function"
+        ) {
           const d = (v as { toDate: () => Date }).toDate();
           return Number.isFinite(d.getTime()) ? d : null;
         }
@@ -334,63 +315,110 @@ export const FanHubUsers: React.FC = () => {
       const monthEnd = new Date(nowRef.getFullYear(), nowRef.getMonth() + 1, 0, 23, 59, 59, 999);
       const isInCurrentMonth = (d: Date) => d >= monthStart && d <= monthEnd;
 
-      const userMap = new Map<string, {
-        id: string;
-        email: string | null;
-        displayName: string | null;
-        username?: string | null;
-        /** From fans doc role (admin / member / tipper) — Stormij migration + manual */
-        storedRole?: UserRole | null;
-        subscriptionStatus: string | null;
-        subscribedAt: Date | null;
-        tips: number;
-        unlocks: number;
-        treats: number;
-        membership: number;
-        /** Sum of order amounts only (tips + unlocks + treats + membership); not fans.totalSpentCents */
-        total: number;
-        /** `creators/.../fans/{id}.totalSpentCents` — used when orders are missing or undercounted */
-        fanDocBaselineCents: number;
-        /** `creators/.../fans/{id}.totalMembershipCents` — webhook-maintained subscription spend when available */
-        fanDocMembershipCents: number;
-        mtdTips: number;
-        mtdUnlocks: number;
-        mtdTreats: number;
-        mtdMembership: number;
-        lastActive: Date | null;
-        firstOrder: Date | null;
-        avatarUrl?: string;
-        /** True when Stripe cancel_at_period_end; access continues until subscriptionCurrentPeriodEnd */
-        cancelAtPeriodEnd?: boolean;
-        /** Fan hub webhook sets when subscription deleted (approx. when status flipped to canceled) */
-        canceledAt?: Date | null;
-        /** ISO or Date from webhook — end of current paid period */
-        subscriptionCurrentPeriodEnd?: Date | null;
-        /** From users/{uid}.signupDate when fan doc has no timeline */
-        profileSignupAt?: Date | null;
-      }>();
+      const userMap = new Map<
+        string,
+        {
+          id: string;
+          email: string | null;
+          displayName: string | null;
+          username?: string | null;
+          /** From fans doc role (admin / member / tipper) — Stormij migration + manual */
+          storedRole?: UserRole | null;
+          subscriptionStatus: string | null;
+          subscribedAt: Date | null;
+          tips: number;
+          unlocks: number;
+          treats: number;
+          membership: number;
+          /** Sum of order amounts only (tips + unlocks + treats + membership); not fans.totalSpentCents */
+          total: number;
+          /** `creators/.../fans/{id}.totalSpentCents` — used when orders are missing or undercounted */
+          fanDocBaselineCents: number;
+          /** `creators/.../fans/{id}.totalMembershipCents` — webhook-maintained subscription spend when available */
+          fanDocMembershipCents: number;
+          mtdTips: number;
+          mtdUnlocks: number;
+          mtdTreats: number;
+          mtdMembership: number;
+          lastActive: Date | null;
+          firstOrder: Date | null;
+          avatarUrl?: string;
+          cancelAtPeriodEnd?: boolean;
+          canceledAt?: Date | null;
+          subscriptionCurrentPeriodEnd?: Date | null;
+          profileSignupAt?: Date | null;
+        }
+      >();
 
-      let creatorImageUrls = new Set<string>();
-      try {
-        const [creatorUserSnap, creatorDocSnap] = await Promise.all([
-          getDoc(doc(db, "users", creatorId)),
-          getDoc(doc(db, "creators", creatorId)),
-        ]);
-        creatorImageUrls = buildCreatorImageUrlSet(
-          creatorUserSnap.exists() ? (creatorUserSnap.data() as Record<string, unknown>) : undefined,
-          creatorDocSnap.exists() ? (creatorDocSnap.data() as Record<string, unknown>) : undefined
-        );
-      } catch {
-        creatorImageUrls = new Set();
-      }
+      /** Overlap API + Fan Hub mirror reads — same payloads as sequential; only wall-clock differs. */
+      const [ordersPayload, creatorImageUrls, fansSnapOutcome] = await Promise.all([
+        (async () => {
+          const ordersRes = await fetch(
+            `/api/creatorOrders?limit=1000&creatorId=${encodeURIComponent(creatorId)}`,
+            { headers }
+          );
+          const empty = {
+            orders: [] as any[],
+            earliestPurchaseAtByFanId: {} as Record<string, string>,
+            earliestPurchaseAtByFanEmail: {} as Record<string, string>,
+            subscriptionSpendByFanId: {} as Record<string, number>,
+            subscriptionSpendByFanEmail: {} as Record<string, number>,
+          };
+          if (ordersRes.ok) {
+            const data = await ordersRes.json();
+            return {
+              orders: data.orders || [],
+              earliestPurchaseAtByFanId:
+                (data.earliestPurchaseAtByFanId as Record<string, string>) || {},
+              earliestPurchaseAtByFanEmail:
+                (data.earliestPurchaseAtByFanEmail as Record<string, string>) || {},
+              subscriptionSpendByFanId:
+                (data.subscriptionSpendByFanId as Record<string, number>) || {},
+              subscriptionSpendByFanEmail:
+                (data.subscriptionSpendByFanEmail as Record<string, number>) || {},
+            };
+          }
+          if (import.meta.env.DEV && (ordersRes.status === 404 || ordersRes.status === 502)) {
+            console.warn(
+              `[FanHubUsers] /api/creatorOrders returned ${ordersRes.status}. ` +
+                "Vite does not run serverless routes locally unless you proxy: add DEV_API_PROXY=https://your-app.vercel.app to .env.local (see docs/LOCAL_DEV.md). User list still loads from Firestore; store spend columns may be incomplete."
+            );
+          }
+          return empty;
+        })(),
+        (async (): Promise<Set<string>> => {
+          try {
+            const [creatorUserSnap, creatorDocSnap] = await Promise.all([
+              getDoc(doc(db, "users", creatorId)),
+              getDoc(doc(db, "creators", creatorId)),
+            ]);
+            return buildCreatorImageUrlSet(
+              creatorUserSnap.exists() ? (creatorUserSnap.data() as Record<string, unknown>) : undefined,
+              creatorDocSnap.exists() ? (creatorDocSnap.data() as Record<string, unknown>) : undefined
+            );
+          } catch {
+            return new Set<string>();
+          }
+        })(),
+        (async () => {
+          try {
+            const fansRef = collection(db, "creators", creatorId, "fans");
+            return await getDocs(fansRef);
+          } catch (e) {
+            console.log("Fans collection may not exist yet:", e);
+            return null;
+          }
+        })(),
+      ]);
 
-      // First, fetch from creators/{creatorId}/fans collection (Stripe subscribers and purchasers)
-      // Note: Do not use orderBy("createdAt") here — Firestore omits docs missing that field, so migrated
-      // Stormij fans (or older webhook rows) can disappear from the list. Sort client-side instead.
-      try {
-        const fansRef = collection(db, "creators", creatorId, "fans");
-        const fansSnap = await getDocs(fansRef);
-        const fanDocs = [...fansSnap.docs].sort((a, b) => {
+      const orders = ordersPayload.orders;
+      const earliestPurchaseAtByFanId = ordersPayload.earliestPurchaseAtByFanId;
+      const earliestPurchaseAtByFanEmail = ordersPayload.earliestPurchaseAtByFanEmail;
+      const subscriptionSpendByFanId = ordersPayload.subscriptionSpendByFanId;
+      const subscriptionSpendByFanEmail = ordersPayload.subscriptionSpendByFanEmail;
+
+      if (fansSnapOutcome) {
+        const fanDocs = [...fansSnapOutcome.docs].sort((a, b) => {
           const da = a.data();
           const db_ = b.data();
           const ta =
@@ -407,18 +435,16 @@ export const FanHubUsers: React.FC = () => {
               : 0);
           return tb - ta;
         });
-        fanDocs.forEach((doc) => {
-          const data = doc.data();
-          const fanId = doc.id;
+        fanDocs.forEach((docSnap) => {
+          const data = docSnap.data();
+          const fanId = docSnap.id;
           const fromCompound = parseCompoundFanDocumentId(fanId);
           const resolvedEmail =
             (typeof data.email === "string" && data.email.trim()) ||
             fromCompound.emailFromId ||
             null;
           const subscribedAt =
-            firestoreDate(data.subscribedAt) ??
-            firestoreDate(data.createdAt) ??
-            null;
+            firestoreDate(data.subscribedAt) ?? firestoreDate(data.createdAt) ?? null;
           const subscriptionCurrentPeriodEnd = pickLatestMemberAccessEnd(data as Record<string, unknown>);
 
           const rawUsernameFromDoc =
@@ -428,9 +454,7 @@ export const FanHubUsers: React.FC = () => {
             (typeof data.instagram_handle === "string" && data.instagram_handle.trim()) ||
             (typeof data.instagramHandle === "string" && data.instagramHandle.trim()) ||
             "";
-          const rawUsername = rawUsernameFromDoc
-            ? rawUsernameFromDoc.replace(/^@/, "").toLowerCase()
-            : null;
+          const rawUsername = rawUsernameFromDoc ? rawUsernameFromDoc.replace(/^@/, "").toLowerCase() : null;
           const storedRole = parseFanMemberRoleFromFirestore(data as Record<string, unknown>) as UserRole | null;
 
           userMap.set(fanId, {
@@ -470,8 +494,6 @@ export const FanHubUsers: React.FC = () => {
             subscriptionCurrentPeriodEnd,
           });
         });
-      } catch (e) {
-        console.log("Fans collection may not exist yet:", e);
       }
 
       // Merge order data into user map
@@ -555,13 +577,17 @@ export const FanHubUsers: React.FC = () => {
         if (pd && (!row.firstOrder || pd < row.firstOrder)) row.firstOrder = pd;
       }
 
-      // Also check creatorSubscribers for any legacy data
-      try {
-        const legacySubRef = collection(db, "creatorSubscribers", creatorId, "subscribers");
-        const legacySubSnap = await getDocs(legacySubRef);
-        legacySubSnap.docs.forEach((doc) => {
-          const data = doc.data();
-          const fanId = doc.id;
+      // Legacy subscriber mirror + manually added hub users — independent reads, same merge rules.
+      const legacySubRef = collection(db, "creatorSubscribers", creatorId, "subscribers");
+      const manualUsersRef = collection(db, "creators", creatorId, "fanUsers");
+      const [legacySubSnapOutcome, manualUsersSnapOutcome] = await Promise.all([
+        getDocs(legacySubRef).catch(() => null),
+        getDocs(manualUsersRef).catch(() => null),
+      ]);
+      if (legacySubSnapOutcome) {
+        legacySubSnapOutcome.docs.forEach((docSnap) => {
+          const data = docSnap.data();
+          const fanId = docSnap.id;
           const legacyPeriodEnd = pickLatestMemberAccessEnd(data as Record<string, unknown>);
           if (!userMap.has(fanId)) {
             const subscribedAt = data.updatedAt ? new Date(data.updatedAt) : null;
@@ -604,17 +630,11 @@ export const FanHubUsers: React.FC = () => {
             }
           }
         });
-      } catch {
-        // Collection may not exist
       }
-
-      // Also fetch manually added users from fanUsers collection
-      try {
-        const manualUsersRef = collection(db, "creators", creatorId, "fanUsers");
-        const manualUsersSnap = await getDocs(manualUsersRef);
-        manualUsersSnap.docs.forEach((doc) => {
-          const data = doc.data();
-          const fanId = data.email || doc.id;
+      if (manualUsersSnapOutcome) {
+        manualUsersSnapOutcome.docs.forEach((docSnap) => {
+          const data = docSnap.data();
+          const fanId = data.email || docSnap.id;
           if (!userMap.has(fanId)) {
             const createdAt = data.createdAt?.toDate() || null;
             userMap.set(fanId, {
@@ -641,8 +661,6 @@ export const FanHubUsers: React.FC = () => {
             });
           }
         });
-      } catch {
-        // Manual users collection may not exist
       }
 
       // Same fan can appear twice after migration: e.g. `fans/{stormijUid}` from members vs `orders` keyed by
@@ -813,76 +831,80 @@ export const FanHubUsers: React.FC = () => {
       // Merge `users/{fanId}` so @username shows when `fans` doc lacks it (Stripe + claimed handles)
       const profileIds = [...userMap.keys()];
       const PROFILE_CHUNK = 30;
-      for (let i = 0; i < profileIds.length; i += PROFILE_CHUNK) {
-        const chunk = profileIds.slice(i, i + PROFILE_CHUNK);
-        await Promise.all(
-          chunk.map(async (fanId) => {
-            try {
-              const entry = userMap.get(fanId);
-              if (!entry) return;
-              const authUid = authUidFromFanDocId(fanId);
-              const userDocIds = Array.from(new Set([fanId, authUid].filter((x) => x.length > 0)));
-              let u: Record<string, unknown> | null = null;
-              for (const uid of userDocIds) {
-                if (uid === creatorId) continue;
-                const uSnap = await getDoc(doc(db, "users", uid));
-                if (uSnap.exists()) {
-                  u = uSnap.data() as Record<string, unknown>;
-                  break;
-                }
-              }
-              if (!u && entry.email && EMAIL_RE.test(entry.email.trim().toLowerCase())) {
-                const emailSnap = await getDocs(
-                  query(collection(db, "users"), where("email", "==", entry.email.trim().toLowerCase()))
-                );
-                const first = emailSnap.docs[0];
-                if (first?.exists()) {
-                  u = first.data() as Record<string, unknown>;
-                }
-              }
-              if (!u) return;
-              const uu = safeUsernameForHandle(
-                typeof u.username === "string" ? u.username : undefined
-              );
-              if (uu && (!entry.username || looksDerivedFromEmailUsername(entry.username, entry.email))) {
-                entry.username = uu;
-              }
-              // Prefer canonical EchoFlux profile naming (`users/{uid}`) over older
-              // fan row displayName values so Fan Hub matches Admin/User Management.
-              const dn = typeof u.displayName === "string" ? u.displayName.trim() : "";
-              const nm = typeof u.name === "string" ? u.name.trim() : "";
-              if (dn) entry.displayName = dn;
-              else if (nm) entry.displayName = nm;
-              // Stormij sometimes stored admin/role only on `users/{uid}`, not on `fans/{uid}`
-              if (!entry.storedRole) {
-                const fromUser = parseFanMemberRoleFromFirestore(u);
-                if (fromUser) entry.storedRole = fromUser;
-              }
-              const profileSu = firestoreDate(u.signupDate);
-              if (profileSu) {
-                if (!entry.profileSignupAt || profileSu.getTime() < entry.profileSignupAt.getTime()) {
-                  entry.profileSignupAt = profileSu;
-                }
-              }
-              const userDocCreated = firestoreDate(u.createdAt);
-              if (userDocCreated) {
-                if (!entry.profileSignupAt || userDocCreated.getTime() < entry.profileSignupAt.getTime()) {
-                  entry.profileSignupAt = userDocCreated;
-                }
-              }
-              const uAv =
-                (typeof u.avatar === "string" && u.avatar.trim()) ||
-                (typeof u.photoURL === "string" && u.photoURL.trim()) ||
-                (typeof u.photoUrl === "string" && u.photoUrl.trim()) ||
-                "";
-              if (uAv) {
-                entry.avatarUrl = uAv;
-              }
-            } catch {
-              /* ignore */
+      const enrichOneFanProfile = async (fanId: string): Promise<void> => {
+        try {
+          const entry = userMap.get(fanId);
+          if (!entry) return;
+          const authUid = authUidFromFanDocId(fanId);
+          const userDocIds = Array.from(new Set([fanId, authUid].filter((x) => x.length > 0)));
+          let u: Record<string, unknown> | null = null;
+          for (const uid of userDocIds) {
+            if (uid === creatorId) continue;
+            const uSnap = await getDoc(doc(db, "users", uid));
+            if (uSnap.exists()) {
+              u = uSnap.data() as Record<string, unknown>;
+              break;
             }
-          })
-        );
+          }
+          if (!u && entry.email && EMAIL_RE.test(entry.email.trim().toLowerCase())) {
+            const emailSnap = await getDocs(
+              query(collection(db, "users"), where("email", "==", entry.email.trim().toLowerCase()))
+            );
+            const first = emailSnap.docs[0];
+            if (first?.exists()) {
+              u = first.data() as Record<string, unknown>;
+            }
+          }
+          if (!u) return;
+          const uu = safeUsernameForHandle(
+            typeof u.username === "string" ? u.username : undefined
+          );
+          if (uu && (!entry.username || looksDerivedFromEmailUsername(entry.username, entry.email))) {
+            entry.username = uu;
+          }
+          // Prefer canonical EchoFlux profile naming (`users/{uid}`) over older
+          // fan row displayName values so Fan Hub matches Admin/User Management.
+          const dn = typeof u.displayName === "string" ? u.displayName.trim() : "";
+          const nm = typeof u.name === "string" ? u.name.trim() : "";
+          if (dn) entry.displayName = dn;
+          else if (nm) entry.displayName = nm;
+          // Stormij sometimes stored admin/role only on `users/{uid}`, not on `fans/{uid}`
+          if (!entry.storedRole) {
+            const fromUser = parseFanMemberRoleFromFirestore(u);
+            if (fromUser) entry.storedRole = fromUser;
+          }
+          const profileSu = firestoreDate(u.signupDate);
+          if (profileSu) {
+            if (!entry.profileSignupAt || profileSu.getTime() < entry.profileSignupAt.getTime()) {
+              entry.profileSignupAt = profileSu;
+            }
+          }
+          const userDocCreated = firestoreDate(u.createdAt);
+          if (userDocCreated) {
+            if (!entry.profileSignupAt || userDocCreated.getTime() < entry.profileSignupAt.getTime()) {
+              entry.profileSignupAt = userDocCreated;
+            }
+          }
+          const uAv =
+            (typeof u.avatar === "string" && u.avatar.trim()) ||
+            (typeof u.photoURL === "string" && u.photoURL.trim()) ||
+            (typeof u.photoUrl === "string" && u.photoUrl.trim()) ||
+            "";
+          if (uAv) {
+            entry.avatarUrl = uAv;
+          }
+        } catch {
+          /* ignore */
+        }
+      };
+
+      for (let i = 0; i < profileIds.length; i += PROFILE_CHUNK * 2) {
+        const chunkA = profileIds.slice(i, i + PROFILE_CHUNK);
+        const chunkB = profileIds.slice(i + PROFILE_CHUNK, i + PROFILE_CHUNK * 2);
+        await Promise.all([
+          Promise.all(chunkA.map((id) => enrichOneFanProfile(id))),
+          chunkB.length > 0 ? Promise.all(chunkB.map((id) => enrichOneFanProfile(id))) : Promise.resolve(),
+        ]);
       }
 
       for (const row of userMap.values()) {

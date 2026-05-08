@@ -137,7 +137,58 @@ type FanSpendSummary = {
     unlocksCents: number;
     subscriptionsCents: number;
     storeCents: number;
+    /** Matched paid hub orders (amount > 0, not refunded), counted once per order row */
+    matchedPaidOrderCount: number;
+    /** Latest matched order `createdAt` (epoch ms); 0 if unknown */
+    latestPaidOrderAtMs: number;
 };
+
+const MS_PER_DAY = 86_400_000;
+
+function orderCreatedAtMs(raw: Record<string, unknown>): number {
+    const c = raw.createdAt;
+    if (c == null) return 0;
+    if (typeof c === 'string') {
+        const t = new Date(c).getTime();
+        return Number.isFinite(t) ? t : 0;
+    }
+    if (typeof c === 'object' && c !== null && 'toDate' in c && typeof (c as { toDate?: () => Date }).toDate === 'function') {
+        const d = (c as { toDate: () => Date }).toDate();
+        const t = d.getTime();
+        return Number.isFinite(t) ? t : 0;
+    }
+    return 0;
+}
+
+/** Active in last 30d: saved session date on the card, or any matched Fan Hub order in that window. */
+function fanActiveInLast30Days(f: Fan, s: FanSpendSummary | undefined): boolean {
+    const lastPref = f.preferences.lastSessionDate;
+    if (lastPref != null && lastPref !== '') {
+        try {
+            const d =
+                typeof lastPref === 'object' && lastPref !== null && 'toDate' in lastPref
+                    ? (lastPref as { toDate: () => Date }).toDate()
+                    : new Date(lastPref as string | number | Date);
+            const t = d.getTime();
+            if (Number.isFinite(t)) {
+                const days = (Date.now() - t) / MS_PER_DAY;
+                if (days <= 30) return true;
+            }
+        } catch {
+            /* ignore */
+        }
+    }
+    if (s != null && s.latestPaidOrderAtMs > 0) {
+        return (Date.now() - s.latestPaidOrderAtMs) / MS_PER_DAY <= 30;
+    }
+    return false;
+}
+
+/** Listed as Paid on the fan card and hub membership access not expired. */
+function fanIsActiveSubscriber(f: Fan): boolean {
+    if (f.hubMembershipExpired === true) return false;
+    return f.preferences.subscriptionTier === 'Paid';
+}
 
 function formatUsdFromCents(cents: number): string {
     const n = Math.max(0, Math.round(Number(cents) || 0));
@@ -226,8 +277,6 @@ export const OnlyFansFans: React.FC = () => {
     const [fanSearchQuery, setFanSearchQuery] = useState('');
     const [fanFilter, setFanFilter] = useState<'all' | 'bigSpenders' | 'loyal' | 'recent' | 'inactive'>('all');
     const [fanSortBy, setFanSortBy] = useState<'name' | 'sessions' | 'lastSession' | 'spendingLevel'>('lastSession');
-    const [viewMode, setViewMode] = useState<'grid' | 'timeline'>('grid');
-    const [activityTypeFilter, setActivityTypeFilter] = useState<FanActivityType | 'all'>('all');
     const [isLoading, setIsLoading] = useState(false);
     const [selectedFanActivity, setSelectedFanActivity] = useState<FanActivity[]>([]);
     const [showAddFanModal, setShowAddFanModal] = useState(false);
@@ -580,7 +629,10 @@ export const OnlyFansFans: React.FC = () => {
     };
 
     const hydrateFanSpendSummaries = useCallback(
-        async (fansList: Fan[]) => {
+        async (
+            fansList: Fan[],
+            prefetchedOrders?: Promise<{ orders?: Record<string, unknown>[] }>
+        ) => {
             if (!user?.id || fansList.length === 0) {
                 setFanSpendSummaries({});
                 setFanSpendLoading(false);
@@ -588,12 +640,26 @@ export const OnlyFansFans: React.FC = () => {
             }
             setFanSpendLoading(true);
             try {
-                const token = auth.currentUser ? await auth.currentUser.getIdToken() : null;
-                const res = await fetch('/api/creatorOrders?limit=1000', {
-                    headers: token ? { Authorization: `Bearer ${token}` } : {},
-                });
-                if (!res.ok) throw new Error('creatorOrders failed');
-                const data = (await res.json()) as { orders?: Record<string, unknown>[] };
+                let data: { orders?: Record<string, unknown>[] };
+                if (prefetchedOrders) {
+                    try {
+                        data = await prefetchedOrders;
+                    } catch {
+                        const token = auth.currentUser ? await auth.currentUser.getIdToken() : null;
+                        const res = await fetch('/api/creatorOrders?limit=1000', {
+                            headers: token ? { Authorization: `Bearer ${token}` } : {},
+                        });
+                        if (!res.ok) throw new Error('creatorOrders failed');
+                        data = (await res.json()) as { orders?: Record<string, unknown>[] };
+                    }
+                } else {
+                    const token = auth.currentUser ? await auth.currentUser.getIdToken() : null;
+                    const res = await fetch('/api/creatorOrders?limit=1000', {
+                        headers: token ? { Authorization: `Bearer ${token}` } : {},
+                    });
+                    if (!res.ok) throw new Error('creatorOrders failed');
+                    data = (await res.json()) as { orders?: Record<string, unknown>[] };
+                }
                 const orders = data.orders || [];
                 const next: Record<string, FanSpendSummary> = {};
                 for (const fan of fansList) {
@@ -604,6 +670,8 @@ export const OnlyFansFans: React.FC = () => {
                         unlocksCents: 0,
                         subscriptionsCents: 0,
                         storeCents: 0,
+                        matchedPaidOrderCount: 0,
+                        latestPaidOrderAtMs: 0,
                     };
                     for (const raw of orders) {
                         const st = String(raw.status ?? '').trim().toLowerCase();
@@ -614,6 +682,10 @@ export const OnlyFansFans: React.FC = () => {
                             typeof raw.amountCents === 'number' && Number.isFinite(raw.amountCents)
                                 ? Math.max(0, Math.round(raw.amountCents))
                                 : 0;
+                        if (amt <= 0) continue;
+                        s.matchedPaidOrderCount += 1;
+                        const cms = orderCreatedAtMs(raw as Record<string, unknown>);
+                        if (cms > 0) s.latestPaidOrderAtMs = Math.max(s.latestPaidOrderAtMs, cms);
                         if (kind === 'tip') s.tipsCents += amt;
                         else if (kind === 'unlock') s.unlocksCents += amt;
                         else if (kind === 'subscription') s.subscriptionsCents += amt;
@@ -636,22 +708,34 @@ export const OnlyFansFans: React.FC = () => {
     const loadFans = async () => {
         if (!user?.id) return;
         setIsLoading(true);
-        try {
-            let creatorImageUrls = new Set<string>();
-            try {
-                const [creatorUserSnap, creatorDocSnap] = await Promise.all([
-                    getDoc(doc(db, 'users', user.id)),
-                    getDoc(doc(db, 'creators', user.id)),
-                ]);
-                creatorImageUrls = buildCreatorImageUrlSet(
-                    creatorUserSnap.exists() ? (creatorUserSnap.data() as Record<string, unknown>) : undefined,
-                    creatorDocSnap.exists() ? (creatorDocSnap.data() as Record<string, unknown>) : undefined
-                );
-            } catch {
-                creatorImageUrls = new Set();
-            }
+        const prefetchedOrdersJson = (async (): Promise<{ orders?: Record<string, unknown>[] }> => {
+            const token = auth.currentUser ? await auth.currentUser.getIdToken() : null;
+            const res = await fetch('/api/creatorOrders?limit=1000', {
+                headers: token ? { Authorization: `Bearer ${token}` } : {},
+            });
+            if (!res.ok) throw new Error('creatorOrders failed');
+            return (await res.json()) as { orders?: Record<string, unknown>[] };
+        })();
 
-            const fansSnap = await getDocs(collection(db, 'users', user.id, 'onlyfans_fan_preferences'));
+        try {
+            const [fansSnap, creatorImageUrls] = await Promise.all([
+                getDocs(collection(db, 'users', user.id, 'onlyfans_fan_preferences')),
+                (async (): Promise<Set<string>> => {
+                    try {
+                        const [creatorUserSnap, creatorDocSnap] = await Promise.all([
+                            getDoc(doc(db, 'users', user.id)),
+                            getDoc(doc(db, 'creators', user.id)),
+                        ]);
+                        return buildCreatorImageUrlSet(
+                            creatorUserSnap.exists() ? (creatorUserSnap.data() as Record<string, unknown>) : undefined,
+                            creatorDocSnap.exists() ? (creatorDocSnap.data() as Record<string, unknown>) : undefined
+                        );
+                    } catch {
+                        return new Set<string>();
+                    }
+                })(),
+            ]);
+
             const docs = fansSnap.docs;
             const CHUNK = 25;
             const fansList: Fan[] = [];
@@ -722,8 +806,10 @@ export const OnlyFansFans: React.FC = () => {
 
                                 let fSnap: Awaited<ReturnType<typeof getDoc>> | null = null;
                                 const hubFanMirrorRows: Record<string, unknown>[] = [];
-                                for (const cand of fanDocCandidates) {
-                                    const s = await getDoc(doc(db, 'creators', user.id, 'fans', cand));
+                                const candSnaps = await Promise.all(
+                                    fanDocCandidates.map((cand) => getDoc(doc(db, 'creators', user.id, 'fans', cand)))
+                                );
+                                for (const s of candSnaps) {
                                     if (!s.exists()) continue;
                                     hubFanMirrorRows.push(s.data() as Record<string, unknown>);
                                     if (!fSnap) fSnap = s;
@@ -876,7 +962,7 @@ export const OnlyFansFans: React.FC = () => {
                 fansList.push(...part);
             }
             setFans(fansList);
-            void hydrateFanSpendSummaries(fansList);
+            void hydrateFanSpendSummaries(fansList, prefetchedOrdersJson);
         } catch (error) {
             console.error('Error loading fans:', error);
             showToast?.('Failed to load fans', 'error');
@@ -921,7 +1007,6 @@ export const OnlyFansFans: React.FC = () => {
         const match = findFanForPendingSelection(fans, pending);
         if (match) {
             setSelectedFan(match);
-            setViewMode('grid');
             clearPending();
             requestAnimationFrame(() => {
                 fanDetailsPanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
@@ -1107,25 +1192,6 @@ export const OnlyFansFans: React.FC = () => {
         }
     }, [selectedFan, fans]);
 
-    // Calculate stats
-    const stats = {
-        totalFans: fans.length,
-        activeFans: fans.filter(f => {
-            if (!f.preferences.lastSessionDate) return false;
-            try {
-                const lastSession = f.preferences.lastSessionDate?.toDate 
-                    ? f.preferences.lastSessionDate.toDate() 
-                    : new Date(f.preferences.lastSessionDate);
-                const daysSince = (Date.now() - lastSession.getTime()) / (1000 * 60 * 60 * 24);
-                return daysSince <= 30;
-            } catch {
-                return false;
-            }
-        }).length,
-        bigSpenders: fans.filter(f => f.preferences.isWhale || f.preferences.isBigSpender || (f.preferences.spendingLevel || 0) >= 4).length,
-        loyalFans: fans.filter(f => f.preferences.isRegular || f.preferences.isLoyalFan || (f.preferences.totalSessions || 0) >= 5).length,
-    };
-
     // Filter and sort fans
     const getFilteredAndSortedFans = () => {
         let filtered = [...fans];
@@ -1143,22 +1209,11 @@ export const OnlyFansFans: React.FC = () => {
 
         // Apply type filter
         if (fanFilter === 'bigSpenders') {
-            filtered = filtered.filter(fan => fan.preferences.isWhale || fan.preferences.isBigSpender || (fan.preferences.spendingLevel || 0) >= 4);
+            filtered = filtered.filter((fan) => fan.preferences.isWhale === true || fan.preferences.isBigSpender === true);
         } else if (fanFilter === 'loyal') {
-            filtered = filtered.filter(fan => fan.preferences.isRegular || fan.preferences.isLoyalFan || (fan.preferences.totalSessions || 0) >= 5);
+            filtered = filtered.filter((fan) => fanIsActiveSubscriber(fan));
         } else if (fanFilter === 'recent') {
-            filtered = filtered.filter(fan => {
-                if (!fan.preferences.lastSessionDate) return false;
-                try {
-                    const lastSession = fan.preferences.lastSessionDate?.toDate 
-                        ? fan.preferences.lastSessionDate.toDate() 
-                        : new Date(fan.preferences.lastSessionDate);
-                    const daysSince = (Date.now() - lastSession.getTime()) / (1000 * 60 * 60 * 24);
-                    return daysSince <= 30;
-                } catch {
-                    return false;
-                }
-            });
+            filtered = filtered.filter((fan) => fanActiveInLast30Days(fan, fanSpendSummaries[fan.id]));
         } else if (fanFilter === 'inactive') {
             filtered = filtered.filter(fan => {
                 if (!fan.preferences.lastSessionDate) return true;
@@ -1423,13 +1478,19 @@ export const OnlyFansFans: React.FC = () => {
             : null;
 
     const filteredFans = getFilteredAndSortedFans();
-    const displayedActivity = activityTypeFilter === 'all'
-        ? selectedFanActivity
-        : selectedFanActivity.filter(a => a.type === activityTypeFilter);
-    const last5Activity = displayedActivity.slice(0, 5);
-    const filteredCustomContent = customContentTypeFilter === 'all'
-        ? customContent
-        : customContent.filter((item) => inferDeliveryType(item) === customContentTypeFilter);
+    const last5Activity = selectedFanActivity.slice(0, 5);
+
+    const stats = {
+        totalFans: fans.length,
+        activeFans: fans.filter((f) => fanActiveInLast30Days(f, fanSpendSummaries[f.id])).length,
+        bigSpenders: fans.filter((f) => f.preferences.isWhale === true || f.preferences.isBigSpender === true).length,
+        loyalFans: fans.filter((f) => fanIsActiveSubscriber(f)).length,
+    };
+
+    const filteredCustomContent =
+        customContentTypeFilter === 'all'
+            ? customContent
+            : customContent.filter((item) => inferDeliveryType(item) === customContentTypeFilter);
 
     return (
         <div className="max-w-7xl mx-auto">
@@ -1451,7 +1512,7 @@ export const OnlyFansFans: React.FC = () => {
                     </button>
                 </div>
                 <p className="text-gray-600 dark:text-gray-400">
-                    Track VIPs, regulars, whales, and what they like.
+                    Track VIPs, subscribers, whales, and what they like.
                 </p>
             </div>
 
@@ -1464,14 +1525,14 @@ export const OnlyFansFans: React.FC = () => {
                 <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4">
                     <div className="text-sm text-gray-600 dark:text-gray-400 mb-1">Active (30d)</div>
                     <div className="text-2xl font-bold text-primary-600 dark:text-primary-400">{stats.activeFans}</div>
-                    <div className="text-xs text-gray-500 dark:text-gray-500">Last 30 days</div>
+                    <div className="text-xs text-gray-500 dark:text-gray-500">Last session on card or paid Fan Hub order</div>
                 </div>
                 <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4">
                     <div className="text-sm text-gray-600 dark:text-gray-400 mb-1">Whales</div>
                     <div className="text-2xl font-bold text-green-600 dark:text-green-400">{stats.bigSpenders}</div>
                 </div>
                 <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4">
-                    <div className="text-sm text-gray-600 dark:text-gray-400 mb-1">Regulars</div>
+                    <div className="text-sm text-gray-600 dark:text-gray-400 mb-1">Subscribers</div>
                     <div className="text-2xl font-bold text-pink-600 dark:text-pink-400">{stats.loyalFans}</div>
                 </div>
             </div>
@@ -1496,7 +1557,7 @@ export const OnlyFansFans: React.FC = () => {
                     >
                         <option value="all">All fans</option>
                         <option value="bigSpenders">Whales</option>
-                        <option value="loyal">Regulars</option>
+                        <option value="loyal">Subscribers</option>
                         <option value="recent">Recent (30 days)</option>
                         <option value="inactive">Inactive (60+ days)</option>
                     </select>
@@ -1510,33 +1571,11 @@ export const OnlyFansFans: React.FC = () => {
                         <option value="spendingLevel">Highest Spender</option>
                         <option value="name">Name (A-Z)</option>
                     </select>
-                    <div className="flex gap-2">
-                        <button
-                            onClick={() => setViewMode('grid')}
-                            className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${
-                                viewMode === 'grid'
-                                    ? 'bg-primary-600 text-white'
-                                    : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
-                            }`}
-                        >
-                            Grid
-                        </button>
-                        <button
-                            onClick={() => setViewMode('timeline')}
-                            className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${
-                                viewMode === 'timeline'
-                                    ? 'bg-primary-600 text-white'
-                                    : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
-                            }`}
-                        >
-                            Timeline
-                        </button>
-                    </div>
+
                 </div>
             </div>
 
-            {/* Fan Grid View */}
-            {viewMode === 'grid' && (
+            {/* Fan grid */}
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                     {isLoading ? (
                         <div className="col-span-full text-center py-8 text-gray-500 dark:text-gray-400">Loading fans...</div>
@@ -1770,60 +1809,9 @@ export const OnlyFansFans: React.FC = () => {
                         })
                     )}
                 </div>
-            )}
-
-            {/* Timeline View */}
-            {viewMode === 'timeline' && selectedFan && (
-                <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
-                    <div className="flex items-center justify-between mb-4">
-                        <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
-                            Activity Timeline: {selectedFan.name}
-                        </h2>
-                        <select
-                            value={activityTypeFilter}
-                            onChange={(e) => setActivityTypeFilter(e.target.value as any)}
-                            className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
-                        >
-                            <option value="all">All Activities</option>
-                            <option value="session">Sessions</option>
-                            <option value="rating">Body Ratings</option>
-                            <option value="content">Content</option>
-                            <option value="calendar">Calendar</option>
-                            <option value="media">Media</option>
-                        </select>
-                    </div>
-                    {displayedActivity.length === 0 ? (
-                        <div className="text-center py-8 text-gray-500 dark:text-gray-400">
-                            No activities found for this fan.
-                        </div>
-                    ) : (
-                        <div className="space-y-3">
-                            {displayedActivity.map((activity) => (
-                                <div key={activity.id} className="flex items-start gap-3 p-3 bg-gray-50 dark:bg-gray-900/40 rounded-lg">
-                                    <div className="flex-shrink-0 w-2 h-2 rounded-full bg-primary-600 dark:bg-primary-400 mt-2" />
-                                    <div className="flex-1">
-                                        <div className="flex items-center justify-between">
-                                            <h4 className="text-sm font-semibold text-gray-900 dark:text-white">{activity.title}</h4>
-                                            <span className="text-xs text-gray-500 dark:text-gray-500">
-                                                {new Date(activity.date).toLocaleDateString()}
-                                            </span>
-                                        </div>
-                                        {activity.description && (
-                                            <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">{activity.description}</p>
-                                        )}
-                                        <span className="inline-block mt-2 text-xs bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300 px-2 py-0.5 rounded">
-                                            {activity.type}
-                                        </span>
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                    )}
-                </div>
-            )}
 
             {/* Selected Fan Details Panel */}
-            {selectedFan && viewMode === 'grid' && (
+            {selectedFan && (
                 <div
                     ref={fanDetailsPanelRef}
                     className={`mt-6 rounded-lg shadow-md p-6 ${
@@ -1902,14 +1890,19 @@ export const OnlyFansFans: React.FC = () => {
                         </button>
                     </div>
 
-                    {/* Last 5 Activities */}
+                    {/* Recent activity (same sources as legacy Timeline; pick a fan card to load) */}
                     {last5Activity.length > 0 && (
                         <div className="mb-4">
-                            <div className="flex items-center justify-between mb-2">
-                                <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Last 5 Activities</h3>
+                            <div className="flex items-start justify-between gap-3 mb-2">
+                                <div>
+                                    <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Recent activity</h3>
+                                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                                        Latest synced sessions &amp; saved plans · open Show for the newest five entries
+                                    </p>
+                                </div>
                                 <button
                                     onClick={() => setShowActivities(!showActivities)}
-                                    className="text-xs text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 font-medium"
+                                    className="text-xs text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 font-medium flex-shrink-0 pt-0.5"
                                 >
                                     {showActivities ? 'Hide' : 'Show'}
                                 </button>

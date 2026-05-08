@@ -302,27 +302,23 @@ export const TreatsStore: React.FC = () => {
           const snap = await getDocs(qs);
           return snap.docs.map(firestoreDocToTreatProduct);
         };
-        let list: TreatProduct[] = [];
-        for (const cid of creatorIdFirestoreQueryVariants(creatorId)) {
-          const rows = await loadFs(cid);
-          if (rows.length > 0) {
-            list = rows;
-            break;
-          }
-        }
+        const firstNonEmpty = (rowSets: TreatProduct[][]) => {
+          for (const rows of rowSets) if (rows.length > 0) return rows;
+          return [] as TreatProduct[];
+        };
+
+        let list: TreatProduct[] = firstNonEmpty(
+          await Promise.all(creatorIdFirestoreQueryVariants(creatorId).map(loadFs))
+        );
         if (
           list.length === 0 &&
           user?.id &&
           auth.currentUser?.uid &&
           user.id !== auth.currentUser.uid
         ) {
-          for (const cid of creatorIdFirestoreQueryVariants(user.id)) {
-            const alt = await loadFs(cid);
-            if (alt.length > 0) {
-              list = alt;
-              break;
-            }
-          }
+          list = firstNonEmpty(
+            await Promise.all(creatorIdFirestoreQueryVariants(user.id).map(loadFs))
+          );
         }
         list.sort((a, b) => {
           const orderDiff = (a.sortOrder ?? 0) - (b.sortOrder ?? 0);

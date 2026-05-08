@@ -230,29 +230,6 @@ export const FanHubMessages: React.FC = () => {
     return distanceFromBottom <= 72;
   }, []);
 
-  useEffect(() => {
-    if (!creatorId) {
-      setCreatorBubbleProfile(null);
-      return;
-    }
-    let cancelled = false;
-    getDoc(doc(db, "creators", creatorId))
-      .then((snap) => {
-        if (cancelled || !snap.exists()) return;
-        const d = snap.data() as Record<string, unknown>;
-        setCreatorBubbleProfile({
-          displayName: typeof d.displayName === "string" ? d.displayName : undefined,
-          handle: typeof d.handle === "string" ? d.handle : undefined,
-        });
-      })
-      .catch(() => {
-        if (!cancelled) setCreatorBubbleProfile(null);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [creatorId]);
-
   /** Threads with at least one message (non-empty preview). Placeholder rows from join/checkout stay out until someone chats. */
   const threadsWithActivity = useMemo(
     () => threads.filter((t) => (t.lastMessagePreview || "").trim().length > 0),
@@ -297,9 +274,24 @@ export const FanHubMessages: React.FC = () => {
     setThreadsError(null);
     try {
       const token = auth.currentUser ? await auth.currentUser.getIdToken() : null;
-      const res = await fetch("/api/fanDmThreads?as=creator", {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-      });
+      const threadsInit: RequestInit = token
+        ? { headers: { Authorization: `Bearer ${token}` } }
+        : {};
+      const [res, creatorSnap] = await Promise.all([
+        fetch("/api/fanDmThreads?as=creator", threadsInit),
+        getDoc(doc(db, "creators", creatorId)).catch(
+          (): Awaited<ReturnType<typeof getDoc>> | null => null
+        ),
+      ]);
+      if (creatorSnap?.exists()) {
+        const d = creatorSnap.data() as Record<string, unknown>;
+        setCreatorBubbleProfile({
+          displayName: typeof d.displayName === "string" ? d.displayName : undefined,
+          handle: typeof d.handle === "string" ? d.handle : undefined,
+        });
+      } else {
+        setCreatorBubbleProfile(null);
+      }
       const { json: data, plainTextHint } = await parseApiBody(res);
       if (!res.ok) {
         const err =

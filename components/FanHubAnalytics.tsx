@@ -757,16 +757,44 @@ export const FanHubAnalytics: React.FC = () => {
       const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
       const startDate = getDateRangeStart(dateRange);
 
-      // Fetch orders for revenue calculation
-      const ordersRes = await fetch(
-        `/api/creatorOrders?limit=1000&creatorId=${encodeURIComponent(creatorId)}`,
-        { headers }
-      );
-      let orders: any[] = [];
-      if (ordersRes.ok) {
-        const data = await ordersRes.json();
-        orders = data.orders || [];
-      }
+      // Overlap HTTP + Firestore reads that don't depend on each other (same results as sequential).
+      const [orders, prefMeta, engagement] = await Promise.all([
+        (async (): Promise<any[]> => {
+          const ordersRes = await fetch(
+            `/api/creatorOrders?limit=1000&creatorId=${encodeURIComponent(creatorId)}`,
+            { headers }
+          );
+          if (!ordersRes.ok) return [];
+          const data = await ordersRes.json();
+          return data.orders || [];
+        })(),
+        (async (): Promise<Map<string, { createdAt: Date | null; updatedAt: Date | null }>> => {
+          const m = new Map<string, { createdAt: Date | null; updatedAt: Date | null }>();
+          try {
+            const prefSnap = await getDocs(collection(db, "users", creatorId, "onlyfans_fan_preferences"));
+            prefSnap.forEach((d) => {
+              const data = d.data() as Record<string, unknown>;
+              m.set(d.id, {
+                createdAt: parsePreferenceDate(data.createdAt),
+                updatedAt: parsePreferenceDate(data.updatedAt),
+              });
+            });
+          } catch (e) {
+            console.warn("FanHubAnalytics: could not load fan preferences", e);
+          }
+          return m;
+        })(),
+        loadEngagementStats(creatorId).catch((engErr: unknown) => {
+          console.warn("FanHubAnalytics: engagement load failed", engErr);
+          return {
+            postsThisMonth: 0,
+            totalLikes: 0,
+            topLikes: null,
+            topComments: null,
+          } satisfies EngagementStats;
+        }),
+      ]);
+      setEngagement(engagement);
 
       // Filter orders by date range
       const filteredOrders = orders.filter((o: any) => {
@@ -904,20 +932,6 @@ export const FanHubAnalytics: React.FC = () => {
       const purchasingFans = fanSpending.size;
 
       // Same member list as Fan Hub → Fans (`onlyfans_fan_preferences`), plus order-only fanIds
-      const prefMeta = new Map<string, { createdAt: Date | null; updatedAt: Date | null }>();
-      try {
-        const prefSnap = await getDocs(collection(db, "users", creatorId, "onlyfans_fan_preferences"));
-        prefSnap.forEach((d) => {
-          const data = d.data() as Record<string, unknown>;
-          prefMeta.set(d.id, {
-            createdAt: parsePreferenceDate(data.createdAt),
-            updatedAt: parsePreferenceDate(data.updatedAt),
-          });
-        });
-      } catch (e) {
-        console.warn("FanHubAnalytics: could not load fan preferences", e);
-      }
-
       const allMemberFanIds = new Set<string>(prefMeta.keys());
       orders.forEach((o: any) => {
         const fid = typeof o.fanId === "string" ? o.fanId.trim() : "";
@@ -993,19 +1007,6 @@ export const FanHubAnalytics: React.FC = () => {
       setTopFans(topFansList);
 
       setMonthlyRows(buildFebThroughCurrentMonthlyRows(orders, prefMeta, fanSpending));
-
-      try {
-        const eg = await loadEngagementStats(creatorId);
-        setEngagement(eg);
-      } catch (engErr) {
-        console.warn("FanHubAnalytics: engagement load failed", engErr);
-        setEngagement({
-          postsThisMonth: 0,
-          totalLikes: 0,
-          topLikes: null,
-          topComments: null,
-        });
-      }
 
     } catch (error) {
       console.error("Error loading fan hub analytics:", error);

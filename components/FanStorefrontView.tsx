@@ -12,6 +12,8 @@ import {
   query,
   setDoc,
   where,
+  type DocumentData,
+  type QueryDocumentSnapshot,
 } from "firebase/firestore";
 import { storage } from "../firebaseConfig";
 import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
@@ -137,35 +139,39 @@ async function loadTreatProductsViaFirestore(
   const canReadOwnerScope =
     !!auth.currentUser?.uid &&
     normalizeCreatorId(auth.currentUser.uid) === normalizeCreatorId(creatorId);
+  const docArrays = await Promise.all(
+    variants.map(async (cid): Promise<QueryDocumentSnapshot<DocumentData>[]> => {
+      try {
+        /**
+         * For public/guest storefront reads, Firestore rules require visibility/archive predicates to be
+         * part of the query. Creator-owner reads can use creatorId-only query for manage/member parity.
+         */
+        const snap = canReadOwnerScope
+          ? await getDocs(query(collection(db, "products"), where("creatorId", "==", cid)))
+          : await getDocs(
+              query(
+                collection(db, "products"),
+                where("creatorId", "==", cid),
+                where("visible", "==", true),
+                where("archived", "==", false)
+              )
+            );
+        return snap.docs;
+      } catch (e) {
+        console.warn("Landing/member Firestore treats fallback query failed", {
+          creatorIdVariant: cid,
+          context,
+          canReadOwnerScope,
+          error: e,
+        });
+        return [];
+      }
+    })
+  );
   const out: TreatProduct[] = [];
   const seen = new Set<string>();
-  for (const cid of variants) {
-    let snap;
-    try {
-      /**
-       * For public/guest storefront reads, Firestore rules require visibility/archive predicates to be
-       * part of the query. Creator-owner reads can use creatorId-only query for manage/member parity.
-       */
-      snap = canReadOwnerScope
-        ? await getDocs(query(collection(db, "products"), where("creatorId", "==", cid)))
-        : await getDocs(
-            query(
-              collection(db, "products"),
-              where("creatorId", "==", cid),
-              where("visible", "==", true),
-              where("archived", "==", false)
-            )
-          );
-    } catch (e) {
-      console.warn("Landing/member Firestore treats fallback query failed", {
-        creatorIdVariant: cid,
-        context,
-        canReadOwnerScope,
-        error: e,
-      });
-      continue;
-    }
-    for (const d of snap.docs) {
+  for (const docs of docArrays) {
+    for (const d of docs) {
       if (seen.has(d.id)) continue;
       seen.add(d.id);
       const x = d.data() as Record<string, unknown>;
@@ -2614,14 +2620,23 @@ export const FanStorefrontView: React.FC = () => {
       if ((res.status === 404 || res.status === 405) && auth.currentUser?.uid) {
         const fanUid = auth.currentUser.uid;
         const fanEmail = (auth.currentUser.email || "").trim().toLowerCase();
-        const byIdSnap = await getDocs(
+        const ordersByFanId = query(
+          collection(db, "orders"),
+          where("creatorId", "==", creator.creatorId),
+          where("fanId", "==", fanUid),
+          limit(300)
+        );
+        const ordersByFanEmail =
+          fanEmail &&
           query(
             collection(db, "orders"),
             where("creatorId", "==", creator.creatorId),
-            where("fanId", "==", fanUid),
+            where("fanEmail", "==", fanEmail),
             limit(300)
-          )
-        );
+          );
+        const [byIdSnap, byEmailSnap] = ordersByFanEmail
+          ? await Promise.all([getDocs(ordersByFanId), getDocs(ordersByFanEmail)])
+          : [await getDocs(ordersByFanId), null];
         const outById = new Map<string, FanDeliveryPurchase>();
         for (const d of byIdSnap.docs) {
           const raw = d.data() as Record<string, unknown>;
@@ -2658,15 +2673,7 @@ export const FanStorefrontView: React.FC = () => {
             deliveredAt: typeof raw.deliveredAt === "string" ? raw.deliveredAt : null,
           });
         }
-        if (fanEmail) {
-          const byEmailSnap = await getDocs(
-            query(
-              collection(db, "orders"),
-              where("creatorId", "==", creator.creatorId),
-              where("fanEmail", "==", fanEmail),
-              limit(300)
-            )
-          );
+        if (byEmailSnap) {
           for (const d of byEmailSnap.docs) {
             const raw = d.data() as Record<string, unknown>;
             const normalizedType = normalizeFanPurchaseType(raw);
