@@ -21,6 +21,8 @@ export type CreatorOrder = {
   stripePaymentIntentId?: string | null;
   /** Checkout session id (`cs_`) when present. */
   stripeSessionId?: string | null;
+  /** Stripe billing-derived ISO 3166-1 alpha-2 (card / Checkout billing), when captured. */
+  billingCountry?: string | null;
   /** After guest→member merge (`mergeGuestTreatPurchasesIntoUid`), original `guest_*` fan id. */
   linkedFromGuestFanId?: string | null;
   scheduleStatus?: string;
@@ -169,6 +171,8 @@ function mapDocToOrder(docSnap: QueryDocumentSnapshot): CreatorOrder {
     : docSnap.id.startsWith("cs_")
       ? docSnap.id
       : null;
+  const billingCountryRaw = typeof d.billingCountry === "string" ? d.billingCountry.trim().toUpperCase() : "";
+  const billingCountry = /^[A-Z]{2}$/.test(billingCountryRaw) ? billingCountryRaw : null;
   return {
     id: docSnap.id,
     creatorId: (d.creatorId as string) ?? "",
@@ -184,6 +188,7 @@ function mapDocToOrder(docSnap: QueryDocumentSnapshot): CreatorOrder {
     fanEmail: typeof d.fanEmail === "string" && d.fanEmail.trim() ? d.fanEmail.trim() : undefined,
     stripePaymentIntentId,
     stripeSessionId,
+    billingCountry,
     linkedFromGuestFanId: linkedGuest,
     scheduleStatus: isNonDeliverable ? "completed" : ((d.scheduleStatus as string) || "pending"),
     scheduledDate: isNonDeliverable ? null : ((d.scheduledDate as string) ?? null),

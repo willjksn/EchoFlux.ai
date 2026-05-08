@@ -12,6 +12,11 @@ import {
 import { mergeGuestTreatPurchasesIntoUid } from './_mergeGuestFanPurchases.js';
 import { notifyCreatorNewFanMemberJoined, sendCreatorHubNotification } from './_fanNotifications.js';
 import { syncLiveStreamTicketOrdersForStream } from './_syncLiveStreamTicketOrders.js';
+import {
+  billingCountryFromCheckoutSession,
+  enrichBillingCountryFromCheckoutSession,
+  enrichBillingCountryFromInvoice,
+} from './_stripeBillingCountry.js';
 
 // Check STRIPE_USE_TEST_MODE toggle first, then select appropriate key
 // Set STRIPE_USE_TEST_MODE=true in Vercel to use test mode, false or unset for live mode
@@ -147,6 +152,26 @@ function getCheckoutSessionName(session: Stripe.Checkout.Session): string | null
     null;
   return typeof name === 'string' && name.trim() ? name.trim() : null;
 }
+
+/** Stripe-derived billing locale (ISO2), not inferred physical location. */
+function fanBillingCountryPatch(country: string | null, now: string): Record<string, unknown> {
+  if (!country) return {};
+  return {
+    billingCountry: country,
+    billingCountrySource: 'stripe_billing',
+    billingCountryUpdatedAt: now,
+  };
+}
+
+function orderBillingCountryField(country: string | null): Record<string, unknown> {
+  return country ? { billingCountry: country } : {};
+}
+
+export type FanHubCheckoutStripeContext = {
+  stripe: Stripe;
+  /** Connected account id when Checkout lived on Stripe Connect */
+  stripeAccount?: string | null;
+};
 
 async function incrementFanPostTipGoalRaisedCents(
   db: Firestore,
@@ -304,6 +329,7 @@ async function repairFanHubSubscriptionIdentityForSession(
 export async function processFanHubCheckoutSessionCompleted(
   db: Firestore,
   session: Stripe.Checkout.Session,
+  stripeContext?: FanHubCheckoutStripeContext | null,
 ): Promise<boolean> {
   const creatorId = session.metadata?.creatorId;
   const rawType = session.metadata?.type;
@@ -368,6 +394,17 @@ export async function processFanHubCheckoutSessionCompleted(
     }
   }
 
+  let billingCountry: string | null = null;
+  if (stripeContext?.stripe) {
+    billingCountry = await enrichBillingCountryFromCheckoutSession(
+      stripeContext.stripe,
+      session,
+      stripeContext.stripeAccount ?? null,
+    );
+  } else {
+    billingCountry = billingCountryFromCheckoutSession(session);
+  }
+
   const sessionSubscriptionId = stripeRefId(session.subscription);
   if (type === 'subscription' && sessionSubscriptionId) {
     const amountTotal = session.amount_total ?? 0;
@@ -393,6 +430,7 @@ export async function processFanHubCheckoutSessionCompleted(
       fanName: getCheckoutSessionName(session),
       scheduleStatus: 'pending',
       createdAt: now,
+      ...orderBillingCountryField(billingCountry),
     });
 
     const statsRef = db.collection('creatorStats').doc(creatorId);
@@ -438,6 +476,7 @@ export async function processFanHubCheckoutSessionCompleted(
         membershipPaymentCount: 1,
         createdAt: now,
         updatedAt: now,
+        ...fanBillingCountryPatch(billingCountry, now),
       });
     } else {
       const fanData = fanSnap.data() as {
@@ -452,6 +491,7 @@ export async function processFanHubCheckoutSessionCompleted(
         totalMembershipCents: (fanData?.totalMembershipCents || 0) + amountTotal,
         membershipPaymentCount: (fanData?.membershipPaymentCount || 0) + 1,
         updatedAt: now,
+        ...fanBillingCountryPatch(billingCountry, now),
       };
       if (memberUsername) patch.username = memberUsername;
       await fanRef.update(patch);
@@ -524,6 +564,7 @@ export async function processFanHubCheckoutSessionCompleted(
       scheduleStatus: 'pending',
       ...(isGuestProductCheckout ? { guestCheckout: true } : {}),
       createdAt: now,
+      ...orderBillingCountryField(billingCountry),
     };
 
     /** One order row + one soldCount bump per Stripe session (race-safe vs duplicate webhooks / sync). */
@@ -572,6 +613,7 @@ export async function processFanHubCheckoutSessionCompleted(
         purchaseCount: 1,
         createdAt: now,
         updatedAt: now,
+        ...fanBillingCountryPatch(billingCountry, now),
       });
     } else {
       const fanData = fanSnap.data() as { totalSpentCents?: number; purchaseCount?: number };
@@ -580,6 +622,7 @@ export async function processFanHubCheckoutSessionCompleted(
         totalSpentCents: (fanData.totalSpentCents || 0) + amountTotal,
         purchaseCount: (fanData.purchaseCount || 0) + 1,
         updatedAt: now,
+        ...fanBillingCountryPatch(billingCountry, now),
       };
       if (isGuestFan) {
         patch.role = 'treat_buyer';
@@ -651,6 +694,7 @@ export async function processFanHubCheckoutSessionCompleted(
       fanName: getCheckoutSessionName(session),
       scheduleStatus: 'pending',
       createdAt: now,
+      ...orderBillingCountryField(billingCountry),
     });
 
     const grantRef = db.collection('creatorEntitlements').doc(creatorId).collection('grants').doc(fanId);
@@ -678,6 +722,7 @@ export async function processFanHubCheckoutSessionCompleted(
         purchaseCount: 1,
         createdAt: now,
         updatedAt: now,
+        ...fanBillingCountryPatch(billingCountry, now),
       });
     } else {
       const fanData = fanSnap.data() as { totalSpentCents?: number; purchaseCount?: number };
@@ -686,6 +731,7 @@ export async function processFanHubCheckoutSessionCompleted(
         totalSpentCents: (fanData.totalSpentCents || 0) + amountTotal,
         purchaseCount: (fanData.purchaseCount || 0) + 1,
         updatedAt: now,
+        ...fanBillingCountryPatch(billingCountry, now),
       });
     }
 
@@ -746,6 +792,7 @@ export async function processFanHubCheckoutSessionCompleted(
       fanName: getCheckoutSessionName(session),
       scheduleStatus: 'pending',
       createdAt: now,
+      ...orderBillingCountryField(billingCountry),
     });
 
     const grantRef = db.collection('creatorEntitlements').doc(creatorId).collection('grants').doc(fanId);
@@ -777,6 +824,7 @@ export async function processFanHubCheckoutSessionCompleted(
         purchaseCount: 1,
         createdAt: now,
         updatedAt: now,
+        ...fanBillingCountryPatch(billingCountry, now),
       });
     } else {
       const fanData = fanSnap.data() as { totalSpentCents?: number; purchaseCount?: number };
@@ -785,6 +833,7 @@ export async function processFanHubCheckoutSessionCompleted(
         totalSpentCents: (fanData.totalSpentCents || 0) + amountTotal,
         purchaseCount: (fanData.purchaseCount || 0) + 1,
         updatedAt: now,
+        ...fanBillingCountryPatch(billingCountry, now),
       });
     }
 
@@ -851,6 +900,7 @@ export async function processFanHubCheckoutSessionCompleted(
       status: 'paid',
       scheduleStatus: 'pending',
       createdAt: now,
+      ...orderBillingCountryField(billingCountry),
     });
 
     const fanEmail = getCheckoutSessionEmail(session);
@@ -877,6 +927,7 @@ export async function processFanHubCheckoutSessionCompleted(
         totalSpentCents: amountTotal,
         createdAt: now,
         updatedAt: now,
+        ...fanBillingCountryPatch(billingCountry, now),
       });
     } else {
       const fanData = fanSnap.data() as {
@@ -894,6 +945,7 @@ export async function processFanHubCheckoutSessionCompleted(
         tipCount: (fanData.tipCount || 0) + 1,
         totalSpentCents: (fanData.totalSpentCents || 0) + amountTotal,
         updatedAt: now,
+        ...fanBillingCountryPatch(billingCountry, now),
       };
       if (fanEmail && !(fanData as { email?: string }).email) {
         patch.email = fanEmail;
@@ -1093,6 +1145,7 @@ async function processFanHubSubscriptionInvoicePaid(
   db: Firestore,
   stripe: Stripe,
   invoice: Stripe.Invoice,
+  stripeAccount?: string | null,
 ): Promise<boolean> {
   const subField = (invoice as Stripe.Invoice & { subscription?: string | Stripe.Subscription | null }).subscription;
   const subId =
@@ -1105,7 +1158,11 @@ async function processFanHubSubscriptionInvoicePaid(
 
   let subscription: Stripe.Subscription;
   try {
-    subscription = await stripe.subscriptions.retrieve(subId);
+    subscription = await stripe.subscriptions.retrieve(
+      subId,
+      undefined,
+      stripeAccount ? { stripeAccount } : undefined,
+    );
   } catch {
     return false;
   }
@@ -1154,6 +1211,8 @@ async function processFanHubSubscriptionInvoicePaid(
       ? invoiceWithPaymentIntent.payment_intent
       : invoiceWithPaymentIntent.payment_intent?.id || null;
 
+  const billingCountry = await enrichBillingCountryFromInvoice(stripe, invoice, stripeAccount ?? null);
+
   await db.collection('orders').doc(`inv_${invoice.id}`).set({
     creatorId,
     fanId,
@@ -1169,6 +1228,7 @@ async function processFanHubSubscriptionInvoicePaid(
     scheduleStatus: 'pending',
     createdAt,
     updatedAt: now,
+    ...orderBillingCountryField(billingCountry),
   });
 
   const fanRef = db.collection('creators').doc(creatorId).collection('fans').doc(fanId);
@@ -1187,6 +1247,7 @@ async function processFanHubSubscriptionInvoicePaid(
         totalMembershipCents: (fanData?.totalMembershipCents ?? 0) + amountPaid,
         membershipPaymentCount: (fanData?.membershipPaymentCount ?? 0) + 1,
         updatedAt: now,
+        ...fanBillingCountryPatch(billingCountry, now),
       },
       { merge: true },
     );
@@ -1312,7 +1373,10 @@ async function processFanHubChargeRefunded(db: Firestore, charge: Stripe.Charge)
 async function handleConnectEvent(db: Firestore, stripeClient: Stripe, event: Stripe.Event): Promise<void> {
   if (event.type === 'checkout.session.completed') {
     const session = event.data.object as Stripe.Checkout.Session;
-    const handled = await processFanHubCheckoutSessionCompleted(db, session);
+    const handled = await processFanHubCheckoutSessionCompleted(db, session, {
+      stripe: stripeClient,
+      stripeAccount: event.account || null,
+    });
     if (!handled) {
       console.warn('Connect checkout.session.completed missing fan hub metadata', session.id);
     }
@@ -1330,7 +1394,7 @@ async function handleConnectEvent(db: Firestore, stripeClient: Stripe, event: St
   }
 
   if (event.type === 'invoice.payment_succeeded') {
-    await processFanHubSubscriptionInvoicePaid(db, stripeClient, event.data.object as Stripe.Invoice);
+    await processFanHubSubscriptionInvoicePaid(db, stripeClient, event.data.object as Stripe.Invoice, event.account || null);
     return;
   }
 
@@ -1446,7 +1510,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         }
 
         // Fan Hub on platform Stripe (e.g. PLATFORM_OWNER_CREATOR_IDS) — same Firestore as Connect path
-        const fanHubCheckoutDone = await processFanHubCheckoutSessionCompleted(db, session);
+        const fanHubCheckoutDone = await processFanHubCheckoutSessionCompleted(db, session, { stripe });
         if (fanHubCheckoutDone) {
           break;
         }

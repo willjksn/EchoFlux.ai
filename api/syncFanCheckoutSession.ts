@@ -115,10 +115,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       primaryAcct === fallbackAcct ? [primaryAcct] : [primaryAcct, fallbackAcct];
 
     let session: Awaited<ReturnType<typeof checkoutSessionsRetrieve>> | null = null;
+    let resolvedStripeAccount: string | null = null;
     let lastErr: unknown;
     for (const acct of retrieveOrder) {
       try {
         session = await checkoutSessionsRetrieve(stripe, sessionId, acct);
+        resolvedStripeAccount = acct;
         lastErr = undefined;
         break;
       } catch (e) {
@@ -194,7 +196,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(200).json({ success: true, alreadySynced: true });
     }
 
-    const applied = await processFanHubCheckoutSessionCompleted(db, effectiveSession);
+    const applied = await processFanHubCheckoutSessionCompleted(db, effectiveSession, {
+      stripe,
+      stripeAccount: resolvedStripeAccount,
+    });
     if (!applied) {
       return res.status(400).json({
         error: "Could not apply this checkout (unsupported type or missing session data).",

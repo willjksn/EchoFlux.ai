@@ -50,6 +50,8 @@ interface FanUser {
   membershipAccessExpired?: boolean;
 }
 
+type MemberSectionVisual = "default" | "active" | "expiring" | "expired";
+
 const PlusIcon = () => (
   <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <line x1="12" y1="5" x2="12" y2="19" />
@@ -117,6 +119,23 @@ function formatDateTime(date: Date | null): string {
     hour: "numeric",
     minute: "2-digit",
   });
+}
+
+/** Still has membership access but cancel-at-period-end or scheduled end (not included in expired bucket). */
+function isMemberExpiringAccess(u: FanUser): boolean {
+  if (u.role !== "member" || u.membershipAccessExpired === true) return false;
+  const plan = (u.plan || "").trim();
+  if (plan === "Cancelled") return true;
+  const ra = String(u.remainingAccess || "");
+  if (/\b\d+\s+day(s)?\s+left\b/i.test(ra)) return true;
+  if (/^Cancelling/i.test(ra)) return true;
+  return false;
+}
+
+function sortMembersBySignupDesc(a: FanUser, b: FanUser): number {
+  const signupB = b.signupDate?.getTime() ?? 0;
+  const signupA = a.signupDate?.getTime() ?? 0;
+  return signupB - signupA;
 }
 
 /** Firestore / imports sometimes store cancel-at-period-end as string or snake_case. */
@@ -1444,9 +1463,19 @@ export const FanHubUsers: React.FC = () => {
       (u.memberUsername && u.memberUsername.toLowerCase().includes(searchQuery.toLowerCase()))
   );
 
-  // Group users by role
+  // Group users by role; members split into active / expiring soon / expired access
   const admins = filteredUsers.filter((u) => u.role === "admin");
-  const members = filteredUsers.filter((u) => u.role === "member");
+  const membersAll = filteredUsers.filter((u) => u.role === "member");
+  const membersExpired = membersAll
+    .filter((u) => u.membershipAccessExpired === true)
+    .sort(sortMembersBySignupDesc);
+  const membersNonExpired = membersAll.filter((u) => !u.membershipAccessExpired);
+  const membersExpiring = membersNonExpired
+    .filter((u) => isMemberExpiringAccess(u))
+    .sort(sortMembersBySignupDesc);
+  const membersActive = membersNonExpired
+    .filter((u) => !isMemberExpiringAccess(u))
+    .sort(sortMembersBySignupDesc);
   const tippers = filteredUsers.filter((u) => u.role === "tipper");
 
   // Calculate monthly totals
@@ -1466,26 +1495,35 @@ export const FanHubUsers: React.FC = () => {
     );
   }
 
-  const UserRow: React.FC<{ fanUser: FanUser; showActions?: boolean }> = ({ fanUser, showActions = true }) => {
+  const UserRow: React.FC<{ fanUser: FanUser; showActions?: boolean; memberSection?: MemberSectionVisual }> = ({
+    fanUser,
+    showActions = true,
+    memberSection = "default",
+  }) => {
     const planBadgeClass = fanUser.plan ? planStatusBadgeClass(fanUser.plan) : null;
     const accessBadgeClass = planStatusBadgeClass(fanUser.remainingAccess);
-    const rowMuted = fanUser.role === "member" && fanUser.membershipAccessExpired === true;
+    const rowExpired = memberSection === "expired" || (fanUser.role === "member" && fanUser.membershipAccessExpired === true);
+    const rowExpiring = memberSection === "expiring";
     return (
     <tr
       className={`transition-colors ${
-        rowMuted
+        rowExpired
           ? "opacity-[0.82] grayscale-[0.55] bg-gray-50/95 dark:bg-gray-900/80 hover:bg-gray-100/90 dark:hover:bg-gray-900/85"
-          : "hover:bg-gray-50 dark:hover:bg-gray-800/40"
+          : rowExpiring
+            ? "bg-amber-50/85 dark:bg-amber-950/20 hover:bg-amber-100/80 dark:hover:bg-amber-950/30"
+            : "hover:bg-gray-50 dark:hover:bg-gray-800/40"
       }`}
       title={
-        rowMuted
+        rowExpired
           ? "Paid access ended when their billing period ended. Row stays for history; it updates if they resubscribe."
-          : undefined
+          : rowExpiring
+            ? "Membership still active until the date shown; cancel at period end or similar."
+            : undefined
       }
     >
       <td className="px-4 py-3">
         <div className="flex items-center gap-3">
-          <FanTableAvatar name={fanUser.name} avatarUrl={fanUser.avatarUrl} muted={rowMuted} />
+          <FanTableAvatar name={fanUser.name} avatarUrl={fanUser.avatarUrl} muted={rowExpired} />
           <div>
             <div className="flex items-center gap-2">
               <span className="font-medium text-gray-900 dark:text-white">{fanUser.name}</span>
@@ -1770,12 +1808,32 @@ export const FanHubUsers: React.FC = () => {
                   </>
                 )}
 
-                {/* Members Section */}
-                {members.length > 0 && (
+                {/* Members — active access */}
+                {membersActive.length > 0 && (
                   <>
-                    <SectionHeader title="Members" count={members.length} />
-                    {members.map((fanUser) => (
-                      <UserRow key={fanUser.id} fanUser={fanUser} />
+                    <SectionHeader title="Members — active" count={membersActive.length} />
+                    {membersActive.map((fanUser) => (
+                      <UserRow key={fanUser.id} fanUser={fanUser} memberSection="active" />
+                    ))}
+                  </>
+                )}
+
+                {/* Members — ending soon (cancel at period end; access until date) */}
+                {membersExpiring.length > 0 && (
+                  <>
+                    <SectionHeader title="Members — ending soon" count={membersExpiring.length} />
+                    {membersExpiring.map((fanUser) => (
+                      <UserRow key={fanUser.id} fanUser={fanUser} memberSection="expiring" />
+                    ))}
+                  </>
+                )}
+
+                {/* Members — expired access (billing period ended) */}
+                {membersExpired.length > 0 && (
+                  <>
+                    <SectionHeader title="Members — expired" count={membersExpired.length} />
+                    {membersExpired.map((fanUser) => (
+                      <UserRow key={fanUser.id} fanUser={fanUser} memberSection="expired" />
                     ))}
                   </>
                 )}

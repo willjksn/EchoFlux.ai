@@ -98,7 +98,10 @@ export async function syncRecentFanHubProductCheckouts(params: {
           patchedSession.payment_status === "paid" ||
           patchedSession.payment_status === "no_payment_required";
         if (!paid) continue;
-        const applied = await processFanHubCheckoutSessionCompleted(db, patchedSession);
+        const applied = await processFanHubCheckoutSessionCompleted(db, patchedSession, {
+          stripe,
+          stripeAccount: accountId,
+        });
         if (applied) synced += 1;
       }
     } catch (e) {
@@ -153,7 +156,10 @@ export async function syncRecentFanHubCheckoutsForAdminRevenue(params: {
           patchedSession.payment_status === "paid" ||
           patchedSession.payment_status === "no_payment_required";
         if (!paid) continue;
-        const applied = await processFanHubCheckoutSessionCompleted(params.db, patchedSession);
+        const applied = await processFanHubCheckoutSessionCompleted(params.db, patchedSession, {
+          stripe,
+          stripeAccount: accountId,
+        });
         if (applied) synced += 1;
       }
     } catch (e) {

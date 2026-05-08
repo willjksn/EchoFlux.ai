@@ -197,7 +197,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             ...(fallbackFanUid && !session.metadata?.fanId ? { fanId: fallbackFanUid } : {}),
           },
         } as typeof session;
-        recovered = await processFanHubCheckoutSessionCompleted(db, patchedSession);
+        recovered = await processFanHubCheckoutSessionCompleted(db, patchedSession, {
+          stripe,
+          stripeAccount: foundAccount,
+        });
         error = recovered ? null : "Checkout Session metadata was not applicable to Fan Hub recovery.";
         break;
       }
