@@ -22,6 +22,7 @@ import {
   GoogleAuthProvider,
   reauthenticateWithCredential,
   reauthenticateWithPopup,
+  reload,
   sendPasswordResetEmail,
   updatePassword,
   updateProfile,
@@ -209,9 +210,14 @@ async function loadTreatProductsViaFirestore(
   return out;
 }
 
-/** Parse `users/{uid}` for fan member profile tab (Firestore + Auth fallbacks). */
+/**
+ * Parse `users/{uid}` for the fan member hub.
+ * If the Firestore doc exists but has no `photoURL` / `avatar` keys (e.g. after deleteField clears),
+ * return an empty photo — do not resurrect a stale `auth.currentUser.photoURL` Storage URL after removal.
+ */
 function parseFanMemberProfileFromUserDoc(
   d: Record<string, unknown>,
+  userDocumentExists: boolean,
   authDisplayName: string | null | undefined,
   authPhotoURL: string | null | undefined
 ): {
@@ -230,12 +236,28 @@ function parseFanMemberProfileFromUserDoc(
   const lastName =
     (typeof d.lastName === "string" && d.lastName.trim()) ||
     (displayNameRaw.includes(" ") ? displayNameRaw.split(/\s+/).slice(1).join(" ") : "");
-  const hasStoredPhotoField = Object.prototype.hasOwnProperty.call(d, "photoURL") || Object.prototype.hasOwnProperty.call(d, "avatar");
-  const photoURL = hasStoredPhotoField
-    ? ((typeof d.photoURL === "string" && d.photoURL.trim()) ||
+  const hasPhotoKeys =
+    Object.prototype.hasOwnProperty.call(d, "photoURL") || Object.prototype.hasOwnProperty.call(d, "avatar");
+
+  let photoURL: string;
+  if (!userDocumentExists) {
+    const fromDoc =
+      hasPhotoKeys
+        ? ((typeof d.photoURL === "string" && d.photoURL.trim()) ||
+            (typeof d.avatar === "string" && d.avatar.trim()) ||
+            "")
+        : "";
+    const oauth = typeof authPhotoURL === "string" ? authPhotoURL.trim() : "";
+    photoURL = fromDoc || oauth;
+  } else if (hasPhotoKeys) {
+    photoURL =
+      ((typeof d.photoURL === "string" && d.photoURL.trim()) ||
         (typeof d.avatar === "string" && d.avatar.trim()) ||
-        "")
-    : authPhotoURL || "";
+        "");
+  } else {
+    photoURL = "";
+  }
+
   const username =
     (typeof d.username === "string" && d.username.trim())
       ? normalizeMemberUsername(d.username)
@@ -1304,6 +1326,8 @@ export const FanStorefrontView: React.FC = () => {
   const [avatarUploading, setAvatarUploading] = useState(false);
   /** When URL is set but the image fails in prod (expired token, 403, etc.), show initials until URL changes. */
   const [memberProfilePhotoLoadFailed, setMemberProfilePhotoLoadFailed] = useState(false);
+  /** After first `users/{uid}` snapshot, don't use Auth photo for the header (Auth can stay non-null after Firestore photo was cleared). */
+  const [memberProfileDocSynced, setMemberProfileDocSynced] = useState(false);
   const [passwordCurrent, setPasswordCurrent] = useState("");
   const [passwordNext, setPasswordNext] = useState("");
   const [passwordConfirm, setPasswordConfirm] = useState("");
@@ -3194,8 +3218,11 @@ export const FanStorefrontView: React.FC = () => {
   };
 
   useEffect(() => {
-    if (activeTab !== "profile" || !auth.currentUser?.uid) return;
-    const uid = auth.currentUser.uid;
+    const uid = auth.currentUser?.uid;
+    if (!isLoggedIn || !uid || previewMember) {
+      setMemberProfileDocSynced(false);
+      return;
+    }
     let cancelled = false;
     const userRef = doc(db, "users", uid);
     const applyFallbackFromAuth = () => {
@@ -3214,14 +3241,17 @@ export const FanStorefrontView: React.FC = () => {
       setUsernameInitial("");
       setUsernameState("idle");
       setUsernameMsg("");
+      setMemberProfileDocSynced(true);
     };
     const unsub = onSnapshot(
       userRef,
       (snap) => {
         if (cancelled) return;
+        setMemberProfileDocSynced(true);
         const d = (snap.data() || {}) as Record<string, unknown>;
         const parsed = parseFanMemberProfileFromUserDoc(
           d,
+          snap.exists(),
           auth.currentUser?.displayName,
           auth.currentUser?.photoURL
         );
@@ -3266,7 +3296,7 @@ export const FanStorefrontView: React.FC = () => {
       cancelled = true;
       unsub();
     };
-  }, [activeTab, isLoggedIn, auth.currentUser?.uid]);
+  }, [isLoggedIn, auth.currentUser?.uid, previewMember]);
 
   useEffect(() => {
     setMemberProfilePhotoLoadFailed(false);
@@ -3365,6 +3395,7 @@ export const FanStorefrontView: React.FC = () => {
           throw new Error((claimData as { error?: string }).error || "Could not save username.");
         }
       }
+      const photoTrim = (profileDraft.photoURL || "").trim();
       await setDoc(
         doc(db, "users", auth.currentUser.uid),
         {
@@ -3373,16 +3404,22 @@ export const FanStorefrontView: React.FC = () => {
           displayName,
           bio: deleteField(),
           memberBio: deleteField(),
-          photoURL: profileDraft.photoURL || "",
-          avatar: profileDraft.photoURL || "",
+          ...(photoTrim
+            ? { photoURL: photoTrim, avatar: photoTrim }
+            : { photoURL: deleteField(), avatar: deleteField() }),
           updatedAt: new Date().toISOString(),
         },
         { merge: true }
       );
       await updateProfile(auth.currentUser, {
         displayName,
-        photoURL: profileDraft.photoURL || null,
+        photoURL: photoTrim ? photoTrim : null,
       });
+      try {
+        await reload(auth.currentUser);
+      } catch {
+        /* ignore reload failures */
+      }
       if (nextUsername) {
         setUsernameInitial(nextUsername);
         setUsernameState("current");
@@ -3392,10 +3429,15 @@ export const FanStorefrontView: React.FC = () => {
         setUsernameState("idle");
         setUsernameMsg("");
       }
+      setProfileDraft({
+        firstName,
+        lastName,
+        photoURL: photoTrim ? photoTrim : "",
+      });
       setProfileInitial({
         firstName,
         lastName,
-        photoURL: profileDraft.photoURL || "",
+        photoURL: photoTrim ? photoTrim : "",
       });
       showToast("Profile updated.", "success");
     } catch (e) {
@@ -4471,9 +4513,21 @@ export const FanStorefrontView: React.FC = () => {
   /** Never fall back to creator storefront avatar — that showed the creator on the member menu when the fan had no photo. */
   const draftMemberPhoto = (profileDraft.photoURL || "").trim();
   const baselineMemberPhotoFromProfile = (profileInitial.photoURL || "").trim();
-  const memberAvatar =
-    draftMemberPhoto ||
-    (!baselineMemberPhotoFromProfile ? (auth.currentUser?.photoURL || "").trim() : "");
+  /** Cleared in the form before save — keep initials in chrome (avoid stale baseline / OAuth fallback). */
+  const photoRemovedUnsaved =
+    isProfileDirty &&
+    !(profileDraft.photoURL || "").trim() &&
+    !!baselineMemberPhotoFromProfile;
+  /** Same source as profile hero (`profileDraft.photoURL`) once Firestore has synced — never show baseline alone while draft photo is cleared. */
+  const memberAvatarStored = photoRemovedUnsaved
+    ? ""
+    : memberProfileDocSynced
+      ? draftMemberPhoto
+      : draftMemberPhoto || baselineMemberPhotoFromProfile;
+  /** OAuth/social photo only until Firestore sync — cleared Firestore photo must win over stale Auth.photoURL. */
+  const oauthPhotoFallback =
+    memberProfileDocSynced ? "" : (auth.currentUser?.photoURL || "").trim();
+  const memberAvatar = (memberAvatarStored || oauthPhotoFallback).trim();
   const memberAvatarInitial = (() => {
     const fn = (profileDraft.firstName || "").trim();
     const ln = (profileDraft.lastName || "").trim();
@@ -5226,12 +5280,13 @@ export const FanStorefrontView: React.FC = () => {
                 aria-expanded={profileMenuOpen}
                 title="Profile menu"
               >
-                {memberAvatar ? (
+                {memberAvatar && !memberProfilePhotoLoadFailed ? (
                   <img
                     src={memberAvatar}
                     alt=""
                     className="storefront-profile-menu-avatar"
                     style={avatarCropStyle}
+                    onError={() => setMemberProfilePhotoLoadFailed(true)}
                     {...storefrontImageDownloadGuardProps}
                   />
                 ) : (
