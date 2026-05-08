@@ -5,6 +5,7 @@
 import type { Firestore } from "firebase-admin/firestore";
 import { FAN_DM_THREADS, getThreadId } from "./_fanDmHelpers.js";
 import { fanHubListLabel } from "./_fanHubDisplay.js";
+import { spendingLevelFromLifetimeSpendCents } from "../src/lib/fanHubSpendingLevel.js";
 
 function subscriptionTierFromFanStatus(subStatus: string): "Free" | "Paid" {
   if (subStatus === "free") return "Free";
@@ -126,9 +127,7 @@ export async function upsertFanHubFanPreferenceFromMember(
   const prefRef = db.collection("users").doc(creatorId).collection("onlyfans_fan_preferences").doc(fanId);
   const prefSnap = await prefRef.get();
   const totalSpent = typeof fanRow.totalSpentCents === "number" ? fanRow.totalSpentCents : 0;
-  /** Dollars — matches `OnlyFansFans` fallback: ceil(totalSpent / 200) uses dollars. */
-  const spendingLevel =
-    totalSpent <= 0 ? 0 : Math.min(5, Math.max(1, Math.ceil(totalSpent / 20000)));
+  const spendingLevel = spendingLevelFromLifetimeSpendCents(totalSpent);
   const patch: Record<string, unknown> = {
     name: listName,
     email,

@@ -19,14 +19,15 @@
  *   ECHOFLUX_CREATOR_ID — optional default creator uid if you omit --creator-id
  */
 /**
- * NOTE: Logic must stay aligned with `api/_syncFanHubFanPreference.ts` (inlined here so
- * `ts-node --esm` does not need to resolve API `.js` paths to `.ts` sources).
+ * NOTE: Fan Hub spending level must stay aligned with `api/_syncFanHubFanPreference.ts`
+ * via `src/lib/fanHubSpendingLevel.ts`.
  */
 import admin from "firebase-admin";
 import type { Firestore } from "firebase-admin/firestore";
 import * as fs from "fs";
 import * as path from "path";
 import { fileURLToPath } from "url";
+import { spendingLevelFromLifetimeSpendCents } from "../src/lib/fanHubSpendingLevel.ts";
 
 const FAN_DM_THREADS = "fanDmThreads";
 function getThreadId(creatorId: string, fanId: string): string {
@@ -143,7 +144,7 @@ async function upsertFanHubFanPreferenceFromMember(
   };
   if (!prefSnap.exists) {
     patch.createdAt = nowIso;
-    patch.spendingLevel = Math.min(5, Math.floor(totalSpent / 10000));
+    patch.spendingLevel = spendingLevelFromLifetimeSpendCents(totalSpent);
     patch.totalSessions = 0;
     patch.notes = "";
     patch.tags = [];

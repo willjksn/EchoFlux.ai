@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useAppContext } from './AppContext';
 import { usePremiumStudioTab, type PendingFansTabSelection } from './PremiumStudioLayout';
 import { UserIcon, SearchIcon, StarIcon, SparklesIcon, TrashIcon, EditIcon, PlusIcon, XMarkIcon } from './icons/UIIcons';
@@ -12,7 +12,14 @@ import {
     onlyfansCalendarEventIsCustomOrStore,
     orderMatchesFanPurchaseIdentity,
     type FanPurchaseIdentity,
+    type MinimalOrderForFanMatch,
 } from '../src/lib/fanHubFanPurchaseIdentity';
+import { classifyFanHubOrderLedgerKind } from '../src/lib/fanHubOrderLedger';
+import {
+    spendingLevelFromLifetimeSpendDollars,
+    FAN_HUB_SPENDING_LEVEL_SCALE_ONE_LINER,
+    fanHubSpendingTierBandLabel,
+} from '../src/lib/fanHubSpendingLevel';
 import { buildCreatorImageUrlSet, fanAvatarUrlOrUndefined } from '../src/lib/fanAvatar';
 import { isHubMembershipAccessExpired, parseDateLike, pickLatestMemberAccessEnd } from '../src/lib/memberAccessEnd';
 
@@ -124,6 +131,48 @@ interface FanActivity {
     link?: string;
 }
 
+/** Aggregated from `/api/creatorOrders` for this fan card (matched via purchase identity). */
+type FanSpendSummary = {
+    tipsCents: number;
+    unlocksCents: number;
+    subscriptionsCents: number;
+    storeCents: number;
+};
+
+function formatUsdFromCents(cents: number): string {
+    const n = Math.max(0, Math.round(Number(cents) || 0));
+    return `$${(n / 100).toFixed(2)}`;
+}
+
+function spendingLevelFromLedgerSummary(s: FanSpendSummary | undefined): number {
+    if (!s) return 0;
+    const cents = s.tipsCents + s.unlocksCents + s.subscriptionsCents + s.storeCents;
+    return spendingLevelFromLifetimeSpendDollars(cents / 100);
+}
+
+/** Prefer live ledger totals; else synced pref `totalSpent` (USD); else stored spendingLevel. */
+function deriveFanAutoSpendingLevel(fan: Fan, summaries: Record<string, FanSpendSummary>): number {
+    const fromLedger = spendingLevelFromLedgerSummary(summaries[fan.id]);
+    if (fromLedger > 0) return fromLedger;
+    const prefs = fan.preferences as { totalSpent?: unknown; spendingLevel?: unknown };
+    const ts =
+        typeof prefs.totalSpent === 'number' && Number.isFinite(prefs.totalSpent)
+            ? Math.max(0, prefs.totalSpent)
+            : 0;
+    if (ts > 0) return spendingLevelFromLifetimeSpendDollars(ts);
+    const sl =
+        typeof prefs.spendingLevel === 'number' && Number.isFinite(prefs.spendingLevel)
+            ? Math.round(prefs.spendingLevel)
+            : 0;
+    return Math.min(5, Math.max(0, sl));
+}
+
+function lifetimeSpendDollarsFromLedger(s: FanSpendSummary | undefined): number | null {
+    if (!s) return null;
+    const cents = s.tipsCents + s.unlocksCents + s.subscriptionsCents + s.storeCents;
+    return cents / 100;
+}
+
 interface Fan {
     id: string;
     name: string;
@@ -131,6 +180,8 @@ interface Fan {
     avatarUrl?: string | null;
     /** From creators/.../fans subscription mirror: paid period ended (grey card; fan row kept for renewals). */
     hubMembershipExpired?: boolean;
+    /** Match Fan Hub Stripe orders + calendar events to this card (built in loadFans). */
+    purchaseIdentity?: FanPurchaseIdentity;
     preferences: {
         preferredTone?: 'soft' | 'dominant' | 'playful' | 'dirty' | 'Bold' | 'Very Explicit';
         favoriteSessionType?: string;
@@ -189,6 +240,8 @@ export const OnlyFansFans: React.FC = () => {
     const [expandedSessionFanId, setExpandedSessionFanId] = useState<string | null>(null);
     const [sessionHistory, setSessionHistory] = useState<Record<string, any[]>>({});
     const [isLoadingSessionHistory, setIsLoadingSessionHistory] = useState<Record<string, boolean>>({});
+    const [fanSpendSummaries, setFanSpendSummaries] = useState<Record<string, FanSpendSummary>>({});
+    const [fanSpendLoading, setFanSpendLoading] = useState(false);
     const [customContent, setCustomContent] = useState<Array<{
         id: string;
         title: string;
@@ -526,6 +579,59 @@ export const OnlyFansFans: React.FC = () => {
         }
     };
 
+    const hydrateFanSpendSummaries = useCallback(
+        async (fansList: Fan[]) => {
+            if (!user?.id || fansList.length === 0) {
+                setFanSpendSummaries({});
+                setFanSpendLoading(false);
+                return;
+            }
+            setFanSpendLoading(true);
+            try {
+                const token = auth.currentUser ? await auth.currentUser.getIdToken() : null;
+                const res = await fetch('/api/creatorOrders?limit=1000', {
+                    headers: token ? { Authorization: `Bearer ${token}` } : {},
+                });
+                if (!res.ok) throw new Error('creatorOrders failed');
+                const data = (await res.json()) as { orders?: Record<string, unknown>[] };
+                const orders = data.orders || [];
+                const next: Record<string, FanSpendSummary> = {};
+                for (const fan of fansList) {
+                    const pid = fan.purchaseIdentity;
+                    if (!pid) continue;
+                    const s: FanSpendSummary = {
+                        tipsCents: 0,
+                        unlocksCents: 0,
+                        subscriptionsCents: 0,
+                        storeCents: 0,
+                    };
+                    for (const raw of orders) {
+                        const st = String(raw.status ?? '').trim().toLowerCase();
+                        if (st === 'refunded') continue;
+                        if (!orderMatchesFanPurchaseIdentity(raw as MinimalOrderForFanMatch, pid)) continue;
+                        const kind = classifyFanHubOrderLedgerKind(raw);
+                        const amt =
+                            typeof raw.amountCents === 'number' && Number.isFinite(raw.amountCents)
+                                ? Math.max(0, Math.round(raw.amountCents))
+                                : 0;
+                        if (kind === 'tip') s.tipsCents += amt;
+                        else if (kind === 'unlock') s.unlocksCents += amt;
+                        else if (kind === 'subscription') s.subscriptionsCents += amt;
+                        else s.storeCents += amt;
+                    }
+                    next[fan.id] = s;
+                }
+                setFanSpendSummaries(next);
+            } catch (e) {
+                console.warn('OnlyFansFans: fan spend summaries', e);
+                setFanSpendSummaries({});
+            } finally {
+                setFanSpendLoading(false);
+            }
+        },
+        [user?.id]
+    );
+
     // Load fans (enrich from users/{fanId} + creators/.../fans so labels match User Management / ab5360d rules)
     const loadFans = async () => {
         if (!user?.id) return;
@@ -555,6 +661,9 @@ export const OnlyFansFans: React.FC = () => {
                     chunk.map(async (docSnap) => {
                         const data = docSnap.data();
                         const fanId = docSnap.id;
+                        let resolvedUserEmail: string | null = null;
+                        let resolvedFanRowEmail: string | null = null;
+                        let resolvedStripeCustomerId: string | null = null;
                         let username: string | null = null;
                         let displayName: string | null =
                             typeof data.displayName === 'string' && data.displayName.trim()
@@ -630,6 +739,15 @@ export const OnlyFansFans: React.FC = () => {
                                 }
                                 if (fSnap?.exists()) {
                                     const fd = fSnap.data() as Record<string, unknown>;
+                                    if (typeof fd.email === 'string' && fd.email.trim()) {
+                                        resolvedFanRowEmail = fd.email.trim();
+                                    }
+                                    if (
+                                        typeof fd.stripeCustomerId === 'string' &&
+                                        fd.stripeCustomerId.trim().startsWith('cus_')
+                                    ) {
+                                        resolvedStripeCustomerId = fd.stripeCustomerId.trim();
+                                    }
                                     const fromFan = usernameFromFanDoc(fd);
                                     if (fromFan) username = fromFan;
                                     if (!displayName && typeof fd.displayName === 'string' && fd.displayName.trim()) {
@@ -669,6 +787,9 @@ export const OnlyFansFans: React.FC = () => {
                                         displayName = ud.displayName.trim();
                                     }
                                     if (!email && typeof ud.email === 'string' && ud.email) email = ud.email;
+                                    if (typeof ud.email === 'string' && ud.email.trim()) {
+                                        resolvedUserEmail = ud.email.trim();
+                                    }
                                     const uAv =
                                         (typeof ud.avatar === 'string' && ud.avatar.trim()) ||
                                         (typeof ud.photoURL === 'string' && ud.photoURL.trim()) ||
@@ -707,11 +828,30 @@ export const OnlyFansFans: React.FC = () => {
                             name: listName,
                             avatarUrl: resolvedAvatar,
                             hubMembershipExpired,
+                            purchaseIdentity:
+                                user?.id && fanId !== user.id
+                                    ? buildFanPurchaseIdentity({
+                                          fanUid: fanId,
+                                          prefEmail: typeof data.email === 'string' ? data.email : null,
+                                          userEmail: resolvedUserEmail,
+                                          fanRowEmail: resolvedFanRowEmail,
+                                          stripeCustomerId: resolvedStripeCustomerId,
+                                      })
+                                    : undefined,
                             preferences: {
                                 ...data,
-                                spendingLevel:
-                                    data.spendingLevel ||
-                                    (data.totalSpent ? Math.min(5, Math.max(1, Math.ceil(data.totalSpent / 200))) : 0),
+                                spendingLevel: (() => {
+                                    const ts =
+                                        typeof data.totalSpent === 'number' && Number.isFinite(data.totalSpent)
+                                            ? Math.max(0, data.totalSpent)
+                                            : 0;
+                                    if (ts > 0) return spendingLevelFromLifetimeSpendDollars(ts);
+                                    const sl =
+                                        typeof data.spendingLevel === 'number' && Number.isFinite(data.spendingLevel)
+                                            ? Math.round(data.spendingLevel)
+                                            : 0;
+                                    return Math.min(5, Math.max(0, sl));
+                                })(),
                                 totalSessions: data.totalSessions || 0,
                                 isBigSpender:
                                     data.isBigSpender || (data.spendingLevel && data.spendingLevel >= 4) || false,
@@ -740,6 +880,7 @@ export const OnlyFansFans: React.FC = () => {
                 fansList.push(...part);
             }
             setFans(fansList);
+            void hydrateFanSpendSummaries(fansList);
         } catch (error) {
             console.error('Error loading fans:', error);
             showToast?.('Failed to load fans', 'error');
@@ -1045,7 +1186,10 @@ export const OnlyFansFans: React.FC = () => {
                 case 'sessions':
                     return (b.preferences.totalSessions || 0) - (a.preferences.totalSessions || 0);
                 case 'spendingLevel':
-                    return (b.preferences.spendingLevel || 0) - (a.preferences.spendingLevel || 0);
+                    return (
+                        deriveFanAutoSpendingLevel(b, fanSpendSummaries) -
+                        deriveFanAutoSpendingLevel(a, fanSpendSummaries)
+                    );
                 case 'lastSession':
                 default:
                     const aDate = a.preferences.lastSessionDate 
@@ -1153,7 +1297,7 @@ export const OnlyFansFans: React.FC = () => {
         setEditingFan(fan);
         // Pre-fill all fields with existing fan data
         setNewFanName(fan.name);
-        setNewFanSpendingLevel(fan.preferences.spendingLevel || 0);
+        setNewFanSpendingLevel(deriveFanAutoSpendingLevel(fan, fanSpendSummaries));
         setNewFanTier(fan.preferences.subscriptionTier || 'Free');
         setNewFanType(
             fan.preferences.isWhale ? 'Whale' :
@@ -1188,18 +1332,25 @@ export const OnlyFansFans: React.FC = () => {
 
         setIsSavingFan(true);
         try {
+            const autoSpendLevel = deriveFanAutoSpendingLevel(editingFan, fanSpendSummaries);
+            const ledgerDollars = lifetimeSpendDollarsFromLedger(fanSpendSummaries[editingFan.id]);
+
             const fanData: any = {
                 name: newFanName.trim(),
-                spendingLevel: newFanSpendingLevel,
+                spendingLevel: autoSpendLevel,
                 subscriptionTier: newFanTier,
                 isVIP: newFanType === 'VIP',
                 isWhale: newFanType === 'Whale',
                 isRegular: newFanType === 'Regular',
-                isBigSpender: newFanType === 'Whale' || newFanSpendingLevel >= 4,
+                isBigSpender: newFanType === 'Whale' || autoSpendLevel >= 4,
                 notes: newFanNotes.trim() || '',
                 tags: [],
                 updatedAt: Timestamp.now(),
             };
+            /** Only sync pref dollars when ledger shows paid spend (avoid wiping Stripe-synced totals). */
+            if (ledgerDollars !== null && ledgerDollars > 0) {
+                fanData.totalSpent = ledgerDollars;
+            }
 
             // Only add fields that have values (not empty strings or undefined)
             if (newFanPreferredTone) fanData.preferredTone = newFanPreferredTone;
@@ -1261,6 +1412,19 @@ export const OnlyFansFans: React.FC = () => {
             setIsSavingFan(false);
         }
     };
+
+    const editFanSpendTier =
+        editingFan != null ? deriveFanAutoSpendingLevel(editingFan, fanSpendSummaries) : 0;
+    const editFanLifetimeUsdDollars =
+        editingFan != null
+            ? (() => {
+                  const ledger = lifetimeSpendDollarsFromLedger(fanSpendSummaries[editingFan.id]);
+                  if (ledger !== null && ledger > 0) return ledger;
+                  const ts = (editingFan.preferences as { totalSpent?: number }).totalSpent;
+                  if (typeof ts === 'number' && Number.isFinite(ts) && ts > 0) return ts;
+                  return null;
+              })()
+            : null;
 
     const filteredFans = getFilteredAndSortedFans();
     const displayedActivity = activityTypeFilter === 'all'
@@ -1486,18 +1650,23 @@ export const OnlyFansFans: React.FC = () => {
                                                         <span>sessions</span>
                                                     </button>
                                                 )}
-                                                {prefs.spendingLevel && prefs.spendingLevel > 0 && (
+                                                {(() => {
+                                                    const spendLvl = fanSpendLoading
+                                                        ? prefs.spendingLevel || 0
+                                                        : deriveFanAutoSpendingLevel(fan, fanSpendSummaries);
+                                                    return spendLvl > 0 ? (
                                                     <div className="flex items-center gap-1 text-xs text-gray-600 dark:text-gray-400">
                                                         <span className="font-medium">Spending:</span>
                                                         <span className="flex items-center gap-0.5">
-                                                            {Array.from({ length: prefs.spendingLevel }).map((_, i) => (
+                                                            {Array.from({ length: spendLvl }).map((_, i) => (
                                                                 <span key={i} className="text-green-600 dark:text-green-400">
                                                                     💰
                                                                 </span>
                                                             ))}
                                                         </span>
                                                     </div>
-                                                )}
+                                                    ) : null;
+                                                })()}
                                                 {prefs.lastSessionDate && (
                                                     <div className="text-xs text-gray-500 dark:text-gray-500">
                                                         Last: {(() => {
@@ -1508,6 +1677,43 @@ export const OnlyFansFans: React.FC = () => {
                                                                 return 'Invalid date';
                                                             }
                                                         })()}
+                                                    </div>
+                                                )}
+                                                {fan.purchaseIdentity && (
+                                                    <div className="mt-2 pt-2 border-t border-gray-100 dark:border-gray-700/80">
+                                                        <div className="text-[10px] font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">
+                                                            Fan Hub revenue
+                                                        </div>
+                                                        {fanSpendLoading ? (
+                                                            <span className="text-[10px] text-gray-400">Loading…</span>
+                                                        ) : (
+                                                            <div className="grid grid-cols-2 gap-x-2 gap-y-0.5 mt-1 text-[10px] text-gray-700 dark:text-gray-300">
+                                                                {(() => {
+                                                                    const s = fanSpendSummaries[fan.id];
+                                                                    if (!s) {
+                                                                        return (
+                                                                            <span className="text-gray-400 col-span-2">No ledger match yet</span>
+                                                                        );
+                                                                    }
+                                                                    const rows: [string, number][] = [
+                                                                        ['Tips', s.tipsCents],
+                                                                        ['Unlocks', s.unlocksCents],
+                                                                        ['Subs', s.subscriptionsCents],
+                                                                        ['Store', s.storeCents],
+                                                                    ];
+                                                                    return (
+                                                                        <>
+                                                                            {rows.flatMap(([label, cents]) => [
+                                                                                <span key={`${label}-l`}>{label}</span>,
+                                                                                <span key={`${label}-v`} className="tabular-nums text-right font-medium">
+                                                                                    {formatUsdFromCents(cents)}
+                                                                                </span>,
+                                                                            ])}
+                                                                        </>
+                                                                    );
+                                                                })()}
+                                                            </div>
+                                                        )}
                                                     </div>
                                                 )}
                                             </div>
@@ -1727,6 +1933,46 @@ export const OnlyFansFans: React.FC = () => {
                                             )}
                                         </div>
                                     ))}
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    {/* Fan Hub revenue from Stripe orders ledger */}
+                    {selectedFan.purchaseIdentity && (
+                        <div className="mb-4 border-t border-gray-200 dark:border-gray-700 pt-4">
+                            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Fan Hub revenue</h3>
+                            <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                                Tips, content unlocks, subscriptions, and store purchases for this fan (matched from your
+                                orders ledger).
+                            </p>
+                            {fanSpendLoading ? (
+                                <div className="text-sm text-gray-500 dark:text-gray-400 mt-2">Loading revenue…</div>
+                            ) : (
+                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-3 text-sm">
+                                    {(() => {
+                                        const s = fanSpendSummaries[selectedFan.id];
+                                        const cells: { label: string; cents: number }[] = [
+                                            { label: 'Tips', cents: s?.tipsCents ?? 0 },
+                                            { label: 'Unlocks', cents: s?.unlocksCents ?? 0 },
+                                            {
+                                                label: 'Subscriptions',
+                                                cents: s?.subscriptionsCents ?? 0,
+                                            },
+                                            { label: 'Store', cents: s?.storeCents ?? 0 },
+                                        ];
+                                        return cells.map((c) => (
+                                            <div
+                                                key={c.label}
+                                                className="rounded-lg border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-900/40 px-3 py-2"
+                                            >
+                                                <div className="text-xs text-gray-500 dark:text-gray-400">{c.label}</div>
+                                                <div className="text-base font-semibold text-gray-900 dark:text-white tabular-nums">
+                                                    {formatUsdFromCents(c.cents)}
+                                                </div>
+                                            </div>
+                                        ));
+                                    })()}
                                 </div>
                             )}
                         </div>
@@ -2048,9 +2294,17 @@ export const OnlyFansFans: React.FC = () => {
                         </div>
                         <div>
                             <span className="text-gray-600 dark:text-gray-400">Spending Level:</span>
-                            <span className="ml-2 font-semibold text-gray-900 dark:text-white">
-                                {selectedFan.preferences.spendingLevel || 0}/5
+                            <span className="ml-2 font-semibold text-gray-900 dark:text-white tabular-nums">
+                                {fanSpendLoading
+                                    ? selectedFan.preferences.spendingLevel || 0
+                                    : deriveFanAutoSpendingLevel(selectedFan, fanSpendSummaries)}
+                                /5
                             </span>
+                            {!fanSpendLoading && (
+                                <span className="ml-1 text-xs text-gray-500 dark:text-gray-400">
+                                    (from Fan Hub spend)
+                                </span>
+                            )}
                         </div>
                         {selectedFan.preferences.lastSessionDate && (
                             <div>
@@ -2206,23 +2460,27 @@ export const OnlyFansFans: React.FC = () => {
                                 />
                             </div>
 
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:items-start">
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                        Spending Level (0-5)
+                                        Starter tier (optional)
                                     </label>
                                     <select
                                         value={newFanSpendingLevel}
                                         onChange={(e) => setNewFanSpendingLevel(Number(e.target.value))}
                                         className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                                     >
-                                        <option value={0}>0 - Not Set</option>
-                                        <option value={1}>1</option>
-                                        <option value={2}>2</option>
-                                        <option value={3}>3</option>
-                                        <option value={4}>4</option>
-                                        <option value={5}>5 - Highest</option>
+                                        <option value={0}>0 — not set</option>
+                                        <option value={1}>1 — up to $20 lifetime</option>
+                                        <option value={2}>2 — $20–50</option>
+                                        <option value={3}>3 — $50–100</option>
+                                        <option value={4}>4 — $100–200</option>
+                                        <option value={5}>5 — $200+</option>
                                     </select>
+                                    <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-1 leading-snug">
+                                        For fans linked to Fan Hub, tier updates from real orders and overrides this.{' '}
+                                        {FAN_HUB_SPENDING_LEVEL_SCALE_ONE_LINER}
+                                    </p>
                                 </div>
 
                                 <div>
@@ -2584,23 +2842,51 @@ export const OnlyFansFans: React.FC = () => {
                                 />
                             </div>
 
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:items-start">
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                        Spending Level (0-5)
+                                        Fan Hub spend tier
                                     </label>
-                                    <select
-                                        value={newFanSpendingLevel}
-                                        onChange={(e) => setNewFanSpendingLevel(Number(e.target.value))}
-                                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                                    >
-                                        <option value={0}>0 - Not Set</option>
-                                        <option value={1}>1</option>
-                                        <option value={2}>2</option>
-                                        <option value={3}>3</option>
-                                        <option value={4}>4</option>
-                                        <option value={5}>5 - Highest</option>
-                                    </select>
+                                    <div className="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-md bg-gray-50 dark:bg-gray-900/50 text-gray-900 dark:text-white text-sm space-y-1.5">
+                                        {editFanSpendTier <= 0 ? (
+                                            <>
+                                                <p className="text-base font-medium text-gray-900 dark:text-white">
+                                                    Not ranked yet
+                                                </p>
+                                                <p className="text-xs text-gray-600 dark:text-gray-400 leading-snug">
+                                                    Tier fills in automatically when Fan Hub orders match this fan
+                                                    (tips, unlocks, subscriptions, store).
+                                                </p>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <p className="text-lg font-semibold tabular-nums text-gray-900 dark:text-white">
+                                                    Tier {editFanSpendTier}
+                                                    <span className="text-sm font-normal text-gray-600 dark:text-gray-400">
+                                                        {' '}
+                                                        — {fanHubSpendingTierBandLabel(editFanSpendTier)}
+                                                    </span>
+                                                </p>
+                                                {editFanLifetimeUsdDollars != null ? (
+                                                    <p className="text-xs text-gray-600 dark:text-gray-400 leading-snug">
+                                                        About{' '}
+                                                        <span className="font-medium tabular-nums text-gray-800 dark:text-gray-200">
+                                                            {formatUsdFromCents(Math.round(editFanLifetimeUsdDollars * 100))}
+                                                        </span>{' '}
+                                                        lifetime Fan Hub revenue (matched orders).
+                                                    </p>
+                                                ) : (
+                                                    <p className="text-xs text-gray-500 dark:text-gray-400 leading-snug">
+                                                        Exact total appears once orders are linked to this fan.
+                                                    </p>
+                                                )}
+                                            </>
+                                        )}
+                                        <p className="text-[11px] text-gray-500 dark:text-gray-400 pt-1.5 mt-1 border-t border-gray-200 dark:border-gray-600 leading-snug">
+                                            {FAN_HUB_SPENDING_LEVEL_SCALE_ONE_LINER} Tier is stored with other fields when
+                                            you save.
+                                        </p>
+                                    </div>
                                 </div>
 
                                 <div>
