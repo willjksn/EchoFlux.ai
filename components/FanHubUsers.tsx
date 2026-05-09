@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { useAppContext } from "./AppContext";
 import { auth, db } from "../firebaseConfig";
 import { collection, query, getDocs, getDoc, doc, addDoc, setDoc, serverTimestamp, updateDoc, where } from "firebase/firestore";
@@ -14,6 +14,18 @@ import { buildCreatorImageUrlSet, fanAvatarUrlOrUndefined } from "../src/lib/fan
 import { classifyFanHubOrderLedgerKind, isGuestCheckoutFanId } from "../src/lib/fanHubOrderLedger";
 
 type UserRole = "admin" | "member" | "tipper" | "treat_buyer";
+
+/** User Management table: optional activity window, then search, then Show category. */
+type FanHubUsersCategoryFilter =
+  | "all"
+  | "admins"
+  | "members"
+  | "members_ending_soon"
+  | "members_expired"
+  | "tippers";
+
+/** Rolling window vs. full roster; uses latest of signup / last login / last activity. */
+type FanHubUsersActivityWindow = "all" | 7 | 30 | 90;
 
 interface FanUser {
   id: string;
@@ -130,6 +142,56 @@ function isMemberExpiringAccess(u: FanUser): boolean {
   if (/\b\d+\s+day(s)?\s+left\b/i.test(ra)) return true;
   if (/^Cancelling/i.test(ra)) return true;
   return false;
+}
+
+function fanMatchesUserCategory(u: FanUser, filter: FanHubUsersCategoryFilter): boolean {
+  switch (filter) {
+    case "all":
+      return true;
+    case "admins":
+      return u.role === "admin";
+    case "members":
+      return (
+        u.role === "member" &&
+        u.membershipAccessExpired !== true &&
+        !isMemberExpiringAccess(u)
+      );
+    case "members_ending_soon":
+      return u.role === "member" && u.membershipAccessExpired !== true && isMemberExpiringAccess(u);
+    case "members_expired":
+      return u.role === "member" && u.membershipAccessExpired === true;
+    case "tippers":
+      return u.role === "tipper";
+    default:
+      return true;
+  }
+}
+
+function categoryFilterLabel(f: FanHubUsersCategoryFilter): string {
+  const labels: Record<FanHubUsersCategoryFilter, string> = {
+    all: "All",
+    admins: "Admins",
+    members: "Members — active",
+    members_ending_soon: "Members ending soon",
+    members_expired: "Members expired",
+    tippers: "Tippers",
+  };
+  return labels[f];
+}
+
+/** Fan kept if any of signup / login / activity falls on or after the cutoff. Undated rows stay visible. */
+function fanHasActivityInWindow(u: FanUser, window: FanHubUsersActivityWindow): boolean {
+  if (window === "all") return true;
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - window);
+  const t = cutoff.getTime();
+  const times = [
+    u.signupDate?.getTime(),
+    u.lastLoginAt?.getTime(),
+    u.lastActiveAt?.getTime(),
+  ].filter((x): x is number => typeof x === "number" && Number.isFinite(x));
+  if (times.length === 0) return true;
+  return Math.max(...times) >= t;
 }
 
 function sortMembersBySignupDesc(a: FanUser, b: FanUser): number {
@@ -253,6 +315,8 @@ export const FanHubUsers: React.FC = () => {
   const [users, setUsers] = useState<FanUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
+  const [userListActivityWindow, setUserListActivityWindow] = useState<FanHubUsersActivityWindow>("all");
+  const [userCategoryFilter, setUserCategoryFilter] = useState<FanHubUsersCategoryFilter>("all");
   const [showAddModal, setShowAddModal] = useState(false);
   const [showManageModal, setShowManageModal] = useState(false);
   const [selectedUser, setSelectedUser] = useState<FanUser | null>(null);
@@ -1477,15 +1541,28 @@ export const FanHubUsers: React.FC = () => {
     }
   };
 
-  // Filter users by search
-  const filteredUsers = users.filter(
+  // Optional rolling activity window, then search, then category (Admins / Members / …)
+  const dateRangeFilteredUsers = useMemo(() => {
+    if (userListActivityWindow === "all") return users;
+    return users.filter((u) => fanHasActivityInWindow(u, userListActivityWindow));
+  }, [users, userListActivityWindow]);
+
+  const searchFiltered = dateRangeFilteredUsers.filter(
     (u) =>
       u.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       u.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (u.memberUsername && u.memberUsername.toLowerCase().includes(searchQuery.toLowerCase()))
+      (u.memberUsername && u.memberUsername.toLowerCase().includes(searchQuery.toLowerCase())),
   );
+  const filteredUsers = searchFiltered.filter((u) => fanMatchesUserCategory(u, userCategoryFilter));
 
   // Group users by role; members split into active / expiring soon / expired access
+  const showAdminsSection = userCategoryFilter === "all" || userCategoryFilter === "admins";
+  const showMembersActiveSection = userCategoryFilter === "all" || userCategoryFilter === "members";
+  const showMembersExpiringSection =
+    userCategoryFilter === "all" || userCategoryFilter === "members_ending_soon";
+  const showMembersExpiredSection =
+    userCategoryFilter === "all" || userCategoryFilter === "members_expired";
+  const showTippersSection = userCategoryFilter === "all" || userCategoryFilter === "tippers";
   const admins = filteredUsers.filter((u) => u.role === "admin");
   const membersAll = filteredUsers.filter((u) => u.role === "member");
   const membersExpired = membersAll
@@ -1499,6 +1576,28 @@ export const FanHubUsers: React.FC = () => {
     .filter((u) => !isMemberExpiringAccess(u))
     .sort(sortMembersBySignupDesc);
   const tippers = filteredUsers.filter((u) => u.role === "tipper");
+
+  const showTippersPlaceholder =
+    showTippersSection &&
+    userCategoryFilter === "all" &&
+    searchFiltered.length > 0 &&
+    tippers.length === 0;
+
+  const userManagementEmptyMessage = (() => {
+    if (users.length === 0) {
+      return "No users yet. Add users or they'll appear here when they make purchases.";
+    }
+    if (dateRangeFilteredUsers.length === 0) {
+      return `No users with signup, login, or activity in the last ${userListActivityWindow} days. Try All time.`;
+    }
+    if (searchQuery.trim() && searchFiltered.length === 0) {
+      return "No users match your search.";
+    }
+    if (userCategoryFilter !== "all") {
+      return `No users in ${categoryFilterLabel(userCategoryFilter)}.`;
+    }
+    return "Nothing to show.";
+  })();
 
   // Calculate monthly totals
   const monthlyTotals = {
@@ -1682,7 +1781,45 @@ export const FanHubUsers: React.FC = () => {
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
         <h1 className="text-2xl font-bold text-gray-900 dark:text-white">User Management</h1>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="flex items-center gap-2">
+            <label htmlFor="fanhub-users-activity" className="text-sm font-medium text-gray-600 dark:text-gray-400 whitespace-nowrap">
+              Activity
+            </label>
+            <select
+              id="fanhub-users-activity"
+              value={userListActivityWindow === "all" ? "all" : String(userListActivityWindow)}
+              onChange={(e) => {
+                const v = e.target.value;
+                setUserListActivityWindow(v === "all" ? "all" : (Number(v) as 7 | 30 | 90));
+              }}
+              className="border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm py-2 pl-3 pr-8 min-w-[10.5rem]"
+              title="Shows fans whose signup, last login, or last activity falls in this window. Fans with no dates stay visible."
+            >
+              <option value="all">All time</option>
+              <option value="7">Last 7 days</option>
+              <option value="30">Last 30 days</option>
+              <option value="90">Last 90 days</option>
+            </select>
+          </div>
+          <div className="flex items-center gap-2">
+            <label htmlFor="fanhub-users-category" className="text-sm font-medium text-gray-600 dark:text-gray-400 whitespace-nowrap">
+              Show
+            </label>
+            <select
+              id="fanhub-users-category"
+              value={userCategoryFilter}
+              onChange={(e) => setUserCategoryFilter(e.target.value as FanHubUsersCategoryFilter)}
+              className="border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm py-2 pl-3 pr-8 min-w-[11.5rem]"
+            >
+              <option value="all">All</option>
+              <option value="admins">Admins</option>
+              <option value="members">Members — active</option>
+              <option value="members_ending_soon">Members ending soon</option>
+              <option value="members_expired">Members expired</option>
+              <option value="tippers">Tippers</option>
+            </select>
+          </div>
           <button
             type="button"
             onClick={() => setShowAddModal(true)}
@@ -1717,9 +1854,9 @@ export const FanHubUsers: React.FC = () => {
             <p className="text-gray-500 dark:text-gray-400">Loading users...</p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto max-h-[min(72vh,780px)] overflow-y-auto overscroll-y-contain [scrollbar-gutter:stable]">
             <table className="w-full">
-              <thead className="bg-gray-50 dark:bg-gray-700/50 border-b border-gray-200 dark:border-gray-700">
+              <thead className="sticky top-0 z-10 bg-gray-50 dark:bg-gray-700/50 border-b border-gray-200 dark:border-gray-700 shadow-[0_1px_0_0_rgba(15,23,42,0.06)] dark:shadow-[0_1px_0_0_rgba(0,0,0,0.3)]">
                 <tr>
                   <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                     User
@@ -1821,7 +1958,7 @@ export const FanHubUsers: React.FC = () => {
                 </tr>
 
                 {/* Admins Section */}
-                {admins.length > 0 && (
+                {showAdminsSection && admins.length > 0 && (
                   <>
                     <SectionHeader title="Admins" count={admins.length} />
                     {admins.map((fanUser) => (
@@ -1831,7 +1968,7 @@ export const FanHubUsers: React.FC = () => {
                 )}
 
                 {/* Members — active access */}
-                {membersActive.length > 0 && (
+                {showMembersActiveSection && membersActive.length > 0 && (
                   <>
                     <SectionHeader title="Members — active" count={membersActive.length} />
                     {membersActive.map((fanUser) => (
@@ -1841,7 +1978,7 @@ export const FanHubUsers: React.FC = () => {
                 )}
 
                 {/* Members — ending soon (cancel at period end; access until date) */}
-                {membersExpiring.length > 0 && (
+                {showMembersExpiringSection && membersExpiring.length > 0 && (
                   <>
                     <SectionHeader title="Members — ending soon" count={membersExpiring.length} />
                     {membersExpiring.map((fanUser) => (
@@ -1851,7 +1988,7 @@ export const FanHubUsers: React.FC = () => {
                 )}
 
                 {/* Members — expired access (billing period ended) */}
-                {membersExpired.length > 0 && (
+                {showMembersExpiredSection && membersExpired.length > 0 && (
                   <>
                     <SectionHeader title="Members — expired" count={membersExpired.length} />
                     {membersExpired.map((fanUser) => (
@@ -1861,24 +1998,26 @@ export const FanHubUsers: React.FC = () => {
                 )}
 
                 {/* Tippers Section */}
-                <SectionHeader title="Tippers" count={tippers.length} />
-                {tippers.length > 0 ? (
-                  tippers.map((fanUser) => (
-                    <UserRow key={fanUser.id} fanUser={fanUser} />
-                  ))
-                ) : (
-                  <tr>
-                    <td colSpan={11} className="px-4 py-4 text-sm text-gray-500 dark:text-gray-400 italic">
-                      No tippers yet.
-                    </td>
-                  </tr>
+                {showTippersSection && (tippers.length > 0 || showTippersPlaceholder) && (
+                  <>
+                    <SectionHeader title="Tippers" count={tippers.length} />
+                    {tippers.length > 0 ? (
+                      tippers.map((fanUser) => <UserRow key={fanUser.id} fanUser={fanUser} />)
+                    ) : (
+                      <tr>
+                        <td colSpan={11} className="px-4 py-4 text-sm text-gray-500 dark:text-gray-400 italic">
+                          No tippers yet.
+                        </td>
+                      </tr>
+                    )}
+                  </>
                 )}
 
                 {/* Empty State */}
                 {filteredUsers.length === 0 && !loading && (
                   <tr>
                     <td colSpan={11} className="px-4 py-12 text-center text-gray-500 dark:text-gray-400">
-                      {searchQuery ? "No users match your search." : "No users yet. Add users or they'll appear here when they make purchases."}
+                      {userManagementEmptyMessage}
                     </td>
                   </tr>
                 )}
