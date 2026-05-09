@@ -7111,6 +7111,50 @@ button.treat-card:hover:not(:disabled) .treat-card-cta {
 .purchases-header-actions {
   display: flex;
   gap: 0.5rem;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.purchases-range-label {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--text-muted, #6b7280);
+  white-space: nowrap;
+}
+
+.dark .purchases-range-label {
+  color: #9ca3af;
+}
+
+.purchases-range-select {
+  font-size: 0.8125rem;
+  font-weight: 500;
+  padding: 0.4rem 0.55rem;
+  border-radius: 0.5rem;
+  border: 1px solid rgba(201, 112, 130, 0.32);
+  background: rgba(255, 255, 255, 0.95);
+  color: var(--text, #1f2937);
+  cursor: pointer;
+  min-height: 2.25rem;
+}
+
+.dark .purchases-range-select {
+  background: rgb(55, 65, 81);
+  border-color: rgba(251, 113, 133, 0.35);
+  color: #f3f4f6;
+}
+
+.purchases-range-select:focus {
+  outline: 2px solid color-mix(in srgb, var(--fan-primary, #c97082) 45%, transparent);
+  outline-offset: 1px;
+}
+
+.stormij-theme .purchases-range-select {
+  border-color: color-mix(in srgb, var(--fan-primary) 28%, var(--fan-border, #e5e7eb));
+}
+
+.dark .stormij-theme:not(.stormij-theme--light) .purchases-range-select {
+  border-color: color-mix(in srgb, var(--fan-primary) 35%, #4b5563);
 }
 
 /* Stats Bar */

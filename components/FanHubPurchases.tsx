@@ -337,6 +337,7 @@ export const FanHubPurchases: React.FC = () => {
   const [scheduleTime, setScheduleTime] = useState("12:00");
   const [savingId, setSavingId] = useState<string | null>(null);
   const [filterStatus, setFilterStatus] = useState<"all" | "pending" | "scheduled" | "completed" | "tips">("all");
+  const [purchaseDateRangeDays, setPurchaseDateRangeDays] = useState<7 | 30 | 90>(30);
   const [showPurchasesHelpModal, setShowPurchasesHelpModal] = useState(false);
   const [deliveryEditingId, setDeliveryEditingId] = useState<string | null>(null);
   const [deliveryTypeDraft, setDeliveryTypeDraft] = useState<"video" | "image" | "audio" | "text">("text");
@@ -1355,7 +1356,18 @@ export const FanHubPurchases: React.FC = () => {
     showToast?.("All hidden purchases are visible again.", "success");
   }, [showToast]);
 
-  const filteredPurchases = purchases.filter((p) => {
+  const purchaseDateRangeCutoffMs = useMemo(() => {
+    const d = new Date();
+    d.setDate(d.getDate() - purchaseDateRangeDays);
+    return d.getTime();
+  }, [purchaseDateRangeDays]);
+
+  const purchasesInDateRange = useMemo(
+    () => purchases.filter((p) => p.createdAt.getTime() >= purchaseDateRangeCutoffMs),
+    [purchases, purchaseDateRangeCutoffMs],
+  );
+
+  const filteredPurchases = purchasesInDateRange.filter((p) => {
     if (!showHidden && hiddenPurchaseIds.has(p.id)) return false;
     if (filterStatus === "all") return true;
     if (filterStatus === "tips") return isTipPurchase(p);
@@ -1363,9 +1375,13 @@ export const FanHubPurchases: React.FC = () => {
   });
 
   const hiddenCount = purchases.filter((p) => hiddenPurchaseIds.has(p.id)).length;
-  const pendingCount = purchases.filter((p) => purchaseEffectiveForUi(p).scheduleStatus === "pending").length;
-  const scheduledCount = purchases.filter((p) => purchaseEffectiveForUi(p).scheduleStatus === "scheduled").length;
-  const tipsCount = purchases.filter((p) => isTipPurchase(p)).length;
+  const pendingCount = purchasesInDateRange.filter(
+    (p) => purchaseEffectiveForUi(p).scheduleStatus === "pending",
+  ).length;
+  const scheduledCount = purchasesInDateRange.filter(
+    (p) => purchaseEffectiveForUi(p).scheduleStatus === "scheduled",
+  ).length;
+  const tipsCount = purchasesInDateRange.filter((p) => isTipPurchase(p)).length;
 
   if (!user?.id) {
     return (
@@ -1406,6 +1422,19 @@ export const FanHubPurchases: React.FC = () => {
           </div>
         </div>
         <div className="purchases-header-actions">
+          <label htmlFor="fanhub-purchases-date-range" className="purchases-range-label">
+            Period
+          </label>
+          <select
+            id="fanhub-purchases-date-range"
+            className="purchases-range-select"
+            value={purchaseDateRangeDays}
+            onChange={(e) => setPurchaseDateRangeDays(Number(e.target.value) as 7 | 30 | 90)}
+          >
+            <option value={7}>Last 7 days</option>
+            <option value={30}>Last 30 days</option>
+            <option value={90}>Last 90 days</option>
+          </select>
           <button
             type="button"
             onClick={() => hideNonActionablePurchases()}
@@ -1564,8 +1593,8 @@ export const FanHubPurchases: React.FC = () => {
           <span className="purchases-stat-label">Scheduled</span>
         </div>
         <div className="purchases-stat">
-          <span className="purchases-stat-value">{purchases.length}</span>
-          <span className="purchases-stat-label">Total purchases</span>
+          <span className="purchases-stat-value">{purchasesInDateRange.length}</span>
+          <span className="purchases-stat-label">{`Purchases (${purchaseDateRangeDays}d)`}</span>
         </div>
       </div>
 
@@ -1611,9 +1640,15 @@ export const FanHubPurchases: React.FC = () => {
       >
         {filteredPurchases.length === 0 ? (
           <p className="purchases-empty">
-            {filterStatus === "all"
+            {purchases.length === 0
               ? "No purchases yet. When someone buys from your store, it will appear here."
-              : `No ${filterStatus} purchases.`}
+              : purchasesInDateRange.length === 0
+                ? `No purchases in the last ${purchaseDateRangeDays} days. Try a longer period or Refresh.`
+                : filterStatus === "all"
+                  ? hiddenCount > 0 && !showHidden
+                    ? "No purchases visible. Items may be hidden — use Show hidden to reveal them."
+                    : "Nothing to show right now."
+                  : `No ${filterStatus} purchases in this period.`}
           </p>
         ) : (
           filteredPurchases.map((p) => {
