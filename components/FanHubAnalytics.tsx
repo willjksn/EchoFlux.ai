@@ -125,6 +125,9 @@ const DEFAULT_LIVE_STREAM_BIZ: LiveStreamBizMetrics = {
   other: 0,
 };
 
+/** Default rows shown in Top Fans / Recent Transactions before "Show all". */
+const FAN_HUB_ANALYTICS_LIST_PREVIEW = 10;
+
 const TrendUpIcon = () => (
   <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <polyline points="23 6 13.5 15.5 8.5 10.5 1 18" />
@@ -671,6 +674,8 @@ export const FanHubAnalytics: React.FC = () => {
   });
   const [topFans, setTopFans] = useState<TopFan[]>([]);
   const [recentTransactions, setRecentTransactions] = useState<Transaction[]>([]);
+  const [expandTopFansList, setExpandTopFansList] = useState(false);
+  const [expandRecentTransactionsList, setExpandRecentTransactionsList] = useState(false);
   /** Orders in selected date range (for CSV export). */
   const [rangeOrders, setRangeOrders] = useState<Record<string, unknown>[]>([]);
   const [countrySpendRows, setCountrySpendRows] = useState<CountrySpendRow[]>([]);
@@ -702,6 +707,11 @@ export const FanHubAnalytics: React.FC = () => {
       prev === "all" || countrySpendRows.some((r) => r.code === prev) ? prev : "all",
     );
   }, [countrySpendRows]);
+
+  useEffect(() => {
+    setExpandTopFansList(false);
+    setExpandRecentTransactionsList(false);
+  }, [dateRange]);
 
   const handleExportTransactionsCsv = useCallback(() => {
     if (rangeOrders.length === 0) {
@@ -1633,7 +1643,7 @@ export const FanHubAnalytics: React.FC = () => {
                 No fan data yet. Earnings will appear here as fans purchase.
               </div>
             ) : (
-              topFans.map((fan, index) => (
+              (expandTopFansList ? topFans : topFans.slice(0, FAN_HUB_ANALYTICS_LIST_PREVIEW)).map((fan, index) => (
                 <div key={fan.id} className="p-4 flex items-center justify-between hover:bg-gray-50 dark:hover:bg-gray-700/50 transition">
                   <div className="flex items-center gap-3">
                     <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${
@@ -1663,6 +1673,17 @@ export const FanHubAnalytics: React.FC = () => {
               ))
             )}
           </div>
+          {topFans.length > FAN_HUB_ANALYTICS_LIST_PREVIEW && (
+            <div className="p-3 border-t border-gray-100 dark:border-gray-700">
+              <button
+                type="button"
+                onClick={() => setExpandTopFansList((v) => !v)}
+                className="text-sm font-medium text-indigo-600 dark:text-indigo-400 hover:underline"
+              >
+                {expandTopFansList ? "Show less" : `Show all (${topFans.length})`}
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Recent Transactions */}
@@ -1673,13 +1694,22 @@ export const FanHubAnalytics: React.FC = () => {
               Recent Transactions
             </h3>
           </div>
-          <div className="divide-y divide-gray-100 dark:divide-gray-700 max-h-[400px] overflow-y-auto">
+          <div
+            className={
+              expandRecentTransactionsList
+                ? "divide-y divide-gray-100 dark:divide-gray-700 max-h-[400px] overflow-y-auto"
+                : "divide-y divide-gray-100 dark:divide-gray-700"
+            }
+          >
             {recentTransactions.length === 0 ? (
               <div className="p-6 text-center text-gray-500 dark:text-gray-400">
                 No transactions yet. They'll appear here when fans make purchases.
               </div>
             ) : (
-              recentTransactions.map((tx) => (
+              (expandRecentTransactionsList
+                ? recentTransactions
+                : recentTransactions.slice(0, FAN_HUB_ANALYTICS_LIST_PREVIEW)
+              ).map((tx) => (
                 <div key={tx.id} className="p-4 flex items-center justify-between hover:bg-gray-50 dark:hover:bg-gray-700/50 transition">
                   <div className="flex items-center gap-3">
                     <div className={`p-2 rounded-lg ${
@@ -1721,6 +1751,17 @@ export const FanHubAnalytics: React.FC = () => {
               ))
             )}
           </div>
+          {recentTransactions.length > FAN_HUB_ANALYTICS_LIST_PREVIEW && (
+            <div className="p-3 border-t border-gray-100 dark:border-gray-700">
+              <button
+                type="button"
+                onClick={() => setExpandRecentTransactionsList((v) => !v)}
+                className="text-sm font-medium text-indigo-600 dark:text-indigo-400 hover:underline"
+              >
+                {expandRecentTransactionsList ? "Show less" : `Show all (${recentTransactions.length})`}
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
