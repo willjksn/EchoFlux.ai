@@ -366,6 +366,32 @@ function membershipChipsForDisplay(links: FanMembershipLink[]): FanMembershipLin
     return [];
 }
 
+/**
+ * Compress Fan Hub storefront links into a short admin-readable line (which creator(s) the fan is tied to).
+ * Uses the same membership merge as Fan Buyer Summary; empty when Firestore links are absent.
+ */
+function fanHubCreatorLineFromMembershipLinks(links: FanMembershipLink[]): string | null {
+    if (!links.length) return null;
+    const deduped = dedupeFanMembershipLinksByCreator(links);
+    const chipped = membershipChipsForDisplay(deduped);
+    const source = chipped.length > 0 ? chipped : deduped;
+    const parts: string[] = [];
+    for (const m of source) {
+        const name = (m.creatorName || "").trim();
+        if (!isUnknownCreatorChipName(name)) parts.push(name);
+        else if (typeof m.creatorHandle === "string" && m.creatorHandle.trim()) {
+            parts.push(`@${m.creatorHandle.replace(/^@+/, "").trim()}`);
+        } else {
+            const nid = normalizeAdminCreatorGroupKey(m.creatorId) || "";
+            parts.push(nid ? `Creator ${nid.slice(0, 8)}…` : "Creator");
+        }
+    }
+    if (!parts.length) return null;
+    const preview = parts.slice(0, 6);
+    const joined = preview.join(", ");
+    return parts.length > 6 ? `${joined}, …` : joined;
+}
+
 /** Dedupe Fan Hub membership links by creator (same rules as Fan Buyer Summary table). */
 function dedupeFanMembershipLinksByCreator(links: FanMembershipLink[]): FanMembershipLink[] {
     const dedupedByCreator = new Map<string, FanMembershipLink>();
@@ -2295,6 +2321,13 @@ export const AdminDashboard: React.FC = () => {
                                                 </p>
                                                 <p className="text-xs text-gray-500 dark:text-gray-400">
                                                     {new Date(u.signupDate).toLocaleString()} · Plan {u.plan ?? "—"}
+                                                    {(() => {
+                                                        const hubCreators =
+                                                            fanHubCreatorLineFromMembershipLinks(
+                                                                getFanHubMembershipsForUser(u),
+                                                            );
+                                                        return hubCreators ? ` · Fan Hub: ${hubCreators}` : "";
+                                                    })()}
                                                 </p>
                                             </div>
                                         </li>
@@ -2351,6 +2384,13 @@ export const AdminDashboard: React.FC = () => {
                                                     (u as unknown as { stripeCustomerId?: string }).stripeCustomerId?.trim()
                                                         ? " · Stripe customer record"
                                                         : " · No active subscription"}
+                                                    {(() => {
+                                                        const hubCreators =
+                                                            fanHubCreatorLineFromMembershipLinks(
+                                                                getFanHubMembershipsForUser(u),
+                                                            );
+                                                        return hubCreators ? ` · Fan Hub: ${hubCreators}` : "";
+                                                    })()}
                                                 </p>
                                             </div>
                                         </li>
