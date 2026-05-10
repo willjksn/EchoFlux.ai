@@ -22,6 +22,8 @@ import {
 } from '../src/lib/fanHubSpendingLevel';
 import { buildCreatorImageUrlSet, fanAvatarUrlOrUndefined } from '../src/lib/fanAvatar';
 import { isHubMembershipAccessExpired, mergeFanHubFanMirrorRowsForAccess, parseDateLike, pickLatestMemberAccessEnd } from '../src/lib/memberAccessEnd';
+import { useCreatorHandle } from '../src/hooks/useCreatorHandle';
+import { stormijMembershipDisplayFloorCents } from '../src/lib/stormijMembershipDisplayFloors';
 
 function usernameFromFanDoc(fd: Record<string, unknown>): string | null {
   const keys = ['username', 'memberUsername', 'handle', 'instagram_handle', 'instagramHandle'] as const;
@@ -271,6 +273,7 @@ type CustomDeliveryType = 'video' | 'image' | 'audio' | 'text' | 'link' | 'other
 
 export const OnlyFansFans: React.FC = () => {
     const { user, showToast } = useAppContext();
+    const creatorHandle = useCreatorHandle(user?.id);
     const fanHubTab = usePremiumStudioTab();
     const [fans, setFans] = useState<Fan[]>([]);
     const [selectedFan, setSelectedFan] = useState<Fan | null>(null);
@@ -691,6 +694,24 @@ export const OnlyFansFans: React.FC = () => {
                         else if (kind === 'subscription') s.subscriptionsCents += amt;
                         else s.storeCents += amt;
                     }
+                    let subsFloor = 0;
+                    const idEmails = fan.purchaseIdentity?.emails;
+                    if (idEmails && idEmails.size > 0) {
+                        for (const em of idEmails) {
+                            subsFloor = Math.max(
+                                subsFloor,
+                                stormijMembershipDisplayFloorCents(creatorHandle, em),
+                            );
+                        }
+                    } else {
+                        subsFloor = stormijMembershipDisplayFloorCents(
+                            creatorHandle,
+                            fan.preferences.email,
+                        );
+                    }
+                    if (subsFloor > 0) {
+                        s.subscriptionsCents = Math.max(s.subscriptionsCents, subsFloor);
+                    }
                     next[fan.id] = s;
                 }
                 setFanSpendSummaries(next);
@@ -701,7 +722,7 @@ export const OnlyFansFans: React.FC = () => {
                 setFanSpendLoading(false);
             }
         },
-        [user?.id]
+        [user?.id, creatorHandle]
     );
 
     // Load fans (enrich from users/{fanId} + creators/.../fans so labels match User Management / ab5360d rules)

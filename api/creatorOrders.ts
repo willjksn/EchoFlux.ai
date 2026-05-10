@@ -92,12 +92,30 @@ function toLegacyAmountCents(raw: unknown): number {
   return 0;
 }
 
-function inferLegacyPurchaseType(d: Record<string, unknown>): "tip" | "product" {
+function legacyStripeSubscriptionIndicator(d: Record<string, unknown>): boolean {
+  const candidates = [
+    d.stripeSubscriptionId,
+    d.subscriptionId,
+    d.stripe_subscription_id,
+    d.stripeSubscription,
+  ];
+  for (const v of candidates) {
+    const s = typeof v === "string" ? v.trim().toLowerCase() : "";
+    if (s.startsWith("sub_")) return true;
+  }
+  return false;
+}
+
+/** Legacy/top-level `purchases` rows (Stormij migration, etc.). Must align with `normalizeOrderType` / Fan Hub ledger. */
+function inferLegacyPurchaseType(d: Record<string, unknown>): "tip" | "product" | "subscription" {
   const type = toLowerString(d.type);
   if (type === "tip") return "tip";
+  if (type === "subscription") return "subscription";
   const productType = toLowerString(d.productType);
   if (productType === "tip") return "tip";
+  if (productType === "subscription") return "subscription";
   if (typeof d.tipHandle === "string" && d.tipHandle.trim()) return "tip";
+  if (legacyStripeSubscriptionIndicator(d)) return "subscription";
   const productName = toLowerString(d.productName);
   if (productName.includes("tip")) return "tip";
   return "product";
@@ -638,6 +656,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           typeof raw.email === "string" && raw.email.trim()
             ? raw.email.trim().toLowerCase()
             : undefined;
+        if (inferredType === "subscription") {
+          if (fanId && fanId !== "unknown") {
+            subscriptionSpendByFanId[fanId] = (subscriptionSpendByFanId[fanId] || 0) + amountCents;
+          }
+          if (fanEmail) {
+            subscriptionSpendByFanEmail[fanEmail] =
+              (subscriptionSpendByFanEmail[fanEmail] || 0) + amountCents;
+          }
+        }
         const createdAtIso = new Date(ms).toISOString();
         const legacyId = `legacy_purchase_${p.id}`;
         const legacyPi =
@@ -674,18 +701,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
               (typeof raw.tipHandle === "string" && raw.tipHandle.trim()) ||
               null,
             fanEmail,
-            scheduleStatus: inferredType === "tip"
-              ? "completed"
-              : (typeof raw.scheduleStatus === "string" && raw.scheduleStatus.trim() ? raw.scheduleStatus : "pending"),
-            scheduledDate: inferredType === "tip"
-              ? null
-              : (typeof raw.scheduledDate === "string" ? raw.scheduledDate : null),
-            scheduledTime: inferredType === "tip"
-              ? null
-              : (typeof raw.scheduledTime === "string" ? raw.scheduledTime : null),
-            deliveryStatus: inferredType === "tip"
-              ? "delivered"
-              : (raw.deliveryStatus === "delivered" ? "delivered" : "pending"),
+            scheduleStatus:
+              inferredType === "tip" || inferredType === "subscription"
+                ? "completed"
+                : (typeof raw.scheduleStatus === "string" && raw.scheduleStatus.trim()
+                    ? raw.scheduleStatus
+                    : "pending"),
+            scheduledDate:
+              inferredType === "tip" || inferredType === "subscription"
+                ? null
+                : (typeof raw.scheduledDate === "string" ? raw.scheduledDate : null),
+            scheduledTime:
+              inferredType === "tip" || inferredType === "subscription"
+                ? null
+                : (typeof raw.scheduledTime === "string" ? raw.scheduledTime : null),
+            deliveryStatus:
+              inferredType === "tip" || inferredType === "subscription"
+                ? "delivered"
+                : (raw.deliveryStatus === "delivered" ? "delivered" : "pending"),
             deliveryType:
               raw.deliveryType === "video" ||
               raw.deliveryType === "image" ||

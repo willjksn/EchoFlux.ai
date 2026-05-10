@@ -700,6 +700,25 @@ async function migratePurchases(
 
         const buyerEmail = inferBuyerEmailFromStormijPurchase(data);
 
+        const typeRaw =
+          typeof data.type === 'string' && data.type.trim() ? data.type.trim() : '';
+        const productTypeRaw =
+          typeof data.productType === 'string' && data.productType.trim()
+            ? data.productType.trim()
+            : '';
+        const stripeSubRaw = (() => {
+          const c = [
+            data.stripeSubscriptionId,
+            data.subscriptionId,
+            data.stripe_subscription_id,
+            data.stripeSubscription,
+          ];
+          for (const v of c) {
+            if (typeof v === 'string' && v.trim().toLowerCase().startsWith('sub_')) return v.trim();
+          }
+          return '';
+        })();
+
         const echofluxPurchase = {
           id: doc.id,
           creatorId,
@@ -713,6 +732,9 @@ async function migratePurchases(
           scheduledTime: data.scheduledTime || null,
           scheduledAt: data.scheduledAt || null,
           ...(fanId ? { fanId } : {}),
+          ...(typeRaw ? { type: typeRaw } : {}),
+          ...(productTypeRaw ? { productType: productTypeRaw } : {}),
+          ...(stripeSubRaw ? { stripeSubscriptionId: stripeSubRaw } : {}),
           // Migration metadata
           migratedFrom: 'stormij',
           migratedAt: admin.firestore.FieldValue.serverTimestamp(),

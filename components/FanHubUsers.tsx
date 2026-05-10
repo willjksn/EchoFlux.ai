@@ -12,6 +12,8 @@ import { pickLatestMemberAccessEnd, formatRemainingAccessForFanRow, isHubMembers
 import { authUidFromFanDocId, parseCompoundFanDocumentId } from "../src/lib/compoundFanDocId";
 import { buildCreatorImageUrlSet, fanAvatarUrlOrUndefined } from "../src/lib/fanAvatar";
 import { classifyFanHubOrderLedgerKind, isGuestCheckoutFanId } from "../src/lib/fanHubOrderLedger";
+import { useCreatorHandle } from "../src/hooks/useCreatorHandle";
+import { stormijMembershipDisplayFloorCents } from "../src/lib/stormijMembershipDisplayFloors";
 
 type UserRole = "admin" | "member" | "tipper" | "treat_buyer";
 
@@ -194,6 +196,27 @@ function fanHasActivityInWindow(u: FanUser, window: FanHubUsersActivityWindow): 
   return Math.max(...times) >= t;
 }
 
+/**
+ * Used only for inferring subscription column $ from total spend when order rows lack `type: subscription`
+ * or fan doc omits totalMembershipCents. Include ended/canceled subs so the column isn't blank.
+ */
+function subscriptionStatusAllowsMembershipSpendInference(status: string | null | undefined): boolean {
+  const s = String(status ?? "").trim().toLowerCase();
+  if (!s) return false;
+  return (
+    s === "active" ||
+    s === "trialing" ||
+    s === "past_due" ||
+    s === "free" ||
+    s === "canceled" ||
+    s === "cancelled" ||
+    s === "paused" ||
+    s === "unpaid" ||
+    s === "incomplete" ||
+    s === "incomplete_expired"
+  );
+}
+
 function sortMembersBySignupDesc(a: FanUser, b: FanUser): number {
   const signupB = b.signupDate?.getTime() ?? 0;
   const signupA = a.signupDate?.getTime() ?? 0;
@@ -312,6 +335,7 @@ function FanTableAvatar({
 export const FanHubUsers: React.FC = () => {
   const { user, showToast } = useAppContext();
   const creatorId = auth.currentUser?.uid ?? user?.id ?? "";
+  const creatorHandle = useCreatorHandle(creatorId || undefined);
   const [users, setUsers] = useState<FanUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
@@ -1051,10 +1075,14 @@ export const FanHubUsers: React.FC = () => {
         const inferredFanDocMembership =
           explicitFanDocMembership > 0
             ? explicitFanDocMembership
-            : hasMembershipStatus
+            : subscriptionStatusAllowsMembershipSpendInference(data.subscriptionStatus)
               ? Math.max(0, baselineCents - tips - treats - unlocks)
               : 0;
-        const lifetimeMembershipCents = Math.max(membership, inferredFanDocMembership);
+        let lifetimeMembershipCents = Math.max(membership, inferredFanDocMembership);
+        lifetimeMembershipCents = Math.max(
+          lifetimeMembershipCents,
+          stormijMembershipDisplayFloorCents(creatorHandle, email),
+        );
 
         const stPlan = (data.subscriptionStatus || "").toLowerCase();
         /** Badge: treat as scheduled cancel if flag is set OR remaining-access copy implies it (handles stale client reads). */
@@ -1224,7 +1252,7 @@ export const FanHubUsers: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [creatorId, showToast]);
+  }, [creatorId, creatorHandle, showToast]);
 
   useEffect(() => {
     loadUsers();
@@ -1878,7 +1906,7 @@ export const FanHubUsers: React.FC = () => {
                   </th>
                   <th
                     className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider"
-                    title="Subscription / membership charges from paid orders (type subscription). Separate from store SKUs."
+                    title="Subscription order charges plus fan doc totalMembershipCents; if missing, estimated from total spend minus tips, store, and unlocks when Stripe reported a subscription (including canceled)."
                   >
                     Membership
                   </th>
