@@ -1454,6 +1454,7 @@ export const FanStorefrontView: React.FC = () => {
     if (hasUrl(socialLinks.tiktok?.url) && socialLinks.tiktok?.show !== false) return true;
     if (hasUrl(socialLinks.youtube?.url) && socialLinks.youtube?.show !== false) return true;
     if (hasUrl(socialLinks.facebook?.url) && socialLinks.facebook?.show !== false) return true;
+    if (hasUrl(socialLinks.amazon?.url) && socialLinks.amazon?.show !== false) return true;
     const legacyTwitter = (socialLinks as StorefrontSocialLinks & { twitter?: { url?: string; show?: boolean } }).twitter;
     if (hasUrl(legacyTwitter?.url) && legacyTwitter?.show !== false) return true;
     if (Array.isArray(socialLinks.custom)) {

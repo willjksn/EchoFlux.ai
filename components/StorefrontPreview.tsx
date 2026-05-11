@@ -8,6 +8,7 @@ import type {
   LandingSectionListMarker,
 } from "../types";
 import { COPYRIGHT_PROTECTION_NOTICE } from "../constants";
+import { AmazonBrandIcon } from "../src/lib/icons/AmazonBrandIcon";
 
 /** When set, landing preview uses real auth, checkout, tips, and footer links (public storefront). */
 export interface StorefrontPreviewLiveLanding {
@@ -357,6 +358,7 @@ function getVisibleSocialLinks(socialLinks?: StorefrontSocialLinks) {
   includeIfVisible("tiktok", <TikTokIcon />, socialLinks.tiktok);
   includeIfVisible("youtube", <YouTubeIcon />, socialLinks.youtube);
   includeIfVisible("facebook", <FacebookIcon />, socialLinks.facebook);
+  includeIfVisible("amazon", <AmazonBrandIcon />, socialLinks.amazon);
   // Backward compatibility for old records that stored twitter instead of x.
   includeIfVisible(
     "x",
@@ -419,6 +421,13 @@ function getSocialIconStyle(key: string, fallback: string): React.CSSProperties 
         background: "#ff0000",
         border: "1px solid rgba(255,255,255,0.35)",
         boxShadow: "0 4px 10px rgba(255,0,0,0.28)",
+      };
+    case "amazon":
+      return {
+        color: "#ffffff",
+        background: "#232f3e",
+        border: "1px solid rgba(255,255,255,0.28)",
+        boxShadow: "0 4px 10px rgba(35,47,62,0.35)",
       };
     default:
       return {

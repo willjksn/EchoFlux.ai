@@ -18,6 +18,7 @@ import type {
 } from "../types";
 import { STOREFRONT_CONTENT_POLICY, DEFAULT_PRIVACY_POLICY, DEFAULT_TERMS_OF_SERVICE, FAN_HUB_THEME_PRESETS, HERO_LAYOUT_OPTIONS, HERO_MEDIA_SIZE_OPTIONS } from "../constants";
 import { isFullBleedHeroMediaSize } from "../src/lib/storefrontHeroNormalize";
+import { AmazonBrandIcon } from "../src/lib/icons/AmazonBrandIcon";
 import { getAvatarCropStyle } from "../src/lib/avatarCrop";
 import {
   clampPan,
@@ -98,6 +99,7 @@ const DEFAULT_SOCIAL_LINKS: StorefrontSocialLinks = {
   x: { url: "", show: true },
   tiktok: { url: "", show: true },
   youtube: { url: "", show: false },
+  amazon: { url: "", show: false },
 };
 
 const DEFAULT_LANDING_CONTENT: StorefrontLandingContent = {
@@ -421,7 +423,6 @@ const YouTubeIcon = () => (
   </svg>
 );
 
-// Font size options for text styling (with pixel labels)
 const FONT_SIZE_OPTIONS: { value: PresetFontSize; label: string }[] = [
   { value: 'xs', label: '12px' },
   { value: 'sm', label: '14px' },
@@ -2497,6 +2498,7 @@ export const MyPageBuilder: React.FC = () => {
                 { key: "tiktok" as const, icon: <TikTokIcon />, placeholder: "https://tiktok.com/@..." },
                 { key: "youtube" as const, icon: <YouTubeIcon />, placeholder: "https://youtube.com/..." },
                 { key: "facebook" as const, icon: <FacebookIcon />, placeholder: "https://facebook.com/..." },
+                { key: "amazon" as const, icon: <AmazonBrandIcon />, placeholder: "https://www.amazon.com/shop/..." },
               ]).map(({ key, icon, placeholder }) => (
                 <div key={key} className="flex items-center gap-2">
                   <span className="text-gray-500 dark:text-gray-400 w-6">{icon}</span>

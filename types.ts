@@ -232,6 +232,8 @@ export interface StorefrontSocialLinks {
     x?: SocialLinkConfig;
     tiktok?: SocialLinkConfig;
     youtube?: SocialLinkConfig;
+    /** Amazon storefront / influencer shop / wishlist link */
+    amazon?: SocialLinkConfig;
     custom?: CustomSocialLink[];
 }
 

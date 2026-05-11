@@ -925,6 +925,7 @@ async function migrateSiteConfig(
         x: { url: '', show: data.showSocialX !== false },
         tiktok: { url: '', show: data.showSocialTiktok !== false },
         youtube: { url: '', show: data.showSocialYoutube !== false },
+        amazon: { url: '', show: false },
       },
       // Tip page settings from Stormij
       tipPageSettings: {
