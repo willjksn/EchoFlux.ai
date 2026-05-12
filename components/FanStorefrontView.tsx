@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useLayoutEffect, useCallback, useRef, Fragment, useMemo } from "react";
+import { createPortal } from "react-dom";
 import { auth } from "../firebaseConfig";
 import {
   collection,
@@ -84,6 +85,8 @@ import { AudioLevelMeter } from "./AudioLevelMeter";
 import { RecordingDurationLabel } from "./RecordingDurationLabel";
 import { DmMessageAttachmentStack } from "./DmMessageAttachmentStack";
 import { inferIsVideoFromUrl } from "../src/lib/mediaUrlInfer";
+import { fetchCreatorFanPostMedia } from "../src/lib/fetchCreatorFanPostMedia";
+import { isProtectedLockedMediaUrl } from "../src/lib/lockedPostMedia";
 import { FanHubNotificationBell, type FanHubNotificationNavigatePayload } from "./FanHubNotificationBell";
 import { getAvatarCropStyle } from "../src/lib/avatarCrop";
 import { resolveStoreCopy } from "../src/lib/storefrontStoreCopy";
@@ -493,34 +496,74 @@ function toIsoFromUnknownDate(v: unknown): string {
   return new Date(0).toISOString();
 }
 
-function FanPurchaseUnlockedPostBlock({
-  creatorId,
-  postId,
-  primary,
-  onOpenInFeed,
-}: {
-  creatorId: string;
-  postId: string;
-  primary: string;
-  onOpenInFeed: () => void;
-}) {
+function FanPurchaseUnlockedPostBlock({ creatorId, postId }: { creatorId: string; postId: string }) {
   const [row, setRow] = useState<Awaited<ReturnType<typeof fetchFanMemberPostForPurchases>> | null>(null);
   const [loading, setLoading] = useState(true);
+  const [expandedImageUrl, setExpandedImageUrl] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
     setRow(null);
-    void fetchFanMemberPostForPurchases(creatorId, postId).then((r) => {
-      if (!cancelled) {
-        setRow(r);
+    void Promise.all([
+      fetchFanMemberPostForPurchases(creatorId, postId),
+      fetchCreatorFanPostMedia(creatorId, postId),
+    ])
+      .then(([base, apiMedia]) => {
+        if (cancelled) return;
+        if (!base) {
+          setRow(null);
+          setLoading(false);
+          return;
+        }
+        let mediaUrls = [...base.mediaUrls];
+        let mediaTypes = [...base.mediaTypes];
+        if (apiMedia?.mediaUrls?.length) {
+          mediaUrls = apiMedia.mediaUrls;
+          mediaTypes = apiMedia.mediaTypes;
+        } else {
+          const filteredUrls: string[] = [];
+          const filteredTypes: ("image" | "video")[] = [];
+          mediaUrls.forEach((url, i) => {
+            if (isProtectedLockedMediaUrl(url)) return;
+            filteredUrls.push(url);
+            filteredTypes.push(mediaTypes[i] === "video" ? "video" : "image");
+          });
+          mediaUrls = filteredUrls;
+          mediaTypes = filteredTypes;
+        }
+        const audioUrls = (base.audioUrls ?? []).filter((u) => !isProtectedLockedMediaUrl(u));
+        setRow({ ...base, mediaUrls, mediaTypes, audioUrls });
         setLoading(false);
-      }
-    });
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setRow(null);
+          setLoading(false);
+        }
+      });
     return () => {
       cancelled = true;
     };
   }, [creatorId, postId]);
+
+  useEffect(() => {
+    if (!expandedImageUrl) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setExpandedImageUrl(null);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [expandedImageUrl]);
+
+  useEffect(() => {
+    if (!expandedImageUrl) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, [expandedImageUrl]);
 
   if (loading) {
     return <p className="fan-member-loading" style={{ marginTop: "0.5rem" }}>Loading…</p>;
@@ -528,66 +571,106 @@ function FanPurchaseUnlockedPostBlock({
   if (!row) {
     return (
       <p className="fan-member-about-text" style={{ marginTop: "0.5rem" }}>
-        This post isn&apos;t available. You can still open it from Home if it appears there.
+        This post isn&apos;t available right now.
       </p>
     );
   }
 
   return (
-    <>
+    <div className="fan-member-purchase-unlock-preview">
       {row.body ? (
-        <div className="fan-profile-panel" style={{ marginTop: "0.6rem" }}>
-          <p className="fan-member-about-text" style={{ whiteSpace: "pre-wrap" }}>
-            {row.body}
-          </p>
+        <div className="fan-profile-panel fan-member-purchase-unlock-preview-body">
+          <p className="fan-member-about-text fan-member-purchase-unlock-preview-text">{row.body}</p>
         </div>
       ) : null}
-      {row.mediaUrls.map((url, i) => {
-        const declared = row.mediaTypes[i] === "video" ? "video" : "image";
-        const isVideo = declared === "video" || inferIsVideoFromUrl(url);
-        if (isVideo) {
-          return (
-            <video
-              key={`${url}-${i}`}
+      {row.mediaUrls.length > 0 ? (
+        <div className="fan-member-purchase-unlock-media-stack">
+          {row.mediaUrls.map((url, i) => {
+            const declared = row.mediaTypes[i] === "video" ? "video" : "image";
+            const isVideo = declared === "video" || inferIsVideoFromUrl(url);
+            if (isVideo) {
+              return (
+                <video
+                  key={`${url}-${i}`}
+                  src={url}
+                  controls
+                  playsInline
+                  preload="metadata"
+                  className="fan-member-purchase-unlock-preview-video"
+                  {...storefrontVideoDownloadGuardProps}
+                />
+              );
+            }
+            return (
+              <div key={`unlock-img-slot-${i}-${url}`} className="fan-member-purchase-unlock-img-slot">
+                <img
+                  src={url}
+                  alt=""
+                  loading="lazy"
+                  className="fan-member-purchase-unlock-preview-img"
+                  {...storefrontImageDownloadGuardProps}
+                />
+                <button
+                  type="button"
+                  className="fan-member-purchase-unlock-expand-btn"
+                  aria-label="Expand image"
+                  onClick={() => setExpandedImageUrl(url)}
+                >
+                  Expand
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      ) : null}
+      {row.audioUrls.length > 0 ? (
+        <div className="fan-member-purchase-unlock-audio-stack">
+          {row.audioUrls.map((url) => (
+            <audio
+              key={url}
               src={url}
               controls
-              playsInline
               preload="metadata"
-              style={{ width: "100%", marginTop: "0.6rem", borderRadius: 10 }}
-              {...storefrontVideoDownloadGuardProps}
+              {...storefrontAudioDownloadGuardProps}
             />
-          );
-        }
-        return (
-          <img
-            key={`${url}-${i}`}
-            src={url}
-            alt=""
-            loading="lazy"
-            style={{ width: "100%", marginTop: "0.6rem", borderRadius: 10 }}
-            {...storefrontImageDownloadGuardProps}
-          />
-        );
-      })}
-      {row.audioUrls.map((url) => (
-        <audio
-          key={url}
-          src={url}
-          controls
-          preload="metadata"
-          style={{ width: "100%", marginTop: "0.6rem" }}
-          {...storefrontAudioDownloadGuardProps}
-        />
-      ))}
-      <button
-        type="button"
-        className="fan-member-treat-buy"
-        style={{ marginTop: "0.65rem", backgroundColor: primary }}
-        onClick={onOpenInFeed}
-      >
-        Open in Home
-      </button>
-    </>
+          ))}
+        </div>
+      ) : null}
+      {expandedImageUrl && typeof document !== "undefined"
+        ? createPortal(
+            <div
+              className="fan-member-purchase-unlock-lightbox fixed inset-0 z-[120] flex flex-col items-center justify-center gap-3 p-4"
+              style={{ backgroundColor: "rgba(0,0,0,0.85)" }}
+              role="dialog"
+              aria-modal="true"
+              aria-label="Expanded purchase image"
+              onClick={(e) => {
+                if (e.target === e.currentTarget) setExpandedImageUrl(null);
+              }}
+            >
+              <button
+                type="button"
+                className="fan-member-purchase-unlock-lightbox-close shrink-0 rounded-full px-4 py-2 text-sm font-semibold text-white"
+                style={{
+                  backgroundColor: "color-mix(in srgb, var(--fan-primary, #6366f1) 65%, #334155)",
+                  border: "1px solid rgba(255,255,255,0.25)",
+                }}
+                onClick={() => setExpandedImageUrl(null)}
+              >
+                Close
+              </button>
+              <img
+                src={expandedImageUrl}
+                alt=""
+                className="max-h-[85vh] max-w-full rounded-xl object-contain shadow-2xl"
+                {...storefrontImageDownloadGuardProps}
+                onClick={(e) => e.stopPropagation()}
+              />
+            </div>,
+            document.body,
+          )
+        : null}
+    </div>
   );
 }
 
@@ -618,15 +701,13 @@ function FanMemberPurchaseItemBody({
   o,
   creatorId,
   primary,
-  onOpenFeed,
 }: {
   o: FanDeliveryPurchase;
   creatorId: string | undefined;
   primary: string;
-  onOpenFeed: () => void;
 }) {
   return (
-    <div className="fan-member-treat-action" style={{ display: "block" }}>
+    <div className="fan-member-treat-action fan-member-purchase-item-body">
       {o.type === "tip" ? (
         <span className="fan-member-treat-owned">Tip paid</span>
       ) : o.type === "subscription" ? (
@@ -635,21 +716,11 @@ function FanMemberPurchaseItemBody({
         <>
           <span className="fan-member-treat-owned">Unlocked</span>
           {o.postId && creatorId ? (
-            <FanPurchaseUnlockedPostBlock
-              creatorId={creatorId}
-              postId={o.postId}
-              primary={primary}
-              onOpenInFeed={onOpenFeed}
-            />
+            <FanPurchaseUnlockedPostBlock creatorId={creatorId} postId={o.postId} />
           ) : (
-            <button
-              type="button"
-              className="fan-member-treat-buy"
-              style={{ marginTop: "0.65rem", backgroundColor: primary }}
-              onClick={onOpenFeed}
-            >
-              Open in Home
-            </button>
+            <p className="fan-member-about-text" style={{ marginTop: "0.5rem", opacity: 0.85 }}>
+              Post details aren&apos;t linked to this receipt.
+            </p>
           )}
         </>
       ) : o.type === "live_stream_ticket" ? (
@@ -5539,7 +5610,6 @@ export const FanStorefrontView: React.FC = () => {
                             o={o}
                             creatorId={creator?.creatorId}
                             primary={primary}
-                            onOpenFeed={() => setActiveTabWithUrl("feed")}
                           />
                         </div>
                       </details>
@@ -5576,7 +5646,7 @@ export const FanStorefrontView: React.FC = () => {
                     })}
                   </div>
                 ) : (
-                  <div className="fan-member-treats-grid">
+                  <div className="fan-member-treats-grid fan-member-purchases-expanded-grid">
                     {fanPurchasesDisplayRows.map((o) => (
                       <div key={`order-${o.id}`} className="fan-member-treat-card">
                         <p className="fan-member-treat-type">{fanPurchaseTypeLabel(o)}</p>
@@ -5590,7 +5660,6 @@ export const FanStorefrontView: React.FC = () => {
                           o={o}
                           creatorId={creator?.creatorId}
                           primary={primary}
-                          onOpenFeed={() => setActiveTabWithUrl("feed")}
                         />
                       </div>
                     ))}

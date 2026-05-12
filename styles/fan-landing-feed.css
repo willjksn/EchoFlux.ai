@@ -2543,6 +2543,15 @@
   gap: 0.75rem;
 }
 
+.fan-member-purchase-item-body.fan-member-treat-action {
+  display: block;
+}
+
+.fan-member-purchase-item-body .fan-member-treat-owned + .fan-member-purchase-unlock-preview,
+.fan-member-purchase-item-body .fan-member-treat-owned + .fan-member-loading {
+  margin-top: 0.5rem;
+}
+
 .fan-member-treat-owned {
   display: inline-block;
   padding: 0.5rem 1rem;
@@ -2671,6 +2680,151 @@ html.dark .fan-member-purchases-compact {
 .fan-member-purchase-compact-body {
   padding: 0 0.85rem 0.85rem;
   border-top: 1px solid color-mix(in srgb, var(--fan-text, #1f2937) 7%, transparent);
+}
+
+/* Purchases tab — unlocked post preview + compact row sizing */
+.fan-member-purchase-unlock-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  width: 100%;
+  min-width: 0;
+}
+
+.fan-member-purchase-unlock-preview-body {
+  margin-top: 0;
+}
+
+.fan-member-purchase-unlock-preview-text {
+  white-space: pre-wrap;
+  overflow: hidden;
+  max-height: 6rem;
+}
+
+.fan-member-purchase-unlock-media-stack,
+.fan-member-purchase-unlock-audio-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  width: 100%;
+  min-width: 0;
+}
+
+.fan-member-purchase-unlock-img-slot {
+  position: relative;
+  width: 100%;
+  min-width: 0;
+}
+
+.fan-member-purchase-unlock-expand-btn {
+  position: absolute;
+  bottom: 0.5rem;
+  right: 0.5rem;
+  padding: 0.38rem 0.75rem;
+  border: none;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  color: #fff;
+  background: color-mix(in srgb, var(--fan-text, #1f2937) 52%, transparent);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.25);
+}
+
+.fan-member-purchase-unlock-expand-btn:hover {
+  background: color-mix(in srgb, var(--fan-text, #1f2937) 68%, transparent);
+}
+
+.fan-member-purchase-unlock-expand-btn:focus-visible {
+  outline: 2px solid var(--fan-accent, var(--fan-primary, #6366f1));
+  outline-offset: 2px;
+}
+
+.fan-member-purchase-unlock-preview-video,
+.fan-member-purchase-unlock-preview-img {
+  width: 100%;
+  height: auto;
+  max-height: min(340px, 50vh);
+  object-fit: contain;
+  object-position: center top;
+  display: block;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--fan-text, #1f2937) 6%, transparent);
+  border: 1px solid color-mix(in srgb, var(--fan-text, #1f2937) 10%, transparent);
+  box-sizing: border-box;
+}
+
+.fan-member-purchase-unlock-audio-stack audio {
+  width: 100%;
+  display: block;
+}
+
+/* Minimized purchases list — tighter card body + shorter media */
+.fan-member-purchases-compact .fan-member-purchase-compact-body {
+  padding: 0.55rem 0.6rem 0.65rem;
+}
+
+.fan-member-purchases-compact .fan-member-purchase-item-body.fan-member-treat-action {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: none;
+}
+
+.fan-member-purchases-compact .fan-member-purchase-unlock-preview-text {
+  max-height: 4.5rem;
+}
+
+.fan-member-purchases-compact .fan-member-purchase-unlock-preview-img,
+.fan-member-purchases-compact .fan-member-purchase-unlock-preview-video {
+  max-height: min(240px, 36vh);
+}
+
+.fan-member-purchases-compact .fan-member-purchase-unlock-preview-video {
+  min-height: 132px;
+  background: color-mix(in srgb, var(--fan-text, #1f2937) 10%, transparent);
+}
+
+.fan-member-purchases-compact .fan-member-purchase-unlock-preview-body {
+  padding: 0.45rem 0.55rem;
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--fan-primary, #6366f1) 7%, var(--fan-bg, #ffffff));
+  border: 1px solid color-mix(in srgb, var(--fan-primary, #6366f1) 14%, transparent);
+}
+
+.dark .fan-member-purchases-compact .fan-member-purchase-unlock-preview-body,
+html.dark .fan-member-purchases-compact .fan-member-purchase-unlock-preview-body {
+  background: color-mix(in srgb, var(--fan-primary, #6366f1) 12%, var(--fan-bg, #0f172a));
+}
+
+/* Expanded purchase cards — avoid grid stretch gap; taller preview than compact */
+.fan-member-purchases-expanded-grid.fan-member-treats-grid {
+  gap: 1rem;
+  align-items: start;
+}
+
+@media (min-width: 640px) {
+  .fan-member-purchases-expanded-grid.fan-member-treats-grid {
+    gap: 1.25rem;
+  }
+}
+
+.fan-member-purchases-expanded-grid .fan-member-treat-card {
+  height: fit-content;
+}
+
+.fan-member-purchases-expanded-grid .fan-member-purchase-item-body.fan-member-treat-action {
+  margin-top: 0;
+}
+
+.fan-member-purchases-expanded-grid .fan-member-purchase-unlock-preview-text {
+  max-height: none;
+}
+
+.fan-member-purchases-expanded-grid .fan-member-purchase-unlock-preview-img,
+.fan-member-purchases-expanded-grid .fan-member-purchase-unlock-preview-video {
+  max-height: min(420px, 56vh);
 }
 
 @media (max-width: 520px) {
