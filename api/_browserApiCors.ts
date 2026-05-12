@@ -29,12 +29,12 @@ export function isBrowserApiAllowedOrigin(origin: string): boolean {
     const u = new URL(origin);
     const h = u.hostname.toLowerCase();
     if (h === "localhost" || h === "127.0.0.1") return true;
-    if (h === "echoflux.ai" || h === "www.echoflux.ai") return true;
+    const hn = h.replace(/^www\./, "");
+    if (hn === "echoflux.ai") return true;
     if (h.endsWith(".vercel.app")) return true;
     if (h.endsWith(".web.app") || h.endsWith(".firebaseapp.com")) return true;
-    if (h === "witme.io" || h.endsWith(".witme.io")) return true;
+    if (hn === "witme.io" || hn.endsWith(".witme.io")) return true;
     if (extraAllowedOrigins().includes(origin)) return true;
-    const hn = h.replace(/^www\./, "");
     if (customStorefrontHostnames().includes(hn)) return true;
     return false;
   } catch {

@@ -179,6 +179,16 @@ function isLiveStreamTicketPurchase(p: Purchase): boolean {
   return (p.orderType || "").trim().toLowerCase() === "live_stream_ticket";
 }
 
+function isPostUnlockOrderType(raw: string): boolean {
+  const t = raw.trim().toLowerCase();
+  return t === "post_unlock" || t === "unlock" || t === "unlock_media";
+}
+
+/** Paid feed unlock — entitlement is applied immediately; no calendar or delivery workflow. */
+function isPostUnlockPurchase(p: Purchase): boolean {
+  return isPostUnlockOrderType(p.orderType || "") || isPostUnlockOrderType(String(p.treatType || ""));
+}
+
 /** Past scheduled start + grace: treat ticket as fulfilled if Firestore still says pending/scheduled/live-synced. */
 const LIVE_STREAM_TICKET_STALE_AFTER_MS = 6 * 60 * 60 * 1000;
 
@@ -215,6 +225,9 @@ function purchaseEffectiveForUi(p: Purchase): {
   scheduleStatus: ScheduleStatus;
   deliveryStatus: "pending" | "delivered";
 } {
+  if (isPostUnlockPurchase(p)) {
+    return { scheduleStatus: "completed", deliveryStatus: "delivered" };
+  }
   const ls = liveStreamTicketPurchaseEffective(p);
   if (isLiveStreamTicketPurchase(p)) return ls;
   return { scheduleStatus: p.scheduleStatus, deliveryStatus: p.deliveryStatus };
@@ -234,6 +247,7 @@ function creatorPurchaseStatusLine(p: Purchase): string {
   const eff = purchaseEffectiveForUi(p);
   if (isTipPurchase(p)) return "Tip received";
   if (isSubscriptionPurchase(p)) return "Subscription payment";
+  if (isPostUnlockPurchase(p)) return "Unlocked in feed";
   if (isLiveStreamTicketPurchase(p)) {
     if (eff.deliveryStatus === "delivered" || eff.scheduleStatus === "completed") return "Delivered";
     if (eff.scheduleStatus === "scheduled") return "Scheduled";
@@ -508,7 +522,13 @@ export const FanHubPurchases: React.FC = () => {
         const realPurchases: Purchase[] = list.map((o: any) => {
           const orderType = typeof o.type === "string" ? o.type : "";
           const normalizedType = orderType.trim().toLowerCase();
-          const isNonDeliverableOrder = normalizedType === "tip" || normalizedType === "subscription";
+          const productKey =
+            typeof o.productId === "string" ? o.productId.trim().toLowerCase() : "";
+          const isNonDeliverableOrder =
+            normalizedType === "tip" ||
+            normalizedType === "subscription" ||
+            isPostUnlockOrderType(normalizedType) ||
+            isPostUnlockOrderType(productKey);
           const fanIdRaw = typeof o.fanId === "string" ? o.fanId.trim() : "";
           const email = o.fanEmail || fanIdRaw || "Unknown";
           const emailKey = emailFromUnknown(email);
@@ -1334,7 +1354,8 @@ export const FanHubPurchases: React.FC = () => {
       .filter((p) => {
         const tipPurchase = isTipPurchase(p);
         const subscriptionPurchase = isSubscriptionPurchase(p);
-        const nonDeliverablePurchase = tipPurchase || subscriptionPurchase;
+        const postUnlockPurchase = isPostUnlockPurchase(p);
+        const nonDeliverablePurchase = tipPurchase || subscriptionPurchase || postUnlockPurchase;
         const pe = purchaseEffectiveForUi(p);
         return nonDeliverablePurchase || pe.scheduleStatus === "completed" || pe.deliveryStatus === "delivered";
       })
@@ -1654,9 +1675,10 @@ export const FanHubPurchases: React.FC = () => {
           filteredPurchases.map((p) => {
             const tipPurchase = isTipPurchase(p);
             const subscriptionPurchase = isSubscriptionPurchase(p);
+            const postUnlockPurchase = isPostUnlockPurchase(p);
             const liveStreamTicketPurchase = isLiveStreamTicketPurchase(p);
-            const nonDeliverablePurchase = tipPurchase || subscriptionPurchase;
-            /** Live stream tickets are fulfilled when the event ends — hide manual deliver / schedule controls. */
+            const nonDeliverablePurchase = tipPurchase || subscriptionPurchase || postUnlockPurchase;
+            /** Live stream tickets + instant digital orders — no calendar / manual delivery controls. */
             const skipManualFulfillment = nonDeliverablePurchase || liveStreamTicketPurchase;
             const eff = purchaseEffectiveForUi(p);
             const isDelivered = eff.deliveryStatus === "delivered";
@@ -1706,6 +1728,11 @@ export const FanHubPurchases: React.FC = () => {
                     {subscriptionPurchase && (
                       <span className="purchases-status-badge purchases-status-completed">
                         Subscription payment
+                      </span>
+                    )}
+                    {postUnlockPurchase && (
+                      <span className="purchases-status-badge purchases-status-completed">
+                        Unlocked in feed
                       </span>
                     )}
                     {liveStreamTicketPurchase && (

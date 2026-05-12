@@ -1,4 +1,5 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
+import { applyBrowserApiCors } from "./_browserApiCors.js";
 import { getAdminDb } from "./_firebaseAdmin.js";
 import { verifyAuth } from "./verifyAuth.js";
 import { shouldGrantFanPageAdminMemberAccess } from "../src/lib/fanPageAdminBypass.js";
@@ -56,6 +57,8 @@ function orderAmountCentsFromRow(row: Record<string, unknown>): number {
  * or equivalent. Until that is populated, returns { subscribed: false } when no doc exists.
  */
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+  if (applyBrowserApiCors(req, res)) return;
+
   if (req.method !== "GET") {
     return res.status(405).json({ error: "Method not allowed" });
   }

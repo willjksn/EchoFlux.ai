@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, lazy, Suspense } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useRef, lazy, Suspense } from 'react';
 import { useAppContext } from './components/AppContext';
 import { AuthProvider } from './components/contexts/AuthContext';
 import { UIProvider } from './components/contexts/UIContext';
@@ -50,7 +50,7 @@ import {
   ECHOFLUX_PRO_MONTHLY_USD,
   echofluxEffectiveMonthlyWhenAnnualUsd,
 } from './constants';
-import { isCustomDomainStorefrontPath } from './src/lib/storefrontCustomDomain';
+import { isCustomDomainStorefrontPath, isCanonicalSaaSAppHostname } from './src/lib/storefrontCustomDomain';
 import { useOAuthReturnHandler } from './src/hooks/useOAuthReturnHandler';
 import { ResetPassword } from './components/ResetPassword';
 import { InviteRequiredPage } from './components/InviteRequiredPage';
@@ -210,7 +210,7 @@ const MainContent: React.FC = () => {
                 );
             case 'automation': return <Automation />;
             case 'bio': {
-                const hasAccess = hasPremiumStudioRouteAccess(user);
+                const hasAccess = hasFanHubStudioRouteAccess(user);
                 if (!hasAccess) {
                     return (
                         <LazyBoundary label="Loading…">
@@ -220,12 +220,12 @@ const MainContent: React.FC = () => {
                 }
                 // Only set default URL if no tab param already present
                 if (typeof window !== 'undefined' && !window.location.search.includes('tab=')) {
-                    window.history.replaceState({}, '', '/studio?tab=myPage');
+                    window.history.replaceState({}, '', '/fan-hub?tab=myPage');
                 }
                 return (
-                    <LazyBoundary label="Loading Premium Studio…">
-                        <PremiumStudioLayout>
-                            <OnlyFansStudio />
+                    <LazyBoundary label="Loading Fan Hub…">
+                        <PremiumStudioLayout section="fanHub">
+                            <OnlyFansStudio mode="fanHub" />
                         </PremiumStudioLayout>
                     </LazyBoundary>
                 );
@@ -381,6 +381,31 @@ const AppContent: React.FC = () => {
      */
     const fanOnlyEarlyExitShell = isStorefrontPath || isWitmeDiscoverPath || isCreatorsApplyPath;
     const echofluxUrlSyncSuppressed = isWitmeSurface || isStorefrontPath;
+
+    /**
+     * Fans should use the canonical public storefront host (usually witme.io). EchoFlux apex still
+     * serves /{handle} for legacy links; optionally redirect so creator pages are never “sticky” under echoflux.ai.
+     * Set `VITE_FAN_STOREFRONT_PUBLIC_ORIGIN=https://witme.io` on the echoflux.ai build.
+     */
+    useLayoutEffect(() => {
+        if (typeof window === 'undefined') return;
+        const rawEnv = import.meta.env.VITE_FAN_STOREFRONT_PUBLIC_ORIGIN;
+        const raw = typeof rawEnv === 'string' ? rawEnv.trim() : '';
+        if (!raw || !/^https:\/\//i.test(raw)) return;
+        if (!import.meta.env.PROD) return;
+        if (!isCanonicalSaaSAppHostname(window.location.hostname)) return;
+        if (!isStorefrontPath) return;
+        let canon: URL;
+        try {
+            canon = new URL(raw);
+        } catch {
+            return;
+        }
+        if (window.location.origin === canon.origin) return;
+        window.location.replace(
+            `${canon.origin}${pathname}${window.location.search}${window.location.hash}`,
+        );
+    }, [isStorefrontPath, pathname]);
 
     // Check maintenance mode FIRST - before any other logic
     const maintenanceEnabled = isMaintenanceMode();

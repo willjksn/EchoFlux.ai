@@ -274,9 +274,12 @@ export const UIProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
         const fromUrl = pathToPage[currentPath];
         if (fromUrl) {
             setActivePageState(fromUrl);
-            // Legacy bio routes: redirect to Premium Studio My Page tab
+            // Legacy bio routes: canonicalize to Fan Hub (same surface as My Page / Purchases)
             if (currentPath === '/bio' || currentPath === '/bio-link-page') {
-                const target = '/studio?tab=myPage';
+                const params =
+                    typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : new URLSearchParams();
+                if (!params.get('tab')) params.set('tab', 'myPage');
+                const target = `/fan-hub?${params.toString()}`;
                 if (typeof window !== 'undefined' && window.history.replaceState) {
                     window.history.replaceState({}, '', target);
                 }
@@ -319,7 +322,7 @@ export const UIProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
         } catch {}
 
         const targetPath = activePageState === 'bio'
-            ? '/studio?tab=myPage'
+            ? '/fan-hub?tab=myPage'
             : activePageState === 'fanHub'
             ? '/fan-hub?tab=myPage'
             : pageToPath[activePageState];
@@ -331,9 +334,13 @@ export const UIProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
         const targetPathNormalized = normalizePath(targetPath);
         // When already on Fan Hub, don't overwrite URL so tab changes from the layout are preserved.
         if (activePageState === 'fanHub' && currentPath === '/fan-hub') return;
-        if (activePageState === 'bio' && currentPath === '/studio') return;
+        // Bio page resolves to Fan Hub; preserve ?tab= the same way.
+        if (activePageState === 'bio' && currentPath === '/fan-hub') return;
 
-        const pathToPush = activePageState === 'bio' ? '/studio?tab=myPage' : activePageState === 'fanHub' ? '/fan-hub?tab=myPage' : targetPath;
+        const pathToPush =
+            activePageState === 'bio' || activePageState === 'fanHub'
+                ? '/fan-hub?tab=myPage'
+                : targetPath;
         if (currentPath !== targetPathNormalized) {
             window.history.pushState({}, '', mergePathPreservingReturnParams(pathToPush));
         }

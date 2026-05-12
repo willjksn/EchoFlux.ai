@@ -1,5 +1,6 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import type { Firestore } from "firebase-admin/firestore";
+import type { DocumentSnapshot, Firestore } from "firebase-admin/firestore";
+import { applyBrowserApiCors } from "./_browserApiCors.js";
 import { getAdminDb } from "./_firebaseAdmin.js";
 import { verifyAuth } from "./verifyAuth.js";
 
@@ -55,6 +56,8 @@ async function hasUnlockedPost(
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+  if (applyBrowserApiCors(req, res)) return;
+
   if (req.method !== "GET") {
     return res.status(405).json({ error: "Method not allowed" });
   }
@@ -74,9 +77,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const db = getAdminDb();
     if (!db) return res.status(500).json({ error: "Database unavailable" });
 
-    const postRef = db.collection("creators").doc(creatorId).collection("fanPosts").doc(postId);
-    const postSnap = await postRef.get();
-    if (!postSnap.exists) {
+    // Match member feed + addCommentToPost: composer uses fanPosts; legacy may live under users/…/posts or creators/…/posts.
+    const candidatePostRefs = [
+      db.collection("creators").doc(creatorId).collection("fanPosts").doc(postId),
+      db.collection("users").doc(creatorId).collection("posts").doc(postId),
+      db.collection("creators").doc(creatorId).collection("posts").doc(postId),
+    ];
+    let postSnap: DocumentSnapshot | null = null;
+    for (const ref of candidatePostRefs) {
+      const snap = await ref.get();
+      if (snap.exists) {
+        postSnap = snap;
+        break;
+      }
+    }
+    if (!postSnap?.exists) {
       return res.status(404).json({ error: "Post not found" });
     }
     const post = postSnap.data() as Record<string, unknown>;

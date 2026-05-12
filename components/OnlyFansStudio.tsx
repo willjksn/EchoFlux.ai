@@ -14,6 +14,7 @@ import { usePremiumStudioTab } from './PremiumStudioLayout';
 import { hasPremiumStudioRouteAccess } from '../src/utils/planAccess';
 import { isCreatorIdentityPlanClient } from '../src/lib/creatorIdentity/planGate';
 import { auth, db } from '../firebaseConfig';
+import { FAN_HUB_TAB_IDS, type FanHubTabId } from '../constants';
 import { addDoc, collection, getDocs, limit, orderBy, query, Timestamp, doc, getDoc, where, onSnapshot } from 'firebase/firestore';
 
 const OnlyFansContentBrain = lazy(() =>
@@ -853,9 +854,22 @@ export const OnlyFansStudio: React.FC<{ mode?: 'studio' | 'fanHub' }> = ({ mode 
         );
     }
 
-    // Fan Hub: only these tabs when mode === 'fanHub' (Stormij theme wrapper for feed/treats styling)
-    if (mode === 'fanHub' && premiumTab) {
-        const bridge = premiumTab.fanHubCssVarBridge;
+    // Fan Hub: only these tabs when mode === 'fanHub' (Stormij theme wrapper for feed/treats styling).
+    // Never fall through to the Premium Content Studio dashboard: resolve tab from context and/or URL
+    // (context can be briefly unset during unusual mounts; Fan Hub URLs use ?tab=purchases, etc.).
+    if (mode === 'fanHub') {
+        const validFanTabs = FAN_HUB_TAB_IDS as readonly string[];
+        const tabFromSearch =
+            typeof window !== 'undefined'
+                ? new URLSearchParams(window.location.search).get('tab')
+                : null;
+        const fanTab: FanHubTabId =
+            premiumTab?.tab && validFanTabs.includes(premiumTab.tab)
+                ? (premiumTab.tab as FanHubTabId)
+                : tabFromSearch && validFanTabs.includes(tabFromSearch)
+                  ? (tabFromSearch as FanHubTabId)
+                  : 'myPage';
+        const bridge = premiumTab?.fanHubCssVarBridge ?? null;
         const wrap = (content: React.ReactNode) => (
             <div
                 style={{
@@ -868,42 +882,42 @@ export const OnlyFansStudio: React.FC<{ mode?: 'studio' | 'fanHub' }> = ({ mode 
                 {content}
             </div>
         );
-        if (premiumTab.tab === 'myPage') {
+        if (fanTab === 'myPage') {
             return wrap(
                 <StudioSuspense label="Loading My Page…">
                     <FanHubMyPage />
                 </StudioSuspense>
             );
         }
-        if (premiumTab.tab === 'posts') {
+        if (fanTab === 'posts') {
             return wrap(
                 <StudioSuspense label="Loading posts…">
                     <FanHubPosts />
                 </StudioSuspense>
             );
         }
-        if (premiumTab.tab === 'treats') {
+        if (fanTab === 'treats') {
             return wrap(
                 <StudioSuspense label="Loading store…">
                     <TreatsStore />
                 </StudioSuspense>
             );
         }
-        if (premiumTab.tab === 'messages') {
+        if (fanTab === 'messages') {
             return wrap(
                 <StudioSuspense label="Loading messages…">
                     <FanHubMessages />
                 </StudioSuspense>
             );
         }
-        if (premiumTab.tab === 'payouts') {
+        if (fanTab === 'payouts') {
             return wrap(
                 <StudioSuspense label="Loading payouts…">
                     <FanHubPayouts />
                 </StudioSuspense>
             );
         }
-        if (premiumTab.tab === 'fans') {
+        if (fanTab === 'fans') {
             return wrap(
                 <div className="max-w-7xl mx-auto">
                     <ErrorBoundary>
@@ -914,7 +928,7 @@ export const OnlyFansStudio: React.FC<{ mode?: 'studio' | 'fanHub' }> = ({ mode 
                 </div>
             );
         }
-        if (premiumTab.tab === 'analytics') {
+        if (fanTab === 'analytics') {
             return wrap(
                 <div className="max-w-7xl mx-auto">
                     <ErrorBoundary>
@@ -925,14 +939,14 @@ export const OnlyFansStudio: React.FC<{ mode?: 'studio' | 'fanHub' }> = ({ mode 
                 </div>
             );
         }
-        if (premiumTab.tab === 'purchases') {
+        if (fanTab === 'purchases') {
             return wrap(
                 <StudioSuspense label="Loading purchases…">
                     <FanHubPurchases />
                 </StudioSuspense>
             );
         }
-        if (premiumTab.tab === 'sessions') {
+        if (fanTab === 'sessions') {
             return wrap(
                 <div className="max-w-7xl mx-auto">
                     <ErrorBoundary>
@@ -943,7 +957,7 @@ export const OnlyFansStudio: React.FC<{ mode?: 'studio' | 'fanHub' }> = ({ mode 
                 </div>
             );
         }
-        if (premiumTab.tab === 'videoChats') {
+        if (fanTab === 'videoChats') {
             return wrap(
                 <div className="max-w-7xl mx-auto">
                     <ErrorBoundary>
@@ -954,7 +968,7 @@ export const OnlyFansStudio: React.FC<{ mode?: 'studio' | 'fanHub' }> = ({ mode 
                 </div>
             );
         }
-        if (premiumTab.tab === 'users') {
+        if (fanTab === 'users') {
             return wrap(
                 <div className="w-full">
                     <ErrorBoundary>
@@ -967,7 +981,7 @@ export const OnlyFansStudio: React.FC<{ mode?: 'studio' | 'fanHub' }> = ({ mode 
         }
         return wrap(
             <div className="py-8 text-center" style={{ color: "var(--text-muted)" }}>
-                <p>Coming soon: {premiumTab.tab}</p>
+                <p>Coming soon: {fanTab}</p>
             </div>
         );
     }

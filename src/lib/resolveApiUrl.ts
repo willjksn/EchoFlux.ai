@@ -3,6 +3,20 @@ import { getConfiguredCustomStorefrontHosts, normalizeHostname } from "./storefr
 /** Where browser `/api/*` lives when the SPA is not deployed on that same origin. */
 const CANONICAL_ECHOFLUX_API_ORIGIN = "https://echoflux.ai";
 
+function witmeHostname(hostname: string): boolean {
+  const h = hostname.trim().toLowerCase();
+  return h === "witme.io" || h.endsWith(".witme.io");
+}
+
+/** Firebase-hosted witme with no `/api` must call echoflux.ai (CORS required). Witme domains on Vercel with `/api` can set this true to skip cross-origin entirely. */
+function witmeUsesSameOriginApi(): boolean {
+  const v =
+    typeof import.meta.env.VITE_WITME_USE_SAME_ORIGIN_API === "string"
+      ? import.meta.env.VITE_WITME_USE_SAME_ORIGIN_API.trim().toLowerCase()
+      : "";
+  return v === "1" || v === "true" || v === "yes";
+}
+
 /**
  * Prefix for browser `fetch` to Vercel `/api/*` when the static app is not same-origin
  * (e.g. Firebase Hosting + API on Vercel). Leave unset when the UI is deployed on Vercel
@@ -24,11 +38,16 @@ function productionApiBase(): string {
   const h = window.location.hostname.toLowerCase();
   const normalized = normalizeHostname(h);
   const customHosts = getConfiguredCustomStorefrontHosts();
+
+  /** Same Vercel project may serve witme.io + echoflux.ai; witme hosts can hit `/api` on the current origin and avoid locked-media CORS. */
+  if (witmeHostname(h) && witmeUsesSameOriginApi()) {
+    return "";
+  }
+
   const useCanonical =
     h.endsWith(".web.app") ||
     h.endsWith(".firebaseapp.com") ||
-    h === "witme.io" ||
-    h.endsWith(".witme.io") ||
+    witmeHostname(h) ||
     customHosts.includes(normalized);
   if (useCanonical) return CANONICAL_ECHOFLUX_API_ORIGIN;
   return "";

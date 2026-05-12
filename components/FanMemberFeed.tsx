@@ -1037,23 +1037,27 @@ function FanMemberPostMedia({
     }
     setUnlockMediaLoadFailed(false);
     let cancelled = false;
-    void fetchUnlockedFanPostMedia(creatorId, post.id).then((result) => {
-      if (cancelled) return;
-      if (!result.ok) {
-        setUnlockMediaLoadFailed(true);
-        return;
-      }
-      if (!result.mediaUrls.length) {
-        setUnlockMediaLoadFailed(true);
-        return;
-      }
-      setUnlockMediaLoadFailed(false);
-      setResolvedMedia({
-        postId: post.id,
-        mediaUrls: result.mediaUrls,
-        mediaTypes: result.mediaTypes,
+    void fetchUnlockedFanPostMedia(creatorId, post.id)
+      .then((result) => {
+        if (cancelled) return;
+        if (!result.ok) {
+          setUnlockMediaLoadFailed(true);
+          return;
+        }
+        if (!result.mediaUrls.length) {
+          setUnlockMediaLoadFailed(true);
+          return;
+        }
+        setUnlockMediaLoadFailed(false);
+        setResolvedMedia({
+          postId: post.id,
+          mediaUrls: result.mediaUrls,
+          mediaTypes: result.mediaTypes,
+        });
+      })
+      .catch(() => {
+        if (!cancelled) setUnlockMediaLoadFailed(true);
       });
-    });
     return () => {
       cancelled = true;
     };
