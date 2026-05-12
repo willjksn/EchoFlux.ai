@@ -9,6 +9,7 @@ import {
   instagramPostTypeFromContentFormat,
 } from '../src/lib/strategyComposeHandoff';
 import { hasEliteAccess } from '../src/utils/planAccess';
+import { EchoFluxHowItWorksModal } from './EchoFluxHowItWorksModal';
 
 type PlatformOption = 'instagram' | 'facebook' | 'x' | 'mypage';
 
@@ -375,6 +376,7 @@ export const WhatToPost: React.FC<WhatToPostProps> = ({ onOpenAdvanced }) => {
   };
   const [scheduleDate, setScheduleDate] = useState('');
   const [scheduleTime, setScheduleTime] = useState('12:00');
+  const [showHowItWorks, setShowHowItWorks] = useState(false);
 
   useEffect(() => {
     if (drawerOpen) {
@@ -623,6 +625,13 @@ export const WhatToPost: React.FC<WhatToPostProps> = ({ onOpenAdvanced }) => {
         <div className="flex flex-wrap gap-2">
           <button
             type="button"
+            onClick={() => setShowHowItWorks(true)}
+            className="text-xs font-medium text-primary-600 underline-offset-2 hover:text-primary-700 hover:underline dark:text-primary-400 dark:hover:text-primary-300 px-3 py-2 self-center sm:self-auto"
+          >
+            How it works
+          </button>
+          <button
+            type="button"
             onClick={() => setDrawerOpen(true)}
             className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 text-sm font-medium hover:bg-gray-200 dark:hover:bg-gray-600"
           >
@@ -639,6 +648,86 @@ export const WhatToPost: React.FC<WhatToPostProps> = ({ onOpenAdvanced }) => {
           </button>
         </div>
       </div>
+
+      <div className="mb-6 rounded-xl border border-primary-100 bg-gradient-to-br from-primary-50 via-white to-pink-50 p-4 shadow-sm ring-1 ring-primary-100/60 dark:border-primary-900/40 dark:from-gray-900 dark:via-gray-900/95 dark:to-primary-950/25 dark:ring-primary-900/20">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-wide text-primary-600 dark:text-primary-400">What to Post</p>
+            <h2 className="mt-1 text-base font-semibold text-gray-900 dark:text-white">
+              Instant ideas tuned to your platform, goals, and tone—with one tap into Create Post.
+            </h2>
+          </div>
+          <button
+            type="button"
+            onClick={() => setShowHowItWorks(true)}
+            className="shrink-0 text-xs font-medium text-primary-600 underline-offset-2 hover:text-primary-700 hover:underline dark:text-primary-400 dark:hover:text-primary-300 sm:hidden"
+          >
+            Details
+          </button>
+        </div>
+        <div className="mt-3 grid gap-2 text-[13px] leading-relaxed text-gray-600 dark:text-gray-300 md:grid-cols-3">
+          <p>
+            <strong className="text-gray-900 dark:text-white">1. Pick:</strong> Instagram, Facebook, X, or My Page.
+          </p>
+          <p>
+            <strong className="text-gray-900 dark:text-white">2. Generate:</strong> fresh angles, hooks, and shot ideas—no long form.
+          </p>
+          <p>
+            <strong className="text-gray-900 dark:text-white">3. Use:</strong> open Create Post prefilled or try another idea with swap.
+          </p>
+        </div>
+      </div>
+
+      <EchoFluxHowItWorksModal
+        open={showHowItWorks}
+        onClose={() => setShowHowItWorks(false)}
+        ariaTitleId="what-to-post-how-title"
+        title="How What to Post works"
+        subtitle="Quick daily ideas that match where you publish and what you're optimizing for."
+      >
+        <section>
+          <h4 className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-primary-600 dark:text-primary-400">
+            Start fast
+          </h4>
+          <p className="text-[13px] leading-relaxed text-gray-600 dark:text-gray-400">
+            Choose a platform at the top. EchoFlux pulls context from your account (including My Page engagement when you pick My Page)
+            so suggestions feel relevant—not generic prompts.
+          </p>
+        </section>
+        <section>
+          <h4 className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-primary-600 dark:text-primary-400">
+            Quick settings
+          </h4>
+          <ul className="list-inside list-disc space-y-1 text-[13px] leading-relaxed text-gray-600 dark:text-gray-400">
+            <li>Goal, tone, effort, and format steer how bold or practical each idea is.</li>
+            <li>Turn on <strong className="text-gray-800 dark:text-gray-200">Personality Override first</strong> in Quick settings when your saved override should strongly shape ideas.</li>
+            <li>Tone sliders in Settings fine-tune voice; Personality Override adds your real phrasing habits.</li>
+          </ul>
+        </section>
+        <section>
+          <h4 className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-primary-600 dark:text-primary-400">
+            Cards &amp; actions
+          </h4>
+          <ul className="list-inside list-disc space-y-1 text-[13px] leading-relaxed text-gray-600 dark:text-gray-400">
+            <li>
+              <strong className="text-gray-800 dark:text-gray-200">Use this</strong> sends the idea into Create Post with caption and structure hints.
+            </li>
+            <li>
+              <strong className="text-gray-800 dark:text-gray-200">Swap</strong> replaces one card while keeping the rest.
+            </li>
+            <li>Idea history keeps recent generations so you can reload a set you liked.</li>
+          </ul>
+        </section>
+        <section>
+          <h4 className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-primary-600 dark:text-primary-400">
+            Advanced planner
+          </h4>
+          <p className="text-[13px] leading-relaxed text-gray-600 dark:text-gray-400">
+            Elite unlocks the deeper weekly planner and strategy view. On Pro, use What to Post for daily angles and Creator OS for your
+            money-flow planning.
+          </p>
+        </section>
+      </EchoFluxHowItWorksModal>
 
       {ideaHistory.length > 0 && (
         <div className="mb-5 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50/80 dark:bg-gray-800/40 overflow-hidden">

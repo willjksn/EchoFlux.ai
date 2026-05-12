@@ -18,6 +18,12 @@ function isPublishedFanPostStatus(raw: unknown): boolean {
   return String(raw).trim().toLowerCase() === "published";
 }
 
+/** Must stay in sync with `src/lib/lockedPostMedia.ts` (`publicMediaUrlsForLockedPost`). */
+const PROTECTED_LOCKED_MEDIA_PREFIX = "protected://fan-post-media/";
+function isProtectedLockedMediaUrl(url: string): boolean {
+  return typeof url === "string" && url.startsWith(PROTECTED_LOCKED_MEDIA_PREFIX);
+}
+
 async function hasUnlockedPost(
   db: Firestore,
   creatorId: string,
@@ -91,8 +97,33 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       .doc(postId)
       .get();
     const source = privateSnap.exists ? privateSnap.data() : post;
-    const mediaUrls = normalizeStringArray(source?.mediaUrls);
-    const mediaTypes = normalizeStringArray(source?.mediaTypes);
+    const rawUrls = normalizeStringArray(source?.mediaUrls);
+    const rawTypes = normalizeStringArray(source?.mediaTypes);
+    // Never return client-only placeholders to entitled viewers (fixes corrupt saves that wrote
+    // `protected://fan-post-media/*` into `fanPostPrivateMedia` after a failed editor URL resolve).
+    const mediaUrls = rawUrls.filter((u) => !isProtectedLockedMediaUrl(u));
+    const mediaTypes = rawUrls.reduce<string[]>((acc, u, i) => {
+      if (!isProtectedLockedMediaUrl(u)) acc.push(rawTypes[i] || "image");
+      return acc;
+    }, []);
+
+    if (
+      mediaUrls.length === 0 &&
+      rawUrls.some(isProtectedLockedMediaUrl) &&
+      locked?.enabled &&
+      canView
+    ) {
+      console.warn("[fanPostMedia] locked post has only placeholder URLs in resolved source", {
+        creatorId,
+        postId,
+        privateSnapExists: privateSnap.exists,
+      });
+      return res.status(503).json({
+        error:
+          "This post’s unlocked media could not be loaded. The creator can fix it by opening the post in Fan Hub Posts, re-adding media if needed, and saving.",
+        code: "LOCKED_MEDIA_PLACEHOLDER_LEAK",
+      });
+    }
 
     return res.status(200).json({ postId, mediaUrls, mediaTypes });
   } catch (error) {

@@ -484,6 +484,7 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
   const accentHover = theme.accentHover ?? primary;
   const background = theme.background || DEFAULT_BG;
   const textColor = theme.text || DEFAULT_TEXT;
+  const themeBorder = theme.border?.trim() || "#e5e7eb";
   const buttonStyle = theme.buttonStyle || "solid";
   const isDark = isDarkBackground(background);
   const live = liveLanding;
@@ -1056,7 +1057,15 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
             background: landingPageGradient,
             color: landingPageText,
             minHeight: live ? "100vh" : undefined,
-          }}
+            "--fan-primary": primary,
+            "--fan-accent": primary,
+            "--fan-accent-soft": `color-mix(in srgb, ${primary} 14%, transparent)`,
+            "--fan-accent-hover": accentHover,
+            "--fan-bg": background,
+            "--fan-text": landingPageText,
+            "--fan-text-muted": landingPageMuted,
+            "--fan-border": themeBorder,
+          } as React.CSSProperties}
         >
           {/* Header — full-width chrome (Stormij-style); inner row is edge-to-edge with horizontal padding */}
           <header className="w-full" style={headerChromeLanding}>

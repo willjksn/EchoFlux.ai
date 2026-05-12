@@ -47,6 +47,7 @@ import type { LiveStreamEventStatus, LiveStreamPromoOnPost } from "../types";
 import { hasLiveStreamAccess } from "../src/utils/planAccess";
 import { LiveStreamWatchRoom } from "./LiveStreamWatchRoom";
 import {
+  isProtectedLockedMediaUrl,
   publicMediaUrlsForLockedPost,
   type LockedPostContent,
 } from "../src/lib/lockedPostMedia";
@@ -1741,6 +1742,21 @@ Write 2-4 sentences that are engaging and on-topic.`;
                 : {}),
             }
           : undefined;
+
+      if (lockedContentForPost) {
+        const badSlots = uploadedUrls.filter((u) =>
+          typeof u === "string" ? isProtectedLockedMediaUrl(u.trim()) : false,
+        );
+        if (badSlots.length > 0) {
+          showToast?.(
+            "Locked posts need real upload URLs—not preview placeholders. Re-open this post so media reloads from storage, then save again.",
+            "error",
+          );
+          setPublishing(false);
+          return;
+        }
+      }
+
       const publicMediaUrls = publicMediaUrlsForLockedPost(uploadedUrls, lockedContentForPost);
 
       // Build post data. For edits, do not touch engagement or original publish timestamps.
@@ -2046,11 +2062,41 @@ Write 2-4 sentences that are engaging and on-topic.`;
     if (ownerUid && post.lockedContent?.enabled) {
       const resolved = await fetchCreatorFanPostMedia(ownerUid, post.id).catch(() => null);
       if (resolved?.mediaUrls?.length) {
-        urls = resolved.mediaUrls;
-        types = urls.map((_, index) =>
-          resolved.mediaTypes[index] === "video" ? "video" : "image"
+        const pu: string[] = [];
+        const pt: ("image" | "video")[] = [];
+        resolved.mediaUrls.forEach((raw, index) => {
+          if (typeof raw !== "string") return;
+          const s = raw.trim();
+          if (!s || isProtectedLockedMediaUrl(s)) return;
+          pu.push(raw);
+          pt.push(resolved.mediaTypes[index] === "video" ? "video" : "image");
+        });
+        if (pu.length > 0) {
+          urls = pu;
+          types = pt;
+        }
+      }
+      const stillHasProtected = urls.some((u) => typeof u === "string" && isProtectedLockedMediaUrl(u.trim()));
+      if (stillHasProtected || (post.lockedContent?.enabled && urls.length === 0)) {
+        urls = [];
+        types = [];
+        showToast?.(
+          "Could not load original media for this locked post—re-upload photos or video, then publish.",
+          "error",
         );
       }
+    } else {
+      const keptUrls: string[] = [];
+      const keptTypes: ("image" | "video")[] = [];
+      urls.forEach((u, i) => {
+        if (typeof u !== "string") return;
+        const t = u.trim();
+        if (!t || isProtectedLockedMediaUrl(t)) return;
+        keptUrls.push(u);
+        keptTypes.push(types[i] === "video" ? "video" : "image");
+      });
+      urls = keptUrls;
+      types = keptTypes;
     }
     const mediaFromPost: MediaItem[] = urls
       .filter((u): u is string => typeof u === "string" && u.trim().length > 0)

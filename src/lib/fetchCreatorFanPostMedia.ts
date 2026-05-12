@@ -1,5 +1,7 @@
 import { auth } from "../../firebaseConfig";
 import { resolveApiUrl } from "./resolveApiUrl";
+import { isProtectedLockedMediaUrl } from "./lockedPostMedia";
+import { normalizePostMediaTypes } from "./mediaUrlInfer";
 
 /** Author-facing fetch for full fan-post media URLs (locked slots hidden from public post docs). */
 export async function fetchCreatorFanPostMedia(creatorId: string, postId: string): Promise<{
@@ -14,11 +16,19 @@ export async function fetchCreatorFanPostMedia(creatorId: string, postId: string
   });
   if (!res.ok) return null;
   const data = (await res.json().catch(() => null)) as { mediaUrls?: unknown; mediaTypes?: unknown } | null;
-  const mediaUrls = Array.isArray(data?.mediaUrls)
+  const rawUrls = Array.isArray(data?.mediaUrls)
     ? data.mediaUrls.filter((u): u is string => typeof u === "string" && !!u.trim())
     : [];
   const rawTypes = Array.isArray(data?.mediaTypes)
     ? data.mediaTypes.filter((t): t is string => typeof t === "string")
     : [];
-  return { mediaUrls, mediaTypes: rawTypes.map((t) => (t === "video" ? "video" : "image")) };
+  const zippedUrls: string[] = [];
+  const zippedTypesRaw: string[] = [];
+  rawUrls.forEach((u, i) => {
+    if (isProtectedLockedMediaUrl(u.trim())) return;
+    zippedUrls.push(u);
+    zippedTypesRaw.push(rawTypes[i] || "image");
+  });
+  if (!zippedUrls.length) return null;
+  return { mediaUrls: zippedUrls, mediaTypes: normalizePostMediaTypes(zippedUrls, zippedTypesRaw) };
 }

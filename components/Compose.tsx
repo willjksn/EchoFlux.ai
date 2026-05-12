@@ -58,6 +58,7 @@ import {
 } from '../src/lib/composeStrategyHandoff';
 import { stripStrategyFormatPrefix } from '../src/lib/strategyComposeHandoff';
 import { Approvals } from './Approvals';
+import { EchoFluxHowItWorksModal } from './EchoFluxHowItWorksModal';
 
 const fileToBase64 = (file: File): Promise<string> => {
   return new Promise((resolve, reject) => {
@@ -175,6 +176,7 @@ const CaptionGenerator: React.FC = () => {
   // Preview state
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
   const [previewMediaIndex, setPreviewMediaIndex] = useState<number | null>(null);
+  const [showComposeHowItWorks, setShowComposeHowItWorks] = useState(false);
 
   // Scheduling state
   const [isScheduling, setIsScheduling] = useState(false);
@@ -3935,18 +3937,101 @@ const CaptionGenerator: React.FC = () => {
         </div>
       )}
 
-      <div className="text-center">
-        <h2 className="text-3xl font-bold text-gray-900 dark:text-white">
-          Write Captions & Schedule
-        </h2>
-        <p className="mt-2 text-lg text-gray-500 dark:text-gray-400">
-          Post a pic, get caption ideas, and schedule it.
-        </p>
-        {isFinite(limit) && (
-          <p className="mt-1 text-sm font-semibold text-primary-600 dark:text-primary-400">
-            {usageLeft} generations left this month.
+      <div className="space-y-4">
+        <div className="text-center">
+          <h2 className="text-3xl font-bold text-gray-900 dark:text-white">
+            Write Captions & Schedule
+          </h2>
+          <p className="mt-2 text-lg text-gray-500 dark:text-gray-400">
+            Post a pic, get caption ideas, and schedule it.
           </p>
-        )}
+          {isFinite(limit) && (
+            <p className="mt-1 text-sm font-semibold text-primary-600 dark:text-primary-400">
+              {usageLeft} generations left this month.
+            </p>
+          )}
+        </div>
+
+        <div className="rounded-xl border border-primary-100 bg-gradient-to-br from-primary-50 via-white to-pink-50 p-4 shadow-sm ring-1 ring-primary-100/60 dark:border-primary-900/40 dark:from-gray-900 dark:via-gray-900/95 dark:to-primary-950/25 dark:ring-primary-900/20">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-wide text-primary-600 dark:text-primary-400">Create Post</p>
+              <h2 className="mt-1 text-base font-semibold text-gray-900 dark:text-white">
+                One place for media, AI captions per platform, personality, hashtags, publishing, and calendar.
+              </h2>
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowComposeHowItWorks(true)}
+              className="shrink-0 text-xs font-medium text-primary-600 underline-offset-2 hover:text-primary-700 hover:underline dark:text-primary-400 dark:hover:text-primary-300"
+            >
+              How it works
+            </button>
+          </div>
+          <div className="mt-3 grid gap-2 text-[13px] leading-relaxed text-gray-600 dark:text-gray-300 md:grid-cols-3">
+            <p>
+              <strong className="text-gray-900 dark:text-white">1. Add media:</strong> upload images or video, one or many frames.
+            </p>
+            <p>
+              <strong className="text-gray-900 dark:text-white">2. Platforms:</strong> pick where it goes—captions tailor to each format.
+            </p>
+            <p>
+              <strong className="text-gray-900 dark:text-white">3. Ship:</strong> generate, tweak, publish or schedule—or save a draft.
+            </p>
+          </div>
+        </div>
+
+        <EchoFluxHowItWorksModal
+          open={showComposeHowItWorks}
+          onClose={() => setShowComposeHowItWorks(false)}
+          ariaTitleId="compose-how-title"
+          title="How Create Post works"
+          subtitle="Turn media into captions, then publish or schedule—all with your tone and safeguards."
+        >
+          <section>
+            <h4 className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-primary-600 dark:text-primary-400">
+              Media first
+            </h4>
+            <p className="text-[13px] leading-relaxed text-gray-600 dark:text-gray-400">
+              Add visuals for each clip or carousel slot. Caption tools can analyze what&apos;s on screen when you generate, so prompts stay contextual.
+            </p>
+          </section>
+          <section>
+            <h4 className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-primary-600 dark:text-primary-400">
+              Personality Override
+            </h4>
+            <p className="text-[13px] leading-relaxed text-gray-600 dark:text-gray-400">
+              Turn on Personality when generating so EchoFlux blends your captions with the description you saved under Settings → AI training →
+              Personality Override. Tone sliders steer formality and humor; the override fills in slang, pacing, emoji habits, and lines you&apos;d never say—or always say.
+            </p>
+          </section>
+          <section>
+            <h4 className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-primary-600 dark:text-primary-400">
+              Platforms &amp; repurposing
+            </h4>
+            <ul className="list-inside list-disc space-y-1 text-[13px] leading-relaxed text-gray-600 dark:text-gray-400">
+              <li>Select one or several networks; captions respect length and style where possible.</li>
+              <li>Use Remix when you already have winning copy and want a version for another channel.</li>
+              <li>Favorite hashtag sets attach when you enable them—consistent discovery without typing every tag.</li>
+            </ul>
+          </section>
+          <section>
+            <h4 className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-primary-600 dark:text-primary-400">
+              Connected accounts &amp; calendar
+            </h4>
+            <p className="text-[13px] leading-relaxed text-gray-600 dark:text-gray-400">
+              After you connect social accounts in Settings, publish or schedule from here. Calendar access depends on your plan—check the banner if scheduling is locked.
+            </p>
+          </section>
+          <section>
+            <h4 className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-primary-600 dark:text-primary-400">
+              Handoffs from What to Post &amp; Creator OS
+            </h4>
+            <p className="text-[13px] leading-relaxed text-gray-600 dark:text-gray-400">
+              When you tap &quot;Use this&quot; on an idea or send from Creator OS, Create Post opens with context already filled so you only add media and polish.
+            </p>
+          </section>
+        </EchoFluxHowItWorksModal>
       </div>
 
       {/* Predict & Repurpose History */}

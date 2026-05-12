@@ -14,6 +14,7 @@ import { startXOAuth1Authorization } from '../src/lib/startXOAuth1Authorization'
 import { PLATFORM_CAPABILITIES, hasCapability, getCapabilityDescription, getCapability, isFullySupported } from '../src/services/platformCapabilities';
 import { isCreatorIdentityPlanClient } from '../src/lib/creatorIdentity/planGate';
 import { hasPremiumStudioRouteAccess } from '../src/utils/planAccess';
+import { EchoFluxHowItWorksModal } from './EchoFluxHowItWorksModal';
 
 interface SettingsProps {}
 
@@ -219,6 +220,7 @@ export const Settings: React.FC = () => {
     const [showCancelModal, setShowCancelModal] = useState(false);
     const [isCancelling, setIsCancelling] = useState(false);
     const [identitySummaryElite, setIdentitySummaryElite] = useState<string | null>(null);
+    const [showPersonalityHowItWorks, setShowPersonalityHowItWorks] = useState(false);
 
     useEffect(() => {
         if (!user?.id || !isCreatorIdentityPlanClient(user.plan)) return;
@@ -1155,6 +1157,29 @@ export const Settings: React.FC = () => {
                         </SettingsSection>
 
                         <SettingsSection title="Personality Override">
+                            <div className="mb-4 rounded-xl border border-primary-100 bg-gradient-to-br from-primary-50 via-white to-pink-50 p-4 shadow-sm ring-1 ring-primary-100/60 dark:border-primary-900/40 dark:from-gray-900 dark:via-gray-900/95 dark:to-primary-950/25 dark:ring-primary-900/20">
+                                <div className="flex items-start justify-between gap-3">
+                                    <div>
+                                        <p className="text-xs font-bold uppercase tracking-wide text-primary-600 dark:text-primary-400">
+                                            Why this matters
+                                        </p>
+                                        <p className="mt-1 text-sm font-semibold text-gray-900 dark:text-white">
+                                            This is how EchoFlux learns to sound like you—not a generic AI voice.
+                                        </p>
+                                        <p className="mt-2 text-[13px] leading-relaxed text-gray-600 dark:text-gray-300">
+                                            When you turn on Personality in Create Post (or related tools), this text is blended with your tone sliders and niche so
+                                            captions, hooks, and replies match your real voice, boundaries, and phrases.
+                                        </p>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowPersonalityHowItWorks(true)}
+                                        className="shrink-0 text-xs font-medium text-primary-600 underline-offset-2 hover:text-primary-700 hover:underline dark:text-primary-400 dark:hover:text-primary-300"
+                                    >
+                                        How it works
+                                    </button>
+                                </div>
+                            </div>
                             <div className="space-y-4">
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
@@ -1321,6 +1346,55 @@ Return only the rewritten personality description.
                               )}
                           </SettingsSection>
                         )}
+
+                        <EchoFluxHowItWorksModal
+                          open={showPersonalityHowItWorks}
+                          onClose={() => setShowPersonalityHowItWorks(false)}
+                          ariaTitleId="personality-override-how-title"
+                          title="Personality Override"
+                          subtitle="The single best way to make EchoFlux sound like you—not a template."
+                        >
+                          <section>
+                            <h4 className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-primary-600 dark:text-primary-400">
+                              What it controls
+                            </h4>
+                            <p className="text-[13px] leading-relaxed text-gray-600 dark:text-gray-400">
+                              Personality Override is explicit written direction: how you greet people, joke, sign off, swear (or not),
+                              reference your community, and steer clear of phrases that feel off-brand. Tone sliders set broad dials; this field
+                              fills in the specifics only you know.
+                            </p>
+                          </section>
+                          <section>
+                            <h4 className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-primary-600 dark:text-primary-400">
+                              Where it applies
+                            </h4>
+                            <ul className="list-inside list-disc space-y-1 text-[13px] leading-relaxed text-gray-600 dark:text-gray-400">
+                              <li>Create Post: toggle Personality when generating captions or replies so the model weighs this text heavily.</li>
+                              <li>What to Post: enable &quot;Prioritize Personality&quot; in Quick settings when idea titles and hooks should mimic your voice.</li>
+                              <li>Other assistants (strategy, Premium Studio, Fan Hub tools) may read the same profile when those flows pass personality context.</li>
+                            </ul>
+                          </section>
+                          <section>
+                            <h4 className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-primary-600 dark:text-primary-400">
+                              How to write a strong override
+                            </h4>
+                            <ul className="list-inside list-disc space-y-1 text-[13px] leading-relaxed text-gray-600 dark:text-gray-400">
+                              <li>Open with 2–3 sentences in your own voice—paste something you already posted if it helps.</li>
+                              <li>List do&apos;s and don&apos;ts (&quot;never deadname,&quot; &quot;always hype the community,&quot; &quot;emoji only for emphasis&quot;).</li>
+                              <li>Mention audience relationship (coach vs best friend vs flirt) so intensity matches your brand.</li>
+                              <li>Tap the sparkle <strong className="text-gray-800 dark:text-gray-200">AI Help</strong> button to tighten messy notes into a concise instruction block.</li>
+                            </ul>
+                          </section>
+                          <section>
+                            <h4 className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-primary-600 dark:text-primary-400">
+                              Elite: Creator Identity vs override
+                            </h4>
+                            <p className="text-[13px] leading-relaxed text-gray-600 dark:text-gray-400">
+                              If you use Creator Identity, treat that as your default brand spine. Keep Personality Override for experiments, alternate personas,
+                              or niche campaigns so you can switch tone without rebuilding the full identity kit.
+                            </p>
+                          </section>
+                        </EchoFluxHowItWorksModal>
                     </>
                 )}
 

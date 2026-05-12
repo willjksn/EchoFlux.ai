@@ -14,6 +14,7 @@ import {
   clearNewMessageNotificationBadge,
 } from './useUnreadNewMessageNotifications';
 import { useCreatorLiveChatSessionsCount } from './useCreatorLiveChatSessionsCount';
+import { EchoFluxHowItWorksModal } from './EchoFluxHowItWorksModal';
 
 const FAN_HUB_PREVIEW_THEME_STORAGE_KEY = 'echoflux:fanhub-preview-theme';
 const FAN_HUB_PREVIEW_THEME_EVENT = 'echoflux:fanhub-preview-theme-changed';
@@ -84,6 +85,7 @@ export const PremiumStudioLayout: React.FC<PremiumStudioLayoutProps> = ({ childr
   const clearPendingMessagesThreadId = useCallback(() => setPendingMessagesThreadId(null), []);
   const [pendingFeedPostId, setPendingFeedPostId] = useState<string | null>(null);
   const clearPendingFeedPostId = useCallback(() => setPendingFeedPostId(null), []);
+  const [showPremiumStudioHowItWorks, setShowPremiumStudioHowItWorks] = useState(false);
   const openMessagesForThread = useCallback(
     (threadId: string) => {
       if (!isFanHub) return;
@@ -331,8 +333,79 @@ export const PremiumStudioLayout: React.FC<PremiumStudioLayoutProps> = ({ childr
             hidden={suppressFanHubDmNotifications}
             showToast={showToast}
           />
-        ) : null}
+        ) : (
+          <button
+            type="button"
+            onClick={() => setShowPremiumStudioHowItWorks(true)}
+            className="shrink-0 self-center rounded-lg px-2.5 py-1.5 text-xs font-medium text-primary-600 underline-offset-2 hover:bg-primary-50 hover:text-primary-700 hover:underline dark:text-primary-400 dark:hover:bg-primary-950/40 dark:hover:text-primary-300"
+          >
+            How it works
+          </button>
+        )}
       </div>
+      {!isFanHub && (
+        <EchoFluxHowItWorksModal
+          open={showPremiumStudioHowItWorks}
+          onClose={() => setShowPremiumStudioHowItWorks(false)}
+          ariaTitleId="premium-studio-how-title"
+          title="Premium Studio tabs"
+          subtitle="Elite tooling for monetized workflows—jump between generators without losing your brand spine."
+        >
+          <section>
+            <h4 className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-primary-600 dark:text-primary-400">
+              Creator Identity
+            </h4>
+            <p className="text-[13px] leading-relaxed text-gray-600 dark:text-gray-400">
+              Builds or loads your Elite identity questionnaire output: pillars, monetization cues, bios, headlines, and copy you can apply
+              to Fan Hub / EchoFlux defaults. Finish here before expecting other tabs to feel fully custom.
+            </p>
+          </section>
+          <section>
+            <h4 className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-primary-600 dark:text-primary-400">
+              New Ideas
+            </h4>
+            <p className="text-[13px] leading-relaxed text-gray-600 dark:text-gray-400">
+              Generates post concepts, captions, hooks, or campaign angles anchored to Premium Studio cues and Creator Identity saves.
+              Use it when planning fresh feed content or prepping drops.
+            </p>
+          </section>
+          <section>
+            <h4 className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-primary-600 dark:text-primary-400">
+              Drops &amp; PPV
+            </h4>
+            <p className="text-[13px] leading-relaxed text-gray-600 dark:text-gray-400">
+              Plans paywalled bursts, scarcity angles, bundles, or post sequences so paid fans know why to unlock today.
+            </p>
+          </section>
+          <section>
+            <h4 className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-primary-600 dark:text-primary-400">
+              DM Session
+            </h4>
+            <p className="text-[13px] leading-relaxed text-gray-600 dark:text-gray-400">
+              Outlines scripted session beats, escalation notes, prompts, or upsell placements for one-to-one chats that match your persona.
+              Send lines you like into Compose or Fan Hub messages when you approve them.
+            </p>
+          </section>
+          <section>
+            <h4 className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-primary-600 dark:text-primary-400">
+              Teasers
+            </h4>
+            <p className="text-[13px] leading-relaxed text-gray-600 dark:text-gray-400">
+              Chips away at spoiler-free previews, countdown language, blurred-media blurbs, and cross-post hooks pointing fans to Inner
+              Circle, My Page, or paid drops.
+            </p>
+          </section>
+          <section>
+            <h4 className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-primary-600 dark:text-primary-400">
+              Tip
+            </h4>
+            <p className="text-[13px] leading-relaxed text-gray-600 dark:text-gray-400">
+              Personality Override plus tone sliders in Settings still steer how spicy, formal, or emoji-heavy drafts read. Creator Identity carries
+              the bigger brand story—you need both finely tuned lists for predictable voice.
+            </p>
+          </section>
+        </EchoFluxHowItWorksModal>
+      )}
       <PremiumStudioTabContext.Provider
         value={{
           tab,

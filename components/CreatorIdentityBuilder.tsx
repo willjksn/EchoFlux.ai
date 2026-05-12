@@ -3,6 +3,7 @@ import { auth } from '../firebaseConfig';
 import { CREATOR_IDENTITY_PROMISE, CREATOR_IDENTITY_QUESTIONS } from '../src/lib/creatorIdentity/questionBank';
 import type { CreatorIdentityDraftAnswers, CreatorIdentityProfile, StructuredAnswer } from '../src/lib/creatorIdentity/types';
 import { CopyIcon, SparklesIcon } from './icons/UIIcons';
+import { EchoFluxHowItWorksModal } from './EchoFluxHowItWorksModal';
 
 function emptyAnswers(): CreatorIdentityDraftAnswers {
   return { structured: {}, openText: {} };
@@ -83,6 +84,7 @@ export const CreatorIdentityBuilder: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [applying, setApplying] = useState<string | null>(null);
+  const [showIdentityHowItWorks, setShowIdentityHowItWorks] = useState(false);
   const builderScrollAnchorRef = useRef<HTMLDivElement>(null);
 
   const total = CREATOR_IDENTITY_QUESTIONS.length;
@@ -265,13 +267,22 @@ export const CreatorIdentityBuilder: React.FC = () => {
         <div className="relative overflow-hidden rounded-3xl border border-gray-200/90 bg-gradient-to-br from-primary-50 via-white to-indigo-50/80 px-6 py-8 shadow-sm dark:border-slate-700/80 dark:from-slate-900 dark:via-slate-950 dark:to-indigo-950/40 sm:px-10 sm:py-10">
           <div className="absolute -right-20 -top-20 h-64 w-64 rounded-full bg-primary-400/10 blur-3xl dark:bg-primary-500/10" aria-hidden />
           <div className="relative space-y-4">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="text-xs font-semibold uppercase tracking-widest text-primary-600 dark:text-primary-400">
-                Elite · Creator identity
-              </span>
-              <span className="rounded-full bg-white/90 px-2.5 py-0.5 text-xs font-medium text-gray-600 shadow-sm dark:bg-slate-800/90 dark:text-slate-300">
-                Clarity {conf} · {profile.confidenceScore}/100
-              </span>
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div className="flex flex-wrap items-center gap-2 min-w-0">
+                <span className="text-xs font-semibold uppercase tracking-widest text-primary-600 dark:text-primary-400">
+                  Elite · Creator identity
+                </span>
+                <span className="rounded-full bg-white/90 px-2.5 py-0.5 text-xs font-medium text-gray-600 shadow-sm dark:bg-slate-800/90 dark:text-slate-300">
+                  Clarity {conf} · {profile.confidenceScore}/100
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowIdentityHowItWorks(true)}
+                className="shrink-0 text-xs font-medium text-primary-600 underline-offset-2 hover:text-primary-700 hover:underline dark:text-primary-400 dark:hover:text-primary-300"
+              >
+                How it works
+              </button>
             </div>
             <h1 className="text-2xl font-semibold tracking-tight text-gray-900 dark:text-white sm:text-3xl md:text-4xl md:leading-tight max-w-3xl">
               {g.pageHeadline}
@@ -553,6 +564,61 @@ export const CreatorIdentityBuilder: React.FC = () => {
         </div>
 
         {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
+
+        <EchoFluxHowItWorksModal
+          open={showIdentityHowItWorks}
+          onClose={() => setShowIdentityHowItWorks(false)}
+          ariaTitleId="creator-identity-how-title"
+          title="How Creator Identity works"
+          subtitle="Turn your answers into a saved brand kit—without changing your live page until you apply."
+        >
+          <section>
+            <h4 className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-primary-600 dark:text-primary-400">
+              What you&apos;re seeing
+            </h4>
+            <p className="text-[13px] leading-relaxed text-gray-600 dark:text-gray-400">
+              EchoFlux summarizes your quiz (and follow-ups if you had them) into headlines, bios, pillars, monetization hints, and
+              Premium Studio tags. The clarity score reflects how actionable and consistent those signals looked—not your worth as a creator.
+            </p>
+          </section>
+          <section>
+            <h4 className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-primary-600 dark:text-primary-400">
+              Saved vs live
+            </h4>
+            <p className="text-[13px] leading-relaxed text-gray-600 dark:text-gray-400">
+              This profile stays in EchoFlux until you tap an apply action. Fan Hub / witme.io does not automatically update—you choose
+              when to push copy like hero blurbs or bios via the Fan Hub apply button below.
+            </p>
+          </section>
+          <section>
+            <h4 className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-primary-600 dark:text-primary-400">
+              Apply buttons
+            </h4>
+            <ul className="list-inside list-disc space-y-1 text-[13px] leading-relaxed text-gray-600 dark:text-gray-400">
+              <li>
+                <strong className="text-gray-800 dark:text-gray-200">Apply to Fan Hub / My Page</strong> updates marketing copy previews
+                (hero, bullets, bios)—not your handle, pricing, theme, legal, or media assets.
+              </li>
+              <li>
+                <strong className="text-gray-800 dark:text-gray-200">Apply to EchoFlux</strong> syncs Personality Override and related
+                defaults so Create Post &amp; strategy flows can mirror this identity when Personality is enabled.
+              </li>
+              <li>
+                <strong className="text-gray-800 dark:text-gray-200">Apply to Premium Content Studio</strong> pushes tags and defaults
+                used by Premium Studio generators (ideas, drops, sessions, teasers).
+              </li>
+            </ul>
+          </section>
+          <section>
+            <h4 className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-primary-600 dark:text-primary-400">
+              Relationship to Settings → Personality Override
+            </h4>
+            <p className="text-[13px] leading-relaxed text-gray-600 dark:text-gray-400">
+              Personality Override remains your quick knob for slang, boundaries, and micro tone. Creator Identity carries the fuller story
+              (niche stack, pillars, monetization emphasis). Sync them when you apply to EchoFlux, then refine details in Settings anytime.
+            </p>
+          </section>
+        </EchoFluxHowItWorksModal>
       </div>
     );
   }

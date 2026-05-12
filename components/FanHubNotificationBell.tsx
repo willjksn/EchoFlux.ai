@@ -326,7 +326,7 @@ export const FanHubNotificationBell: React.FC<FanHubNotificationBellProps> = ({
                 ? "-top-0.5 -right-0.5 min-w-[0.95rem] h-[0.95rem] px-[2px] text-[9px] leading-none"
                 : "-top-0.5 -right-0.5 min-w-[1.1rem] h-[1.1rem] px-0.5 text-[10px]"
             }`}
-            style={{ backgroundColor: accentColor || "var(--fan-primary, #d4558b)" }}
+            style={{ backgroundColor: accentColor || "var(--fan-primary, #6366f1)" }}
           >
             {unread > 9 ? "9+" : unread}
           </span>

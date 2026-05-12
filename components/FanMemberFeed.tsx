@@ -160,26 +160,43 @@ async function startFanPostUnlockCheckoutSession(creatorId: string, postId: stri
   return url;
 }
 
-async function fetchUnlockedFanPostMedia(creatorId: string, postId: string): Promise<{
-  mediaUrls: string[];
-  mediaTypes: ("image" | "video")[];
-} | null> {
+type UnlockedFanPostMediaFetchResult =
+  | { ok: true; mediaUrls: string[]; mediaTypes: ("image" | "video")[] }
+  | { ok: false; status?: number };
+
+async function fetchUnlockedFanPostMedia(
+  creatorId: string,
+  postId: string,
+): Promise<UnlockedFanPostMediaFetchResult> {
   const token = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
-  if (!token) return null;
+  if (!token) return { ok: false };
   const qs = new URLSearchParams({ creatorId, postId });
   const res = await fetch(resolveApiUrl(`/api/fanPostMedia?${qs.toString()}`), {
     headers: { Authorization: `Bearer ${token}` },
   });
-  if (!res.ok) return null;
+  if (!res.ok) {
+    return { ok: false, status: res.status };
+  }
   const data = await res.json().catch(() => null) as {
     mediaUrls?: unknown;
     mediaTypes?: unknown;
   } | null;
-  const mediaUrls = Array.isArray(data?.mediaUrls)
+  const rawUrls = Array.isArray(data?.mediaUrls)
     ? data.mediaUrls.filter((u): u is string => typeof u === "string" && !!u.trim())
     : [];
   const rawTypes = Array.isArray(data?.mediaTypes) ? data.mediaTypes.filter((t): t is string => typeof t === "string") : [];
-  return { mediaUrls, mediaTypes: normalizePostMediaTypes(mediaUrls, rawTypes) };
+  const zippedUrls: string[] = [];
+  const zippedTypesRaw: string[] = [];
+  rawUrls.forEach((u, i) => {
+    if (isProtectedLockedMediaUrl(u.trim())) return;
+    zippedUrls.push(u);
+    zippedTypesRaw.push(rawTypes[i] || "image");
+  });
+  return {
+    ok: true,
+    mediaUrls: zippedUrls,
+    mediaTypes: normalizePostMediaTypes(zippedUrls, zippedTypesRaw),
+  };
 }
 
 function buildLiveStreamTicketCheckoutReturnUrls(): { successUrl?: string; cancelUrl?: string } {
@@ -982,6 +999,7 @@ function FanMemberPostMedia({
     mediaUrls: string[];
     mediaTypes: ("image" | "video")[];
   } | null>(null);
+  const [unlockMediaLoadFailed, setUnlockMediaLoadFailed] = useState(false);
   const shouldResolveProtectedMedia =
     !!creatorId &&
     (fanPageAdminBypass || (unlockedFanPostIds ?? EMPTY_FAN_POST_UNLOCK_SET).has(post.id)) &&
@@ -1009,14 +1027,32 @@ function FanMemberPostMedia({
   useEffect(() => {
     setMediaIndex(0);
     setResolvedMedia(null);
+    setUnlockMediaLoadFailed(false);
   }, [post.id]);
 
   useEffect(() => {
-    if (!shouldResolveProtectedMedia || !creatorId) return;
+    if (!shouldResolveProtectedMedia || !creatorId) {
+      setUnlockMediaLoadFailed(false);
+      return;
+    }
+    setUnlockMediaLoadFailed(false);
     let cancelled = false;
-    void fetchUnlockedFanPostMedia(creatorId, post.id).then((media) => {
-      if (cancelled || !media?.mediaUrls.length) return;
-      setResolvedMedia({ postId: post.id, ...media });
+    void fetchUnlockedFanPostMedia(creatorId, post.id).then((result) => {
+      if (cancelled) return;
+      if (!result.ok) {
+        setUnlockMediaLoadFailed(true);
+        return;
+      }
+      if (!result.mediaUrls.length) {
+        setUnlockMediaLoadFailed(true);
+        return;
+      }
+      setUnlockMediaLoadFailed(false);
+      setResolvedMedia({
+        postId: post.id,
+        mediaUrls: result.mediaUrls,
+        mediaTypes: result.mediaTypes,
+      });
     });
     return () => {
       cancelled = true;
@@ -1476,6 +1512,11 @@ function FanMemberPostMedia({
               </button>
             </div>
           )}
+        </div>
+      )}
+      {postUnlocked && currentProtectedPlaceholder && unlockMediaLoadFailed && (
+        <div className="fan-feed-media-unlock-failed-overlay" role="status">
+          Could not load media after unlock. Try refreshing—if it persists, ask the creator to re-save this post in Fan Hub Posts.
         </div>
       )}
       {showCarousel && (

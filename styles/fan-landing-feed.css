@@ -3,14 +3,18 @@
    These variables can be overridden inline via style attribute
    ============================================ */
 
+/*
+ * Neutral document defaults — do not bake Stormij “blush pink” globally.
+ * Landings (.fan-landing-page) and member shells (.stormij-theme) set --fan-* from creator theme inline.
+ */
 :root {
   --fan-serif: "Cormorant Garamond", Georgia, 'Times New Roman', serif;
-  --fan-accent: #d4558b;
-  --fan-accent-soft: rgba(212, 85, 139, 0.15);
-  --fan-bg: #fff2f8;
-  --fan-text: #2f1a24;
-  --fan-text-muted: #7c5b68;
-  --fan-primary: #d4558b;
+  --fan-accent: #6366f1;
+  --fan-accent-soft: rgba(99, 102, 241, 0.15);
+  --fan-bg: #fafafa;
+  --fan-text: #1f2937;
+  --fan-text-muted: #6b7280;
+  --fan-primary: #6366f1;
 }
 
 .fan-landing-page {
@@ -1640,6 +1644,23 @@
   pointer-events: auto;
   user-select: none;
   cursor: default;
+}
+
+.fan-feed-media-unlock-failed-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem 1.25rem;
+  background: rgba(15, 23, 42, 0.78);
+  color: #f8fafc;
+  font-weight: 600;
+  font-size: 0.8125rem;
+  line-height: 1.45;
+  text-align: center;
+  pointer-events: none;
 }
 
 /* Lighter scrim when the post uses media blur so the blurred teaser stays visible */
