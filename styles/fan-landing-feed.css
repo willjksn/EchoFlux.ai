@@ -2555,10 +2555,12 @@
 .fan-member-treat-owned {
   display: inline-block;
   padding: 0.5rem 1rem;
-  background: color-mix(in srgb, var(--fan-primary, #6366f1) 10%, transparent);
+  background: color-mix(in srgb, var(--fan-primary, #6366f1) 20%, var(--fan-bg, #ffffff));
+  border: 1px solid color-mix(in srgb, var(--fan-primary, #6366f1) 38%, transparent);
   border-radius: 999px;
   font-size: 0.9rem;
-  color: var(--fan-text-muted);
+  font-weight: 600;
+  color: color-mix(in srgb, var(--fan-text, #1f2937) 78%, var(--fan-primary, #6366f1));
 }
 
 .fan-member-treat-buy {
