@@ -18,6 +18,7 @@ import {
 } from "firebase/firestore";
 import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
 import { formatFanDisplayLabel, safeUsernameForHandle } from "../src/lib/fanHubDisplay";
+import { useCreatorFanHubTheme } from "../src/hooks/useCreatorFanHubTheme";
 import { isJointLiveSessionProductId, jointSessionKindFromProductId } from "../src/lib/treatSessionClassification";
 import { usePremiumStudioTab } from "./PremiumStudioLayout";
 import VideoCallRoom from "./VideoCallRoom";
@@ -412,6 +413,26 @@ export const FanHubPurchases: React.FC = () => {
   const deliveryPendingUnmountRef = useRef<typeof deliveryPendingMedia>(null);
   const deliveryPendingLatestRef = useRef<typeof deliveryPendingMedia>(null);
   const hiddenStorageKey = user?.id ? `fanhub_hidden_purchases_${user.id}` : null;
+  const hubTheme = useCreatorFanHubTheme(user?.id);
+
+  const purchasesHelpChrome = useMemo(() => {
+    const p = hubTheme.primary;
+    const a = hubTheme.accentHover || p;
+    const borderBase = hubTheme.border || "#e5e7eb";
+    const dark =
+      typeof document !== "undefined" && document.documentElement.classList.contains("dark");
+    return {
+      dialogBorder: dark ? `color-mix(in srgb, ${p} 32%, #374151)` : `color-mix(in srgb, ${p} 22%, ${borderBase})`,
+      headerBorderBottom: dark ? `color-mix(in srgb, ${p} 28%, #374151)` : `color-mix(in srgb, ${p} 18%, ${borderBase})`,
+      headerBg: dark
+        ? `linear-gradient(to right, color-mix(in srgb, ${p} 14%, rgb(31 41 55)), rgb(31 41 55))`
+        : `linear-gradient(to right, color-mix(in srgb, ${p} 10%, #ffffff), #ffffff)`,
+      iconBg: `color-mix(in srgb, ${p} 14%, transparent)`,
+      iconColor: p,
+      accentText: p,
+      btnBg: `linear-gradient(to right, ${p}, ${a})`,
+    };
+  }, [hubTheme, showPurchasesHelpModal]);
 
   const creatorPurchasesCompactKey = useMemo(
     () => (user?.id ? `fanhubCreatorPurchasesCompact:${user.id}` : null),
@@ -1502,12 +1523,25 @@ export const FanHubPurchases: React.FC = () => {
             role="dialog"
             aria-modal="true"
             aria-labelledby="fanhub-purchases-help-title"
-            className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-lg max-h-[min(85vh,34rem)] flex flex-col border border-pink-100 dark:border-gray-700"
+            className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-lg max-h-[min(85vh,34rem)] flex flex-col border"
+            style={{ borderColor: purchasesHelpChrome.dialogBorder }}
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-start justify-between gap-3 p-4 border-b border-pink-100 dark:border-gray-700 bg-gradient-to-r from-pink-50/80 to-white dark:from-pink-950/30 dark:to-gray-800">
+            <div
+              className="flex items-start justify-between gap-3 p-4 border-b"
+              style={{
+                borderBottomColor: purchasesHelpChrome.headerBorderBottom,
+                background: purchasesHelpChrome.headerBg,
+              }}
+            >
               <div className="flex items-start gap-3 min-w-0">
-                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-pink-500/10 text-pink-600 dark:text-pink-300">
+                <span
+                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl"
+                  style={{
+                    backgroundColor: purchasesHelpChrome.iconBg,
+                    color: purchasesHelpChrome.iconColor,
+                  }}
+                >
                   <PurchasesHelpIcon />
                 </span>
                 <div>
@@ -1530,7 +1564,10 @@ export const FanHubPurchases: React.FC = () => {
             </div>
             <div className="overflow-y-auto p-4 space-y-4 text-sm text-gray-700 dark:text-gray-300">
               <section>
-                <h3 className="text-xs font-semibold uppercase tracking-wide text-pink-600 dark:text-pink-400 mb-1.5">
+                <h3
+                  className="text-xs font-semibold uppercase tracking-wide mb-1.5"
+                  style={{ color: purchasesHelpChrome.accentText }}
+                >
                   What appears here
                 </h3>
                 <p className="text-[13px] leading-relaxed text-gray-600 dark:text-gray-400">
@@ -1539,14 +1576,21 @@ export const FanHubPurchases: React.FC = () => {
                 </p>
               </section>
               <section>
-                <h3 className="text-xs font-semibold uppercase tracking-wide text-pink-600 dark:text-pink-400 mb-1.5">
+                <h3
+                  className="text-xs font-semibold uppercase tracking-wide mb-1.5"
+                  style={{ color: purchasesHelpChrome.accentText }}
+                >
                   Scheduling &amp; calendar
                 </h3>
                 <ul className="list-disc list-inside space-y-1 text-[13px] leading-relaxed text-gray-600 dark:text-gray-400">
                   <li>
                     Pick a <strong className="text-gray-800 dark:text-gray-200">date and time</strong>, then{" "}
                     <strong className="text-gray-800 dark:text-gray-200">Schedule</strong> — it adds to your{" "}
-                    <a href="/calendar" className="text-pink-600 dark:text-pink-400 font-medium hover:underline">
+                    <a
+                      href="/calendar"
+                      className="font-medium hover:underline"
+                      style={{ color: hubTheme.primary }}
+                    >
                       calendar
                     </a>
                     .
@@ -1554,7 +1598,10 @@ export const FanHubPurchases: React.FC = () => {
                 </ul>
               </section>
               <section>
-                <h3 className="text-xs font-semibold uppercase tracking-wide text-pink-600 dark:text-pink-400 mb-1.5">
+                <h3
+                  className="text-xs font-semibold uppercase tracking-wide mb-1.5"
+                  style={{ color: purchasesHelpChrome.accentText }}
+                >
                   When fans get notified
                 </h3>
                 <p className="text-[13px] leading-relaxed text-gray-600 dark:text-gray-400">
@@ -1565,7 +1612,10 @@ export const FanHubPurchases: React.FC = () => {
                 </p>
               </section>
               <section>
-                <h3 className="text-xs font-semibold uppercase tracking-wide text-pink-600 dark:text-pink-400 mb-1.5">
+                <h3
+                  className="text-xs font-semibold uppercase tracking-wide mb-1.5"
+                  style={{ color: purchasesHelpChrome.accentText }}
+                >
                   At session time
                 </h3>
                 <ul className="list-disc list-inside space-y-1 text-[13px] leading-relaxed text-gray-600 dark:text-gray-400">
@@ -1581,7 +1631,10 @@ export const FanHubPurchases: React.FC = () => {
                 </ul>
               </section>
               <section>
-                <h3 className="text-xs font-semibold uppercase tracking-wide text-pink-600 dark:text-pink-400 mb-1.5">
+                <h3
+                  className="text-xs font-semibold uppercase tracking-wide mb-1.5"
+                  style={{ color: purchasesHelpChrome.accentText }}
+                >
                   Other treats
                 </h3>
                 <p className="text-[13px] leading-relaxed text-gray-600 dark:text-gray-400">
@@ -1594,7 +1647,8 @@ export const FanHubPurchases: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setShowPurchasesHelpModal(false)}
-                className="px-4 py-2 rounded-lg bg-gradient-to-r from-pink-500 to-rose-500 text-white text-sm font-semibold hover:from-pink-600 hover:to-rose-600 shadow-sm"
+                className="px-4 py-2 rounded-lg text-white text-sm font-semibold shadow-sm transition-opacity hover:opacity-90"
+                style={{ background: purchasesHelpChrome.btnBg }}
               >
                 Got it
               </button>
