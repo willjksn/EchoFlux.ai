@@ -297,14 +297,25 @@ function WitmeAnalyticsStatCard({
   );
 }
 
-function WitmeAnalyticsSection({ title, children }: { title: string; children: React.ReactNode }) {
+function WitmeAnalyticsSection({
+  title,
+  headerRight,
+  children,
+}: {
+  title: string;
+  headerRight?: React.ReactNode;
+  children: React.ReactNode;
+}) {
   return (
     <section className="rounded-2xl border p-5 sm:p-6 shadow-sm bg-gradient-to-b from-primary-50/90 via-white to-white border-primary-200/55 dark:from-primary-900/25 dark:via-gray-900 dark:to-gray-950 dark:border-primary-900/35">
-      <div className="flex items-center gap-2 mb-5">
-        <span className="w-1 h-5 rounded-full shrink-0 bg-primary-600 dark:bg-primary-500" aria-hidden />
-        <h2 className="text-xs sm:text-sm font-semibold tracking-[0.12em] uppercase text-gray-900 dark:text-gray-100">
-          {title}
-        </h2>
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-5">
+        <div className="flex items-center gap-2 min-w-0">
+          <span className="w-1 h-5 rounded-full shrink-0 bg-primary-600 dark:bg-primary-500" aria-hidden />
+          <h2 className="text-xs sm:text-sm font-semibold tracking-[0.12em] uppercase text-gray-900 dark:text-gray-100">
+            {title}
+          </h2>
+        </div>
+        {headerRight ? <div className="shrink-0">{headerRight}</div> : null}
       </div>
       {children}
     </section>
@@ -654,6 +665,7 @@ export const WitmePageManager: React.FC = () => {
   const [updatedAt, setUpdatedAt] = useState<string | null>(null);
   const [publishedAt, setPublishedAt] = useState<string | null>(null);
   const [analyticsDays, setAnalyticsDays] = useState<number>(30);
+  const [dailyPageViewsWindowDays, setDailyPageViewsWindowDays] = useState<7 | 30>(30);
   const [analytics, setAnalytics] = useState<WitmeAnalyticsResponse | null>(null);
   const [analyticsLoading, setAnalyticsLoading] = useState(false);
 
@@ -2020,13 +2032,29 @@ export const WitmePageManager: React.FC = () => {
                 </div>
               </WitmeAnalyticsSection>
 
-              <WitmeAnalyticsSection title="Daily page views">
+              <WitmeAnalyticsSection
+                title="Daily page views"
+                headerRight={
+                  <label className="flex items-center gap-2 text-[11px] sm:text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">
+                    <span className="hidden sm:inline">Show</span>
+                    <select
+                      aria-label="Daily page views range"
+                      value={dailyPageViewsWindowDays}
+                      onChange={(e) => setDailyPageViewsWindowDays(Number(e.target.value) as 7 | 30)}
+                      className="px-2.5 py-1.5 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-xs sm:text-sm shadow-sm"
+                    >
+                      <option value={7}>Last 7 days</option>
+                      <option value={30}>Last 30 days</option>
+                    </select>
+                  </label>
+                }
+              >
                 <div className="bg-white dark:bg-gray-900/40 rounded-xl border border-black/[0.06] dark:border-white/10 shadow-sm p-4 sm:p-5">
                   <div className="space-y-2.5">
                     {(() => {
-                      const series = [...(analytics.dailySeries || [])].sort((a, b) =>
-                        b.date.localeCompare(a.date)
-                      );
+                      const series = [...(analytics.dailySeries || [])]
+                        .sort((a, b) => b.date.localeCompare(a.date))
+                        .slice(0, dailyPageViewsWindowDays);
                       const max = Math.max(1, ...series.map((d) => d.pageViews));
                       return series.map((row) => (
                         <div key={row.date} className="grid grid-cols-[100px_1fr_72px] items-center gap-3 text-xs sm:text-sm">
