@@ -39,12 +39,15 @@ function WitmeHeroCollageCell({
   className,
   imgLoading,
   enableTracking,
+  coverRelax = 1,
 }: {
   creator: WitmeShowcaseCreator;
   idx: number;
   className: string;
   imgLoading: "eager" | "lazy";
   enableTracking: boolean;
+  /** Multiplies configured `mediaScale`; values below 1 zoom out cover slightly (more of asset visible). */
+  coverRelax?: number;
 }) {
   const [mediaReady, setMediaReady] = useState(false);
   const path = witmeCreatorPagePath(creator.pageSlug);
@@ -69,7 +72,7 @@ function WitmeHeroCollageCell({
         alt={alt}
         className="relative z-[1] h-full w-full"
         objectPosition={creator.mediaObjectPosition}
-        mediaScale={creator.mediaScale ?? 1}
+        mediaScale={(creator.mediaScale ?? 1) * coverRelax}
         objectFit="cover"
         layout="fill"
         imgLoading={imgLoading}
@@ -130,7 +133,13 @@ function WitmeHeroVisualCollage({
 
   if (items.length === 0) return null;
 
-  const wrapFrame = (creator: WitmeShowcaseCreator, idx: number, className: string, imgLoading: "eager" | "lazy") => (
+  const wrapFrame = (
+    creator: WitmeShowcaseCreator,
+    idx: number,
+    className: string,
+    imgLoading: "eager" | "lazy",
+    coverRelax = 1
+  ) => (
     <WitmeHeroCollageCell
       key={`${creator.pageSlug}-${idx}-${creator.imageUrl.trim()}`}
       creator={creator}
@@ -138,6 +147,7 @@ function WitmeHeroVisualCollage({
       className={className}
       imgLoading={imgLoading}
       enableTracking={enableTracking}
+      coverRelax={coverRelax}
     />
   );
 
@@ -165,17 +175,18 @@ function WitmeHeroVisualCollage({
   }
 
   return collageShell(
-    <div className="relative h-[min(24rem,max(16rem,78vw))] w-full max-w-[19rem] overflow-visible sm:h-[25rem] sm:max-w-[21rem] lg:h-[27rem] lg:max-w-[24rem]">
+    <div className="relative h-[min(25rem,max(16rem,78vw))] w-full max-w-[19rem] overflow-visible sm:h-[26rem] sm:max-w-[21rem] lg:h-[29rem] lg:max-w-[24rem]">
       {wrapFrame(items[0], 0, "absolute right-0 top-0 z-30 w-[58%] rotate-[2deg]", "eager")}
       {wrapFrame(items[1], 1, "absolute left-0 top-[16%] z-20 w-[55%] -rotate-[2deg]", "lazy")}
       {wrapFrame(
         items[2],
         2,
-        "absolute right-[8%] z-10 w-[50%] rotate-[1deg] bottom-[-1.35rem] sm:bottom-[-0.35rem]",
-        "lazy"
+        "absolute right-[8%] z-10 w-[52%] rotate-[1deg] bottom-[-2.85rem] sm:bottom-[-2.35rem] lg:bottom-[-2.95rem]",
+        "lazy",
+        0.9
       )}
     </div>,
-    "max-sm:pb-16 sm:pb-0 lg:pt-5"
+    "max-sm:pb-20 sm:pb-14 lg:pb-12 lg:pt-5"
   );
 }
 

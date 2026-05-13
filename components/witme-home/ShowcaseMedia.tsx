@@ -132,6 +132,7 @@ export const ShowcaseMedia: React.FC<{
         className={`${className} transition-opacity ease-in-out`}
         style={{
           ...fitStyle,
+          ...mediaTransformStyle,
           transitionDuration: `${VIDEO_LOOP_FADE_MS}ms`,
         }}
         muted
