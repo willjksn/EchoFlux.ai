@@ -34,7 +34,7 @@ import { UnifiedAssistant } from './components/UnifiedAssistant';
 import { VoiceAssistant } from './components/VoiceAssistant';
 import { AnnouncementBanner } from './components/AnnouncementBanner';
 import { PublicAnnouncementBanner } from './components/PublicAnnouncementBanner';
-import { Page, UserType, Plan } from './types';
+import { Page, UserType, Plan, User } from './types';
 import { Pricing } from './components/Pricing';
 import { CRMSidebar } from './components/CRMSidebar';
 import { AdGenerator } from './components/AdGenerator';
@@ -92,6 +92,17 @@ const RouteChunkFallback: React.FC<{ label?: string }> = ({ label = 'Loading…'
 const LazyBoundary: React.FC<{ label?: string; children: React.ReactNode }> = ({ label, children }) => (
   <Suspense fallback={<RouteChunkFallback label={label} />}>{children}</Suspense>
 );
+
+function hasTrustedStaffAdminShell(user: Partial<User> | null | undefined): boolean {
+    if (!user) return false;
+    if ((user as { role?: string }).role === 'Admin') return true;
+    const f = (user as User).staffRoleFlags;
+    return !!(f?.contentAudit || f?.legalDisclosureReserve);
+}
+
+function hasInviteModeStaffBypass(user: Partial<User> | null | undefined): boolean {
+    return hasTrustedStaffAdminShell(user);
+}
 
 const pageTitles: Record<Page, string> = {
     dashboard: 'Dashboard',
@@ -204,8 +215,8 @@ const MainContent: React.FC = () => {
             case 'dataDeletion': return <DataDeletion />;
             case 'admin':
                 return (
-                    <LazyBoundary label={user?.role === 'Admin' ? 'Loading admin…' : 'Loading dashboard…'}>
-                        {user?.role === 'Admin' ? <AdminDashboard /> : <Dashboard />}
+                    <LazyBoundary label={hasTrustedStaffAdminShell(user) ? 'Loading admin…' : 'Loading dashboard…'}>
+                        {hasTrustedStaffAdminShell(user) ? <AdminDashboard /> : <Dashboard />}
                     </LazyBoundary>
                 );
             case 'automation': return <Automation />;
@@ -1408,9 +1419,10 @@ const AppContent: React.FC = () => {
     // Invite-only mode gate: allow only Admins and users who have redeemed an invite.
     if (isAuthenticated && user) {
         const inviteOnly = isInviteOnlyMode();
-        const isAdmin = (user as any)?.role === 'Admin';
-        const invitedWithCode = (user as any)?.invitedWithCode;
-        if (inviteOnly && !isAdmin && !invitedWithCode) {
+        const isAdminInvite = (user as { role?: string })?.role === 'Admin';
+        const inviteStaffBypass = hasInviteModeStaffBypass(user);
+        const invitedWithCode = (user as { invitedWithCode?: string })?.invitedWithCode;
+        if (inviteOnly && !isAdminInvite && !inviteStaffBypass && !invitedWithCode) {
             return <InviteRequiredPage />;
         }
     }
@@ -1434,7 +1446,8 @@ const AppContent: React.FC = () => {
     }
 
     const isAdminUser = (user as { role?: string }).role === 'Admin';
-    if (!creatorAppAccess && !isAdminUser) {
+    const trustedStaffEchoShell = !!(user.staffRoleFlags?.contentAudit || user.staffRoleFlags?.legalDisclosureReserve);
+    if (!creatorAppAccess && !isAdminUser && !trustedStaffEchoShell) {
         return (
             <FanOnlyEchoFluxShell user={user} onLogout={handleLogout} onRefreshAccess={refreshCreatorAppAccess} />
         );

@@ -4,6 +4,7 @@ import { doc, getDoc, setDoc, deleteField } from 'firebase/firestore';
 import { auth, db } from '../../firebaseConfig';
 import { User, SocialStats, Platform, Plan } from '../../types';
 import { defaultSettings, FAN_STOREFRONT_SIGNUP_SESSION_KEY } from '../../constants';
+import { fetchStaffRoleFlagsForUid } from '../../src/lib/staffRolesFirestore';
 
 interface AuthContextType {
     user: User | null;
@@ -78,6 +79,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             setCreatorAppAccess(true);
             return;
         }
+        if (u?.staffRoleFlags?.contentAudit || u?.staffRoleFlags?.legalDisclosureReserve) {
+            setCreatorAppAccess(true);
+            return;
+        }
         const hasClaim = await syncCreatorAppClaimWithServer(fbUser);
         setCreatorAppAccess(hasClaim);
     };
@@ -122,6 +127,14 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                         },
                         socialStats: loaded.socialStats || generateMockSocialStats(),
                     };
+
+                    let staffRoleFlags = { contentAudit: false, legalDisclosureReserve: false };
+                    try {
+                        staffRoleFlags = await fetchStaffRoleFlagsForUid(db, fbUser.uid);
+                    } catch {
+                        /* rules may deny until staff_roles doc exists */
+                    }
+                    mergedUser.staffRoleFlags = staffRoleFlags;
 
                     // Check for expired subscriptions and invite-granted access
                     try {
@@ -179,6 +192,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     }
 
                         if (mergedUser.role === 'Admin') {
+                            setCreatorAppAccess(true);
+                        } else if (staffRoleFlags.contentAudit || staffRoleFlags.legalDisclosureReserve) {
                             setCreatorAppAccess(true);
                         } else {
                             const hasClaim = await syncCreatorAppClaimWithServer(fbUser);

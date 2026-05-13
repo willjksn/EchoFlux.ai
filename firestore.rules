@@ -28,6 +28,42 @@ service cloud.firestore {
         && isAdminUserDoc(get(/databases/$(database)/documents/users/$(request.auth.uid)).data);
     }
 
+    /** EchoFlux trusted staff UID lists (narrow tools access; configured under Admin → Tools → Staff roles). */
+    match /staff_roles/{roleDocId} {
+      allow read: if request.auth != null && (
+        isAdmin()
+        || (
+          resource.data.keys().hasAny(['memberUids'])
+          && request.auth.uid in resource.data.memberUids
+        )
+      );
+      allow write: if isAdmin();
+    }
+
+    /** `/staff_roles/content_audit.memberUids` — Fan Hub moderator read paths + audit log writes. */
+    function assignedToContentAuditStaffRoster() {
+      return request.auth != null
+        && exists(/databases/$(database)/documents/staff_roles/content_audit)
+        && get(/databases/$(database)/documents/staff_roles/content_audit).data.keys().hasAny(['memberUids'])
+        && request.auth.uid in get(/databases/$(database)/documents/staff_roles/content_audit).data.memberUids;
+    }
+
+    /** Moderation audit trail: view + create; admins or authors may delete rows (no updates). */
+    match /admin_content_audit_events/{eventId} {
+      allow read: if isAdmin() || assignedToContentAuditStaffRoster();
+      allow create: if (isAdmin() || assignedToContentAuditStaffRoster())
+        && request.resource.data.actorUid == request.auth.uid
+        && request.resource.data.actorUid is string
+        && request.resource.data.action == 'view_creator_fan_hub_feed'
+        && request.resource.data.creatorId is string
+        && request.resource.data.creatorId.size() >= 10
+        && request.resource.data.createdAt is timestamp;
+      allow update: if false;
+      /** Admins: clear mistaken / test rows. Audit roster: drop only entries they authored. */
+      allow delete: if isAdmin()
+        || (assignedToContentAuditStaffRoster() && resource.data.actorUid == request.auth.uid);
+    }
+
     /** -------------------------------------------------------
      *  Helper: Check if user is authenticated
      *  ------------------------------------------------------- */
@@ -203,6 +239,14 @@ service cloud.firestore {
         allow update, delete: if (isAuthenticated() && request.auth.uid == userId) || isAdmin();
       }
 
+      /** Compose-published posts mirrored for calendar/feed tooling — auditors may read peers (no DMs via this path). */
+      match /posts/{postId} {
+        allow read: if (isAuthenticated() && request.auth.uid == userId)
+          || isAdmin()
+          || assignedToContentAuditStaffRoster();
+        allow create, update, delete: if (isAuthenticated() && request.auth.uid == userId) || isAdmin();
+      }
+
       /** ---------------------------------------------------
        * USER SUBCOLLECTIONS (messages, posts, CRM, calendar, voices, media_library, onlyfans_media_vault, etc.)
        * ----------------------------------------------------
@@ -311,7 +355,11 @@ service cloud.firestore {
      *  ------------------------------------------------------- */
     match /creators/{creatorId} {
       // Owner: My Page / storefront. Admin: list creator ids + storefront ops (User Management Fan Hub tab).
-      allow read: if isAuthenticated() && (request.auth.uid == creatorId || isAdmin());
+      allow read: if isAuthenticated() && (
+        request.auth.uid == creatorId
+        || isAdmin()
+        || assignedToContentAuditStaffRoster()
+      );
 
       allow create: if isOwner(creatorId);
       allow update: if isOwner(creatorId);
@@ -320,7 +368,10 @@ service cloud.firestore {
       /** Fan Hub posts — creators manage; signed-in users read published (member feed / previews). */
       match /fanPosts/{postId} {
         allow read: if isAuthenticated() && (
-          request.auth.uid == creatorId || fanPostReadableByAuthenticatedFan()
+          request.auth.uid == creatorId
+          || fanPostReadableByAuthenticatedFan()
+          || isAdmin()
+          || assignedToContentAuditStaffRoster()
         );
         allow create: if isOwner(creatorId);
         allow update, delete: if isOwner(creatorId);
@@ -328,13 +379,17 @@ service cloud.firestore {
 
       /** Full URLs for locked / PPV fan post media. Fans must resolve through api/fanPostMedia. */
       match /fanPostPrivateMedia/{postId} {
-        allow read, write: if isOwner(creatorId) || isAdmin();
+        allow read: if isOwner(creatorId) || isAdmin() || assignedToContentAuditStaffRoster();
+        allow write: if isOwner(creatorId) || isAdmin();
       }
 
       /** Legacy mirror under creators */
       match /posts/{postId} {
         allow read: if isAuthenticated() && (
-          request.auth.uid == creatorId || fanPostReadableByAuthenticatedFan()
+          request.auth.uid == creatorId
+          || fanPostReadableByAuthenticatedFan()
+          || isAdmin()
+          || assignedToContentAuditStaffRoster()
         );
         allow create: if isOwner(creatorId);
         allow update, delete: if isOwner(creatorId);

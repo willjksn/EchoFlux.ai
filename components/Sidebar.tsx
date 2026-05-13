@@ -98,7 +98,11 @@ export const Sidebar: React.FC = () => {
           case 'creator-os':
               return true;
           case 'admin':
-              return user.role === 'Admin';
+              return (
+                  user.role === 'Admin' ||
+                  !!user.staffRoleFlags?.contentAudit ||
+                  !!user.staffRoleFlags?.legalDisclosureReserve
+              );
           case 'calendar':
               return hasFanHubStudioRouteAccess(user);
           case 'onlyfansStudio':

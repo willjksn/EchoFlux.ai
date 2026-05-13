@@ -7,6 +7,8 @@ import { ReferralRewardsConfig } from './ReferralRewardsConfig';
 import { GrantReferralRewardModal } from './GrantReferralRewardModal';
 import { AdminAnnouncementsPanel } from './AdminAnnouncementsPanel';
 import { AdminToolsPanel } from './AdminToolsPanel';
+import { AdminStaffRolesPanel } from './AdminStaffRolesPanel';
+import { AdminContentAuditToolsPanel, type AdminAuditLogSource } from './AdminContentAuditToolsPanel';
 import { AdminReviewsPanel } from './AdminReviewsPanel';
 import { AdminFeedbackPanel } from './AdminFeedbackPanel';
 import { AdminFeedbackFormBuilder } from './AdminFeedbackFormBuilder';
@@ -605,7 +607,24 @@ export const AdminDashboard: React.FC = () => {
     const [isLoadingModelStats, setIsLoadingModelStats] = useState(true);
     const [modelStatsDays, setModelStatsDays] = useState<number>(30);
     const [activeTab, setActiveTab] = useState<'overview' | 'users' | 'tools'>('overview');
-    const [toolsTab, setToolsTab] = useState<'toolsHome' | 'referralRewards' | 'announcements' | 'invites' | 'waitlist' | 'email' | 'feedback' | 'feedbackForms' | 'reviews' | 'itSupport'>('toolsHome');
+    const [toolsTab, setToolsTab] = useState<
+        | 'toolsHome'
+        | 'referralRewards'
+        | 'announcements'
+        | 'invites'
+        | 'waitlist'
+        | 'email'
+        | 'feedback'
+        | 'feedbackForms'
+        | 'reviews'
+        | 'itSupport'
+        | 'staffRoles'
+        | 'contentAudit'
+    >('toolsHome');
+    const [contentAuditJump, setContentAuditJump] = useState<{
+        creatorId: string;
+        source: AdminAuditLogSource;
+    } | null>(null);
     const [userStorageMap, setUserStorageMap] = useState<Record<string, number>>({});
     const [currentPage, setCurrentPage] = useState<number>(1);
     const usersPerPage = 20;
@@ -618,6 +637,36 @@ export const AdminDashboard: React.FC = () => {
     /** When false, each signup list shows only the first few rows; expand for full list (capped in useMemo). */
     const [expandPaidWorkspaceSignups, setExpandPaidWorkspaceSignups] = useState(false);
     const [expandIncompleteSignups, setExpandIncompleteSignups] = useState(false);
+
+    /** Full platform admins (`users.role === Admin`) retain roster + billing. Trusted staff operators use a narrowed dashboard. */
+    const isPlatformAdmin = currentUser?.role === 'Admin';
+    const isTrustedContentAuditor = useMemo(
+        () => !!currentUser?.staffRoleFlags?.contentAudit && currentUser?.role !== 'Admin',
+        [currentUser?.role, currentUser?.staffRoleFlags?.contentAudit],
+    );
+    const isTrustedStaffOperator = useMemo(() => {
+        if (!currentUser) return false;
+        if (currentUser.role === 'Admin') return false;
+        return !!(
+            currentUser.staffRoleFlags?.contentAudit || currentUser.staffRoleFlags?.legalDisclosureReserve
+        );
+    }, [currentUser]);
+
+    const openContentAuditFromUserRow = useCallback((creatorUid: string) => {
+        setContentAuditJump({ creatorId: creatorUid, source: 'admin_users_row_content_audit' });
+        setActiveTab('tools');
+        setToolsTab('contentAudit');
+    }, []);
+
+    useEffect(() => {
+        if (!isTrustedStaffOperator) return;
+        setActiveTab('tools');
+        if (isTrustedContentAuditor) {
+            setToolsTab('contentAudit');
+        } else {
+            setToolsTab('toolsHome');
+        }
+    }, [isTrustedContentAuditor, isTrustedStaffOperator]);
 
     // Fan Hub Revenue State
     const [fanHubRevenue, setFanHubRevenue] = useState<{
@@ -1058,6 +1107,12 @@ export const AdminDashboard: React.FC = () => {
         setAccessError(null);
         
         let unsubscribe = () => {};
+
+        if (!currentUser || currentUser.role !== 'Admin') {
+            setUsers([]);
+            setIsLoading(false);
+            return () => unsubscribe();
+        }
 
         try {
             // Use v9 modular SDK syntax
@@ -1937,6 +1992,7 @@ export const AdminDashboard: React.FC = () => {
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
             <h2 className="text-3xl font-bold text-gray-900 dark:text-white">Admin Dashboard</h2>
                 <div className="flex flex-wrap gap-2 overflow-x-auto pb-2 -mx-2 px-2 sm:overflow-x-visible sm:pb-0 sm:mx-0 sm:px-0">
+                    {isPlatformAdmin && (
                     <button
                         onClick={() => setActiveTab('overview')}
                         className={`px-4 py-2 rounded-md transition-colors ${
@@ -1947,6 +2003,8 @@ export const AdminDashboard: React.FC = () => {
                     >
                         Overview
                     </button>
+                    )}
+                    {isPlatformAdmin && (
                     <button
                         onClick={() => setActiveTab('users')}
                         className={`px-4 py-2 rounded-md transition-colors ${
@@ -1957,6 +2015,7 @@ export const AdminDashboard: React.FC = () => {
                     >
                         Users
                     </button>
+                    )}
                     <button
                         onClick={() => {
                             setActiveTab('tools');
@@ -1975,129 +2034,177 @@ export const AdminDashboard: React.FC = () => {
 
             {activeTab === 'tools' && (
                 <div className="space-y-6">
-                    <div className="flex flex-wrap gap-2 border-b border-gray-200 dark:border-gray-700 pb-2">
-                        <button
-                            onClick={() => setToolsTab('toolsHome')}
-                            className={`px-4 py-2 rounded-md transition-colors ${
-                                toolsTab === 'toolsHome'
-                                    ? 'bg-primary-600 text-white'
-                                    : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
-                            }`}
-                        >
-                            Tools Home
-                        </button>
-                        <button
-                            onClick={() => setToolsTab('referralRewards')}
-                            className={`px-4 py-2 rounded-md transition-colors ${
-                                toolsTab === 'referralRewards'
-                                    ? 'bg-primary-600 text-white'
-                                    : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
-                            }`}
-                        >
-                            Referral Rewards
-                        </button>
-                        <button
-                            onClick={() => setToolsTab('announcements')}
-                            className={`px-4 py-2 rounded-md transition-colors ${
-                                toolsTab === 'announcements'
-                                    ? 'bg-primary-600 text-white'
-                                    : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
-                            }`}
-                        >
-                            Announcements
-                        </button>
-                        <button
-                            onClick={() => setToolsTab('invites')}
-                            className={`px-4 py-2 rounded-md transition-colors ${
-                                toolsTab === 'invites'
-                                    ? 'bg-primary-600 text-white'
-                                    : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
-                            }`}
-                        >
-                            Invite Codes
-                        </button>
-                        <button
-                            onClick={() => setToolsTab('waitlist')}
-                            className={`px-4 py-2 rounded-md transition-colors ${
-                                toolsTab === 'waitlist'
-                                    ? 'bg-primary-600 text-white'
-                                    : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
-                            }`}
-                        >
-                            Waitlist
-                        </button>
-                        <button
-                            onClick={() => setToolsTab('feedback')}
-                            className={`px-4 py-2 rounded-md transition-colors ${
-                                toolsTab === 'feedback'
-                                    ? 'bg-primary-600 text-white'
-                                    : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
-                            }`}
-                        >
-                            Feedback
-                        </button>
-                        <button
-                            onClick={() => setToolsTab('feedbackForms')}
-                            className={`px-4 py-2 rounded-md transition-colors ${
-                                toolsTab === 'feedbackForms'
-                                    ? 'bg-primary-600 text-white'
-                                    : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
-                            }`}
-                        >
-                            Feedback Forms
-                        </button>
-                        <button
-                            onClick={() => setToolsTab('reviews')}
-                            className={`px-4 py-2 rounded-md transition-colors ${
-                                toolsTab === 'reviews'
-                                    ? 'bg-primary-600 text-white'
-                                    : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
-                            }`}
-                        >
-                            Reviews
-                        </button>
-                        <button
-                            onClick={() => setToolsTab('itSupport')}
-                            className={`px-4 py-2 rounded-md transition-colors ${
-                                toolsTab === 'itSupport'
-                                    ? 'bg-primary-600 text-white'
-                                    : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
-                            }`}
-                        >
-                            IT Support
-                        </button>
-                        <button
-                            onClick={() => setToolsTab('email')}
-                            className={`px-4 py-2 rounded-md transition-colors ${
-                                toolsTab === 'email'
-                                    ? 'bg-primary-600 text-white'
-                                    : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
-                            }`}
-                        >
-                            Email Center
-                        </button>
-                    </div>
-
-                    {toolsTab === 'toolsHome' && (
-                        <div className="space-y-6">
-                            <div className="flex justify-between items-center">
-                                <h3 className="text-xl font-bold text-gray-900 dark:text-white">Admin Tools</h3>
+                    {isPlatformAdmin ? (
+                        <>
+                            <div className="flex flex-wrap gap-2 border-b border-gray-200 dark:border-gray-700 pb-2">
+                                <button
+                                    onClick={() => setToolsTab('toolsHome')}
+                                    className={`px-4 py-2 rounded-md transition-colors ${
+                                        toolsTab === 'toolsHome'
+                                            ? 'bg-primary-600 text-white'
+                                            : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
+                                    }`}
+                                >
+                                    Tools Home
+                                </button>
+                                <button
+                                    onClick={() => setToolsTab('referralRewards')}
+                                    className={`px-4 py-2 rounded-md transition-colors ${
+                                        toolsTab === 'referralRewards'
+                                            ? 'bg-primary-600 text-white'
+                                            : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
+                                    }`}
+                                >
+                                    Referral Rewards
+                                </button>
+                                <button
+                                    onClick={() => setToolsTab('announcements')}
+                                    className={`px-4 py-2 rounded-md transition-colors ${
+                                        toolsTab === 'announcements'
+                                            ? 'bg-primary-600 text-white'
+                                            : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
+                                    }`}
+                                >
+                                    Announcements
+                                </button>
+                                <button
+                                    onClick={() => setToolsTab('invites')}
+                                    className={`px-4 py-2 rounded-md transition-colors ${
+                                        toolsTab === 'invites'
+                                            ? 'bg-primary-600 text-white'
+                                            : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
+                                    }`}
+                                >
+                                    Invite Codes
+                                </button>
+                                <button
+                                    onClick={() => setToolsTab('waitlist')}
+                                    className={`px-4 py-2 rounded-md transition-colors ${
+                                        toolsTab === 'waitlist'
+                                            ? 'bg-primary-600 text-white'
+                                            : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
+                                    }`}
+                                >
+                                    Waitlist
+                                </button>
+                                <button
+                                    onClick={() => setToolsTab('feedback')}
+                                    className={`px-4 py-2 rounded-md transition-colors ${
+                                        toolsTab === 'feedback'
+                                            ? 'bg-primary-600 text-white'
+                                            : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
+                                    }`}
+                                >
+                                    Feedback
+                                </button>
+                                <button
+                                    onClick={() => setToolsTab('feedbackForms')}
+                                    className={`px-4 py-2 rounded-md transition-colors ${
+                                        toolsTab === 'feedbackForms'
+                                            ? 'bg-primary-600 text-white'
+                                            : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
+                                    }`}
+                                >
+                                    Feedback Forms
+                                </button>
+                                <button
+                                    onClick={() => setToolsTab('reviews')}
+                                    className={`px-4 py-2 rounded-md transition-colors ${
+                                        toolsTab === 'reviews'
+                                            ? 'bg-primary-600 text-white'
+                                            : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
+                                    }`}
+                                >
+                                    Reviews
+                                </button>
+                                <button
+                                    onClick={() => setToolsTab('itSupport')}
+                                    className={`px-4 py-2 rounded-md transition-colors ${
+                                        toolsTab === 'itSupport'
+                                            ? 'bg-primary-600 text-white'
+                                            : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
+                                    }`}
+                                >
+                                    IT Support
+                                </button>
+                                <button
+                                    onClick={() => setToolsTab('contentAudit')}
+                                    className={`px-4 py-2 rounded-md transition-colors ${
+                                        toolsTab === 'contentAudit'
+                                            ? 'bg-primary-600 text-white'
+                                            : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
+                                    }`}
+                                >
+                                    Content audit
+                                </button>
+                                <button
+                                    onClick={() => setToolsTab('staffRoles')}
+                                    className={`px-4 py-2 rounded-md transition-colors ${
+                                        toolsTab === 'staffRoles'
+                                            ? 'bg-primary-600 text-white'
+                                            : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
+                                    }`}
+                                >
+                                    Staff roles
+                                </button>
+                                <button
+                                    onClick={() => setToolsTab('email')}
+                                    className={`px-4 py-2 rounded-md transition-colors ${
+                                        toolsTab === 'email'
+                                            ? 'bg-primary-600 text-white'
+                                            : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
+                                    }`}
+                                >
+                                    Email Center
+                                </button>
                             </div>
-                            <AdminToolsPanel />
+
+                            {toolsTab === 'toolsHome' && (
+                                <div className="space-y-6">
+                                    <div className="flex justify-between items-center">
+                                        <h3 className="text-xl font-bold text-gray-900 dark:text-white">Admin Tools</h3>
+                                    </div>
+                                    <AdminToolsPanel />
+                                </div>
+                            )}
+                            {toolsTab === 'referralRewards' && <ReferralRewardsConfig />}
+                            {toolsTab === 'announcements' && <AdminAnnouncementsPanel />}
+                            {toolsTab === 'invites' && <InviteCodeManager />}
+                            {toolsTab === 'waitlist' && <WaitlistManager />}
+                            {toolsTab === 'feedback' && <AdminFeedbackPanel />}
+                            {toolsTab === 'feedbackForms' && <AdminFeedbackFormBuilder />}
+                            {toolsTab === 'reviews' && <AdminReviewsPanel />}
+                            {toolsTab === 'itSupport' && <AdminITSupportPanel />}
+                            {toolsTab === 'contentAudit' && (
+                                <AdminContentAuditToolsPanel
+                                    openingJump={contentAuditJump}
+                                    onOpeningJumpConsumed={() => setContentAuditJump(null)}
+                                    canFetchUserComposePosts
+                                    manualLogSource="admin_tools_content_audit"
+                                />
+                            )}
+                            {toolsTab === 'staffRoles' && <AdminStaffRolesPanel />}
+                            {toolsTab === 'email' && <EmailCenterPage />}
+                        </>
+                    ) : isTrustedContentAuditor ? (
+                        <AdminContentAuditToolsPanel
+                            openingJump={contentAuditJump}
+                            onOpeningJumpConsumed={() => setContentAuditJump(null)}
+                            canFetchUserComposePosts={false}
+                            manualLogSource="admin_tools_content_audit"
+                        />
+                    ) : (
+                        <div className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900/60 p-5 sm:p-6 max-w-2xl">
+                            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Trusted staff workspace</h3>
+                            <p className="mt-3 text-sm text-gray-600 dark:text-gray-400 leading-relaxed">
+                                You&apos;re on the reserved legal disclosure roster without content-audit tooling. EchoFlux admins
+                                can adjust assignments under Tools → Staff roles.
+                            </p>
                         </div>
                     )}
-                    {toolsTab === 'referralRewards' && <ReferralRewardsConfig />}
-                    {toolsTab === 'announcements' && <AdminAnnouncementsPanel />}
-                    {toolsTab === 'invites' && <InviteCodeManager />}
-                    {toolsTab === 'waitlist' && <WaitlistManager />}
-                    {toolsTab === 'feedback' && <AdminFeedbackPanel />}
-                    {toolsTab === 'feedbackForms' && <AdminFeedbackFormBuilder />}
-                    {toolsTab === 'reviews' && <AdminReviewsPanel />}
-                    {toolsTab === 'itSupport' && <AdminITSupportPanel />}
-                    {toolsTab === 'email' && <EmailCenterPage />}
                 </div>
             )}
-            {activeTab === 'overview' && (
+            {activeTab === 'overview' && isPlatformAdmin && (
                 <>
             {/* Key Metrics - Echoflux Business Overview */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 md:gap-6">
@@ -3092,7 +3199,7 @@ export const AdminDashboard: React.FC = () => {
 
                 </>
             )}
-            {activeTab === 'users' && (
+            {activeTab === 'users' && isPlatformAdmin && (
             <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-md">
                 <div className="flex flex-col gap-4 mb-4">
                     <div className="flex flex-col lg:flex-row lg:justify-between lg:items-start gap-4">
@@ -3450,10 +3557,20 @@ export const AdminDashboard: React.FC = () => {
                                                                     })()}
                                                                 </td>
                                                                 <td className="p-3">
-                                                                    <div className="flex gap-2">
+                                                                    <div className="flex flex-wrap gap-2">
                                                                         <button onClick={() => setEditingUser(user)} className="px-3 py-1 text-sm font-medium text-primary-600 dark:text-primary-400 hover:bg-primary-50 dark:hover:bg-primary-900/30 rounded-md">
                                                                             Manage
                                                                         </button>
+                                                                        {isPlatformAdmin && creatorIds.has(user.id) ? (
+                                                                            <button
+                                                                                type="button"
+                                                                                onClick={() => openContentAuditFromUserRow(user.id)}
+                                                                                className="px-3 py-1 text-sm font-medium text-amber-700 dark:text-amber-300 hover:bg-amber-50 dark:hover:bg-amber-900/30 rounded-md"
+                                                                                title="Open Fan Hub audit in Tools → Content audit"
+                                                                            >
+                                                                                Audit feed
+                                                                            </button>
+                                                                        ) : null}
                                                                         <button onClick={() => setGrantingRewardToUser(user)} className="px-3 py-1 text-sm font-medium text-purple-600 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-900/30 rounded-md">
                                                                             Grant Reward
                                                                         </button>
@@ -3536,10 +3653,20 @@ export const AdminDashboard: React.FC = () => {
                                                                     })()}
                                                                 </td>
                                                                 <td className="p-3">
-                                                                    <div className="flex gap-2">
+                                                                    <div className="flex flex-wrap gap-2">
                                                                         <button onClick={() => setEditingUser(user)} className="px-3 py-1 text-sm font-medium text-primary-600 dark:text-primary-400 hover:bg-primary-50 dark:hover:bg-primary-900/30 rounded-md">
                                                                             Manage
                                                                         </button>
+                                                                        {isPlatformAdmin ? (
+                                                                            <button
+                                                                                type="button"
+                                                                                onClick={() => openContentAuditFromUserRow(user.id)}
+                                                                                className="px-3 py-1 text-sm font-medium text-amber-700 dark:text-amber-300 hover:bg-amber-50 dark:hover:bg-amber-900/30 rounded-md"
+                                                                                title="Open Fan Hub audit in Tools → Content audit"
+                                                                            >
+                                                                                Audit feed
+                                                                            </button>
+                                                                        ) : null}
                                                                         <button onClick={() => setGrantingRewardToUser(user)} className="px-3 py-1 text-sm font-medium text-purple-600 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-900/30 rounded-md">
                                                                             Grant Reward
                                                                         </button>
@@ -3623,13 +3750,23 @@ export const AdminDashboard: React.FC = () => {
                                                                         })()}
                                                                     </td>
                                                                     <td className="p-3">
-                                                                        <div className="flex gap-2">
+                                                                        <div className="flex flex-wrap gap-2">
                                                                             <button
                                                                                 onClick={() => setEditingUser(user)}
                                                                                 className="px-3 py-1 text-sm font-medium text-primary-600 dark:text-primary-400 hover:bg-primary-50 dark:hover:bg-primary-900/30 rounded-md"
                                                                             >
                                                                                 Manage
                                                                             </button>
+                                                                            {isPlatformAdmin && creatorIds.has(user.id) ? (
+                                                                                <button
+                                                                                    type="button"
+                                                                                    onClick={() => openContentAuditFromUserRow(user.id)}
+                                                                                    className="px-3 py-1 text-sm font-medium text-amber-700 dark:text-amber-300 hover:bg-amber-50 dark:hover:bg-amber-900/30 rounded-md"
+                                                                                    title="Open Fan Hub audit in Tools → Content audit"
+                                                                                >
+                                                                                    Audit feed
+                                                                                </button>
+                                                                            ) : null}
                                                                             <button
                                                                                 onClick={() => setGrantingRewardToUser(user)}
                                                                                 className="px-3 py-1 text-sm font-medium text-purple-600 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-900/30 rounded-md"
@@ -3685,13 +3822,23 @@ export const AdminDashboard: React.FC = () => {
                                                                         })()}
                                                                     </td>
                                                                     <td className="p-3">
-                                                                        <div className="flex gap-2">
+                                                                        <div className="flex flex-wrap gap-2">
                                                                             <button
                                                                                 onClick={() => setEditingUser(user)}
                                                                                 className="px-3 py-1 text-sm font-medium text-primary-600 dark:text-primary-400 hover:bg-primary-50 dark:hover:bg-primary-900/30 rounded-md"
                                                                             >
                                                                                 Manage
                                                                             </button>
+                                                                            {isPlatformAdmin && creatorIds.has(user.id) ? (
+                                                                                <button
+                                                                                    type="button"
+                                                                                    onClick={() => openContentAuditFromUserRow(user.id)}
+                                                                                    className="px-3 py-1 text-sm font-medium text-amber-700 dark:text-amber-300 hover:bg-amber-50 dark:hover:bg-amber-900/30 rounded-md"
+                                                                                    title="Open Fan Hub audit in Tools → Content audit"
+                                                                                >
+                                                                                    Audit feed
+                                                                                </button>
+                                                                            ) : null}
                                                                             <button
                                                                                 onClick={() => setGrantingRewardToUser(user)}
                                                                                 className="px-3 py-1 text-sm font-medium text-purple-600 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-900/30 rounded-md"
@@ -3833,10 +3980,20 @@ export const AdminDashboard: React.FC = () => {
                                                                                                         <span className="font-mono">users/</span> account row.
                                                                                                     </span>
                                                                                                 ) : (
-                                                                                                    <div className="flex gap-2">
+                                                                                                    <div className="flex flex-wrap gap-2">
                                                                                                         <button onClick={() => setEditingUser(row.user)} className="px-3 py-1 text-sm font-medium text-cyan-700 dark:text-cyan-300 hover:bg-cyan-50 dark:hover:bg-cyan-900/30 rounded-md">
                                                                                                             Manage
                                                                                                         </button>
+                                                                                                        {isPlatformAdmin && creatorIds.has(row.user.id) ? (
+                                                                                                            <button
+                                                                                                                type="button"
+                                                                                                                onClick={() => openContentAuditFromUserRow(row.user.id)}
+                                                                                                                className="px-3 py-1 text-sm font-medium text-amber-700 dark:text-amber-300 hover:bg-amber-50 dark:hover:bg-amber-900/30 rounded-md"
+                                                                                                                title="Open Fan Hub audit in Tools → Content audit"
+                                                                                                            >
+                                                                                                                Audit feed
+                                                                                                            </button>
+                                                                                                        ) : null}
                                                                                                         <button
                                                                                                             onClick={() => handleDeleteUser(row.user)}
                                                                                                             className="px-3 py-1 text-sm font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-md flex items-center gap-1"
@@ -3875,10 +4032,20 @@ export const AdminDashboard: React.FC = () => {
                                                                                             <td className="p-3 text-sm text-gray-500 dark:text-gray-400">—</td>
                                                                                             <td className="p-3 text-sm text-gray-500 dark:text-gray-400">—</td>
                                                                                             <td className="p-3">
-                                                                                                <div className="flex gap-2">
+                                                                                                <div className="flex flex-wrap gap-2">
                                                                                                     <button onClick={() => setEditingUser(user)} className="px-3 py-1 text-sm font-medium text-cyan-700 dark:text-cyan-300 hover:bg-cyan-50 dark:hover:bg-cyan-900/30 rounded-md">
                                                                                                         Manage
                                                                                                     </button>
+                                                                                                    {isPlatformAdmin && creatorIds.has(user.id) ? (
+                                                                                                        <button
+                                                                                                            type="button"
+                                                                                                            onClick={() => openContentAuditFromUserRow(user.id)}
+                                                                                                            className="px-3 py-1 text-sm font-medium text-amber-700 dark:text-amber-300 hover:bg-amber-50 dark:hover:bg-amber-900/30 rounded-md"
+                                                                                                            title="Open Fan Hub audit in Tools → Content audit"
+                                                                                                        >
+                                                                                                            Audit feed
+                                                                                                        </button>
+                                                                                                    ) : null}
                                                                                                     <button
                                                                                                         onClick={() => handleDeleteUser(user)}
                                                                                                         className="px-3 py-1 text-sm font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-md flex items-center gap-1"

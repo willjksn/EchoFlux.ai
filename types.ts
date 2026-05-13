@@ -949,6 +949,15 @@ export interface User {
   username?: string;
   /** How this auth profile was first provisioned. */
   accountOrigin?: 'fan_hub' | 'echoflux';
+
+  /**
+   * Client-only mirror of `staff_roles/*` allowlists (`content_audit`, `legal_disclosure_reserve`).
+   * Do not persist on `users/{uid}` from the client.
+   */
+  staffRoleFlags?: {
+    contentAudit: boolean;
+    legalDisclosureReserve: boolean;
+  };
 }
 
 export interface Notification {
