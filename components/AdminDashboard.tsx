@@ -29,6 +29,9 @@ import { normalizePlanForLimitsClient } from '../src/lib/creatorIdentity/planGat
 const ADMIN_ECHOFLUX_SIGNUP_LIST_CAP = 120;
 const ADMIN_ECHOFLUX_SIGNUP_PREVIEW = 3;
 
+/** Admin “Stripe refund” on Recent Fan Hub Transactions — must match `api/adminRefundFanHubOrder.ts`. */
+const FAN_HUB_ADMIN_REFUND_WINDOW_MS = 24 * 60 * 60 * 1000;
+
 /** Gemini text models always listed in Requests by Model (0 when unused) so 2.5 / 2.0 / 1.5 show like other rows. */
 const GEMINI_TEXT_MODEL_DISPLAY_ORDER = [
     'gemini-2.5-flash-lite',
@@ -678,7 +681,15 @@ export const AdminDashboard: React.FC = () => {
         echofluxCommission: number;
         commissionRate: number;
         topCreators: Array<{ id: string; name: string; email: string; revenue: number; commission: number }>;
-        recentTransactions: Array<{ id: string; creatorName: string; type: string; amount: number; commission: number; timestamp: Date }>;
+        recentTransactions: Array<{
+            id: string;
+            creatorId: string;
+            creatorName: string;
+            type: string;
+            amount: number;
+            commission: number;
+            timestamp: Date;
+        }>;
     }>({
         totalRevenue: 0,
         tips: 0,
@@ -691,6 +702,7 @@ export const AdminDashboard: React.FC = () => {
         recentTransactions: [],
     });
     const [isLoadingFanHubRevenue, setIsLoadingFanHubRevenue] = useState(true);
+    const [refundingFanHubOrderId, setRefundingFanHubOrderId] = useState<string | null>(null);
     const [fanHubMembershipsByFanId, setFanHubMembershipsByFanId] = useState<Record<string, FanMembershipLink[]>>({});
     const [fanHubMemberProfilesByFanId, setFanHubMemberProfilesByFanId] = useState<Record<string, FanHubMemberProfile>>({});
     /** Server-built Fan Buyer rows (Firestore users join); null = use client merge fallback. */
@@ -926,7 +938,8 @@ export const AdminDashboard: React.FC = () => {
 
                 const recentTransactions = (data.recentTransactions || []).map((t) => ({
                     id: t.id,
-                    creatorName: resolveCreatorName(t.creatorId),
+                    creatorId: typeof t.creatorId === "string" ? t.creatorId : "",
+                    creatorName: resolveCreatorName(typeof t.creatorId === "string" ? t.creatorId : ""),
                     type: t.type,
                     amount: t.amount,
                     commission: t.amount * commissionRate,
@@ -1732,6 +1745,78 @@ export const AdminDashboard: React.FC = () => {
         [filteredFanHubTransactions, showAllFanHubTransactions]
     );
 
+    const refundFanHubOrderAdmin = async (tx: {
+        id: string;
+        creatorId: string;
+        creatorName: string;
+        type: string;
+        amount: number;
+        timestamp: Date;
+    }) => {
+        if (currentUser?.role !== "Admin") return;
+
+        if (Date.now() - tx.timestamp.getTime() > FAN_HUB_ADMIN_REFUND_WINDOW_MS) {
+            showToast?.(
+                "This charge is past the 24-hour admin refund window. Use Stripe Dashboard if you still need a refund.",
+                "error",
+            );
+            return;
+        }
+
+        const line1 =
+            `Issue a full Stripe refund for this Fan Hub charge?\n\n` +
+            `Order: ${tx.id}\n` +
+            `Creator: ${tx.creatorName}\n` +
+            `Amount: $${tx.amount.toFixed(2)}\n\n` +
+            `Use for mistaken double charges. Bookkeeping updates after Stripe webhook.`;
+        if (!window.confirm(line1)) return;
+
+        let cancelSubscription = false;
+        if (String(tx.type || "").toLowerCase() === "subscription") {
+            cancelSubscription = window.confirm(
+                "Also cancel the Stripe subscription tied to this order?\n\n" +
+                    'Choose OK for duplicate signup (stops renewals on that subscription). Choose Cancel to refund only.',
+            );
+        }
+
+        try {
+            setRefundingFanHubOrderId(tx.id);
+            const token = await auth.currentUser?.getIdToken(true);
+            if (!token) {
+                showToast?.("Sign in again to refund.", "error");
+                return;
+            }
+            const res = await fetch("/api/adminRefundFanHubOrder", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    Authorization: `Bearer ${token}`,
+                },
+                body: JSON.stringify({ orderId: tx.id, cancelSubscription }),
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) {
+                showToast?.(
+                    typeof data?.error === "string" ? data.error : `Refund failed (${res.status})`,
+                    "error",
+                );
+                return;
+            }
+            showToast?.(
+                typeof data?.message === "string" ? data.message : "Stripe refund created.",
+                "success",
+            );
+            setFanHubRevenue((prev) => ({
+                ...prev,
+                recentTransactions: prev.recentTransactions.filter((r) => r.id !== tx.id),
+            }));
+        } catch (e) {
+            showToast?.((e as Error)?.message || "Refund request failed", "error");
+        } finally {
+            setRefundingFanHubOrderId(null);
+        }
+    };
+
     useEffect(() => {
         setShowAllFanHubTransactions(false);
     }, [fanHubRevenueDays]);
@@ -2531,6 +2616,7 @@ export const AdminDashboard: React.FC = () => {
                         <h3 className="text-xl font-bold text-gray-900 dark:text-white">Recent Fan Hub Transactions</h3>
                         <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
                             Top 5 shown by default. Expand to see all for the selected period.
+                            Stripe refund is enabled for charges less than 24 hours old (older refunds: Stripe Dashboard).
                         </p>
                     </div>
                     <div className="flex items-center gap-2">
@@ -2557,10 +2643,14 @@ export const AdminDashboard: React.FC = () => {
                                     <th className="p-3 text-xs font-semibold text-gray-600 dark:text-gray-300">Amount</th>
                                     <th className="p-3 text-xs font-semibold text-gray-600 dark:text-gray-300">Your Commission</th>
                                     <th className="p-3 text-xs font-semibold text-gray-600 dark:text-gray-300">Date</th>
+                                    <th className="p-3 text-xs font-semibold text-gray-600 dark:text-gray-300">Actions</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                {visibleFanHubTransactions.map(tx => (
+                                {visibleFanHubTransactions.map(tx => {
+                                    const refundWindowClosed =
+                                        Date.now() - tx.timestamp.getTime() > FAN_HUB_ADMIN_REFUND_WINDOW_MS;
+                                    return (
                                     <tr key={tx.id} className="border-b border-gray-100 dark:border-gray-700">
                                         <td className="p-3 text-sm text-gray-900 dark:text-white">{tx.creatorName}</td>
                                         <td className="p-3">
@@ -2576,8 +2666,30 @@ export const AdminDashboard: React.FC = () => {
                                         <td className="p-3 text-sm font-semibold text-gray-900 dark:text-white">${tx.amount.toFixed(2)}</td>
                                         <td className="p-3 text-sm font-semibold text-green-600 dark:text-green-400">${tx.commission.toFixed(2)}</td>
                                         <td className="p-3 text-sm text-gray-500 dark:text-gray-400">{tx.timestamp.toLocaleDateString()}</td>
+                                        <td className="p-3">
+                                            <button
+                                                type="button"
+                                                className="text-xs font-semibold text-red-600 dark:text-red-400 hover:underline disabled:opacity-50 disabled:cursor-not-allowed"
+                                                disabled={
+                                                    refundWindowClosed || refundingFanHubOrderId === tx.id
+                                                }
+                                                title={
+                                                    refundWindowClosed
+                                                        ? "Admin refund expires 24 hours after order time. Use Stripe Dashboard afterward."
+                                                        : "Issues a Stripe refund via platform admin API (Firestore updates when Stripe sends charge.refunded)."
+                                                }
+                                                onClick={() => void refundFanHubOrderAdmin(tx)}
+                                            >
+                                                {refundingFanHubOrderId === tx.id
+                                                    ? "Refunding…"
+                                                    : refundWindowClosed
+                                                      ? "Refund expired"
+                                                      : "Stripe refund"}
+                                            </button>
+                                        </td>
                                     </tr>
-                                ))}
+                                    );
+                                })}
                             </tbody>
                         </table>
                         {filteredFanHubTransactions.length > 5 && (

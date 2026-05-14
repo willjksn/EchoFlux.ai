@@ -4502,6 +4502,10 @@ export const FanStorefrontView: React.FC = () => {
         else goTab("messages");
         return;
       }
+      if (p.type === "creator_new_purchase") {
+        goTab("purchases");
+        return;
+      }
       if (p.type === "purchase_confirmed" || p.type === "content_unlocked") {
         goTab("purchases");
         return;

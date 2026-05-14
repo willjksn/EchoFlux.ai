@@ -1832,68 +1832,79 @@ export const FanHubPurchases: React.FC = () => {
                   >
                     {hiddenPurchaseIds.has(p.id) ? "Unhide" : "Hide"}
                   </button>
-                  {!skipManualFulfillment && !isEditing && !isCompleted && (
+                  {!skipManualFulfillment && !isEditing && (
                     <>
-                      {isScheduled && (
+                      {!isCompleted && (
                         <>
-                          <button
-                            type="button"
-                            className="purchases-btn purchases-btn-secondary"
-                            onClick={() => startEdit(p)}
-                          >
-                            Edit
-                          </button>
-                          {isJointLiveSessionProductId(p.treatType) && p.fanMemberId && (
+                          {isScheduled && (
                             <>
-                              {jointSessionKindFromProductId(p.treatType) === "video_call" && (
-                                <button
-                                  type="button"
-                                  className="purchases-btn purchases-btn-primary"
-                                  disabled={startingVideoFromOrderId === p.id}
-                                  onClick={() => void startVideoFromScheduledOrder(p)}
-                                >
-                                  {startingVideoFromOrderId === p.id ? "Starting…" : "Start video call"}
-                                </button>
+                              <button
+                                type="button"
+                                className="purchases-btn purchases-btn-secondary"
+                                onClick={() => startEdit(p)}
+                              >
+                                Edit
+                              </button>
+                              {isJointLiveSessionProductId(p.treatType) && p.fanMemberId && (
+                                <>
+                                  {jointSessionKindFromProductId(p.treatType) === "video_call" && (
+                                    <button
+                                      type="button"
+                                      className="purchases-btn purchases-btn-primary"
+                                      disabled={startingVideoFromOrderId === p.id}
+                                      onClick={() => void startVideoFromScheduledOrder(p)}
+                                    >
+                                      {startingVideoFromOrderId === p.id ? "Starting…" : "Start video call"}
+                                    </button>
+                                  )}
+                                  {jointSessionKindFromProductId(p.treatType) === "chat_session" && (
+                                    <button
+                                      type="button"
+                                      className="purchases-btn purchases-btn-primary"
+                                      onClick={() => openDmWithFan(p.fanMemberId)}
+                                    >
+                                      Open messages
+                                    </button>
+                                  )}
+                                </>
                               )}
-                              {jointSessionKindFromProductId(p.treatType) === "chat_session" && (
-                                <button
-                                  type="button"
-                                  className="purchases-btn purchases-btn-primary"
-                                  onClick={() => openDmWithFan(p.fanMemberId)}
-                                >
-                                  Open messages
-                                </button>
-                              )}
+                              <button
+                                type="button"
+                                className="purchases-btn purchases-btn-success"
+                                onClick={() => void markCompleted(p)}
+                              >
+                                Mark Complete
+                              </button>
                             </>
                           )}
-                          <button
-                            type="button"
-                            className="purchases-btn purchases-btn-success"
-                            onClick={() => markCompleted(p)}
-                          >
-                            Mark Complete
-                          </button>
+                          {isPending && (
+                            <button
+                              type="button"
+                              className="purchases-btn purchases-btn-primary"
+                              onClick={() => startEdit(p)}
+                            >
+                              Schedule
+                            </button>
+                          )}
                         </>
                       )}
-                      {isPending && (
+                      <button
+                        type="button"
+                        className="purchases-btn purchases-btn-primary"
+                        onClick={() => openDeliveryEditor(p)}
+                      >
+                        {p.deliveryStatus === "delivered" ? "Update Delivery" : "Deliver Purchase"}
+                      </button>
+                      {!isCompleted && isPending && (
                         <button
                           type="button"
-                          className="purchases-btn purchases-btn-primary"
-                          onClick={() => startEdit(p)}
+                          className="purchases-btn purchases-btn-success"
+                          onClick={() => void markCompleted(p)}
                         >
-                          Schedule
+                          Complete
                         </button>
                       )}
                     </>
-                  )}
-                  {!skipManualFulfillment && !isEditing && (
-                    <button
-                      type="button"
-                      className="purchases-btn purchases-btn-primary"
-                      onClick={() => openDeliveryEditor(p)}
-                    >
-                      {p.deliveryStatus === "delivered" ? "Update Delivery" : "Deliver Purchase"}
-                    </button>
                   )}
                 </div>
 

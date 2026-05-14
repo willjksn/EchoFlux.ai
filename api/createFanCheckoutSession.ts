@@ -381,7 +381,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // ==================== SUBSCRIPTION ====================
     if (type === "subscription") {
       const subAmountCents = Math.max(100, Number(subscriptionPriceCents) || DEFAULT_SUBSCRIPTION_CENTS);
-      
+
       const sessionParams: Stripe.Checkout.SessionCreateParams = {
         mode: "subscription",
         payment_method_types: ["card"],

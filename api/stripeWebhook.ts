@@ -213,6 +213,86 @@ function stripeRefId(
   return null;
 }
 
+/**
+ * Creator Fan Hub bell: one notification per paid store order, even when a duplicate webhook
+ * skips granting (Firestore already finalized) — avoids missing the bell after a crash between txn + notify.
+ */
+async function trySendCreatorHubProductPurchaseBell(
+  db: Firestore,
+  sessionId: string,
+  session: Stripe.Checkout.Session,
+): Promise<void> {
+  const orderRef = db.collection('orders').doc(sessionId);
+  const snap = await orderRef.get();
+  const d = snap.data() as {
+    status?: string;
+    type?: string;
+    creatorPurchaseBellSent?: boolean;
+    creatorId?: string;
+    productId?: string;
+    productTitle?: string;
+    amountCents?: number;
+    fanEmail?: unknown;
+    fanName?: unknown;
+  } | undefined;
+  const status = typeof d?.status === 'string' ? d.status.trim().toLowerCase() : '';
+  const typ = typeof d?.type === 'string' ? d.type.trim().toLowerCase() : '';
+  if (!d || status !== 'paid' || typ !== 'product') return;
+  if (d.creatorPurchaseBellSent === true) return;
+
+  const creatorId = typeof d.creatorId === 'string' ? d.creatorId.trim() : '';
+  if (!creatorId) return;
+
+  const md = session.metadata || {};
+  const productId =
+    (typeof d.productId === 'string' ? d.productId.trim() : '') ||
+    (typeof md.productId === 'string' ? md.productId.trim() : '') ||
+    (typeof md.treatId === 'string' ? md.treatId.trim() : '');
+
+  const amountTotal =
+    typeof d.amountCents === 'number' && Number.isFinite(d.amountCents)
+      ? d.amountCents
+      : (session.amount_total ?? 0);
+
+  const fanNameDoc = typeof d.fanName === 'string' ? d.fanName.trim() : '';
+  const fanEmailDoc = typeof d.fanEmail === 'string' ? d.fanEmail.trim() : '';
+  const fanName = fanNameDoc || getCheckoutSessionName(session) || '';
+  const fanEmail = fanEmailDoc || getCheckoutSessionEmail(session) || '';
+
+  try {
+    const amountLabel = (amountTotal / 100).toFixed(2);
+    const buyerLabel = (fanName && String(fanName).trim()) || fanEmail || 'A fan';
+    const itemLabel =
+      (typeof d.productTitle === 'string' && d.productTitle.trim()) ||
+      (typeof md.productTitle === 'string' && md.productTitle.trim()) ||
+      'Store item';
+
+    await sendCreatorHubNotification({
+      creatorId,
+      type: 'creator_new_purchase',
+      title: 'New store purchase',
+      body: `${buyerLabel} bought ${itemLabel} ($${amountLabel}).`,
+      data: {
+        orderId: sessionId,
+        creatorId,
+        ...(productId ? { productId } : {}),
+        destination: 'purchases',
+      },
+    });
+
+    await orderRef.set(
+      {
+        creatorPurchaseBellSent: true,
+        creatorPurchaseBellSentAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      },
+      { merge: true },
+    );
+  } catch (e) {
+    console.warn('trySendCreatorHubProductPurchaseBell failed', sessionId, e);
+  }
+}
+
 async function repairFanHubSubscriptionIdentityForSession(
   db: Firestore,
   session: Stripe.Checkout.Session,
@@ -408,6 +488,30 @@ export async function processFanHubCheckoutSessionCompleted(
   const sessionSubscriptionId = stripeRefId(session.subscription);
   if (type === 'subscription' && sessionSubscriptionId) {
     const amountTotal = session.amount_total ?? 0;
+
+    let subscriptionPaymentIntentId =
+      typeof session.payment_intent === 'string'
+        ? session.payment_intent
+        : (session.payment_intent as Stripe.PaymentIntent | null)?.id || null;
+
+    if (!subscriptionPaymentIntentId && stripeContext?.stripe) {
+      const stripe = stripeContext.stripe;
+      const acct = stripeContext.stripeAccount ?? null;
+      const reqOpts = acct ? { stripeAccount: acct } : undefined;
+      try {
+        const invoiceId = stripeRefId(session.invoice);
+        if (invoiceId) {
+          const inv = await stripe.invoices.retrieve(invoiceId, { expand: ['payment_intent'] }, reqOpts);
+          const invPi = (
+            inv as Stripe.Invoice & { payment_intent?: string | Stripe.PaymentIntent | null }
+          ).payment_intent;
+          subscriptionPaymentIntentId = stripeRefId(invPi);
+        }
+      } catch (e) {
+        console.warn('Fan hub subscription checkout: could not resolve payment_intent from invoice', e);
+      }
+    }
+
     const subRef = db.collection('creatorSubscribers').doc(creatorId).collection('subscribers').doc(fanId);
     await subRef.set({ status: 'active', stripeSubscriptionId: sessionSubscriptionId, updatedAt: now }, { merge: true });
     const grantRef = db.collection('creatorEntitlements').doc(creatorId).collection('grants').doc(fanId);
@@ -423,6 +527,7 @@ export async function processFanHubCheckoutSessionCompleted(
       productId: null,
       type: 'subscription',
       stripeSessionId: session.id,
+      ...(subscriptionPaymentIntentId ? { stripePaymentIntentId: subscriptionPaymentIntentId } : {}),
       stripeSubscriptionId: sessionSubscriptionId,
       amountCents: amountTotal,
       status: 'paid',
@@ -586,86 +691,68 @@ export async function processFanHubCheckoutSessionCompleted(
 
     if (!finalizedOrder) {
       console.log(`Fan hub: skip duplicate product checkout session=${session.id}`);
-      return true;
-    }
-
-    const grantRef = db.collection('creatorEntitlements').doc(creatorId).collection('grants').doc(fanId);
-    const grantSnap = await grantRef.get();
-    const existing = grantSnap.data() as { unlockedProductIds?: string[] } | undefined;
-    const unlocked = Array.isArray(existing?.unlockedProductIds) ? existing.unlockedProductIds : [];
-    if (!unlocked.includes(productId)) {
-      await grantRef.set({ unlockedProductIds: [...unlocked, productId], updatedAt: now }, { merge: true });
-    }
-
-    const fanRef = db.collection('creators').doc(creatorId).collection('fans').doc(fanId);
-    const fanSnap = await fanRef.get();
-    if (!fanSnap.exists) {
-      await fanRef.set({
-        id: fanId,
-        creatorId,
-        email: fanEmail,
-        displayName: fanName,
-        stripeCustomerId: typeof session.customer === 'string' ? session.customer : (session.customer as any)?.id || null,
-        subscriptionStatus: null,
-        ...(isGuestFan ? { role: 'treat_buyer' as const } : {}),
-        lastPurchaseAt: now,
-        totalSpentCents: amountTotal,
-        purchaseCount: 1,
-        createdAt: now,
-        updatedAt: now,
-        ...fanBillingCountryPatch(billingCountry, now),
-      });
     } else {
-      const fanData = fanSnap.data() as { totalSpentCents?: number; purchaseCount?: number };
-      const patch: Record<string, unknown> = {
-        lastPurchaseAt: now,
-        totalSpentCents: (fanData.totalSpentCents || 0) + amountTotal,
-        purchaseCount: (fanData.purchaseCount || 0) + 1,
-        updatedAt: now,
-        ...fanBillingCountryPatch(billingCountry, now),
-      };
-      if (isGuestFan) {
-        patch.role = 'treat_buyer';
-        if (fanEmail) patch.email = fanEmail;
-        if (fanName) patch.displayName = fanName;
+      const grantRef = db.collection('creatorEntitlements').doc(creatorId).collection('grants').doc(fanId);
+      const grantSnap = await grantRef.get();
+      const existing = grantSnap.data() as { unlockedProductIds?: string[] } | undefined;
+      const unlocked = Array.isArray(existing?.unlockedProductIds) ? existing.unlockedProductIds : [];
+      if (!unlocked.includes(productId)) {
+        await grantRef.set({ unlockedProductIds: [...unlocked, productId], updatedAt: now }, { merge: true });
       }
-      await fanRef.update(patch);
-    }
 
-    if (!isGuestFan) {
-      try {
-        await reconcileFanHubFanPreferenceForMember(db, creatorId, fanId, now, 'stripe_product');
-      } catch (e) {
-        console.error('reconcileFanHubFanPreference (product):', e);
+      const fanRef = db.collection('creators').doc(creatorId).collection('fans').doc(fanId);
+      const fanSnap = await fanRef.get();
+      if (!fanSnap.exists) {
+        await fanRef.set({
+          id: fanId,
+          creatorId,
+          email: fanEmail,
+          displayName: fanName,
+          stripeCustomerId: typeof session.customer === 'string' ? session.customer : (session.customer as any)?.id || null,
+          subscriptionStatus: null,
+          ...(isGuestFan ? { role: 'treat_buyer' as const } : {}),
+          lastPurchaseAt: now,
+          totalSpentCents: amountTotal,
+          purchaseCount: 1,
+          createdAt: now,
+          updatedAt: now,
+          ...fanBillingCountryPatch(billingCountry, now),
+        });
+      } else {
+        const fanData = fanSnap.data() as { totalSpentCents?: number; purchaseCount?: number };
+        const patch: Record<string, unknown> = {
+          lastPurchaseAt: now,
+          totalSpentCents: (fanData.totalSpentCents || 0) + amountTotal,
+          purchaseCount: (fanData.purchaseCount || 0) + 1,
+          updatedAt: now,
+          ...fanBillingCountryPatch(billingCountry, now),
+        };
+        if (isGuestFan) {
+          patch.role = 'treat_buyer';
+          if (fanEmail) patch.email = fanEmail;
+          if (fanName) patch.displayName = fanName;
+        }
+        await fanRef.update(patch);
       }
+
+      if (!isGuestFan) {
+        try {
+          await reconcileFanHubFanPreferenceForMember(db, creatorId, fanId, now, 'stripe_product');
+        } catch (e) {
+          console.error('reconcileFanHubFanPreference (product):', e);
+        }
+      }
+
+      const statsRef = db.collection('creatorStats').doc(creatorId);
+      const statsSnap = await statsRef.get();
+      const stats = statsSnap.data() as { totalRevenueCents?: number; totalOrders?: number } | undefined;
+      const totalRevenue = (stats?.totalRevenueCents ?? 0) + amountTotal;
+      const totalOrders = (stats?.totalOrders ?? 0) + 1;
+      await statsRef.set({ totalRevenueCents: totalRevenue, totalOrders, updatedAt: now }, { merge: true });
+      console.log(`Fan hub: product checkout creator=${creatorId} fan=${fanId} product=${productId}`);
     }
 
-    const statsRef = db.collection('creatorStats').doc(creatorId);
-    const statsSnap = await statsRef.get();
-    const stats = statsSnap.data() as { totalRevenueCents?: number; totalOrders?: number } | undefined;
-    const totalRevenue = (stats?.totalRevenueCents ?? 0) + amountTotal;
-    const totalOrders = (stats?.totalOrders ?? 0) + 1;
-    await statsRef.set({ totalRevenueCents: totalRevenue, totalOrders, updatedAt: now }, { merge: true });
-    console.log(`Fan hub: product checkout creator=${creatorId} fan=${fanId} product=${productId}`);
-
-    try {
-      const amountLabel = (amountTotal / 100).toFixed(2);
-      const buyerLabel = (fanName && String(fanName).trim()) || fanEmail || 'A fan';
-      const itemLabel = (productTitle && String(productTitle).trim()) || 'Store item';
-      await sendCreatorHubNotification({
-        creatorId,
-        type: 'creator_new_purchase',
-        title: 'New store purchase',
-        body: `${buyerLabel} bought ${itemLabel} ($${amountLabel}).`,
-        data: {
-          orderId: session.id,
-          productId,
-          destination: 'purchases',
-        },
-      });
-    } catch (e) {
-      console.warn('sendCreatorHubNotification (product checkout):', e);
-    }
+    await trySendCreatorHubProductPurchaseBell(db, session.id, session);
 
     return true;
   }
