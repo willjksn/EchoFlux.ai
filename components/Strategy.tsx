@@ -2239,6 +2239,17 @@ Return only the rewritten context description.
                                         posted: 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300'
                                     };
 
+                                    const statusBadgeLabel =
+                                        status === 'draft'
+                                            ? day.linkedPostId
+                                                ? 'Unscheduled'
+                                                : 'Planning'
+                                            : status === 'ready'
+                                              ? 'Ready'
+                                              : status === 'scheduled'
+                                                ? 'Scheduled'
+                                                : 'Posted';
+
                                     // "Used" visual: darker once it has been turned into a Draft/Scheduled/Posted post (linkedPostId),
                                     // or when user uploaded media and created a post.
                                     const isUsed = Boolean(day.linkedPostId) || status === 'scheduled' || status === 'posted' || (status === 'draft' && Boolean(day.mediaUrl));
@@ -2332,7 +2343,12 @@ Return only the rewritten context description.
                                                     {day.mediaUrl && (
                                                         <div className="p-2 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg">
                                                             <p className="text-xs font-semibold text-green-800 dark:text-green-200">
-                                                                ✅ Media uploaded • Caption generated {day.status === 'scheduled' ? '• Post created (Scheduled)' : day.status === 'draft' ? '• Post created (Draft)' : ''}
+                                                                ✅ Media uploaded • Caption generated{" "}
+                                                                {day.status === "scheduled"
+                                                                    ? "• Added to Calendar (scheduled)"
+                                                                    : day.status === "draft" && day.linkedPostId
+                                                                      ? "• Saved to planner (not scheduled)"
+                                                                      : ""}
                                                             </p>
                                                         </div>
                                                     )}
@@ -2477,150 +2493,18 @@ Return only the rewritten context description.
                                                     </div>
                                                 ) : null}
                                                 
-                                                {/* Draft and Calendar buttons - show below media preview */}
+                                                {/* Calendar — add roadmap item as a scheduled post (no approvals / drafts flow) */}
                                                 {day.mediaUrl && (
                                                     <div className="flex flex-col gap-2 w-full">
                                                         <button
                                                             onClick={async () => {
                                                                 if (!plan || !user) return;
                                                                 if (!canUseCalendar) {
-                                                                    showToast('Upgrade to Pro or Elite to access the calendar', 'info');
-                                                                    setActivePage('pricing');
+                                                                    showToast("Upgrade to Pro or Elite to access the calendar", "info");
+                                                                    setActivePage("pricing");
                                                                     return;
                                                                 }
-                                                                
-                                                                const currentDay = plan.weeks[weekIndex].content[dayIndex];
-                                                                if (!currentDay.mediaUrl) {
-                                                                    showToast('Please upload media first', 'error');
-                                                                    return;
-                                                                }
-                                                                
-                                                                // Prevent multiple clicks by checking if already has linked post
-                                                                if (currentDay.linkedPostId && (currentDay.status === 'draft' || currentDay.status === 'scheduled')) {
-                                                                    showToast('This post already exists in your calendar', 'success');
-                                                                    return;
-                                                                }
-                                                                
-                                                                const today = new Date();
-                                                                const suggestedDate = new Date(today);
-                                                                suggestedDate.setDate(today.getDate() + (weekIndex * 7) + currentDay.dayOffset);
-                                                                suggestedDate.setHours(14, 0, 0, 0);
-                                                                
-                                                                // Use stable postId - reuse existing linkedPostId or generate stable ID based on strategy/week/day (not timestamp)
-                                                                const postId = currentDay.linkedPostId || `roadmap-${selectedStrategy?.id || 'temp'}-${weekIndex}-${dayIndex}`;
-                                                                
-                                                                // Ensure scheduledDate is a valid ISO string (Calendar requires this)
-                                                                const scheduledDateISO = suggestedDate.toISOString();
-                                                                
-                                                                // Ensure platform is valid (not OnlyFans for main calendar)
-                                                                // Platform type doesn't include OnlyFans, but check string value just in case
-                                                                const platformValue = String(currentDay.platform);
-                                                                const platform: Platform = (platformValue === 'OnlyFans' || platformValue?.includes('OnlyFans')) ? 'Instagram' : (currentDay.platform as Platform);
-                                                                
-                                                                const newPost = {
-                                                                    id: postId,
-                                                                    content: currentDay.caption || currentDay.topic || 'Untitled Post',
-                                                                    mediaUrl: currentDay.mediaUrl, // Required for Calendar to show it
-                                                                    mediaType: currentDay.mediaType || 'image',
-                                                                    platforms: [platform], // Use valid platform (not OnlyFans)
-                                                                    status: 'Draft',
-                                                                    author: { name: user.name, avatar: user.avatar },
-                                                                    comments: [],
-                                                                    scheduledDate: scheduledDateISO, // Required for Calendar - must be ISO string
-                                                                };
-                                                                
-                                                                try {
-                                                                    // Save post exactly like Compose does - no manual refresh, let Firestore listener handle it
-                                                                    const safePost = JSON.parse(JSON.stringify(newPost));
-                                                                    console.log('Strategy: Saving Draft post:', { 
-                                                                        postId, 
-                                                                        status: newPost.status, 
-                                                                        scheduledDate: newPost.scheduledDate,
-                                                                        scheduledDateFormatted: new Date(newPost.scheduledDate).toLocaleDateString(),
-                                                                        platforms: newPost.platforms,
-                                                                        mediaUrl: newPost.mediaUrl ? 'present' : 'missing'
-                                                                    });
-                                                                    await setDoc(doc(db, 'users', user.id, 'posts', postId), safePost);
-                                                                    console.log('Strategy: Draft post saved to Firestore:', {
-                                                                        postId,
-                                                                        status: safePost.status,
-                                                                        scheduledDate: safePost.scheduledDate,
-                                                                        scheduledDateParsed: new Date(safePost.scheduledDate).toLocaleString(),
-                                                                        platforms: safePost.platforms,
-                                                                        hasMediaUrl: !!safePost.mediaUrl,
-                                                                        mediaType: safePost.mediaType
-                                                                    });
-                                                                    // Update local posts state immediately so Calendar shows it right away
-                                                                    if (setPosts) {
-                                                                        setPosts(prev => {
-                                                                            const existingIndex = prev.findIndex(p => p.id === postId);
-                                                                            if (existingIndex >= 0) {
-                                                                                // Update existing post
-                                                                                const updated = [...prev];
-                                                                                updated[existingIndex] = { ...safePost } as Post;
-                                                                                return updated;
-                                                                            } else {
-                                                                                // Add new post
-                                                                                return [...prev, { ...safePost } as Post];
-                                                                            }
-                                                                        });
-                                                                    }
-                                                                    
-                                                                    // Update plan with Draft status and link post (do this after post is saved)
-                                                                    const updatedPlan = {
-                                                                        ...plan,
-                                                                        weeks: plan.weeks.map((w, wIdx) => {
-                                                                            if (wIdx !== weekIndex) return w;
-                                                                            return {
-                                                                                ...w,
-                                                                                content: w.content.map((d, dIdx) => {
-                                                                                    if (dIdx !== dayIndex) return d;
-                                                                                    return {
-                                                                                        ...d,
-                                                                                        status: 'draft' as const,
-                                                                                        linkedPostId: postId
-                                                                                    };
-                                                                                })
-                                                                            };
-                                                                        })
-                                                                    };
-                                                                    
-                                                                    setPlan(updatedPlan);
-                                                                    
-                                                                    if (selectedStrategy) {
-                                                                        const updatedStrategy = {
-                                                                            ...selectedStrategy,
-                                                                            plan: updatedPlan,
-                                                                            linkedPostIds: [...(selectedStrategy.linkedPostIds || []).filter((id: string) => id !== currentDay.linkedPostId), postId]
-                                                                        };
-                                                                        setSelectedStrategy(updatedStrategy);
-                                                                        // Save strategy update in background (don't await)
-                                                                        setDoc(doc(db, 'users', user.id, 'strategies', selectedStrategy.id), updatedStrategy).catch(err => console.error('Failed to update strategy:', err));
-                                                                    }
-                                                                    
-                                                                    showToast('Saved to Draft and added to Calendar!', 'success');
-                                                                    // Navigate to Approvals page to see the draft (like ContentIntelligence)
-                                                                    // Small delay to ensure posts context updates
-                                                                    setTimeout(() => {
-                                                                        if (setActivePage) {
-                                                                            setActivePage('approvals');
-                                                                        }
-                                                                    }, 100);
-                                                                } catch (error) {
-                                                                    console.error('Failed to save to draft:', error);
-                                                                    showToast('Failed to save to draft', 'error');
-                                                                }
-                                                            }}
-                                                            disabled={!canUseCalendar || status === 'draft' || status === 'scheduled'}
-                                                            className="px-3 py-1.5 text-xs font-medium bg-gray-600 text-white rounded-md hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-1"
-                                                        >
-                                                            <CheckCircleIcon className="w-3 h-3" />
-                                                            Draft
-                                                        </button>
-                                                        <button
-                                                            onClick={async () => {
-                                                                if (!plan || !user) return;
-                                                                
+
                                                                 const currentDay = plan.weeks[weekIndex].content[dayIndex];
                                                                 if (!currentDay.mediaUrl) {
                                                                     showToast('Please upload media first', 'error');
@@ -2740,7 +2624,12 @@ Return only the rewritten context description.
                                                                     }
                                                                 }
                                                             }}
-                                                            disabled={!canUseCalendar || status === 'draft' || status === 'scheduled'}
+                                                            disabled={
+                                                                !canUseCalendar ||
+                                                                !day.mediaUrl ||
+                                                                status === "scheduled" ||
+                                                                status === "posted"
+                                                            }
                                                             className="px-3 py-1.5 text-xs font-medium bg-primary-600 text-white rounded-md hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-1"
                                                         >
                                                             <CalendarIcon className="w-3 h-3" />
@@ -2786,7 +2675,7 @@ Return only the rewritten context description.
                                                     </div>
                                                 )}
                                                 <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${statusColors[status] || statusColors.draft}`}>
-                                                    {status === 'draft' ? 'Draft' : status === 'ready' ? 'Ready' : status === 'scheduled' ? 'Scheduled' : 'Posted'}
+                                                    {statusBadgeLabel}
                                                 </span>
                                             </div>
                                         </div>

@@ -700,8 +700,9 @@ export const WhatToPost: React.FC<WhatToPostProps> = ({ onOpenAdvanced }) => {
           </h4>
           <ul className="list-inside list-disc space-y-1 text-[13px] leading-relaxed text-gray-600 dark:text-gray-400">
             <li>Goal, tone, effort, and format steer how bold or practical each idea is.</li>
-            <li>Turn on <strong className="text-gray-800 dark:text-gray-200">Personality Override first</strong> in Quick settings when your saved override should strongly shape ideas.</li>
-            <li>Tone sliders in Settings fine-tune voice; Personality Override adds your real phrasing habits.</li>
+            <li>
+              Toggle <strong className="text-gray-800 dark:text-gray-200">Personality Override</strong> in Quick settings when you want suggestions to lean on your saved voice text.
+            </li>
           </ul>
         </section>
         <section>
@@ -902,22 +903,12 @@ export const WhatToPost: React.FC<WhatToPostProps> = ({ onOpenAdvanced }) => {
                 </p>
               </div>
 
-              {/* Personality Override overrides tone/sliders (same as Compose when override is on) */}
+              {/* Same behavior as Compose when personality override is prioritized */}
               <div className="rounded-lg border border-gray-200 dark:border-gray-600 p-3">
-                <div className="flex items-start justify-between gap-3">
+                <div className="flex items-center justify-between gap-3">
                   <div className="min-w-0 flex-1" id="what-to-post-personality-label">
                     <span className="block text-sm font-medium text-gray-900 dark:text-white">
-                      Personality Override first
-                    </span>
-                    <span className="block text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                      Use your{" "}
-                      <strong className="font-medium text-gray-700 dark:text-gray-300">Personality Override</strong> text from
-                      Settings as the main voice. Tone and style sliders are ignored when they conflict.
-                      {!user.settings?.creatorPersonality?.trim() ? (
-                        <span className="block mt-1 text-amber-600 dark:text-amber-400">
-                          Add Personality Override text in Settings → Profile & AI to enable this.
-                        </span>
-                      ) : null}
+                      Personality Override
                     </span>
                   </div>
                   <button
@@ -925,6 +916,11 @@ export const WhatToPost: React.FC<WhatToPostProps> = ({ onOpenAdvanced }) => {
                     role="switch"
                     aria-checked={draftSettings.prioritizeCreatorPersonality === true}
                     aria-labelledby="what-to-post-personality-label"
+                    title={
+                      user.settings?.creatorPersonality?.trim()
+                        ? undefined
+                        : "Save personality text on your profile to enable this option."
+                    }
                     disabled={!user.settings?.creatorPersonality?.trim()}
                     onClick={() =>
                       setDraftSettings((p) => ({
