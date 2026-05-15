@@ -8,6 +8,7 @@ import { User, MediaItem, Client, Plan } from '../types';
 import { ReferralSystem } from './ReferralSystem';
 import { FanHubHelpChooserModal } from './FanHubHelpChooserModal';
 import { ReportProblemModal } from './ReportProblemModal';
+import { SupportThreadsPanel } from './SupportThreadsPanel';
 import { ECHOFLUX_APP_ACCENT_HEX } from '../constants';
 
 const categoryIcons: Record<string, React.ReactNode> = {
@@ -900,7 +901,7 @@ export const Profile: React.FC = () => {
                     </SettingsSection>
                     <SettingsSection title="Help & support">
                         <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
-                            Get in touch with EchoFlux — report a technical issue or ask a general question about your creator account (billing, payouts, safety, policy). You&apos;ll use the same guided flow as members, with messages sent to platform support.
+                            Get in touch with EchoFlux — report a technical issue or ask a general question about your creator account (billing, payouts, safety, policy). Below you&apos;ll see your threaded conversation history with EchoFlux support (same pattern members see on their hub profiles).
                         </p>
                         <button
                             type="button"
@@ -909,6 +910,25 @@ export const Profile: React.FC = () => {
                         >
                             Get in touch
                         </button>
+                        <div className="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
+                            <SupportThreadsPanel
+                                accentHex={ECHOFLUX_APP_ACCENT_HEX}
+                                showToast={showToast}
+                                heading="Support threads"
+                                supportLabel="EchoFlux"
+                                replyPlaceholder="Reply to EchoFlux support…"
+                                description={
+                                    <>
+                                        Messages from your <strong className="font-semibold">Get in touch</strong> submissions appear here. Read responses from the team and reply in-line without leaving your profile.
+                                    </>
+                                }
+                                emptyStateHint={
+                                    <>
+                                        No threads yet. Tap <strong className="font-semibold">Get in touch</strong> above to contact EchoFlux support.
+                                    </>
+                                }
+                            />
+                        </div>
                     </SettingsSection>
                     <SettingsSection title="Security">
                         <div className="flex items-center justify-between">

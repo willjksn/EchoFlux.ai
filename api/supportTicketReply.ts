@@ -28,12 +28,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     const creatorId = typeof ticket.creatorId === "string" ? ticket.creatorId : null;
+    const reporterKindForTicket = ticket.reporterKind === "creator" ? "creator" : "fan";
     const reporterName =
       (typeof ticket.reporterName === "string" && ticket.reporterName) || authUser.email || "Reporter";
 
     const batch = db.batch();
     batch.set(ticketRef.collection("messages").doc(), {
-      senderKind: "fan",
+      senderKind: reporterKindForTicket,
       senderUid: authUser.uid,
       senderName: reporterName,
       content: text,
@@ -78,7 +79,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       ticketId,
       reporterUid,
       reporterEmail: authUser.email || null,
-      reporterKind: "fan",
+      reporterKind: reporterKindForTicket,
       creatorId,
       read: false,
       createdAt: new Date(),

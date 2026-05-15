@@ -4,6 +4,7 @@ import { getAdminDb } from "./_firebaseAdmin.js";
 import { hasPlatformAdminAccess } from "./_platformAdminAccess.js";
 import { sendEmail, isMailerConfigured } from "./_mailer.js";
 import { logEmailHistory } from "./_emailHistory.js";
+import { resolveMemberFacingReplyBrandFromTicket } from "./_supportTicketBranding.js";
 
 function messageTimeMs(data: Record<string, unknown>): number {
   const c = data.createdAt;
@@ -28,7 +29,8 @@ function escapeHtml(s: string): string {
 function buildTicketContextBlock(
   ticketId: string,
   ticket: Record<string, unknown>,
-  sortedMessages: Array<{ senderKind: string; senderName: string; content: string }>
+  sortedMessages: Array<{ senderKind: string; senderName: string; content: string }>,
+  memberFacingBrand: string,
 ): string {
   const creatorDisplayName =
     typeof ticket.creatorDisplayName === "string" && ticket.creatorDisplayName.trim()
@@ -53,7 +55,7 @@ function buildTicketContextBlock(
           .join("\n\n")
       : preview || "(no thread text)";
   return (
-    `EchoFlux support — Ticket ${ticketId}\n` +
+    `${memberFacingBrand} support — Ticket ${ticketId}\n` +
     `Creator / storefront: ${creatorLine}\n` +
     `Reporter: ${reporterName} (${reporterKind})\n` +
     `Opened: ${createdAt ? new Date(createdAt).toLocaleString() : "—"}\n\n` +
@@ -93,6 +95,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (!ticketSnap.exists) return res.status(404).json({ error: "Ticket not found" });
 
   const ticket = ticketSnap.data() as Record<string, unknown>;
+  const memberFacingBrand = resolveMemberFacingReplyBrandFromTicket(ticket);
   const toRaw = typeof ticket.reporterEmail === "string" ? ticket.reporterEmail.trim() : "";
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   if (!toRaw || !emailRegex.test(toRaw.toLowerCase())) {
@@ -114,9 +117,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     .sort((a, b) => a._ms - b._ms)
     .map(({ _ms, ...rest }) => rest);
 
-  const contextBlock = buildTicketContextBlock(tid, ticket, sorted);
+  const contextBlock = buildTicketContextBlock(tid, ticket, sorted, memberFacingBrand);
   const fullText = `${contextBlock}${reply}`;
-  const subject = `Re: EchoFlux support (ticket ${tid.slice(0, 8)}…)`;
+  const subject = `Re: ${memberFacingBrand} support (ticket ${tid.slice(0, 8)}…)`;
   const html = `<pre style="font-family:system-ui,sans-serif;white-space:pre-wrap;">${escapeHtml(fullText)}</pre>`;
 
   try {
@@ -156,9 +159,76 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
     }
 
+    const now = new Date().toISOString();
+    const reporterUid = typeof ticket.reporterUid === "string" ? ticket.reporterUid.trim() : "";
+    const creatorId = typeof ticket.creatorId === "string" ? ticket.creatorId.trim() : "";
+    const senderDisplayName = `${memberFacingBrand} support`;
+    const prevCount = typeof ticket.messageCount === "number" ? ticket.messageCount : 1;
+
+    let threadMirrored = false;
+    try {
+      const batch = db.batch();
+      batch.set(ticketRef.collection("messages").doc(), {
+        senderKind: "support",
+        senderUid: authUser.uid,
+        senderName: senderDisplayName,
+        content: reply,
+        createdAt: now,
+      });
+      batch.set(
+        ticketRef,
+        {
+          updatedAt: now,
+          status: "open",
+          lastMessageAt: now,
+          lastMessagePreview: reply.slice(0, 180),
+          messageCount: prevCount + 1,
+        },
+        { merge: true },
+      );
+
+      if (reporterUid) {
+        const threadRef = db.collection("users").doc(reporterUid).collection("support_threads").doc(tid);
+        batch.set(threadRef.collection("messages").doc(), {
+          senderType: "support",
+          content: reply,
+          createdAt: now,
+        });
+        batch.set(
+          threadRef,
+          {
+            updatedAt: now,
+            lastMessage: reply,
+            status: "open",
+            memberFacingReplyBrand: memberFacingBrand,
+          },
+          { merge: true },
+        );
+        threadMirrored = true;
+      }
+
+      if (creatorId) {
+        batch.set(
+          db.collection("creators").doc(creatorId).collection("support_tickets").doc(tid),
+          {
+            updatedAt: now,
+            status: "open",
+            lastMessageAt: now,
+            preview: reply.slice(0, 180),
+          },
+          { merge: true },
+        );
+      }
+
+      await batch.commit();
+    } catch (mirrorErr: unknown) {
+      console.error("adminSendSupportTicketEmail thread mirror:", mirrorErr);
+    }
+
     return res.status(200).json({
       success: true,
       emailSent: true,
+      threadMirrored,
       provider,
       to,
     });

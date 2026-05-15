@@ -5,6 +5,7 @@ import { getAdminDb } from "./_firebaseAdmin.js";
 import { hasPlatformAdminAccess } from "./_platformAdminAccess.js";
 import { checkApiKeys } from "./_errorHandler.js";
 import { getModelForTask } from "./_modelRouter.js";
+import { resolveMemberFacingReplyBrandFromTicket } from "./_supportTicketBranding.js";
 
 function sanitizeForPrompt(s: string, max: number): string {
   const t = String(s || "")
@@ -84,6 +85,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         preview: typeof t.preview === "string" ? t.preview : "",
         status: t.status === "done" ? "done" : "open",
         createdAt: typeof t.createdAt === "string" ? t.createdAt : null,
+        memberFacingReplyBrand: resolveMemberFacingReplyBrandFromTicket(t),
       },
       messages,
     });
@@ -135,7 +137,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const dn = !isPlaceholderAdminCreatorDisplay(dnRaw) ? dnRaw : "";
   const creatorLabel = handle || dn || "Platform / unassigned";
 
-  const prompt = `You are EchoFlux platform support (echoflux.ai). Write the BODY of a resolution email only (plain text, no subject line, no "Subject:" line).
+  const memberFacingBrand = resolveMemberFacingReplyBrandFromTicket(t);
+  const prompt =
+    reporterKind === "creator"
+      ? `You are EchoFlux platform support (creator studio — echoflux.ai). Write the BODY of a resolution email only (plain text, no subject line, no "Subject:" line).
 
 Rules:
 - 2–6 short paragraphs max; professional, warm, clear.
@@ -143,6 +148,25 @@ Rules:
 - If the report is vague, acknowledge that and offer concrete next steps (e.g. try again, clear cache, reply with screenshots).
 - Do not promise refunds or legal outcomes unless the ticket clearly asks and you can say "we'll review."
 - End with a simple sign-off: "EchoFlux Support"
+- Do not use markdown code fences.
+
+Ticket meta:
+- Reporter type: ${reporterKind}
+- Creator / storefront context: ${creatorLabel}
+- Preview: ${preview}
+
+Full thread:
+${sanitizeForPrompt(threadText, 12000)}
+
+Output ONLY the email body text, nothing else.`
+      : `You are ${memberFacingBrand} member support (the fan-facing site where members browse creator hubs). EchoFlux operates the platform behind the scenes; the member experience should stay labeled as ${memberFacingBrand}. Write the BODY of a resolution email only (plain text, no subject line, no "Subject:" line).
+
+Rules:
+- 2–6 short paragraphs max; professional, warm, clear.
+- Reference their issue specifically based on the ticket below; do not invent details they did not report.
+- If the report is vague, acknowledge that and offer concrete next steps (e.g. try again, clear cache, reply with screenshots).
+- Do not promise refunds or legal outcomes unless the ticket clearly asks and you can say "we'll review."
+- End with a simple sign-off: "${memberFacingBrand} support"
 - Do not use markdown code fences.
 
 Ticket meta:

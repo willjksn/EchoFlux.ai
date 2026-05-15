@@ -38,6 +38,12 @@ interface ReportProblemModalProps {
   showDiagnosticsUi?: boolean;
   /** Screenshot uploads (Firebase Storage → URLs on ticket). Defaults to true when `layout` is `contactPage`. */
   allowImageAttachments?: boolean;
+  /** Extra lines appended to diagnostics (e.g. member @username + creator handle on fan hubs). */
+  additionalDiagnosticsLines?: string[];
+  /**
+   * Fan hub: server validates this creators/{id} doc and stores creatorId/handle on platform tickets for admin triage.
+   */
+  hubCreatorId?: string | null;
 }
 
 export const ReportProblemModal: React.FC<ReportProblemModalProps> = ({
@@ -55,6 +61,8 @@ export const ReportProblemModal: React.FC<ReportProblemModalProps> = ({
   onBack,
   showDiagnosticsUi = true,
   allowImageAttachments,
+  additionalDiagnosticsLines,
+  hubCreatorId,
 }) => {
   const { user, activePage, showToast } = useAppContext();
   const [message, setMessage] = useState("");
@@ -75,8 +83,12 @@ export const ReportProblemModal: React.FC<ReportProblemModalProps> = ({
     lines.push(`URL: ${typeof window !== "undefined" ? window.location.href : ""}`);
     lines.push(`Time: ${new Date().toISOString()}`);
     lines.push(`User-Agent: ${typeof navigator !== "undefined" ? navigator.userAgent : ""}`);
+    for (const line of additionalDiagnosticsLines || []) {
+      const t = typeof line === "string" ? line.trim() : "";
+      if (t) lines.push(t);
+    }
     return lines.join("\n");
-  }, [user?.email, user?.id, user?.plan, user?.role, pageLabel]);
+  }, [user?.email, user?.id, user?.plan, user?.role, pageLabel, additionalDiagnosticsLines]);
 
   const readonlyName =
     auth.currentUser?.displayName?.trim() ||
@@ -176,6 +188,16 @@ export const ReportProblemModal: React.FC<ReportProblemModalProps> = ({
     try {
       const attachmentUrls = await uploadPendingScreenshots();
       const token = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
+      const trimmedHubCreatorId = hubCreatorId?.trim();
+      const platformPayload = {
+        message: message.trim(),
+        diagnostics,
+        page: pageLabel,
+        url: typeof window !== "undefined" ? window.location.href : "",
+        userAgent: typeof navigator !== "undefined" ? navigator.userAgent : "",
+        ...(attachmentUrls.length > 0 ? { attachmentUrls } : {}),
+        ...(trimmedHubCreatorId ? { hubCreatorId: trimmedHubCreatorId } : {}),
+      };
 
       if (mode === "platform") {
         if (!token) throw new Error("Please sign in to contact support.");
@@ -186,13 +208,8 @@ export const ReportProblemModal: React.FC<ReportProblemModalProps> = ({
             Authorization: `Bearer ${token}`,
           },
           body: JSON.stringify({
-            message: message.trim(),
-            diagnostics,
-            page: pageLabel,
-            url: typeof window !== "undefined" ? window.location.href : "",
-            userAgent: typeof navigator !== "undefined" ? navigator.userAgent : "",
+            ...platformPayload,
             inboxBucket: platformInboxBucket,
-            ...(attachmentUrls.length > 0 ? { attachmentUrls } : {}),
           }),
         });
         const data = await res.json().catch(() => ({}));
@@ -218,13 +235,8 @@ export const ReportProblemModal: React.FC<ReportProblemModalProps> = ({
             Authorization: `Bearer ${token}`,
           },
           body: JSON.stringify({
-            message: message.trim(),
-            diagnostics,
-            page: pageLabel,
-            url: typeof window !== "undefined" ? window.location.href : "",
-            userAgent: typeof navigator !== "undefined" ? navigator.userAgent : "",
+            ...platformPayload,
             inboxBucket: "it_support",
-            ...(attachmentUrls.length > 0 ? { attachmentUrls } : {}),
           }),
         }).catch(() => {});
       }

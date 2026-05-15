@@ -15,6 +15,8 @@ type ITTicket = {
   reporterName: string | null;
   reporterKind: ReporterKind;
   reporterRole: string;
+  /** Member-visible support brand for replies (witme.io vs EchoFlux). */
+  memberFacingReplyBrand: string | null;
   status: TicketStatus;
   preview: string;
   createdAt: string | null;
@@ -31,7 +33,14 @@ type TicketMessageRow = {
   createdAt: string | null;
 };
 
+function resolveTicketEmailBrand(ticket: Pick<ITTicket, "memberFacingReplyBrand" | "reporterKind">): string {
+  const stored = ticket.memberFacingReplyBrand?.trim();
+  if (stored) return stored;
+  return ticket.reporterKind === "fan" ? "witme.io" : "EchoFlux";
+}
+
 function buildTicketEmailHeader(ticket: ITTicket, messages: TicketMessageRow[]): string {
+  const brand = resolveTicketEmailBrand(ticket);
   const creatorLine =
     ticket.creatorDisplayName ||
     (ticket.creatorHandle ? `@${ticket.creatorHandle.replace(/^@/, "")}` : "Platform / unassigned");
@@ -45,7 +54,7 @@ function buildTicketEmailHeader(ticket: ITTicket, messages: TicketMessageRow[]):
           .join("\n\n")
       : ticket.preview || "(no thread text)";
   return (
-    `EchoFlux support — Ticket ${ticket.id}\n` +
+    `${brand} support — Ticket ${ticket.id}\n` +
     `Creator / storefront: ${creatorLine}\n` +
     `Reporter: ${ticket.reporterName || "Unknown"} (${ticket.reporterKind})\n` +
     `Opened: ${ticket.createdAt ? new Date(ticket.createdAt).toLocaleString() : "—"}\n\n` +

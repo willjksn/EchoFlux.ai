@@ -68,6 +68,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         reporterName: typeof data.reporterName === "string" ? data.reporterName : null,
         reporterKind: data.reporterKind === "creator" ? "creator" : "fan",
         reporterRole: typeof data.reporterRole === "string" ? data.reporterRole : "User",
+        memberFacingReplyBrand:
+          typeof data.memberFacingReplyBrand === "string" ? data.memberFacingReplyBrand : null,
         status: data.status === "done" ? "done" : "open",
         preview: typeof data.preview === "string" ? data.preview : "",
         createdAt: typeof data.createdAt === "string" ? data.createdAt : null,

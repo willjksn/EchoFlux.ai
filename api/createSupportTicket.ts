@@ -3,6 +3,7 @@ import { getAdminDb } from "./_firebaseAdmin.js";
 import { verifyAuth } from "./verifyAuth.js";
 import { sendSupportTicketAcknowledgmentEmail } from "./_supportTicketAcknowledgmentEmail.js";
 import { appendAttachmentsToMessageBody, sanitizeSupportAttachmentUrlsForUid } from "./_supportAttachmentUrls.js";
+import { memberFacingReplyBrandForReporterKind } from "./_supportTicketBranding.js";
 
 type ReporterKind = "fan" | "creator";
 
@@ -56,6 +57,30 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         ? creatorData.displayName.trim()
         : creatorHandle || creatorId;
 
+    const reporterKindResolved: ReporterKind = reporterKind === "creator" ? "creator" : "fan";
+    const fanUsernameRaw =
+      reporterKindResolved === "fan" && typeof reporterData.username === "string"
+        ? reporterData.username.trim().toLowerCase()
+        : "";
+    const verifiedFanUsername =
+      reporterKindResolved === "fan" && fanUsernameRaw.length >= 3 && /^[a-z0-9_]+$/.test(fanUsernameRaw)
+        ? fanUsernameRaw
+        : "";
+    const reporterNameResolved =
+      reporterKindResolved === "creator"
+        ? (typeof reporterData.name === "string" && reporterData.name) ||
+          (typeof reporterData.displayName === "string" && reporterData.displayName) ||
+          authUser.email ||
+          "Unknown"
+        : verifiedFanUsername
+          ? `@${verifiedFanUsername}`
+          : (typeof reporterData.name === "string" && reporterData.name) ||
+            (typeof reporterData.displayName === "string" && reporterData.displayName) ||
+            authUser.email ||
+            "Unknown";
+
+    const memberFacingReplyBrand = memberFacingReplyBrandForReporterKind(reporterKindResolved);
+
     const initialMessage = String(message).trim();
     const messageWithDiagnostics = diagnostics?.trim()
       ? `${initialMessage}\n\n---\n${diagnostics.trim()}`
@@ -72,13 +97,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       creatorDisplayName,
       reporterUid: authUser.uid,
       reporterEmail: authUser.email || null,
-      reporterName:
-        (typeof reporterData.name === "string" && reporterData.name) ||
-        (typeof reporterData.displayName === "string" && reporterData.displayName) ||
-        authUser.email ||
-        "Unknown",
+      reporterName: reporterNameResolved,
       reporterRole: (typeof reporterData.role === "string" && reporterData.role) || "User",
-      reporterKind: reporterKind === "creator" ? "creator" : "fan",
+      reporterKind: reporterKindResolved,
+      memberFacingReplyBrand,
       status: "open",
       page: typeof page === "string" ? page : null,
       url: typeof url === "string" ? url : null,
@@ -108,6 +130,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       lastMessage: initialMessage,
       creatorId,
       creatorDisplayName,
+      memberFacingReplyBrand,
     });
     batch.set(
       db.collection("users").doc(authUser.uid).collection("support_threads").doc(ticketId).collection("messages").doc(),
@@ -152,6 +175,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       to: authUser.email,
       reporterName: baseTicket.reporterName,
       ticketId,
+      memberFacingBrand: memberFacingReplyBrand,
     });
 
     return res.status(200).json({ success: true, ticketId });

@@ -3,6 +3,7 @@ import { getAdminDb } from "./_firebaseAdmin.js";
 import { getVerifyAuth, withErrorHandling } from "./_errorHandler.js";
 import { sendSupportTicketAcknowledgmentEmail } from "./_supportTicketAcknowledgmentEmail.js";
 import { appendAttachmentsToMessageBody, sanitizeSupportAttachmentUrlsForUid } from "./_supportAttachmentUrls.js";
+import { memberFacingReplyBrandForReporterKind } from "./_supportTicketBranding.js";
 
 async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
   if (req.method !== "POST") {
@@ -17,7 +18,7 @@ async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
     return;
   }
 
-  const { message, diagnostics, page, url, userAgent, inboxBucket, attachmentUrls } = (req.body || {}) as {
+  const { message, diagnostics, page, url, userAgent, inboxBucket, attachmentUrls, hubCreatorId } = (req.body || {}) as {
     message?: string;
     diagnostics?: string;
     page?: string;
@@ -26,6 +27,8 @@ async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
     /** "contact" = general EchoFlux inbox; omit or anything else defaults to IT-style triage. */
     inboxBucket?: string;
     attachmentUrls?: unknown;
+    /** Fan hub: validated server-side against creators/{id}; links platform ticket to storefront for admins. */
+    hubCreatorId?: string;
   };
 
   if (!message || !String(message).trim()) {
@@ -70,6 +73,26 @@ async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
     isCreatorReporter && typeof creatorData.displayName === "string" && creatorData.displayName.trim()
       ? creatorData.displayName.trim()
       : creatorHandle || null;
+
+  let hubCreatorIdResolved: string | null = null;
+  let hubCreatorHandleResolved: string | null = null;
+  let hubCreatorDisplayNameResolved: string | null = null;
+  if (!isCreatorReporter && hubCreatorId && typeof hubCreatorId === "string" && hubCreatorId.trim()) {
+    const hubSnap = await db.collection("creators").doc(hubCreatorId.trim()).get();
+    if (hubSnap.exists) {
+      const hubData = (hubSnap.data() || {}) as Record<string, unknown>;
+      hubCreatorIdResolved = hubCreatorId.trim();
+      hubCreatorHandleResolved = typeof hubData.handle === "string" ? hubData.handle : null;
+      hubCreatorDisplayNameResolved =
+        typeof hubData.displayName === "string" && hubData.displayName.trim()
+          ? hubData.displayName.trim()
+          : hubCreatorHandleResolved || hubCreatorIdResolved;
+    }
+  }
+
+  const ticketCreatorId = isCreatorReporter ? user.uid : hubCreatorIdResolved;
+  const ticketCreatorHandle = isCreatorReporter ? creatorHandle : hubCreatorHandleResolved;
+  const ticketCreatorDisplayName = isCreatorReporter ? creatorDisplayName : hubCreatorDisplayNameResolved;
   const preview = trimmedUserMessage.slice(0, 180);
   const threadTitle =
     bucket === "contact"
@@ -79,24 +102,37 @@ async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
   const ticketRef = db.collection("support_tickets").doc();
   const ticketId = ticketRef.id;
   const reporterKind = isCreatorReporter ? "creator" : "fan";
-  const reporterName =
-    (typeof userData.name === "string" && userData.name) ||
-    (typeof userData.displayName === "string" && userData.displayName) ||
-    user.email ||
-    "Unknown";
+  const fanUsernameRaw =
+    !isCreatorReporter && typeof userData.username === "string" ? userData.username.trim().toLowerCase() : "";
+  const verifiedFanUsername =
+    !isCreatorReporter && fanUsernameRaw.length >= 3 && /^[a-z0-9_]+$/.test(fanUsernameRaw) ? fanUsernameRaw : "";
+  const reporterName = isCreatorReporter
+    ? (typeof userData.name === "string" && userData.name) ||
+      (typeof userData.displayName === "string" && userData.displayName) ||
+      user.email ||
+      "Unknown"
+    : verifiedFanUsername
+      ? `@${verifiedFanUsername}`
+      : (typeof userData.name === "string" && userData.name) ||
+        (typeof userData.displayName === "string" && userData.displayName) ||
+        user.email ||
+        "Unknown";
+
+  const memberFacingReplyBrand = memberFacingReplyBrandForReporterKind(reporterKind);
 
   const batch = db.batch();
 
   batch.set(ticketRef, {
     id: ticketId,
-    creatorId: isCreatorReporter ? user.uid : null,
-    creatorHandle,
-    creatorDisplayName,
+    creatorId: ticketCreatorId,
+    creatorHandle: ticketCreatorHandle,
+    creatorDisplayName: ticketCreatorDisplayName,
     reporterUid: user.uid,
     reporterEmail: user.email || null,
     reporterName,
     reporterRole: (typeof userData.role === "string" && userData.role) || "User",
     reporterKind,
+    memberFacingReplyBrand,
     status: "open",
     page: page || null,
     url: url || null,
@@ -126,8 +162,9 @@ async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
     createdAt: now,
     updatedAt: now,
     lastMessage: trimmedUserMessage,
-    creatorId: isCreatorReporter ? user.uid : null,
-    creatorDisplayName,
+    creatorId: ticketCreatorId,
+    creatorDisplayName: ticketCreatorDisplayName,
+    memberFacingReplyBrand,
   });
   batch.set(
     db.collection("users").doc(user.uid).collection("support_threads").doc(ticketId).collection("messages").doc(),
@@ -167,7 +204,7 @@ async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
     reporterUid: user.uid,
     reporterEmail: user.email || null,
     reporterKind,
-    creatorId: isCreatorReporter ? user.uid : null,
+    creatorId: ticketCreatorId,
     read: false,
     createdAt: new Date(),
   });
@@ -178,6 +215,7 @@ async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
     to: user.email,
     reporterName,
     ticketId,
+    memberFacingBrand: memberFacingReplyBrand,
   });
 
   res.status(200).json({ success: true });

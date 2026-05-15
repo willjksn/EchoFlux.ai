@@ -8,24 +8,30 @@ export async function sendSupportTicketAcknowledgmentEmail(params: {
   to: string | null | undefined;
   reporterName: string;
   ticketId: string;
+  /** Label members see for support (e.g. witme.io vs EchoFlux). */
+  memberFacingBrand?: string;
 }): Promise<void> {
   const to = typeof params.to === "string" ? params.to.trim().toLowerCase() : "";
   if (!to || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to)) return;
 
   const name = params.reporterName?.trim() || "there";
-  const subject = "We received your support request — EchoFlux";
+  const brand = params.memberFacingBrand?.trim() || "EchoFlux";
+  const threadsLabel = brand === "EchoFlux" ? "EchoFlux support threads" : `${brand} support threads`;
+  const signOff = brand === "EchoFlux" ? "EchoFlux Support" : `${brand} support`;
+
+  const subject = `We received your support request — ${brand}`;
   const text =
     `Hi ${name},\n\n` +
-    `Thanks for contacting EchoFlux support. We've received your report and our team will review it shortly.\n\n` +
-    `When you're signed in, you can continue the conversation from your profile under IT support threads.\n\n` +
+    `Thanks for contacting ${brand} support. We've received your report and our team will review it shortly.\n\n` +
+    `When you're signed in, you can continue the conversation from your profile under ${threadsLabel}.\n\n` +
     `Reference: ${params.ticketId}\n\n` +
-    `— EchoFlux Support`;
+    `— ${signOff}`;
 
   const html = `<p>Hi ${escapeHtml(name)},</p>
-<p>Thanks for contacting EchoFlux support. We've received your report and our team will review it shortly.</p>
-<p>When you're signed in, you can continue the conversation from your profile under <strong>IT support threads</strong>.</p>
+<p>Thanks for contacting ${escapeHtml(brand)} support. We've received your report and our team will review it shortly.</p>
+<p>When you're signed in, you can continue the conversation from your profile under <strong>${escapeHtml(threadsLabel)}</strong>.</p>
 <p><strong>Reference:</strong> ${escapeHtml(params.ticketId)}</p>
-<p>— EchoFlux Support</p>`;
+<p>— ${escapeHtml(signOff)}</p>`;
 
   try {
     const mail = await sendEmail({ to, subject, text, html });
