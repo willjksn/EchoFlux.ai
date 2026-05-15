@@ -265,14 +265,49 @@ export const ReportProblemModal: React.FC<ReportProblemModalProps> = ({
 
   if (!isOpen) return null;
 
-  const centerTitle =
-    mode === "platform" ? `Contact ${supportName}` : "Report a problem";
-  const centerSubtitle =
-    mode === "platform"
-      ? `Questions about ${supportName} — account, billing, safety, or general feedback.`
-      : "Tell us what went wrong on this member hub. We’ll share this with the support team for this page.";
-
   const infoEmail = (panelSupportEmail ?? "").trim() || null;
+
+  const isPlatformContactBucket = mode === "platform" && platformInboxBucket === "contact";
+  const isPlatformItBucket = mode === "platform" && platformInboxBucket === "it_support";
+
+  const contactPageHeroTitle =
+    isPlatformContactBucket
+      ? `Contact ${supportName}`
+      : isPlatformItBucket
+        ? "Report a problem"
+        : mode === "inApp"
+          ? "Report a problem"
+          : `Contact ${supportName}`;
+
+  const contactPageHeroSubtitle = isPlatformContactBucket
+    ? `Questions about ${supportName} — account, billing, safety, or general feedback.`
+    : isPlatformItBucket
+      ? `Tell us what went wrong in the EchoFlux creator app — dashboard, payouts, storefront tools, or media.`
+      : mode === "inApp"
+        ? "Tell us what went wrong on this member hub. We’ll share this with the support team for this page."
+        : `Questions about ${supportName} — account, billing, safety, or general feedback.`;
+
+  const contactPageMessagePlaceholder = isPlatformContactBucket
+    ? "What do you need help with? Include dates, charges, or usernames if relevant."
+    : isPlatformItBucket
+      ? "What happened, what you expected, and any error text or steps to reproduce…"
+      : mode === "inApp"
+        ? "What happened, what you expected, and any error text or steps to reproduce…"
+        : "What do you need help with? Include dates, charges, or usernames if relevant.";
+
+  const standardModalTitle = isPlatformItBucket
+    ? "Report a problem"
+    : mode === "platform"
+      ? `Contact ${supportName}`
+      : "Report a Problem";
+
+  const standardModalSubtitle = isPlatformContactBucket
+    ? `Reach the ${supportName} team about billing, account access, safety, or general questions.`
+    : isPlatformItBucket
+      ? `Technical issues with EchoFlux — include what you tried and any error messages.`
+      : mode === "inApp"
+        ? "Send this directly to support in-app."
+        : `We’ll respond via \`${contactEmail}\`.`;
 
   if (layout === "contactPage") {
     return (
@@ -304,8 +339,8 @@ export const ReportProblemModal: React.FC<ReportProblemModalProps> = ({
 
           <div className="p-6 sm:p-8 space-y-8">
             <div className="text-center px-2">
-              <h2 className="text-3xl font-bold text-gray-900 dark:text-white">{centerTitle}</h2>
-              <p className="mt-2 text-lg text-gray-500 dark:text-gray-400 max-w-2xl mx-auto">{centerSubtitle}</p>
+              <h2 className="text-3xl font-bold text-gray-900 dark:text-white">{contactPageHeroTitle}</h2>
+              <p className="mt-2 text-lg text-gray-500 dark:text-gray-400 max-w-2xl mx-auto">{contactPageHeroSubtitle}</p>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
@@ -346,11 +381,7 @@ export const ReportProblemModal: React.FC<ReportProblemModalProps> = ({
                       onChange={(e) => setMessage(e.target.value)}
                       rows={5}
                       className={FORM_FIELD_CLASS}
-                      placeholder={
-                        mode === "platform"
-                          ? "What do you need help with? Include dates, charges, or usernames if relevant."
-                          : "What happened, what you expected, and any error text or steps to reproduce…"
-                      }
+                      placeholder={contactPageMessagePlaceholder}
                     />
                   </div>
                   {allowScreenshots ? (
@@ -410,11 +441,11 @@ export const ReportProblemModal: React.FC<ReportProblemModalProps> = ({
                   >
                     {isSubmitting
                       ? "Sending…"
-                      : mode === "platform"
+                      : isPlatformContactBucket
                         ? "Submit"
-                        : mode === "inApp"
+                        : isPlatformItBucket || mode === "inApp"
                           ? "Submit report"
-                          : "Email support"}
+                          : "Submit"}
                   </button>
                 </div>
               </div>
@@ -429,7 +460,9 @@ export const ReportProblemModal: React.FC<ReportProblemModalProps> = ({
                           <MailIcon className="w-5 h-5 text-primary-600 dark:text-primary-400" />
                         </div>
                         <div>
-                          <p className="font-semibold text-gray-900 dark:text-white">Support</p>
+                          <p className="font-semibold text-gray-900 dark:text-white">
+                            {isPlatformItBucket ? "EchoFlux support" : "Support"}
+                          </p>
                           {infoEmail ? (
                             <>
                               <a
@@ -522,14 +555,10 @@ export const ReportProblemModal: React.FC<ReportProblemModalProps> = ({
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200 dark:border-gray-800">
           <div>
             <h3 className="text-lg font-bold text-gray-900 dark:text-white">
-              {mode === "platform" ? `Contact ${supportName}` : "Report a Problem"}
+              {standardModalTitle}
             </h3>
             <p className="text-xs text-gray-500 dark:text-gray-400">
-              {mode === "platform"
-                ? `Reach the ${supportName} team about billing, account access, safety, or general questions.`
-                : mode === "inApp"
-                  ? "Send this directly to support in-app."
-                  : `We’ll respond via \`${contactEmail}\`.`}
+              {standardModalSubtitle}
             </p>
           </div>
           <button
@@ -544,7 +573,7 @@ export const ReportProblemModal: React.FC<ReportProblemModalProps> = ({
 
         <div className="px-5 py-4 space-y-3">
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-            {mode === "platform" ? "Your message" : "What happened?"}
+            {isPlatformContactBucket ? "Your message" : "What happened?"}
           </label>
           <textarea
             value={message}
@@ -552,7 +581,7 @@ export const ReportProblemModal: React.FC<ReportProblemModalProps> = ({
             rows={5}
             className="w-full rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white p-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
             placeholder={
-              mode === "platform"
+              isPlatformContactBucket
                 ? "What do you need help with? Include any relevant dates, charges, or usernames."
                 : "Describe the issue and what you were trying to do…"
             }
@@ -593,9 +622,9 @@ export const ReportProblemModal: React.FC<ReportProblemModalProps> = ({
           >
             {isSubmitting
               ? "Sending…"
-              : mode === "platform"
+              : isPlatformContactBucket
                 ? "Send message"
-                : mode === "inApp"
+                : isPlatformItBucket || mode === "inApp"
                   ? "Send Report"
                   : "Email Support"}
           </button>

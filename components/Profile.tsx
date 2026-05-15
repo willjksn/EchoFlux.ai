@@ -6,6 +6,9 @@ import { useCreatorHandle } from '../src/hooks/useCreatorHandle';
 import { filterEmojisForSjHeartAccess, canUseSjHeartEmoji } from '../src/lib/customEmoji';
 import { User, MediaItem, Client, Plan } from '../types';
 import { ReferralSystem } from './ReferralSystem';
+import { FanHubHelpChooserModal } from './FanHubHelpChooserModal';
+import { ReportProblemModal } from './ReportProblemModal';
+import { ECHOFLUX_APP_ACCENT_HEX } from '../constants';
 
 const categoryIcons: Record<string, React.ReactNode> = {
     FaceSmileIcon: <FaceSmileIcon className="w-5 h-5"/>,
@@ -62,6 +65,8 @@ export const Profile: React.FC = () => {
     const nameInputRef = useRef<HTMLInputElement>(null);
     const nameEmojiPickerRef = useRef<HTMLDivElement>(null);
     const nameEmojiButtonRef = useRef<HTMLButtonElement>(null);
+
+    const [creatorHelpFlow, setCreatorHelpFlow] = useState<'closed' | 'chooser' | 'report' | 'contact'>('closed');
     
     // Emoji picker state for bio field
     const [isBioEmojiPickerOpen, setIsBioEmojiPickerOpen] = useState(false);
@@ -439,6 +444,42 @@ export const Profile: React.FC = () => {
 
     return (
         <div className="p-6 bg-gray-50 dark:bg-gray-900 min-h-full">
+            <FanHubHelpChooserModal
+                variant="creatorApp"
+                isOpen={creatorHelpFlow === 'chooser'}
+                onClose={() => setCreatorHelpFlow('closed')}
+                fanBrand="EchoFlux"
+                creatorDisplayName=""
+                primaryColor={ECHOFLUX_APP_ACCENT_HEX}
+                onChooseReport={() => setCreatorHelpFlow('report')}
+                onChooseContact={() => setCreatorHelpFlow('contact')}
+            />
+            <ReportProblemModal
+                isOpen={creatorHelpFlow === 'report'}
+                onClose={() => setCreatorHelpFlow('closed')}
+                onBack={() => setCreatorHelpFlow('chooser')}
+                layout="contactPage"
+                showDiagnosticsUi={false}
+                mode="platform"
+                platformInboxBucket="it_support"
+                supportName="EchoFlux"
+                panelSupportEmail="contact@echoflux.ai"
+                pageLabelForReporting="Profile (EchoFlux creator)"
+                contactEmail="contact@echoflux.ai"
+            />
+            <ReportProblemModal
+                isOpen={creatorHelpFlow === 'contact'}
+                onClose={() => setCreatorHelpFlow('closed')}
+                onBack={() => setCreatorHelpFlow('chooser')}
+                layout="contactPage"
+                showDiagnosticsUi={false}
+                mode="platform"
+                platformInboxBucket="contact"
+                supportName="EchoFlux"
+                panelSupportEmail="contact@echoflux.ai"
+                pageLabelForReporting="Profile (EchoFlux creator)"
+                contactEmail="contact@echoflux.ai"
+            />
             <div className="max-w-4xl mx-auto space-y-6">
                 <div className="mb-6">
                     <h1 className="text-3xl font-bold text-gray-900 dark:text-white">{currentAccountName}'s Profile</h1>
@@ -856,6 +897,18 @@ export const Profile: React.FC = () => {
                 <>
                     <SettingsSection title="Referral Program">
                         <ReferralSystem />
+                    </SettingsSection>
+                    <SettingsSection title="Help & support">
+                        <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
+                            Get in touch with EchoFlux — report a technical issue or ask a general question about your creator account (billing, payouts, safety, policy). You&apos;ll use the same guided flow as members, with messages sent to platform support.
+                        </p>
+                        <button
+                            type="button"
+                            onClick={() => setCreatorHelpFlow('chooser')}
+                            className="px-5 py-2.5 bg-gradient-to-r from-primary-600 to-primary-500 text-white rounded-lg hover:from-primary-700 hover:to-primary-600 font-semibold shadow-md transition-all"
+                        >
+                            Get in touch
+                        </button>
                     </SettingsSection>
                     <SettingsSection title="Security">
                         <div className="flex items-center justify-between">

@@ -22,6 +22,9 @@ export const STOREFRONT_CONTENT_POLICY = {
   ] as const,
 } as const;
 
+/** EchoFlux creator app chrome: matches Tailwind `primary-600` (see tailwind.config.js). Not fan-hub storefront theme. */
+export const ECHOFLUX_APP_ACCENT_HEX = "#2563eb";
+
 /**
  * sessionStorage key: set immediately before fan storefront email/Google signup so AuthContext
  * creates `users/{uid}` with plan Free + hasCompletedOnboarding (skips EchoFlux PlanSelectorModal).

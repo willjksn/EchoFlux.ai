@@ -4,8 +4,9 @@ import { SunIcon, MoonIcon, BellIcon, MenuIcon, LogoutIcon, ChatIcon, BriefcaseI
 import { Client, Notification } from '../types';
 import { useAppContext } from './AppContext';
 import { auth } from '../firebaseConfig';
-import { OFFLINE_MODE } from '../constants';
+import { OFFLINE_MODE, ECHOFLUX_APP_ACCENT_HEX } from '../constants';
 import { ReportProblemModal } from './ReportProblemModal';
+import { FanHubHelpChooserModal } from './FanHubHelpChooserModal';
 import { ShareReviewModal } from './ShareReviewModal';
 import { getAvatarCropStyle } from '../src/lib/avatarCrop';
 import { resolveApiUrl } from '../src/lib/resolveApiUrl';
@@ -36,7 +37,7 @@ export const Header: React.FC<HeaderProps> = ({ pageTitle }) => {
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isClientSwitcherOpen, setIsClientSwitcherOpen] = useState(false);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
-  const [isReportOpen, setIsReportOpen] = useState(false);
+  const [creatorHelpFlow, setCreatorHelpFlow] = useState<'closed' | 'chooser' | 'report' | 'contact'>('closed');
   const [isReviewOpen, setIsReviewOpen] = useState(false);
 
   const profileRef = useRef<HTMLDivElement>(null);
@@ -271,7 +272,42 @@ export const Header: React.FC<HeaderProps> = ({ pageTitle }) => {
 
   return (
     <header className="flex-shrink-0 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
-      <ReportProblemModal isOpen={isReportOpen} onClose={() => setIsReportOpen(false)} />
+      <FanHubHelpChooserModal
+        variant="creatorApp"
+        isOpen={creatorHelpFlow === 'chooser'}
+        onClose={() => setCreatorHelpFlow('closed')}
+        fanBrand="EchoFlux"
+        creatorDisplayName=""
+        primaryColor={ECHOFLUX_APP_ACCENT_HEX}
+        onChooseReport={() => setCreatorHelpFlow('report')}
+        onChooseContact={() => setCreatorHelpFlow('contact')}
+      />
+      <ReportProblemModal
+        isOpen={creatorHelpFlow === 'report'}
+        onClose={() => setCreatorHelpFlow('closed')}
+        onBack={() => setCreatorHelpFlow('chooser')}
+        layout="contactPage"
+        showDiagnosticsUi={false}
+        mode="platform"
+        platformInboxBucket="it_support"
+        supportName="EchoFlux"
+        panelSupportEmail="contact@echoflux.ai"
+        pageLabelForReporting="EchoFlux creator app"
+        contactEmail="contact@echoflux.ai"
+      />
+      <ReportProblemModal
+        isOpen={creatorHelpFlow === 'contact'}
+        onClose={() => setCreatorHelpFlow('closed')}
+        onBack={() => setCreatorHelpFlow('chooser')}
+        layout="contactPage"
+        showDiagnosticsUi={false}
+        mode="platform"
+        platformInboxBucket="contact"
+        supportName="EchoFlux"
+        panelSupportEmail="contact@echoflux.ai"
+        pageLabelForReporting="EchoFlux creator app"
+        contactEmail="contact@echoflux.ai"
+      />
       {showShareReviewInMenu ? (
         <ShareReviewModal isOpen={isReviewOpen} onClose={() => setIsReviewOpen(false)} />
       ) : null}
@@ -422,10 +458,14 @@ export const Header: React.FC<HeaderProps> = ({ pageTitle }) => {
                 <div className="absolute right-0 mt-2 w-48 bg-white dark:bg-gray-800 rounded-md shadow-lg py-1 ring-1 ring-black ring-opacity-5 z-50">
                     <button onClick={() => { setActivePage('profile'); setIsProfileOpen(false); }} className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700">Your Profile</button>
                     <button
-                        onClick={() => { setIsReportOpen(true); setIsProfileOpen(false); }}
+                        type="button"
+                        onClick={() => {
+                          setCreatorHelpFlow('chooser');
+                          setIsProfileOpen(false);
+                        }}
                         className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
                     >
-                        Report a Problem
+                        Get in touch
                     </button>
                     {showShareReviewInMenu ? (
                       <button
