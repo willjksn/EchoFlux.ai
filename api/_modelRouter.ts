@@ -32,7 +32,8 @@ export type TaskType =
   | 'caption_optimization'      // Caption optimization - use balanced model
   | 'performance_prediction'   // Performance prediction - use balanced model
   | 'content_repurposing'      // Content repurposing - use balanced model
-  | 'sexting_session';  // Premium Content Studio: Sexting session assistant - use balanced model
+  | 'sexting_session'   // Premium Content Studio: Sexting session assistant - use balanced model
+  | 'member-welcome-draft'; // Automated member welcome DM drafts — stronger prose model
 
 /**
  * Model configuration for each task type
@@ -133,6 +134,11 @@ const MODEL_CONFIG: Record<TaskType, {
   'sexting_session': {
     model: 'gemini-2.0-flash',
     description: 'Balanced model for Premium Content Studio sexting session assistant',
+    costTier: 'medium',
+  },
+  'member-welcome-draft': {
+    model: 'gemini-2.5-flash',
+    description: 'Stronger model for membership welcome DM drafts',
     costTier: 'medium',
   },
   

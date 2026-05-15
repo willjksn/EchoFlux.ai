@@ -5,6 +5,7 @@ import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { db, storage, auth } from "../firebaseConfig";
 import type {
   CreatorStorefrontSettings,
+  MemberWelcomeDraftTone,
   StorefrontButtonStyle,
   StorefrontSocialLinks,
   StorefrontLandingContent,
@@ -71,8 +72,35 @@ const DEFAULT_MONETIZATION: NonNullable<CreatorStorefrontSettings["monetization"
     enabled: false,
     text: "",
     attachments: [],
+    draftTone: "personality",
+    includeMemberFirstName: true,
   },
 };
+
+const MEMBER_WELCOME_DRAFT_TONE_OPTIONS: Array<{ value: MemberWelcomeDraftTone; label: string }> = [
+  { value: "personality", label: "Creator personality" },
+  { value: "warm", label: "Warm & genuine" },
+  { value: "flirty", label: "Flirty & playful" },
+];
+
+/** Migrate legacy draft tones removed from the UI (direct/bold/soft → warm). */
+function normalizeMemberWelcomeDraftTone(raw: unknown): MemberWelcomeDraftTone {
+  const s = typeof raw === "string" ? raw.trim().toLowerCase() : "";
+  if (s === "personality" || s === "warm" || s === "flirty") return s;
+  return "warm";
+}
+
+function mergeMonetizationFromFirestore(raw: CreatorStorefrontSettings["monetization"] | undefined) {
+  const m = raw ? { ...DEFAULT_MONETIZATION, ...raw } : { ...DEFAULT_MONETIZATION };
+  const mw = { ...DEFAULT_MONETIZATION.memberWelcomeDm!, ...m.memberWelcomeDm };
+  return {
+    ...m,
+    memberWelcomeDm: {
+      ...mw,
+      draftTone: normalizeMemberWelcomeDraftTone(mw.draftTone),
+    },
+  };
+}
 
 const DEFAULT_GEO_ACCESS: NonNullable<StorefrontGeoAccessSettings> = {
   enabled: false,
@@ -369,7 +397,7 @@ function buildStorefrontPreviewConfig(draft: Partial<CreatorStorefrontSettings>)
     sectionsOrder: (draft.sectionsOrder ?? DEFAULT_SECTIONS_ORDER).filter((key) => key !== "about"),
     spicyMode: draft.spicyMode ?? false,
     rules: draft.rules ?? {},
-    monetization: draft.monetization ? { ...DEFAULT_MONETIZATION, ...draft.monetization } : { ...DEFAULT_MONETIZATION },
+    monetization: mergeMonetizationFromFirestore(draft.monetization),
     textStyles: draft.textStyles ?? {},
     onboardingStatus: draft.onboardingStatus,
     updatedAt: draft.updatedAt,
@@ -1155,7 +1183,7 @@ export const MyPageBuilder: React.FC = () => {
         sectionsOrder: (data.sectionsOrder ?? DEFAULT_SECTIONS_ORDER).filter((key) => key !== "about"),
         spicyMode: data.spicyMode ?? false,
         rules: data.rules ?? {},
-        monetization: data.monetization ? { ...DEFAULT_MONETIZATION, ...data.monetization } : { ...DEFAULT_MONETIZATION },
+        monetization: mergeMonetizationFromFirestore(data.monetization),
         textStyles: data.textStyles ?? {},
         onboardingStatus: data.onboardingStatus,
         updatedAt: data.updatedAt,
@@ -1628,10 +1656,20 @@ export const MyPageBuilder: React.FC = () => {
     }
     setMemberWelcomeDraftLoading(true);
     try {
+      const welcome = {
+        ...DEFAULT_MONETIZATION.memberWelcomeDm!,
+        ...draft.monetization?.memberWelcomeDm,
+      };
+      const tone = welcome.draftTone ?? "personality";
+      const includeMemberFirstName = welcome.includeMemberFirstName !== false;
       const token = await auth.currentUser.getIdToken();
       const res = await fetch(resolveApiUrl("/api/generateMemberWelcomeDraft"), {
         method: "POST",
-        headers: { Authorization: `Bearer ${token}` },
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ tone, includeMemberFirstName }),
       });
       const data = (await res.json().catch(() => ({}))) as { text?: string; error?: string; message?: string };
       if (!res.ok) {
@@ -3364,6 +3402,67 @@ export const MyPageBuilder: React.FC = () => {
                 </label>
                 {draft.monetization?.memberWelcomeDm?.enabled === true ? (
                   <div className="space-y-2 sm:pl-8 sm:border-l-2 border-primary-200 dark:border-primary-800">
+                    <label className="block space-y-1">
+                      <span className="text-xs font-medium text-gray-700 dark:text-gray-300">Draft tone</span>
+                      <select
+                        className={`w-full max-w-xs px-3 py-2 text-sm rounded-lg ${landingEditorControlClass}`}
+                        style={{
+                          fontFamily: currentLandingFontFamily,
+                          color: landingPreviewThemeText,
+                        }}
+                        value={
+                          draft.monetization?.memberWelcomeDm?.draftTone ??
+                          DEFAULT_MONETIZATION.memberWelcomeDm!.draftTone
+                        }
+                        onChange={(e) =>
+                          updateDraft({
+                            monetization: {
+                              ...draft.monetization,
+                              ...DEFAULT_MONETIZATION,
+                              memberWelcomeDm: {
+                                ...DEFAULT_MONETIZATION.memberWelcomeDm!,
+                                ...draft.monetization?.memberWelcomeDm,
+                                draftTone: e.target.value as MemberWelcomeDraftTone,
+                              },
+                            },
+                          })
+                        }
+                      >
+                        {MEMBER_WELCOME_DRAFT_TONE_OPTIONS.map((opt) => (
+                          <option key={opt.value} value={opt.value}>
+                            {opt.label}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="flex items-start gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        className="mt-0.5 w-4 h-4 rounded border-gray-300 dark:border-gray-600 text-primary-600"
+                        checked={draft.monetization?.memberWelcomeDm?.includeMemberFirstName !== false}
+                        onChange={(e) =>
+                          updateDraft({
+                            monetization: {
+                              ...draft.monetization,
+                              ...DEFAULT_MONETIZATION,
+                              memberWelcomeDm: {
+                                ...DEFAULT_MONETIZATION.memberWelcomeDm!,
+                                ...draft.monetization?.memberWelcomeDm,
+                                includeMemberFirstName: e.target.checked,
+                              },
+                            },
+                          })
+                        }
+                      />
+                      <span className="text-xs text-gray-700 dark:text-gray-300 leading-snug">
+                        Include member&apos;s first name{" "}
+                        <span className="text-gray-500 dark:text-gray-400">
+                          — when on, put{" "}
+                          <code className="text-[10px] px-1 rounded bg-gray-200/80 dark:bg-gray-700/80">{'{{name}}'}</code>{" "}
+                          in the message (Draft with AI adds it); we replace it when the DM sends. When off, keep it generic (no name).
+                        </span>
+                      </span>
+                    </label>
                     <textarea
                       rows={4}
                       className={`w-full px-3 py-2 text-sm ${landingEditorControlClass}`}
@@ -3371,7 +3470,11 @@ export const MyPageBuilder: React.FC = () => {
                         fontFamily: currentLandingFontFamily,
                         color: landingPreviewThemeText,
                       }}
-                      placeholder="Hey! Welcome to my member hub…"
+                      placeholder={
+                        draft.monetization?.memberWelcomeDm?.includeMemberFirstName !== false
+                          ? "{{name}} — hey… glad you're here. Here's what members actually get…"
+                          : "Hey — glad you're here. Here's what members actually get…"
+                      }
                       value={draft.monetization?.memberWelcomeDm?.text ?? ""}
                       onChange={(e) =>
                         updateDraft({

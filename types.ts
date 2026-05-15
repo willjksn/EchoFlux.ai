@@ -200,6 +200,12 @@ export interface BioPageConfig {
 /** Button style for storefront theme */
 export type StorefrontButtonStyle = 'solid' | 'outline' | 'pill';
 
+/** Tone used when generating welcome DM drafts with AI (saved on storefront; optional for manual-only flows). */
+export type MemberWelcomeDraftTone =
+  | 'personality'
+  | 'warm'
+  | 'flirty';
+
 /** Automated DM when someone first joins as a paid or free member (server sends from Stripe / joinFreeMembership). */
 export interface MemberWelcomeDmSettings {
     enabled?: boolean;
@@ -207,6 +213,13 @@ export interface MemberWelcomeDmSettings {
     text?: string;
     /** Optional image/video URLs (same shape as fan DM attachments). */
     attachments?: Array<{ url: string; type: 'image' | 'video' }>;
+    /** Guides "Draft with AI" copy; does not change send behavior until template uses {{name}} etc. */
+    draftTone?: MemberWelcomeDraftTone;
+    /**
+     * When true (default), `{{name}}` in the template is replaced with the fan's first name when the welcome DM is sent.
+     * When false, placeholders are removed server-side and AI drafts omit personalized names.
+     */
+    includeMemberFirstName?: boolean;
 }
 
 /** Monetization settings (non-explicit, IG-like) */

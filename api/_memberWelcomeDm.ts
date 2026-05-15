@@ -22,7 +22,52 @@ type MemberWelcomeFirestoreBlock = {
   enabled?: boolean;
   text?: string;
   attachments?: unknown;
+  /** Default true: replace {{name}} with fan first name when sending. */
+  includeMemberFirstName?: boolean;
 };
+
+/** Strip `{{name}}` and tidy punctuation/spacing (when welcome is sent without personalization). */
+export function stripWelcomeNamePlaceholder(content: string): string {
+  let s = content.replace(/\{\{\s*name\s*\}\}/gi, "").trim();
+  s = s.replace(/^[,\u2014\u2013\-–:\s]+/, "");
+  s = s.replace(/\s{2,}/g, " ");
+  return s.trim();
+}
+
+function firstWelcomeNameToken(raw: string | undefined): string | null {
+  const s = raw?.trim();
+  if (!s || s.toLowerCase() === "member") return null;
+  const token = (s.split(/\s+/)[0] ?? "").replace(/^@/, "").trim();
+  if (!token || token.includes("@")) return null;
+  return token.slice(0, 60) || null;
+}
+
+async function resolveFanFirstNameForWelcome(db: Firestore, creatorId: string, fanId: string): Promise<string | null> {
+  const [userSnap, fanSnap] = await Promise.all([
+    db.collection("users").doc(fanId).get(),
+    db.collection("creators").doc(creatorId).collection("fans").doc(fanId).get(),
+  ]);
+  const u = userSnap.exists ? (userSnap.data() as Record<string, unknown>) : {};
+  const f = fanSnap.exists ? (fanSnap.data() as Record<string, unknown>) : {};
+  const fromName =
+    firstWelcomeNameToken(typeof u.name === "string" ? u.name : undefined) ??
+    firstWelcomeNameToken(typeof f.name === "string" ? f.name : undefined);
+  if (fromName) return fromName;
+  const fromDn =
+    firstWelcomeNameToken(typeof u.displayName === "string" ? u.displayName : undefined) ??
+    firstWelcomeNameToken(typeof f.displayName === "string" ? f.displayName : undefined);
+  if (fromDn && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(fromDn)) return fromDn;
+  const uname = typeof u.username === "string" ? u.username.trim().replace(/^@/, "") : "";
+  if (uname && !uname.includes("@")) return firstWelcomeNameToken(uname);
+  return null;
+}
+
+export function finalizeAutomatedWelcomeText(template: string, includeMemberFirstName: boolean, firstName: string | null): string {
+  if (!includeMemberFirstName) return stripWelcomeNamePlaceholder(template);
+  const fn = firstName?.trim();
+  if (!fn) return stripWelcomeNamePlaceholder(template);
+  return template.replace(/\{\{\s*name\s*\}\}/gi, fn);
+}
 
 async function hasActiveOrPausedChatSessionForThread(
   db: Firestore,
@@ -77,14 +122,16 @@ export function extractMemberWelcomeFromCreatorData(data: Record<string, unknown
   enabled: boolean;
   content: string;
   attachments: DmAttachmentItem[];
+  includeMemberFirstName: boolean;
 } | null {
   const monetization = data?.monetization as { memberWelcomeDm?: MemberWelcomeFirestoreBlock } | undefined;
   const block = monetization?.memberWelcomeDm;
   if (!block || block.enabled !== true) return null;
   const content = typeof block.text === "string" ? block.text.trim() : "";
   const attachments = normalizeWelcomeAttachments(block.attachments);
+  const includeMemberFirstName = block.includeMemberFirstName !== false;
   if (!content && attachments.length === 0) return null;
-  return { enabled: true, content, attachments };
+  return { enabled: true, content, attachments, includeMemberFirstName };
 }
 
 /**
@@ -113,6 +160,9 @@ export async function maybeSendAutomatedMemberWelcomeDm(
     return;
   }
 
+  const firstName = welcome.includeMemberFirstName ? await resolveFanFirstNameForWelcome(db, creatorId, fanId) : null;
+  const resolvedContent = finalizeAutomatedWelcomeText(welcome.content, welcome.includeMemberFirstName, firstName);
+
   const threadId = getThreadId(creatorId, fanId);
 
   await db.runTransaction(async (t) => {
@@ -135,12 +185,12 @@ export async function maybeSendAutomatedMemberWelcomeDm(
       return;
     }
 
-    const previewText = previewTextForFanDmAttachments(welcome.content, welcome.attachments);
+    const previewText = previewTextForFanDmAttachments(resolvedContent, welcome.attachments);
     const msgRef = threadRef.collection(FAN_DM_MESSAGES).doc();
 
     const msgPayload: Record<string, unknown> = {
       senderId: creatorId,
-      content: welcome.content || "",
+      content: resolvedContent || "",
       createdAt: nowIso,
       read: false,
       automatedMemberWelcome: true,
@@ -170,12 +220,12 @@ export async function maybeSendAutomatedMemberWelcomeDm(
 
   try {
     if (!skipNotifyForLiveSession) {
-      const previewText = previewTextForFanDmAttachments(welcome.content, welcome.attachments);
+      const previewText = previewTextForFanDmAttachments(resolvedContent, welcome.attachments);
       await sendFanNotification({
         fanId,
         type: "new_message",
         title: "New message from creator",
-        body: (welcome.content || previewText).slice(0, 200),
+        body: (resolvedContent || previewText).slice(0, 200),
         data: {
           threadId,
           creatorId,
