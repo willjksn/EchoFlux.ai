@@ -52,6 +52,8 @@ export interface SupportThreadsPanelProps {
   supportLabel?: string;
   /** Fan profile stats card — notified when thread list updates */
   onThreadsChange?: (threads: SupportThreadRow[]) => void;
+  /** When true, each thread row can be removed from this user’s profile only (default true). */
+  allowDeleteThreads?: boolean;
 }
 
 export const SupportThreadsPanel: React.FC<SupportThreadsPanelProps> = ({
@@ -67,12 +69,14 @@ export const SupportThreadsPanel: React.FC<SupportThreadsPanelProps> = ({
   youLabel = "You",
   supportLabel = "EchoFlux",
   onThreadsChange,
+  allowDeleteThreads = true,
 }) => {
   const [supportThreads, setSupportThreads] = useState<SupportThreadRow[]>([]);
   const [supportThreadId, setSupportThreadId] = useState<string | null>(null);
   const [supportMessages, setSupportMessages] = useState<SupportMessageRow[]>([]);
   const [supportReplyDraft, setSupportReplyDraft] = useState("");
   const [supportSending, setSupportSending] = useState(false);
+  const [deletingThreadId, setDeletingThreadId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!auth.currentUser?.uid || !db) {
@@ -182,6 +186,45 @@ export const SupportThreadsPanel: React.FC<SupportThreadsPanelProps> = ({
     }
   }, [showToast, supportReplyDraft, supportThreadId]);
 
+  const deleteMyThread = useCallback(
+    async (threadId: string) => {
+      if (
+        !window.confirm(
+          "Permanently delete this support conversation? This removes it here and clears the ticket from support — you can’t undo it."
+        )
+      ) {
+        return;
+      }
+      if (!auth.currentUser?.uid) {
+        showToast("Sign in again to remove a thread.", "error");
+        return;
+      }
+      setDeletingThreadId(threadId);
+      try {
+        const token = await auth.currentUser.getIdToken(true);
+        const res = await fetch("/api/deleteMySupportThread", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ ticketId: threadId }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          throw new Error((data as { error?: string }).error || "Could not remove thread");
+        }
+        setSupportThreadId((prev) => (prev === threadId ? null : prev));
+        showToast("Support conversation deleted everywhere.", "success");
+      } catch (error: unknown) {
+        showToast(error instanceof Error ? error.message : "Could not remove thread", "error");
+      } finally {
+        setDeletingThreadId(null);
+      }
+    },
+    [showToast]
+  );
+
   const getSupportMessageMainText = useCallback((content: string): string => {
     const [main] = content.split("\n\n---\n");
     return (main || content).trim();
@@ -241,42 +284,62 @@ export const SupportThreadsPanel: React.FC<SupportThreadsPanelProps> = ({
                 const active = supportThreadId === thread.id;
                 const preview = getSupportMessageMainText(thread.lastMessage || "");
                 return (
-                  <button
+                  <div
                     key={thread.id}
-                    type="button"
-                    onClick={() => setSupportThreadId(thread.id)}
-                    className="w-full text-left rounded-lg border px-3 py-2 transition-colors"
+                    className="flex gap-1 items-stretch rounded-lg border transition-colors"
                     style={{
                       borderColor: active ? accentStroke(58) : accentStroke(20),
                       backgroundColor: active ? accentFill(12, "rgb(255 255 255)") : "transparent",
                     }}
                   >
-                    <div className="flex items-center justify-between gap-2">
-                      <p className="text-sm font-semibold m-0 truncate text-gray-900 dark:text-white">{thread.title}</p>
-                      <span
-                        className="text-[10px] px-2 py-0.5 rounded-full border shrink-0"
-                        style={{
-                          borderColor:
-                            thread.status === "closed"
-                              ? "color-mix(in srgb, #64748b 45%, transparent)"
-                              : "color-mix(in srgb, #059669 45%, transparent)",
-                          color: thread.status === "closed" ? "#64748b" : "#059669",
-                          backgroundColor:
-                            thread.status === "closed"
-                              ? "color-mix(in srgb, #64748b 10%, transparent)"
-                              : "color-mix(in srgb, #059669 10%, transparent)",
+                    <button
+                      type="button"
+                      onClick={() => setSupportThreadId(thread.id)}
+                      className="min-w-0 flex-1 text-left rounded-l-lg px-3 py-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-1"
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-sm font-semibold m-0 truncate text-gray-900 dark:text-white">{thread.title}</p>
+                        <span
+                          className="text-[10px] px-2 py-0.5 rounded-full border shrink-0"
+                          style={{
+                            borderColor:
+                              thread.status === "closed"
+                                ? "color-mix(in srgb, #64748b 45%, transparent)"
+                                : "color-mix(in srgb, #059669 45%, transparent)",
+                            color: thread.status === "closed" ? "#64748b" : "#059669",
+                            backgroundColor:
+                              thread.status === "closed"
+                                ? "color-mix(in srgb, #64748b 10%, transparent)"
+                                : "color-mix(in srgb, #059669 10%, transparent)",
+                          }}
+                        >
+                          {thread.status === "closed" ? "Closed" : "Open"}
+                        </span>
+                      </div>
+                      {preview ? (
+                        <p className="text-xs m-0 mt-1 opacity-85 line-clamp-2 text-gray-600 dark:text-gray-400">{preview}</p>
+                      ) : null}
+                      <p className="text-[11px] m-0 mt-1 opacity-75 text-gray-500 dark:text-gray-500">
+                        {thread.updatedAt ? new Date(thread.updatedAt).toLocaleString() : "No date"}
+                      </p>
+                    </button>
+                    {allowDeleteThreads ? (
+                      <button
+                        type="button"
+                        disabled={deletingThreadId === thread.id}
+                        aria-label={`Delete “${thread.title}” (removes ticket for everyone)`}
+                        title="Delete conversation"
+                        className="shrink-0 self-stretch px-2 my-1 mr-1 rounded-md text-[11px] font-semibold uppercase tracking-wide text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30 disabled:opacity-40 border border-transparent hover:border-red-200 dark:hover:border-red-900"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          void deleteMyThread(thread.id);
                         }}
                       >
-                        {thread.status === "closed" ? "Closed" : "Open"}
-                      </span>
-                    </div>
-                    {preview ? (
-                      <p className="text-xs m-0 mt-1 opacity-85 line-clamp-2 text-gray-600 dark:text-gray-400">{preview}</p>
+                        {deletingThreadId === thread.id ? "…" : "Delete"}
+                      </button>
                     ) : null}
-                    <p className="text-[11px] m-0 mt-1 opacity-75 text-gray-500 dark:text-gray-500">
-                      {thread.updatedAt ? new Date(thread.updatedAt).toLocaleString() : "No date"}
-                    </p>
-                  </button>
+                  </div>
                 );
               })}
             </div>
