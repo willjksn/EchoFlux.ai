@@ -36,6 +36,7 @@ import { deriveFanHubThemeFromPrimary } from "../src/lib/fanHubThemeFromPrimary"
 import { normalizeTreatProductsFromApi } from "../src/lib/treatProductsNormalize";
 import { getTreatProductTypeDisplayLabel } from "../src/lib/treatProductTypeLabel";
 import { primeFanStorefrontPublicLandingIntentFromAbsoluteUrl } from "../src/lib/fanStorefrontLandingIntent";
+import { resolveApiUrl, DEV_API_404_USER_HINT } from "../src/lib/resolveApiUrl";
 
 const DEFAULT_SECTIONS: NonNullable<CreatorStorefrontSettings["sections"]> = {
   feed: true,
@@ -1628,12 +1629,15 @@ export const MyPageBuilder: React.FC = () => {
     setMemberWelcomeDraftLoading(true);
     try {
       const token = await auth.currentUser.getIdToken();
-      const res = await fetch("/api/generateMemberWelcomeDraft", {
+      const res = await fetch(resolveApiUrl("/api/generateMemberWelcomeDraft"), {
         method: "POST",
         headers: { Authorization: `Bearer ${token}` },
       });
       const data = (await res.json().catch(() => ({}))) as { text?: string; error?: string; message?: string };
-      if (!res.ok) throw new Error(data.message || data.error || "Draft failed");
+      if (!res.ok) {
+        const base = data.message || data.error || `Draft failed (${res.status})`;
+        throw new Error(res.status === 404 ? `${base} ${DEV_API_404_USER_HINT}` : base);
+      }
       const text = typeof data.text === "string" ? data.text.trim() : "";
       if (!text) throw new Error("Empty draft");
       setDraft((prev) => {
@@ -3390,7 +3394,7 @@ export const MyPageBuilder: React.FC = () => {
                         disabled={memberWelcomeDraftLoading || saving}
                         className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-primary-600 text-white hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed"
                       >
-                        {memberWelcomeDraftLoading ? "Drafting…" : "Draft with AI (personality)"}
+                        {memberWelcomeDraftLoading ? "Drafting…" : "Draft with AI"}
                       </button>
                       <label className="inline-flex cursor-pointer">
                         <input
