@@ -690,7 +690,21 @@ export const FanHubAnalytics: React.FC = () => {
     topComments: null,
   });
   const [showLast12, setShowLast12] = useState(true);
+  const [countrySpendSectionCompact, setCountrySpendSectionCompact] = useState(false);
   const creatorId = auth.currentUser?.uid ?? user?.id ?? "";
+
+  const countrySpendTipsTotal = useMemo(
+    () => countrySpendRows.reduce((s, r) => s + r.tipsCents, 0),
+    [countrySpendRows],
+  );
+  const countrySpendSubsTotal = useMemo(
+    () => countrySpendRows.reduce((s, r) => s + r.subscriptionsCents, 0),
+    [countrySpendRows],
+  );
+  const countrySpendChargeTotal = useMemo(
+    () => countrySpendRows.reduce((s, r) => s + r.chargeCount, 0),
+    [countrySpendRows],
+  );
 
   const countrySpendRowsDisplayed = useMemo(() => {
     if (countryTableFilter === "all") return countrySpendRows;
@@ -711,6 +725,7 @@ export const FanHubAnalytics: React.FC = () => {
   useEffect(() => {
     setExpandTopFansList(false);
     setExpandRecentTransactionsList(false);
+    setCountrySpendSectionCompact(false);
   }, [dateRange]);
 
   const handleExportTransactionsCsv = useCallback(() => {
@@ -1179,39 +1194,81 @@ export const FanHubAnalytics: React.FC = () => {
       {/* Tips + memberships by country */}
       <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md border border-gray-100 dark:border-gray-700 overflow-hidden">
         <div className="p-5 border-b border-gray-100 dark:border-gray-700">
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
-            <GlobeIcon />
-            Tips & memberships by country
-          </h2>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1 max-w-3xl">
-            Stripe checkout and renewals. Store unlocks excluded.
-          </p>
-          {countrySpendRows.length > 1 && (
-            <div className="mt-3 flex flex-wrap items-center gap-2">
-              <label htmlFor="fan-hub-country-filter" className="text-sm text-gray-600 dark:text-gray-400">
-                Filter
-              </label>
-              <select
-                id="fan-hub-country-filter"
-                className="text-sm rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-gray-900 shadow-sm dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100"
-                value={countryTableFilter}
-                onChange={(e) => setCountryTableFilter(e.target.value)}
-              >
-                <option value="all">All countries</option>
-                {countrySpendRows.map((r) => (
-                  <option key={r.code} value={r.code}>
-                    {r.label}
-                    {r.code !== UNKNOWN_BILLING_COUNTRY ? ` (${r.code})` : ""}
-                  </option>
-                ))}
-              </select>
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="min-w-0 flex-1">
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+                <GlobeIcon />
+                Tips & memberships by country
+              </h2>
+              <p className="text-sm text-gray-500 dark:text-gray-400 mt-1 max-w-3xl">
+                Stripe checkout and renewals. Store unlocks excluded.
+              </p>
+              {!countrySpendSectionCompact && countrySpendRows.length > 1 && (
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  <label htmlFor="fan-hub-country-filter" className="text-sm text-gray-600 dark:text-gray-400">
+                    Filter
+                  </label>
+                  <select
+                    id="fan-hub-country-filter"
+                    className="text-sm rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-gray-900 shadow-sm dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100"
+                    value={countryTableFilter}
+                    onChange={(e) => setCountryTableFilter(e.target.value)}
+                  >
+                    <option value="all">All countries</option>
+                    {countrySpendRows.map((r) => (
+                      <option key={r.code} value={r.code}>
+                        {r.label}
+                        {r.code !== UNKNOWN_BILLING_COUNTRY ? ` (${r.code})` : ""}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
             </div>
-          )}
+            {countrySpendRows.length > 0 ? (
+              <button
+                type="button"
+                aria-expanded={!countrySpendSectionCompact}
+                aria-controls="fan-hub-country-breakdown-body"
+                onClick={() => setCountrySpendSectionCompact((v) => !v)}
+                className="shrink-0 text-sm font-medium px-3 py-1.5 rounded-lg border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-900/60 text-gray-800 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition"
+              >
+                {countrySpendSectionCompact ? "Expand" : "Minimize"}
+              </button>
+            ) : null}
+          </div>
         </div>
+        <div id="fan-hub-country-breakdown-body">
         {countrySpendRows.length === 0 ? (
           <p className="p-6 text-sm text-gray-500 dark:text-gray-400">
             No tips or subscription charges with country in this period.
           </p>
+        ) : countrySpendSectionCompact ? (
+          <div className="p-5 bg-gray-50/60 dark:bg-gray-900/30">
+            <p className="text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-2">
+              Overall (all countries)
+            </p>
+            <div className="flex flex-wrap items-baseline gap-x-4 gap-y-2 text-sm text-gray-800 dark:text-gray-200">
+              <span>
+                <span className="font-semibold text-lg tabular-nums">{formatCents(countrySpendGrandTotalCents)}</span>
+                <span className="text-gray-500 dark:text-gray-400 ml-1.5">tips + memberships</span>
+              </span>
+              <span className="text-gray-300 dark:text-gray-600 hidden sm:inline" aria-hidden>
+                |
+              </span>
+              <span className="tabular-nums">
+                <span className="text-gray-500 dark:text-gray-400">Memberships</span>{" "}
+                {formatCents(countrySpendSubsTotal)}
+              </span>
+              <span className="tabular-nums">
+                <span className="text-gray-500 dark:text-gray-400">Tips</span> {formatCents(countrySpendTipsTotal)}
+              </span>
+              <span className="tabular-nums text-gray-600 dark:text-gray-400">
+                {countrySpendChargeTotal} charge{countrySpendChargeTotal === 1 ? "" : "s"} · {countrySpendRows.length}{" "}
+                {countrySpendRows.length === 1 ? "country" : "countries"}
+              </span>
+            </div>
+          </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -1326,6 +1383,7 @@ export const FanHubAnalytics: React.FC = () => {
             </table>
           </div>
         )}
+        </div>
       </div>
 
       {/* Live streams — Elite (and Agency); skips liveStreams subcollection reads on Pro */}
