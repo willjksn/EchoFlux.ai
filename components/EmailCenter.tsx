@@ -1,12 +1,11 @@
 import React, { useState } from 'react';
-import { BioPageEmailDashboard } from './BioPageEmailDashboard';
 import { EmailHistory } from './EmailHistory';
 import { EmailTemplatesManager } from './EmailTemplatesManager';
 import { ScheduledEmailManager } from './ScheduledEmailManager';
 import { MassEmailComposer } from './MassEmailComposer';
 import { SingleEmailComposer } from './SingleEmailComposer';
 
-type EmailSection = 'send' | 'history' | 'templates' | 'scheduled' | 'bio';
+type EmailSection = 'send' | 'history' | 'templates' | 'scheduled';
 
 export const EmailCenter: React.FC = () => {
   const [section, setSection] = useState<EmailSection>('send');
@@ -18,7 +17,7 @@ export const EmailCenter: React.FC = () => {
         <div>
           <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">Email</h2>
           <p className="text-gray-600 dark:text-gray-400">
-            Everything email-related in one place: send, templates, scheduling, history, and bio-page subscribers.
+            Everything email-related in one place: send, templates, scheduling, and history.
           </p>
         </div>
         <button
@@ -54,12 +53,6 @@ export const EmailCenter: React.FC = () => {
         >
           History
         </button>
-        <button
-          onClick={() => setSection('bio')}
-          className={`px-4 py-2 rounded-md transition-colors ${section === 'bio' ? 'bg-primary-600 text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'}`}
-        >
-          Bio Emails
-        </button>
       </div>
 
       {section === 'send' && (
@@ -90,11 +83,6 @@ export const EmailCenter: React.FC = () => {
       {section === 'history' && (
         <div className="-mx-6">
           <EmailHistory />
-        </div>
-      )}
-      {section === 'bio' && (
-        <div className="-mx-6">
-          <BioPageEmailDashboard />
         </div>
       )}
 

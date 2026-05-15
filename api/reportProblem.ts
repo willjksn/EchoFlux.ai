@@ -2,6 +2,7 @@ import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { getAdminDb } from "./_firebaseAdmin.js";
 import { getVerifyAuth, withErrorHandling } from "./_errorHandler.js";
 import { sendSupportTicketAcknowledgmentEmail } from "./_supportTicketAcknowledgmentEmail.js";
+import { appendAttachmentsToMessageBody, sanitizeSupportAttachmentUrlsForUid } from "./_supportAttachmentUrls.js";
 
 async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
   if (req.method !== "POST") {
@@ -16,11 +17,15 @@ async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
     return;
   }
 
-  const { message, page, url, userAgent } = (req.body || {}) as {
+  const { message, diagnostics, page, url, userAgent, inboxBucket, attachmentUrls } = (req.body || {}) as {
     message?: string;
+    diagnostics?: string;
     page?: string;
     url?: string;
     userAgent?: string;
+    /** "contact" = general EchoFlux inbox; omit or anything else defaults to IT-style triage. */
+    inboxBucket?: string;
+    attachmentUrls?: unknown;
   };
 
   if (!message || !String(message).trim()) {
@@ -28,13 +33,23 @@ async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
     return;
   }
 
+  const trimmedUserMessage = String(message).trim();
+  const diagTrim = diagnostics && String(diagnostics).trim() ? String(diagnostics).trim() : "";
+  const storedBody = diagTrim ? `${trimmedUserMessage}\n\n---\n${diagTrim}` : trimmedUserMessage;
+  const bucket =
+    inboxBucket === "contact" ? "contact" : "it_support";
+
+  const attachmentList = sanitizeSupportAttachmentUrlsForUid(attachmentUrls, user.uid);
+  const storedBodyWithAttachments = appendAttachmentsToMessageBody(storedBody, attachmentList);
+
   const db = getAdminDb();
   const now = new Date().toISOString();
 
   await db.collection("user_problem_reports").add({
     userId: user.uid,
     email: user.email || null,
-    message: String(message).trim(),
+    message: storedBodyWithAttachments,
+    inboxBucket: bucket,
     page: page || null,
     url: url || null,
     userAgent: userAgent || null,
@@ -55,8 +70,11 @@ async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
     isCreatorReporter && typeof creatorData.displayName === "string" && creatorData.displayName.trim()
       ? creatorData.displayName.trim()
       : creatorHandle || null;
-  const trimmedMessage = String(message).trim();
-  const preview = trimmedMessage.slice(0, 180);
+  const preview = trimmedUserMessage.slice(0, 180);
+  const threadTitle =
+    bucket === "contact"
+      ? (preview ? `Contact · ${preview.slice(0, 72)}` : "Contact request")
+      : preview || "Problem report";
 
   const ticketRef = db.collection("support_tickets").doc();
   const ticketId = ticketRef.id;
@@ -89,23 +107,25 @@ async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
     lastMessageAt: now,
     lastMessagePreview: preview,
     messageCount: 1,
+    inboxBucket: bucket,
   });
 
   batch.set(ticketRef.collection("messages").doc(), {
     senderKind: reporterKind,
     senderUid: user.uid,
     senderName: reporterName,
-    content: trimmedMessage,
+    content: storedBodyWithAttachments,
     createdAt: now,
   });
 
   // Mirror every report into the reporter's support thread collection for in-app tracking.
   batch.set(db.collection("users").doc(user.uid).collection("support_threads").doc(ticketId), {
-    title: preview || "Problem report",
+    title: threadTitle,
+    inboxBucket: bucket,
     status: "open",
     createdAt: now,
     updatedAt: now,
-    lastMessage: trimmedMessage,
+    lastMessage: trimmedUserMessage,
     creatorId: isCreatorReporter ? user.uid : null,
     creatorDisplayName,
   });
@@ -113,7 +133,7 @@ async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
     db.collection("users").doc(user.uid).collection("support_threads").doc(ticketId).collection("messages").doc(),
     {
       senderType: "fan",
-      content: trimmedMessage,
+      content: storedBodyWithAttachments,
       createdAt: now,
     }
   );
@@ -142,7 +162,7 @@ async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
     type: "support_ticket_created",
     severity: "warning",
     title: "New support ticket",
-    message: `${reporterKind === "creator" ? "Creator" : "Fan"} report from ${reporterName}`,
+    message: `${bucket === "contact" ? "Contact" : reporterKind === "creator" ? "Creator" : "Fan"} ticket from ${reporterName}`,
     ticketId,
     reporterUid: user.uid,
     reporterEmail: user.email || null,

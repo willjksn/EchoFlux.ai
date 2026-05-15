@@ -2,6 +2,7 @@ import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { getAdminDb } from "./_firebaseAdmin.js";
 import { verifyAuth } from "./verifyAuth.js";
 import { sendSupportTicketAcknowledgmentEmail } from "./_supportTicketAcknowledgmentEmail.js";
+import { appendAttachmentsToMessageBody, sanitizeSupportAttachmentUrlsForUid } from "./_supportAttachmentUrls.js";
 
 type ReporterKind = "fan" | "creator";
 
@@ -19,6 +20,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     url,
     userAgent,
     reporterKind = "fan",
+    attachmentUrls,
   } = (req.body || {}) as {
     creatorId?: string;
     message?: string;
@@ -27,6 +29,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     url?: string;
     userAgent?: string;
     reporterKind?: ReporterKind;
+    attachmentUrls?: unknown;
   };
 
   if (!message || !String(message).trim()) {
@@ -57,6 +60,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const messageWithDiagnostics = diagnostics?.trim()
       ? `${initialMessage}\n\n---\n${diagnostics.trim()}`
       : initialMessage;
+    const validatedAttachments = sanitizeSupportAttachmentUrlsForUid(attachmentUrls, authUser.uid);
+    const storedMessageBody = appendAttachmentsToMessageBody(messageWithDiagnostics, validatedAttachments);
 
     const ticketRef = db.collection("support_tickets").doc();
     const ticketId = ticketRef.id;
@@ -92,7 +97,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       senderKind: baseTicket.reporterKind,
       senderUid: authUser.uid,
       senderName: baseTicket.reporterName,
-      content: messageWithDiagnostics,
+      content: storedMessageBody,
       createdAt: now,
     });
     batch.set(db.collection("users").doc(authUser.uid).collection("support_threads").doc(ticketId), {
@@ -108,7 +113,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       db.collection("users").doc(authUser.uid).collection("support_threads").doc(ticketId).collection("messages").doc(),
       {
         senderType: "fan",
-        content: messageWithDiagnostics,
+        content: storedMessageBody,
         createdAt: now,
       }
     );

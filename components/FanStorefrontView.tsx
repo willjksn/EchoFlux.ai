@@ -99,6 +99,7 @@ import { isConfiguredCustomStorefrontHost } from "../src/lib/storefrontCustomDom
 import { usePathname } from "../src/hooks/usePathname";
 import { db } from "../firebaseConfig";
 import { ReportProblemModal } from "./ReportProblemModal";
+import { FanHubHelpChooserModal } from "./FanHubHelpChooserModal";
 import { Toast } from "./Toast";
 import VideoCallRoom from "./VideoCallRoom";
 import { readFanCheckoutFetchResult, FAN_TIP_CHECKOUT_SUCCESS_QS } from "../src/lib/fanCheckoutResponse";
@@ -1443,7 +1444,7 @@ export const FanStorefrontView: React.FC = () => {
   const [sessionAlerts, setSessionAlerts] = useState<HeaderSessionAlert[]>([]);
   const sessionAlertIdsRef = useRef<Set<string> | null>(null);
   const [activeVideoSession, setActiveVideoSession] = useState<{ sessionId: string; creatorId: string } | null>(null);
-  const [reportProblemOpen, setReportProblemOpen] = useState(false);
+  const [fanHelpFlow, setFanHelpFlow] = useState<"closed" | "chooser" | "report" | "contact">("closed");
   const [supportThreads, setSupportThreads] = useState<SupportThread[]>([]);
   const [supportThreadId, setSupportThreadId] = useState<string | null>(null);
   const [supportMessages, setSupportMessages] = useState<SupportMessage[]>([]);
@@ -2242,7 +2243,15 @@ export const FanStorefrontView: React.FC = () => {
   }, [isLoggedIn, supportThreadId]);
 
   const submitSupportProblem = useCallback(
-    async ({ message, diagnostics }: { message: string; diagnostics: string }) => {
+    async ({
+      message,
+      diagnostics,
+      attachmentUrls,
+    }: {
+      message: string;
+      diagnostics: string;
+      attachmentUrls?: string[];
+    }) => {
       if (!auth.currentUser?.uid || !creator?.creatorId) throw new Error("Please sign in again and try.");
       const token = await auth.currentUser.getIdToken(true);
       const res = await fetch("/api/createSupportTicket", {
@@ -2259,6 +2268,7 @@ export const FanStorefrontView: React.FC = () => {
           page: activePage,
           url: typeof window !== "undefined" ? window.location.href : "",
           userAgent: typeof navigator !== "undefined" ? navigator.userAgent : "",
+          ...(attachmentUrls && attachmentUrls.length > 0 ? { attachmentUrls } : {}),
         }),
       });
       const data = await res.json().catch(() => ({}));
@@ -2273,6 +2283,11 @@ export const FanStorefrontView: React.FC = () => {
     },
     [activePage, creator?.creatorId, creator?.handle, setActiveTab]
   );
+
+  const echofluxContactPageLabel = useMemo(() => {
+    const h = creator?.handle?.trim();
+    return h ? `Fan Hub · member · @${h}` : "Fan Hub · member";
+  }, [creator?.handle]);
 
   const sendSupportReply = useCallback(async () => {
     const content = supportReplyDraft.trim();
@@ -3308,10 +3323,12 @@ export const FanStorefrontView: React.FC = () => {
     }
   };
 
-  const handleSendProblem = () => {
+  const openFanHelpChooser = () => {
     setProfileMenuOpen(false);
-    setReportProblemOpen(true);
+    setFanHelpFlow("chooser");
   };
+
+  const closeFanHelpFlow = () => setFanHelpFlow("closed");
 
   const handleLogout = async () => {
     setProfileMenuOpen(false);
@@ -4693,6 +4710,9 @@ export const FanStorefrontView: React.FC = () => {
     if (Number.isNaN(date.getTime())) return "Unknown";
     return date.toLocaleDateString(undefined, { month: "long", year: "numeric" });
   })();
+  const fanFacingSiteBrand = getFanFacingSiteTitle();
+  const fanPanelSupportEmail =
+    (import.meta.env.VITE_FAN_SUPPORT_EMAIL as string | undefined)?.trim() || "";
   const membershipSummary = fanPageAdminBypass
     ? "Staff access"
     : subscribed
@@ -5015,14 +5035,47 @@ export const FanStorefrontView: React.FC = () => {
         "--fan-border": theme?.border || "#e5e7eb",
       } as React.CSSProperties}
     >
+      <FanHubHelpChooserModal
+        isOpen={fanHelpFlow === "chooser"}
+        onClose={closeFanHelpFlow}
+        fanBrand={fanFacingSiteBrand}
+        creatorDisplayName={typeof displayName === "string" ? displayName : ""}
+        primaryColor={primary}
+        onChooseReport={() => setFanHelpFlow("report")}
+        onChooseContact={() => setFanHelpFlow("contact")}
+      />
       <ReportProblemModal
-        isOpen={reportProblemOpen}
-        onClose={() => setReportProblemOpen(false)}
+        isOpen={fanHelpFlow === "report"}
+        onClose={closeFanHelpFlow}
+        onBack={() => setFanHelpFlow("chooser")}
+        layout="contactPage"
+        showDiagnosticsUi={false}
         contactEmail="contact@insightmediagroupllc.com"
         supportName="Insight Media Group LLC"
+        panelSupportEmail={null}
         mode="inApp"
         onSubmitInApp={submitSupportProblem}
         onSubmitted={() => {
+          setFanHelpFlow("closed");
+          setActiveTab("profile");
+          if (creator.handle?.trim()) {
+            applyFanStorefrontMemberUrl("profile", { showLanding: false, creatorHandle: creator.handle });
+          }
+        }}
+      />
+      <ReportProblemModal
+        isOpen={fanHelpFlow === "contact"}
+        onClose={closeFanHelpFlow}
+        onBack={() => setFanHelpFlow("chooser")}
+        layout="contactPage"
+        showDiagnosticsUi={false}
+        mode="platform"
+        platformInboxBucket="contact"
+        pageLabelForReporting={echofluxContactPageLabel}
+        supportName={fanFacingSiteBrand}
+        panelSupportEmail={fanPanelSupportEmail || null}
+        onSubmitted={() => {
+          setFanHelpFlow("closed");
           setActiveTab("profile");
           if (creator.handle?.trim()) {
             applyFanStorefrontMemberUrl("profile", { showLanding: false, creatorHandle: creator.handle });
@@ -5411,8 +5464,8 @@ export const FanStorefrontView: React.FC = () => {
                   <button type="button" role="menuitem" className="storefront-profile-menu-item" onClick={handleOpenProfile}>
                     Your profile
                   </button>
-                  <button type="button" role="menuitem" className="storefront-profile-menu-item" onClick={handleSendProblem}>
-                    Report a problem
+                  <button type="button" role="menuitem" className="storefront-profile-menu-item" onClick={openFanHelpChooser}>
+                    Get in touch
                   </button>
                   <button type="button" role="menuitem" className="storefront-profile-menu-item" onClick={handleLogout}>
                     Log out
@@ -6372,7 +6425,7 @@ export const FanStorefrontView: React.FC = () => {
                 ) : null}
                 <div className="fan-member-about-section">
                   <div className="flex items-center justify-between gap-3">
-                    <h3 className="fan-member-about-heading m-0">IT support threads</h3>
+                    <h3 className="fan-member-about-heading m-0">Support threads</h3>
                     <button
                       type="button"
                       className="storefront-cancel-membership-btn"
@@ -6381,13 +6434,15 @@ export const FanStorefrontView: React.FC = () => {
                         borderColor: `${primary}66`,
                         backgroundColor: `${primary}0f`,
                       }}
-                      onClick={() => setReportProblemOpen(true)}
+                      onClick={() => setFanHelpFlow("chooser")}
                     >
-                      Report a problem
+                      Help
                     </button>
                   </div>
                   <p className="fan-member-about-text mt-2">
-                    Submit and track technical issues here. Your support history is organized by thread.
+                    Conversation with {displayName || "this creator"} belongs in <strong className="font-semibold">Messages</strong>
+                    . Use <strong className="font-semibold">Help</strong> for billing or site questions, or technical issues
+                    with this hub — then follow up here by thread.
                   </p>
                   {supportThreads.length === 0 ? (
                     <div
@@ -6396,7 +6451,7 @@ export const FanStorefrontView: React.FC = () => {
                         borderColor: "color-mix(in srgb, var(--fan-primary, #6366f1) 24%, transparent)",
                       }}
                     >
-                      No support threads yet. Use <strong>Report a problem</strong> to start one.
+                      No threads yet. Open <strong>Help</strong> to report a problem or contact {fanFacingSiteBrand}.
                     </div>
                   ) : (
                     <div className="mt-2 grid grid-cols-1 lg:grid-cols-[300px_minmax(0,1fr)] gap-4">
