@@ -2210,7 +2210,7 @@ export const AdminDashboard: React.FC = () => {
                                             : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
                                     }`}
                                 >
-                                    IT Support
+                                    Echo Support
                                 </button>
                                 <button
                                     onClick={() => setToolsTab('contentAudit')}

@@ -11,6 +11,23 @@ import {
 const FORM_FIELD_CLASS =
   "mt-1 w-full p-2 border rounded-md bg-gray-50 dark:bg-gray-700 border-gray-300 dark:border-gray-600 dark:text-white dark:placeholder-gray-400";
 
+/** Primary CTA fills that match fan hub theme; avoids EchoFlux purple on hover when `accentHex` is set. */
+function accentPrimaryFillButtonProps(hex: string): Pick<
+  React.ComponentPropsWithoutRef<"button">,
+  "style" | "onMouseEnter" | "onMouseLeave"
+> {
+  const h = hex.trim();
+  return {
+    style: { backgroundColor: h },
+    onMouseEnter: (e) => {
+      e.currentTarget.style.backgroundColor = `color-mix(in srgb, ${h} 78%, rgb(24 24 27))`;
+    },
+    onMouseLeave: (e) => {
+      e.currentTarget.style.backgroundColor = h;
+    },
+  };
+}
+
 interface ReportProblemModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -44,6 +61,8 @@ interface ReportProblemModalProps {
    * Fan hub: server validates this creators/{id} doc and stores creatorId/handle on platform tickets for admin triage.
    */
   hubCreatorId?: string | null;
+  /** Member hub: theme color for primary actions (omit to use EchoFlux `primary-*`). */
+  accentHex?: string | null;
 }
 
 export const ReportProblemModal: React.FC<ReportProblemModalProps> = ({
@@ -63,6 +82,7 @@ export const ReportProblemModal: React.FC<ReportProblemModalProps> = ({
   allowImageAttachments,
   additionalDiagnosticsLines,
   hubCreatorId,
+  accentHex,
 }) => {
   const { user, activePage, showToast } = useAppContext();
   const [message, setMessage] = useState("");
@@ -72,6 +92,8 @@ export const ReportProblemModal: React.FC<ReportProblemModalProps> = ({
   const screenshotInputRef = useRef<HTMLInputElement>(null);
 
   const allowScreenshots = allowImageAttachments ?? layout === "contactPage";
+
+  const accentTint = accentHex?.trim() || "";
 
   const pageLabel = pageLabelForReporting ?? activePage;
 
@@ -449,7 +471,10 @@ export const ReportProblemModal: React.FC<ReportProblemModalProps> = ({
                     type="button"
                     disabled={isSubmitting}
                     onClick={handleSubmit}
-                    className="w-full px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 transition-colors disabled:opacity-50"
+                    {...(accentTint ? accentPrimaryFillButtonProps(accentTint) : {})}
+                    className={`w-full px-4 py-2 text-white rounded-md transition-colors disabled:opacity-50 ${
+                      accentTint ? "" : "bg-primary-600 hover:bg-primary-700"
+                    }`}
                   >
                     {isSubmitting
                       ? "Sending…"
@@ -468,8 +493,10 @@ export const ReportProblemModal: React.FC<ReportProblemModalProps> = ({
                   {mode === "platform" ? (
                     <>
                       <div className="flex items-start gap-3">
-                        <div className="mt-1">
-                          <MailIcon className="w-5 h-5 text-primary-600 dark:text-primary-400" />
+                        <div className="mt-1" style={accentTint ? { color: accentTint } : undefined}>
+                          <MailIcon
+                            className={`w-5 h-5 ${accentTint ? "text-current" : "text-primary-600 dark:text-primary-400"}`}
+                          />
                         </div>
                         <div>
                           <p className="font-semibold text-gray-900 dark:text-white">
@@ -479,7 +506,8 @@ export const ReportProblemModal: React.FC<ReportProblemModalProps> = ({
                             <>
                               <a
                                 href={`mailto:${infoEmail}`}
-                                className="text-primary-600 dark:text-primary-400 font-medium break-all"
+                                className={`font-medium break-all ${accentTint ? "" : "text-primary-600 dark:text-primary-400"}`}
+                                style={accentTint ? { color: accentTint } : undefined}
                               >
                                 {infoEmail}
                               </a>
@@ -507,8 +535,10 @@ export const ReportProblemModal: React.FC<ReportProblemModalProps> = ({
                   ) : (
                     <>
                       <div className="flex items-start gap-3">
-                        <div className="mt-1">
-                          <MailIcon className="w-5 h-5 text-primary-600 dark:text-primary-400" />
+                        <div className="mt-1" style={accentTint ? { color: accentTint } : undefined}>
+                          <MailIcon
+                            className={`w-5 h-5 ${accentTint ? "text-current" : "text-primary-600 dark:text-primary-400"}`}
+                          />
                         </div>
                         <div>
                           <p className="font-semibold text-gray-900 dark:text-white">Hub support</p>
@@ -630,7 +660,10 @@ export const ReportProblemModal: React.FC<ReportProblemModalProps> = ({
             type="button"
             disabled={isSubmitting}
             onClick={handleSubmit}
-            className="px-4 py-2 rounded-md text-sm bg-primary-600 text-white hover:bg-primary-700 disabled:opacity-50"
+            {...(accentTint ? accentPrimaryFillButtonProps(accentTint) : {})}
+            className={`px-4 py-2 rounded-md text-sm text-white disabled:opacity-50 ${
+              accentTint ? "" : "bg-primary-600 hover:bg-primary-700"
+            }`}
           >
             {isSubmitting
               ? "Sending…"

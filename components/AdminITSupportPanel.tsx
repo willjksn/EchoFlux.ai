@@ -75,6 +75,8 @@ export const AdminITSupportPanel: React.FC = () => {
   const [emailBody, setEmailBody] = useState("");
   const [emailAiLoading, setEmailAiLoading] = useState(false);
   const [emailSending, setEmailSending] = useState(false);
+  const [creatorFilterKey, setCreatorFilterKey] = useState<string>("all");
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const loadTickets = async () => {
     setIsLoading(true);
@@ -88,10 +90,10 @@ export const AdminITSupportPanel: React.FC = () => {
         headers: { Authorization: `Bearer ${token}` },
       });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data?.error || "Failed to load IT support tickets");
+      if (!res.ok) throw new Error(data?.error || "Failed to load Echo Support tickets");
       setTickets(Array.isArray(data?.items) ? (data.items as ITTicket[]) : []);
     } catch (error: any) {
-      showToast(error?.message || "Failed to load IT support tickets", "error");
+      showToast(error?.message || "Failed to load Echo Support tickets", "error");
     } finally {
       setIsLoading(false);
     }
@@ -115,6 +117,31 @@ export const AdminITSupportPanel: React.FC = () => {
     }
     return Array.from(groups.entries()).map(([key, value]) => ({ key, ...value }));
   }, [tickets]);
+
+  const creatorFilterOptions = useMemo(() => {
+    const keys = new Map<string, string>();
+    for (const t of tickets) {
+      const key = t.creatorId || "unassigned";
+      const label =
+        t.creatorDisplayName ||
+        (t.creatorHandle ? `@${t.creatorHandle.replace(/^@/, "")}` : "Unassigned / Platform level");
+      keys.set(key, label);
+    }
+    return Array.from(keys.entries())
+      .map(([value, label]) => ({ value, label }))
+      .sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: "base" }));
+  }, [tickets]);
+
+  React.useEffect(() => {
+    if (creatorFilterKey !== "all" && !creatorFilterOptions.some((o) => o.value === creatorFilterKey)) {
+      setCreatorFilterKey("all");
+    }
+  }, [creatorFilterKey, creatorFilterOptions]);
+
+  const byCreatorFiltered = useMemo(() => {
+    if (creatorFilterKey === "all") return byCreator;
+    return byCreator.filter((g) => g.key === creatorFilterKey);
+  }, [byCreator, creatorFilterKey]);
 
   const openEmailModal = useCallback(
     async (t: ITTicket) => {
@@ -245,16 +272,71 @@ export const AdminITSupportPanel: React.FC = () => {
     }
   };
 
+  const deleteTicket = useCallback(
+    async (t: ITTicket) => {
+      if (
+        !window.confirm(
+          `Delete ticket ${t.id.slice(0, 8)}… permanently?\n\nThis removes the ticket, its thread, and the reporter’s support thread copy. This cannot be undone.`
+        )
+      ) {
+        return;
+      }
+      setDeletingId(t.id);
+      try {
+        const token = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
+        if (!token) throw new Error("Not authenticated");
+        const res = await fetch("/api/adminDeleteSupportTicket", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ ticketId: t.id }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error((data as { error?: string }).error || "Failed to delete ticket");
+        setTickets((prev) => prev.filter((row) => row.id !== t.id));
+        if (emailTicket?.id === t.id) {
+          closeEmailModal();
+        }
+        showToast("Ticket deleted.", "success");
+      } catch (e: unknown) {
+        showToast(e instanceof Error ? e.message : "Failed to delete ticket", "error");
+      } finally {
+        setDeletingId(null);
+      }
+    },
+    [closeEmailModal, emailTicket?.id, showToast]
+  );
+
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h3 className="text-xl font-bold text-gray-900 dark:text-white">IT Support</h3>
+          <h3 className="text-xl font-bold text-gray-900 dark:text-white">Echo Support</h3>
           <p className="text-sm text-gray-600 dark:text-gray-400">
             Fan and creator problem reports, grouped by creator.
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          <div className="flex items-center gap-2">
+            <label htmlFor="echo-support-creator-filter" className="text-xs font-medium text-gray-600 dark:text-gray-400 sr-only">
+              Filter by creator
+            </label>
+            <select
+              id="echo-support-creator-filter"
+              value={creatorFilterKey}
+              onChange={(e) => setCreatorFilterKey(e.target.value)}
+              className="rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 text-sm px-3 py-2 min-w-[180px] max-w-[min(100vw-2rem,280px)]"
+            >
+              <option value="all">All creators</option>
+              {creatorFilterOptions.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+          </div>
           <button
             type="button"
             onClick={() => setStatusFilter("open")}
@@ -300,11 +382,11 @@ export const AdminITSupportPanel: React.FC = () => {
 
       {isLoading ? (
         <div className="text-sm text-gray-500 dark:text-gray-400">Loading tickets…</div>
-      ) : byCreator.length === 0 ? (
+      ) : byCreatorFiltered.length === 0 ? (
         <div className="text-sm text-gray-500 dark:text-gray-400">No support tickets found.</div>
       ) : (
         <div className="space-y-4">
-          {byCreator.map((group) => (
+          {byCreatorFiltered.map((group) => (
             <div key={group.key} className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
               <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-700">
                 <div className="flex items-center justify-between gap-2">
@@ -373,6 +455,14 @@ export const AdminITSupportPanel: React.FC = () => {
                           Reopen
                         </button>
                       )}
+                      <button
+                        type="button"
+                        disabled={deletingId === t.id || updatingId === t.id}
+                        onClick={() => void deleteTicket(t)}
+                        className="px-3 py-1.5 rounded-md text-xs font-semibold border border-red-300 dark:border-red-800 text-red-700 dark:text-red-300 hover:bg-red-50 dark:hover:bg-red-950/40 disabled:opacity-50"
+                      >
+                        {deletingId === t.id ? "Deleting…" : "Delete"}
+                      </button>
                     </div>
                   </div>
                 ))}
@@ -414,8 +504,8 @@ export const AdminITSupportPanel: React.FC = () => {
                     )}
                   </div>
                   <div className="text-gray-700 dark:text-gray-300">
-                    <span className="text-gray-500 dark:text-gray-400">Subject:</span> Re: EchoFlux support (ticket{" "}
-                    {emailTicket.id.slice(0, 8)}…)
+                    <span className="text-gray-500 dark:text-gray-400">Subject:</span> Re:{" "}
+                    {resolveTicketEmailBrand(emailTicket)} support (ticket {emailTicket.id.slice(0, 8)}…)
                   </div>
                   <div>
                     <p className="text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1">

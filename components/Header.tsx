@@ -55,6 +55,11 @@ export const Header: React.FC<HeaderProps> = ({ pageTitle }) => {
   }, [notifications]);
 
   const hasUnreadNotifications = useMemo(() => visibleNotifications.some(n => !n.read), [visibleNotifications]);
+  const unreadVisibleCount = useMemo(
+    () => visibleNotifications.reduce((acc, n) => acc + (n.read ? 0 : 1), 0),
+    [visibleNotifications]
+  );
+  const unreadBellBadge = unreadVisibleCount > 99 ? "99+" : String(Math.max(0, unreadVisibleCount));
   const showShareReviewInMenu = activePage !== 'fanHub';
 
   useEffect(() => {
@@ -336,11 +341,26 @@ export const Header: React.FC<HeaderProps> = ({ pageTitle }) => {
           <div className="relative" ref={notificationsRef}>
             <button
               onClick={handleToggleNotifications}
-              className="p-2 rounded-full text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 focus:outline-none"
-              aria-label={OFFLINE_MODE ? 'Reminders' : 'Account and usage alerts'}
+              className="relative p-2 rounded-full text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 focus:outline-none"
+              aria-label={
+                OFFLINE_MODE
+                  ? unreadVisibleCount > 0
+                    ? `Reminders, ${unreadVisibleCount} unread`
+                    : "Reminders"
+                  : unreadVisibleCount > 0
+                    ? `Account and usage alerts, ${unreadVisibleCount} unread`
+                    : "Account and usage alerts"
+              }
             >
               <BellIcon />
-              {hasUnreadNotifications && <span className="absolute top-0 right-0 h-2.5 w-2.5 bg-red-500 rounded-full border-2 border-white dark:border-gray-800"></span>}
+              {unreadVisibleCount > 0 ? (
+                <span
+                  className="absolute -top-0.5 -right-0.5 flex min-h-[18px] min-w-[18px] shrink-0 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold tabular-nums leading-none text-white ring-2 ring-white dark:ring-gray-800"
+                  aria-hidden
+                >
+                  {unreadBellBadge}
+                </span>
+              ) : null}
             </button>
             {isNotificationsOpen && (
                 <div className="absolute right-0 mt-2 w-80 bg-white dark:bg-gray-800 rounded-lg shadow-lg ring-1 ring-black ring-opacity-5 z-20 flex flex-col">

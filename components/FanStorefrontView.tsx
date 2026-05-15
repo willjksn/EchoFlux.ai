@@ -4929,6 +4929,7 @@ export const FanStorefrontView: React.FC = () => {
         pageLabelForReporting={echofluxContactPageLabel}
         additionalDiagnosticsLines={fanHubSupportDiagnosticsExtras}
         hubCreatorId={creator?.creatorId ?? null}
+        accentHex={primary}
         contactEmail="contact@insightmediagroupllc.com"
         supportName="Insight Media Group LLC"
         panelSupportEmail={null}
@@ -4953,6 +4954,7 @@ export const FanStorefrontView: React.FC = () => {
         pageLabelForReporting={echofluxContactPageLabel}
         additionalDiagnosticsLines={fanHubSupportDiagnosticsExtras}
         hubCreatorId={creator?.creatorId ?? null}
+        accentHex={primary}
         supportName={fanFacingSiteBrand}
         panelSupportEmail={fanPanelSupportEmail || null}
         onSubmitted={() => {
