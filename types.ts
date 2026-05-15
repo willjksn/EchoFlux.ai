@@ -200,6 +200,15 @@ export interface BioPageConfig {
 /** Button style for storefront theme */
 export type StorefrontButtonStyle = 'solid' | 'outline' | 'pill';
 
+/** Automated DM when someone first joins as a paid or free member (server sends from Stripe / joinFreeMembership). */
+export interface MemberWelcomeDmSettings {
+    enabled?: boolean;
+    /** Plain text body; attachments optional. Empty string allowed if attachments only. */
+    text?: string;
+    /** Optional image/video URLs (same shape as fan DM attachments). */
+    attachments?: Array<{ url: string; type: 'image' | 'video' }>;
+}
+
 /** Monetization settings (non-explicit, IG-like) */
 export interface CreatorMonetization {
     monthlyPrice?: number;       // cents or display value; platform interprets
@@ -210,6 +219,8 @@ export interface CreatorMonetization {
     /** Fan DM video file attachments only (not live 1:1 or livestream — see docs/LIVE_VIDEO_AND_STREAMS.md). */
     videoEnabled?: boolean;
     freeAccessEnabled?: boolean; // Allow fans to join for free (no subscription required)
+    /** New member welcome DM (paid subscription checkout or free membership join). */
+    memberWelcomeDm?: MemberWelcomeDmSettings;
 }
 
 /** Social link configuration for a single platform */

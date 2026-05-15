@@ -11,6 +11,7 @@ import {
 } from './_syncFanHubFanPreference.js';
 import { mergeGuestTreatPurchasesIntoUid } from './_mergeGuestFanPurchases.js';
 import { notifyCreatorNewFanMemberJoined, sendCreatorHubNotification } from './_fanNotifications.js';
+import { maybeSendAutomatedMemberWelcomeDm } from './_memberWelcomeDm.js';
 import { syncLiveStreamTicketOrdersForStream } from './_syncLiveStreamTicketOrders.js';
 import {
   billingCountryFromCheckoutSession,
@@ -468,6 +469,15 @@ export async function processFanHubCheckoutSessionCompleted(
           console.warn('Fan hub duplicate session identity repair failed', session.id, e);
         }
       }
+      const canonFanId =
+        typeof existing?.fanId === 'string' && existing.fanId.trim() ? existing.fanId.trim() : fanId;
+      try {
+        await maybeSendAutomatedMemberWelcomeDm(db, creatorId, canonFanId, now, {
+          source: 'paid_subscription',
+        });
+      } catch (e) {
+        console.warn('maybeSendAutomatedMemberWelcomeDm (subscription duplicate session replay):', e);
+      }
     }
     console.log(`Fan hub: skip duplicate checkout.session.completed session=${session.id}`);
     return true;
@@ -634,6 +644,14 @@ export async function processFanHubCheckoutSessionCompleted(
       } catch (e) {
         console.warn('notifyCreatorNewFanMemberJoined (subscription checkout):', e);
       }
+    }
+
+    try {
+      await maybeSendAutomatedMemberWelcomeDm(db, creatorId, fanId, now, {
+        source: 'paid_subscription',
+      });
+    } catch (e) {
+      console.warn('maybeSendAutomatedMemberWelcomeDm (subscription checkout):', e);
     }
 
     console.log(`Fan hub: subscription checkout creator=${creatorId} fan=${fanId}`);

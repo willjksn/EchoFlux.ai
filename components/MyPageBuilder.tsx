@@ -66,6 +66,11 @@ const DEFAULT_MONETIZATION: NonNullable<CreatorStorefrontSettings["monetization"
   chatEnabled: true,
   videoEnabled: true,
   freeAccessEnabled: false,
+  memberWelcomeDm: {
+    enabled: false,
+    text: "",
+    attachments: [],
+  },
 };
 
 const DEFAULT_GEO_ACCESS: NonNullable<StorefrontGeoAccessSettings> = {
@@ -864,6 +869,8 @@ export const MyPageBuilder: React.FC = () => {
   /** Ignore stale async results from handle availability checks (fast typing / saved.handle updates). */
   const handleAvailReqSeqRef = useRef(0);
   const [avatarUploading, setAvatarUploading] = useState(false);
+  const [memberWelcomeMediaUploading, setMemberWelcomeMediaUploading] = useState(false);
+  const [memberWelcomeDraftLoading, setMemberWelcomeDraftLoading] = useState(false);
   const [previewMode, setPreviewMode] = useState<"landing" | "member">("landing");
   const [saveBtnHover, setSaveBtnHover] = useState(false);
   const [previewFramingTool, setPreviewFramingTool] = useState<
@@ -1566,6 +1573,88 @@ export const MyPageBuilder: React.FC = () => {
     setDraft({ ...saved });
     setHandleInput(saved.handle ?? "");
   }, [saved]);
+
+  const handleMemberWelcomeMediaUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file || !creatorId) return;
+    const isVideo = file.type.startsWith("video/");
+    const isImage = file.type.startsWith("image/");
+    if (!isVideo && !isImage) {
+      showToast?.("Please choose an image or video file", "error");
+      return;
+    }
+    setMemberWelcomeMediaUploading(true);
+    try {
+      const ext = file.type.split("/")[1] || (isVideo ? "mp4" : "jpg");
+      const path = `users/${creatorId}/member_welcome_dm/${Date.now()}.${ext}`;
+      const storageRef = ref(storage, path);
+      await uploadBytes(storageRef, file, { contentType: file.type });
+      const url = await getDownloadURL(storageRef);
+      const type = isVideo ? ("video" as const) : ("image" as const);
+      setDraft((prev) => {
+        const m = { ...DEFAULT_MONETIZATION, ...prev.monetization };
+        const prevWelcome = { ...DEFAULT_MONETIZATION.memberWelcomeDm!, ...m.memberWelcomeDm };
+        return {
+          ...prev,
+          monetization: {
+            ...m,
+            memberWelcomeDm: {
+              ...prevWelcome,
+              attachments: [{ url, type }],
+            },
+          },
+        };
+      });
+      showToast?.("Welcome attachment saved locally — click Save to publish.", "success");
+    } catch (err) {
+      console.error(err);
+      showToast?.("Failed to upload welcome attachment", "error");
+    } finally {
+      setMemberWelcomeMediaUploading(false);
+    }
+  };
+
+  const draftMemberWelcomeWithAi = async () => {
+    if (!auth.currentUser) {
+      showToast?.("Sign in to generate a draft.", "error");
+      return;
+    }
+    const enabled = !!draft.monetization?.memberWelcomeDm?.enabled;
+    if (!enabled) {
+      showToast?.('Turn on "Automated welcome message" first.', "info");
+      return;
+    }
+    setMemberWelcomeDraftLoading(true);
+    try {
+      const token = await auth.currentUser.getIdToken();
+      const res = await fetch("/api/generateMemberWelcomeDraft", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = (await res.json().catch(() => ({}))) as { text?: string; error?: string; message?: string };
+      if (!res.ok) throw new Error(data.message || data.error || "Draft failed");
+      const text = typeof data.text === "string" ? data.text.trim() : "";
+      if (!text) throw new Error("Empty draft");
+      setDraft((prev) => {
+        const m = { ...DEFAULT_MONETIZATION, ...prev.monetization };
+        const prevWelcome = { ...DEFAULT_MONETIZATION.memberWelcomeDm!, ...m.memberWelcomeDm };
+        return {
+          ...prev,
+          monetization: {
+            ...m,
+            memberWelcomeDm: { ...prevWelcome, text },
+          },
+        };
+      });
+      showToast?.("Draft added — review, then Save.", "success");
+    } catch (err) {
+      console.error(err);
+      showToast?.(err instanceof Error ? err.message : "Draft failed", "error");
+    } finally {
+      setMemberWelcomeDraftLoading(false);
+    }
+  };
 
   const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -3242,6 +3331,129 @@ export const MyPageBuilder: React.FC = () => {
                 </label>
               </div>
 
+              <div className="p-3 rounded-lg border border-gray-200 dark:border-gray-600 bg-gray-50/70 dark:bg-gray-800/30 space-y-3">
+                <label className="flex items-start gap-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    className="mt-0.5 w-5 h-5 rounded border-gray-300 dark:border-gray-600 text-primary-600"
+                    checked={draft.monetization?.memberWelcomeDm?.enabled ?? false}
+                    onChange={(e) =>
+                      updateDraft({
+                        monetization: {
+                          ...draft.monetization,
+                          ...DEFAULT_MONETIZATION,
+                          memberWelcomeDm: {
+                            ...DEFAULT_MONETIZATION.memberWelcomeDm!,
+                            ...draft.monetization?.memberWelcomeDm,
+                            enabled: e.target.checked,
+                          },
+                        },
+                      })
+                    }
+                  />
+                  <div className="min-w-0">
+                    <span className="text-sm font-medium text-gray-900 dark:text-white">Automated welcome message</span>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                      Sent once automatically when someone becomes a paying member after checkout, or when they join via Free Access. Uses your Messages inbox with the fan.
+                    </p>
+                  </div>
+                </label>
+                {draft.monetization?.memberWelcomeDm?.enabled === true ? (
+                  <div className="space-y-2 sm:pl-8 sm:border-l-2 border-primary-200 dark:border-primary-800">
+                    <textarea
+                      rows={4}
+                      className={`w-full px-3 py-2 text-sm ${landingEditorControlClass}`}
+                      style={{
+                        fontFamily: currentLandingFontFamily,
+                        color: landingPreviewThemeText,
+                      }}
+                      placeholder="Hey! Welcome to my member hub…"
+                      value={draft.monetization?.memberWelcomeDm?.text ?? ""}
+                      onChange={(e) =>
+                        updateDraft({
+                          monetization: {
+                            ...draft.monetization,
+                            ...DEFAULT_MONETIZATION,
+                            memberWelcomeDm: {
+                              ...DEFAULT_MONETIZATION.memberWelcomeDm!,
+                              ...draft.monetization?.memberWelcomeDm,
+                              text: e.target.value,
+                            },
+                          },
+                        })
+                      }
+                    />
+                    <div className="flex flex-wrap items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => void draftMemberWelcomeWithAi()}
+                        disabled={memberWelcomeDraftLoading || saving}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-primary-600 text-white hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {memberWelcomeDraftLoading ? "Drafting…" : "Draft with AI (personality)"}
+                      </button>
+                      <label className="inline-flex cursor-pointer">
+                        <input
+                          type="file"
+                          accept="image/*,video/*"
+                          className="hidden"
+                          disabled={memberWelcomeMediaUploading || saving}
+                          onChange={(e) => void handleMemberWelcomeMediaUpload(e)}
+                        />
+                        <span className="inline-flex px-3 py-1.5 rounded-lg text-xs font-medium border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600">
+                          {memberWelcomeMediaUploading ? "Uploading…" : "Attach image/video"}
+                        </span>
+                      </label>
+                      {draft.monetization?.memberWelcomeDm?.attachments?.[0]?.url ? (
+                        <button
+                          type="button"
+                          disabled={saving || memberWelcomeMediaUploading}
+                          onClick={() =>
+                            updateDraft({
+                              monetization: {
+                                ...draft.monetization,
+                                ...DEFAULT_MONETIZATION,
+                                memberWelcomeDm: {
+                                  ...DEFAULT_MONETIZATION.memberWelcomeDm!,
+                                  ...draft.monetization?.memberWelcomeDm,
+                                  attachments: [],
+                                },
+                              },
+                            })
+                          }
+                          className="text-xs font-medium text-amber-700 dark:text-amber-400 hover:underline disabled:opacity-50"
+                        >
+                          Remove attachment
+                        </button>
+                      ) : null}
+                    </div>
+                    {draft.monetization?.memberWelcomeDm?.attachments?.[0]?.url ? (
+                      <div className="flex gap-3 items-start rounded-lg border border-gray-200 dark:border-gray-600 p-2 bg-white dark:bg-gray-800/80">
+                        {draft.monetization.memberWelcomeDm.attachments[0].type === "video" ? (
+                          <video
+                            src={draft.monetization.memberWelcomeDm.attachments[0].url}
+                            className="max-h-24 rounded"
+                            muted
+                            playsInline
+                            controls
+                          />
+                        ) : (
+                          <img
+                            src={draft.monetization.memberWelcomeDm.attachments[0].url}
+                            alt="Welcome attachment"
+                            className="max-h-24 rounded object-cover"
+                          />
+                        )}
+                        <p className="text-xs text-gray-500 dark:text-gray-400">Included with the welcome DM when a new member joins.</p>
+                      </div>
+                    ) : null}
+                    <p className="text-[11px] text-gray-500 dark:text-gray-400">
+                      Add body text or a media attachment (or both). Save My Page settings to publish. Each fan receives this at most once per conversation.
+                    </p>
+                  </div>
+                ) : null}
+              </div>
+
               {!draft.monetization?.freeAccessEnabled && (
                 <div>
                   <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
@@ -3370,7 +3582,7 @@ export const MyPageBuilder: React.FC = () => {
                           fontFamily: currentLandingFontFamily,
                           color: landingPreviewThemeText,
                         }}
-                        placeholder={`Join - $${((draft.monetization?.monthlyPrice ?? DEFAULT_MONETIZATION.monthlyPrice) / 100).toFixed(2)}/mo`}
+                        placeholder={`Join - $${((draft.monetization?.monthlyPrice ?? DEFAULT_MONETIZATION.monthlyPrice ?? 999) / 100).toFixed(2)}/mo`}
                         value={draft.landingContent?.pricingCtaLoggedInPaid ?? ""}
                         onChange={(e) =>
                           updateDraft({

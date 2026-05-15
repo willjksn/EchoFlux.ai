@@ -6,6 +6,7 @@ import {
   ensureFanDmThreadForMember,
 } from "./_syncFanHubFanPreference.js";
 import { notifyCreatorNewFanMemberJoined } from "./_fanNotifications.js";
+import { maybeSendAutomatedMemberWelcomeDm } from "./_memberWelcomeDm.js";
 
 /**
  * POST: Join a creator's fan page for free (no payment required).
@@ -157,6 +158,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         await notifyCreatorNewFanMemberJoined({ creatorId, fanId });
       } catch (e) {
         console.warn("notifyCreatorNewFanMemberJoined (free join):", e);
+      }
+      try {
+        await maybeSendAutomatedMemberWelcomeDm(db, creatorId, fanId, now, {
+          source: "free_membership",
+        });
+      } catch (e) {
+        console.warn("maybeSendAutomatedMemberWelcomeDm (free join):", e);
       }
     }
 
