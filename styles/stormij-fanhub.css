@@ -1923,6 +1923,15 @@ button.feed-card-action-count--clickable:hover {
   margin: 0 0 0.75rem;
   color: #374151;
 }
+.feed-card-poll-admin-summary {
+  margin: -0.35rem 0 0.75rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #6b7280;
+}
+.dark .feed-card-poll-admin-summary {
+  color: #9ca3af;
+}
 .feed-card-poll-options {
   list-style: none;
   padding: 0;

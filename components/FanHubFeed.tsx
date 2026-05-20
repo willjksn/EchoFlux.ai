@@ -177,7 +177,7 @@ export type FeedPost = {
   hideLikes?: boolean;
   hideLikeCounts?: boolean;
   showTipButton?: boolean;
-  poll?: { question: string; options: string[]; optionVotes?: number[] };
+  poll?: FeedPostPoll;
   tipGoal?: { description: string; targetCents: number; raisedCents: number };
   lockedContent?: LockedPostContent;
   /** Optional blur on image/video (see `feedSlideMediaBlurStyle`). */
@@ -218,6 +218,113 @@ function parseLiveStreamPromoFromDoc(d: DocumentData): LiveStreamPromoOnPost | u
     promo.streamStatus = ss as (typeof allowed)[number];
   }
   return promo;
+}
+
+type FeedPostPoll = {
+  question: string;
+  options: string[];
+  optionVotes?: number[];
+  votesByFan?: Record<string, number>;
+};
+
+function parseFeedPostPoll(data: DocumentData): FeedPostPoll | undefined {
+  const raw = data.poll;
+  if (!raw || typeof raw !== "object") return undefined;
+  const poll = raw as Record<string, unknown>;
+  const question = typeof poll.question === "string" ? poll.question.trim() : "";
+  const options = Array.isArray(poll.options)
+    ? poll.options
+        .filter((option): option is string => typeof option === "string" && !!option.trim())
+        .map((option) => option.trim())
+    : [];
+  if (!question || options.length < 2) return undefined;
+  const optionVotes = Array.isArray(poll.optionVotes)
+    ? poll.optionVotes.map((vote) =>
+        typeof vote === "number" && Number.isFinite(vote) ? Math.max(0, Math.round(vote)) : 0,
+      )
+    : undefined;
+  const votesByFanRaw =
+    poll.votesByFan && typeof poll.votesByFan === "object"
+      ? (poll.votesByFan as Record<string, unknown>)
+      : {};
+  const votesByFan = Object.fromEntries(
+    Object.entries(votesByFanRaw)
+      .filter(([, vote]) => typeof vote === "number" && Number.isFinite(vote))
+      .map(([fan, vote]) => [fan, Math.max(0, Math.round(vote as number))]),
+  );
+  return {
+    question,
+    options,
+    ...(optionVotes ? { optionVotes: optionVotes.slice(0, options.length) } : {}),
+    ...(Object.keys(votesByFan).length > 0 ? { votesByFan } : {}),
+  };
+}
+
+function getFeedPollVoteStats(poll: FeedPostPoll): {
+  votes: number[];
+  totalVotes: number;
+  voterCount: number;
+} {
+  const n = poll.options.length;
+  let votes = [...(poll.optionVotes ?? poll.options.map(() => 0))];
+  while (votes.length < n) votes.push(0);
+  votes = votes.slice(0, n).map((v) => Math.max(0, Math.round(v)));
+
+  const votesByFan = poll.votesByFan ?? {};
+  const voterCountFromFans = Object.keys(votesByFan).length;
+  const sumFromArray = votes.reduce((a, b) => a + b, 0);
+  if (sumFromArray === 0 && voterCountFromFans > 0) {
+    votes = poll.options.map(() => 0);
+    for (const idx of Object.values(votesByFan)) {
+      if (typeof idx === "number" && idx >= 0 && idx < n) votes[idx] += 1;
+    }
+  }
+
+  const totalVotes = votes.reduce((a, b) => a + b, 0);
+  const voterCount = voterCountFromFans > 0 ? voterCountFromFans : totalVotes;
+  return { votes, totalVotes, voterCount };
+}
+
+function FeedCardPollBlock({ poll, isAdminMode }: { poll: FeedPostPoll; isAdminMode?: boolean }) {
+  const { votes, totalVotes, voterCount } = getFeedPollVoteStats(poll);
+  return (
+    <div className="feed-card-poll">
+      <p className="feed-card-poll-question">{poll.question}</p>
+      {isAdminMode ? (
+        <p className="feed-card-poll-admin-summary" aria-live="polite">
+          {voterCount === 0
+            ? "No votes yet"
+            : `${voterCount} ${voterCount === 1 ? "member" : "members"} voted`}
+        </p>
+      ) : null}
+      <ul className="feed-card-poll-options">
+        {poll.options.map((opt, i) => {
+          const voteCount = votes[i] ?? 0;
+          const pct = totalVotes > 0 ? Math.round((voteCount / totalVotes) * 100) : 0;
+          return (
+            <li key={i} className="feed-card-poll-option">
+              <span className="feed-card-poll-option-label">{opt}</span>
+              <span className="feed-card-poll-option-meta">
+                {isAdminMode ? (
+                  <>
+                    {voteCount} {voteCount === 1 ? "vote" : "votes"}
+                    {totalVotes > 0 ? ` (${pct}%)` : ""}
+                  </>
+                ) : totalVotes > 0 ? (
+                  `${pct}%`
+                ) : (
+                  "0%"
+                )}
+              </span>
+              {totalVotes > 0 ? (
+                <div className="feed-card-poll-option-bar" style={{ width: `${pct}%` }} aria-hidden />
+              ) : null}
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
 }
 
 function feedPostCreatedMs(p: FeedPost): number {
@@ -294,7 +401,7 @@ function firestoreDocToFeedPost(docSnap: QueryDocumentSnapshot<DocumentData>, is
     hideLikes: !!d.hideLikes,
     hideLikeCounts: !!d.hideLikeCounts,
     showTipButton: d.showTipButton !== false,
-    poll: d.poll as FeedPost["poll"] | undefined,
+    poll: parseFeedPostPoll(d),
     tipGoal: d.tipGoal as FeedPost["tipGoal"] | undefined,
     lockedContent: d.lockedContent as FeedPost["lockedContent"] | undefined,
     mediaPreviewBlurPx: (() => {
@@ -1649,31 +1756,8 @@ function FeedCard({
           <span className="caption-username">{creatorName}</span>
           {renderTextWithCustomEmoji(post.body || "", sjHeartEmojiCtx)}
         </p>
-        {post.poll && post.poll.question && post.poll.options?.length >= 2 && (
-          <div className="feed-card-poll">
-            <p className="feed-card-poll-question">{post.poll.question}</p>
-            <ul className="feed-card-poll-options">
-              {(() => {
-                const votes = post.poll.optionVotes ?? post.poll.options.map(() => 0);
-                const total = votes.reduce((a, b) => a + b, 0);
-                return post.poll.options.map((opt, i) => {
-                  const v = votes[i] ?? 0;
-                  const pct = total > 0 ? Math.round((v / total) * 100) : 0;
-                  return (
-                    <li key={i} className="feed-card-poll-option">
-                      <span className="feed-card-poll-option-label">{opt}</span>
-                      <span className="feed-card-poll-option-meta">
-                        {total > 0 ? `${pct}%` : "0%"}
-                      </span>
-                      {total > 0 && (
-                        <div className="feed-card-poll-option-bar" style={{ width: `${pct}%` }} aria-hidden />
-                      )}
-                    </li>
-                  );
-                });
-              })()}
-            </ul>
-          </div>
+        {post.poll && post.poll.options.length >= 2 && (
+          <FeedCardPollBlock poll={post.poll} isAdminMode={isAdminMode} />
         )}
         {post.tipGoal && post.tipGoal.targetCents > 0 && (
           <div className="feed-card-tip-goal">
