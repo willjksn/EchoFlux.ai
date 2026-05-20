@@ -1740,22 +1740,25 @@ const CaptionGenerator: React.FC = () => {
         const newPost: Post = {
           id: postId,
           content: item.captionText,
-          mediaUrl: mediaUrl, // Primary image (for backward compatibility)
-          mediaUrls: mediaUrls, // Multiple images array
+          mediaUrl: mediaUrl,
+          mediaUrls: mediaUrls,
           mediaType: item.type,
           platforms: platformsToPost,
           status: 'Scheduled',
           author: { name: user.name, avatar: user.avatar },
           comments: [],
           scheduledDate: item.scheduledDate,
+          autoPublishAtSchedule: item.autoPublishAtSchedule !== false,
           clientId: selectedClient?.id,
           timestamp: new Date().toISOString(),
+          ...(item.instagramPostType ? { instagramPostType: item.instagramPostType } : {}),
         } as Post & { timestamp: string };
 
         const safePost = JSON.parse(JSON.stringify(newPost));
         await setDoc(doc(db, 'users', user.id, 'posts', postId), safePost);
       }
 
+      // Legacy path: immediate Meta native schedule when handleScheduleMedia is used (e.g. AI auto-schedule)
       // Schedule to Instagram if selected
       const hasInstagram = platformsToPost.includes('Instagram');
       if (hasInstagram && mediaUrl) {
@@ -3124,10 +3127,16 @@ const CaptionGenerator: React.FC = () => {
       return;
     }
 
+    if (status === 'Scheduled' && !item.scheduledDate) {
+      showToast('Please set a schedule date and time before adding to the calendar.', 'error');
+      return;
+    }
+
     setIsSaving(true);
     try {
-      // Upload media only if it exists
       let mediaUrl: string | undefined = undefined;
+      let mediaUrls: string[] | undefined = undefined;
+
       if (item.previewUrl) {
         mediaUrl = item.previewUrl.startsWith('http')
           ? item.previewUrl
@@ -3139,9 +3148,35 @@ const CaptionGenerator: React.FC = () => {
         }
       }
 
-      const title = item.captionText.trim()
-        ? item.captionText.substring(0, 30) + '...'
-        : 'New Post';
+      if (item.additionalImages && item.additionalImages.length > 0) {
+        const uploadedUrls: string[] = [];
+        for (const additionalImg of item.additionalImages) {
+          let imgUrl: string | undefined = undefined;
+
+          if (additionalImg.previewUrl.startsWith('http://') || additionalImg.previewUrl.startsWith('https://')) {
+            imgUrl = additionalImg.previewUrl;
+          } else if (additionalImg.data) {
+            const timestamp = Date.now();
+            const extension = additionalImg.mimeType.split('/')[1] || 'png';
+            const storagePath = `users/${user!.id}/uploads/${timestamp}.${extension}`;
+            const storageRef = ref(storage, storagePath);
+
+            const bytes = base64ToBytes(additionalImg.data);
+            await uploadBytes(storageRef, bytes, {
+              contentType: additionalImg.mimeType,
+            });
+
+            imgUrl = await getDownloadURL(storageRef);
+          }
+
+          if (imgUrl) uploadedUrls.push(imgUrl);
+        }
+
+        if (uploadedUrls.length > 0) {
+          mediaUrls = [mediaUrl, ...uploadedUrls].filter(Boolean) as string[];
+          mediaUrl = mediaUrls[0];
+        }
+      }
 
       // Check if this is a draft being edited (has item.id from draft post)
       const isDraftEdit = item.id && item.id.length > 0;
@@ -3182,25 +3217,18 @@ const CaptionGenerator: React.FC = () => {
           }
         }
 
-        // Set scheduled date - use item's scheduledDate if available, otherwise default to tomorrow
         let scheduledDate: string | undefined;
         if (status === 'Scheduled') {
-          if (item.scheduledDate) {
-            scheduledDate = item.scheduledDate;
-          } else {
-            const tomorrow = new Date();
-            tomorrow.setDate(tomorrow.getDate() + 1);
-            tomorrow.setHours(14, 0, 0, 0); // Default to 2 PM tomorrow
-            scheduledDate = tomorrow.toISOString();
-          }
+          scheduledDate = item.scheduledDate;
         } else if (status === 'Draft') {
-          scheduledDate = draftDate.toISOString(); // Drafts also get a suggested date
+          scheduledDate = draftDate.toISOString();
         }
 
         const newPost: Post = {
           id: postId,
           content: item.captionText,
           mediaUrl: mediaUrl,
+          mediaUrls: mediaUrls,
           mediaType: item.type,
           platforms: platformsToPost,
           status: status,
@@ -3208,7 +3236,8 @@ const CaptionGenerator: React.FC = () => {
           comments: [],
           scheduledDate: scheduledDate,
           clientId: selectedClient?.id,
-          timestamp: new Date().toISOString(), // Add timestamp for Firestore ordering
+          timestamp: new Date().toISOString(),
+          ...(item.instagramPostType ? { instagramPostType: item.instagramPostType } : {}),
         } as Post & { timestamp: string };
 
         if (status === 'Scheduled') {
@@ -3255,7 +3284,14 @@ const CaptionGenerator: React.FC = () => {
           showToast('Upgrade to Pro or Elite to access the calendar', 'info');
           setActivePage('pricing');
         } else {
-          showToast('Added to Calendar!', 'success');
+          const when = item.scheduledDate
+            ? new Date(item.scheduledDate).toLocaleString()
+            : 'your calendar';
+          const autoNote =
+            item.autoPublishAtSchedule !== false
+              ? ' Auto-post is on for connected platforms.'
+              : ' Reminder only (auto-post off).';
+          showToast(`Scheduled for ${when}.${autoNote}`, 'success');
           setActivePage('calendar');
         }
       } else {
@@ -3267,8 +3303,7 @@ const CaptionGenerator: React.FC = () => {
           setActivePage('calendar');
         }
       }
-      
-      // Refresh posts in context
+
       if (setPosts) {
         try {
           const postsRef = collection(db, 'users', user.id, 'posts');

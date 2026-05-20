@@ -2021,26 +2021,44 @@ export const Calendar: React.FC = () => {
 
                             {!isEditing && !selectedSkipsPostEditor && selectedEvent.post?.status === 'Scheduled' && (
                                 <div className="mb-4 p-3 rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20">
-                                    <label className="flex items-start gap-3 cursor-pointer">
-                                        <input
-                                            type="checkbox"
-                                            className="mt-1 rounded border-gray-300 dark:border-gray-600 text-amber-600 focus:ring-amber-500"
-                                            checked={selectedEvent.post.autoPublishAtSchedule === true}
+                                    <div className="flex items-start justify-between gap-3">
+                                        <div className="min-w-0 flex-1">
+                                            <span
+                                                id="calendar-autopost-label"
+                                                className="text-sm font-semibold text-amber-900 dark:text-amber-100"
+                                            >
+                                                Auto-post when due
+                                            </span>
+                                            <p className="text-xs text-amber-800/90 dark:text-amber-200/90 mt-1 leading-snug">
+                                                At the scheduled time, publishes to selected platforms (X, Instagram, Facebook) when connected.
+                                                {selectedEvent.post.platforms?.includes('X') && !socialAccounts?.X?.connected ? (
+                                                    <span className="block mt-1 font-medium">
+                                                        Connect X in Settings for automatic posting.
+                                                    </span>
+                                                ) : null}
+                                            </p>
+                                        </div>
+                                        <button
+                                            type="button"
+                                            role="switch"
+                                            aria-checked={selectedEvent.post.autoPublishAtSchedule === true}
+                                            aria-labelledby="calendar-autopost-label"
                                             disabled={autoPublishUpdating || OFFLINE_MODE}
-                                            onChange={async (e) => {
+                                            onClick={async () => {
                                                 if (!selectedEvent.post || !user) return;
+                                                const nextChecked = selectedEvent.post.autoPublishAtSchedule !== true;
                                                 setAutoPublishUpdating(true);
                                                 try {
                                                     const next: Post = {
                                                         ...selectedEvent.post,
-                                                        autoPublishAtSchedule: e.target.checked,
+                                                        autoPublishAtSchedule: nextChecked,
                                                     };
                                                     await updatePost(next);
                                                     setSelectedEvent((se) =>
                                                         se && se.post ? { ...se, post: next } : se
                                                     );
                                                     showToast(
-                                                        e.target.checked
+                                                        nextChecked
                                                             ? 'Auto-post at schedule time is on for this post.'
                                                             : 'Auto-post is off; use Publish Now or post manually.',
                                                         'success'
@@ -2052,21 +2070,22 @@ export const Calendar: React.FC = () => {
                                                     setAutoPublishUpdating(false);
                                                 }
                                             }}
-                                        />
-                                        <div>
-                                            <span className="text-sm font-semibold text-amber-900 dark:text-amber-100">
-                                                Auto-post when due
-                                            </span>
-                                            <p className="text-xs text-amber-800/90 dark:text-amber-200/90 mt-1 leading-snug">
-                                                At the scheduled time, publishes automatically when X is in this post and your X account is connected. Other platforms: use Publish Now or post manually.
-                                                {selectedEvent.post.platforms?.includes('X') && !socialAccounts?.X?.connected ? (
-                                                    <span className="block mt-1 font-medium">
-                                                        Connect X in Settings for automatic posting.
-                                                    </span>
-                                                ) : null}
-                                            </p>
-                                        </div>
-                                    </label>
+                                            className={`relative mt-0.5 inline-block h-6 w-11 shrink-0 rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-800 disabled:opacity-50 disabled:cursor-not-allowed ${
+                                                selectedEvent.post.autoPublishAtSchedule === true
+                                                    ? 'bg-amber-600'
+                                                    : 'bg-gray-200 dark:bg-gray-600'
+                                            }`}
+                                        >
+                                            <span
+                                                aria-hidden
+                                                className={`pointer-events-none absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform duration-200 ease-in-out ${
+                                                    selectedEvent.post.autoPublishAtSchedule === true
+                                                        ? 'translate-x-4'
+                                                        : 'translate-x-0'
+                                                }`}
+                                            />
+                                        </button>
+                                    </div>
                                 </div>
                             )}
 

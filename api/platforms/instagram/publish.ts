@@ -97,7 +97,7 @@ async function debugAccessToken(accessToken: string): Promise<TokenDebugResult> 
   };
 }
 
-async function refreshInstagramAccessToken(
+export async function refreshInstagramAccessToken(
   userId: string,
   db: any
 ): Promise<string | null> {

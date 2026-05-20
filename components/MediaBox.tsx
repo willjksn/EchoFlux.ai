@@ -1761,25 +1761,53 @@ ${contextLines || 'None'}
       </div>
 
       {user?.plan !== 'Free' && hasCalendarAccess(user) && platformsToPost.length > 0 && (
-        <div className="mb-3">
-          <label className={`inline-flex w-full items-center justify-center gap-2 rounded-lg border px-3 py-2 text-xs font-semibold transition-colors cursor-pointer ${
+        <div
+          className={`mb-2 flex items-center justify-between gap-2 rounded-md border px-2 py-1.5 ${
             mediaItem.autoPublishAtSchedule !== false
-              ? 'border-primary-200 bg-primary-50 text-primary-700 hover:bg-primary-100 dark:border-primary-900/50 dark:bg-primary-900/30 dark:text-primary-200'
-              : 'border-gray-200 bg-gray-50 text-gray-600 hover:bg-gray-100 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300'
-          }`}>
-            <input
-              type="checkbox"
-              className="rounded border-gray-300 text-primary-600 focus:ring-primary-500 dark:border-gray-600"
-              checked={mediaItem.autoPublishAtSchedule !== false}
-              onChange={(e) => onUpdate(index, { autoPublishAtSchedule: e.target.checked })}
+              ? 'border-primary-200/80 bg-primary-50/80 dark:border-primary-900/40 dark:bg-primary-900/15'
+              : 'border-gray-200 bg-gray-50/80 dark:border-gray-700 dark:bg-gray-800/50'
+          }`}
+        >
+          <span
+            id={`media-box-autopost-label-${index}`}
+            className="min-w-0 flex-1 text-[11px] font-medium leading-tight text-gray-700 dark:text-gray-300"
+            title="When on, posts to selected platforms at the scheduled time. Off = calendar reminder only."
+          >
+            Auto-post when due
+          </span>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={mediaItem.autoPublishAtSchedule !== false}
+            aria-labelledby={`media-box-autopost-label-${index}`}
+            title={
+              mediaItem.autoPublishAtSchedule !== false
+                ? 'Auto-post on for selected platforms'
+                : 'Calendar reminder only'
+            }
+            onClick={() =>
+              onUpdate(index, {
+                autoPublishAtSchedule: mediaItem.autoPublishAtSchedule === false,
+              })
+            }
+            className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors duration-200 ease-in-out focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-gray-800 ${
+              mediaItem.autoPublishAtSchedule !== false
+                ? 'bg-primary-600'
+                : 'bg-gray-300 dark:bg-gray-600'
+            }`}
+          >
+            <span
+              aria-hidden
+              className={`pointer-events-none absolute left-0.5 top-0.5 h-4 w-4 rounded-full bg-white shadow-sm transition-transform duration-200 ease-in-out ${
+                mediaItem.autoPublishAtSchedule !== false ? 'translate-x-4' : 'translate-x-0'
+              }`}
             />
-            <span>Auto-post at scheduled time</span>
-          </label>
-          {xSelected && !xConnected ? (
-            <p className="mt-1 text-center text-[10px] font-medium text-amber-700 dark:text-amber-300">Connect X first</p>
-          ) : null}
+          </button>
         </div>
       )}
+      {user?.plan !== 'Free' && hasCalendarAccess(user) && platformsToPost.length > 0 && xSelected && !xConnected ? (
+        <p className="-mt-1 mb-2 text-[10px] font-medium text-amber-700 dark:text-amber-300">Connect X for auto-post.</p>
+      ) : null}
 
       {/* Preview Button - Always visible if media exists */}
       {mediaItem.previewUrl && (

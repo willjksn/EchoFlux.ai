@@ -276,6 +276,60 @@ async function publishVideo(
   return data.id;
 }
 
+/** Server-side Facebook publish (used by API route and auto-post cron). */
+export async function publishFacebookContent(params: {
+  userId: string;
+  db: any;
+  caption: string;
+  mediaUrl?: string;
+  mediaUrls?: string[];
+  mediaType?: 'image' | 'video';
+  scheduledPublishTime?: string;
+}): Promise<{ postId: string; status: 'scheduled' | 'published' }> {
+  const { userId, db, caption, mediaUrl, mediaUrls, mediaType, scheduledPublishTime } = params;
+  const normalizedCaption = (caption || '').trim();
+  const urlsToUse =
+    Array.isArray(mediaUrls) && mediaUrls.length > 0 ? mediaUrls : mediaUrl ? [mediaUrl] : [];
+
+  if (!normalizedCaption && urlsToUse.length === 0) {
+    throw new Error('caption is required for text-only posts');
+  }
+  if (urlsToUse.length > 1 && mediaType && mediaType !== 'image') {
+    throw new Error('Multiple images are only supported for image posts');
+  }
+
+  const scheduledInfo = parseScheduledTime(scheduledPublishTime);
+  if (scheduledPublishTime && !scheduledInfo.isValid) {
+    throw new Error(scheduledInfo.error || 'Invalid scheduledPublishTime');
+  }
+
+  const socialAccountRef = db.collection('users').doc(userId).collection('social_accounts').doc('facebook');
+  const socialAccountDoc = await socialAccountRef.get();
+  if (!socialAccountDoc.exists) {
+    throw new Error('Facebook account not connected');
+  }
+  const socialAccount = socialAccountDoc.data();
+  if (!socialAccount?.connected) {
+    throw new Error('Facebook account not properly connected');
+  }
+
+  const page = await resolveFacebookPageAccount(socialAccount, userId, db);
+  const scheduledUnix = scheduledInfo.isValid ? scheduledInfo.unix : undefined;
+
+  let postId: string;
+  if (urlsToUse.length === 0) {
+    postId = await publishTextPost(page, normalizedCaption, scheduledUnix);
+  } else if (mediaType === 'video') {
+    postId = await publishVideo(page, urlsToUse[0], normalizedCaption, scheduledUnix);
+  } else if (urlsToUse.length > 1) {
+    postId = await publishMultiPhoto(page, urlsToUse, normalizedCaption, scheduledUnix);
+  } else {
+    postId = await publishSinglePhoto(page, urlsToUse[0], normalizedCaption, scheduledUnix);
+  }
+
+  return { postId, status: scheduledUnix ? 'scheduled' : 'published' };
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
@@ -321,48 +375,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const adminApp = getAdminApp();
     const db = adminApp.firestore();
-    const socialAccountRef = db
-      .collection('users')
-      .doc(authUser.uid)
-      .collection('social_accounts')
-      .doc('facebook');
 
-    const socialAccountDoc = await socialAccountRef.get();
-    if (!socialAccountDoc.exists) {
-      return res.status(404).json({
-        error: 'Facebook account not connected',
-        details: 'Please connect your Facebook Page in Settings',
-      });
-    }
-
-    const socialAccount = socialAccountDoc.data();
-    if (!socialAccount?.connected) {
-      return res.status(400).json({
-        error: 'Facebook account not properly connected',
-        details: 'Please reconnect your Facebook account',
-      });
-    }
-
-    const page = await resolveFacebookPageAccount(socialAccount, authUser.uid, db);
-
-    let postId: string;
-    const scheduledUnix = scheduledInfo.isValid ? scheduledInfo.unix : undefined;
-
-    if (urlsToUse.length === 0) {
-      postId = await publishTextPost(page, normalizedCaption, scheduledUnix);
-    } else if (mediaType === 'video') {
-      postId = await publishVideo(page, urlsToUse[0], normalizedCaption, scheduledUnix);
-    } else if (urlsToUse.length > 1) {
-      postId = await publishMultiPhoto(page, urlsToUse, normalizedCaption, scheduledUnix);
-    } else {
-      postId = await publishSinglePhoto(page, urlsToUse[0], normalizedCaption, scheduledUnix);
-    }
+    const { postId, status } = await publishFacebookContent({
+      userId: authUser.uid,
+      db,
+      caption: normalizedCaption,
+      mediaUrl,
+      mediaUrls,
+      mediaType,
+      scheduledPublishTime,
+    });
 
     return res.status(200).json({
       success: true,
       postId,
-      status: scheduledUnix ? 'scheduled' : 'published',
-      message: scheduledUnix ? 'Post scheduled successfully' : 'Post published successfully',
+      status,
+      message: status === 'scheduled' ? 'Post scheduled successfully' : 'Post published successfully',
     });
   } catch (error: any) {
     console.error('Facebook publish error:', error);

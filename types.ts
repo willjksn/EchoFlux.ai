@@ -1252,6 +1252,8 @@ export interface Post {
     scheduledDate?: string;
     /** If true, scheduled posts are eligible for automatic publishing at `scheduledDate` when the account is connected (see auto-post cron). */
     autoPublishAtSchedule?: boolean;
+    instagramPostType?: 'Post' | 'Reel' | 'Story';
+    lastPublishResults?: Array<{ platform: string; success: boolean; id?: string; error?: string; mediaSkipped?: boolean }>;
     timestamp?: string;
     createdAt?: string;
     updatedAt?: string;
