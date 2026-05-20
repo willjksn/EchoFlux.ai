@@ -62,7 +62,6 @@ export const Sidebar: React.FC = () => {
   const isBusiness = user.userType === 'Business';
   const autopilotLabel = isBusiness ? 'Marketing Manager' : 'AI Autopilot';
 
-  // Premium Studio: Pro/CreatorPro -> upgrade screen; Elite/CreatorElite/OFS/Agency -> full studio. Fan Hub: all paid creator tiers above.
   const hasFanHubAccess = hasFanHubStudioRouteAccess(user);
   const hasPremiumStudioAccess = hasPremiumStudioRouteAccess(user);
   const trackFanHubSidebarBadge = hasFanHubAccess || hasPremiumStudioAccess;
@@ -73,12 +72,10 @@ export const Sidebar: React.FC = () => {
   const allNavItems: (Omit<NavItemProps, 'page' | 'label'> & { page: Page | 'admin', label: string })[] = [
     // MAIN
     { page: 'dashboard', icon: <DashboardIcon />, label: 'Dashboard', tourId: 'tour-step-1-dashboard' },
-    { page: 'strategy', icon: <TargetIcon />, label: 'What to Post' },
-    { page: 'creator-os', icon: <SparklesIcon />, label: 'Creator OS' },
+    { page: 'strategy', icon: <TargetIcon />, label: 'Plan', tourId: 'tour-step-plan-nav' },
     { page: 'compose', icon: <ComposeIcon />, label: 'Create Post', tourId: 'tour-step-3-compose-nav' },
     { page: 'calendar', icon: <CalendarIcon />, label: 'Calendar' },
     { page: 'mediaLibrary', icon: <ImageIcon />, label: 'Vault' },
-    ...(hasFanHubAccess ? [{ page: (hasPremiumStudioAccess ? 'onlyfansStudio' : 'premiumStudioUpgrade') as Page, icon: <SparklesIcon />, label: 'Premium Studio' }] : []),
     ...((hasFanHubAccess || hasPremiumStudioAccess) ? [{ page: 'fanHub' as Page, icon: <HeartIcon />, label: 'Fan Hub', tourId: 'tour-step-fanhub-nav' }] : []),
     { page: 'witmePage', icon: <GlobeIcon />, label: 'Witme Page' },
     { page: 'settings', icon: <SettingsIcon />, label: 'Settings' },
@@ -87,15 +84,13 @@ export const Sidebar: React.FC = () => {
 
   const navItems = allNavItems.filter(item => {
       if (user.plan === 'Caption') return item.page === 'compose' || item.page === 'settings';
-      if (user.plan === 'OnlyFansStudio') return item.page === 'onlyfansStudio' || item.page === 'fanHub';
+      if (user.plan === 'OnlyFansStudio') return item.page === 'fanHub' || item.page === 'settings';
       switch (item.page) {
           case 'dashboard':
           case 'strategy':
           case 'compose':
           case 'settings':
           case 'mediaLibrary':
-              return true;
-          case 'creator-os':
               return true;
           case 'admin':
               return (
@@ -105,10 +100,6 @@ export const Sidebar: React.FC = () => {
               );
           case 'calendar':
               return hasFanHubStudioRouteAccess(user);
-          case 'onlyfansStudio':
-              return hasPremiumStudioAccess;
-          case 'premiumStudioUpgrade':
-              return hasFanHubAccess && !hasPremiumStudioAccess;
           case 'fanHub':
               return hasFanHubAccess || hasPremiumStudioAccess;
           case 'witmePage':

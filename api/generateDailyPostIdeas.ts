@@ -8,6 +8,12 @@ import { parseJSON } from "./_geminiShared.js";
 import { enforceRateLimit } from "./_rateLimit.js";
 import { getLatestTrends } from "./_trendsHelper.js";
 import { searchWeb } from "./_webSearch.js";
+import {
+  MEMBER_HUB_RETENTION_SYSTEM,
+  buildMemberHubNicheLine,
+  getMemberHubToneGuidance,
+  getMemberHubTrendsContext,
+} from "./_memberHubContentContext.js";
 
 export interface DailyPostIdeaPayload {
   id: string;
@@ -106,6 +112,8 @@ function buildPrompt(opts: {
   targetAudienceGender?: string;
   creatorHint?: string;
   prioritizeCreatorPersonality?: boolean;
+  memberHubToneLine?: string;
+  niche?: string;
 }): string {
   const {
     platform,
@@ -154,7 +162,7 @@ function buildPrompt(opts: {
   const formatGuidance =
     format === "auto"
       ? platform === "fan_hub"
-        ? "Generate 3 varied ideas using My Page formats: photo posts, video posts, text updates, or polls. NO Instagram-specific formats."
+        ? "Generate exactly 3 ideas: ONE photo, ONE video, and ONE text post (poll only if it clearly fits the creator hint better than text). Each idea MUST include a full creation blueprint in shotList — not caption-only."
         : platform === "twitter"
         ? "Generate 3 varied X/Twitter ideas: tweets, threads, polls, or short videos."
         : (opts as any).generateAllFormats
@@ -194,13 +202,41 @@ SPICINESS / BORDERLINE EXPLICITNESS (${spice}/100):
 - Keep the level consistent across title, hook, captionStarter, and shotList. Do not randomly sanitize spicy requests into generic lifestyle content.
 ` : "";
 
-  const contentPolicyBlock = personalityPrimary ? `
+  const fanHubBlueprintBlock =
+    platform === "fan_hub"
+      ? `
+FAN HUB CREATION BLUEPRINT (MOST IMPORTANT — creators need WHAT TO MAKE, not just captions):
+- Each idea = (1) format + (2) title naming the concept + (3) shotList = step-by-step what to photograph, film, or write + (4) hook = separate caption for members.
+- shotList is REQUIRED with 4–5 SPECIFIC bullets. Never return an idea with an empty shotList.
+- title describes the POST CONCEPT (what members will see), NOT the caption text.
+- hook/captionStarter are SECONDARY — written after the visual/text concept is defined.
+
+Format-specific shotList rules:
+- photo: outfit, pose, setting/background, lighting, camera angle/framing, expression/vibe (5 bullets).
+- video: length (sec), opening frame, movement/action, outfit/setting, audio/music or voice note, ending beat (5 bullets).
+- text: post structure (lines/paragraphs), topics to cover, tone, optional emoji, CTA for replies (4–5 bullets).
+- poll: exact question text + 2–4 answer options members tap (as shotList items).
+
+${opts.memberHubToneLine || ""}
+${MEMBER_HUB_RETENTION_SYSTEM}
+${buildMemberHubNicheLine(opts.niche)}
+`
+      : "";
+
+  const contentPolicyBlock =
+    platform === "fan_hub"
+      ? fanHubBlueprintBlock
+      : personalityPrimary
+        ? `
 CONTENT POLICY (PERSONALITY OVERRIDE):
 - Let the creator personality define how spicy, flirty, clean, quiet, profane, or reserved the copy should be.
 - If the personality clearly says flirty, sensual, bold, spicy, or provocative, you may use tasteful flirtiness that fits it.
 - If the personality says calm, quiet, soft, classy, gentle, reserved, clean, wholesome, or similar, keep ideas clean and do NOT add profanity or flirtiness.
 - Never become explicit or unsafe unless the personality clearly asks for an adult edge and the platform/context allows it.
-` : spicyMode ? CONTENT_POLICY_SPICY : CONTENT_POLICY_SAFE;
+`
+        : spicyMode
+          ? CONTENT_POLICY_SPICY
+          : CONTENT_POLICY_SAFE;
 
   const ideaCount = swapOnly ? "ONE" : opts.generateAllFormats ? "exactly 4 (one per format: Reel, Carousel, Photo, Story)" : "exactly 3";
   
@@ -221,7 +257,8 @@ ${opts.creatorGender === 'Male' ? `- Can include: shirtless photos, gym content,
 ` : '';
   
   // Fan Hub / My Page specific guidance
-  const fanHubGuidance = opts.platform === "fan_hub" && opts.fanHubAnalytics ? `
+  const fanHubGuidance = opts.platform === "fan_hub"
+    ? `${opts.fanHubAnalytics ? `
 FAN HUB ANALYTICS CONTEXT:
 - Your top performing post types: ${opts.fanHubAnalytics.topPostTypes?.join(", ") || "varied content"}
 - Average likes per post: ${opts.fanHubAnalytics.avgLikes || "N/A"}
@@ -230,7 +267,10 @@ FAN HUB ANALYTICS CONTEXT:
 - Recent tip activity: ${opts.fanHubAnalytics.recentTips || 0} tips this week
 
 Generate ideas that mirror your top-performing content patterns. Focus on what drives engagement, tips, and subscriber retention.
-` : "";
+` : ""}
+Prioritize shotList blueprints members can execute today. Hooks should complement the visual/text — never replace the blueprint.
+`
+    : "";
 
   // Add randomness seed to ensure unique ideas each time
   const uniqueSeed = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -304,13 +344,32 @@ OUTPUT STRICT JSON ONLY (no markdown, no code fence):
 }
 
 IMPORTANT RULES:
-- shotList must have 3-5 SPECIFIC, ACTIONABLE items (not vague like "nice pose" - say exactly what pose, what angle, what to wear)
-- hook should be a COMPLETE caption ready to copy/paste, not just one sentence — scroll-stopping and conversational, not a dull restatement of the title; always first-person creator voice, not "explaining" the post in third person
+- shotList must have ${platform === "fan_hub" ? "4-5" : "3-5"} SPECIFIC, ACTIONABLE items (not vague like "nice pose" - say exactly what pose, what angle, what to wear)
+${platform === "fan_hub" ? `- REJECT caption-only ideas: if shotList would be empty, rewrite until shotList fully describes what to create
+- hook should be a COMPLETE member-feed caption (2-4 sentences) that pairs with the shotList — do NOT repeat shotList items verbatim as the only content` : `- hook should be a COMPLETE caption ready to copy/paste, not just one sentence — scroll-stopping and conversational, not a dull restatement of the title; always first-person creator voice, not "explaining" the post in third person`}
 - NEVER prefix hook or captionStarter with "Reel:", "Post:", "Story:", or similar format labels (format is in the JSON "format" field only)
 - Be EXPLICIT about what the content should include${platform === "fan_hub" ? `
 - DO NOT include hashtags for My Page/Fan Hub content
 - NEVER say "link in bio" - this is already their own page, no external links needed` : ""}
 - If generating one (swap), return one idea in ideas array.`;
+}
+
+function normalizeIdeaShotList(idea: DailyPostIdeaPayload & Record<string, unknown>): string[] {
+  const fromShot = Array.isArray(idea.shotList)
+    ? idea.shotList.map((s) => String(s).trim()).filter(Boolean)
+    : [];
+  if (fromShot.length > 0) return fromShot;
+  const alt = idea.whatToCreate ?? idea.whatToShow ?? idea.contentBrief ?? idea.creationBlueprint;
+  if (Array.isArray(alt)) {
+    return alt.map((s) => String(s).trim()).filter(Boolean);
+  }
+  if (typeof alt === "string" && alt.trim()) {
+    return alt
+      .split(/\n+/)
+      .map((line) => line.replace(/^[-•*]\s*/, "").trim())
+      .filter(Boolean);
+  }
+  return [];
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
@@ -384,13 +443,27 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
   const userPlan = typeof (userData as { plan?: string })?.plan === "string" ? (userData as { plan: string }).plan : "Free";
   const userRole = typeof (userData as { role?: string })?.role === "string" ? (userData as { role: string }).role : undefined;
 
+  const explicitnessLevel =
+    typeof userData?.explicitnessLevel === "number" ? userData.explicitnessLevel : 6;
+
   let trendContext = "";
   if (useTrends) {
+    if (platform === "fan_hub") {
+      try {
+        trendContext = await getMemberHubTrendsContext();
+      } catch (e) {
+        console.warn("[generateDailyPostIdeas] Member hub trends failed:", e);
+      }
+    }
     try {
-      trendContext = await getLatestTrends();
+      const socialTrends = await getLatestTrends();
+      if (socialTrends) {
+        trendContext = trendContext
+          ? `${trendContext}\n\n${socialTrends}`
+          : socialTrends;
+      }
     } catch (e) {
       console.warn("[generateDailyPostIdeas] getLatestTrends failed:", e);
-      trendContext = "";
     }
     const nicheLabel = (niche || "lifestyle").trim().slice(0, 100);
     const platformLabel =
@@ -407,20 +480,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
     const trendQueries = [
       `${nicheLabel} ${platformLabel} viral hooks trends algorithm growth tips creators ${year}`,
     ];
-    for (const q of trendQueries) {
-      try {
-        const sw = await searchWeb(q, authUser.uid, userPlan, userRole, {
-          maxResults: 5,
-          searchDepth: "basic",
-          allowQuotaUserTrendSearch: true,
-        });
-        if (sw.success && sw.results?.length) {
-          trendContext +=
-            "\n\nLIVE WEB RESEARCH (Tavily — cite at least one concrete angle when relevant):\n" +
-            sw.results.map((r, i) => `${i + 1}. ${r.title}: ${r.snippet}`).join("\n");
+    if (platform !== "fan_hub") {
+      for (const q of trendQueries) {
+        try {
+          const sw = await searchWeb(q, authUser.uid, userPlan, userRole, {
+            maxResults: 5,
+            searchDepth: "basic",
+            allowQuotaUserTrendSearch: true,
+          });
+          if (sw.success && sw.results?.length) {
+            trendContext +=
+              "\n\nLIVE WEB RESEARCH (Tavily — cite at least one concrete angle when relevant):\n" +
+              sw.results.map((r, i) => `${i + 1}. ${r.title}: ${r.snippet}`).join("\n");
+          }
+        } catch (e) {
+          console.warn("[generateDailyPostIdeas] Tavily search failed:", e);
         }
-      } catch (e) {
-        console.warn("[generateDailyPostIdeas] Tavily search failed:", e);
       }
     }
   }
@@ -499,6 +574,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
       targetAudienceGender,
       creatorHint,
       prioritizeCreatorPersonality: Boolean(prioritizeCreatorPersonality),
+      memberHubToneLine:
+        platform === "fan_hub" ? getMemberHubToneGuidance(explicitnessLevel) : undefined,
+      niche,
     });
 
     const result = await model.generateContent({
@@ -524,10 +602,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
     const processedIdeas: typeof ideas = [];
     for (let index = 0; index < ideas.length; index++) {
       const idea = ideas[index];
+      const shotList = normalizeIdeaShotList(idea as DailyPostIdeaPayload & Record<string, unknown>);
       const baseIdea = {
         ...idea,
         id: idea.id || `idea_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
-        shotList: Array.isArray(idea.shotList) ? idea.shotList : [],
+        shotList,
         hashtags: Array.isArray(idea.hashtags) ? idea.hashtags : [],
         placeholderImage: undefined, // Frontend will use gradient + emoji
         imageSource: undefined,

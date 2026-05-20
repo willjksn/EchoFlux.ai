@@ -53,8 +53,8 @@ function firestoreSafePatch(raw: Record<string, unknown>): Record<string, any> {
 }
 
 /** Direct Firestore updates: unlimited = remove field (same semantics as API PATCH). */
-function toFirestoreProductPatch(updates: Record<string, unknown>, updatedAtIso: string): Record<string, unknown> {
-  const next = { ...updates, updatedAt: updatedAtIso };
+function toFirestoreProductPatch(updates: Record<string, unknown>, updatedAtIso: string): Record<string, any> {
+  const next: Record<string, unknown> = { ...updates, updatedAt: updatedAtIso };
   if (next.quantityLimit === null) {
     next.quantityLimit = deleteField();
   }
@@ -486,7 +486,7 @@ export const TreatsStore: React.FC = () => {
       visible: boolean;
       showOnLandingPage?: boolean;
       showInMemberStore?: boolean;
-      quantityLimit?: number;
+      quantityLimit?: number | null;
       typeDisplayLabel?: string | null;
     }) => {
       if (!db || !creatorId || !auth.currentUser) return false;
@@ -531,7 +531,7 @@ export const TreatsStore: React.FC = () => {
     visible: boolean;
     showOnLandingPage?: boolean;
     showInMemberStore?: boolean;
-    quantityLimit?: number;
+    quantityLimit?: number | null;
     typeDisplayLabel?: string | null;
   }) => {
     if (!creatorId) return;

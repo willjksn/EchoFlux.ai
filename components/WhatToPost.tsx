@@ -226,6 +226,8 @@ const DEFAULT_SETTINGS: WhatToPostSettings = {
 
 interface WhatToPostProps {
   onOpenAdvanced: () => void;
+  /** When true, rendered inside Plan hub (no duplicate page chrome). */
+  embedded?: boolean;
 }
 
 const MAX_IDEA_HISTORY = 5;
@@ -269,7 +271,7 @@ function saveHistoryToStorage(userId: string, entries: WhatToPostHistoryEntry[])
   }
 }
 
-export const WhatToPost: React.FC<WhatToPostProps> = ({ onOpenAdvanced }) => {
+export const WhatToPost: React.FC<WhatToPostProps> = ({ onOpenAdvanced, embedded = false }) => {
   const { user, showToast, setActivePage, addCalendarEvent } = useAppContext();
 
   const [ideaHistory, setIdeaHistory] = useState<WhatToPostHistoryEntry[]>([]);
@@ -364,10 +366,10 @@ export const WhatToPost: React.FC<WhatToPostProps> = ({ onOpenAdvanced }) => {
     [user?.id, showToast]
   );
 
-  // Advanced Planner is Elite-tier, including CreatorElite invite accounts.
+  // Multi-week strategy (Plan → roadmap tab) is Elite-tier.
   const hasAdvancedAccess = hasEliteAccess(user);
 
-  const handleAdvancedClick = () => {
+  const handleMultiWeekStrategyClick = () => {
     if (hasAdvancedAccess) {
       onOpenAdvanced();
     } else {
@@ -616,17 +618,78 @@ export const WhatToPost: React.FC<WhatToPostProps> = ({ onOpenAdvanced }) => {
   if (!user) return null;
 
   return (
-    <div className="max-w-4xl mx-auto p-6">
-      <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">What to post today</h1>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">Instant ideas—no form to fill.</p>
-        </div>
-        <div className="flex flex-wrap gap-2">
+    <div className={embedded ? "max-w-4xl mx-auto" : "max-w-4xl mx-auto p-6"}>
+      {!embedded && (
+        <>
+          <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900 dark:text-white">What to post today</h1>
+              <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">Instant ideas—no form to fill.</p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => setShowHowItWorks(true)}
+                className="text-xs font-medium text-primary-600 underline-offset-2 hover:text-primary-700 hover:underline dark:text-primary-400 dark:hover:text-primary-300 px-3 py-2 self-center sm:self-auto"
+              >
+                How it works
+              </button>
+              <button
+                type="button"
+                onClick={() => setDrawerOpen(true)}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 text-sm font-medium hover:bg-gray-200 dark:hover:bg-gray-600"
+              >
+                <SettingsIcon className="w-4 h-4" />
+                Quick settings
+              </button>
+              <button
+                type="button"
+                onClick={handleMultiWeekStrategyClick}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 text-sm font-medium hover:bg-gray-50 dark:hover:bg-gray-800"
+              >
+                Multi-week strategy
+                {!hasAdvancedAccess && <span className="text-xs bg-primary-100 dark:bg-primary-900/50 text-primary-700 dark:text-primary-300 px-1.5 py-0.5 rounded">Elite</span>}
+              </button>
+            </div>
+          </div>
+
+          <div className="mb-6 rounded-xl border border-primary-100 bg-gradient-to-br from-primary-50 via-white to-pink-50 p-4 shadow-sm ring-1 ring-primary-100/60 dark:border-primary-900/40 dark:from-gray-900 dark:via-gray-900/95 dark:to-primary-950/25 dark:ring-primary-900/20">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-xs font-bold uppercase tracking-wide text-primary-600 dark:text-primary-400">What to Post</p>
+                <h2 className="mt-1 text-base font-semibold text-gray-900 dark:text-white">
+                  Instant ideas tuned to your platform, goals, and tone—with one tap into Create Post.
+                </h2>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowHowItWorks(true)}
+                className="shrink-0 text-xs font-medium text-primary-600 underline-offset-2 hover:text-primary-700 hover:underline dark:text-primary-400 dark:hover:text-primary-300 sm:hidden"
+              >
+                Details
+              </button>
+            </div>
+            <div className="mt-3 grid gap-2 text-[13px] leading-relaxed text-gray-600 dark:text-gray-300 md:grid-cols-3">
+              <p>
+                <strong className="text-gray-900 dark:text-white">1. Pick:</strong> Instagram, Facebook, X, or My Page.
+              </p>
+              <p>
+                <strong className="text-gray-900 dark:text-white">2. Generate:</strong> fresh angles, hooks, and shot ideas—no long form.
+              </p>
+              <p>
+                <strong className="text-gray-900 dark:text-white">3. Use:</strong> open Create Post prefilled or try another idea with swap.
+              </p>
+            </div>
+          </div>
+        </>
+      )}
+
+      {embedded && (
+        <div className="mb-4 flex flex-wrap items-center justify-end gap-2">
           <button
             type="button"
             onClick={() => setShowHowItWorks(true)}
-            className="text-xs font-medium text-primary-600 underline-offset-2 hover:text-primary-700 hover:underline dark:text-primary-400 dark:hover:text-primary-300 px-3 py-2 self-center sm:self-auto"
+            className="text-xs font-medium text-primary-600 underline-offset-2 hover:text-primary-700 hover:underline dark:text-primary-400 dark:hover:text-primary-300 px-3 py-2"
           >
             How it works
           </button>
@@ -638,60 +701,27 @@ export const WhatToPost: React.FC<WhatToPostProps> = ({ onOpenAdvanced }) => {
             <SettingsIcon className="w-4 h-4" />
             Quick settings
           </button>
-          <button
-            type="button"
-            onClick={handleAdvancedClick}
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 text-sm font-medium hover:bg-gray-50 dark:hover:bg-gray-800"
-          >
-            Advanced planner
-            {!hasAdvancedAccess && <span className="text-xs bg-primary-100 dark:bg-primary-900/50 text-primary-700 dark:text-primary-300 px-1.5 py-0.5 rounded">Elite</span>}
-          </button>
         </div>
-      </div>
-
-      <div className="mb-6 rounded-xl border border-primary-100 bg-gradient-to-br from-primary-50 via-white to-pink-50 p-4 shadow-sm ring-1 ring-primary-100/60 dark:border-primary-900/40 dark:from-gray-900 dark:via-gray-900/95 dark:to-primary-950/25 dark:ring-primary-900/20">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <p className="text-xs font-bold uppercase tracking-wide text-primary-600 dark:text-primary-400">What to Post</p>
-            <h2 className="mt-1 text-base font-semibold text-gray-900 dark:text-white">
-              Instant ideas tuned to your platform, goals, and tone—with one tap into Create Post.
-            </h2>
-          </div>
-          <button
-            type="button"
-            onClick={() => setShowHowItWorks(true)}
-            className="shrink-0 text-xs font-medium text-primary-600 underline-offset-2 hover:text-primary-700 hover:underline dark:text-primary-400 dark:hover:text-primary-300 sm:hidden"
-          >
-            Details
-          </button>
-        </div>
-        <div className="mt-3 grid gap-2 text-[13px] leading-relaxed text-gray-600 dark:text-gray-300 md:grid-cols-3">
-          <p>
-            <strong className="text-gray-900 dark:text-white">1. Pick:</strong> Instagram, Facebook, X, or My Page.
-          </p>
-          <p>
-            <strong className="text-gray-900 dark:text-white">2. Generate:</strong> fresh angles, hooks, and shot ideas—no long form.
-          </p>
-          <p>
-            <strong className="text-gray-900 dark:text-white">3. Use:</strong> open Create Post prefilled or try another idea with swap.
-          </p>
-        </div>
-      </div>
+      )}
 
       <EchoFluxHowItWorksModal
         open={showHowItWorks}
         onClose={() => setShowHowItWorks(false)}
         ariaTitleId="what-to-post-how-title"
-        title="How What to Post works"
-        subtitle="Quick daily ideas that match where you publish and what you're optimizing for."
+        title={embedded ? "How Plan → Today works" : "How What to Post works"}
+        subtitle={
+          embedded
+            ? "Quick daily ideas for Instagram, Facebook, X, and My Page—part of the unified Plan hub."
+            : "Quick daily ideas that match where you publish and what you're optimizing for."
+        }
       >
         <section>
           <h4 className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-primary-600 dark:text-primary-400">
             Start fast
           </h4>
           <p className="text-[13px] leading-relaxed text-gray-600 dark:text-gray-400">
-            Choose a platform at the top. EchoFlux pulls context from your account (including My Page engagement when you pick My Page)
-            so suggestions feel relevant—not generic prompts.
+            Choose a platform at the top. EchoFlux uses your niche, trends, and account context (including My Page engagement when you
+            pick My Page) so ideas feel relevant—not generic prompts.
           </p>
         </section>
         <section>
@@ -711,7 +741,7 @@ export const WhatToPost: React.FC<WhatToPostProps> = ({ onOpenAdvanced }) => {
           </h4>
           <ul className="list-inside list-disc space-y-1 text-[13px] leading-relaxed text-gray-600 dark:text-gray-400">
             <li>
-              <strong className="text-gray-800 dark:text-gray-200">Use this</strong> sends the idea into Create Post with caption and structure hints.
+              <strong className="text-gray-800 dark:text-gray-200">Use this</strong> opens Create Post with caption and structure hints (or Fan Hub for My Page).
             </li>
             <li>
               <strong className="text-gray-800 dark:text-gray-200">Swap</strong> replaces one card while keeping the rest.
@@ -721,12 +751,29 @@ export const WhatToPost: React.FC<WhatToPostProps> = ({ onOpenAdvanced }) => {
         </section>
         <section>
           <h4 className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-primary-600 dark:text-primary-400">
-            Advanced planner
+            More in Plan
           </h4>
-          <p className="text-[13px] leading-relaxed text-gray-600 dark:text-gray-400">
-            Elite unlocks the deeper weekly planner and strategy view. On Pro, use What to Post for daily angles and Creator OS for your
-            money-flow planning.
-          </p>
+          <ul className="list-inside list-disc space-y-1 text-[13px] leading-relaxed text-gray-600 dark:text-gray-400">
+            <li>
+              <strong className="text-gray-800 dark:text-gray-200">Weekly monetization</strong> — today&apos;s move, weekly grid, and
+              your paid-member funnel for Instagram + story monetization.
+            </li>
+            <li>
+              <strong className="text-gray-800 dark:text-gray-200">Multi-week strategy</strong> (Elite) — AI roadmap with calendar
+              handoff and media on each day.
+            </li>
+            {embedded ? (
+              <li>
+                <strong className="text-gray-800 dark:text-gray-200">Fan Hub → Posts</strong> — My Page post ideas and drop/PPV plans
+                (separate from social ideas here).
+              </li>
+            ) : (
+              <li>
+                Open <strong className="text-gray-800 dark:text-gray-200">Plan</strong> in the sidebar for weekly monetization and
+                multi-week strategy.
+              </li>
+            )}
+          </ul>
         </section>
       </EchoFluxHowItWorksModal>
 
@@ -1043,7 +1090,7 @@ export const WhatToPost: React.FC<WhatToPostProps> = ({ onOpenAdvanced }) => {
                     </button>
                   </div>
                   <p className="text-xs text-gray-500 dark:text-gray-400 text-center">
-                    Idea Bank saves ideas for later. Access it from Advanced Planner → Saved Ideas.
+                    Idea Bank saves ideas for later. Access it from Plan → Multi-week strategy → Saved Ideas.
                   </p>
                 </>
               )}
@@ -1185,7 +1232,7 @@ export const WhatToPost: React.FC<WhatToPostProps> = ({ onOpenAdvanced }) => {
         </>
       )}
 
-      {/* Upgrade Modal for Advanced Planner */}
+      {/* Upgrade Modal for Multi-week strategy */}
       {showUpgradeModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
           <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl max-w-md w-full p-6">
@@ -1197,8 +1244,8 @@ export const WhatToPost: React.FC<WhatToPostProps> = ({ onOpenAdvanced }) => {
                 Upgrade to Elite
               </h3>
               <p className="text-gray-600 dark:text-gray-400 mb-6">
-                The Advanced Planner with full content strategy tools is available on the Elite plan. 
-                Get multi-week roadmaps, trend analysis, and premium planning features.
+                Multi-week strategy in Plan is available on Elite — AI roadmaps, calendar handoff, saved ideas, and trend-aware planning.
+                Pro keeps Today for daily post ideas and Weekly monetization for your funnel.
               </p>
               <div className="flex gap-3">
                 <button

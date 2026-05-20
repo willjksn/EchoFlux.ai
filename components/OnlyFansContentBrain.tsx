@@ -9,8 +9,286 @@ import { FanSelector } from './FanSelector';
 import { loadEmojiSettings } from '../src/utils/loadEmojiSettings';
 import { findAdultTrends } from '../src/services/geminiService';
 import { maybeTrimVideoForCaption } from '../src/lib/videoCaptionClip';
+import { DailyPostIdea } from '../types';
 
 type ContentType = 'captions' | 'mediaCaptions' | 'postIdeas' | 'shootConcepts' | 'weeklyPlan' | 'trends' | 'monetizationPlanner' | 'messaging' | 'guides' | 'history';
+
+function mapPlatformToDailyApi(platform: 'Instagram' | 'Facebook' | 'X' | 'My Page'): string {
+    if (platform === 'My Page') return 'fan_hub';
+    if (platform === 'X') return 'twitter';
+    if (platform === 'Facebook') return 'facebook';
+    return 'instagram';
+}
+
+function extractShotListFromIdea(o: Record<string, unknown>): string[] {
+    const fromShot = Array.isArray(o.shotList)
+        ? o.shotList.map((s) => String(s).trim()).filter(Boolean)
+        : [];
+    if (fromShot.length > 0) return fromShot;
+    const alt = o.whatToCreate ?? o.whatToShow ?? o.contentBrief ?? o.creationBlueprint;
+    if (Array.isArray(alt)) {
+        return alt.map((s) => String(s).trim()).filter(Boolean);
+    }
+    if (typeof alt === 'string' && alt.trim()) {
+        return alt
+            .split(/\n+/)
+            .map((line) => line.replace(/^[-•*]\s*/, '').trim())
+            .filter(Boolean);
+    }
+    return [];
+}
+
+function normalizePostIdea(item: unknown, index: number): DailyPostIdea | null {
+    if (typeof item === 'string') {
+        const trimmed = item.trim();
+        if (!trimmed) return null;
+        const formatMatch = trimmed.match(/\*\*(Photo|Video|Text|Poll)\*\*/i);
+        const format = (formatMatch?.[1] || 'photo').toLowerCase();
+        const hookMatch = trimmed.match(/\*\*Hook:\*\*\s*[“"]?([^"”\n]+)[”"]?/i);
+        const captionMatch = trimmed.match(/\*\*Caption:\*\*\s*(.+)/i);
+        return {
+            id: `legacy_${index}`,
+            format,
+            title: format.charAt(0).toUpperCase() + format.slice(1),
+            hook: hookMatch?.[1]?.trim() || trimmed.replace(/\*\*/g, '').slice(0, 280),
+            shotList: [],
+            hashtags: [],
+            captionStarter: captionMatch?.[1]?.trim(),
+        };
+    }
+    if (item && typeof item === 'object') {
+        const o = item as Partial<DailyPostIdea> & Record<string, unknown>;
+        if (typeof o.hook === 'string' || typeof o.title === 'string') {
+            return {
+                id: o.id || `idea_${index}`,
+                format: String(o.format || 'photo').toLowerCase(),
+                title: o.title || 'Post idea',
+                hook: o.hook || '',
+                shotList: extractShotListFromIdea(o),
+                hashtags: Array.isArray(o.hashtags) ? o.hashtags : [],
+                captionStarter: o.captionStarter,
+                cta: o.cta,
+                whyThisWorks: o.whyThisWorks,
+                trendBased: o.trendBased,
+                trendContext: o.trendContext,
+            };
+        }
+    }
+    return null;
+}
+
+function parseStoredPostIdeas(raw: unknown): DailyPostIdea[] {
+    if (!Array.isArray(raw)) return [];
+    return raw
+        .map((item, i) => normalizePostIdea(item, i))
+        .filter((x): x is DailyPostIdea => x !== null);
+}
+
+function buildCaptionFromPostIdea(idea: DailyPostIdea): string {
+    const parts = [idea.hook].filter(Boolean);
+    if (idea.captionStarter?.trim()) parts.push(idea.captionStarter.trim());
+    return parts.join('\n\n');
+}
+
+function postIdeaPreviewText(idea: string | DailyPostIdea): string {
+    if (typeof idea === 'string') return idea.slice(0, 100);
+    return (idea.title || idea.hook || 'Post idea').slice(0, 100);
+}
+
+function formatIdeaTypeLabel(format: string): string {
+    const f = format.toLowerCase();
+    if (f === 'photo') return 'Photo idea';
+    if (f === 'video') return 'Video idea';
+    if (f === 'text') return 'Text post idea';
+    if (f === 'poll') return 'Poll idea';
+    if (f === 'reel') return 'Reel idea';
+    if (f === 'carousel') return 'Carousel idea';
+    if (f === 'story') return 'Story idea';
+    return 'Post idea';
+}
+
+/** One-line concept for the card header: what to create (never the caption). */
+function getIdeaConceptSummary(idea: DailyPostIdea): { headline: string; detail: string | null } {
+    const headline = idea.title?.trim() || 'New post';
+    const shots = idea.shotList?.filter((s) => s?.trim()) ?? [];
+    if (shots.length > 0) {
+        const detail =
+            shots.length === 1
+                ? shots[0]
+                : `${shots[0]} · ${shots[1]}`;
+        return { headline, detail };
+    }
+    return { headline, detail: null };
+}
+
+function whatToCreateSectionLabel(format: string): string {
+    const f = format.toLowerCase();
+    if (f === 'photo') return 'What to photograph';
+    if (f === 'video') return 'What to film';
+    if (f === 'text') return 'What to write';
+    if (f === 'poll') return 'Poll to post';
+    return 'What to create';
+}
+
+const POST_IDEA_FORMAT_STYLES: Record<string, { gradient: string; icon: string; label: string }> = {
+    reel: { gradient: 'from-purple-500 via-pink-500 to-orange-400', icon: '▶️', label: 'REEL' },
+    carousel: { gradient: 'from-blue-500 to-purple-500', icon: '◀ ▶', label: 'CAROUSEL' },
+    photo: { gradient: 'from-pink-500 via-purple-500 to-indigo-500', icon: '📷', label: 'PHOTO' },
+    story: { gradient: 'from-orange-400 via-pink-500 to-purple-500', icon: '○', label: 'STORY' },
+    video: { gradient: 'from-purple-600 via-pink-500 to-red-500', icon: '🎬', label: 'VIDEO' },
+    text: { gradient: 'from-indigo-500 via-purple-500 to-pink-500', icon: '✍️', label: 'TEXT' },
+    poll: { gradient: 'from-teal-500 via-cyan-500 to-blue-500', icon: '📊', label: 'POLL' },
+    tweet: { gradient: 'from-gray-800 via-gray-700 to-gray-600', icon: '💬', label: 'TWEET' },
+    thread: { gradient: 'from-blue-600 via-blue-500 to-cyan-500', icon: '🧵', label: 'THREAD' },
+    post: { gradient: 'from-blue-600 to-blue-400', icon: '📝', label: 'POST' },
+    live: { gradient: 'from-red-500 via-pink-500 to-orange-500', icon: '🔴', label: 'LIVE' },
+    mixed: { gradient: 'from-blue-600 to-blue-400', icon: '🎨', label: 'POST' },
+};
+
+/** Fan Hub New Ideas card — matches Plan → Today readability (title, hook, what to show, use in post). */
+const FanHubPostIdeaCard: React.FC<{
+    idea: DailyPostIdea;
+    onUse: () => void;
+}> = ({ idea, onUse }) => {
+    const [expandedShots, setExpandedShots] = useState(false);
+    const [showCaptions, setShowCaptions] = useState(false);
+    const formatKey = (idea.format || 'photo').toLowerCase();
+    const style = POST_IDEA_FORMAT_STYLES[formatKey] || POST_IDEA_FORMAT_STYLES.photo;
+    const isTrending = idea.trendBased || Boolean(idea.trendContext);
+    const shotList = idea.shotList?.filter((s) => s?.trim()) ?? [];
+    const visibleShots = expandedShots ? shotList : shotList.slice(0, 5);
+    const hasMoreShots = shotList.length > 5;
+    const createLabel = whatToCreateSectionLabel(formatKey);
+    const captionStarter =
+        idea.captionStarter?.trim() &&
+        idea.captionStarter.trim() !== idea.hook?.trim()
+            ? idea.captionStarter.trim()
+            : null;
+    const { headline: conceptHeadline, detail: conceptDetail } = getIdeaConceptSummary(idea);
+    const ideaTypeLabel = formatIdeaTypeLabel(formatKey);
+
+    return (
+        <div className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 overflow-hidden shadow-sm hover:shadow-md transition-shadow flex flex-col">
+            <div
+                className={`relative min-h-[9.5rem] bg-gradient-to-br ${style.gradient} flex flex-col p-3 pt-10`}
+                aria-label={`${ideaTypeLabel}: ${conceptHeadline}`}
+            >
+                <div className="absolute top-2 left-2 right-2 flex items-center justify-between gap-1.5">
+                    <span className="px-2 py-0.5 bg-white/90 dark:bg-gray-900/90 rounded text-xs font-bold text-gray-800 dark:text-white shadow-sm">
+                        {style.label}
+                    </span>
+                    <div className="flex items-center gap-1.5">
+                        {isTrending && (
+                            <span className="px-2 py-0.5 bg-orange-500 rounded text-xs font-bold text-white shadow-sm">
+                                🔥
+                            </span>
+                        )}
+                        <span className="text-lg drop-shadow-sm" aria-hidden>
+                            {style.icon}
+                        </span>
+                    </div>
+                </div>
+                <div className="flex-1 flex flex-col justify-center text-center px-1">
+                    <p className="text-[10px] font-semibold uppercase tracking-wider text-white/85 mb-1">
+                        {ideaTypeLabel}
+                    </p>
+                    <p className="text-white font-bold text-sm leading-snug line-clamp-2 drop-shadow-md">
+                        {conceptHeadline}
+                    </p>
+                    {conceptDetail && (
+                        <p className="text-white/95 text-xs leading-snug line-clamp-3 mt-1.5 drop-shadow">
+                            {conceptDetail}
+                        </p>
+                    )}
+                </div>
+            </div>
+
+            <div className="p-4 flex-1 flex flex-col">
+                <div className="mb-3">
+                    <p className="text-xs font-semibold text-primary-600 dark:text-primary-400 uppercase tracking-wide mb-2">
+                        {createLabel}
+                    </p>
+                    {shotList.length > 0 ? (
+                        <>
+                            <ul className="space-y-2 text-sm text-gray-800 dark:text-gray-200">
+                                {visibleShots.map((shot, i) => (
+                                    <li key={i} className="flex gap-2 leading-snug">
+                                        <span className="text-primary-500 font-bold flex-shrink-0">{i + 1}.</span>
+                                        <span>{shot}</span>
+                                    </li>
+                                ))}
+                            </ul>
+                            {hasMoreShots && !expandedShots && (
+                                <button
+                                    type="button"
+                                    onClick={() => setExpandedShots(true)}
+                                    className="mt-2 text-xs text-primary-600 dark:text-primary-400 hover:underline font-medium"
+                                >
+                                    + {shotList.length - 5} more steps
+                                </button>
+                            )}
+                        </>
+                    ) : (
+                        <p className="text-sm text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-900/25 border border-amber-200 dark:border-amber-800 rounded-lg px-3 py-2">
+                            No shoot blueprint came back — click <strong>Generate Post Ideas</strong> again and add
+                            more detail in your prompt (e.g. &ldquo;mirror selfie, gym BTS, poll about outfits&rdquo;).
+                        </p>
+                    )}
+                </div>
+
+                {idea.trendContext && (
+                    <p className="text-xs text-orange-600 dark:text-orange-400 bg-orange-50 dark:bg-orange-900/20 px-2 py-1.5 rounded mb-3">
+                        📈 {idea.trendContext}
+                    </p>
+                )}
+
+                {idea.whyThisWorks && (
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">
+                        <span className="font-semibold text-gray-600 dark:text-gray-300">Why it works: </span>
+                        {idea.whyThisWorks}
+                    </p>
+                )}
+
+                {(idea.hook || captionStarter) && (
+                    <div className="mb-3 border-t border-gray-200 dark:border-gray-600 pt-3">
+                        <button
+                            type="button"
+                            onClick={() => setShowCaptions(!showCaptions)}
+                            className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide hover:text-primary-600 dark:hover:text-primary-400"
+                        >
+                            {showCaptions ? '▼' : '▶'} Caption to pair with this {formatKey}
+                        </button>
+                        {showCaptions && (
+                            <div className="mt-2 space-y-2">
+                                {idea.hook && (
+                                    <p className="text-sm text-gray-600 dark:text-gray-300 italic">
+                                        &ldquo;{idea.hook}&rdquo;
+                                    </p>
+                                )}
+                                {captionStarter && (
+                                    <p className="text-sm text-gray-600 dark:text-gray-400">
+                                        <span className="font-medium not-italic text-gray-500 dark:text-gray-500">
+                                            Alt opening:{' '}
+                                        </span>
+                                        {captionStarter}
+                                    </p>
+                                )}
+                            </div>
+                        )}
+                    </div>
+                )}
+
+                <button
+                    type="button"
+                    onClick={onUse}
+                    className="mt-auto w-full py-2.5 rounded-lg bg-primary-600 text-white text-sm font-semibold hover:bg-primary-700 transition-colors"
+                >
+                    Use in Post →
+                </button>
+            </div>
+        </div>
+    );
+};
 
 type AdultTrendOpportunity = {
     id: string;
@@ -1093,9 +1371,15 @@ type OnlyFansContentBrainProps = {
     initialTab?: ContentType;
     /** When true, show only the initial tab content (no tab bar). Used when Premium Studio → New Ideas shows only Content Ideas. */
     singleTabMode?: boolean;
+    /** Fan Hub Posts: ideas/plans are My Page only (no IG/FB/X selector). Plan hub covers other platforms. */
+    fanHubContext?: boolean;
 };
 
-export const OnlyFansContentBrain: React.FC<OnlyFansContentBrainProps> = ({ initialTab, singleTabMode }) => {
+export const OnlyFansContentBrain: React.FC<OnlyFansContentBrainProps> = ({
+    initialTab,
+    singleTabMode,
+    fanHubContext = false,
+}) => {
     // All hooks must be called unconditionally at the top
     const context = useAppContext();
     const user = context?.user;
@@ -1106,16 +1390,24 @@ export const OnlyFansContentBrain: React.FC<OnlyFansContentBrainProps> = ({ init
     const [error, setError] = useState<string | null>(null);
     const [activeTab, setActiveTab] = useState<ContentType>(initialTab ?? 'captions');
     const effectiveTab = singleTabMode ? (initialTab ?? 'postIdeas') : activeTab;
-    const platformOptions: Array<'Instagram' | 'Facebook' | 'X' | 'My Page'> = ['Instagram', 'Facebook', 'X', 'My Page'];
-    const platformOptionsDmOnly: Array<'My Page'> = ['My Page'];
-    const [selectedPlatform, setSelectedPlatform] = useState<'Instagram' | 'Facebook' | 'X' | 'My Page'>('Instagram');
 
-    // When showing DM Session only (singleTabMode + messaging), force My Page and no platform selector
     useEffect(() => {
-        if (singleTabMode && initialTab === 'messaging') {
-            setSelectedPlatform('My Page');
+        if (singleTabMode && initialTab) {
+            setActiveTab(initialTab);
         }
     }, [singleTabMode, initialTab]);
+    const platformOptions: Array<'Instagram' | 'Facebook' | 'X' | 'My Page'> = ['Instagram', 'Facebook', 'X', 'My Page'];
+    const platformOptionsDmOnly: Array<'My Page'> = ['My Page'];
+    const [selectedPlatform, setSelectedPlatform] = useState<'Instagram' | 'Facebook' | 'X' | 'My Page'>(
+        fanHubContext ? 'My Page' : 'Instagram'
+    );
+
+    // Fan Hub + DM Session: My Page only (social platforms live under Plan / Create Post)
+    useEffect(() => {
+        if (fanHubContext || (singleTabMode && initialTab === 'messaging')) {
+            setSelectedPlatform('My Page');
+        }
+    }, [fanHubContext, singleTabMode, initialTab]);
     const [isGenerating, setIsGenerating] = useState(false);
     
     // Caption generation state
@@ -1137,7 +1429,11 @@ export const OnlyFansContentBrain: React.FC<OnlyFansContentBrainProps> = ({ init
     const [captionGoal, setCaptionGoal] = useState('engagement');
     const [generatedCaptions, setGeneratedCaptions] = useState<string[]>([]);
     const [useCreatorPersonalityCaptions, setUseCreatorPersonalityCaptions] = useState(false);
-    
+    const [creatorPersonality, setCreatorPersonality] = useState('');
+    const [aiPersonalitySetting, setAiPersonalitySetting] = useState('');
+    const [aiToneSetting, setAiToneSetting] = useState('');
+    const [explicitnessLevelSetting, setExplicitnessLevelSetting] = useState(7);
+
     // Media upload state (for captions tab)
     const [uploadedMediaFile, setUploadedMediaFile] = useState<File | null>(null);
     const [uploadedMediaPreview, setUploadedMediaPreview] = useState<string | null>(null);
@@ -1182,14 +1478,15 @@ export const OnlyFansContentBrain: React.FC<OnlyFansContentBrainProps> = ({ init
     
     // Post ideas state - persist in localStorage
     const [postIdeaPrompt, setPostIdeaPrompt] = useState('');
-    const [generatedPostIdeas, setGeneratedPostIdeas] = useState<string[]>(() => {
+    const [generatedPostIdeas, setGeneratedPostIdeas] = useState<DailyPostIdea[]>(() => {
         if (typeof window !== 'undefined') {
             const saved = localStorage.getItem('premiumStudio_postIdeas');
-            return saved ? JSON.parse(saved) : [];
+            return saved ? parseStoredPostIdeas(JSON.parse(saved)) : [];
         }
         return [];
     });
     const [useCreatorPersonalityPostIdeas, setUseCreatorPersonalityPostIdeas] = useState(false);
+    const [useCreatorPersonalityMonetization, setUseCreatorPersonalityMonetization] = useState(false);
     
     // Persist post ideas to localStorage when they change
     useEffect(() => {
@@ -1361,7 +1658,9 @@ export const OnlyFansContentBrain: React.FC<OnlyFansContentBrainProps> = ({ init
                 const userDoc = await getDoc(doc(db, 'users', user.id));
                 if (userDoc.exists()) {
                     const data = userDoc.data();
-                    setCreatorPersonality(data.creatorPersonality || '');
+                    setCreatorPersonality(
+                        (data.creatorPersonality || data.settings?.creatorPersonality || '').trim(),
+                    );
                     setAiPersonalitySetting(data.aiPersonality || '');
                     setAiToneSetting(data.aiTone || '');
                     setExplicitnessLevelSetting(data.explicitnessLevel ?? 7);
@@ -1373,12 +1672,43 @@ export const OnlyFansContentBrain: React.FC<OnlyFansContentBrainProps> = ({ init
         loadCreatorPersonality();
     }, [user?.id]);
 
+    useEffect(() => {
+        const fromSettings = user?.settings?.creatorPersonality?.trim();
+        if (fromSettings) {
+            setCreatorPersonality(fromSettings);
+        }
+    }, [user?.settings?.creatorPersonality]);
+
     // ------------------------------------------------------------
     // Personalization: use Elite OnlyFans onboarding answers
     // ------------------------------------------------------------
     const monetizedModeEnabled = Boolean(user?.settings?.monetizedModeEnabled);
     const monetizedOnboarding = (user?.settings?.monetizedOnboarding || {}) as any;
     const didInitMonetizedDefaults = useRef(false);
+
+    const effectiveCreatorPersonality = (
+        user?.settings?.creatorPersonality ||
+        creatorPersonality ||
+        ''
+    ).trim();
+
+    const buildGenerationSettingsContext = (prioritizePersonality: boolean) => {
+        const secondary = [
+            aiPersonalitySetting ? `AI PERSONALITY & TRAINING:\n${aiPersonalitySetting}` : null,
+            aiToneSetting ? `Default AI Tone: ${aiToneSetting}` : null,
+            explicitnessLevelSetting !== null && explicitnessLevelSetting !== undefined
+                ? `Explicitness Level: ${explicitnessLevelSetting}/10`
+                : null,
+        ].filter(Boolean) as string[];
+
+        if (prioritizePersonality && effectiveCreatorPersonality) {
+            return [
+                `CREATOR PERSONALITY (PRIMARY — match this voice first):\n${effectiveCreatorPersonality}`,
+                ...secondary,
+            ].join('\n\n');
+        }
+        return secondary.join('\n\n');
+    };
 
     const buildMonetizedContext = () => {
         if (!monetizedModeEnabled) return '';
@@ -1606,16 +1936,16 @@ export const OnlyFansContentBrain: React.FC<OnlyFansContentBrainProps> = ({ init
     // Load saved items when respective tabs are active
     useEffect(() => {
         if (!user?.id) return;
-        if (activeTab === 'postIdeas') {
+        if (effectiveTab === 'postIdeas') {
             loadSavedPostIdeas();
-        } else if (activeTab === 'shootConcepts') {
+        } else if (effectiveTab === 'shootConcepts') {
             loadSavedShootConcepts();
-        } else if (activeTab === 'weeklyPlan') {
+        } else if (effectiveTab === 'weeklyPlan') {
             loadSavedWeeklyPlans();
-        } else if (activeTab === 'monetizationPlanner') {
+        } else if (effectiveTab === 'monetizationPlanner') {
             loadSavedMonetizationPlans();
         }
-    }, [activeTab, user?.id]);
+    }, [effectiveTab, user?.id]);
 
     // Persist media and captions to localStorage
     useEffect(() => {
@@ -1917,71 +2247,53 @@ export const OnlyFansContentBrain: React.FC<OnlyFansContentBrainProps> = ({ init
         setError(null);
         try {
             const token = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
-            
-            // Load emoji settings
-            const emojiSettings = await loadEmojiSettings(user.id);
-            const settingsContext = [
-                aiPersonalitySetting ? `AI PERSONALITY & TRAINING:\n${aiPersonalitySetting}` : null,
-                aiToneSetting ? `Default AI Tone: ${aiToneSetting}` : null,
-                explicitnessLevelSetting !== null && explicitnessLevelSetting !== undefined ? `Explicitness Level: ${explicitnessLevelSetting}/10` : null,
-                useCreatorPersonalityPostIdeas && creatorPersonality ? `CREATOR PERSONALITY:\n${creatorPersonality}` : null,
-            ].filter(Boolean).join('\n');
-            
-            // Platform-specific format guidance
-            const isMyPage = selectedPlatform === 'My Page';
-            const formatGuidance = isMyPage 
-                ? `CRITICAL FORMAT RESTRICTION FOR MY PAGE:
-- ONLY use these formats: photo, video, text, poll
-- NEVER suggest: reels, carousels, stories, swipeable content - these DO NOT exist on My Page
-- My Page is a simple feed similar to OnlyFans, NOT Instagram
-- Focus on: single photo posts, video posts, text updates with emojis, or poll questions
-- Each idea should specify if it's a photo, video, text post, or poll`
-                : selectedPlatform === 'X' 
-                ? `For X/Twitter: Use formats like tweets, threads, polls, or short videos. Keep it concise and punchy.`
-                : selectedPlatform === 'Facebook'
-                ? `For Facebook: Use formats like photos, videos, posts, or live streams. Focus on shareable content.`
-                : `For Instagram: You can suggest reels, carousels, photos, or stories. Specify the format for each idea.`;
+            const apiPlatform = mapPlatformToDailyApi(selectedPlatform);
+            const isMemberHubIdeas = fanHubContext || selectedPlatform === 'My Page';
 
-            const response = await fetch('/api/generateText', {
+            const response = await fetch('/api/generateDailyPostIdeas', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                     ...(token ? { Authorization: `Bearer ${token}` } : {}),
                 },
                 body: JSON.stringify({
-                    prompt: `Generate 10 creative post ideas tailored for ${selectedPlatform} based on: ${postIdeaPrompt}. 
-                    
-${formatGuidance}
-
-Each idea should be specific, engaging, and tailored for adult content creators. 
-When natural, include a ${selectedPlatform} mention (e.g., "join me on ${selectedPlatform}") but only if it fits. 
-Format as a numbered list with brief descriptions. For each idea, clearly specify the format (${isMyPage ? 'photo/video/text/poll' : 'reel/carousel/photo/story/video'}).${settingsContext ? `\n\n${settingsContext}` : ''}`,
-                    context: {
-                        goal: 'content-ideas',
-                        tone: 'Explicit/Adult Content',
-                        platforms: [selectedPlatform],
+                    platform: apiPlatform,
+                    goal: isMemberHubIdeas ? 'engagement' : 'balanced_followers_engagement',
+                    effort: 15,
+                    format: 'auto',
+                    tone: aiToneSetting || 'relatable',
+                    useTrends: true,
+                    includeTrendContext: true,
+                    spicyMode: (user?.settings?.tone?.spiciness ?? 0) > 0,
+                    toneSettings: {
+                        formality: user?.settings?.tone?.formality,
+                        humor: user?.settings?.tone?.humor,
+                        empathy: user?.settings?.tone?.empathy,
+                        spiciness: user?.settings?.tone?.spiciness ?? 0,
+                        profanity: user?.settings?.tone?.profanity,
+                        emojiLevel: user?.settings?.tone?.emojiLevel,
                     },
-                    analyticsData: buildAnalyticsData(),
-                    emojiEnabled: emojiSettings.enabled,
-                    emojiIntensity: emojiSettings.intensity,
+                    generateAllFormats:
+                        apiPlatform === 'instagram' && !isMemberHubIdeas,
+                    analyzeMyPageEngagement: isMemberHubIdeas,
+                    creatorHint: postIdeaPrompt.trim(),
+                    prioritizeCreatorPersonality: useCreatorPersonalityPostIdeas,
                 }),
             });
 
-            if (!response.ok) {
-                throw new Error('Failed to generate post ideas');
+            const data = await response.json();
+            if (!response.ok || (data.error && !data.ideas?.length)) {
+                throw new Error(data.error || data.note || 'Failed to generate post ideas');
             }
 
-            const data = await response.json();
-            const text = data.text || data.caption || '';
-            // Parse the numbered list into array
-            const ideas = typeof text === 'string' 
-                ? text.split(/\d+\./).filter(item => item.trim()).map(item => item.trim())
-                : [];
-            const finalIdeas = Array.isArray(ideas) && ideas.length > 0 ? ideas : (typeof text === 'string' ? [text] : []);
+            const finalIdeas = parseStoredPostIdeas(data.ideas);
+            if (finalIdeas.length === 0) {
+                throw new Error('No ideas returned — try again with a bit more detail in your prompt.');
+            }
+
             setGeneratedPostIdeas(finalIdeas);
-            // Save to history
-            await saveToHistory('post_ideas', `Post Ideas - ${new Date().toLocaleDateString()}`, { 
-                ideas: finalIdeas, 
+            await saveToHistory('post_ideas', `Post Ideas - ${new Date().toLocaleDateString()}`, {
+                ideas: finalIdeas,
                 prompt: postIdeaPrompt,
             });
             showToast?.('Post ideas generated successfully!', 'success');
@@ -2927,8 +3239,11 @@ Format as a numbered list with brief descriptions. For each idea, clearly specif
                         retention: balanceRetention,
                         conversion: balanceConversion,
                     },
-                    niche: user?.niche || 'Adult Content Creator',
+                    niche: user?.niche || 'Creator',
                     analyticsData: buildAnalyticsData(),
+                    creatorPersonality: effectiveCreatorPersonality || undefined,
+                    prioritizeCreatorPersonality: useCreatorPersonalityMonetization,
+                    ...(fanHubContext ? { contentMode: 'member_hub' } : {}),
                 }),
             });
 
@@ -3177,10 +3492,6 @@ Output format:
     const [history, setHistory] = useState<any[]>([]);
     const [loadingHistory, setLoadingHistory] = useState(false);
     const [showHistoryTab, setShowHistoryTab] = useState(false);
-    const [creatorPersonality, setCreatorPersonality] = useState('');
-    const [aiPersonalitySetting, setAiPersonalitySetting] = useState('');
-    const [aiToneSetting, setAiToneSetting] = useState('');
-    const [explicitnessLevelSetting, setExplicitnessLevelSetting] = useState(7);
     // History state for captions tab (separate from main history tab)
     const [showCaptionsHistory, setShowCaptionsHistory] = useState(false);
     const [captionsPredictHistory, setCaptionsPredictHistory] = useState<any[]>([]);
@@ -3554,13 +3865,13 @@ Output format:
             // Reload captions history
             loadCaptionsHistory();
             // Reload saved items for the respective tab
-            if (type === 'post_ideas' && activeTab === 'postIdeas') {
+            if (type === 'post_ideas' && effectiveTab === 'postIdeas') {
                 loadSavedPostIdeas();
-            } else if (type === 'shoot_concepts' && activeTab === 'shootConcepts') {
+            } else if (type === 'shoot_concepts' && effectiveTab === 'shootConcepts') {
                 loadSavedShootConcepts();
-            } else if (type === 'weekly_plan' && activeTab === 'weeklyPlan') {
+            } else if (type === 'weekly_plan' && effectiveTab === 'weeklyPlan') {
                 loadSavedWeeklyPlans();
-            } else if (type === 'monetization_plan' && activeTab === 'monetizationPlanner') {
+            } else if (type === 'monetization_plan' && effectiveTab === 'monetizationPlanner') {
                 loadSavedMonetizationPlans();
             }
         } catch (error: any) {
@@ -3661,13 +3972,13 @@ Output format:
             await deleteDoc(historyRef);
             
             // Reload the appropriate list
-            if (type === 'post_ideas' && activeTab === 'postIdeas') {
+            if (type === 'post_ideas' && effectiveTab === 'postIdeas') {
                 loadSavedPostIdeas();
-            } else if (type === 'shoot_concepts' && activeTab === 'shootConcepts') {
+            } else if (type === 'shoot_concepts' && effectiveTab === 'shootConcepts') {
                 loadSavedShootConcepts();
-            } else if (type === 'weekly_plan' && activeTab === 'weeklyPlan') {
+            } else if (type === 'weekly_plan' && effectiveTab === 'weeklyPlan') {
                 loadSavedWeeklyPlans();
-            } else if (type === 'monetization_plan' && activeTab === 'monetizationPlanner') {
+            } else if (type === 'monetization_plan' && effectiveTab === 'monetizationPlanner') {
                 loadSavedMonetizationPlans();
             }
             
@@ -4422,7 +4733,7 @@ Output format:
                     <p className="text-sm text-gray-600 dark:text-gray-400">Where you’re posting.</p>
                 </div>
                 <div className="flex flex-wrap gap-2">
-                    {(effectiveTab === 'messaging' ? platformOptionsDmOnly : platformOptions).map((platform) => (
+                    {(fanHubContext || effectiveTab === 'messaging' ? platformOptionsDmOnly : platformOptions).map((platform) => (
                         <button
                             key={platform}
                             onClick={() => setSelectedPlatform(platform)}
@@ -4453,17 +4764,23 @@ Output format:
                             ? 'DM Session'
                             : singleTabMode && effectiveTab === 'shootConcepts'
                             ? 'Shoot Ideas'
+                            : fanHubContext && effectiveTab === 'postIdeas'
+                            ? 'Post ideas'
                             : 'Content Ideas'}
                     </h1>
                 </div>
                 <p className="text-gray-600 dark:text-gray-400">
                     {singleTabMode && effectiveTab === 'monetizationPlanner'
-                            ? 'Plan drops and PPV strategy with a balanced content mix.'
+                            ? fanHubContext
+                              ? 'Plan My Page drops and PPV — your fan feed and locked content.'
+                              : 'Plan drops and PPV strategy with a balanced content mix.'
                             : singleTabMode && effectiveTab === 'messaging'
                             ? 'Subscriber messaging toolkit for retention and PPV conversions.'
                             : singleTabMode && effectiveTab === 'shootConcepts'
                             ? 'Photoshoot and concept ideas tailored to your niche and audience.'
-                            : "Get fresh post ideas and prompts for where you're posting."}
+                            : fanHubContext
+                              ? 'Hooks and angles for what to publish on My Page. Instagram, Facebook, and X are in Plan.'
+                              : "Get fresh post ideas and prompts for where you're posting."}
                 </p>
             </div>
 
@@ -4518,7 +4835,7 @@ Output format:
                                             loadCaptionsHistory();
                                         }
                                     }}
-                                    className="relative px-3 py-1.5 text-sm text-primary-600 dark:text-primary-400 hover:bg-primary-50 dark:hover:bg-primary-900/20 rounded-lg border border-primary-200 dark:border-primary-800"
+                                    className="fh-outline-btn relative px-3 py-1.5 text-sm rounded-lg border"
                                 >
                                     {showCaptionsHistory ? 'Hide' : 'Show'} History
                                     {(captionsPredictHistory.length > 0 || captionsRepurposeHistory.length > 0) && (
@@ -5455,9 +5772,9 @@ Output format:
             )}
 
             {/* Post Ideas Tab */}
-            {activeTab === 'postIdeas' && (
+            {effectiveTab === 'postIdeas' && (
                 <div className="space-y-6">
-                    <PlatformTargetingCard />
+                    {!fanHubContext && <PlatformTargetingCard />}
 
                     {/* Saved Post Ideas History */}
                     <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4">
@@ -5467,7 +5784,7 @@ Output format:
                             </h3>
                             <button
                                 onClick={() => setShowPostIdeasHistory(!showPostIdeasHistory)}
-                                className="relative px-3 py-1.5 text-sm text-primary-600 dark:text-primary-400 hover:bg-primary-50 dark:hover:bg-primary-900/20 rounded-lg border border-primary-200 dark:border-primary-800"
+                                className="fh-outline-btn relative px-3 py-1.5 text-sm rounded-lg border"
                             >
                                 {showPostIdeasHistory ? 'Hide' : 'Show'} History
                                 {savedPostIdeas.length > 0 && (
@@ -5485,8 +5802,8 @@ Output format:
                                     <div className="space-y-2 max-h-60 overflow-y-auto custom-scrollbar">
                                 {savedPostIdeas.map((saved, index) => {
                                     const ideasCount = saved.data?.ideas && Array.isArray(saved.data.ideas) ? saved.data.ideas.length : 0;
-                                    const firstIdea = saved.data?.ideas && Array.isArray(saved.data.ideas) && saved.data.ideas.length > 0 ? saved.data.ideas[0] : '';
-                                    const displayText = firstIdea ? firstIdea.substring(0, 100) : (saved.title || 'Post ideas');
+                                    const firstIdea = saved.data?.ideas && Array.isArray(saved.data.ideas) && saved.data.ideas.length > 0 ? saved.data.ideas[0] : null;
+                                    const displayText = firstIdea ? postIdeaPreviewText(firstIdea) : (saved.title || 'Post ideas');
                                     return (
                                         <div
                                             key={saved.id || index}
@@ -5503,6 +5820,8 @@ Output format:
                                             <div className="flex gap-2 sm:justify-end">
                                                 <button
                                                     onClick={() => {
+                                                        const loaded = parseStoredPostIdeas(saved.data?.ideas);
+                                                        if (loaded.length > 0) setGeneratedPostIdeas(loaded);
                                                         setViewingSavedItem(saved);
                                                         setShowSavedItemModal(true);
                                                         setShowPostIdeasHistory(false);
@@ -5539,14 +5858,11 @@ Output format:
                                     </h2>
                                     <p className="text-sm text-gray-500 dark:text-gray-400 flex items-center gap-1.5 mt-1">
                                         <span className="text-orange-500">🔥</span>
-                                        Powered by current trends in your niche
+                                        {fanHubContext
+                                            ? 'Weekly trends + your niche — built to keep My Page members engaged'
+                                            : 'Weekly trends + your niche — built for member retention'}
                                     </p>
                                 </div>
-                                {savedPostIdeas.length > 0 && (
-                                    <span className="text-sm text-gray-500 dark:text-gray-400">
-                                        {savedPostIdeas.length} saved
-                                    </span>
-                                )}
                             </div>
                         
                         <div className="space-y-4">
@@ -5628,14 +5944,19 @@ Output format:
 
                             <div className="flex flex-wrap gap-2">
                                 <button
+                                    type="button"
                                     onClick={() => setUseCreatorPersonalityPostIdeas(prev => !prev)}
-                                    disabled={!creatorPersonality}
+                                    disabled={!effectiveCreatorPersonality}
                                     className={`px-3 py-2 rounded-md text-sm font-medium transition-colors flex items-center justify-center gap-2 ${
                                         useCreatorPersonalityPostIdeas
                                             ? 'bg-primary-600 text-white hover:bg-primary-700'
                                             : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
-                                    } ${!creatorPersonality ? 'opacity-50 cursor-not-allowed' : ''}`}
-                                    title={!creatorPersonality ? 'Add Personality Override text in Settings → Profile & AI to enable' : undefined}
+                                    } ${!effectiveCreatorPersonality ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                    title={
+                                        !effectiveCreatorPersonality
+                                            ? 'Add Personality Override text in Settings → Profile & AI to enable'
+                                            : 'When on, your saved personality leads every idea'
+                                    }
                                 >
                                     <SparklesIcon className="w-4 h-4" />
                                     Personality Override
@@ -5675,82 +5996,19 @@ Output format:
                                 </span>
                             </div>
                             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                                {generatedPostIdeas.map((idea, index) => {
-                                    // Platform-specific formats
-                                    const platformFormats: Record<string, string[]> = {
-                                        'Instagram': ['Reel', 'Carousel', 'Photo', 'Story'],
-                                        'Facebook': ['Photo', 'Video', 'Post', 'Live'],
-                                        'X': ['Tweet', 'Thread', 'Poll', 'Video'],
-                                        'My Page': ['Photo', 'Video', 'Text', 'Poll'],
-                                    };
-                                    const formats = platformFormats[selectedPlatform] || platformFormats['Instagram'];
-                                    const format = formats[index % formats.length];
-                                    const formatStyles: Record<string, { gradient: string; icon: string; aspect: string }> = {
-                                        'Reel': { gradient: 'from-purple-500 via-pink-500 to-orange-400', icon: '▶️', aspect: 'h-36' },
-                                        'Carousel': { gradient: 'from-blue-500 to-purple-500', icon: '◀ ▶', aspect: 'h-36' },
-                                        'Photo': { gradient: 'from-pink-500 via-purple-500 to-indigo-500', icon: '📷', aspect: 'h-36' },
-                                        'Story': { gradient: 'from-orange-400 via-pink-500 to-purple-500', icon: '○', aspect: 'h-36' },
-                                        'Video': { gradient: 'from-purple-600 via-pink-500 to-red-500', icon: '🎬', aspect: 'h-36' },
-                                        'Text': { gradient: 'from-indigo-500 via-purple-500 to-pink-500', icon: '✍️', aspect: 'h-36' },
-                                        'Poll': { gradient: 'from-teal-500 via-cyan-500 to-blue-500', icon: '📊', aspect: 'h-36' },
-                                        'Tweet': { gradient: 'from-gray-800 via-gray-700 to-gray-600', icon: '💬', aspect: 'h-36' },
-                                        'Thread': { gradient: 'from-blue-600 via-blue-500 to-cyan-500', icon: '🧵', aspect: 'h-36' },
-                                        'Post': { gradient: 'from-blue-600 to-blue-400', icon: '📝', aspect: 'h-36' },
-                                        'Live': { gradient: 'from-red-500 via-pink-500 to-orange-500', icon: '🔴', aspect: 'h-36' },
-                                    };
-                                    const style = formatStyles[format] || formatStyles['Photo'];
-                                    const isTrending = index < 2;
-                                    
-                                    // Function to use this idea - navigates to Fan Hub Posts with caption pre-filled
-                                    const handleUseIdea = () => {
-                                        // Store caption in localStorage for Fan Hub Posts to pick up
-                                        localStorage.setItem('fanHubPendingCaption', idea);
-                                        // Navigate to Fan Hub Posts tab
-                                        window.location.href = '/fan-hub?tab=posts';
-                                    };
-                                    
-                                    return (
-                                        <div
-                                            key={index}
-                                            className="rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden hover:shadow-md transition-shadow"
-                                        >
-                                            {/* Visual Preview Header - taller with better padding */}
-                                            <div className={`relative ${style.aspect} bg-gradient-to-br ${style.gradient} flex flex-col justify-between p-3`}>
-                                                {/* Format badge row */}
-                                                <div className="flex items-center gap-1.5">
-                                                    <span className="px-2 py-1 bg-black/30 backdrop-blur-sm rounded-md text-white text-xs font-bold">
-                                                        {format.toUpperCase()}
-                                                    </span>
-                                                    {isTrending && (
-                                                        <span className="px-2 py-1 bg-orange-500/90 backdrop-blur-sm rounded-md text-white text-xs font-bold">
-                                                            🔥 Trending
-                                                        </span>
-                                                    )}
-                                                </div>
-                                                {/* Hook preview - centered with better text handling */}
-                                                <div className="flex-1 flex items-center justify-center px-2 py-2">
-                                                    <p className="text-white font-semibold text-sm leading-snug drop-shadow-lg text-center" style={{ wordBreak: 'break-word' }}>
-                                                        "{idea.length > 100 ? idea.slice(0, 100) + '...' : idea}"
-                                                    </p>
-                                                </div>
-                                                {/* Format icon */}
-                                                <div className="text-white/60 text-lg text-right">
-                                                    {style.icon}
-                                                </div>
-                                            </div>
-                                            {/* Content - full text visible */}
-                                            <div className="p-3 bg-gray-50 dark:bg-gray-700/50">
-                                                <p className="text-xs text-gray-600 dark:text-gray-300 mb-3 line-clamp-3">{idea}</p>
-                                                <button
-                                                    onClick={handleUseIdea}
-                                                    className="w-full py-2 text-xs font-semibold text-white bg-primary-600 hover:bg-primary-700 rounded-lg transition-colors"
-                                                >
-                                                    Use in Post →
-                                                </button>
-                                            </div>
-                                        </div>
-                                    );
-                                })}
+                                {generatedPostIdeas.map((idea, index) => (
+                                    <FanHubPostIdeaCard
+                                        key={idea.id || index}
+                                        idea={idea}
+                                        onUse={() => {
+                                            localStorage.setItem(
+                                                'fanHubPendingCaption',
+                                                buildCaptionFromPostIdea(idea)
+                                            );
+                                            window.location.href = '/fan-hub?tab=posts';
+                                        }}
+                                    />
+                                ))}
                             </div>
                         </div>
                     )}
@@ -5758,7 +6016,7 @@ Output format:
             )}
 
             {/* Trends Tab */}
-            {activeTab === 'trends' && (
+            {effectiveTab === 'trends' && (
                 <div className="space-y-6">
                     <PlatformTargetingCard />
 
@@ -5781,7 +6039,7 @@ Output format:
                                         loadTrendsHistory();
                                     }
                                 }}
-                                className="relative px-3 py-1.5 text-sm text-primary-600 dark:text-primary-400 hover:bg-primary-50 dark:hover:bg-primary-900/20 rounded-lg border border-primary-200 dark:border-primary-800"
+                                className="fh-outline-btn relative px-3 py-1.5 text-sm rounded-lg border"
                             >
                                 {showTrendsHistory ? 'Hide' : 'Show'} History
                                 {trendsHistory.length > 0 && (
@@ -6048,7 +6306,7 @@ Output format:
             )}
 
             {/* Shoot Concepts Tab */}
-            {activeTab === 'shootConcepts' && (
+            {effectiveTab === 'shootConcepts' && (
                 <div className="space-y-6">
                     <PlatformTargetingCard />
 
@@ -6060,7 +6318,7 @@ Output format:
                             </h3>
                             <button
                                 onClick={() => setShowShootConceptsHistory(!showShootConceptsHistory)}
-                                className="relative px-3 py-1.5 text-sm text-primary-600 dark:text-primary-400 hover:bg-primary-50 dark:hover:bg-primary-900/20 rounded-lg border border-primary-200 dark:border-primary-800"
+                                className="fh-outline-btn relative px-3 py-1.5 text-sm rounded-lg border"
                             >
                                 {showShootConceptsHistory ? 'Hide' : 'Show'} History
                                 {savedShootConcepts.length > 0 && (
@@ -6278,7 +6536,7 @@ Output format:
             )}
 
             {/* Weekly Plan Tab */}
-            {activeTab === 'weeklyPlan' && (
+            {effectiveTab === 'weeklyPlan' && (
                 <div className="space-y-6">
                     <PlatformTargetingCard />
 
@@ -6290,7 +6548,7 @@ Output format:
                             </h3>
                             <button
                                 onClick={() => setShowWeeklyPlanHistory(!showWeeklyPlanHistory)}
-                                className="relative px-3 py-1.5 text-sm text-primary-600 dark:text-primary-400 hover:bg-primary-50 dark:hover:bg-primary-900/20 rounded-lg border border-primary-200 dark:border-primary-800"
+                                className="fh-outline-btn relative px-3 py-1.5 text-sm rounded-lg border"
                             >
                                 {showWeeklyPlanHistory ? 'Hide' : 'Show'} History
                                 {savedWeeklyPlans.length > 0 && (
@@ -6561,7 +6819,7 @@ Output format:
 
 
             {/* Monetization Planner Tab */}
-            {activeTab === 'monetizationPlanner' && (
+            {effectiveTab === 'monetizationPlanner' && (
                 <div className="space-y-6">
                     {!singleTabMode && <PlatformTargetingCard />}
 
@@ -6573,7 +6831,7 @@ Output format:
                             </h3>
                             <button
                                 onClick={() => setShowMonetizationHistory(!showMonetizationHistory)}
-                                className="relative px-3 py-1.5 text-sm text-primary-600 dark:text-primary-400 hover:bg-primary-50 dark:hover:bg-primary-900/20 rounded-lg border border-primary-200 dark:border-primary-800"
+                                className="fh-outline-btn relative px-3 py-1.5 text-sm rounded-lg border"
                             >
                                 {showMonetizationHistory ? 'Hide' : 'Show'} History
                                 {savedMonetizationPlans.length > 0 && (
@@ -6640,11 +6898,6 @@ Output format:
                             <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
                                 AI Monetization Planner
                             </h2>
-                            {savedMonetizationPlans.length > 0 && (
-                                <span className="text-sm text-gray-500 dark:text-gray-400">
-                                    {savedMonetizationPlans.length} saved
-                                </span>
-                            )}
                         </div>
                         <p className="text-sm text-gray-600 dark:text-gray-400 mb-6">
                             Generate a balanced content strategy that labels each idea as Engagement, Upsell, Retention, or Conversion. 
@@ -6858,6 +7111,27 @@ Output format:
                             </div>
 
 
+                            <div className="flex flex-wrap gap-2 mb-4">
+                                <button
+                                    type="button"
+                                    onClick={() => setUseCreatorPersonalityMonetization(prev => !prev)}
+                                    disabled={!effectiveCreatorPersonality}
+                                    className={`px-3 py-2 rounded-md text-sm font-medium transition-colors flex items-center justify-center gap-2 ${
+                                        useCreatorPersonalityMonetization
+                                            ? 'bg-primary-600 text-white hover:bg-primary-700'
+                                            : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+                                    } ${!effectiveCreatorPersonality ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                    title={
+                                        !effectiveCreatorPersonality
+                                            ? 'Add Personality Override text in Settings → Profile & AI to enable'
+                                            : 'When on, your saved personality leads the drop plan'
+                                    }
+                                >
+                                    <SparklesIcon className="w-4 h-4" />
+                                    Personality Override
+                                </button>
+                            </div>
+
                             <button
                                 onClick={handleGenerateMonetizationPlan}
                                 disabled={isGenerating || monetizationGoals.length === 0 || Math.abs((balanceEngagement + balanceUpsell + balanceRetention + balanceConversion) - 100) > 1}
@@ -6886,7 +7160,7 @@ Output format:
             )}
 
             {/* Messaging Tab */}
-            {activeTab === 'messaging' && (
+            {effectiveTab === 'messaging' && (
                 <div className="space-y-6">
                     {!singleTabMode && <PlatformTargetingCard />}
 
@@ -7456,13 +7730,23 @@ Output format:
                                 {viewingSavedItem.type === 'post_ideas' && viewingSavedItem.data?.ideas && Array.isArray(viewingSavedItem.data.ideas) && (
                                     <div className="space-y-3">
                                         <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Post Ideas</h3>
-                                        {viewingSavedItem.data.ideas.map((idea: string, idx: number) => (
-                                            <div key={idx} className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600">
-                                                <p className="text-gray-900 dark:text-white whitespace-pre-wrap">{idea}</p>
+                                        {parseStoredPostIdeas(viewingSavedItem.data.ideas).map((idea, idx) => (
+                                            <div key={idea.id || idx} className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600">
+                                                <p className="text-xs font-semibold uppercase text-primary-600 dark:text-primary-400 mb-1">
+                                                    {(idea.format || 'post').toUpperCase()}
+                                                    {idea.title ? ` · ${idea.title}` : ''}
+                                                </p>
+                                                <p className="text-gray-900 dark:text-white whitespace-pre-wrap text-sm">{idea.hook}</p>
+                                                {idea.shotList && idea.shotList.length > 0 && (
+                                                    <ul className="mt-2 text-xs text-gray-600 dark:text-gray-400 list-disc list-inside">
+                                                        {idea.shotList.map((shot, i) => (
+                                                            <li key={i}>{shot}</li>
+                                                        ))}
+                                                    </ul>
+                                                )}
                                                 <button
-                                                    onClick={() => {
-                                                        copyToClipboard(idea);
-                                                    }}
+                                                    type="button"
+                                                    onClick={() => copyToClipboard(buildCaptionFromPostIdea(idea))}
                                                     className="mt-2 text-sm text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300"
                                                 >
                                                     Copy

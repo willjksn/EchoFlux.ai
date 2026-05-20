@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import type { AmazonLink, ContentIdea, ContentLane, FunnelGoal, PlatformTarget } from "../../types/creatorOS";
 import { CONTENT_IDEA_STATUS_LABELS, CONTENT_LANE_LABELS, FUNNEL_GOAL_LABELS, PLATFORM_LABELS } from "../../lib/creatorOS";
 import { auth } from "../../../firebaseConfig";
+import { useCreatorOSDisplay } from "./CreatorOSDisplayContext";
 
 type Props = {
   open: boolean;
@@ -97,6 +98,7 @@ const emptyIdea = (): Omit<ContentIdea, "id"> => ({
 });
 
 export const ContentIdeaModal: React.FC<Props> = ({ open, idea, amazonLinks, onClose, onSave }) => {
+  const { showAmazonAffiliate, paidMemberHubLabel } = useCreatorOSDisplay();
   const [draft, setDraft] = useState<Omit<ContentIdea, "id">>(emptyIdea());
   const [saving, setSaving] = useState(false);
   const [quickTemplates, setQuickTemplates] = useState<Template[]>(() => pickQuickTemplates());
@@ -338,17 +340,21 @@ Rules:
               {Object.entries(FUNNEL_GOAL_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
             </select>
           </label>
-          <label className="text-sm font-semibold">
-            Amazon product/link
-            <select value={draft.amazonLinkId || ""} onChange={(e) => setDraft({ ...draft, amazonLinkId: e.target.value })} className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 font-normal dark:border-slate-700 dark:bg-slate-950">
-              <option value="">No saved link yet</option>
-              {amazonLinks.map((link) => <option key={link.id} value={link.id}>{link.productName}</option>)}
-            </select>
-          </label>
-          <label className="text-sm font-semibold">
-            Amazon category
-            <input value={draft.amazonCategory || ""} onChange={(e) => setDraft({ ...draft, amazonCategory: e.target.value })} className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 font-normal dark:border-slate-700 dark:bg-slate-950" />
-          </label>
+          {showAmazonAffiliate ? (
+            <>
+              <label className="text-sm font-semibold">
+                Amazon product/link
+                <select value={draft.amazonLinkId || ""} onChange={(e) => setDraft({ ...draft, amazonLinkId: e.target.value })} className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 font-normal dark:border-slate-700 dark:bg-slate-950">
+                  <option value="">No saved link yet</option>
+                  {amazonLinks.map((link) => <option key={link.id} value={link.id}>{link.productName}</option>)}
+                </select>
+              </label>
+              <label className="text-sm font-semibold">
+                Amazon category
+                <input value={draft.amazonCategory || ""} onChange={(e) => setDraft({ ...draft, amazonCategory: e.target.value })} className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 font-normal dark:border-slate-700 dark:bg-slate-950" />
+              </label>
+            </>
+          ) : null}
           <label className="text-sm font-semibold">
             Due date
             <input type="date" value={draft.dueDate} onChange={(e) => setDraft({ ...draft, dueDate: e.target.value })} className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 font-normal dark:border-slate-700 dark:bg-slate-950" />
@@ -360,13 +366,15 @@ Rules:
             </select>
           </label>
           <label className="text-sm font-semibold md:col-span-2">
-            Inner Circle tie-in
+            {paidMemberHubLabel} tie-in
             <input value={draft.innerCircleTieIn} onChange={(e) => setDraft({ ...draft, innerCircleTieIn: e.target.value })} className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 font-normal dark:border-slate-700 dark:bg-slate-950" />
           </label>
           <div className="md:col-span-2">
             <p className="text-sm font-semibold">Platforms</p>
             <div className="mt-2 flex flex-wrap gap-2">
-              {Object.entries(PLATFORM_LABELS).map(([value, label]) => (
+              {Object.entries(PLATFORM_LABELS)
+                .filter(([value]) => showAmazonAffiliate || value !== "amazon_storefront")
+                .map(([value, label]) => (
                 <button key={value} onClick={() => togglePlatform(value as PlatformTarget)} className={`rounded-full border px-3 py-1 text-xs font-semibold ${draft.platforms.includes(value as PlatformTarget) ? "border-primary-500 bg-primary-50 text-primary-700 dark:bg-primary-950 dark:text-primary-200" : "border-slate-300 dark:border-slate-700"}`}>
                   {label}
                 </button>

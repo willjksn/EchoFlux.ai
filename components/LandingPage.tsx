@@ -426,7 +426,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onGetSta
                         </div>
                         <h3 className="text-xl font-bold text-center text-gray-900 dark:text-white mb-4">Growing Creators</h3>
                         <p className="text-gray-600 dark:text-gray-300 text-center">
-                            Build your audience with structured content planning. Create engaging posts for Instagram, TikTok, X, and Facebook.
+                            Build your audience with structured content planning. Create engaging posts for Instagram, X, Facebook, and your Fan Hub.
                         </p>
                     </div>
                     <div className="bg-white dark:bg-gray-900 p-8 rounded-2xl shadow-lg border-t-4 border-purple-500 hover:-translate-y-1 transition-transform">
@@ -455,12 +455,12 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onGetSta
         <div id="features" className="bg-white dark:bg-gray-900 py-24">
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                 <div className="lg:text-center">
-                    <h2 className="text-base text-primary-600 font-semibold tracking-wide uppercase">Studio &amp; witme.io</h2>
+                    <h2 className="text-base text-primary-600 font-semibold tracking-wide uppercase">EchoFlux &amp; witme.io</h2>
                     <p className="mt-2 text-3xl leading-8 font-extrabold tracking-tight text-gray-900 dark:text-white sm:text-4xl">
                       Run your business from EchoFlux
                     </p>
                     <p className="mt-4 max-w-2xl text-xl text-gray-500 dark:text-gray-400 lg:mx-auto">
-                      Plan content, manage your vault, and configure your public page on witme.io—where fans subscribe, shop, and message{' '}
+                      Use Plan and Create Post, manage your vault, and configure your public page on witme.io—where fans subscribe, shop, and message{' '}
                       <span className="font-medium text-gray-700 dark:text-gray-300">you</span>. Optional drafting helpers stay in your studio;
                       what fans see is always under your control.
                     </p>
@@ -468,10 +468,10 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onGetSta
                 <div className="mt-12">
                     <dl className="space-y-10 md:space-y-0 md:grid md:grid-cols-2 lg:grid-cols-3 md:gap-x-8 md:gap-y-10">
                         <Feature icon={<SparklesIcon />} title="AI Captions">
-                           Generate scroll-stopping captions with trending hashtags. Optimized for Instagram, TikTok, X, Facebook, and your Fan Hub.
+                           Generate scroll-stopping captions with trending hashtags. Optimized for Instagram, X, Facebook, and My Page on Fan Hub.
                         </Feature>
-                        <Feature icon={<TargetIcon />} title="Content Strategy">
-                           Get AI-generated content ideas and posting strategies based on current trends and what works for your niche.
+                        <Feature icon={<TargetIcon />} title="Plan">
+                           Daily ideas in Today, weekly monetization flows, and Elite multi-week roadmaps—AI plans what to post and hands off to Create Post or Fan Hub.
                         </Feature>
                         <Feature icon={<CalendarIcon />} title="Content Calendar">
                            See all your planned posts in one beautiful calendar. Organize your content schedule and never miss a post.
@@ -479,11 +479,14 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onGetSta
                         <Feature icon={<ImageIcon />} title="My Vault">
                            Upload and organize your images, videos, and audio files. Reuse assets across your social posts and Fan Hub.
                         </Feature>
-                        <Feature icon={<HeartIcon />} title="witme.io fan page">
-                           Your public page at witme.io/yourhandle—subscriptions, tips, store, and DMs—configured from EchoFlux.
+                        <Feature icon={<HeartIcon />} title="Fan Hub & witme.io">
+                           Run My Page, Posts, Store, and Messages in Fan Hub; fans use witme.io/yourhandle to subscribe, shop, tip, and DM you.
                         </Feature>
-                        <Feature icon={<ChatIcon />} title="Studio assistant">
-                           Brainstorm ideas and draft captions inside EchoFlux—built for your workflow, not for replacing you with fans.
+                        <Feature icon={<SparklesIcon />} title="Post ideas & Drop plan (Elite)">
+                           In Fan Hub → Posts, get member-content blueprints—what to film, photograph, or write—with captions you can edit before publishing.
+                        </Feature>
+                        <Feature icon={<ChatIcon />} title="EchoFlux assistant">
+                           In-app help for Plan, Create Post, Fan Hub, and witme.io—click paths and workflows, not generic chat.
                         </Feature>
                         <Feature icon={<ChatIcon />} title="Chat session reply drafts (Elite)">
                            During timed chat sessions, get optional reply suggestions in your voice—you review and send; fans only ever get messages you send. Elite only; Pro sees an upgrade prompt.

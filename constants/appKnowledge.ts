@@ -1,4 +1,6 @@
-// Shared knowledge base accessible to both client and server components
+// Shared knowledge base for API endpoints
+// Note: This is a duplicate of constants/appKnowledge.ts because API TypeScript config
+// only includes api/**/*.ts and cannot import from outside the api directory
 export const APP_KNOWLEDGE = `
 # EchoFlux.ai Knowledge Base
 
@@ -23,16 +25,115 @@ EchoFlux.ai is an **AI Content Studio, Creator OS, and fan monetization hub for 
 - Creator OS is the main operating system for turning attention into money flow: public content, story clicks, Amazon/product interest, Inner Circle subscribers, Treats, retention, and review.
 - Fan Hub/My Page is the creator’s owned fan experience for member posts, subscriptions, products, tips, polls, tip goals, DMs, blocking/reporting, and storefront-style fan interactions.
 
+## Complete UI & Navigation Map (answer “where is” / “what button” from here)
+
+When users ask how to click something, name the **exact sidebar label, tab, or button text** they will see in the app.
+
+### EchoFlux sidebar (main creator app)
+| Sidebar label | What it opens | Who sees it |
+|---------------|---------------|-------------|
+| **Dashboard** | Home overview, quick actions, usage | Most plans |
+| **Plan** | Planning hub (3 tabs below) | Most plans |
+| **Create Post** | Social caption/media composer (Compose) | Most plans |
+| **Calendar** | Scheduled content calendar | Fan Hub / studio access tiers |
+| **Vault** | Media library (uploads for posts) | Most plans |
+| **Fan Hub** | Creator fan monetization hub (tabs below) | Fan Hub / Elite / studio plans |
+| **Witme Page** | Public witme.io page manager | **Admins only** |
+| **Settings** | Account, connections, AI, billing | Everyone |
+| **Admin** | Platform admin dashboard | Admins / staff roles |
+
+Legacy URLs still redirect: \`/strategy\`, \`/what-to-post\`, \`/creator-os\`, \`/studio\` → **Plan** or **Fan Hub**.
+
+### Plan page (\`/plan\`) — three tabs
+| Tab | Purpose | Key buttons |
+|-----|---------|-------------|
+| **Today** | Daily post ideas (IG, FB, X, My Page) | **How it works**, **Quick settings**, **Generate Ideas**, **Personality Override**, per-card **Use this** (→ Create Post or Fan Hub), **↻** swap idea, **Clear ideas** |
+| **Weekly monetization** | Creator OS money flow (Pro+) | See Creator OS buttons below |
+| **Multi-week strategy** | Elite roadmap | **Generate Strategy**, **How it works**, calendar handoff, **Back to Today** |
+
+**Today → Quick settings drawer:** platform, goal, effort, format, tone, spicy mode, Personality Override.
+
+### Create Post (sidebar: Create Post)
+- Upload media, pick platforms, goal, tone, **Generate Captions**, remix, schedule, copy, **Analyze Content Gaps** (where available), hashtag tools.
+
+### Calendar
+- View/edit scheduled items; drag dates; content from Compose and plans.
+
+### Vault (sidebar: Vault)
+- Upload/organize media; used when composing posts and Fan Hub **Posts** composer (**Vault** picker).
+
+### Fan Hub (\`/fan-hub\`) — top tabs
+| Tab label | Purpose |
+|-----------|---------|
+| **My Page** | Fan-facing page preview, theme, hero, subscribe CTA, storefront landing |
+| **Posts** | Creator feed: compose posts, **Post ideas**, **Drop plan**, **New Post** |
+| **Store** | Treats / digital products storefront |
+| **Messages** | Member DMs, threads, welcome automation |
+| **Chat Session** | Paid chat session tooling |
+| **Video Chats** | Video chat offerings |
+| **Fans** | Member list, blocks, fan profiles |
+| **Analytics** | Fan Hub performance stats |
+| **Purchases** | Orders, tips, unlocks |
+| **Payouts** | Stripe Connect payouts (high level only) |
+| **Users** | Fan Hub user/admin helpers (creator scope) |
+
+### Fan Hub → Posts — important buttons
+- **Post ideas** (Elite): AI My Page ideas → **What to photograph/film/write** + caption → **Use in Post →**
+- **Drop plan** (Elite): AI drops/PPV monetization planner
+- **Back to feed**: exit planner back to post list
+- **New Post**: open composer modal
+- Composer: upload / record / **Vault**, caption, AI tone, **Generate** caption, lock/PPV price, poll, tip goal, blur preview, **Publish** / **Save draft** / schedule
+
+### Fan Hub → Messages (high level)
+- Thread list, open DM, reply, member directory, session toolkit pieces on Elite; blocking/reporting flows.
+
+### Fan Hub → My Page
+- Edit theme/colors, layout, bio, links, subscription pricing display, preview as fan sees it.
+
+### Settings — four tabs
+| Tab | What to configure |
+|-----|-------------------|
+| **General** | Safe Mode, restart onboarding |
+| **Connections** | Connect/disconnect Instagram, X, Facebook, etc. |
+| **Profile & AI** | Creator personality, tone sliders, explicitness, niche, **Creator Identity** (Elite) |
+| **Billing** | Plan, upgrade, payment method |
+
+### Creator OS (inside Plan → Weekly monetization)
+| Area | Key buttons |
+|------|-------------|
+| Header | **Build My Money Flow**, **Add Content Idea**, **Plan My Week**, **Find Product Trends** (if Amazon on), **How it works** |
+| Today’s Move | **Save as Idea**, **Send to Create Post**, **Post to My Page**, **Add to Week**, **Mark Done**, **Regenerate**, action-step chips |
+| Today’s Focus | Mark tasks done (public / story / member drop) |
+| Monetization Flow | **Add idea**, columns Ideas→Review, per card **Create Post**, **Post My Page**, **Move to…**, **Edit**, **Delete** |
+| Weekly Plan | **Plan My Week**, **Regenerate detailed week**, per-day **Mark … done** |
+| Amazon (if enabled) | **Add Amazon Link**, **Find Product Trends**, trend cards **Turn into Idea** / **Save Link** |
+| Inner Circle funnel | **Save funnel** (welcome, 48h, retention, treat upsell text) |
+
+Handoffs: **Send to Create Post** / **Create Post** → sidebar **Create Post**. **Post to My Page** / **Post My Page** → Fan Hub publish flow.
+
+### Assistant (bottom-right chat icon)
+- **All users:** text chat — ask how to use any button above.
+- **Admins only:** **Voice** tab in the widget for spoken assistant (no setting required).
+
+### Pages not in sidebar (URL only)
+- **Opportunities** (\`/opportunities\`): trend scan — Pro/Elite; may be linked from dashboard/marketing, not main sidebar today.
+
+---
+
 ## Key Surfaces & Workflows
 
-### 1. Strategy (AI Content Strategist) - Detailed Guide
+### 1. Plan (AI planning hub) - Detailed Guide
 
 **What it is:**
-The Strategy page generates multi-week content roadmaps tailored to your niche, audience, and goals. It's your starting point for planning campaigns.
+The **Plan** page (sidebar label "Plan"; formerly "Strategy") is the main planning hub with three tabs:
+- **Today** — quick daily post ideas for Instagram/Facebook/X/My Page (photo, video, text, etc.) with hooks, what-to-show blueprints, and "Use this" handoff to Create Post or Fan Hub.
+- **Weekly monetization** (Pro+) — Creator OS money-flow planning: today's move, weekly grid, story/Amazon angles, Inner Circle / paid-member funnel (label may show **Inner Circle** or **Paid members** per creator).
+- **Multi-week strategy** (Elite) — AI multi-week roadmap with themes, daily ideas, captions, and calendar handoff.
 
 **Where to find it:**
-- Click "Strategy" in the sidebar navigation
-- Or use the quick action button on the Dashboard
+- Click **Plan** in the sidebar navigation
+- Legacy URLs \`/strategy\` redirect to \`/plan?tab=…\`
+- Or use quick actions on the Dashboard
 
 **How to use it - Step by step:**
 
@@ -681,9 +782,11 @@ Creator OS helps creators decide what to post, where it goes, and how it support
 Fan Hub/My Page is the creator-owned fan destination. It is used for public/member feed posts, subscriptions, products, tips, Treats, polls, tip goals, live/video experiences, DMs, blocking, reporting, and checkout flows.
 
 **Creator-side features:**
-- Create and manage feed posts, member content, polls, tip goals, overlay text, products, subscriptions, Treats, live/video offerings, and page styling.
-- View members/fans, purchases, revenue/payout information, messages, and notifications when the user has creator access.
-- Customize My Page styling and storefront-style presentation.
+- **Posts:** feed composer, vault, **Post ideas** and **Drop plan** AI planners (Elite)
+- Create and manage member posts, polls, tip goals, locked/PPV content, products, subscriptions, Treats, live/video, page styling
+- **Messages:** member DMs, welcome automation, session toolkit (Elite chatbot in DM sessions where enabled)
+- View members/fans, purchases, revenue/payouts, notifications
+- **Settings → Profile & AI:** Creator Identity, Personality Override, tone/explicitness (used by Fan Hub AI)
 
 **Fan/member-side features:**
 - View creator page/feed according to access.
@@ -704,7 +807,7 @@ Fan Hub/My Page is the creator-owned fan destination. It is used for public/memb
 **Creator Plans:**
 - **Free** – 1 AI strategy/month (basic), 10 AI captions/month, Basic Link-in-Bio (1 link), 100 MB storage
 - **Pro** – AI Content Strategist, 2 strategies/month, 500 captions/month, Link-in-Bio (5 links), Media Library, Calendar, 5 GB storage
-- **Elite** – Advanced Strategy options, 5 strategies/month, 1,500 captions/month, Link-in-Bio (unlimited), Media Library, 10 GB storage, **Premium Content Studio included**
+- **Elite** – Multi-week strategy (Plan tab), Fan Hub Post ideas + Drop plan, DM session AI, 5 strategies/month, 1,500 captions/month, Link-in-Bio (unlimited), Media Library, 10 GB storage
 
 **Note:** Trend context refreshes on a recurring schedule (Mon/Thu). The current version does not provide user-triggered live web research.
 
@@ -724,20 +827,26 @@ Fan Hub/My Page is the creator-owned fan destination. It is used for public/memb
 
 ---
 
-### 11. Chatbot
+### 11. Chatbot & Voice Assistant
 
-**Chatbot:**
-- Text-based assistant accessible to all users
-- Click the chat icon (bottom right) to open
-- Ask questions about features, workflows, or get help
-- Uses this knowledge base for accurate answers about EchoFlux, Fan Hub, Creator OS, Create Post, Premium Content Studio, and core workflows
+**Text chatbot (all users):**
+- Click the **chat icon** (bottom right) → **EchoFlux.ai Assistant**
+- Text mode is always available on every plan
+- Ask about Plan, Fan Hub, Creator OS, Compose, pricing, workflows
+- Uses this knowledge base
+
+**Voice mode (admins only):**
+- Open the chat icon → switch to the **Voice** tab (no separate setting required)
+- Non-admin users only see text chat; voice is not available on their accounts
 
 **The chatbot can:**
-- Explain any feature in detail
-- Provide step-by-step instructions
+- Explain any feature in detail using the **Complete UI & Navigation Map** above (exact tab and button names)
+- Provide step-by-step click paths: Sidebar → Fan Hub → Posts → **New Post**, etc.
 - Help brainstorm content ideas
-- Answer questions about workflows
-- Guide you through using the app
+- Answer questions about workflows and plan limits (Free / Pro / Elite)
+- Guide you through EchoFlux and Fan Hub end-to-end
+
+**If unsure where a control lives:** say which sidebar item and tab to open first, then the button label — do not invent buttons that are not listed in this knowledge base.
 
 **Role-aware safety:**
 - Fans/members and non-admin users may receive product help, navigation help, creator-facing feature explanations, and general best practices.
@@ -764,7 +873,7 @@ Fan Hub/My Page is the creator-owned fan destination. It is used for public/memb
 ## Detailed How-To Examples
 
 ### "How do I plan a campaign?"
-1. Go to **Strategy** page (click "Strategy" in sidebar)
+1. Go to **Plan** (sidebar)
 2. Enter your niche, audience, and goals
 3. Select duration (1-4 weeks) and tone
 4. Choose your primary platform
@@ -788,18 +897,16 @@ Fan Hub/My Page is the creator-owned fan destination. It is used for public/memb
 10. Copy your favorite caption
 11. Optionally schedule it or save as draft
 
-### "How do I use Premium Content Studio?"
-1. Navigate to **Premium Content Studio** (Elite plan required)
-2. Start at the Dashboard to see overview
-3. **Content Brain:** Generate captions, analyze gaps, predict performance
-4. **Roleplay & Interactive Ideas:** Create roleplay scenarios and interactive posts
-5. **Chat/Sexting Session Assistant:** Get conversation suggestions for fan messaging
-6. **Content Calendar:** Plan and schedule premium content
-7. **Media Vault:** Organize all your premium content assets
-8. **Export Hub:** Create ready-to-upload packages
-9. **Fan Management:** Track and manage fan relationships
-10. **Guides & Tips:** Learn best practices
-11. All content must be manually uploaded to OnlyFans, Fansly, or Fanvue
+### "How do I plan My Page posts?"
+1. Open **Fan Hub → Posts**
+2. Click **Post ideas** (Elite) — enter a prompt, generate photo/video/text ideas with what-to-create steps
+3. Click **Use in Post →** to open the composer with caption ready
+4. Or click **Drop plan** for PPV/drop monetization mix
+
+### "How do I use legacy Premium Content Studio tools?"
+1. Elite access required
+2. Use **Fan Hub → Posts** (**Post ideas**, **Drop plan**) and **Fan Hub → Messages** for DM/session tools
+3. Older \`/studio\` URLs redirect into Fan Hub tabs
 
 ### "How do I find trending opportunities?"
 1. Go to **Opportunities** page (Pro/Elite plans)
@@ -948,8 +1055,11 @@ A: You can, but it's better to use platform-optimized captions. When you select 
 **Q: How often should I run a new strategy?**
 A: Monthly is recommended, but you can run new strategies whenever you need fresh ideas or are starting a new campaign.
 
-**Q: What's the difference between Strategy and Compose?**
-A: Strategy creates high-level roadmaps and campaign themes. Compose creates actual captions and posts. Use Strategy for planning, then Compose to create the actual content.
+**Q: What's the difference between Plan and Compose?**
+A: **Plan** (Today / Weekly monetization / Multi-week strategy) decides what to post and when. **Compose** writes platform captions and drafts. Fan Hub **Post ideas** are for My Page member posts only.
+
+**Q: Where did Premium Content Studio go?**
+A: It was consolidated into **Fan Hub → Posts** (Post ideas, Drop plan) and related Fan Hub tools. Elite still unlocks those planners.
 
 **Q: How do I feature my review on the landing page?**
 A: Reviews are managed by admins. If you're an admin, go to Admin Dashboard → Tools tab → Reviews, then check the "Featured" checkbox next to any review. Featured reviews appear on the landing page.
@@ -962,13 +1072,13 @@ A: Yes! Premium Content Studio works for OnlyFans, Fansly, Fanvue, and other pre
 ## Navigation Help
 
 **How to navigate to any page:**
-- Use the sidebar on the left to click any page name
-- Dashboard, Compose, Strategy, Calendar, Opportunities, Premium Content Studio, etc.
-- Each page name is clickable and will take you there
-- The active page is highlighted in the sidebar
+- Use the sidebar: Dashboard, **Plan**, Compose, Calendar, Opportunities, **Fan Hub**, Creator OS, Settings, etc.
+- **Plan** = Today | Weekly monetization | Multi-week strategy
+- **Fan Hub** = My Page, Posts (ideas/drops), Treats, Messages, …
+- Premium Content Studio is **not** in the sidebar anymore (use Fan Hub → Posts)
 
 **Quick actions:**
-- Dashboard has quick action buttons to jump to Strategy, Compose, or Calendar
+- Dashboard quick actions jump to Plan, Compose, or Calendar
 - Use these for faster navigation to common tasks
 
 ---
@@ -979,7 +1089,7 @@ A: Yes! Premium Content Studio works for OnlyFans, Fansly, Fanvue, and other pre
 The Admin Dashboard is a comprehensive management interface for administrators to manage users, monitor system usage, configure settings, and manage content.
 
 **Access Requirements:**
-- Only users with role: "Admin" in their user document can access
+- Only users with \`role: "Admin"\` in their user document can access
 - Navigate to Admin Dashboard from sidebar (only visible to admins)
 
 **Main Tabs:**

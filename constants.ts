@@ -114,6 +114,7 @@ export const KNOWN_APP_ROUTES: readonly string[] = [
   '/automation',
   '/bio-link-page',
   '/bio',
+  '/plan',
   '/what-to-post',
   '/plan-my-week',
   '/strategy',
@@ -449,7 +450,8 @@ export const getTourStepsForPlan = (user: User): TourStep[] => {
     let steps: TourStep[] = [
       { elementId: 'tour-step-1-dashboard', page: 'dashboard', title: 'Your Command Center', content: 'This is your home base. Check stats, upcoming posts, and urgent items.', position: 'top' },
       { elementId: 'tour-step-theme-toggle', page: 'dashboard', title: 'Light / Dark Mode', content: 'Use the sun/moon button (top right) to toggle themes anytime.', position: 'left' },
-      { elementId: 'tour-step-3-compose-nav', page: 'compose', title: 'Write Captions', content: 'Generate caption ideas quickly and keep your posting flow moving.', position: 'right' },
+      { elementId: 'tour-step-plan-nav', page: 'strategy', title: 'Plan', content: 'Today for daily ideas, Weekly monetization for your funnel (Pro+), and Multi-week strategy on Elite.', position: 'right' },
+      { elementId: 'tour-step-3-compose-nav', page: 'compose', title: 'Create Post', content: 'Generate captions and hand off from Plan ideas when you are ready to publish.', position: 'right' },
     ];
 
     if (user.hasAutopilot) {
@@ -457,7 +459,7 @@ export const getTourStepsForPlan = (user: User): TourStep[] => {
     }
 
     if (hasFanHubAccess) {
-        steps.push({ elementId: 'tour-step-fanhub-nav', page: 'fanHub', title: 'Fan Hub', content: 'Build your fan community: customize your page, post to the feed, sell from your store, and message fans.', position: 'right' });
+        steps.push({ elementId: 'tour-step-fanhub-nav', page: 'fanHub', title: 'Fan Hub', content: 'My Page, Posts (Post ideas and Drop plan on Elite), Store, Messages, and your witme.io link.', position: 'right' });
         steps.push({ elementId: 'tour-step-fanhub-mypage', page: 'fanHub', title: 'My Page', content: 'Set your handle (witme.io/you), theme, and landing content. Preview how fans see your page.', position: 'bottom' });
     }
 

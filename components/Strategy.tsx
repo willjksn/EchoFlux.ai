@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useAppContext } from './AppContext';
 import { StrategyPlan, Platform, WeekPlan, DayPlan, Post, CalendarEvent, MediaLibraryItem } from '../types';
 import { generateContentStrategy, getStrategies, saveStrategy, updateStrategyStatus, analyzeMediaForPost, generateCaptions } from "../src/services/geminiService";
-import { TargetIcon, SparklesIcon, CalendarIcon, CheckCircleIcon, RocketIcon, DownloadIcon, TrashIcon, ClockIcon, UploadIcon, ImageIcon, XMarkIcon, CopyIcon, HashtagIcon } from './icons/UIIcons';
+import { TargetIcon, SparklesIcon, CalendarIcon, CheckCircleIcon, RocketIcon, TrashIcon, ClockIcon, UploadIcon, ImageIcon, XMarkIcon, CopyIcon, HashtagIcon } from './icons/UIIcons';
 import { UpgradePrompt } from './UpgradePrompt';
 import { storage, auth } from '../firebaseConfig';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
@@ -16,8 +16,12 @@ import {
     instagramPostTypeFromStrategyFormat,
 } from '../src/lib/strategyComposeHandoff';
 import { isCreatorIdentityPlanClient, normalizePlanForLimitsClient } from '../src/lib/creatorIdentity/planGate';
+import { EchoFluxHowItWorksModal } from './EchoFluxHowItWorksModal';
 
-export const Strategy: React.FC<{ onBackToSimple?: () => void }> = ({ onBackToSimple }) => {
+export const Strategy: React.FC<{ onBackToSimple?: () => void; embedded?: boolean }> = ({
+    onBackToSimple,
+    embedded = false,
+}) => {
     const { 
         showToast, 
         setActivePage, 
@@ -92,6 +96,7 @@ export const Strategy: React.FC<{ onBackToSimple?: () => void }> = ({ onBackToSi
         strategy: { count: number; limit: number; remaining: number; month: string };
         tavily: { count: number; limit: number; remaining: number; month: string };
     } | null>(null);
+    const [showHowItWorks, setShowHowItWorks] = useState(false);
 
     // Helper function to convert file to base64
     const fileToBase64 = (file: File): Promise<string> => {
@@ -428,7 +433,7 @@ export const Strategy: React.FC<{ onBackToSimple?: () => void }> = ({ onBackToSi
              <UpgradePrompt
                  featureName="Plan My Week"
                  onUpgradeClick={() => setActivePage('pricing')}
-                 secondaryActionText={onBackToSimple ? "Back to What to Post" : undefined}
+                 secondaryActionText={onBackToSimple ? (embedded ? "Back to Today" : "Back to What to Post") : undefined}
                  onSecondaryActionClick={onBackToSimple}
              />
          );
@@ -1245,19 +1250,6 @@ export const Strategy: React.FC<{ onBackToSimple?: () => void }> = ({ onBackToSi
         return text;
     };
 
-    const handleExportStrategy = () => {
-        if (!plan) return;
-        const textContent = formatStrategyAsText(plan);
-        const dataBlob = new Blob([textContent], { type: 'text/plain' });
-        const url = URL.createObjectURL(dataBlob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = `strategy-${Date.now()}.txt`;
-        link.click();
-        URL.revokeObjectURL(url);
-        showToast('Strategy exported as TXT!', 'success');
-    };
-
     const handleCopyStrategy = () => {
         if (!plan) return;
         const textContent = formatStrategyAsText(plan);
@@ -1320,8 +1312,13 @@ export const Strategy: React.FC<{ onBackToSimple?: () => void }> = ({ onBackToSi
 
 
     return (
-        <div className="p-4 sm:p-6 bg-gradient-to-br from-gray-50 via-white to-gray-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 min-h-full overflow-x-hidden">
-            {/* Back to What to Post when opened from Advanced planner */}
+        <div
+            className={
+                embedded
+                    ? "min-h-full overflow-x-hidden"
+                    : "p-4 sm:p-6 bg-gradient-to-br from-gray-50 via-white to-gray-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 min-h-full overflow-x-hidden"
+            }
+        >
             {onBackToSimple && (
                 <div className="mb-4">
                     <button
@@ -1329,11 +1326,11 @@ export const Strategy: React.FC<{ onBackToSimple?: () => void }> = ({ onBackToSi
                         onClick={onBackToSimple}
                         className="text-sm text-primary-600 dark:text-primary-400 hover:underline font-medium"
                     >
-                        ← Back to What to Post
+                        {embedded ? "← Back to Today" : "← Back to What to Post"}
                     </button>
                 </div>
             )}
-            {/* Modern Header */}
+            {!embedded && (
             <div className="mb-8">
                 <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-4 mb-4">
                     <div className="flex-1 min-w-0">
@@ -1379,6 +1376,27 @@ export const Strategy: React.FC<{ onBackToSimple?: () => void }> = ({ onBackToSi
                     </div>
                 )}
             </div>
+            )}
+
+            {embedded && (
+                <div className="mb-4 flex flex-wrap items-center justify-end gap-2">
+                    <button
+                        type="button"
+                        onClick={() => setShowHowItWorks(true)}
+                        className="text-xs font-medium text-primary-600 underline-offset-2 hover:text-primary-700 hover:underline dark:text-primary-400 dark:hover:text-primary-300 px-3 py-2"
+                    >
+                        How it works
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => setShowHistory(!showHistory)}
+                        className="px-4 py-2 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors flex items-center gap-2 shadow-sm border border-gray-200 dark:border-gray-700 text-sm font-medium"
+                    >
+                        <ClockIcon className="w-4 h-4" />
+                        {showHistory ? "Hide" : "View"} saved ({savedStrategies.length})
+                    </button>
+                </div>
+            )}
 
             {/* Strategy History View */}
             {showHistory && (
@@ -1439,10 +1457,21 @@ export const Strategy: React.FC<{ onBackToSimple?: () => void }> = ({ onBackToSi
             {/* Redesigned Input Section */}
             <div className="bg-gradient-to-br from-white to-gray-50 dark:from-gray-800 dark:to-gray-900 p-8 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700 mb-6">
                 <div className="mb-6">
-                    <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2 flex items-center gap-2">
-                        <SparklesIcon className="w-6 h-6 text-primary-600 dark:text-primary-400" />
-                        Create Your Content Strategy
-                    </h2>
+                    <div className="flex flex-wrap items-start justify-between gap-3 mb-2">
+                        <h2 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                            <SparklesIcon className="w-6 h-6 text-primary-600 dark:text-primary-400" />
+                            Create Your Content Strategy
+                        </h2>
+                        {!embedded && (
+                            <button
+                                type="button"
+                                onClick={() => setShowHowItWorks(true)}
+                                className="text-xs font-medium text-primary-600 underline-offset-2 hover:text-primary-700 hover:underline dark:text-primary-400 dark:hover:text-primary-300 px-3 py-2 shrink-0"
+                            >
+                                How it works
+                            </button>
+                        )}
+                    </div>
                     <p className="text-gray-600 dark:text-gray-400">
                         AI builds a personalized plan using trends, your primary goal, tone, and platform—plus post ideas, audience, (when enabled) Personality Override from Settings, or your Creator Identity baseline on Elite.
                     </p>
@@ -1758,18 +1787,6 @@ Return only the rewritten context description.
                             </button>
                         </div>
                     </div>
-                    {usageStats && usageStats.strategy ? (
-                        <div className="mt-3 text-sm text-gray-600 dark:text-gray-400 text-center">
-                            <span className="font-medium">Strategy Generations:</span> {usageStats.strategy.count || 0}/{usageStats.strategy.limit || 0} used this month
-                            {usageStats.strategy.remaining === 0 && (
-                                <span className="ml-2 text-red-600 dark:text-red-400 font-semibold">(Limit reached - upgrade for more)</span>
-                            )}
-                        </div>
-                    ) : (
-                        <div className="mt-3 text-sm text-gray-500 dark:text-gray-400 text-center">
-                            Loading usage stats...
-                        </div>
-                    )}
                 </div>
             </div>
 
@@ -1779,13 +1796,7 @@ Return only the rewritten context description.
                     <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
                         <h2 className="text-2xl font-bold text-gray-900 dark:text-white flex-shrink-0">Your Strategy Plan</h2>
                         <div className="flex items-center gap-3 overflow-x-auto pb-2 -mx-6 px-6 sm:mx-0 sm:px-0 sm:pb-0">
-                            <button 
-                                onClick={handleExportStrategy}
-                                className="flex items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors shadow-sm whitespace-nowrap flex-shrink-0"
-                            >
-                                <DownloadIcon className="w-5 h-5" /> Export TXT
-                            </button>
-                            <button 
+                            <button
                                 onClick={handleCopyStrategy}
                                 className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors shadow-sm whitespace-nowrap flex-shrink-0"
                             >
@@ -2915,6 +2926,158 @@ Return only the rewritten context description.
                     </div>
                 </div>
             )}
+
+            <EchoFluxHowItWorksModal
+                open={showHowItWorks}
+                onClose={() => setShowHowItWorks(false)}
+                ariaTitleId="strategy-how-it-works-title"
+                title={embedded ? "How Multi-week strategy works" : "How content strategy works"}
+                subtitle="Build a multi-week posting roadmap with themes, daily post ideas, captions, and calendar handoff."
+            >
+                <section>
+                    <h4 className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-primary-600 dark:text-primary-400">
+                        What this is
+                    </h4>
+                    <p className="text-[13px] leading-relaxed text-gray-600 dark:text-gray-400">
+                        {embedded ? (
+                            <>
+                                <strong className="text-gray-800 dark:text-gray-200">Multi-week strategy</strong> is the Elite tab in{' '}
+                                <strong className="text-gray-800 dark:text-gray-200">Plan</strong>. It produces a week-by-week roadmap—not
+                                single-day ideas (Plan → Today) and not your weekly monetization ops grid (Plan → Weekly monetization). My Page
+                                drop ideas live in Fan Hub → Posts.
+                            </>
+                        ) : (
+                            <>
+                                This tool builds a structured content strategy: weekly themes, daily topics, suggested formats (Post, Reel,
+                                Story), and starter captions you can refine in Create Post or schedule on My Schedule.
+                            </>
+                        )}
+                    </p>
+                </section>
+
+                <section>
+                    <h4 className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-primary-600 dark:text-primary-400">
+                        Before you generate (required)
+                    </h4>
+                    <ul className="list-inside list-disc space-y-1 text-[13px] leading-relaxed text-gray-600 dark:text-gray-400">
+                        <li>
+                            <strong className="text-gray-800 dark:text-gray-200">Primary Goal</strong> is required (followers, engagement,
+                            sales, brand awareness, etc.).
+                        </li>
+                        <li>
+                            Fill in <strong className="text-gray-800 dark:text-gray-200">at least one</strong> of: Post ideas, Target audience,{' '}
+                            <strong className="text-gray-800 dark:text-gray-200">Personality Override</strong> (toggle on + text in Settings →
+                            Profile &amp; AI), or <strong className="text-gray-800 dark:text-gray-200">Creator Identity</strong> (Elite baseline).
+                        </li>
+                        <li>
+                            When Personality Override is on, it <strong className="text-gray-800 dark:text-gray-200">leads voice and topics</strong>
+                            —post ideas and audience can be blank.
+                        </li>
+                        <li>Choose duration (1–8 weeks) and platform focus so formats match where you publish.</li>
+                    </ul>
+                </section>
+
+                <section>
+                    <h4 className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-primary-600 dark:text-primary-400">
+                        What the AI uses
+                    </h4>
+                    <ul className="list-inside list-disc space-y-1 text-[13px] leading-relaxed text-gray-600 dark:text-gray-400">
+                        <li>
+                            <strong className="text-gray-800 dark:text-gray-200">Weekly trend digest</strong> (refreshed Mon/Thu) plus niche
+                            research tailored to your post ideas and goal.
+                        </li>
+                        <li>Your tone, platform focus, and optional extra instructions (rules, cadence, dos/don&rsquo;ts).</li>
+                        <li>Optional favorite hashtags from Settings when the Hashtags toggle is on.</li>
+                        <li>
+                            <strong className="text-gray-800 dark:text-gray-200">My Page focus</strong> can include Fan Hub engagement signals
+                            when you select My Page (Fan Hub) as platform.
+                        </li>
+                        <li>Past published/scheduled posts from your account when available, to avoid repeating the same angles.</li>
+                    </ul>
+                </section>
+
+                <section>
+                    <h4 className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-primary-600 dark:text-primary-400">
+                        Form fields (quick guide)
+                    </h4>
+                    <ul className="list-inside list-disc space-y-1 text-[13px] leading-relaxed text-gray-600 dark:text-gray-400">
+                        <li>
+                            <strong className="text-gray-800 dark:text-gray-200">Post ideas</strong> — themes you want (GRWM, tips, BTS). Not the
+                            same as Extra instructions.
+                        </li>
+                        <li>
+                            <strong className="text-gray-800 dark:text-gray-200">Target audience</strong> — who you are talking to.
+                        </li>
+                        <li>
+                            <strong className="text-gray-800 dark:text-gray-200">Extra instructions</strong> — optional constraints (more Reels,
+                            avoid politics, promote link-in-bio Fridays).
+                        </li>
+                        <li>
+                            <strong className="text-gray-800 dark:text-gray-200">Personality Override / Hashtags</strong> — pull saved Settings
+                            into this plan only when toggled on.
+                        </li>
+                    </ul>
+                </section>
+
+                <section>
+                    <h4 className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-primary-600 dark:text-primary-400">
+                        After you generate
+                    </h4>
+                    <ul className="list-inside list-disc space-y-1 text-[13px] leading-relaxed text-gray-600 dark:text-gray-400">
+                        <li>
+                            Review <strong className="text-gray-800 dark:text-gray-200">Content Roadmap</strong>: weekly themes, milestones, and
+                            success checkpoints tied to your goal.
+                        </li>
+                        <li>
+                            Toggle <strong className="text-gray-800 dark:text-gray-200">Visual Cards</strong> (quick previews + captions) or{' '}
+                            <strong className="text-gray-800 dark:text-gray-200">Detailed List</strong> (full fields + media tools).
+                        </li>
+                        <li>
+                            Per day: upload or pick from Media Library, AI-generate a caption, open{' '}
+                            <strong className="text-gray-800 dark:text-gray-200">Create Post</strong> with the idea prefilled, or mark progress as
+                            you publish.
+                        </li>
+                        <li>
+                            <strong className="text-gray-800 dark:text-gray-200">Populate Calendar</strong> (Pro/Elite) adds planned drafts to My
+                            Schedule with suggested dates.
+                        </li>
+                        <li>
+                            <strong className="text-gray-800 dark:text-gray-200">Copy All</strong> exports the plan text;{' '}
+                            <strong className="text-gray-800 dark:text-gray-200">Clear Plan</strong> starts fresh (saved history remains).
+                        </li>
+                        <li>Plans <strong className="text-gray-800 dark:text-gray-200">auto-save</strong>—use View saved to reload older roadmaps.</li>
+                    </ul>
+                </section>
+
+                <section>
+                    <h4 className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-primary-600 dark:text-primary-400">
+                        Monthly limits
+                    </h4>
+                    <p className="text-[13px] leading-relaxed text-gray-600 dark:text-gray-400">
+                        Strategy generations count toward your plan each calendar month (typically Free: 1, Pro: 2, Elite: 5). Generating uses more
+                        AI research than a single &ldquo;What to Post&rdquo; refresh, so limits are lower. Limits reset at the start of each month.
+                    </p>
+                </section>
+
+                <section>
+                    <h4 className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-primary-600 dark:text-primary-400">
+                        How Plan fits together
+                    </h4>
+                    <ul className="list-inside list-disc space-y-1 text-[13px] leading-relaxed text-gray-600 dark:text-gray-400">
+                        <li>
+                            <strong className="text-gray-800 dark:text-gray-200">Today</strong> — fast daily ideas for social + My Page.
+                        </li>
+                        <li>
+                            <strong className="text-gray-800 dark:text-gray-200">Weekly monetization</strong> — IG/story funnel, weekly grid,
+                            paid-member drops (creator-specific labels).
+                        </li>
+                        <li>
+                            <strong className="text-gray-800 dark:text-gray-200">Multi-week strategy</strong> (this tab, Elite) — long-range
+                            roadmap and calendar planning.
+                        </li>
+                    </ul>
+                </section>
+            </EchoFluxHowItWorksModal>
         </div>
     );
 };

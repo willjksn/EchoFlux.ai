@@ -5,7 +5,7 @@ export const Terms: React.FC = () => {
         <div className="max-w-4xl mx-auto space-y-8">
             <div className="bg-white dark:bg-gray-800 p-8 rounded-xl shadow-md">
                 <h2 className="text-3xl font-bold text-gray-900 dark:text-white">Terms of Service</h2>
-                <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">Last updated: April 3, 2026</p>
+                <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">Last updated: May 19, 2026</p>
 
                 <div className="mt-6 prose prose-lg dark:prose-invert max-w-none text-gray-700 dark:text-gray-300">
                     <p>
@@ -36,6 +36,11 @@ export const Terms: React.FC = () => {
                         </li>
                         <li>
                             <strong>Feature variability:</strong> Not every creator page has the same offerings.
+                        </li>
+                        <li>
+                            <strong>Creator tools:</strong> EchoFlux includes areas such as <strong>Plan</strong> (Today, Weekly monetization, Multi-week strategy on eligible plans),{' '}
+                            <strong>Create Post</strong>, <strong>Fan Hub</strong> (My Page, Posts, Store, Messages, and related tabs), and an in-app assistant.
+                            Availability depends on your subscription plan.
                         </li>
                     </ul>
 

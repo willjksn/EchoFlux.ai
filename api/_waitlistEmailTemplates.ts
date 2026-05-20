@@ -63,11 +63,11 @@ This version is focused on planning workflows only.
 Auto-posting and live analytics are intentionally disabled so creators stay fully in control of publishing.
 
 Recommended first steps:
-1️⃣ Generate a content strategy
+1️⃣ Open Plan → Today for content ideas
 2️⃣ Move items onto your calendar
-3️⃣ Use Compose to generate captions
-4️⃣ Attach media from your library
-5️⃣ Copy + post manually to your platforms
+3️⃣ Use Create Post for captions
+4️⃣ Attach media from Vault
+5️⃣ Copy + post manually to your platforms (or use Fan Hub / witme.io for fans)
 
 Your feedback directly shapes upcoming releases — thanks for being part of this stage.
 
@@ -116,7 +116,7 @@ Reply anytime — we’re reading everything during this phase.
 
 If you’re open to one more round of feedback, could you answer these?
 • On a scale of 1–10, how likely are you to keep using EchoFlux for planning? Why?
-• What planning workflow should we improve first (Strategy / Calendar / Compose / Media)?
+• What planning workflow should we improve first (Plan / Calendar / Create Post / Vault)?
 • What feature would make EchoFlux “must-have” for you?
 • What should we remove or simplify?
 • If EchoFlux had one “wow” moment, what should it be?

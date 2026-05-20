@@ -180,7 +180,7 @@ export const UIProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
         calendar: '/my-schedule',
         approvals: '/create-post/drafts',
         team: '/team',
-        opportunities: '/what-to-post', // Redirected: Trends now integrated into What to Post
+        opportunities: '/plan',
         profile: '/profile',
         about: '/about',
         contact: '/contact',
@@ -189,12 +189,12 @@ export const UIProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
         faq: '/faq',
         terms: '/terms',
         privacy: '/privacy',
-        dataDeletion: '/dataDeletion',
+        dataDeletion: '/data-deletion',
         admin: '/admin',
         automation: '/automation',
         bio: '/bio-link-page',
-        strategy: '/what-to-post',
-        "creator-os": '/creator-os',
+        strategy: '/plan',
+        "creator-os": '/plan',
         ads: '/ads',
         mediaLibrary: '/my-vault',
         autopilot: '/autopilot',
@@ -244,6 +244,8 @@ export const UIProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
     pathToPage['/witme-page'] = 'witmePage';
     // Legacy
     pathToPage['/premium-content-studio'] = 'onlyfansStudio';
+    pathToPage['/data-deletion'] = 'dataDeletion';
+    pathToPage['/datadeletion'] = 'dataDeletion';
 
     const isRoutableAppPath = (path: string) => {
         const p = normalizePath(path);
@@ -284,6 +286,35 @@ export const UIProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
                     window.history.replaceState({}, '', target);
                 }
             }
+            // Legacy Premium Studio → Fan Hub or Settings (sidebar entry removed).
+            if (currentPath === '/studio') {
+                const params =
+                    typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : new URLSearchParams();
+                const tab = params.get('tab');
+                const target =
+                    tab === 'persona'
+                        ? '/settings'
+                        : tab === 'dmSession'
+                          ? '/fan-hub?tab=messages'
+                          : tab === 'drops'
+                            ? '/fan-hub?tab=posts&postsPanel=drops'
+                            : '/fan-hub?tab=posts&postsPanel=ideas';
+                if (tab === 'persona') {
+                    try {
+                        localStorage.setItem('settingsActiveTab', 'ai-training');
+                        localStorage.setItem('openCreatorIdentityBuilder', '1');
+                    } catch {
+                        /* ignore */
+                    }
+                    setActivePageState('settings');
+                } else {
+                    setActivePageState('fanHub');
+                }
+                if (typeof window !== 'undefined' && window.history.replaceState) {
+                    window.history.replaceState({}, '', target);
+                }
+                return;
+            }
             // Fan Hub route: default tab myPage if missing and canonicalize legacy /fan to /fan-hub.
             if (currentPath === '/fan' || currentPath === '/fan-hub') {
                 const params = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : new URLSearchParams();
@@ -321,6 +352,12 @@ export const UIProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
             localStorage.setItem(LAST_ACTIVE_PAGE_KEY, activePageState);
         } catch {}
 
+        // Retired: never push /studio from last-active-page restore.
+        if (activePageState === 'onlyfansStudio' || activePageState === 'premiumStudioUpgrade') {
+            setActivePageState('fanHub');
+            return;
+        }
+
         const targetPath = activePageState === 'bio'
             ? '/fan-hub?tab=myPage'
             : activePageState === 'fanHub'
@@ -336,10 +373,17 @@ export const UIProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
         if (activePageState === 'fanHub' && currentPath === '/fan-hub') return;
         // Bio page resolves to Fan Hub; preserve ?tab= the same way.
         if (activePageState === 'bio' && currentPath === '/fan-hub') return;
+        if (activePageState === 'strategy' && currentPath === '/plan') return;
+        if (activePageState === 'creator-os' && currentPath === '/plan') {
+            const params = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : new URLSearchParams();
+            if (params.get('tab') === 'money-flow') return;
+        }
 
         const pathToPush =
             activePageState === 'bio' || activePageState === 'fanHub'
                 ? '/fan-hub?tab=myPage'
+                : activePageState === 'creator-os'
+                ? '/plan?tab=money-flow'
                 : targetPath;
         if (currentPath !== targetPathNormalized) {
             window.history.pushState({}, '', mergePathPreservingReturnParams(pathToPush));

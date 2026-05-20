@@ -27,11 +27,12 @@ import { PlanSelectorModal } from './components/PlanSelectorModal';
 import { MaintenancePage } from './components/MaintenancePage';
 import { isMaintenanceMode, getAllowedEmail, canBypassMaintenance } from './src/utils/maintenance';
 import { hasFanHubStudioRouteAccess, hasPremiumStudioRouteAccess } from './src/utils/planAccess';
+import { PlanHub } from './components/PlanHub';
+import { LegacyPremiumStudioRedirect } from './components/LegacyPremiumStudioRedirect';
 import { InteractiveTour } from './components/InteractiveTour';
 import { PaymentModal } from './components/PaymentModal';
 import { Toast } from './components/Toast';
 import { UnifiedAssistant } from './components/UnifiedAssistant';
-import { VoiceAssistant } from './components/VoiceAssistant';
 import { AnnouncementBanner } from './components/AnnouncementBanner';
 import { PublicAnnouncementBanner } from './components/PublicAnnouncementBanner';
 import { Page, UserType, Plan, User } from './types';
@@ -55,11 +56,9 @@ import { useOAuthReturnHandler } from './src/hooks/useOAuthReturnHandler';
 import { ResetPassword } from './components/ResetPassword';
 import { InviteRequiredPage } from './components/InviteRequiredPage';
 import { isInviteOnlyMode } from './src/utils/inviteOnly';
-import { WhatToPost } from './components/WhatToPost';
 import { PremiumStudioLayout } from './components/PremiumStudioLayout';
 
 // Lazy load heavy components for code splitting
-const Strategy = lazy(() => import('./components/Strategy').then(module => ({ default: module.Strategy })));
 const OnlyFansStudio = lazy(() => import('./components/OnlyFansStudio').then(module => ({ default: module.OnlyFansStudio })));
 const Autopilot = lazy(() => import('./components/Autopilot'));
 const Dashboard = lazy(() => import('./components/Dashboard').then((m) => ({ default: m.Dashboard })));
@@ -74,7 +73,6 @@ const WitmePageManager = lazy(() => import('./components/WitmePageManager'));
 const Compose = lazy(() => import('./components/Compose').then((m) => ({ default: m.Compose })));
 const Calendar = lazy(() => import('./components/Calendar').then((m) => ({ default: m.Calendar })));
 const MediaLibrary = lazy(() => import('./components/MediaLibrary'));
-const CreatorOSPage = lazy(() => import('./src/pages/CreatorOSPage'));
 
 const RouteChunkFallback: React.FC<{ label?: string }> = ({ label = 'Loading…' }) => (
   <div className="min-h-[50vh] flex items-center justify-center p-8 bg-gray-50 dark:bg-gray-900 text-gray-600 dark:text-gray-300">
@@ -125,8 +123,8 @@ const pageTitles: Record<Page, string> = {
     admin: 'Admin Dashboard',
     automation: 'Automation',
     bio: 'Bio Link Page',
-    strategy: 'What to Post',
-    "creator-os": 'Creator OS',
+    strategy: 'Plan',
+    "creator-os": 'Plan',
     ads: 'Ad Ideas',
     mediaLibrary: 'My Vault',
     autopilot: 'AI Autopilot',
@@ -137,13 +135,93 @@ const pageTitles: Record<Page, string> = {
     witmePage: 'Witme Page',
 };
 
+const GUEST_STANDALONE_PATH_TO_PAGE: Partial<Record<string, Page>> = {
+    '/privacy': 'privacy',
+    '/terms': 'terms',
+    '/faq': 'faq',
+    '/data-deletion': 'dataDeletion',
+    '/pricing': 'pricing',
+};
+
+function guestStandalonePageFromPath(): Page | null {
+    if (typeof window === 'undefined') return null;
+    const path = window.location.pathname.replace(/\/+$/, '') || '/';
+    return GUEST_STANDALONE_PATH_TO_PAGE[path] ?? null;
+}
+
+type GuestStandaloneShellProps = {
+    page: Page;
+    onHome: () => void;
+    onSignIn: () => void;
+    onGetStarted: () => void;
+    onNavigateRequest: (page: Page) => void;
+    loginModal?: React.ReactNode;
+};
+
+const GuestStandaloneShell: React.FC<GuestStandaloneShellProps> = ({
+    page,
+    onHome,
+    onSignIn,
+    onGetStarted,
+    onNavigateRequest,
+    loginModal,
+}) => {
+    const main =
+        page === 'privacy' ? (
+            <Privacy />
+        ) : page === 'terms' ? (
+            <Terms />
+        ) : page === 'faq' ? (
+            <FAQ />
+        ) : page === 'dataDeletion' ? (
+            <DataDeletion />
+        ) : (
+            <Pricing onGetStartedClick={onGetStarted} onNavigateRequest={onNavigateRequest} />
+        );
+
+    return (
+        <>
+            <PublicAnnouncementBanner />
+            <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex flex-col">
+                <header className="border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-4 sm:px-6 py-4 shrink-0">
+                    <div className="max-w-6xl mx-auto flex flex-wrap items-center justify-between gap-3">
+                        <button
+                            type="button"
+                            onClick={onHome}
+                            className="text-lg font-bold text-primary-600 hover:text-primary-700 dark:text-primary-400"
+                        >
+                            EchoFlux.ai
+                        </button>
+                        <div className="flex items-center gap-3">
+                            <button
+                                type="button"
+                                onClick={onSignIn}
+                                className="text-sm font-medium text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white"
+                            >
+                                Sign in
+                            </button>
+                            <button
+                                type="button"
+                                onClick={onGetStarted}
+                                className="text-sm font-medium px-3 py-2 rounded-md bg-primary-600 text-white hover:bg-primary-700"
+                            >
+                                Get Started
+                            </button>
+                        </div>
+                    </div>
+                </header>
+                <main className="flex-1 p-4 sm:p-6">{main}</main>
+            </div>
+            {loginModal}
+        </>
+    );
+};
+
 const MainContent: React.FC = () => {
     // Hooks must be called unconditionally - cannot be in try-catch
     const context = useAppContext();
     const user = context?.user;
     const activePage = context?.activePage || 'dashboard';
-    const [strategyViewMode, setStrategyViewMode] = useState<'simple' | 'advanced'>('simple');
-
     // Check if context is available
     if (!context) {
         return (
@@ -196,14 +274,8 @@ const MainContent: React.FC = () => {
                     </LazyBoundary>
                 );
             case 'team': return <Team />;
-            case 'opportunities': {
-                // Trends/Opportunities page has been integrated into What to Post
-                // Redirect to strategy page (What to Post)
-                if (typeof window !== 'undefined') {
-                    context.setActivePage('strategy');
-                }
-                return <WhatToPost onOpenAdvanced={() => setStrategyViewMode('advanced')} />;
-            }
+            case 'opportunities':
+                return <PlanHub />;
             case 'profile': return <Profile />;
             case 'about': return <About />;
             case 'contact': return <Contact />;
@@ -241,22 +313,9 @@ const MainContent: React.FC = () => {
                     </LazyBoundary>
                 );
             }
-            case 'strategy': {
-                if (strategyViewMode === 'advanced') {
-                    return (
-                        <Suspense fallback={<div className="p-6 text-center text-gray-500 dark:text-gray-400">Loading Strategy...</div>}>
-                            <Strategy onBackToSimple={() => setStrategyViewMode('simple')} />
-                        </Suspense>
-                    );
-                }
-                return <WhatToPost onOpenAdvanced={() => setStrategyViewMode('advanced')} />;
-            }
+            case 'strategy':
             case 'creator-os':
-                return (
-                    <LazyBoundary label="Loading Creator OS…">
-                        <CreatorOSPage />
-                    </LazyBoundary>
-                );
+                return <PlanHub />;
             case 'ads': return <AdGenerator />;
             case 'mediaLibrary':
                 return (
@@ -269,23 +328,8 @@ const MainContent: React.FC = () => {
                     <Autopilot />
                 </Suspense>
             );
-            case 'onlyfansStudio': {
-                const hasPremiumStudioAccess = hasPremiumStudioRouteAccess(user);
-                if (!hasPremiumStudioAccess) {
-                    return (
-                        <LazyBoundary label="Loading…">
-                            <PremiumStudioUpgrade />
-                        </LazyBoundary>
-                    );
-                }
-                return (
-                    <LazyBoundary label="Loading Premium Content Studio…">
-                        <PremiumStudioLayout section="studio">
-                            <OnlyFansStudio mode="studio" />
-                        </PremiumStudioLayout>
-                    </LazyBoundary>
-                );
-            }
+            case 'onlyfansStudio':
+                return <LegacyPremiumStudioRedirect />;
             case 'emailCenter': return <EmailCenterPage />;
             case 'premiumStudioUpgrade':
                 return (
@@ -550,6 +594,7 @@ const AppContent: React.FC = () => {
             path === '/automation' ||
             path === '/bio-link-page' ||
             path === '/bio' ||
+            path === '/plan' ||
             path === '/what-to-post' ||
             path === '/plan-my-week' ||
             path === '/strategy' ||
@@ -1247,7 +1292,46 @@ const AppContent: React.FC = () => {
         console.log('AppContent render:', { isAuthLoading, isAuthenticated, hasUser: !!user, activePage, maintenanceEnabled, bypassMaintenance, canBypass });
     }
 
+    const guestPageFromPath = guestStandalonePageFromPath();
+    const guestLoginModal =
+        isLoginModalOpen ? (
+            <LoginModal
+                isOpen={isLoginModalOpen}
+                onClose={() => {
+                    setIsLoginModalOpen(false);
+                    if (!isAuthenticated) {
+                        setSelectedPlan(null);
+                    }
+                }}
+                initialView={loginModalInitialView}
+                selectedPlan={selectedPlan || undefined}
+            />
+        ) : null;
+    const guestShellProps = {
+        onHome: () => {
+            try {
+                window.history.replaceState({}, '', '/');
+            } catch {
+                /* ignore */
+            }
+            setActivePage('dashboard');
+        },
+        onSignIn: () => {
+            setLoginModalInitialView('login');
+            setIsLoginModalOpen(true);
+        },
+        onGetStarted: () => {
+            setLoginModalInitialView('signup');
+            setIsLoginModalOpen(true);
+        },
+        onNavigateRequest: handleNavigateRequest,
+        loginModal: guestLoginModal,
+    };
+
     if (isAuthLoading) {
+        if (guestPageFromPath) {
+            return <GuestStandaloneShell page={guestPageFromPath} {...guestShellProps} />;
+        }
         return <div className="h-screen w-screen flex items-center justify-center bg-gray-100 dark:bg-gray-900"><p className="text-gray-500 dark:text-gray-400">Loading...</p></div>;
     }
 
@@ -1293,87 +1377,11 @@ const AppContent: React.FC = () => {
 
         /** Guest deep links (/privacy, /terms, …): URL sync sets `activePage` but landing-only branch hid these pages. */
         const standaloneGuestPages: readonly Page[] = ['privacy', 'terms', 'faq', 'dataDeletion', 'pricing'];
-        if (standaloneGuestPages.includes(activePage)) {
-            const guestStandaloneMain =
-                activePage === 'privacy' ? (
-                    <Privacy />
-                ) : activePage === 'terms' ? (
-                    <Terms />
-                ) : activePage === 'faq' ? (
-                    <FAQ />
-                ) : activePage === 'dataDeletion' ? (
-                    <DataDeletion />
-                ) : (
-                    <Pricing
-                        onGetStartedClick={() => {
-                            setLoginModalInitialView('signup');
-                            setIsLoginModalOpen(true);
-                        }}
-                        onNavigateRequest={handleNavigateRequest}
-                    />
-                );
-
-            return (
-                <>
-                    <PublicAnnouncementBanner />
-                    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex flex-col">
-                        <header className="border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-4 sm:px-6 py-4 shrink-0">
-                            <div className="max-w-6xl mx-auto flex flex-wrap items-center justify-between gap-3">
-                                <button
-                                    type="button"
-                                    onClick={() => {
-                                        try {
-                                            window.history.replaceState({}, '', '/');
-                                        } catch {
-                                            /* ignore */
-                                        }
-                                        setActivePage('dashboard');
-                                    }}
-                                    className="text-lg font-bold text-primary-600 hover:text-primary-700 dark:text-primary-400"
-                                >
-                                    EchoFlux.ai
-                                </button>
-                                <div className="flex items-center gap-3">
-                                    <button
-                                        type="button"
-                                        onClick={() => {
-                                            setLoginModalInitialView('login');
-                                            setIsLoginModalOpen(true);
-                                        }}
-                                        className="text-sm font-medium text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white"
-                                    >
-                                        Sign in
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={() => {
-                                            setLoginModalInitialView('signup');
-                                            setIsLoginModalOpen(true);
-                                        }}
-                                        className="text-sm font-medium px-3 py-2 rounded-md bg-primary-600 text-white hover:bg-primary-700"
-                                    >
-                                        Get Started
-                                    </button>
-                                </div>
-                            </div>
-                        </header>
-                        <main className="flex-1 p-4 sm:p-6">{guestStandaloneMain}</main>
-                    </div>
-                    {isLoginModalOpen && (
-                        <LoginModal
-                            isOpen={isLoginModalOpen}
-                            onClose={() => {
-                                setIsLoginModalOpen(false);
-                                if (!isAuthenticated) {
-                                    setSelectedPlan(null);
-                                }
-                            }}
-                            initialView={loginModalInitialView}
-                            selectedPlan={selectedPlan || undefined}
-                        />
-                    )}
-                </>
-            );
+        const guestPage = standaloneGuestPages.includes(activePage)
+            ? activePage
+            : guestPageFromPath;
+        if (guestPage && standaloneGuestPages.includes(guestPage)) {
+            return <GuestStandaloneShell page={guestPage} {...guestShellProps} />;
         }
 
         return (
@@ -1493,8 +1501,6 @@ const AppContent: React.FC = () => {
             <PaymentModal />
             {toast && <Toast message={toast.message} type={toast.type} />}
             <UnifiedAssistant />
-            {/* VoiceAssistant is now integrated into UnifiedAssistant for admins - only show separate button if needed for non-admins */}
-            {user && (user as any)?.role !== 'Admin' && <VoiceAssistant />}
         </div>
     );
 }

@@ -1,9 +1,11 @@
 import React, { useEffect, useState } from "react";
 import type { InnerCircleFunnel as InnerCircleFunnelData } from "../../types/creatorOS";
 import { DEFAULT_INNER_CIRCLE_FUNNEL } from "../../lib/creatorOS";
+import { useCreatorOSDisplay } from "./CreatorOSDisplayContext";
 
 type Props = {
   funnel: InnerCircleFunnelData | null;
+  defaultFunnel?: InnerCircleFunnelData;
   onSave: (funnel: InnerCircleFunnelData) => Promise<void> | void;
 };
 
@@ -50,13 +52,15 @@ const funnelFields = [
   },
 ] as const;
 
-export const InnerCircleFunnel: React.FC<Props> = ({ funnel, onSave }) => {
-  const [draft, setDraft] = useState<InnerCircleFunnelData>(funnel || DEFAULT_INNER_CIRCLE_FUNNEL);
+export const InnerCircleFunnel: React.FC<Props> = ({ funnel, defaultFunnel, onSave }) => {
+  const { paidMemberHubLabel } = useCreatorOSDisplay();
+  const seedFunnel = defaultFunnel || DEFAULT_INNER_CIRCLE_FUNNEL;
+  const [draft, setDraft] = useState<InnerCircleFunnelData>(funnel || seedFunnel);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    setDraft(funnel || DEFAULT_INNER_CIRCLE_FUNNEL);
-  }, [funnel]);
+    setDraft(funnel || seedFunnel);
+  }, [funnel, seedFunnel]);
 
   const updateList = (field: "first48HourPlan" | "weeklyRetentionPlan" | "treatUpsellIdeas", value: string) => {
     setDraft({ ...draft, [field]: value.split("\n").map((line) => line.trim()).filter(Boolean) });
@@ -76,8 +80,8 @@ export const InnerCircleFunnel: React.FC<Props> = ({ funnel, onSave }) => {
       <div className="border-b border-primary-100 bg-gradient-to-r from-primary-50 via-white to-pink-50 p-4 text-gray-900 dark:border-gray-700 dark:from-gray-900 dark:via-gray-900 dark:to-primary-950/20 dark:text-white">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div>
-            <p className="text-xs font-bold uppercase tracking-[0.2em] text-primary-600 dark:text-primary-300">Inner Circle money flow</p>
-            <h2 className="mt-1 text-xl font-bold">Inner Circle Funnel</h2>
+            <p className="text-xs font-bold uppercase tracking-[0.2em] text-primary-600 dark:text-primary-300">{paidMemberHubLabel} money flow</p>
+            <h2 className="mt-1 text-xl font-bold">{paidMemberHubLabel} funnel</h2>
             <p className="mt-1 max-w-3xl text-xs leading-relaxed text-gray-600 dark:text-gray-300">
               Turn new subscribers into retained members with a welcome post, first 48-hour plan, weekly rhythm, and Treat prompts.
             </p>

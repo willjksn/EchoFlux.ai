@@ -1,5 +1,6 @@
-import React from "react";
+import React, { useMemo } from "react";
 import type { WeeklyPlan, WeeklyPlanDayKey } from "../../types/creatorOS";
+import { useCreatorOSDisplay } from "./CreatorOSDisplayContext";
 
 type Props = {
   plan: WeeklyPlan | null;
@@ -10,32 +11,6 @@ type Props = {
 
 const days: WeeklyPlanDayKey[] = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"];
 
-const fieldConfig = {
-  publicPost: {
-    label: "Public post",
-    shortLabel: "Public",
-    accent: "from-primary-500 to-pink-500",
-    border: "border-primary-100 dark:border-primary-900/40",
-    bg: "bg-primary-50/70 dark:bg-primary-950/20",
-    helper: "Film and post the attention piece.",
-  },
-  storyLink: {
-    label: "Story / Amazon",
-    shortLabel: "Story",
-    accent: "from-amber-500 to-orange-500",
-    border: "border-amber-100 dark:border-amber-900/40",
-    bg: "bg-amber-50/70 dark:bg-amber-950/20",
-    helper: "Move attention into clicks, replies, or product interest.",
-  },
-  innerCircleDrop: {
-    label: "Inner Circle / Retention",
-    shortLabel: "Inner",
-    accent: "from-emerald-500 to-teal-500",
-    border: "border-emerald-100 dark:border-emerald-900/40",
-    bg: "bg-emerald-50/70 dark:bg-emerald-950/20",
-    helper: "Give members the closer, private, or retention follow-up.",
-  },
-} as const;
 
 const dayFocus: Record<WeeklyPlanDayKey, string> = {
   monday: "Attention starter",
@@ -48,6 +23,39 @@ const dayFocus: Record<WeeklyPlanDayKey, string> = {
 };
 
 export const WeeklyPlanView: React.FC<Props> = ({ plan, onChange, onSave, onGenerate }) => {
+  const { showAmazonAffiliate, paidMemberHubLabel } = useCreatorOSDisplay();
+  const fieldConfig = useMemo(
+    () => ({
+      publicPost: {
+        label: "Public post",
+        shortLabel: "Public",
+        accent: "from-primary-500 to-pink-500",
+        border: "border-primary-100 dark:border-primary-900/40",
+        bg: "bg-primary-50/70 dark:bg-primary-950/20",
+        helper: "Film and post the attention piece.",
+      },
+      storyLink: {
+        label: showAmazonAffiliate ? "Story / Amazon" : "Story link",
+        shortLabel: "Story",
+        accent: "from-amber-500 to-orange-500",
+        border: "border-amber-100 dark:border-amber-900/40",
+        bg: "bg-amber-50/70 dark:bg-amber-950/20",
+        helper: showAmazonAffiliate
+          ? "Move attention into clicks, replies, or product interest."
+          : "Move attention into clicks, replies, or My Page.",
+      },
+      innerCircleDrop: {
+        label: `${paidMemberHubLabel} / Retention`,
+        shortLabel: "Members",
+        accent: "from-emerald-500 to-teal-500",
+        border: "border-emerald-100 dark:border-emerald-900/40",
+        bg: "bg-emerald-50/70 dark:bg-emerald-950/20",
+        helper: "Give paid members the closer or retention follow-up.",
+      },
+    }),
+    [paidMemberHubLabel, showAmazonAffiliate],
+  );
+
   if (!plan) {
     return (
       <section className="overflow-hidden rounded-2xl border border-primary-100 bg-white shadow-lg dark:border-primary-900/40 dark:bg-gray-800">
@@ -115,10 +123,10 @@ export const WeeklyPlanView: React.FC<Props> = ({ plan, onChange, onSave, onGene
             <span className="font-bold">1. Public:</span> get attention with one repeatable post.
           </div>
           <div className="rounded-xl border border-amber-100 bg-white/80 p-3 text-amber-900 shadow-sm dark:border-amber-900/40 dark:bg-gray-800/80 dark:text-amber-100">
-            <span className="font-bold">2. Story/Amazon:</span> turn views into clicks or replies.
+            <span className="font-bold">2. {showAmazonAffiliate ? "Story/Amazon" : "Story"}:</span> turn views into clicks or replies.
           </div>
           <div className="rounded-xl border border-emerald-100 bg-white/80 p-3 text-emerald-900 shadow-sm dark:border-emerald-900/40 dark:bg-gray-800/80 dark:text-emerald-100">
-            <span className="font-bold">3. Inner Circle:</span> convert or retain paid members.
+            <span className="font-bold">3. {paidMemberHubLabel}:</span> convert or retain paid members.
           </div>
         </div>
       </div>

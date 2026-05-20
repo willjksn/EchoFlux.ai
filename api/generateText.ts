@@ -4,6 +4,13 @@ import { getModelForTask } from "./_modelRouter.js";
 import { getModel, parseJSON } from "./_geminiShared.js";
 import { getOnlyFansResearchContext } from "./_onlyfansResearch.js";
 import { getOnlyFansWeeklyTrends } from "./_trendsHelper.js";
+import {
+  buildCreatorPersonalityBlock,
+  buildMemberHubNicheLine,
+  getMemberHubToneGuidance,
+  getMemberHubTrendsContext,
+  MEMBER_HUB_RETENTION_SYSTEM,
+} from "./_memberHubContentContext.js";
 import { enforceRateLimit } from "./_rateLimit.js";
 import { getEmojiInstructions, getEmojiExamplesForTone } from "./_emojiHelper.js";
 import { getAdminDb } from "./_firebaseAdmin.js";
@@ -56,7 +63,7 @@ async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
   });
   if (!ok) return;
 
-  const { prompt, context, emojiEnabled, emojiIntensity } = req.body || {};
+  const { prompt, context, emojiEnabled, emojiIntensity, niche: bodyNiche, analyticsData } = req.body || {};
 
   if (!prompt || typeof prompt !== "string") {
     res.status(400).json({ error: "Missing or invalid 'prompt'" });
@@ -90,15 +97,52 @@ async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
       ? ` for ${platforms.join(', ')}` 
       : '';
 
-    // Detect explicit content context
-    const isExplicitContent = tone === 'Explicit/Adult Content' || 
-                             tone === 'Explicit' ||
-                             tone === 'Sexy / Explicit' ||
-                             tone === 'Sexy / Bold' ||
-                             (Array.isArray(platforms) && platforms.includes('OnlyFans'));
+    const isMemberHub =
+      context?.contentMode === "member_hub" ||
+      (Array.isArray(platforms) &&
+        platforms.some((p: string) => String(p).toLowerCase() === "my page"));
+
+    // Detect explicit content context (legacy Premium Studio / OnlyFans paths only)
+    const isExplicitContent =
+      !isMemberHub &&
+      (tone === "Explicit/Adult Content" ||
+        tone === "Explicit" ||
+        tone === "Sexy / Explicit" ||
+        tone === "Sexy / Bold" ||
+        (Array.isArray(platforms) && platforms.includes("OnlyFans")));
 
     // Detect if this is for OnlyFans platform
-    const isOnlyFansPlatform = Array.isArray(platforms) && platforms.includes('OnlyFans');
+    const isOnlyFansPlatform =
+      !isMemberHub && Array.isArray(platforms) && platforms.includes("OnlyFans");
+
+    let memberHubTrends = "";
+    let memberHubBlock = "";
+    if (isMemberHub) {
+      const explicitnessLevel = userData?.explicitnessLevel ?? 6;
+      try {
+        memberHubTrends = await getMemberHubTrendsContext();
+      } catch (e) {
+        console.warn("[generateText] Member hub trends unavailable:", e);
+      }
+      const userNiche = bodyNiche || context?.niche || userData?.niche;
+      let analyticsSnippet = "";
+      if (analyticsData && typeof analyticsData === "object") {
+        const topTopics = analyticsData.topTopics?.slice?.(0, 5)?.join(", ");
+        const topTypes = analyticsData.topContentTypes?.join?.(", ");
+        if (topTopics || topTypes) {
+          analyticsSnippet = `\nWhat's working for this creator: ${[topTopics && `topics: ${topTopics}`, topTypes && `formats: ${topTypes}`].filter(Boolean).join("; ")}.`;
+        }
+      }
+      memberHubBlock = `
+${MEMBER_HUB_RETENTION_SYSTEM}
+
+${buildMemberHubNicheLine(userNiche)}
+${getMemberHubToneGuidance(explicitnessLevel)}
+${analyticsSnippet}
+
+${memberHubTrends ? `WEEKLY TREND CONTEXT (Mon/Thu — Instagram, TikTok, X, and creator platforms):\n${memberHubTrends}` : ""}
+`.trim();
+    }
     
     // Get user explicitness level and OnlyFans-specific research if OnlyFans platform is detected
     let onlyfansResearch = '';
@@ -153,19 +197,43 @@ CRITICAL CONTEXT - ONLYFANS ADULT/EXPLICIT CONTENT PLATFORM:
 ${explicitnessContext ? `\nEXPLICITNESS LEVEL: ${explicitnessLevel}/10\n${explicitnessContext}` : ''}
 ` : '';
 
-    const aiPrompt = `
-You are an expert social media copywriter and content creator${isExplicitContent || isOnlyFansPlatform ? ' specializing in OnlyFans adult content platforms' : ''}.
+    const personalityText =
+      (typeof bodyPersonality === "string" ? bodyPersonality : "") ||
+      (typeof userData?.creatorPersonality === "string" ? userData.creatorPersonality : "") ||
+      (typeof userData?.settings?.creatorPersonality === "string"
+        ? userData.settings.creatorPersonality
+        : "");
+    const personalityBlock = buildCreatorPersonalityBlock(
+      personalityText,
+      Boolean(prioritizeCreatorPersonality),
+    );
 
-${isOnlyFansPlatform ? onlyfansWeeklyTrends : ''}
+    const aiPrompt = `
+${personalityBlock ? `${personalityBlock}\n\n` : ""}You are an expert social media copywriter and content creator${
+      isMemberHub
+        ? " specializing in paid member hubs and subscriber retention"
+        : isExplicitContent || isOnlyFansPlatform
+          ? " specializing in OnlyFans adult content platforms"
+          : ""
+    }.
+
+${isMemberHub ? memberHubBlock : isOnlyFansPlatform ? onlyfansWeeklyTrends : ""}
 
 User wants you to write: "${prompt}"
-${context?.goal ? `Goal: ${goal}` : ''}
-${context?.tone ? `Tone: ${tone}${isExplicitContent || isOnlyFansPlatform ? ' (ONLYFANS EXPLICIT/ADULT CONTENT - Generate bold, explicit sexual content focused on lust, desire, girlfriend experience, and intimate moments)' : ''}` : ''}
-${platformContext ? `Platforms: ${platformContext}` : ''}
+${context?.goal ? `Goal: ${isMemberHub && goal === "content-ideas" ? "member-retention" : goal}` : ""}
+${context?.tone ? `Tone: ${tone}${isExplicitContent || isOnlyFansPlatform ? " (ONLYFANS EXPLICIT/ADULT CONTENT - Generate bold, explicit sexual content focused on lust, desire, girlfriend experience, and intimate moments)" : isMemberHub ? " (member engagement — follow tone ceiling above)" : ""}` : ""}
+${platformContext ? `Platforms: ${platformContext}` : ""}
 
-${onlyfansResearch ? `ONLYFANS-SPECIFIC RESEARCH & BEST PRACTICES:\n${onlyfansResearch}\n` : ''}
+${!isMemberHub && onlyfansResearch ? `ONLYFANS-SPECIFIC RESEARCH & BEST PRACTICES:\n${onlyfansResearch}\n` : ""}
 
-${explicitContext}
+${!isMemberHub ? explicitContext : ""}
+
+${isMemberHub ? `
+MEMBER HUB POST IDEAS:
+- Prioritize ideas that build habit, replies, and perceived value so members stay subscribed.
+- Include a mix: free connection posts, exclusive drops, polls, BTS, and soft PPV teases — not only sexual themes.
+- Respect the tone ceiling — never graphic explicit content.
+` : ""}
 
 ${isOnlyFansPlatform ? `
 ONLYFANS CONTENT REQUIREMENTS:
@@ -180,14 +248,12 @@ ONLYFANS CONTENT REQUIREMENTS:
 Write the content the user requested. Be engaging, authentic, and match the tone and goal specified.
 If the user wants a caption, write a complete caption ready to use.
 If the user wants other text content, write exactly what they asked for.
-${isExplicitContent || isOnlyFansPlatform ? 'If explicit content is requested, write it with bold, explicit, adult-oriented language focused on sexual experiences, intimate moments, girlfriend experience, lust, and desire. Be descriptive and explicit about intimate/explicit sexual content.' : ''}
+${isMemberHub ? "Ideas should feel fresh, personal, and worth opening the app for — reduce unsubscribe risk." : isExplicitContent || isOnlyFansPlatform ? "If explicit content is requested, write it with bold, explicit, adult-oriented language focused on sexual experiences, intimate moments, girlfriend experience, lust, and desire. Be descriptive and explicit about intimate/explicit sexual content." : ""}
 
-CREATOR PERSONALITY (USE WHEN RELEVANT - CONSISTENT FOR COMPOSE AND PREMIUM CONTENT STUDIO):
-- Use ONLY the creator personality text provided in the prompt for THIS user. Never use example values, sample text, or placeholder data as if it were this user's data.
-- Use personality when RELEVANT to the request: brand voice, tone, style, preferences. Do NOT force physical attributes (height, weight, body measurements, bust size, etc.) into every response.
-- Physical attributes should ONLY be used when the user explicitly asks (e.g. "describe myself", "describe me") or when the content naturally calls for it (e.g. roleplay). Most content does not require repeating physical stats.
-- When the user asks to "describe myself", "describe yourself", "describe me", or similar, incorporate relevant information from the personality description. For other requests, use tone and style; reserve physical/details for when relevant.
-- Weave personality in when it enhances the content—not forced. Do not overwrite or ignore the user's own instructions in favor of personality.
+${prioritizeCreatorPersonality && personalityText.trim() ? "Follow CREATOR PERSONALITY above for voice on every line. " : ""}CREATOR PERSONALITY (additional guidance):
+- Use ONLY this user's personality text. Never invent placeholder persona details.
+- Do NOT force physical stats into every response unless the user asks or the idea requires it.
+- When Personality Override is ON, personality wins over generic tone sliders and default explicit framing.
 
 ${getEmojiInstructions({ enabled: emojiEnabled !== false, intensity: emojiIntensity ?? 5 })}${emojiEnabled !== false ? ` Choose emojis that match the tone (examples: ${getEmojiExamplesForTone(tone)}). Emojis should enhance the content naturally.` : ''}
 

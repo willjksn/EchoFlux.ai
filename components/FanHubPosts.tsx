@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback, useEffect, useMemo } from "react";
+import React, { useState, useRef, useCallback, useEffect, useMemo, lazy, Suspense } from "react";
 import { useAppContext } from "./AppContext";
 import { ref, uploadBytes, uploadBytesResumable, getDownloadURL } from "firebase/storage";
 import {
@@ -44,8 +44,101 @@ import { canUseSjHeartEmoji } from "../src/lib/customEmoji";
 import { maybeTrimVideoForCaption } from "../src/lib/videoCaptionClip";
 import { resolveApiUrl, DEV_API_404_USER_HINT } from "../src/lib/resolveApiUrl";
 import type { LiveStreamEventStatus, LiveStreamPromoOnPost } from "../types";
-import { hasLiveStreamAccess } from "../src/utils/planAccess";
+import { hasLiveStreamAccess, hasPremiumStudioRouteAccess } from "../src/utils/planAccess";
+import { ErrorBoundary } from "./ErrorBoundary";
+import { ECHOFLUX_ELITE_MONTHLY_USD } from "../constants";
 import { LiveStreamWatchRoom } from "./LiveStreamWatchRoom";
+
+const OnlyFansContentBrain = lazy(() =>
+  import("./OnlyFansContentBrain").then((m) => ({ default: m.OnlyFansContentBrain }))
+);
+
+type PostsAiPanel = "ideas" | "drops";
+
+const POSTS_AI_UPGRADE_COPY: Record<
+  PostsAiPanel,
+  { title: string; summary: string; bullets: string[] }
+> = {
+  ideas: {
+    title: "Post ideas",
+    summary:
+      "Elite AI for My Page—fresh hooks, formats, and angles for your fan feed. Tap any idea to open the post composer with a caption ready to edit.",
+    bullets: [
+      "My Page only (Plan covers Instagram, Facebook, and X)",
+      "Retention-first My Page ideas using weekly trends + your niche",
+      "One tap from idea to published or scheduled post",
+    ],
+  },
+  drops: {
+    title: "Drops & PPV plan",
+    summary:
+      "Elite planning for monetized My Page content—map drops, PPV, and locked posts so you know what to publish and when.",
+    bullets: [
+      "Weekly drop and PPV plan focused on keeping members subscribed",
+      "Mix connection posts, exclusives, and soft monetization — not only explicit themes",
+      "Turn plan items into posts from Fan Hub",
+    ],
+  },
+};
+
+function FanHubPostsEliteUpgradePanel({
+  panel,
+  onBack,
+  onViewPlans,
+  onUpgrade,
+}: {
+  panel: PostsAiPanel;
+  onBack: () => void;
+  onViewPlans: () => void;
+  onUpgrade: () => void;
+}) {
+  const copy = POSTS_AI_UPGRADE_COPY[panel];
+  return (
+    <div className="max-w-2xl mx-auto py-8 px-4 sm:px-6">
+      <div className="rounded-2xl border border-primary-200/80 dark:border-primary-800/60 bg-gradient-to-b from-primary-50/90 to-white dark:from-primary-950/30 dark:to-gray-900 p-8 shadow-sm text-center">
+        <p className="text-xs font-semibold uppercase tracking-wide text-primary-600 dark:text-primary-400">Elite feature</p>
+        <h3 className="mt-2 text-2xl font-bold text-gray-900 dark:text-white">{copy.title}</h3>
+        <p className="mt-3 text-sm text-gray-600 dark:text-gray-300 leading-relaxed">{copy.summary}</p>
+        <ul className="mt-6 text-left space-y-2.5 max-w-md mx-auto">
+          {copy.bullets.map((item) => (
+            <li key={item} className="flex items-start gap-2 text-sm text-gray-700 dark:text-gray-300">
+              <span className="text-primary-500 mt-0.5 shrink-0" aria-hidden>
+                •
+              </span>
+              <span>{item}</span>
+            </li>
+          ))}
+        </ul>
+        <p className="mt-6 text-xs text-gray-500 dark:text-gray-400">
+          Your Pro plan includes Fan Hub publishing, store, messages, and analytics. Elite adds these My Page planning tools.
+        </p>
+        <div className="mt-8 flex flex-col sm:flex-row gap-3 justify-center">
+          <button
+            type="button"
+            onClick={onUpgrade}
+            className="px-6 py-2.5 rounded-lg bg-primary-600 text-white text-sm font-semibold hover:bg-primary-700"
+          >
+            Upgrade to Elite
+          </button>
+          <button
+            type="button"
+            onClick={onViewPlans}
+            className="px-6 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 text-sm font-medium hover:bg-gray-50 dark:hover:bg-gray-800"
+          >
+            Compare plans
+          </button>
+        </div>
+        <button
+          type="button"
+          onClick={onBack}
+          className="mt-4 text-sm font-medium text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300"
+        >
+          Back to feed
+        </button>
+      </div>
+    </div>
+  );
+}
 import {
   isProtectedLockedMediaUrl,
   publicMediaUrlsForLockedPost,
@@ -530,7 +623,9 @@ function rememberStoredFanHubCaption(mediaFingerprint: string, caption: string) 
 }
 
 export const FanHubPosts: React.FC = () => {
-  const { user, showToast, setActivePage } = useAppContext();
+  const { user, showToast, setActivePage, openPaymentModal } = useAppContext();
+  const hasPostsAiAccess = hasPremiumStudioRouteAccess(user);
+  const [postsAiPanel, setPostsAiPanel] = useState<PostsAiPanel | null>(null);
   const premiumTab = usePremiumStudioTab();
   const pendingFeedPostId = premiumTab?.pendingFeedPostId ?? null;
   const clearPendingFeedPostId = premiumTab?.clearPendingFeedPostId;
@@ -615,7 +710,7 @@ export const FanHubPosts: React.FC = () => {
     }
 
     const first = visualEntries[0]!;
-    return { url: first.url, type: first.type };
+    return { url: first.url, type: first.type as "image" | "video" };
   }, [media, lockEnabled, lockPreviewMediaIndex]);
   
   // Poll
@@ -914,9 +1009,25 @@ export const FanHubPosts: React.FC = () => {
       setCaption(pendingCaption);
       setShowComposer(true);
       localStorage.removeItem('fanHubPendingCaption');
-      showToast?.('Caption loaded from New Ideas!', 'success');
+      showToast?.('Caption loaded from post ideas!', 'success');
     }
   }, [showToast]);
+
+  // Deep link: /fan-hub?tab=posts&postsPanel=ideas|drops (legacy /studio redirects)
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    const panel = params.get("postsPanel");
+    if (panel !== "ideas" && panel !== "drops") return;
+    setPostsAiPanel(panel);
+    params.delete("postsPanel");
+    const next = `${window.location.pathname}?${params.toString()}`.replace(/\?$/, "");
+    window.history.replaceState({}, "", next || window.location.pathname);
+  }, []);
+
+  const openPostsAiPanel = useCallback((panel: PostsAiPanel) => {
+    setPostsAiPanel(panel);
+  }, []);
 
   // File upload handler - uploads to vault immediately for persistence
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -2239,23 +2350,113 @@ Write 2-4 sentences that are engaging and on-topic.`;
     );
   }
 
+  const inPostsPlanningView = postsAiPanel != null;
+
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h2 className="text-xl font-bold text-gray-900 dark:text-white">Fan Page Posts</h2>
-          <p className="text-sm text-gray-500 dark:text-gray-400">Create and manage posts for your fan page feed</p>
+          <p className="text-sm text-gray-500 dark:text-gray-400">
+            {inPostsPlanningView
+              ? !hasPostsAiAccess
+                ? "See what Elite unlocks for My Page planning."
+                : postsAiPanel === "ideas"
+                  ? "Plan what to post on My Page — return to the feed when you are ready."
+                  : "Plan drops and PPV for My Page — return to the feed when you are ready."
+              : "Create and manage posts for your fan page feed"}
+          </p>
         </div>
-        <button
-          type="button"
-          onClick={() => setShowComposer(true)}
-          className="flex items-center gap-2 px-4 py-2 fh-btn transition font-medium"
-        >
-          <PlusIcon />
-          New Post
-        </button>
+        <div className="flex flex-wrap items-center gap-2 shrink-0">
+          <button
+            type="button"
+            onClick={() => openPostsAiPanel("ideas")}
+            className={`fh-posts-plan-tab flex items-center gap-2 px-3 py-2 rounded-lg border text-sm font-medium transition ${
+              postsAiPanel === "ideas" ? "fh-posts-plan-tab--active" : ""
+            }`}
+          >
+            <SparklesIcon />
+            Post ideas
+            {!hasPostsAiAccess ? (
+              <span className="text-[10px] font-semibold uppercase text-primary-600">Elite</span>
+            ) : null}
+          </button>
+          <button
+            type="button"
+            onClick={() => openPostsAiPanel("drops")}
+            className={`fh-posts-plan-tab flex items-center gap-2 px-3 py-2 rounded-lg border text-sm font-medium transition ${
+              postsAiPanel === "drops" ? "fh-posts-plan-tab--active" : ""
+            }`}
+          >
+            Drop plan
+            {!hasPostsAiAccess ? (
+              <span className="text-[10px] font-semibold uppercase text-primary-600">Elite</span>
+            ) : null}
+          </button>
+          <button
+            type="button"
+            onClick={() => setShowComposer(true)}
+            className="flex items-center gap-2 px-4 py-2 fh-btn transition font-medium"
+          >
+            <PlusIcon />
+            New Post
+          </button>
+        </div>
       </div>
+
+      {postsAiPanel ? (
+        <div className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 shadow-sm overflow-hidden flex flex-col min-h-[calc(100vh-11rem)]">
+          <div className="flex items-center justify-between gap-3 border-b border-gray-200 dark:border-gray-700 px-4 py-3 bg-gray-50/80 dark:bg-gray-800/50 shrink-0">
+            <div>
+              <h3 className="text-sm font-semibold text-gray-900 dark:text-white">
+                {postsAiPanel === "ideas" ? "Post ideas" : "Drops & PPV plan"}
+              </h3>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                {!hasPostsAiAccess
+                  ? "Included with Elite — upgrade to unlock this planner for My Page."
+                  : postsAiPanel === "ideas"
+                    ? "My Page only. Pick an idea to open the composer with a caption ready to edit."
+                    : "Map drops and PPV for your fan page, then turn plan items into posts."}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setPostsAiPanel(null)}
+              className="fh-outline-btn text-sm font-medium px-3 py-1.5 rounded-lg border"
+            >
+              Back to feed
+            </button>
+          </div>
+          <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar p-4">
+            {!hasPostsAiAccess ? (
+              <FanHubPostsEliteUpgradePanel
+                panel={postsAiPanel}
+                onBack={() => setPostsAiPanel(null)}
+                onViewPlans={() => setActivePage("pricing")}
+                onUpgrade={() =>
+                  openPaymentModal?.({ name: "Elite", price: ECHOFLUX_ELITE_MONTHLY_USD, cycle: "monthly" })
+                }
+              />
+            ) : (
+              <ErrorBoundary>
+                <Suspense
+                  fallback={
+                    <p className="py-12 text-center text-sm text-gray-500 dark:text-gray-400">Loading AI tools…</p>
+                  }
+                >
+                  <OnlyFansContentBrain
+                    key={postsAiPanel}
+                    initialTab={postsAiPanel === "ideas" ? "postIdeas" : "monetizationPlanner"}
+                    singleTabMode
+                    fanHubContext
+                  />
+                </Suspense>
+              </ErrorBoundary>
+            )}
+          </div>
+        </div>
+      ) : null}
 
       {/* Post Composer */}
       {showComposer && (
@@ -3524,22 +3725,24 @@ Write 2-4 sentences that are engaging and on-topic.`;
         </div>
       )}
 
-      {/* Feed Admin View — min-w-0 avoids flex children expanding page width/height oddly */}
-      <div className="min-w-0">
-        <FanHubFeed
-          isAdminMode
-          onEditPostRequest={openComposerForEdit}
-          liveStreamCreatorBroadcast={{
-            onGoLive: (streamId) => void runLiveStreamDaily("goLive", streamId),
-            onEndStream: (streamId) => void runLiveStreamDaily("endLive", streamId),
-            onOpenBroadcast: (streamId) => setLiveStreamBroadcast({ streamId }),
-            dailyBusy: liveStreamDailyBusy,
-          }}
-          liveStreamHostActiveStreamId={liveStreamBroadcast?.streamId ?? null}
-          deeplinkScrollToPostId={feedDeeplinkPostId}
-          onDeeplinkScrollToPostConsumed={() => setFeedDeeplinkPostId(null)}
-        />
-      </div>
+      {/* Feed hidden while Post ideas / Drop plan planning is open */}
+      {!inPostsPlanningView ? (
+        <div className="min-w-0">
+          <FanHubFeed
+            isAdminMode
+            onEditPostRequest={openComposerForEdit}
+            liveStreamCreatorBroadcast={{
+              onGoLive: (streamId) => void runLiveStreamDaily("goLive", streamId),
+              onEndStream: (streamId) => void runLiveStreamDaily("endLive", streamId),
+              onOpenBroadcast: (streamId) => setLiveStreamBroadcast({ streamId }),
+              dailyBusy: liveStreamDailyBusy,
+            }}
+            liveStreamHostActiveStreamId={liveStreamBroadcast?.streamId ?? null}
+            deeplinkScrollToPostId={feedDeeplinkPostId}
+            onDeeplinkScrollToPostConsumed={() => setFeedDeeplinkPostId(null)}
+          />
+        </div>
+      ) : null}
 
       {liveStreamBroadcast && creatorId ? (
         <LiveStreamWatchRoom

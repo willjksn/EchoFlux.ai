@@ -13,6 +13,7 @@ import {
   updateDoc,
 } from "firebase/firestore";
 import { auth, db } from "../../firebaseConfig";
+import { WITME_FIRST_CREATOR_SLUG } from "./witmeFirstCreator";
 import type {
   AmazonLink,
   ContentIdea,
@@ -83,18 +84,66 @@ export function defaultCreatorOSSettings(): CreatorOSSettings {
   return {
     primaryGoal: "story_clicks",
     primaryAudience: "mostly_men",
-    preferredLanes: ["smirk_curiosity", "car_driving", "amazon_soft_mention", "inner_circle_tease"],
+    preferredLanes: ["smirk_curiosity", "car_driving", "inner_circle_tease"],
     availableTime: "15_minutes",
-    monetizationPaths: ["amazon_links", "inner_circle_subscriptions", "treats"],
+    monetizationPaths: ["inner_circle_subscriptions", "treats"],
     weeklyPublicPostsTarget: 4,
     weeklyStoriesTarget: 6,
     weeklyInnerCircleDropsTarget: 3,
-    weeklyAmazonLinksTarget: 3,
+    weeklyAmazonLinksTarget: 0,
     brandTone: defaultBrandTone,
     filmingDays: ["monday", "thursday", "saturday"],
-    mainMonetization: ["amazon_links", "inner_circle_subscriptions"],
+    mainMonetization: ["inner_circle_subscriptions"],
+    amazonAffiliateEnabled: false,
   };
 }
+
+/** Stormijxo keeps legacy Amazon + Inner Circle naming. */
+export function isLegacyCreatorOSProfile(handle?: string | null): boolean {
+  return (handle || "").trim().toLowerCase() === WITME_FIRST_CREATOR_SLUG;
+}
+
+export function resolveAmazonAffiliateEnabled(
+  settings: CreatorOSSettings | null | undefined,
+  handle?: string | null,
+  existingAmazonLinkCount = 0,
+): boolean {
+  if (isLegacyCreatorOSProfile(handle)) return true;
+  if (settings?.amazonAffiliateEnabled === true) return true;
+  if (existingAmazonLinkCount > 0) return true;
+  return false;
+}
+
+export function resolvePaidMemberHubLabel(
+  settings: CreatorOSSettings | null | undefined,
+  handle?: string | null,
+): string {
+  const custom = settings?.paidMemberHubLabel?.trim();
+  if (custom) return custom;
+  if (isLegacyCreatorOSProfile(handle)) return "Inner Circle";
+  return "Paid members";
+}
+
+/** Neutral defaults for new creators (not Stormij's voice). */
+export const GENERIC_PAID_MEMBER_FUNNEL: InnerCircleFunnel = {
+  welcomeScript: `Thanks for joining — this is where I post the closer, members-only version of what I share publicly.
+
+I'll drop updates here a few times a week: extra context, voice notes, and posts that don't belong on my public feed.
+
+Reply anytime — it helps me know what you want more of.`,
+  first48HourPlan: [
+    "Post 1: Welcome + what members get",
+    "Post 2: Behind-the-scenes or personality moment",
+    "Post 3: Ask what they want to see next",
+  ],
+  weeklyRetentionPlan: ["1 member-only post", "1 closer / exclusive drop", "1 check-in or voice note"],
+  treatUpsellIdeas: [
+    "Voice note reply",
+    "Custom thank-you post",
+    "Priority DM window",
+    "Personal shoutout",
+  ],
+};
 
 export const DEFAULT_INNER_CIRCLE_FUNNEL: InnerCircleFunnel = {
   welcomeScript: `Okay... so if you're here, you were curious. And instead of just watching, you clicked. I like that.
@@ -124,6 +173,10 @@ Just don't make it weird... and we're good.`,
     "Scheduled video call",
   ],
 };
+
+export function defaultPaidMemberFunnelForCreator(handle?: string | null): InnerCircleFunnel {
+  return isLegacyCreatorOSProfile(handle) ? DEFAULT_INNER_CIRCLE_FUNNEL : GENERIC_PAID_MEMBER_FUNNEL;
+}
 
 function creatorOSCollection(uid: string, name: string) {
   return collection(db, "users", uid, "creatorOS", name, "items");

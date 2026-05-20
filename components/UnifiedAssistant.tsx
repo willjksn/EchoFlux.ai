@@ -58,9 +58,13 @@ export const UnifiedAssistant: React.FC = () => {
   const { user, showToast, settings, setActivePage } = useAppContext();
   
   // Check if user is admin
-  const isAdmin = (user as any)?.role === 'Admin';
-  
+  const isAdmin = (user as { role?: string })?.role === 'Admin';
+
   const [mode, setMode] = useState<AssistantMode>('text');
+
+  useEffect(() => {
+    if (!isAdmin && mode === 'voice') setMode('text');
+  }, [isAdmin, mode]);
   const [isOpen, setIsOpen] = useState(false);
   
   // Text mode state

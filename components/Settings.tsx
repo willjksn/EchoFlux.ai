@@ -1,4 +1,4 @@
-import React, { useState, useRef, useMemo, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useMemo, useEffect, useCallback, lazy, Suspense } from 'react';
 import { Settings as AppSettings, Platform, CustomVoice, SocialAccount } from '../types';
 import { OFFLINE_MODE, CONNECTION_VISIBLE_PLATFORMS, ANALYTICS_ENABLED, VIDEO_MINUTE_PACKS } from '../constants';
 import { InstagramIcon, TikTokIcon, ThreadsIcon, XIcon, YouTubeIcon, LinkedInIcon, FacebookIcon, PinterestIcon } from './icons/PlatformIcons';
@@ -15,6 +15,10 @@ import { PLATFORM_CAPABILITIES, hasCapability, getCapabilityDescription, getCapa
 import { isCreatorIdentityPlanClient } from '../src/lib/creatorIdentity/planGate';
 import { hasPremiumStudioRouteAccess } from '../src/utils/planAccess';
 import { EchoFluxHowItWorksModal } from './EchoFluxHowItWorksModal';
+
+const CreatorIdentityBuilder = lazy(() =>
+    import('./CreatorIdentityBuilder').then((m) => ({ default: m.CreatorIdentityBuilder }))
+);
 
 interface SettingsProps {}
 
@@ -203,6 +207,7 @@ type SettingsTab = 'general' | 'connections' | 'ai-training' | 'billing';
 export const Settings: React.FC = () => {
     const { user, setUser, settings, setSettings, setActivePage, selectedClient, userCustomVoices, setUserCustomVoices, showToast, setPricingView, socialAccounts } = useAppContext();
     const [activeTab, setActiveTab] = useState<SettingsTab>('general');
+    const [showCreatorIdentityBuilder, setShowCreatorIdentityBuilder] = useState(false);
     const [fileName, setFileName] = useState<string | null>(null);
     const [isUploadingVoice, setIsUploadingVoice] = useState(false);
 
@@ -211,6 +216,14 @@ export const Settings: React.FC = () => {
         if (tabOverride && tabOverride !== activeTab) {
             setActiveTab(tabOverride);
             localStorage.removeItem('settingsActiveTab');
+        }
+        try {
+            if (localStorage.getItem('openCreatorIdentityBuilder') === '1') {
+                localStorage.removeItem('openCreatorIdentityBuilder');
+                setShowCreatorIdentityBuilder(true);
+            }
+        } catch {
+            /* ignore */
         }
     }, [activeTab]);
     const [connectingPlatform, setConnectingPlatform] = useState<Platform | null>(null);
@@ -246,12 +259,19 @@ export const Settings: React.FC = () => {
             return;
         }
         if (!hasPremiumStudioRouteAccess(user)) {
-            showToast?.('Upgrade to Elite to use Premium Studio and Creator Identity.', 'info');
-            setActivePage('premiumStudioUpgrade');
+            showToast?.('Upgrade to Elite for Creator Identity.', 'info');
+            setActivePage('pricing');
             return;
         }
-        setActivePage('onlyfansStudio');
-        window.history.pushState({}, '', '/studio?tab=persona');
+        try {
+            localStorage.setItem('settingsActiveTab', 'ai-training');
+        } catch {
+            /* ignore */
+        }
+        setShowCreatorIdentityBuilder(true);
+        setActiveTab('ai-training');
+        setActivePage('settings');
+        window.history.pushState({}, '', '/settings');
         window.dispatchEvent(new PopStateEvent('popstate'));
     }, [setActivePage, showToast, user]);
 
@@ -1029,13 +1049,6 @@ export const Settings: React.FC = () => {
                         <SettingsSection title="Safety & Accessibility">
                             <ToggleSwitch label="Safe Mode" enabled={settings.safeMode} onChange={(val) => updateSetting('safeMode', val)} />
                             <p className="text-sm text-gray-500 dark:text-gray-400">Prevents the AI from generating replies with profanity or discussing sensitive topics.</p>
-                            <hr className="border-gray-200 dark:border-gray-700" />
-                            {user?.role === 'Admin' && (
-                                <>
-                                    <ToggleSwitch label="Enable Voice Mode" enabled={settings.voiceMode} onChange={(val) => updateSetting('voiceMode', val)} />
-                                    <p className="text-sm text-gray-500 dark:text-gray-400">Enable the floating AI Voice Assistant button for hands-free control.</p>
-                                </>
-                            )}
                         </SettingsSection>
                         {/* Account Type section hidden in AI Content Studio mode */}
                         {false && (
@@ -1286,7 +1299,7 @@ Return only the rewritten personality description.
                                         </p>
                                         <p className="text-xs text-gray-600 dark:text-gray-400">
                                             Your saved identity is the default brand baseline for captions and strategy. Open the full
-                                            builder in Premium Studio anytime.
+                                            builder below when you want to update it.
                                         </p>
                                         {identitySummaryElite ? (
                                             <p className="text-xs text-gray-700 dark:text-gray-300 line-clamp-2">{identitySummaryElite}</p>
@@ -1294,12 +1307,25 @@ Return only the rewritten personality description.
                                     </div>
                                     <button
                                         type="button"
-                                        onClick={openCreatorIdentityBuilder}
+                                        onClick={() => {
+                                            if (showCreatorIdentityBuilder) {
+                                                setShowCreatorIdentityBuilder(false);
+                                                return;
+                                            }
+                                            openCreatorIdentityBuilder();
+                                        }}
                                         className="shrink-0 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-primary-700"
                                     >
-                                        Open Creator Identity
+                                        {showCreatorIdentityBuilder ? 'Hide builder' : 'Open Creator Identity'}
                                     </button>
                                 </div>
+                            </div>
+                        )}
+                        {showCreatorIdentityBuilder && isCreatorIdentityPlanClient(user?.plan) && (
+                            <div className="rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-950 p-4 md:p-8 shadow-sm">
+                                <Suspense fallback={<p className="text-sm text-gray-500 dark:text-gray-400 py-8 text-center">Loading Creator Identity…</p>}>
+                                    <CreatorIdentityBuilder />
+                                </Suspense>
                             </div>
                         )}
                         <SettingsSection title="AI Personality & Tone">
@@ -1370,8 +1396,8 @@ Return only the rewritten personality description.
                             </h4>
                             <ul className="list-inside list-disc space-y-1 text-[13px] leading-relaxed text-gray-600 dark:text-gray-400">
                               <li>Create Post: toggle Personality when generating captions or replies so the model weighs this text heavily.</li>
-                              <li>What to Post: enable &quot;Prioritize Personality&quot; in Quick settings when idea titles and hooks should mimic your voice.</li>
-                              <li>Other assistants (strategy, Premium Studio, Fan Hub tools) may read the same profile when those flows pass personality context.</li>
+                              <li>Plan → Today: enable &quot;Prioritize Personality&quot; in Quick settings when idea titles and hooks should mimic your voice.</li>
+                              <li>Plan, Fan Hub → Posts, and the in-app assistant may read the same profile when those flows pass personality context.</li>
                             </ul>
                           </section>
                           <section>

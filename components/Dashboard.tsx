@@ -1537,10 +1537,10 @@ export const Dashboard: React.FC = () => {
               onClick={() => setActivePage('calendar')}
             />
             <QuickAction
-              label="Premium Studio"
-              icon={<StarIcon className="w-5 h-5" />}
+              label="Plan"
+              icon={<TargetIcon className="w-5 h-5" />}
               color="bg-gradient-to-br from-pink-500 to-rose-500"
-              onClick={() => setActivePage('onlyfansStudio')}
+              onClick={() => setActivePage('strategy')}
             />
             <QuickAction
               label="Fan Hub"
@@ -1706,7 +1706,7 @@ export const Dashboard: React.FC = () => {
                     <p className="text-gray-500 dark:text-gray-400 text-sm">No upcoming content</p>
                     {user?.plan !== 'Free' && (
                       <button onClick={() => setActivePage('strategy')} className="mt-2 text-primary-600 text-sm font-medium">
-                        What to Post
+                        Open Plan
                       </button>
                     )}
                   </div>
@@ -2982,11 +2982,11 @@ export const Dashboard: React.FC = () => {
                 <div className="mt-4 text-gray-700 dark:text-gray-200">
                   <div className="font-semibold mb-2">Recommended first steps:</div>
                   <ol className="list-decimal pl-5 space-y-1">
-                    <li>Generate a content strategy</li>
+                    <li>Open Plan → Today for content ideas</li>
                     <li>Move items onto your calendar</li>
-                    <li>Use Write Captions to generate captions</li>
-                    <li>Attach media from your library</li>
-                    <li>Copy + post manually to your platforms</li>
+                    <li>Use Create Post for captions</li>
+                    <li>Attach media from Vault</li>
+                    <li>Copy + post manually (or use Fan Hub / witme.io for fans)</li>
                   </ol>
                   <p className="mt-4 text-sm text-gray-600 dark:text-gray-300">
                     Your feedback directly shapes upcoming releases — thanks for being part of this stage.

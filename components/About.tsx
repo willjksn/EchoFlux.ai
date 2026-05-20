@@ -27,9 +27,10 @@ export const About: React.FC = () => {
                     <ul className="list-disc pl-5 space-y-2">
                         <li><strong>AI Content Generation:</strong> Upload images or videos, set your goal and tone, and let AI automatically generate engaging captions and relevant hashtags tailored to your content and target platforms. Perfect for busy creators who need to maintain a consistent presence.</li>
                         <li><strong>Central Command:</strong> A unified dashboard that surfaces what matters—your upcoming schedule, key priorities, and focus areas—so you never feel lost in the noise.</li>
-                        <li><strong>What to Post:</strong> Stop guessing what to post. What to Post builds multi-week content roadmaps with image and video ideas tailored to your niche and goals. Upload media directly to roadmap items and place them on your schedule for planned publishing.</li>
+                        <li><strong>Plan:</strong> Your planning hub with Today (daily ideas), Weekly monetization (Creator OS), and Multi-week strategy (Elite). Generate ideas, map monetization flows, and hand off to Create Post or Fan Hub.</li>
+                        <li><strong>Create Post:</strong> AI captions, hashtags, and scheduling for Instagram, TikTok, X, Facebook, and more—plus handoffs from Plan.</li>
                         <li><strong>My Vault:</strong> Upload and organize images and videos in your personal vault. Reuse assets across posts, select from vault when writing captions, and keep your content organized for maximum efficiency.</li>
-                        <li><strong>Premium Studio (Elite users):</strong> An end-to-end workspace for captions, plans, schedules, and media—optimized for premium creator platforms so you can plan, generate, and publish faster.</li>
+                        <li><strong>Fan Hub → Posts (Elite):</strong> Post ideas and Drop plan for member content—blueprints for what to film, photograph, or write, tuned to your Fan Hub tone.</li>
                         <li><strong>Visual Planning:</strong> A beautiful calendar view that lets you preview, edit, and manage all your scheduled content. Click any post to preview, edit date/time/platforms, or delete—all in one place.</li>
                         <li>
                           <strong>witme.io fan pages:</strong> Your public storefront URL is on witme.io (e.g. witme.io/yourname). Fans

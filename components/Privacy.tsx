@@ -5,7 +5,7 @@ export const Privacy: React.FC = () => {
         <div className="max-w-4xl mx-auto space-y-8">
             <div className="bg-white dark:bg-gray-800 p-8 rounded-xl shadow-md">
                 <h2 className="text-3xl font-bold text-gray-900 dark:text-white">Privacy Policy</h2>
-                <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">Last updated: April 3, 2026</p>
+                <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">Last updated: May 19, 2026</p>
 
                 <div className="mt-6 prose prose-lg dark:prose-invert max-w-none text-gray-700 dark:text-gray-300">
                     <p>
@@ -47,7 +47,8 @@ export const Privacy: React.FC = () => {
 
                     <h3 className="text-xl font-bold text-gray-900 dark:text-white mt-8 mb-2">3. AI Features</h3>
                     <p>
-                        If you use AI tools, prompts and selected inputs may be sent to third-party model providers to return results.
+                        If you use AI tools in Plan, Create Post, Fan Hub (including Post ideas and Drop plan), or the in-app assistant,
+                        prompts and selected inputs may be sent to third-party model providers to return results.
                     </p>
                     <ul className="list-disc pl-6 space-y-2 mt-2">
                         <li>Do not submit highly sensitive personal data in free-text prompts unless explicitly requested by the feature.</li>
@@ -150,9 +151,9 @@ export const Privacy: React.FC = () => {
                         13. Platform and creator roles
                     </h3>
                     <p>
-                        EchoFlux.ai handles studio operations, security, and infrastructure for creators; witme.io surfaces the public
-                        pages fans visit. Creators are responsible for creator-specific practices on their pages. Where needed, we may
-                        route requests to the relevant creator.
+                        EchoFlux.ai handles studio operations (including Plan, Create Post, and Fan Hub configuration), security, and
+                        infrastructure for creators; witme.io surfaces the public pages fans visit. Creators are responsible for
+                        creator-specific practices on their pages. Where needed, we may route requests to the relevant creator.
                     </p>
 
                     <div className="mt-8 p-6 border-l-4 border-primary-400 bg-primary-50 dark:bg-primary-900/30 rounded-r-lg">

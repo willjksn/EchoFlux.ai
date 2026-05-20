@@ -3,8 +3,15 @@ import { checkApiKeys, getVerifyAuth, withErrorHandling } from "./_errorHandler.
 import { getModelForTask } from "./_modelRouter.js";
 import { parseJSON } from "./_geminiShared.js";
 import { getGoalFramework, getGoalSpecificCTAs, getGoalSpecificContentGuidance } from "./_goalFrameworks.js";
-import { getLatestTrends, getOnlyFansWeeklyTrends } from "./_trendsHelper.js";
+import { getOnlyFansWeeklyTrends } from "./_trendsHelper.js";
 import { getOnlyFansResearchContext } from "./_onlyfansResearch.js";
+import {
+  buildCreatorPersonalityBlock,
+  buildMemberHubNicheLine,
+  getMemberHubToneGuidance,
+  getMemberHubTrendsContext,
+  MEMBER_HUB_RETENTION_SYSTEM,
+} from "./_memberHubContentContext.js";
 
 async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
   if (req.method !== "POST") {
@@ -43,7 +50,18 @@ async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
     return;
   }
 
-  const { goals, contentPreferences, subscriberCount, balance, niche, analyticsData } = req.body || {};
+  const {
+    goals,
+    contentPreferences,
+    subscriberCount,
+    balance,
+    niche,
+    analyticsData,
+    contentMode,
+    creatorPersonality: bodyPersonality,
+    prioritizeCreatorPersonality = false,
+  } = req.body || {};
+  const isMemberHub = contentMode === "member_hub";
 
   if (!goals || !Array.isArray(goals) || goals.length === 0) {
     res.status(400).json({ error: "Missing or invalid 'goals' array" });
@@ -74,50 +92,64 @@ async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
       ? `Current subscriber count: ${subscriberCount}. ` 
       : "";
 
-    // Get user explicitness level from Firestore
-    let explicitnessLevel = 7; // Default to moderate-high
+    const { getAdminDb } = await import("./_firebaseAdmin.js");
+    const db = getAdminDb();
+    let userData: Record<string, unknown> = {};
+    let explicitnessLevel = 7;
     try {
-      const { getAdminDb } = await import("./_firebaseAdmin.js");
-      const db = getAdminDb();
       const userDoc = await db.collection("users").doc(user.uid).get();
       if (userDoc.exists) {
-        const userData = userDoc.data();
-        explicitnessLevel = userData?.explicitnessLevel ?? 7;
+        userData = (userDoc.data() || {}) as Record<string, unknown>;
+        explicitnessLevel = (userData.explicitnessLevel as number | undefined) ?? 7;
       }
     } catch (error) {
-      console.error('[generateMonetizationPlan] Error fetching explicitness level:', error);
+      console.error("[generateMonetizationPlan] Error loading user profile:", error);
     }
 
-    // Get OnlyFans-specific weekly trends (not general trends)
-    let onlyfansWeeklyTrends = '';
-    try {
-      onlyfansWeeklyTrends = await getOnlyFansWeeklyTrends();
-    } catch (error) {
-      console.error('[generateMonetizationPlan] Error fetching OnlyFans weekly trends:', error);
-      onlyfansWeeklyTrends = 'OnlyFans trend data unavailable. Using general OnlyFans best practices.';
-    }
+    const personalityText =
+      (typeof bodyPersonality === "string" ? bodyPersonality : "") ||
+      (typeof userData.creatorPersonality === "string" ? userData.creatorPersonality : "") ||
+      (typeof (userData.settings as { creatorPersonality?: string } | undefined)?.creatorPersonality ===
+      "string"
+        ? (userData.settings as { creatorPersonality: string }).creatorPersonality
+        : "");
+    const personalityBlock = buildCreatorPersonalityBlock(
+      personalityText,
+      Boolean(prioritizeCreatorPersonality),
+    );
 
-    // Get OnlyFans-specific research (this is for OnlyFans monetization planning)
-    let onlyfansResearch = '';
-    try {
-      const { getAdminDb } = await import("./_firebaseAdmin.js");
-      const db = getAdminDb();
-      const userDoc = await db.collection("users").doc(user.uid).get();
-      const userData = userDoc.data();
-      const userPlan = userData?.plan || 'Free';
-      const userRole = userData?.role;
-      
-      onlyfansResearch = await getOnlyFansResearchContext(
-        'Subscribers',
-        'Sales Conversion', // Primary goal for monetization planning
-        user.uid,
-        userPlan,
-        userRole
-      );
-      console.log('[generateMonetizationPlan] OnlyFans research context fetched');
-    } catch (error) {
-      console.error('[generateMonetizationPlan] Error fetching OnlyFans research:', error);
-      // Continue without OnlyFans research - not critical
+    let trendsContext = "";
+    let onlyfansResearch = "";
+
+    if (isMemberHub) {
+      try {
+        trendsContext = await getMemberHubTrendsContext();
+      } catch (error) {
+        console.error("[generateMonetizationPlan] Error fetching member hub trends:", error);
+        trendsContext = "Trend data unavailable. Use member-retention and social best practices.";
+      }
+    } else {
+      try {
+        trendsContext = await getOnlyFansWeeklyTrends();
+      } catch (error) {
+        console.error("[generateMonetizationPlan] Error fetching OnlyFans weekly trends:", error);
+        trendsContext = "OnlyFans trend data unavailable. Using general OnlyFans best practices.";
+      }
+
+      try {
+        const userPlan = (userData.plan as string | undefined) || "Free";
+        const userRole = userData.role as string | undefined;
+
+        onlyfansResearch = await getOnlyFansResearchContext(
+          "Subscribers",
+          "Sales Conversion",
+          user.uid,
+          userPlan,
+          userRole,
+        );
+      } catch (error) {
+        console.error("[generateMonetizationPlan] Error fetching OnlyFans research:", error);
+      }
     }
 
     // Build analytics context for AI
@@ -155,24 +187,40 @@ Use this analytics data to inform the monetization plan:
 `;
     }
 
-    // Build explicitness context based on user's explicitness level
-    const explicitnessContext = explicitnessLevel >= 9 
-      ? 'EXTREMELY EXPLICIT - Use very explicit, graphic language describing sexual acts, intimate moments, and explicit content in detail. Focus on lust, desire, and explicit sexual experiences.'
-      : explicitnessLevel >= 7
-      ? 'HIGHLY EXPLICIT - Use explicit language describing sexual content, intimate moments, girlfriend experience, and explicit scenes. Focus on sexual desire, lust, and explicit experiences.'
-      : explicitnessLevel >= 5
-      ? 'MODERATELY EXPLICIT - Use suggestive and explicit language describing intimate content, sexual themes, girlfriend experience, and adult content. Focus on desire and intimate experiences.'
-      : 'SUGGESTIVE - Use suggestive language with adult themes, intimate moments, and romantic/sexual undertones. Focus on connection and intimate experiences.';
+    const explicitnessContext = isMemberHub
+      ? getMemberHubToneGuidance(explicitnessLevel)
+      : explicitnessLevel >= 9
+        ? "EXTREMELY EXPLICIT - Use very explicit, graphic language describing sexual acts, intimate moments, and explicit content in detail. Focus on lust, desire, and explicit sexual experiences."
+        : explicitnessLevel >= 7
+          ? "HIGHLY EXPLICIT - Use explicit language describing sexual content, intimate moments, girlfriend experience, and explicit scenes. Focus on sexual desire, lust, and explicit experiences."
+          : explicitnessLevel >= 5
+            ? "MODERATELY EXPLICIT - Use suggestive and explicit language describing intimate content, sexual themes, girlfriend experience, and adult content. Focus on desire and intimate experiences."
+            : "SUGGESTIVE - Use suggestive language with adult themes, intimate moments, and romantic/sexual undertones. Focus on connection and intimate experiences.";
 
-    const prompt = `
-You are an expert monetization strategist for OnlyFans creators specializing in adult/explicit content monetization.
+    const memberHubCore = isMemberHub
+      ? `
+${MEMBER_HUB_RETENTION_SYSTEM}
 
-${onlyfansWeeklyTrends}
+${buildMemberHubNicheLine(userNiche)}
+${explicitnessContext}
 
-${onlyfansResearch ? `ONLYFANS-SPECIFIC RESEARCH & BEST PRACTICES:\n${onlyfansResearch}\n` : ''}
+WEEKLY TREND CONTEXT (Mon/Thu — Instagram, TikTok, X, and creator platforms):
+${trendsContext}
 
-${analyticsContext ? analyticsContext : 'Note: No analytics data available. Use best practices for OnlyFans monetization.'}
+PRIMARY GOAL: Member retention and sustainable monetization on a paid fan feed (My Page).
+- Keep subscribers engaged, replying, and feeling they get exclusive value — reduce churn.
+- Balance free connection content, teasers, drops, and PPV — avoid constant hard-sell spam.
+- Sensual/flirty drops are OK when they fit the niche and tone ceiling — never graphic explicit content.
+- Borrow hooks and formats from Instagram, TikTok, and X where they fit a private feed (photo, video, text, poll).
 
+Content focus areas (mix across the week):
+- Personal connection and BTS exclusives
+- Polls, questions, and community moments
+- Member-only updates and loyalty rewards
+- Soft teasers leading to drops/PPV
+- Variety so the feed does not feel one-note
+`
+      : `
 CRITICAL CONTEXT - ONLYFANS ADULT/EXPLICIT CONTENT PLATFORM:
 - This is EXCLUSIVELY for OnlyFans - an adult content creator platform focused on sexual content and intimate experiences
 - ALL content ideas MUST be focused on adult/explicit sexual content, NOT generic business/tech/product content
@@ -193,16 +241,23 @@ Content Focus Areas (ALL ideas must relate to these):
 - Adult content themes and scenarios
 - Sexual fantasy fulfillment
 - Intimate connection building
+`;
 
-Creator Goals: ${goals.join(', ')}
-Content Preferences: ${contentPreferences || 'No specific preferences'}
+    const prompt = `
+${personalityBlock ? `${personalityBlock}\n\n` : ""}You are an expert monetization strategist for ${
+      isMemberHub ? "paid member hubs (My Page) and creator fan feeds" : "OnlyFans creators specializing in adult/explicit content monetization"
+    }.
+
+${isMemberHub ? memberHubCore : `${trendsContext}\n\n${onlyfansResearch ? `ONLYFANS-SPECIFIC RESEARCH & BEST PRACTICES:\n${onlyfansResearch}\n` : ""}`}
+
+${analyticsContext ? analyticsContext : isMemberHub ? "Note: No analytics data available. Use member-retention best practices." : "Note: No analytics data available. Use best practices for OnlyFans monetization."}
+
+Creator Goals: ${goals.join(", ")}
+Content Preferences: ${contentPreferences || "No specific preferences"}
 ${subscriberContext}
-Niche: ${userNiche}
+${isMemberHub ? "" : `Niche: ${userNiche}`}
 
-GOAL-SPECIFIC GUIDANCE FOR SALES CONVERSION:
-${getGoalSpecificCTAs('Sales Conversion')}
-
-${getGoalSpecificContentGuidance('Sales Conversion')}
+${isMemberHub ? "" : `GOAL-SPECIFIC GUIDANCE FOR SALES CONVERSION:\n${getGoalSpecificCTAs("Sales Conversion")}\n\n${getGoalSpecificContentGuidance("Sales Conversion")}`}
 
 Balance Requirements:
 - Engagement: ${engagementCount} ideas (${finalBalance.engagement}%) - Free content to build connection
@@ -244,7 +299,18 @@ Return ONLY valid JSON in this exact structure:
 }
 
 CRITICAL REQUIREMENTS:
-- ALL ideas MUST be about adult/explicit sexual content - NO generic business/tech/product ideas
+${
+  isMemberHub
+    ? `- Ideas must support member retention first, then monetization (drops/PPV)
+- Mix connection, exclusives, polls, BTS, and monetized content — not only sexual themes
+- Respect tone ceiling — never graphic explicit content
+- Engagement ideas: free posts that build habit and replies
+- Upsell ideas: tease upcoming drops/PPV without spamming
+- Retention ideas: rewards, exclusives, and "you matter" moments for loyal members
+- Conversion ideas: clear but soft CTAs for paid unlocks
+- Distribute ideas across the week intelligently
+- ${explicitnessContext}`
+    : `- ALL ideas MUST be about adult/explicit sexual content - NO generic business/tech/product ideas
 - Make ideas SPECIFIC and explicit - describe actual sexual content, intimate moments, girlfriend experience, lust, desire
 - Engagement ideas should be FREE sexual content that builds intimate connection
 - Upsell ideas should TEASE explicit premium sexual content, girlfriend experience, intimate moments
@@ -254,7 +320,8 @@ CRITICAL REQUIREMENTS:
 - Distribute ideas across the week intelligently
 - Include warnings if balance might be problematic
 - Make descriptions detailed and actionable with explicit sexual content details
-- Respect explicitness level ${explicitnessLevel}/10: ${explicitnessContext}
+- Respect explicitness level ${explicitnessLevel}/10: ${explicitnessContext}`
+}
 `;
 
     const result = await model.generateContent({

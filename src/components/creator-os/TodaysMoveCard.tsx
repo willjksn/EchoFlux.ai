@@ -1,6 +1,7 @@
 import React from "react";
 import type { TodaysMove } from "../../types/creatorOS";
 import { PLATFORM_LABELS } from "../../lib/creatorOS";
+import { useCreatorOSDisplay } from "./CreatorOSDisplayContext";
 
 type Props = {
   move: TodaysMove | null;
@@ -23,6 +24,8 @@ export const TodaysMoveCard: React.FC<Props> = ({
   onPublishToMyPage,
   onToggleChecklist,
 }) => {
+  const { showAmazonAffiliate, paidMemberHubLabel } = useCreatorOSDisplay();
+
   if (!move) {
     return (
       <div className="rounded-xl border border-gray-100 bg-white p-6 shadow-md dark:border-gray-700 dark:bg-gray-800">
@@ -64,17 +67,28 @@ export const TodaysMoveCard: React.FC<Props> = ({
             ))}
           </div>
         </div>
-        <div className="rounded-xl border border-gray-100 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-900/50">
-          <p className="text-xs font-bold uppercase tracking-wide text-gray-500 dark:text-gray-400">Story Link</p>
-          <p className="mt-2 text-sm"><span className="font-semibold">Amazon angle:</span> {move.suggestedAmazonCategory}</p>
-          <div className="mt-3 flex flex-wrap gap-2">
-            {move.storyLinkPlan.map((line, idx) => (
-              <span key={`${line}-${idx}`} className="rounded-full bg-white px-3 py-1.5 text-xs font-medium text-gray-700 ring-1 ring-gray-200 dark:bg-gray-800 dark:text-gray-200 dark:ring-gray-700">{line}</span>
-            ))}
+        {showAmazonAffiliate ? (
+          <div className="rounded-xl border border-gray-100 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-900/50">
+            <p className="text-xs font-bold uppercase tracking-wide text-gray-500 dark:text-gray-400">Story / Amazon</p>
+            <p className="mt-2 text-sm"><span className="font-semibold">Product angle:</span> {move.suggestedAmazonCategory}</p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {move.storyLinkPlan.map((line, idx) => (
+                <span key={`${line}-${idx}`} className="rounded-full bg-white px-3 py-1.5 text-xs font-medium text-gray-700 ring-1 ring-gray-200 dark:bg-gray-800 dark:text-gray-200 dark:ring-gray-700">{line}</span>
+              ))}
+            </div>
           </div>
-        </div>
+        ) : (
+          <div className="rounded-xl border border-gray-100 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-900/50">
+            <p className="text-xs font-bold uppercase tracking-wide text-gray-500 dark:text-gray-400">Story link</p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {move.storyLinkPlan.map((line, idx) => (
+                <span key={`${line}-${idx}`} className="rounded-full bg-white px-3 py-1.5 text-xs font-medium text-gray-700 ring-1 ring-gray-200 dark:bg-gray-800 dark:text-gray-200 dark:ring-gray-700">{line}</span>
+              ))}
+            </div>
+          </div>
+        )}
         <div className="rounded-xl border border-gray-100 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-900/50">
-          <p className="text-xs font-bold uppercase tracking-wide text-gray-500 dark:text-gray-400">Inner Circle Drop</p>
+          <p className="text-xs font-bold uppercase tracking-wide text-gray-500 dark:text-gray-400">{paidMemberHubLabel} drop</p>
           <p className="mt-2 text-sm">{move.innerCircleDrop}</p>
           <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">{move.innerCircleCaption}</p>
         </div>

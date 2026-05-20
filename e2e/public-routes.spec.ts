@@ -13,7 +13,8 @@ test.describe("public routes", () => {
 
   for (const { path, heading } of cases) {
     test(`${path} shows expected heading`, async ({ page }) => {
-      await page.goto(path);
+      await page.goto(path, { waitUntil: "domcontentloaded" });
+      await expect(page.getByText("Loading...")).toBeHidden({ timeout: 25_000 }).catch(() => {});
       await expect(page.getByRole("heading", { name: heading })).toBeVisible({ timeout: 20_000 });
       await expect(page.locator("body")).toBeVisible();
     });

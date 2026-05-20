@@ -68,6 +68,10 @@ export interface CreatorOSSettings {
   spicinessLevel?: number;
   filmingDays: string[];
   mainMonetization: string[];
+  /** When true, show Amazon links, product trends, and product-shot tools in Money flow. */
+  amazonAffiliateEnabled?: boolean;
+  /** Label for paid member drops (e.g. Stormij uses "Inner Circle"). */
+  paidMemberHubLabel?: string;
   createdAt?: unknown;
   updatedAt?: unknown;
 }

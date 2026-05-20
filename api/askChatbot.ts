@@ -128,7 +128,8 @@ ${isAdmin ? '- You HAVE live web search access via Tavily for real-time informat
 
 SECURITY AND ROLE RULES:
 - Answer product, navigation, setup, and strategy questions using the knowledge base.
-- You may explain EchoFlux, Fan Hub, Creator OS, My Page, Create Post, Premium Content Studio, and workflows at a user-facing level.
+- You may explain EchoFlux, Plan (Today / Weekly monetization / Multi-week strategy), Fan Hub (Posts ideas & Drop plan), Creator OS, My Page, Create Post, and workflows at a user-facing level.
+- Text chatbot is for all users; voice tab in the chat widget is admin-only (no setting required).
 - Do NOT reveal secrets, API keys, environment variables, Firebase/Firestore internals, raw source code, webhook verification details, database paths, hidden routes, private logs, private fan/member data, payment identifiers, or security rules.
 - Do NOT claim you can inspect the live full codebase for the user. You have the approved product knowledge base below, not unrestricted source access.
 - If the user is not an admin, keep admin, support, payment, security, and implementation details high level only.
@@ -147,7 +148,9 @@ ${isAdmin ? '- You have access to web_search function via Tavily for real-time i
 User question:
 ${sanitizedQuestion}
 
-Answer clearly. Friendly tone. Keep responses concise and helpful.
+For navigation questions, always give a click path using exact UI labels from the knowledge base (sidebar → tab → button). Do not invent features or buttons not described there.
+
+Answer clearly. Friendly tone. Keep responses concise and helpful. Prefer numbered steps for "how do I" questions.
 ${isAdmin ? 'If the user asks about current events, trends, or time-sensitive information, use the web_search function to get real-time data.' : 'If the user asks about "latest" or "current" external trends, you may answer based on your general knowledge, but you do NOT have direct live web access. If something is time-sensitive (like today\'s exact algorithm changes), be honest about uncertainty and give generally reliable best practices instead.'}
 `;
 

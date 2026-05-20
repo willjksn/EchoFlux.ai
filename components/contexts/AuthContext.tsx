@@ -388,9 +388,11 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     path.startsWith('/automation') ||
                     path.startsWith('/bio-link-page') ||
                     path.startsWith('/bio') ||
+                    path === '/plan' ||
                     path.startsWith('/what-to-post') ||
                     path.startsWith('/plan-my-week') ||
                     path.startsWith('/strategy') ||
+                    path.startsWith('/creator-os') ||
                     path.startsWith('/ads') ||
                     path.startsWith('/my-vault') ||
                     path.startsWith('/mediaLibrary') ||

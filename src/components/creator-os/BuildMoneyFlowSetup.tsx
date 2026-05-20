@@ -5,6 +5,8 @@ import { CONTENT_LANE_LABELS, defaultCreatorOSSettings } from "../../lib/creator
 type Props = {
   open: boolean;
   settings: CreatorOSSettings | null;
+  showAmazonAffiliate?: boolean;
+  paidMemberHubLabel?: string;
   onClose: () => void;
   onSave: (settings: CreatorOSSettings) => Promise<void> | void;
 };
@@ -70,7 +72,14 @@ const monetizationPaths = [
 
 const filmingDays = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"];
 
-export const BuildMoneyFlowSetup: React.FC<Props> = ({ open, settings, onClose, onSave }) => {
+export const BuildMoneyFlowSetup: React.FC<Props> = ({
+  open,
+  settings,
+  showAmazonAffiliate = true,
+  paidMemberHubLabel = "Paid members",
+  onClose,
+  onSave,
+}) => {
   const [draft, setDraft] = useState<CreatorOSSettings>(settings || defaultCreatorOSSettings());
   const [saving, setSaving] = useState(false);
   const [activeStep, setActiveStep] = useState(0);
@@ -205,12 +214,15 @@ export const BuildMoneyFlowSetup: React.FC<Props> = ({ open, settings, onClose, 
       {activeStep === 2 && (
         <div className="space-y-5">
           <div className="rounded-2xl bg-white p-4 text-sm text-slate-600 shadow-sm dark:bg-slate-900 dark:text-slate-300">
-            <strong className="text-slate-900 dark:text-white">What to do:</strong> select every way this content can make money. Creator OS will connect public posts to Stories, Amazon links, Inner Circle, Treats, and retention.
+            <strong className="text-slate-900 dark:text-white">What to do:</strong> select every way this content can make money. Creator OS will connect public posts to Stories
+            {showAmazonAffiliate ? ", Amazon links" : ""}, {paidMemberHubLabel}, Treats, and retention.
           </div>
           <div>
             <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">Monetization paths</p>
             <div className="mt-3 flex flex-wrap gap-2">
-              {monetizationPaths.map(([value, label]) => (
+              {monetizationPaths
+                .filter(([value]) => showAmazonAffiliate || value !== "amazon_links")
+                .map(([value, label]) => (
                 <button
                   key={value}
                   type="button"
@@ -249,8 +261,8 @@ export const BuildMoneyFlowSetup: React.FC<Props> = ({ open, settings, onClose, 
               {[
                 ["weeklyPublicPostsTarget", "Public posts"],
                 ["weeklyStoriesTarget", "IG stories"],
-                ["weeklyInnerCircleDropsTarget", "Inner Circle drops"],
-                ["weeklyAmazonLinksTarget", "Amazon links"],
+                ["weeklyInnerCircleDropsTarget", `${paidMemberHubLabel} drops`],
+                ...(showAmazonAffiliate ? ([["weeklyAmazonLinksTarget", "Amazon links"]] as const) : []),
               ].map(([key, label]) => (
                 <label key={key} className="text-xs text-slate-500 dark:text-slate-400">
                   {label}
@@ -305,7 +317,8 @@ export const BuildMoneyFlowSetup: React.FC<Props> = ({ open, settings, onClose, 
             <div className="rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
               <p className="text-xs font-bold uppercase tracking-wide text-slate-500">Rhythm</p>
               <p className="mt-1 text-sm text-slate-700 dark:text-slate-300">
-                {draft.weeklyPublicPostsTarget} public, {draft.weeklyStoriesTarget} stories, {draft.weeklyInnerCircleDropsTarget} Inner Circle, {draft.weeklyAmazonLinksTarget} Amazon. Film: {selectedFilmingDays}.
+                {draft.weeklyPublicPostsTarget} public, {draft.weeklyStoriesTarget} stories, {draft.weeklyInnerCircleDropsTarget} {paidMemberHubLabel}
+                {showAmazonAffiliate ? `, ${draft.weeklyAmazonLinksTarget} Amazon` : ""}. Film: {selectedFilmingDays}.
               </p>
             </div>
           </div>

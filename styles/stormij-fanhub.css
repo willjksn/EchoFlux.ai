@@ -96,6 +96,27 @@ html.dark .stormij-theme.stormij-theme--light :where(
 .stormij-theme .fh-selected-soft {
   background-color: color-mix(in srgb, var(--fan-primary, #6366f1) 14%, transparent);
 }
+
+/* Fan Hub Posts — Post ideas / Drop plan tabs (light creator shell under html.dark) */
+.stormij-theme .fh-posts-plan-tab {
+  color: var(--fan-text, #374151);
+  border-color: var(--fan-border, #d1d5db);
+  background-color: transparent;
+}
+.stormij-theme .fh-posts-plan-tab:hover:not(.fh-posts-plan-tab--active) {
+  background-color: color-mix(in srgb, var(--fan-bg, #fafafa) 70%, #fff);
+}
+.stormij-theme .fh-posts-plan-tab--active {
+  border-color: var(--fan-primary, #6366f1) !important;
+  background-color: color-mix(in srgb, var(--fan-primary, #6366f1) 12%, #fff) !important;
+  color: color-mix(in srgb, var(--fan-primary, #6366f1) 48%, #000) !important;
+}
+html.dark .stormij-theme.stormij-theme--light .fh-posts-plan-tab:not(.fh-posts-plan-tab--active) {
+  color: var(--fan-text, #374151) !important;
+}
+html.dark .stormij-theme.stormij-theme--light .fh-posts-plan-tab--active {
+  color: color-mix(in srgb, var(--fan-primary, #6366f1) 48%, #000) !important;
+}
 .stormij-theme .fh-bubble-me {
   background-color: var(--fan-primary, #6366f1);
   color: #fff;
@@ -171,6 +192,56 @@ html.dark .stormij-theme.stormij-theme--light :where(
 }
 .stormij-theme .border-primary-600 {
   border-color: var(--fan-primary, #6366f1) !important;
+}
+.stormij-theme .border-primary-200,
+.stormij-theme .border-primary-300 {
+  border-color: color-mix(in srgb, var(--fan-primary, #6366f1) 28%, #fff) !important;
+}
+.stormij-theme .border-primary-700,
+.stormij-theme .border-primary-800 {
+  border-color: color-mix(in srgb, var(--fan-primary, #6366f1) 40%, #000) !important;
+}
+.stormij-theme .hover\:bg-primary-50:hover {
+  background-color: color-mix(in srgb, var(--fan-primary, #6366f1) 12%, #fff) !important;
+}
+.stormij-theme .hover\:bg-primary-100:hover {
+  background-color: color-mix(in srgb, var(--fan-primary, #6366f1) 18%, #fff) !important;
+}
+.stormij-theme .hover\:bg-primary-900\/20:hover {
+  background-color: color-mix(in srgb, var(--fan-primary, #6366f1) 14%, #fff) !important;
+}
+.stormij-theme .hover\:bg-primary-900\/50:hover {
+  background-color: color-mix(in srgb, var(--fan-primary, #6366f1) 22%, #fff) !important;
+}
+
+/* Outline / ghost buttons (Back to feed, Show History) — creator brand on hover, not app indigo */
+.stormij-theme .fh-outline-btn {
+  color: var(--fan-primary, #6366f1);
+  border-color: color-mix(in srgb, var(--fan-primary, #6366f1) 28%, #fff);
+  background-color: transparent;
+  transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+.stormij-theme .fh-outline-btn:hover {
+  color: color-mix(in srgb, var(--fan-primary, #6366f1) 48%, #000) !important;
+  border-color: var(--fan-primary, #6366f1) !important;
+  background-color: color-mix(in srgb, var(--fan-primary, #6366f1) 12%, #fff) !important;
+}
+html.dark .stormij-theme.stormij-theme--light .fh-outline-btn {
+  color: var(--fan-primary, #6366f1) !important;
+}
+html.dark .stormij-theme.stormij-theme--light .fh-outline-btn:hover {
+  color: color-mix(in srgb, var(--fan-primary, #6366f1) 48%, #000) !important;
+  background-color: color-mix(in srgb, var(--fan-primary, #6366f1) 12%, #fff) !important;
+}
+html.dark .stormij-theme.stormij-theme--light .hover\:bg-primary-50:hover,
+html.dark .stormij-theme.stormij-theme--light .dark\:hover\:bg-primary-950\/40:hover,
+html.dark .stormij-theme.stormij-theme--light .dark\:hover\:bg-primary-900\/20:hover,
+html.dark .stormij-theme.stormij-theme--light .dark\:hover\:bg-primary-900\/50:hover {
+  background-color: color-mix(in srgb, var(--fan-primary, #6366f1) 12%, #fff) !important;
+}
+html.dark .stormij-theme.stormij-theme--light .hover\:text-primary-700:hover,
+html.dark .stormij-theme.stormij-theme--light .dark\:hover\:text-primary-300:hover {
+  color: color-mix(in srgb, var(--fan-primary, #6366f1) 48%, #000) !important;
 }
 
 /* ========== Member feed (Stormij_xo member/member-feed.css parity) ========== */

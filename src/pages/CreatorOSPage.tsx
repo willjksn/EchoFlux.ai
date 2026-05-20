@@ -9,6 +9,7 @@ import {
   createAmazonLink,
   createContentIdea,
   defaultCreatorOSSettings,
+  defaultPaidMemberFunnelForCreator,
   findAmazonProductTrends,
   generateDefaultWeeklyPlan,
   generateTodaysMove,
@@ -16,9 +17,12 @@ import {
   getCurrentWeeklyPlan,
   getInnerCircleFunnel,
   getTodaysMove,
+  isLegacyCreatorOSProfile,
   listAmazonLinks,
   listContentIdeas,
   listCreatorOSTrends,
+  resolveAmazonAffiliateEnabled,
+  resolvePaidMemberHubLabel,
   saveCreatorOSSettings,
   saveCreatorOSTrend,
   saveInnerCircleFunnel,
@@ -32,6 +36,8 @@ import {
   deleteAmazonLink,
   deleteContentIdea,
 } from "../lib/creatorOS";
+import { useCreatorHandle } from "../hooks/useCreatorHandle";
+import { CreatorOSDisplayProvider } from "../components/creator-os/CreatorOSDisplayContext";
 import { CreatorOSLockedState } from "../components/creator-os/CreatorOSLockedState";
 import { CreatorOSHeader } from "../components/creator-os/CreatorOSHeader";
 import { BuildMoneyFlowSetup } from "../components/creator-os/BuildMoneyFlowSetup";
@@ -51,9 +57,15 @@ function currentDayKey(): WeeklyPlanDayKey {
   return (["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"].includes(key) ? key : "monday") as WeeklyPlanDayKey;
 }
 
-export default function CreatorOSPage() {
+type CreatorOSPageProps = {
+  /** When true, rendered inside Plan hub (compact chrome). */
+  embedded?: boolean;
+};
+
+export default function CreatorOSPage({ embedded = false }: CreatorOSPageProps) {
   const { user, setActivePage, showToast, setComposeContext } = useAppContext();
   const uid = user?.id || "";
+  const creatorHandle = useCreatorHandle(uid);
   const hasAccess = hasCreatorOSAccess(user);
 
   const [loading, setLoading] = useState(true);
@@ -75,6 +87,12 @@ export default function CreatorOSPage() {
 
   const globalSpiciness = user?.settings?.tone?.spiciness ?? 30;
   const effectiveSettings = { ...(settings || defaultCreatorOSSettings()), spicinessLevel: globalSpiciness };
+  const showAmazonAffiliate = resolveAmazonAffiliateEnabled(settings, creatorHandle, amazonLinks.length);
+  const paidMemberHubLabel = resolvePaidMemberHubLabel(settings, creatorHandle);
+  const displayContext = useMemo(
+    () => ({ showAmazonAffiliate, paidMemberHubLabel }),
+    [showAmazonAffiliate, paidMemberHubLabel],
+  );
 
   const recomputeTodaysMove = useCallback((nextSettings = effectiveSettings, plan = weeklyPlan, links = amazonLinks, trendList = trends) => {
     const move = generateTodaysMove(nextSettings, plan, links, trendList);
@@ -99,7 +117,11 @@ export default function CreatorOSPage() {
         getInnerCircleFunnel(uid),
         getTodaysMove(uid),
       ]);
-      const nextSettings = loadedSettings || defaultCreatorOSSettings();
+      let nextSettings = loadedSettings || defaultCreatorOSSettings();
+      if (isLegacyCreatorOSProfile(creatorHandle) && nextSettings.amazonAffiliateEnabled !== true) {
+        nextSettings = { ...nextSettings, amazonAffiliateEnabled: true };
+        await saveCreatorOSSettings(uid, nextSettings);
+      }
       const nextPlan = loadedPlan || generateDefaultWeeklyPlan(nextSettings, loadedTrends, loadedLinks);
       const nextMove = loadedTodaysMove || generateTodaysMove(nextSettings, nextPlan, loadedLinks, loadedTrends);
       if (!loadedTodaysMove) {
@@ -117,7 +139,7 @@ export default function CreatorOSPage() {
     } finally {
       setLoading(false);
     }
-  }, [hasAccess, uid]);
+  }, [creatorHandle, hasAccess, uid]);
 
   useEffect(() => {
     void load();
@@ -128,28 +150,47 @@ export default function CreatorOSPage() {
     const linkedProduct = todaysMove?.suggestedAmazonLinkId
       ? amazonLinks.find((link) => link.id === todaysMove.suggestedAmazonLinkId)?.productName
       : todaysMove?.suggestedAmazonCategory;
-    return [
+    const items = [
       {
         id: "public",
         label: todaysMove?.publicPost ? `Post: ${todaysMove.publicPost}` : "Post one curiosity clip",
         completed: checklist.find((item) => item.id === "ig")?.completed || false,
       },
       {
-        id: "story",
-        label: linkedProduct ? `Story link: ${linkedProduct}` : "Add one story with a soft product link",
-        completed: checklist.find((item) => item.id === "story")?.completed || false,
-      },
-      {
         id: "inner",
-        label: todaysMove?.innerCircleDrop ? `Inner Circle: ${todaysMove.innerCircleDrop}` : "Drop one closer post inside Inner Circle",
+        label: todaysMove?.innerCircleDrop
+          ? `${paidMemberHubLabel}: ${todaysMove.innerCircleDrop}`
+          : `Drop one closer post for ${paidMemberHubLabel}`,
         completed: checklist.find((item) => item.id === "inner")?.completed || false,
       },
     ];
-  }, [amazonLinks, todaysMove]);
+    if (showAmazonAffiliate) {
+      items.splice(1, 0, {
+        id: "story",
+        label: linkedProduct ? `Story link: ${linkedProduct}` : "Add one story with a soft product link",
+        completed: checklist.find((item) => item.id === "story")?.completed || false,
+      });
+    }
+    return items;
+  }, [amazonLinks, paidMemberHubLabel, showAmazonAffiliate, todaysMove]);
 
   if (!hasAccess) {
     return <CreatorOSLockedState onUpgrade={() => setActivePage("pricing")} />;
   }
+
+  const enableAmazonAffiliate = async () => {
+    const { spicinessLevel: _g, ...base } = effectiveSettings;
+    const next: CreatorOSSettings = {
+      ...base,
+      amazonAffiliateEnabled: true,
+      monetizationPaths: base.monetizationPaths.includes("amazon_links")
+        ? base.monetizationPaths
+        : [...base.monetizationPaths, "amazon_links"],
+      weeklyAmazonLinksTarget: Math.max(base.weeklyAmazonLinksTarget || 0, 2),
+    };
+    await saveSettings(next);
+    showToast("Amazon affiliate tools are on. Add links and product trends below.", "success");
+  };
 
   const saveSettings = async (next: CreatorOSSettings) => {
     const { spicinessLevel: _globalOnly, ...settingsToSave } = next;
@@ -439,15 +480,45 @@ export default function CreatorOSPage() {
   };
 
   return (
-    <div className="min-h-full bg-gray-50 p-4 text-gray-900 dark:bg-gray-900 dark:text-gray-100 sm:p-6">
-      <div className="mx-auto max-w-7xl space-y-6">
+    <CreatorOSDisplayProvider value={displayContext}>
+    <div
+      className={
+        embedded
+          ? "text-gray-900 dark:text-gray-100"
+          : "min-h-full bg-gray-50 p-4 text-gray-900 dark:bg-gray-900 dark:text-gray-100 sm:p-6"
+      }
+    >
+      <div className={embedded ? "space-y-6" : "mx-auto max-w-7xl space-y-6"}>
         <CreatorOSHeader
+          compact={embedded}
           onOpenSetup={() => setSetupOpen(true)}
           onAddIdea={() => { setEditingIdea(null); setIdeaModalOpen(true); }}
           onPlanWeek={planMyWeek}
           onFindTrends={findTrends}
           isFindingTrends={findingTrends}
+          showAmazonAffiliate={showAmazonAffiliate}
         />
+
+        {!showAmazonAffiliate && !loading ? (
+          <div className="rounded-xl border border-dashed border-amber-200 bg-amber-50/80 p-4 dark:border-amber-900/50 dark:bg-amber-950/20">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="text-sm font-semibold text-gray-900 dark:text-white">Amazon affiliate (optional)</p>
+                <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
+                  Turn this on only if you monetize with Amazon Influencer links. You&apos;ll get product trends, a link library, and
+                  Story product angles in Today&apos;s Move and Plan My Week.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => void enableAmazonAffiliate()}
+                className="shrink-0 rounded-lg bg-gray-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-gray-800 dark:bg-gray-100 dark:text-gray-900"
+              >
+                Add Amazon affiliate
+              </button>
+            </div>
+          </div>
+        ) : null}
 
         {error && <div className="rounded-xl bg-red-50 p-4 text-sm text-red-700 dark:bg-red-900/30 dark:text-red-200">{error}</div>}
         {loading ? (
@@ -503,84 +574,105 @@ export default function CreatorOSPage() {
               onGenerate={planMyWeek}
             />
 
-            <ProductShotIdeaBox
-              settings={effectiveSettings}
-              amazonLinks={amazonLinks}
-              creatorProfile={{
-                creatorGender: user?.creatorGender,
-                niche: user?.niche,
-                audience: user?.audience,
-                creatorGoal: user?.creatorGoal,
-              }}
-              onSaveAsIdea={saveProductShotIdea}
-            />
+            {showAmazonAffiliate ? (
+              <>
+                <ProductShotIdeaBox
+                  settings={effectiveSettings}
+                  amazonLinks={amazonLinks}
+                  creatorProfile={{
+                    creatorGender: user?.creatorGender,
+                    niche: user?.niche,
+                    audience: user?.audience,
+                    creatorGoal: user?.creatorGoal,
+                  }}
+                  onSaveAsIdea={saveProductShotIdea}
+                />
 
-            <TrendFindsPanel
-              trends={trends}
-              loading={findingTrends}
-              error={trendError}
-              onFind={findTrends}
-              onTurnIntoIdea={async (trend) => {
-                const idea = await turnTrendIntoContentIdea(uid, trend);
-                setIdeas((prev) => [idea, ...prev]);
-                setTrends((prev) => prev.map((item) => item.id === trend.id ? { ...item, status: "saved_to_ideas" } : item));
-              }}
-              onSaveToLibrary={async (trend) => {
-                const link = await saveTrendToAmazonLibrary(uid, trend);
-                setAmazonLinks((prev) => [link, ...prev]);
-                setTrends((prev) => prev.map((item) => item.id === trend.id ? { ...item, status: "saved_to_amazon_library" } : item));
-              }}
-              onUpdate={updateTrend}
-            />
+                <TrendFindsPanel
+                  trends={trends}
+                  loading={findingTrends}
+                  error={trendError}
+                  onFind={findTrends}
+                  onTurnIntoIdea={async (trend) => {
+                    const idea = await turnTrendIntoContentIdea(uid, trend);
+                    setIdeas((prev) => [idea, ...prev]);
+                    setTrends((prev) => prev.map((item) => item.id === trend.id ? { ...item, status: "saved_to_ideas" } : item));
+                  }}
+                  onSaveToLibrary={async (trend) => {
+                    const link = await saveTrendToAmazonLibrary(uid, trend);
+                    setAmazonLinks((prev) => [link, ...prev]);
+                    setTrends((prev) => prev.map((item) => item.id === trend.id ? { ...item, status: "saved_to_amazon_library" } : item));
+                  }}
+                  onUpdate={updateTrend}
+                />
 
-            <AmazonLinkLibrary
-              links={amazonLinks}
-              onAdd={() => { setEditingLink(null); setLinkModalOpen(true); }}
-              onEdit={(link) => { setEditingLink(link); setLinkModalOpen(true); }}
-              onDelete={async (linkId) => {
-                await deleteAmazonLink(uid, linkId);
-                setAmazonLinks((prev) => prev.filter((link) => link.id !== linkId));
-              }}
-              onTurnIntoIdea={async (link) => {
-                const idea = await createContentIdea(uid, {
-                  title: link.productName,
-                  lane: link.category.toLowerCase().includes("car") ? "car_driving" : "amazon_soft_mention",
-                  publicHook: "why is this actually useful...",
-                  caption: "ok I get it now",
-                  platforms: ["instagram_story", "tiktok"],
-                  funnelGoal: "test_product_interest",
-                  amazonLinkId: link.id,
-                  amazonCategory: link.category,
-                  storyText: ["why is this actually useful...", "I didn't think I needed it", "ok... I get it now"],
-                  innerCircleTieIn: "Share the closer version inside Inner Circle.",
-                  notes: link.bestContentSituation,
-                  dueDate: "",
-                  status: "ideas",
-                });
-                setIdeas((prev) => [idea, ...prev]);
-              }}
-              onUpdate={async (linkId, updates) => {
-                await updateAmazonLink(uid, linkId, updates);
-                setAmazonLinks((prev) => prev.map((link) => (link.id === linkId ? { ...link, ...updates } : link)));
-              }}
-            />
+                <AmazonLinkLibrary
+                  links={amazonLinks}
+                  onAdd={() => { setEditingLink(null); setLinkModalOpen(true); }}
+                  onEdit={(link) => { setEditingLink(link); setLinkModalOpen(true); }}
+                  onDelete={async (linkId) => {
+                    await deleteAmazonLink(uid, linkId);
+                    setAmazonLinks((prev) => prev.filter((link) => link.id !== linkId));
+                  }}
+                  onTurnIntoIdea={async (link) => {
+                    const idea = await createContentIdea(uid, {
+                      title: link.productName,
+                      lane: link.category.toLowerCase().includes("car") ? "car_driving" : "amazon_soft_mention",
+                      publicHook: "why is this actually useful...",
+                      caption: "ok I get it now",
+                      platforms: ["instagram_story", "tiktok"],
+                      funnelGoal: "test_product_interest",
+                      amazonLinkId: link.id,
+                      amazonCategory: link.category,
+                      storyText: ["why is this actually useful...", "I didn't think I needed it", "ok... I get it now"],
+                      innerCircleTieIn: `Share the closer version for ${paidMemberHubLabel}.`,
+                      notes: link.bestContentSituation,
+                      dueDate: "",
+                      status: "ideas",
+                    });
+                    setIdeas((prev) => [idea, ...prev]);
+                  }}
+                  onUpdate={async (linkId, updates) => {
+                    await updateAmazonLink(uid, linkId, updates);
+                    setAmazonLinks((prev) => prev.map((link) => (link.id === linkId ? { ...link, ...updates } : link)));
+                  }}
+                />
+              </>
+            ) : null}
 
             <InnerCircleFunnel
               funnel={funnel}
+              defaultFunnel={defaultPaidMemberFunnelForCreator(creatorHandle)}
               onSave={async (next) => {
                 await saveInnerCircleFunnel(uid, next);
                 setFunnel(next);
-                showToast("Inner Circle funnel saved.", "success");
+                showToast(`${paidMemberHubLabel} funnel saved.`, "success");
               }}
             />
           </>
         )}
 
-        <BuildMoneyFlowSetup open={setupOpen} settings={settings} onClose={() => setSetupOpen(false)} onSave={saveSettings} />
-        <ContentIdeaModal open={ideaModalOpen} idea={editingIdea} amazonLinks={amazonLinks} onClose={() => setIdeaModalOpen(false)} onSave={saveIdea} />
-        <AmazonLinkModal open={linkModalOpen} link={editingLink} onClose={() => setLinkModalOpen(false)} onSave={saveLink} />
+        <BuildMoneyFlowSetup
+          open={setupOpen}
+          settings={settings}
+          showAmazonAffiliate={showAmazonAffiliate}
+          paidMemberHubLabel={paidMemberHubLabel}
+          onClose={() => setSetupOpen(false)}
+          onSave={saveSettings}
+        />
+        <ContentIdeaModal
+          open={ideaModalOpen}
+          idea={editingIdea}
+          amazonLinks={showAmazonAffiliate ? amazonLinks : []}
+          onClose={() => setIdeaModalOpen(false)}
+          onSave={saveIdea}
+        />
+        {showAmazonAffiliate ? (
+          <AmazonLinkModal open={linkModalOpen} link={editingLink} onClose={() => setLinkModalOpen(false)} onSave={saveLink} />
+        ) : null}
       </div>
     </div>
+    </CreatorOSDisplayProvider>
   );
 }
 
