@@ -6,6 +6,7 @@ import {
   ensureFanDmThreadForMember,
 } from "./_syncFanHubFanPreference.js";
 import { notifyCreatorNewFanMemberJoined } from "./_fanNotifications.js";
+import { notifyEchoFluxAdminFanHubMemberJoined } from "./_adminFanHubAlerts.js";
 import { maybeSendAutomatedMemberWelcomeDm } from "./_memberWelcomeDm.js";
 
 /**
@@ -158,6 +159,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         await notifyCreatorNewFanMemberJoined({ creatorId, fanId });
       } catch (e) {
         console.warn("notifyCreatorNewFanMemberJoined (free join):", e);
+      }
+      try {
+        await notifyEchoFluxAdminFanHubMemberJoined({
+          creatorId,
+          fanId,
+          membershipType: "free",
+        });
+      } catch (e) {
+        console.warn("notifyEchoFluxAdminFanHubMemberJoined (free join):", e);
       }
       try {
         await maybeSendAutomatedMemberWelcomeDm(db, creatorId, fanId, now, {

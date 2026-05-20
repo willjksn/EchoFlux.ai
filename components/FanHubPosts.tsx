@@ -645,6 +645,22 @@ export const FanHubPosts: React.FC = () => {
     liveStreamPromo: LiveStreamPromoOnPost;
   } | null>(null);
 
+  /** Caption/media optional when a valid poll replaces body content (parity with postData.poll). */
+  const hasStandaloneFanHubPollReady = useMemo(
+    () =>
+      !liveStreamPromoEnabled &&
+      pollEnabled &&
+      pollQuestion.trim().length > 0 &&
+      pollOptions.filter((o) => o.trim()).length >= 2,
+    [liveStreamPromoEnabled, pollEnabled, pollQuestion, pollOptions],
+  );
+
+  const hasFanHubPublishableComposerContent = useMemo(
+    () =>
+      caption.trim().length > 0 || media.length > 0 || hasStandaloneFanHubPollReady,
+    [caption, media.length, hasStandaloneFanHubPollReady],
+  );
+
   // Text Overlay
   const [overlayEnabled, setOverlayEnabled] = useState(false);
   const [overlayText, setOverlayText] = useState("");
@@ -1565,8 +1581,11 @@ Write 2-4 sentences that are engaging and on-topic.`;
       }
     }
 
-    if (!caption.trim() && media.length === 0) {
-      showToast?.("Add a caption or media", "error");
+    if (!hasFanHubPublishableComposerContent) {
+      showToast?.(
+        "Add a caption, media, or a poll with a question and at least two choices",
+        "error",
+      );
       return;
     }
 
@@ -3199,7 +3218,7 @@ Write 2-4 sentences that are engaging and on-topic.`;
                   disabled={
                     publishing ||
                     liveStreamPromoEnabled ||
-                    (!caption.trim() && media.length === 0)
+                    !hasFanHubPublishableComposerContent
                   }
                   title={liveStreamPromoEnabled ? "Use go-live time in Live stream promo instead" : undefined}
                   className="flex items-center gap-2 px-4 py-2.5 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-lg font-medium disabled:opacity-50 hover:bg-gray-50 dark:hover:bg-gray-600 transition"
@@ -3212,7 +3231,7 @@ Write 2-4 sentences that are engaging and on-topic.`;
                   onClick={() => handlePublish("published")}
                   disabled={
                     publishing ||
-                    (!caption.trim() && media.length === 0) ||
+                    !hasFanHubPublishableComposerContent ||
                     (liveStreamPromoEnabled && (!liveStreamTitle.trim() || !liveStreamStartLocal.trim()))
                   }
                   className="px-6 py-2.5 bg-gradient-to-r from-primary-500 to-primary-600 text-white rounded-lg font-semibold disabled:opacity-50 hover:from-primary-600 hover:to-primary-700 transition shadow-lg shadow-primary-500/25"

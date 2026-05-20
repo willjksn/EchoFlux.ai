@@ -66,6 +66,41 @@ export async function sendCreatorHubNotification(params: {
   return docRef.id;
 }
 
+/** Display label for a fan/member in creator + admin notifications. */
+export async function resolveFanHubMemberDisplayLabel(params: {
+  creatorId: string;
+  fanId: string;
+  displayNameHint?: string | null;
+}): Promise<string> {
+  const db = getAdminDb();
+  let label = (typeof params.displayNameHint === "string" && params.displayNameHint.trim()) || "";
+  if (!label) {
+    try {
+      const fd = (
+        await db.collection("creators").doc(params.creatorId).collection("fans").doc(params.fanId).get()
+      ).data() as { displayName?: string; username?: string } | undefined;
+      const dn = typeof fd?.displayName === "string" ? fd.displayName.trim() : "";
+      const un = typeof fd?.username === "string" ? fd.username.trim() : "";
+      label = dn || (un ? (un.startsWith("@") ? un : `@${un}`) : "");
+    } catch {
+      /* ignore */
+    }
+  }
+  if (!label) {
+    try {
+      const u = (await db.collection("users").doc(params.fanId).get()).data() as
+        | { displayName?: string; username?: string }
+        | undefined;
+      const dn = typeof u?.displayName === "string" ? u.displayName.trim() : "";
+      const un = typeof u?.username === "string" ? u.username.trim() : "";
+      label = dn || (un ? (un.startsWith("@") ? un : `@${un}`) : "");
+    } catch {
+      /* ignore */
+    }
+  }
+  return label || "A fan";
+}
+
 /** Creator Fan Hub bell: someone became a paying member or joined free (first successful membership write). */
 export async function notifyCreatorNewFanMemberJoined(params: {
   creatorId: string;
@@ -73,33 +108,7 @@ export async function notifyCreatorNewFanMemberJoined(params: {
   /** From checkout / auth when fan doc may not exist yet */
   displayNameHint?: string | null;
 }): Promise<void> {
-  const db = getAdminDb();
-  let label = (typeof params.displayNameHint === 'string' && params.displayNameHint.trim()) || '';
-  if (!label) {
-    try {
-      const fd = (
-        await db.collection('creators').doc(params.creatorId).collection('fans').doc(params.fanId).get()
-      ).data() as { displayName?: string; username?: string } | undefined;
-      const dn = typeof fd?.displayName === 'string' ? fd.displayName.trim() : '';
-      const un = typeof fd?.username === 'string' ? fd.username.trim() : '';
-      label = dn || un || '';
-    } catch {
-      /* ignore */
-    }
-  }
-  if (!label) {
-    try {
-      const u = (
-        await db.collection('users').doc(params.fanId).get()
-      ).data() as { displayName?: string; username?: string } | undefined;
-      const dn = typeof u?.displayName === 'string' ? u.displayName.trim() : '';
-      const un = typeof u?.username === 'string' ? u.username.trim() : '';
-      label = dn || un || '';
-    } catch {
-      /* ignore */
-    }
-  }
-  const who = label || 'A fan';
+  const who = await resolveFanHubMemberDisplayLabel(params);
   await sendCreatorHubNotification({
     creatorId: params.creatorId,
     type: 'new_member',

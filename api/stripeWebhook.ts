@@ -11,6 +11,7 @@ import {
 } from './_syncFanHubFanPreference.js';
 import { mergeGuestTreatPurchasesIntoUid } from './_mergeGuestFanPurchases.js';
 import { notifyCreatorNewFanMemberJoined, sendCreatorHubNotification } from './_fanNotifications.js';
+import { notifyEchoFluxAdminFanHubMemberJoined } from './_adminFanHubAlerts.js';
 import { maybeSendAutomatedMemberWelcomeDm } from './_memberWelcomeDm.js';
 import { syncLiveStreamTicketOrdersForStream } from './_syncLiveStreamTicketOrders.js';
 import {
@@ -643,6 +644,16 @@ export async function processFanHubCheckoutSessionCompleted(
         });
       } catch (e) {
         console.warn('notifyCreatorNewFanMemberJoined (subscription checkout):', e);
+      }
+      try {
+        await notifyEchoFluxAdminFanHubMemberJoined({
+          creatorId,
+          fanId,
+          membershipType: 'paid',
+          displayNameHint: fanName || null,
+        });
+      } catch (e) {
+        console.warn('notifyEchoFluxAdminFanHubMemberJoined (subscription checkout):', e);
       }
     }
 
