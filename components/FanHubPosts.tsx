@@ -3727,8 +3727,7 @@ Write 2-4 sentences that are engaging and on-topic.`;
 
       {/* Feed hidden while Post ideas / Drop plan planning is open */}
       {!inPostsPlanningView ? (
-        <div className="fan-hub-posts-feed-bleed min-w-0">
-          <div className="fan-hub-posts-feed-shell fan-member-content fan-member-content--feed">
+        <div className="min-w-0 fan-hub-posts-feed-shell">
           <FanHubFeed
             isAdminMode
             onEditPostRequest={openComposerForEdit}
@@ -3742,7 +3741,6 @@ Write 2-4 sentences that are engaging and on-topic.`;
             deeplinkScrollToPostId={feedDeeplinkPostId}
             onDeeplinkScrollToPostConsumed={() => setFeedDeeplinkPostId(null)}
           />
-          </div>
         </div>
       ) : null}
 

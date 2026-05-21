@@ -1111,7 +1111,7 @@ export const FanHubMessages: React.FC = () => {
   const creatorSecondary = formatCreatorDmBubbleSecondaryLine(creatorDisplayName, creatorHandle);
 
   return (
-    <div className="max-w-7xl mx-auto p-4 sm:p-6 stormij-theme fh-messages-hub">
+    <div className="w-full min-w-0 stormij-theme fh-messages-hub">
       <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-6">Messages</h1>
       <div className="flex gap-4 sm:gap-6 flex-col lg:flex-row">
         <div className="w-full lg:w-96 flex-shrink-0 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 overflow-hidden lg:max-h-[min(90vh,900px)] lg:flex lg:flex-col">
