@@ -3727,7 +3727,7 @@ Write 2-4 sentences that are engaging and on-topic.`;
 
       {/* Feed hidden while Post ideas / Drop plan planning is open */}
       {!inPostsPlanningView ? (
-        <div className="min-w-0">
+        <div className="min-w-0 fan-hub-posts-feed-shell">
           <FanHubFeed
             isAdminMode
             onEditPostRequest={openComposerForEdit}

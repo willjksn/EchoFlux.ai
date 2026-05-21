@@ -3550,3 +3550,35 @@ html.dark .fan-member-purchases-compact .fan-member-purchase-unlock-preview-body
   object-fit: contain !important;
   object-position: center center !important;
 }
+
+/* Creator Fan Hub → Posts: mobile feed width matches member storefront feed tab */
+@media (max-width: 639px) {
+  .stormij-theme .fan-hub-posts-feed-shell {
+    width: calc(100% + 3rem);
+    max-width: none;
+    margin-left: -1.5rem;
+    margin-right: -1.5rem;
+  }
+
+  .stormij-theme .fan-hub-posts-feed-shell .fan-hub-feed-chrome {
+    margin-left: 0;
+    margin-right: 0;
+    padding-left: 0;
+    padding-right: 0;
+    border-radius: 0;
+  }
+
+  .stormij-theme .fan-hub-posts-feed-shell .member-feed-main {
+    max-width: none;
+    width: 100%;
+    margin-left: 0;
+    margin-right: 0;
+    padding-left: 1.25rem;
+    padding-right: 1.25rem;
+  }
+
+  .stormij-theme .fan-hub-posts-feed-shell .feed-grid {
+    padding-left: 0;
+    padding-right: 0;
+  }
+}
