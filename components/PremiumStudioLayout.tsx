@@ -431,7 +431,7 @@ export const PremiumStudioLayout: React.FC<PremiumStudioLayoutProps> = ({ childr
       !fanHubSurfaceIsDark ? 'stormij-theme stormij-theme--light' : 'stormij-theme';
     return (
       <div
-        className={`${fanHubThemeClass} -m-6 min-h-full p-6 rounded-xl shadow-sm border border-black/5 dark:border-slate-600/60`}
+        className={`${fanHubThemeClass} fan-hub-studio-shell -m-6 min-h-full w-full min-w-0 p-6 rounded-xl shadow-sm border border-black/5 dark:border-slate-600/60`}
         style={{
           ...fanHubShellStyle,
           borderColor: fanHubSurfaceIsDark
@@ -439,7 +439,7 @@ export const PremiumStudioLayout: React.FC<PremiumStudioLayoutProps> = ({ childr
             : `${effectiveFanTheme.primary}22`,
         }}
       >
-        <div className="max-w-7xl mx-auto">{inner}</div>
+        <div className="fan-hub-studio-inner max-w-7xl mx-auto w-full min-w-0">{inner}</div>
       </div>
     );
   }
