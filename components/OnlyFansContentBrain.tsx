@@ -1693,15 +1693,6 @@ export const OnlyFansContentBrain: React.FC<OnlyFansContentBrainProps> = ({
         ''
     ).trim();
 
-    // Fan Hub: lean on Settings → Profile & AI (personality + tone) for Post ideas and Drop plan
-    useEffect(() => {
-        if (!fanHubContext) return;
-        if (effectiveCreatorPersonality) {
-            setUseCreatorPersonalityPostIdeas(true);
-            setUseCreatorPersonalityMonetization(true);
-        }
-    }, [fanHubContext, effectiveCreatorPersonality]);
-
     const buildGenerationSettingsContext = (prioritizePersonality: boolean) => {
         const secondary = [
             aiPersonalitySetting ? `AI PERSONALITY & TRAINING:\n${aiPersonalitySetting}` : null,
@@ -2298,9 +2289,7 @@ export const OnlyFansContentBrain: React.FC<OnlyFansContentBrainProps> = ({
                         apiPlatform === 'instagram' && !isMemberHubIdeas,
                     analyzeMyPageEngagement: isMemberHubIdeas,
                     creatorHint: postIdeaPrompt.trim(),
-                    prioritizeCreatorPersonality: isMemberHubIdeas
-                        ? true
-                        : useCreatorPersonalityPostIdeas,
+                    prioritizeCreatorPersonality: useCreatorPersonalityPostIdeas,
                 }),
             });
 
@@ -3257,7 +3246,7 @@ export const OnlyFansContentBrain: React.FC<OnlyFansContentBrainProps> = ({
                     contentPreferences: [
                         monetizationPreferences,
                         fanHubContext
-                            ? buildGenerationSettingsContext(true)
+                            ? buildGenerationSettingsContext(useCreatorPersonalityMonetization)
                             : buildMonetizedContext(),
                     ]
                         .filter(Boolean)
@@ -3273,9 +3262,7 @@ export const OnlyFansContentBrain: React.FC<OnlyFansContentBrainProps> = ({
                     niche: user?.niche || 'Creator',
                     analyticsData: buildAnalyticsData(),
                     creatorPersonality: effectiveCreatorPersonality || undefined,
-                    prioritizeCreatorPersonality: fanHubContext
-                        ? true
-                        : useCreatorPersonalityMonetization,
+                    prioritizeCreatorPersonality: useCreatorPersonalityMonetization,
                     ...(fanHubContext ? { contentMode: 'member_hub' } : {}),
                 }),
             });
@@ -5892,7 +5879,7 @@ Output format:
                                     <p className="text-sm text-gray-500 dark:text-gray-400 flex items-center gap-1.5 mt-1">
                                         <span className="text-orange-500">🔥</span>
                                         {fanHubContext
-                                            ? 'Uses your Profile & AI personality, tone settings, and trends — not default OnlyFans themes unless you ask'
+                                            ? 'Trends + tone settings; turn on Personality Override to lead with your saved personality'
                                             : 'Weekly trends + your niche — built for member retention'}
                                     </p>
                                 </div>

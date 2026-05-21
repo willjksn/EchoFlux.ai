@@ -130,9 +130,7 @@ async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
     const toneSettings = settingsBlock.tone || {};
     const spiciness =
       typeof toneSettings.spiciness === "number" ? toneSettings.spiciness : 0;
-    const prioritizePersonality = isMemberHub
-      ? true
-      : Boolean(prioritizeCreatorPersonality);
+    const prioritizePersonality = Boolean(prioritizeCreatorPersonality);
     const memberHubCreatorContext = isMemberHub
       ? buildMemberHubCreatorContext({
           creatorPersonality: personalityText,

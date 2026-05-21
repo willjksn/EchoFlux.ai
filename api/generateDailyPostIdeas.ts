@@ -172,9 +172,7 @@ function buildPrompt(opts: {
         : "Generate a mix: e.g. 2 reels + 1 carousel, or 1 reel + 1 photo + 1 story, varied and scannable."
       : `Prefer format: ${format}. All ideas should be clearly ${format}-friendly.`;
 
-  const personalityPrimary = Boolean(
-    opts.prioritizeCreatorPersonality && creatorContext.trim(),
-  );
+  const personalityPrimary = Boolean(opts.prioritizeCreatorPersonality);
 
   // When personality leads, the personality text is the source of truth for voice and boundaries.
   const toneStyleGuidance = toneSettings
@@ -302,15 +300,17 @@ ${toneStyleGuidance}
 ${spicinessGuidance}
 ${contentPolicyBlock}
 
-${creatorContext ? `CREATOR PERSONALITY & NICHE (IMPORTANT - reflect this in ALL ideas):
+${creatorContext ? `${personalityPrimary ? "CREATOR PERSONALITY & NICHE" : "CREATOR PROFILE (AI training, tone settings, niche)"} (reflect in ALL ideas):
 ${creatorContext}
-${personalityPrimary ? `VOICE PRIORITY (PERSONALITY FIRST — TOGGLE ON):
-- This personality text is PRIMARY for voice, attitude, hooks, and caption style. Every hook must sound like THIS creator typing — not a strategist or generic influencer.
-- TRENDS (below) inform topics only — do not import trend-speak into hooks.
-- WRITING STYLE above: emoji guidance may apply, but personality overrides all tone, profanity, and spiciness sliders.
-- If the personality is calm/quiet/reserved, avoid profanity and flirtiness even if global sliders are high.
-- Still align topics and CTAs with GOAL: ${goal} — express them in this brand voice.
-` : ""}Generate ideas that match this personality - the tone, style, and content should feel authentic to who this creator is.
+${personalityPrimary ? `VOICE PRIORITY (PERSONALITY OVERRIDE ON):
+- The CREATOR PERSONALITY block above is PRIMARY for voice, attitude, hooks, and caption style.
+- TRENDS inform topics only — do not import trend-speak into hooks.
+- Personality overrides tone sliders when they conflict.
+- Still align topics and CTAs with GOAL: ${goal}.
+` : `PERSONALITY OVERRIDE OFF:
+- Use AI personality/training, tone sliders, niche, and the creator hint for voice — not the Personality Override field unless it appears above as PRIMARY.
+- Do not default to lingerie or OnlyFans-style framing unless the creator hint requests it.
+`}${personalityPrimary ? " Match the creator personality in every hook." : " Keep hooks aligned with tone settings and niche."}
 ` : "No creator profile provided; use broad, relatable angles."}
 ${creatorProfileGuidance}
 ${opts.creatorHint ? `
@@ -449,9 +449,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
   const effectiveTone = tone || toneFromProfile || "relatable";
   const mergedToneSettings = { ...userToneSettings, ...(requestToneSettings || {}) };
   const isFanHub = platform === "fan_hub";
-  const prioritizePersonality = isFanHub
-    ? true
-    : Boolean(prioritizeCreatorPersonality);
+  const prioritizePersonality = Boolean(prioritizeCreatorPersonality);
   const creatorContext = isFanHub
     ? buildMemberHubCreatorContext({
         creatorPersonality,
