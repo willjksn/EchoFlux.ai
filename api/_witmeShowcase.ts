@@ -52,6 +52,9 @@ function sanitizeShowcaseImageUrl(value: unknown, max = 4096): string {
     if (pl === "/witme-og.png" || pl === "/witme-og-discover.png") return pathOnly;
     return "";
   }
+  if (s.startsWith("http://")) {
+    s = `https://${s.slice("http://".length)}`;
+  }
   if (!s.startsWith("https://")) return "";
   try {
     const u = new URL(s);
@@ -137,7 +140,11 @@ export function sanitizeShowcaseCreators(input: unknown, hasShowcaseKey: boolean
     .filter((c) => c.name && c.imageUrl)
     .slice(0, 24);
 
-  if (!hasShowcaseKey && rows.length === 0) return [...DEFAULT_SHOWCASE_CREATORS];
+  if (rows.length === 0) {
+    const rawLen = Array.isArray(input) ? input.length : 0;
+    if (!hasShowcaseKey && rawLen === 0) return [...DEFAULT_SHOWCASE_CREATORS];
+    if (rawLen > 0) return [...DEFAULT_SHOWCASE_CREATORS];
+  }
   return rows;
 }
 

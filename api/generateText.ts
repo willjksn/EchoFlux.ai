@@ -250,10 +250,11 @@ If the user wants a caption, write a complete caption ready to use.
 If the user wants other text content, write exactly what they asked for.
 ${isMemberHub ? "Ideas should feel fresh, personal, and worth opening the app for — reduce unsubscribe risk." : isExplicitContent || isOnlyFansPlatform ? "If explicit content is requested, write it with bold, explicit, adult-oriented language focused on sexual experiences, intimate moments, girlfriend experience, lust, and desire. Be descriptive and explicit about intimate/explicit sexual content." : ""}
 
-${prioritizeCreatorPersonality && personalityText.trim() ? "Follow CREATOR PERSONALITY above for voice on every line. " : ""}CREATOR PERSONALITY (additional guidance):
-- Use ONLY this user's personality text. Never invent placeholder persona details.
+${prioritizeCreatorPersonality && personalityText.trim()
+  ? `VOICE ORDER: (1) Personality Override above is PRIMARY. (2) Apply AI personality & training and Content Preferences from Settings → Profile & AI as SECONDARY refinements. Override wins conflicts.\n`
+  : "Use AI personality & training and tone settings from Profile & AI for voice (Personality Override is off).\n"}
+- Use ONLY this user's saved profile text. Never invent placeholder persona details.
 - Do NOT force physical stats into every response unless the user asks or the idea requires it.
-- When Personality Override is ON, personality wins over generic tone sliders and default explicit framing.
 
 ${getEmojiInstructions({ enabled: emojiEnabled !== false, intensity: emojiIntensity ?? 5 })}${emojiEnabled !== false ? ` Choose emojis that match the tone (examples: ${getEmojiExamplesForTone(tone)}). Emojis should enhance the content naturally.` : ''}
 

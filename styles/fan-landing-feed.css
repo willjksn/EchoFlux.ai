@@ -1180,41 +1180,101 @@
 
 /* Media strip tint: `.stormij-theme .feed-card .feed-card-media-wrap` (matches feed-header-wrap). */
 
-/*
- * Creator Fan Hub in EchoFlux: no extra shell padding on mobile/tablet — main + max-w-7xl
- * match witme and other app pages. Desktop keeps the inset card (lg:-m-6 lg:p-6 on shell).
- */
+/* Creator Fan Hub in EchoFlux app: full-width shell on mobile (matches member storefront). */
 @media (max-width: 1023px) {
   .stormij-theme.fan-hub-studio-shell {
     box-sizing: border-box;
     width: 100%;
     max-width: 100%;
+    margin-left: 0;
+    margin-right: 0;
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+    border-radius: 0 !important;
+    border-left-width: 0 !important;
+    border-right-width: 0 !important;
+    box-shadow: none !important;
+    overflow-x: hidden;
   }
 
   .stormij-theme.fan-hub-studio-shell > .fan-hub-studio-inner {
+    max-width: none !important;
+    width: 100%;
+    margin-left: 0;
+    margin-right: 0;
+    padding-left: 0.9rem;
+    padding-right: 0.9rem;
+    box-sizing: border-box;
+  }
+
+  /* Feed uses same gutters as member .fan-member-content--feed (no extra 580px cap). */
+  .stormij-theme .fan-hub-posts-feed-shell.fan-member-content.fan-member-content--feed {
     max-width: none;
     width: 100%;
-    padding-left: 0;
-    padding-right: 0;
+    margin-left: 0;
+    margin-right: 0;
+    padding-left: 0.9rem;
+    padding-right: 0.9rem;
+  }
+
+  /* Cancel studio-inner side padding so feed gutters match member hub (single pad layer). */
+  .stormij-theme .fan-hub-posts-feed-bleed {
+    width: calc(100% + 1.8rem);
+    margin-left: -0.9rem;
+    margin-right: -0.9rem;
   }
 }
 
-/* Creator Posts tab: full width of Fan Hub inner (match My Page / other tabs; not storefront 580px column). */
-.stormij-theme .fan-hub-posts-feed-shell .fan-hub-feed-chrome,
-.stormij-theme .fan-hub-posts-feed-shell .member-feed-main {
-  box-sizing: border-box;
-  max-width: none;
+@media (max-width: 480px) {
+  .stormij-theme.fan-hub-studio-shell > .fan-hub-studio-inner {
+    padding-left: 0.8rem;
+    padding-right: 0.8rem;
+  }
+
+  .stormij-theme .fan-hub-posts-feed-shell.fan-member-content.fan-member-content--feed {
+    padding-left: 0.8rem;
+    padding-right: 0.8rem;
+  }
+
+  .stormij-theme .fan-hub-posts-feed-bleed {
+    width: calc(100% + 1.6rem);
+    margin-left: -0.8rem;
+    margin-right: -0.8rem;
+  }
+}
+
+/* Creator Fan Hub posts: same column as storefront .fan-member-content--feed (desktop) */
+.fan-hub-posts-feed-bleed {
   width: 100%;
+  max-width: none;
   margin-left: 0;
   margin-right: 0;
+  box-sizing: border-box;
+}
+
+@media (min-width: 1024px) {
+  .stormij-theme .fan-hub-posts-feed-shell.fan-member-content.fan-member-content--feed {
+    box-sizing: border-box;
+    max-width: 580px;
+    width: 100%;
+    margin-left: auto;
+    margin-right: auto;
+    padding: 1.25rem;
+  }
 }
 
 .stormij-theme .fan-hub-posts-feed-shell .fan-hub-feed-chrome {
+  margin-left: 0;
+  margin-right: 0;
   padding-left: 0;
   padding-right: 0;
 }
 
 .stormij-theme .fan-hub-posts-feed-shell .member-feed-main {
+  max-width: none;
+  width: 100%;
+  margin-left: 0;
+  margin-right: 0;
   padding-left: 0;
   padding-right: 0;
 }
@@ -3585,3 +3645,15 @@ html.dark .fan-member-purchases-compact .fan-member-purchase-unlock-preview-body
   object-position: center center !important;
 }
 
+/* Creator posts feed: inherit member hub narrow-screen rules via .fan-member-content */
+@media (max-width: 480px) {
+  .stormij-theme .fan-hub-posts-feed-shell.fan-member-content.fan-member-content--feed {
+    max-width: 100%;
+    padding: 0.9rem 0.8rem calc(env(safe-area-inset-bottom, 0px) + 0.9rem);
+  }
+
+  .stormij-theme .fan-hub-posts-feed-shell .feed-grid {
+    padding-left: 0;
+    padding-right: 0;
+  }
+}

@@ -29,10 +29,7 @@ export function pickFeaturedShowcaseCreators(showcase: WitmeShowcaseCreator[]): 
 
 export type WitmeLegalLink = { label: string; url: string };
 
-/** Hero mid-stop (`via-[#202b3f]`): tile reads as continuous background, not an empty “card”. */
-const HERO_TILE_BLEND = "border-[#202b3f] bg-[#202b3f]";
-
-/** Single hero collage tile: hero-matched fill until media paints; no contrasting outline flash. */
+/** Single hero collage tile — always show media; frame chrome does not cover the image. */
 function WitmeHeroCollageCell({
   creator,
   idx,
@@ -49,20 +46,12 @@ function WitmeHeroCollageCell({
   /** Multiplies configured `mediaScale`; values below 1 zoom out cover slightly (more of asset visible). */
   coverRelax?: number;
 }) {
-  const [mediaReady, setMediaReady] = useState(false);
   const path = witmeCreatorPagePath(creator.pageSlug);
   const href = creator.linkLive && path ? witmePublicHref(path) : null;
   const alt = `${creator.name || "Creator"} on WitMe`;
 
-  useEffect(() => {
-    setMediaReady(false);
-  }, [creator.imageUrl, creator.mediaKind]);
-
   const frameClass =
-    "relative aspect-[5/7] overflow-hidden rounded-2xl transition-[border-color,box-shadow,background-color] duration-300 ease-out " +
-    (mediaReady
-      ? "border border-white/20 bg-transparent shadow-2xl shadow-black/40 ring-1 ring-white/10"
-      : `border shadow-none ring-0 ${HERO_TILE_BLEND}`);
+    "relative aspect-[5/7] overflow-hidden rounded-2xl border border-white/20 bg-black/25 shadow-2xl shadow-black/40 ring-1 ring-white/10";
 
   const inner = (
     <div className={frameClass}>
@@ -76,7 +65,6 @@ function WitmeHeroCollageCell({
         objectFit="cover"
         layout="fill"
         imgLoading={imgLoading}
-        onReady={() => setMediaReady(true)}
       />
     </div>
   );

@@ -272,8 +272,24 @@ Content Focus Areas (ALL ideas must relate to these):
 - Intimate connection building
 `;
 
+    const memberHubVoicePriority =
+      isMemberHub && prioritizePersonality && personalityText.trim()
+        ? `
+VOICE PRIORITY (PERSONALITY OVERRIDE ON):
+1. CREATOR PERSONALITY (override) in the block above — PRIMARY for voice and boundaries.
+2. AI PERSONALITY & TRAINING + CONTENT PREFERENCES (tone sliders) in the same block — SECONDARY; refine ideas after the override.
+3. Trends and creator preferences — topics and monetization angles; do not override voice.
+- When override and sliders conflict, the override wins.
+`
+        : isMemberHub
+          ? `
+VOICE PRIORITY (PERSONALITY OVERRIDE OFF):
+- Use AI personality/training, tone sliders, niche, and content preferences for voice.
+`
+          : "";
+
     const prompt = `
-${personalityBlock ? `${personalityBlock}\n\n` : ""}You are an expert monetization strategist for ${
+${personalityBlock ? `${personalityBlock}\n\n` : ""}${memberHubVoicePriority}You are an expert monetization strategist for ${
       isMemberHub ? "paid member hubs (My Page) and creator fan feeds" : "OnlyFans creators specializing in adult/explicit content monetization"
     }.
 

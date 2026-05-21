@@ -15,6 +15,7 @@ import {
   formatObjectPositionPercentPair,
   parseObjectPositionPercentPair,
 } from '../src/lib/objectPositionPan';
+import { witmeCoerceShowcaseImageUrl } from '../src/lib/witmePublicAssets';
 
 type WitmeFeatureCard = {
   title: string;
@@ -28,6 +29,10 @@ type WitmeLegalLink = {
 };
 
 type WitmeMediaListKey = 'showcaseCreators' | 'homeHeroVisuals' | 'homeExperienceVisuals';
+
+function witmePreviewMediaSrc(url: string): string {
+  return witmeCoerceShowcaseImageUrl(url.trim());
+}
 
 function collectWitmeLandingMediaUrls(cfg: WitmeLandingConfig): string[] {
   return [...cfg.showcaseCreators, ...cfg.homeHeroVisuals, ...cfg.homeExperienceVisuals]
@@ -155,6 +160,7 @@ const witmeAnalyticsPathLabel = (path: string): string => {
 const mergeWitmeLandingFromApi = (raw: WitmeLandingConfig): WitmeLandingConfig => {
   const mapRow = (c: WitmeShowcaseCreator): WitmeShowcaseCreator => ({
     ...c,
+    imageUrl: witmeCoerceShowcaseImageUrl(c.imageUrl),
     mediaKind: c.mediaKind === 'video' ? 'video' : 'image',
     mediaObjectPosition:
       typeof c.mediaObjectPosition === 'string' && c.mediaObjectPosition.trim() !== ''
@@ -579,7 +585,7 @@ const WitmeHomeVisualSlotRow: React.FC<{
                 {row.mediaKind === 'video' ? (
                   <video
                     key={row.imageUrl}
-                    src={row.imageUrl}
+                    src={witmePreviewMediaSrc(row.imageUrl)}
                     className="h-full w-full pointer-events-none select-none"
                     style={focalPreviewStyle}
                     muted
@@ -591,7 +597,7 @@ const WitmeHomeVisualSlotRow: React.FC<{
                   />
                 ) : (
                   <img
-                    src={row.imageUrl}
+                    src={witmePreviewMediaSrc(row.imageUrl)}
                     alt=""
                     className="h-full w-full pointer-events-none select-none"
                     style={focalPreviewStyle}
@@ -1475,7 +1481,7 @@ export const WitmePageManager: React.FC = () => {
                             >
                               {row.mediaKind === 'video' ? (
                                 <video
-                                  src={row.imageUrl}
+                                  src={witmePreviewMediaSrc(row.imageUrl)}
                                   className="h-full w-full pointer-events-none"
                                   style={showcaseFrameMediaStyle(
                                     row.mediaObjectPosition,
@@ -1490,7 +1496,7 @@ export const WitmePageManager: React.FC = () => {
                                 />
                               ) : (
                                 <img
-                                  src={row.imageUrl}
+                                  src={witmePreviewMediaSrc(row.imageUrl)}
                                   alt=""
                                   className="h-full w-full pointer-events-none"
                                   style={showcaseFrameMediaStyle(
@@ -1594,7 +1600,7 @@ export const WitmePageManager: React.FC = () => {
                                 >
                                   {row.mediaKind === 'video' ? (
                                     <video
-                                      src={row.imageUrl}
+                                      src={witmePreviewMediaSrc(row.imageUrl)}
                                       className="h-full w-full pointer-events-none"
                                       style={showcaseFeaturedPreviewStyle(row.mediaObjectPosition, featuredPreviewFit)}
                                       muted
@@ -1605,7 +1611,7 @@ export const WitmePageManager: React.FC = () => {
                                     />
                                   ) : (
                                     <img
-                                      src={row.imageUrl}
+                                      src={witmePreviewMediaSrc(row.imageUrl)}
                                       alt=""
                                       className="h-full w-full pointer-events-none"
                                       style={showcaseFeaturedPreviewStyle(row.mediaObjectPosition, featuredPreviewFit)}

@@ -166,13 +166,13 @@ const useWitmeLandingConfig = (enabled = true): WitmeLandingConfig => {
   useEffect(() => {
     if (!enabled) return;
     if (!shouldUseWitmeApi()) return;
-    let cancelled = false;
+    const ac = new AbortController();
     const load = async () => {
       try {
-        const res = await fetch("/api/witmeLandingConfig");
+        const res = await fetch("/api/witmeLandingConfig", { signal: ac.signal });
         if (!res.ok) return;
         const data = await res.json();
-        if (cancelled || !data?.config) return;
+        if (!data?.config) return;
         setConfig((prev) => {
           const nextBase = { ...prev, ...data.config } as WitmeLandingConfig;
           const mapShowcase = (c: WitmeShowcaseCreator) => ({
@@ -207,12 +207,12 @@ const useWitmeLandingConfig = (enabled = true): WitmeLandingConfig => {
           };
           return normalizeLandingCopy(merged);
         });
-      } catch {}
+      } catch (err: unknown) {
+        if (err instanceof DOMException && err.name === "AbortError") return;
+      }
     };
-    load();
-    return () => {
-      cancelled = true;
-    };
+    void load();
+    return () => ac.abort();
   }, [enabled]);
 
   return config;

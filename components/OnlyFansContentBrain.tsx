@@ -1694,9 +1694,28 @@ export const OnlyFansContentBrain: React.FC<OnlyFansContentBrainProps> = ({
     ).trim();
 
     const buildGenerationSettingsContext = (prioritizePersonality: boolean) => {
+        const tone = user?.settings?.tone;
+        const toneSliderLines = tone
+            ? [
+                  typeof tone.formality === 'number' ? `Formality: ${tone.formality}/100` : null,
+                  typeof tone.humor === 'number' ? `Humor: ${tone.humor}/100` : null,
+                  typeof tone.empathy === 'number' ? `Warmth: ${tone.empathy}/100` : null,
+                  typeof tone.spiciness === 'number' ? `Spiciness: ${tone.spiciness}/100` : null,
+                  typeof tone.profanity === 'number' ? `Profanity: ${tone.profanity}/100` : null,
+                  typeof tone.emojiLevel === 'number' ? `Emoji level: ${tone.emojiLevel}/100` : null,
+              ].filter(Boolean)
+            : [];
+        const secondaryLabel = prioritizePersonality
+            ? 'SECONDARY (after Personality Override — override wins conflicts)'
+            : 'PRIMARY for voice';
         const secondary = [
-            aiPersonalitySetting ? `AI PERSONALITY & TRAINING:\n${aiPersonalitySetting}` : null,
-            aiToneSetting ? `Default AI Tone: ${aiToneSetting}` : null,
+            aiPersonalitySetting
+                ? `AI PERSONALITY & TRAINING — ${secondaryLabel}:\n${aiPersonalitySetting}`
+                : null,
+            aiToneSetting ? `Default AI tone — ${secondaryLabel}: ${aiToneSetting}` : null,
+            toneSliderLines.length
+                ? `CONTENT PREFERENCES (tone sliders) — ${secondaryLabel}:\n${toneSliderLines.map((l) => `- ${l}`).join('\n')}`
+                : null,
             explicitnessLevelSetting !== null && explicitnessLevelSetting !== undefined
                 ? `Explicitness Level: ${explicitnessLevelSetting}/10`
                 : null,
@@ -1704,7 +1723,7 @@ export const OnlyFansContentBrain: React.FC<OnlyFansContentBrainProps> = ({
 
         if (prioritizePersonality && effectiveCreatorPersonality) {
             return [
-                `CREATOR PERSONALITY (PRIMARY — match this voice first):\n${effectiveCreatorPersonality}`,
+                `CREATOR PERSONALITY (PRIMARY — Personality Override ON):\n${effectiveCreatorPersonality}`,
                 ...secondary,
             ].join('\n\n');
         }

@@ -74,16 +74,25 @@ export function buildMemberHubCreatorContext(opts: {
   prioritizeCreatorPersonality: boolean;
 }): string {
   const parts: string[] = [];
+  const overrideOn =
+    opts.prioritizeCreatorPersonality && !!opts.creatorPersonality.trim();
   const personalityBlock = buildCreatorPersonalityBlock(
     opts.creatorPersonality,
-    opts.prioritizeCreatorPersonality && !!opts.creatorPersonality.trim(),
+    overrideOn,
   );
   if (personalityBlock) parts.push(personalityBlock);
+
+  const secondaryLabel = overrideOn
+    ? "SECONDARY (after Personality Override — apply where consistent; override wins conflicts)"
+    : "PRIMARY for voice (Personality Override is off)";
+
   if (opts.aiPersonality.trim()) {
-    parts.push(`AI PERSONALITY & TRAINING (Settings → Profile & AI):\n${opts.aiPersonality.trim()}`);
+    parts.push(
+      `AI PERSONALITY & TRAINING — ${secondaryLabel} (Settings → Profile & AI):\n${opts.aiPersonality.trim()}`,
+    );
   }
   if (opts.aiTone.trim()) {
-    parts.push(`Default AI tone: ${opts.aiTone.trim()}`);
+    parts.push(`Default AI tone — ${secondaryLabel}: ${opts.aiTone.trim()}`);
   }
   if (opts.niche.trim()) {
     parts.push(`Niche: ${opts.niche.trim()}`);
@@ -98,7 +107,9 @@ export function buildMemberHubCreatorContext(opts: {
     if (typeof ts.profanity === "number") lines.push(`Profanity: ${ts.profanity}/100`);
     if (typeof ts.emojiLevel === "number") lines.push(`Emoji level: ${ts.emojiLevel}/100`);
     if (lines.length) {
-      parts.push(`CONTENT PREFERENCES (tone sliders):\n${lines.map((l) => `- ${l}`).join("\n")}`);
+      parts.push(
+        `CONTENT PREFERENCES (tone sliders) — ${secondaryLabel}:\n${lines.map((l) => `- ${l}`).join("\n")}`,
+      );
     }
   }
   return parts.filter(Boolean).join("\n\n");
@@ -124,8 +135,9 @@ CREATOR PERSONALITY (PRIMARY — read before trends and other instructions; voic
 ${p}
 
 WRITING STYLE (personality-first):
-- The personality text is the source of truth for voice, tone, and what to avoid.
-- Do not contradict the personality with generic AI voice or default framing.
+- The Personality Override text is the source of truth for voice, tone, and what to avoid.
+- Then apply AI personality & training and Content Preferences (tone sliders) from Settings → Profile & AI as secondary refinements.
+- Where secondary settings conflict with the override, the override wins.
 - Mirror the creator's style in every idea and description.
 `.trim();
 }

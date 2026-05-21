@@ -61,20 +61,16 @@ export const ShowcaseMedia: React.FC<{
   const videoRef = useRef<HTMLVideoElement>(null);
   const imgRef = useRef<HTMLImageElement>(null);
   const readyOnce = useRef(false);
-  /** Eager hero images: avoid an empty tile flash before `onLoad` (lazy tiles still fade in). */
-  const [imgVisible, setImgVisible] = useState(() => imgLoading === "eager");
 
   const fireReady = useCallback(() => {
     if (readyOnce.current) return;
     readyOnce.current = true;
-    if (mediaKind !== "video") setImgVisible(true);
     onReady?.();
-  }, [mediaKind, onReady]);
+  }, [onReady]);
 
   useEffect(() => {
     readyOnce.current = false;
-    setImgVisible(imgLoading === "eager");
-  }, [u, mediaKind, imgLoading]);
+  }, [u, mediaKind]);
 
   useEffect(() => {
     if (mediaKind !== "video" || !u) return;
@@ -86,11 +82,17 @@ export const ShowcaseMedia: React.FC<{
     return () => v.removeEventListener("loadeddata", onData);
   }, [mediaKind, u, fireReady]);
 
-  useLayoutEffect(() => {
+  const tryMarkImageReady = useCallback(() => {
     if (mediaKind === "video" || !u) return;
     const el = imgRef.current;
     if (el?.complete && el.naturalHeight > 0) fireReady();
   }, [mediaKind, u, fireReady]);
+
+  useLayoutEffect(() => {
+    tryMarkImageReady();
+    const id = window.requestAnimationFrame(() => tryMarkImageReady());
+    return () => window.cancelAnimationFrame(id);
+  }, [tryMarkImageReady]);
 
   useEffect(() => {
     const v = videoRef.current;
@@ -140,11 +142,11 @@ export const ShowcaseMedia: React.FC<{
         autoPlay
         preload="metadata"
         aria-label={alt}
+        onLoadedData={() => fireReady()}
+        onError={() => fireReady()}
       />
     );
   }
-  /** Short fade: long fades read as a second “load” after any stale-frame flash. */
-  const imgOpacityClass = `transition-opacity duration-[180ms] ease-out ${imgVisible ? "opacity-100" : "opacity-0"}`;
 
   return (
     <img
@@ -152,12 +154,13 @@ export const ShowcaseMedia: React.FC<{
       ref={imgRef}
       src={u}
       alt={alt}
-      className={`${imgOpacityClass} ${mergedClass}`.trim()}
+      className={mergedClass}
       style={{ ...fitStyle, ...mediaTransformStyle, ...intrinsicStyle }}
       loading={imgLoading}
       decoding="async"
       fetchPriority={imgLoading === "eager" ? "high" : undefined}
       onLoad={() => fireReady()}
+      onError={() => fireReady()}
     />
   );
 };

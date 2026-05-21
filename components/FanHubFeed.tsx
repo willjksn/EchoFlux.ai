@@ -2558,10 +2558,51 @@ export const FanHubFeed: React.FC<{
 
   const [visibilityOpen, setVisibilityOpen] = useState(false);
   const visibilityRef = useRef<HTMLDivElement | null>(null);
+  const visibilityBtnRef = useRef<HTMLButtonElement | null>(null);
+  const visibilityPopoverRef = useRef<HTMLDivElement | null>(null);
+  const [visibilityPopoverPos, setVisibilityPopoverPos] = useState<{
+    top: number;
+    left: number;
+    width: number;
+  } | null>(null);
+
+  const updateVisibilityPopoverPos = useCallback(() => {
+    const btn = visibilityBtnRef.current;
+    if (!btn) {
+      setVisibilityPopoverPos(null);
+      return;
+    }
+    const pad = 8;
+    const vw = window.innerWidth;
+    const width = Math.min(320, Math.max(260, vw - pad * 2));
+    const rect = btn.getBoundingClientRect();
+    let left = rect.right - width;
+    if (left < pad) left = pad;
+    if (left + width > vw - pad) left = Math.max(pad, vw - pad - width);
+    setVisibilityPopoverPos({ top: rect.bottom + 6, left, width });
+  }, []);
+
+  useLayoutEffect(() => {
+    if (!visibilityOpen) {
+      setVisibilityPopoverPos(null);
+      return;
+    }
+    updateVisibilityPopoverPos();
+    window.addEventListener("resize", updateVisibilityPopoverPos);
+    window.addEventListener("scroll", updateVisibilityPopoverPos, true);
+    return () => {
+      window.removeEventListener("resize", updateVisibilityPopoverPos);
+      window.removeEventListener("scroll", updateVisibilityPopoverPos, true);
+    };
+  }, [visibilityOpen, updateVisibilityPopoverPos]);
+
   useEffect(() => {
     if (!visibilityOpen) return;
     const handleClickOutside = (e: MouseEvent) => {
-      if (visibilityRef.current && !visibilityRef.current.contains(e.target as Node)) setVisibilityOpen(false);
+      const target = e.target as Node;
+      if (visibilityRef.current?.contains(target)) return;
+      if (visibilityPopoverRef.current?.contains(target)) return;
+      setVisibilityOpen(false);
     };
     document.addEventListener("click", handleClickOutside, true);
     return () => document.removeEventListener("click", handleClickOutside, true);
@@ -2585,6 +2626,7 @@ export const FanHubFeed: React.FC<{
             {isAdminMode && (
               <div className="feed-header-visibility-dropdown" ref={visibilityRef}>
                 <button
+                  ref={visibilityBtnRef}
                   type="button"
                   className="feed-header-visibility-btn"
                   onClick={() => setVisibilityOpen((o) => !o)}
@@ -2593,8 +2635,23 @@ export const FanHubFeed: React.FC<{
                 >
                   Visibility
                 </button>
-                {visibilityOpen && (
-                  <div className="feed-header-visibility-popover" aria-label="Visibility for fans">
+                {visibilityOpen &&
+                  visibilityPopoverPos &&
+                  typeof document !== "undefined" &&
+                  createPortal(
+                  <div
+                    ref={visibilityPopoverRef}
+                    className="feed-header-visibility-popover feed-header-visibility-popover--portaled"
+                    aria-label="Visibility for fans"
+                    style={{
+                      position: "fixed",
+                      top: visibilityPopoverPos.top,
+                      left: visibilityPopoverPos.left,
+                      width: visibilityPopoverPos.width,
+                      right: "auto",
+                      marginTop: 0,
+                    }}
+                  >
                     <span className="feed-header-visibility-label">Visibility for fans</span>
                     <div className="feed-header-toggle-row">
                       <span className="feed-header-toggle-label">Like counts</span>
@@ -2739,7 +2796,8 @@ export const FanHubFeed: React.FC<{
                         </>
                       )}
                     </div>
-                  </div>
+                  </div>,
+                  document.body,
                 )}
               </div>
             )}

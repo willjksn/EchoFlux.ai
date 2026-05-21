@@ -178,12 +178,15 @@ function buildPrompt(opts: {
   const toneStyleGuidance = toneSettings
     ? personalityPrimary
       ? `
-WRITING STYLE (personality-first — CREATOR PERSONALITY block defines voice and boundaries):
+WRITING STYLE (order: Personality Override → AI personality & tone sliders below):
+${toneSettings.formality !== undefined ? `- Formality (${toneSettings.formality}/100): apply after override; override wins if they conflict` : ''}
+${toneSettings.humor !== undefined ? `- Humor (${toneSettings.humor}/100): apply after override` : ''}
+${toneSettings.empathy !== undefined ? `- Warmth (${toneSettings.empathy}/100): apply after override` : ''}
+${toneSettings.profanity !== undefined && toneSettings.profanity > 0 ? `- Profanity (${toneSettings.profanity}/100): only if override + sliders allow` : '- Keep language clean unless override and sliders allow profanity'}
 ${toneSettings.emojiLevel !== undefined ? `- Emoji usage (${toneSettings.emojiLevel}/100): ${toneSettings.emojiLevel < 20 ? 'No emojis in hook/captionStarter' : toneSettings.emojiLevel < 40 ? 'At most 1-2 emojis total' : toneSettings.emojiLevel < 60 ? 'Moderate emojis (a few, purposeful)' : 'Liberal, expressive emoji use that matches the voice'}` : ''}
-- Ignore formality/humor/warmth/profanity/spiciness slider numbers when they conflict with personality.
-- If the personality is calm, quiet, soft, classy, gentle, reserved, wholesome, or similar, DO NOT add profanity, aggressive flirtiness, or spicy language.
-- Only use flirtiness or profanity if the personality itself clearly calls for it.
-- Mirror the personality text instead. Do not sanitize hooks to sound generic.
+- Personality Override defines voice and boundaries first; AI personality/training and sliders refine hooks second.
+- If the override is calm, quiet, soft, classy, gentle, reserved, or wholesome, do NOT add profanity or spicy language even if sliders are high.
+- Only use flirtiness or profanity when the override (and optionally sliders) clearly support it.
 `
       : `
 WRITING STYLE PREFERENCES (apply to hook and captionStarter):
@@ -196,11 +199,15 @@ ${toneSettings.emojiLevel !== undefined ? `- Emoji usage (${toneSettings.emojiLe
     : "";
 
   const spice = typeof toneSettings?.spiciness === "number" ? Math.max(0, Math.min(100, Math.round(toneSettings.spiciness))) : 0;
-  const spicinessGuidance = spice > 0 && !personalityPrimary ? `
-SPICINESS / BORDERLINE EXPLICITNESS (${spice}/100):
+  const spicinessGuidance =
+    spice > 0
+      ? `
+SPICINESS / BORDERLINE EXPLICITNESS (${spice}/100)${personalityPrimary ? " — secondary to Personality Override" : ""}:
 - ${spice < 35 ? "Light flirtiness only: suggestive wording is subtle, tasteful, and still mainstream-safe." : spice < 70 ? "Noticeable flirtiness: hooks can be teasing, body-confident, and a little provocative without becoming explicit." : "Bold edge: hooks can be provocative and boundary-pushing for creator-owned spaces, while avoiding illegal content, harassment, or platform-banned claims."}
 - Keep the level consistent across title, hook, captionStarter, and shotList. Do not randomly sanitize spicy requests into generic lifestyle content.
-` : "";
+${personalityPrimary ? "- If Personality Override is clean/reserved, cap spiciness to what the override allows even when this slider is high." : ""}
+`
+      : "";
 
   const fanHubBlueprintBlock =
     platform === "fan_hub"
@@ -295,7 +302,7 @@ GOAL: ${goal}. ${goalGuidance}
 EFFORT (minutes): ${effort}. ${effortGuidance}
 PREFERRED FORMAT: ${format}. ${formatGuidance}
 ${platformFormatGuidance}
-TONE: ${tone}.${personalityPrimary ? " SECONDARY for voice — creator personality block below overrides this label (and tone sliders) when they conflict." : " Keep hooks and copy in this voice."}
+TONE: ${tone}.${personalityPrimary ? " Tertiary label — Personality Override is primary, then AI personality & tone sliders in the creator block below." : " Keep hooks and copy in this voice together with AI personality and tone sliders below."}
 ${toneStyleGuidance}
 ${spicinessGuidance}
 ${contentPolicyBlock}
@@ -303,14 +310,15 @@ ${contentPolicyBlock}
 ${creatorContext ? `${personalityPrimary ? "CREATOR PERSONALITY & NICHE" : "CREATOR PROFILE (AI training, tone settings, niche)"} (reflect in ALL ideas):
 ${creatorContext}
 ${personalityPrimary ? `VOICE PRIORITY (PERSONALITY OVERRIDE ON):
-- The CREATOR PERSONALITY block above is PRIMARY for voice, attitude, hooks, and caption style.
-- TRENDS inform topics only — do not import trend-speak into hooks.
-- Personality overrides tone sliders when they conflict.
+1. CREATOR PERSONALITY (override) — PRIMARY for voice, attitude, hooks, and caption style.
+2. AI PERSONALITY & TRAINING + CONTENT PREFERENCES (tone sliders) in the same block — SECONDARY; apply after the override where they fit.
+3. TRENDS — topics and formats only; do not import trend-speak into hooks.
+- When override and sliders conflict, the override wins.
 - Still align topics and CTAs with GOAL: ${goal}.
 ` : `PERSONALITY OVERRIDE OFF:
-- Use AI personality/training, tone sliders, niche, and the creator hint for voice — not the Personality Override field unless it appears above as PRIMARY.
+- Use AI personality/training, tone sliders, niche, and the creator hint for voice (override field is not primary).
 - Do not default to lingerie or OnlyFans-style framing unless the creator hint requests it.
-`}${personalityPrimary ? " Match the creator personality in every hook." : " Keep hooks aligned with tone settings and niche."}
+`}${personalityPrimary ? " Match the override first, then refine with AI personality and tone sliders." : " Keep hooks aligned with AI personality, tone settings, and niche."}
 ` : "No creator profile provided; use broad, relatable angles."}
 ${creatorProfileGuidance}
 ${opts.creatorHint ? `
@@ -325,7 +333,7 @@ ${fanHubGuidance}
 
 ${existingIdeasForContext?.length ? `EXISTING IDEAS (DO NOT DUPLICATE - generate completely different ideas):\n${existingIdeasForContext.map((i) => `${i.title}: ${i.hook}`).join("\n")}\n` : ""}
 ${personalityPrimary ? `
-FINAL CHECK — HOOKS: If a hook could fit any creator in this niche, rewrite until it clearly matches the CREATOR PERSONALITY text above.
+FINAL CHECK — HOOKS: If a hook could fit any creator in this niche, rewrite until it clearly matches the Personality Override, then AI personality/tone sliders above.
 ` : ""}
 
 BLUEPRINT FORMAT (be SPECIFIC and ACTIONABLE):
