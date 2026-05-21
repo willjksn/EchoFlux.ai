@@ -989,6 +989,7 @@ function FeedCard({
   const likeCount = post.likeCount ?? 0;
   const likersListAvailable = (post.likedBy?.length ?? 0) > 0;
   const likeCountInteractive = Boolean(isAdminMode && likeCount > 0 && likersListAvailable);
+  const showLikeCount = Boolean(isAdminMode && likeCount > 0 && !post.hideLikeCounts);
 
   useEffect(() => {
     if (!commentsOpen) return;
@@ -1709,23 +1710,26 @@ function FeedCard({
               <HeartOutline />
               <HeartFilled />
             </button>
-            {likeCountInteractive ? (
-              <button
-                type="button"
-                className="feed-card-action-count feed-card-action-count--clickable"
-                onClick={() => setLikersOpen(true)}
-                aria-label={`${likeCount} likes — who liked`}
-              >
-                {likeCount}
-              </button>
-            ) : (
-              <span className="feed-card-action-count">{likeCount}</span>
-            )}
+            {showLikeCount &&
+              (likeCountInteractive ? (
+                <button
+                  type="button"
+                  className="feed-card-action-count feed-card-action-count--clickable"
+                  onClick={() => setLikersOpen(true)}
+                  aria-label={`${likeCount} likes — who liked`}
+                >
+                  {likeCount}
+                </button>
+              ) : (
+                <span className="feed-card-action-count">{likeCount}</span>
+              ))}
           </span>
           {!post.hideComments && (
             <button type="button" className="feed-card-action-group feed-card-action-link" aria-label="Comments" onClick={() => setCommentsOpen(true)}>
               <CommentIcon />
-              <span className="feed-card-action-count">{visibleComments.length}</span>
+              {visibleComments.length > 0 ? (
+                <span className="feed-card-action-count">{visibleComments.length}</span>
+              ) : null}
             </button>
           )}
           {post.showTipButton !== false && !hasTipGoal && !hideTipButtons && (
@@ -1814,23 +1818,26 @@ function FeedCard({
                 <HeartOutline />
                 <HeartFilled />
               </button>
-              {likeCountInteractive ? (
-                <button
-                  type="button"
-                  className="feed-card-action-count feed-card-action-count--clickable"
-                  onClick={() => setLikersOpen(true)}
-                  aria-label={`${likeCount} likes — who liked`}
-                >
-                  {likeCount}
-                </button>
-              ) : (
-                <span className="feed-card-action-count">{likeCount}</span>
-              )}
+              {showLikeCount &&
+                (likeCountInteractive ? (
+                  <button
+                    type="button"
+                    className="feed-card-action-count feed-card-action-count--clickable"
+                    onClick={() => setLikersOpen(true)}
+                    aria-label={`${likeCount} likes — who liked`}
+                  >
+                    {likeCount}
+                  </button>
+                ) : (
+                  <span className="feed-card-action-count">{likeCount}</span>
+                ))}
             </span>
             {!post.hideComments && (
               <button type="button" className="feed-card-action-group feed-card-action-link" aria-label="Comments" onClick={() => setCommentsOpen(true)}>
                 <CommentIcon />
-                <span className="feed-card-action-count">{visibleComments.length}</span>
+                {visibleComments.length > 0 ? (
+                  <span className="feed-card-action-count">{visibleComments.length}</span>
+                ) : null}
               </button>
             )}
             {post.showTipButton !== false && !hasTipGoal && !hideTipButtons && (

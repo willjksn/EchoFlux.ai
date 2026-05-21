@@ -1180,9 +1180,38 @@
 
 /* Media strip tint: `.stormij-theme .feed-card .feed-card-media-wrap` (matches feed-header-wrap). */
 
-/* Creator Fan Hub feed column width matches member feed tab */
-.fan-hub-feed-chrome .member-feed-main {
+/* Creator Fan Hub posts: same column as storefront .fan-member-content--feed */
+.fan-hub-posts-feed-bleed {
+  width: calc(100% + 3rem);
+  max-width: none;
+  margin-left: -1.5rem;
+  margin-right: -1.5rem;
+  box-sizing: border-box;
+}
+
+.stormij-theme .fan-hub-posts-feed-shell.fan-member-content.fan-member-content--feed {
+  box-sizing: border-box;
   max-width: 580px;
+  width: 100%;
+  margin-left: auto;
+  margin-right: auto;
+  padding: 1.25rem;
+}
+
+.stormij-theme .fan-hub-posts-feed-shell .fan-hub-feed-chrome {
+  margin-left: 0;
+  margin-right: 0;
+  padding-left: 0;
+  padding-right: 0;
+}
+
+.stormij-theme .fan-hub-posts-feed-shell .member-feed-main {
+  max-width: none;
+  width: 100%;
+  margin-left: 0;
+  margin-right: 0;
+  padding-left: 0;
+  padding-right: 0;
 }
 
 /* Common States */
@@ -3551,30 +3580,17 @@ html.dark .fan-member-purchases-compact .fan-member-purchase-unlock-preview-body
   object-position: center center !important;
 }
 
-/* Creator Fan Hub → Posts: mobile feed width matches member storefront feed tab */
-@media (max-width: 639px) {
-  .stormij-theme .fan-hub-posts-feed-shell {
-    width: calc(100% + 3rem);
-    max-width: none;
-    margin-left: -1.5rem;
-    margin-right: -1.5rem;
-  }
-
-  .stormij-theme .fan-hub-posts-feed-shell .fan-hub-feed-chrome {
-    margin-left: 0;
-    margin-right: 0;
-    padding-left: 0;
-    padding-right: 0;
-    border-radius: 0;
-  }
-
-  .stormij-theme .fan-hub-posts-feed-shell .member-feed-main {
-    max-width: none;
+/* Creator posts feed: inherit member hub narrow-screen rules via .fan-member-content */
+@media (max-width: 480px) {
+  .stormij-theme .fan-hub-posts-feed-bleed {
     width: 100%;
     margin-left: 0;
     margin-right: 0;
-    padding-left: 1.25rem;
-    padding-right: 1.25rem;
+  }
+
+  .stormij-theme .fan-hub-posts-feed-shell.fan-member-content.fan-member-content--feed {
+    max-width: 100%;
+    padding: 0.9rem 0.8rem calc(env(safe-area-inset-bottom, 0px) + 0.9rem);
   }
 
   .stormij-theme .fan-hub-posts-feed-shell .feed-grid {
