@@ -1199,27 +1199,22 @@
   }
 }
 
-/* Posts tab: optional centered feed column on large screens only */
-@media (min-width: 1024px) {
-  .stormij-theme .fan-hub-posts-feed-shell .fan-hub-feed-chrome {
-    max-width: 580px;
-    margin-left: auto;
-    margin-right: auto;
-  }
+/* Creator Posts tab: full width of Fan Hub inner (match My Page / other tabs; not storefront 580px column). */
+.stormij-theme .fan-hub-posts-feed-shell .fan-hub-feed-chrome,
+.stormij-theme .fan-hub-posts-feed-shell .member-feed-main {
+  box-sizing: border-box;
+  max-width: none;
+  width: 100%;
+  margin-left: 0;
+  margin-right: 0;
 }
 
 .stormij-theme .fan-hub-posts-feed-shell .fan-hub-feed-chrome {
-  margin-left: 0;
-  margin-right: 0;
   padding-left: 0;
   padding-right: 0;
 }
 
 .stormij-theme .fan-hub-posts-feed-shell .member-feed-main {
-  max-width: none;
-  width: 100%;
-  margin-left: 0;
-  margin-right: 0;
   padding-left: 0;
   padding-right: 0;
 }
