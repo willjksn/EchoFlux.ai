@@ -1408,6 +1408,7 @@ export const OnlyFansContentBrain: React.FC<OnlyFansContentBrainProps> = ({
             setSelectedPlatform('My Page');
         }
     }, [fanHubContext, singleTabMode, initialTab]);
+
     const [isGenerating, setIsGenerating] = useState(false);
     
     // Caption generation state
@@ -1692,6 +1693,15 @@ export const OnlyFansContentBrain: React.FC<OnlyFansContentBrainProps> = ({
         ''
     ).trim();
 
+    // Fan Hub: lean on Settings → Profile & AI (personality + tone) for Post ideas and Drop plan
+    useEffect(() => {
+        if (!fanHubContext) return;
+        if (effectiveCreatorPersonality) {
+            setUseCreatorPersonalityPostIdeas(true);
+            setUseCreatorPersonalityMonetization(true);
+        }
+    }, [fanHubContext, effectiveCreatorPersonality]);
+
     const buildGenerationSettingsContext = (prioritizePersonality: boolean) => {
         const secondary = [
             aiPersonalitySetting ? `AI PERSONALITY & TRAINING:\n${aiPersonalitySetting}` : null,
@@ -1837,16 +1847,22 @@ export const OnlyFansContentBrain: React.FC<OnlyFansContentBrainProps> = ({
 
         // Monetization preferences: only seed if empty
         if (!monetizationPreferences.trim()) {
-            const pref = [
-                'Account-safe planning (manual posting).',
-                challenge ? `My biggest challenge: ${challenge}.` : null,
-                'I want a simple weekly plan that balances engagement + upsells without burnout.',
-            ].filter(Boolean).join(' ');
-            setMonetizationPreferences(pref);
+            const pref = fanHubContext
+                ? [
+                    'Member feed planning (My Page).',
+                    challenge ? `My biggest challenge: ${challenge}.` : null,
+                    'Balance connection posts, exclusives, polls, and soft drops — match my niche and tone settings.',
+                ]
+                : [
+                    'Account-safe planning (manual posting).',
+                    challenge ? `My biggest challenge: ${challenge}.` : null,
+                    'I want a simple weekly plan that balances engagement + upsells without burnout.',
+                ];
+            setMonetizationPreferences(pref.filter(Boolean).join(' '));
         }
 
         didInitMonetizedDefaults.current = true;
-    }, [user?.id, monetizedModeEnabled]); // intentionally minimal deps
+    }, [user?.id, monetizedModeEnabled, fanHubContext]); // intentionally minimal deps
 
     // Initialize component and restore persisted state
     // Load captions history on mount and when user changes
@@ -2249,6 +2265,9 @@ export const OnlyFansContentBrain: React.FC<OnlyFansContentBrainProps> = ({
             const token = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
             const apiPlatform = mapPlatformToDailyApi(selectedPlatform);
             const isMemberHubIdeas = fanHubContext || selectedPlatform === 'My Page';
+            const hintRequestsSpicy = /\b(lingerie|bikini|swimwear|sexy|sensual|spicy|nsfw|nude|explicit|thirst|boudoir|onlyfans|ppv|tease|teasing|seductive|provocative|bedroom|lace)\b/i.test(
+                postIdeaPrompt,
+            );
 
             const response = await fetch('/api/generateDailyPostIdeas', {
                 method: 'POST',
@@ -2264,7 +2283,9 @@ export const OnlyFansContentBrain: React.FC<OnlyFansContentBrainProps> = ({
                     tone: aiToneSetting || 'relatable',
                     useTrends: true,
                     includeTrendContext: true,
-                    spicyMode: (user?.settings?.tone?.spiciness ?? 0) > 0,
+                    spicyMode: isMemberHubIdeas
+                        ? hintRequestsSpicy
+                        : (user?.settings?.tone?.spiciness ?? 0) > 0,
                     toneSettings: {
                         formality: user?.settings?.tone?.formality,
                         humor: user?.settings?.tone?.humor,
@@ -2277,7 +2298,9 @@ export const OnlyFansContentBrain: React.FC<OnlyFansContentBrainProps> = ({
                         apiPlatform === 'instagram' && !isMemberHubIdeas,
                     analyzeMyPageEngagement: isMemberHubIdeas,
                     creatorHint: postIdeaPrompt.trim(),
-                    prioritizeCreatorPersonality: useCreatorPersonalityPostIdeas,
+                    prioritizeCreatorPersonality: isMemberHubIdeas
+                        ? true
+                        : useCreatorPersonalityPostIdeas,
                 }),
             });
 
@@ -3231,7 +3254,15 @@ export const OnlyFansContentBrain: React.FC<OnlyFansContentBrainProps> = ({
                 },
                 body: JSON.stringify({
                     goals: monetizationGoals,
-                    contentPreferences: `${monetizationPreferences}\n\n${buildMonetizedContext()}`.trim(),
+                    contentPreferences: [
+                        monetizationPreferences,
+                        fanHubContext
+                            ? buildGenerationSettingsContext(true)
+                            : buildMonetizedContext(),
+                    ]
+                        .filter(Boolean)
+                        .join('\n\n')
+                        .trim(),
                     subscriberCount: subscriberCount || undefined,
                     balance: {
                         engagement: balanceEngagement,
@@ -3242,7 +3273,9 @@ export const OnlyFansContentBrain: React.FC<OnlyFansContentBrainProps> = ({
                     niche: user?.niche || 'Creator',
                     analyticsData: buildAnalyticsData(),
                     creatorPersonality: effectiveCreatorPersonality || undefined,
-                    prioritizeCreatorPersonality: useCreatorPersonalityMonetization,
+                    prioritizeCreatorPersonality: fanHubContext
+                        ? true
+                        : useCreatorPersonalityMonetization,
                     ...(fanHubContext ? { contentMode: 'member_hub' } : {}),
                 }),
             });
@@ -5859,7 +5892,7 @@ Output format:
                                     <p className="text-sm text-gray-500 dark:text-gray-400 flex items-center gap-1.5 mt-1">
                                         <span className="text-orange-500">🔥</span>
                                         {fanHubContext
-                                            ? 'Weekly trends + your niche — built to keep My Page members engaged'
+                                            ? 'Uses your Profile & AI personality, tone settings, and trends — not default OnlyFans themes unless you ask'
                                             : 'Weekly trends + your niche — built for member retention'}
                                     </p>
                                 </div>

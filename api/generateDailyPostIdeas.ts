@@ -10,8 +10,10 @@ import { getLatestTrends } from "./_trendsHelper.js";
 import { searchWeb } from "./_webSearch.js";
 import {
   MEMBER_HUB_RETENTION_SYSTEM,
+  buildMemberHubCreatorContext,
   buildMemberHubNicheLine,
-  getMemberHubToneGuidance,
+  creatorHintRequestsSpicyContent,
+  getMemberHubToneGuidanceFromSettings,
   getMemberHubTrendsContext,
 } from "./_memberHubContentContext.js";
 
@@ -240,8 +242,12 @@ CONTENT POLICY (PERSONALITY OVERRIDE):
 
   const ideaCount = swapOnly ? "ONE" : opts.generateAllFormats ? "exactly 4 (one per format: Reel, Carousel, Photo, Story)" : "exactly 3";
   
-  // Creator profile guidance - conservative by default, only racy when spicyMode enabled
-  const creatorProfileGuidance = (opts.creatorGender || opts.targetAudienceGender) ? `
+  // Creator profile guidance — not used on Fan Hub (avoids default lingerie/spicy framing)
+  const creatorProfileGuidance =
+    platform === "fan_hub"
+      ? ""
+      : (opts.creatorGender || opts.targetAudienceGender)
+        ? `
 CREATOR PROFILE:
 ${opts.creatorGender ? `- The creator is: ${opts.creatorGender}` : ''}
 ${opts.targetAudienceGender ? `- Target audience: ${opts.targetAudienceGender === 'Male' ? 'Men' : opts.targetAudienceGender === 'Female' ? 'Women' : opts.targetAudienceGender === 'Both' ? 'Both men and women' : 'All audiences'}` : ''}
@@ -254,7 +260,8 @@ ${opts.creatorGender === 'Male' ? `- Can include: shirtless photos, gym content,
 - Focus on: personality, lifestyle, humor, relatable moments, hobbies, Q&A, day-in-life
 - NO suggestive content, bikini/lingerie, or body-focused ideas
 - Ideas should appeal to the target audience through personality, not provocative content`}
-` : '';
+`
+        : "";
   
   // Fan Hub / My Page specific guidance
   const fanHubGuidance = opts.platform === "fan_hub"
@@ -405,6 +412,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
     (typeof settingsBlock.creatorPersonality === "string" ? settingsBlock.creatorPersonality : "") ||
     "";
   const toneFromProfile = userData?.aiTone || userData?.tone || "";
+  const aiPersonality =
+    (typeof userData?.aiPersonality === "string" ? userData.aiPersonality : "") || "";
   const niche = userData?.niche || "";
   // Get user's tone settings for style preferences
   const userToneSettings = userData?.settings?.tone || {};
@@ -438,13 +447,32 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
       : goal;
 
   const effectiveTone = tone || toneFromProfile || "relatable";
-  const creatorContext = [creatorPersonality, niche].filter(Boolean).join("\n");
+  const mergedToneSettings = { ...userToneSettings, ...(requestToneSettings || {}) };
+  const isFanHub = platform === "fan_hub";
+  const prioritizePersonality = isFanHub
+    ? true
+    : Boolean(prioritizeCreatorPersonality);
+  const creatorContext = isFanHub
+    ? buildMemberHubCreatorContext({
+        creatorPersonality,
+        aiPersonality,
+        aiTone: toneFromProfile,
+        niche,
+        toneSettings: mergedToneSettings,
+        prioritizeCreatorPersonality: prioritizePersonality,
+      })
+    : [creatorPersonality, niche].filter(Boolean).join("\n");
 
   const userPlan = typeof (userData as { plan?: string })?.plan === "string" ? (userData as { plan: string }).plan : "Free";
   const userRole = typeof (userData as { role?: string })?.role === "string" ? (userData as { role: string }).role : undefined;
 
   const explicitnessLevel =
     typeof userData?.explicitnessLevel === "number" ? userData.explicitnessLevel : 6;
+  const fanHubSpiciness =
+    typeof mergedToneSettings.spiciness === "number" ? mergedToneSettings.spiciness : 0;
+  const effectiveSpicyMode = isFanHub
+    ? creatorHintRequestsSpicyContent(creatorHint)
+    : Boolean(spicyMode);
 
   let trendContext = "";
   if (useTrends) {
@@ -561,21 +589,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
       format,
       tone: effectiveTone,
       useTrends,
-      spicyMode: Boolean(spicyMode),
+      spicyMode: effectiveSpicyMode,
       creatorContext,
       trendContext,
       swapOnly,
       existingIdeasForContext: existingIdeas,
-      toneSettings: { ...userToneSettings, ...(requestToneSettings || {}) },
+      toneSettings: mergedToneSettings,
       generateAllFormats: Boolean(generateAllFormats),
       analyzeMyPageEngagement: Boolean(analyzeMyPageEngagement),
       fanHubAnalytics,
-      creatorGender,
-      targetAudienceGender,
+      creatorGender: isFanHub ? undefined : creatorGender,
+      targetAudienceGender: isFanHub ? undefined : targetAudienceGender,
       creatorHint,
-      prioritizeCreatorPersonality: Boolean(prioritizeCreatorPersonality),
-      memberHubToneLine:
-        platform === "fan_hub" ? getMemberHubToneGuidance(explicitnessLevel) : undefined,
+      prioritizeCreatorPersonality: prioritizePersonality,
+      memberHubToneLine: isFanHub
+        ? getMemberHubToneGuidanceFromSettings(explicitnessLevel, fanHubSpiciness)
+        : undefined,
       niche,
     });
 

@@ -7,8 +7,10 @@ import { getOnlyFansWeeklyTrends } from "./_trendsHelper.js";
 import { getOnlyFansResearchContext } from "./_onlyfansResearch.js";
 import {
   buildCreatorPersonalityBlock,
+  buildMemberHubCreatorContext,
   buildMemberHubNicheLine,
-  getMemberHubToneGuidance,
+  creatorHintRequestsSpicyContent,
+  getMemberHubToneGuidanceFromSettings,
   getMemberHubTrendsContext,
   MEMBER_HUB_RETENTION_SYSTEM,
 } from "./_memberHubContentContext.js";
@@ -87,7 +89,7 @@ async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
     const retentionCount = Math.round((finalBalance.retention / 100) * totalIdeas);
     const conversionCount = totalIdeas - engagementCount - upsellCount - retentionCount; // Remaining
 
-    const userNiche = niche || user.niche || "Adult Content Creator";
+    const userNiche = niche || user.niche || (isMemberHub ? "Creator" : "Adult Content Creator");
     const subscriberContext = subscriberCount 
       ? `Current subscriber count: ${subscriberCount}. ` 
       : "";
@@ -95,28 +97,57 @@ async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
     const { getAdminDb } = await import("./_firebaseAdmin.js");
     const db = getAdminDb();
     let userData: Record<string, unknown> = {};
-    let explicitnessLevel = 7;
+    let explicitnessLevel = 6;
     try {
       const userDoc = await db.collection("users").doc(user.uid).get();
       if (userDoc.exists) {
         userData = (userDoc.data() || {}) as Record<string, unknown>;
-        explicitnessLevel = (userData.explicitnessLevel as number | undefined) ?? 7;
+        explicitnessLevel =
+          typeof userData.explicitnessLevel === "number" ? userData.explicitnessLevel : 6;
       }
     } catch (error) {
       console.error("[generateMonetizationPlan] Error loading user profile:", error);
     }
 
+    const settingsBlock = (userData.settings || {}) as {
+      creatorPersonality?: string;
+      tone?: {
+        spiciness?: number;
+        formality?: number;
+        humor?: number;
+        empathy?: number;
+        profanity?: number;
+        emojiLevel?: number;
+      };
+    };
     const personalityText =
       (typeof bodyPersonality === "string" ? bodyPersonality : "") ||
       (typeof userData.creatorPersonality === "string" ? userData.creatorPersonality : "") ||
-      (typeof (userData.settings as { creatorPersonality?: string } | undefined)?.creatorPersonality ===
-      "string"
-        ? (userData.settings as { creatorPersonality: string }).creatorPersonality
-        : "");
-    const personalityBlock = buildCreatorPersonalityBlock(
-      personalityText,
-      Boolean(prioritizeCreatorPersonality),
-    );
+      (typeof settingsBlock.creatorPersonality === "string" ? settingsBlock.creatorPersonality : "");
+    const aiPersonality =
+      typeof userData.aiPersonality === "string" ? userData.aiPersonality : "";
+    const aiTone = typeof userData.aiTone === "string" ? userData.aiTone : "";
+    const toneSettings = settingsBlock.tone || {};
+    const spiciness =
+      typeof toneSettings.spiciness === "number" ? toneSettings.spiciness : 0;
+    const prioritizePersonality = isMemberHub
+      ? true
+      : Boolean(prioritizeCreatorPersonality);
+    const memberHubCreatorContext = isMemberHub
+      ? buildMemberHubCreatorContext({
+          creatorPersonality: personalityText,
+          aiPersonality,
+          aiTone,
+          niche: userNiche,
+          toneSettings,
+          prioritizeCreatorPersonality: prioritizePersonality,
+        })
+      : "";
+    const personalityBlock = isMemberHub
+      ? memberHubCreatorContext
+      : buildCreatorPersonalityBlock(personalityText, prioritizePersonality);
+    const preferencesText = String(contentPreferences || "");
+    const hintSpicy = creatorHintRequestsSpicyContent(preferencesText);
 
     let trendsContext = "";
     let onlyfansResearch = "";
@@ -188,7 +219,7 @@ Use this analytics data to inform the monetization plan:
     }
 
     const explicitnessContext = isMemberHub
-      ? getMemberHubToneGuidance(explicitnessLevel)
+      ? getMemberHubToneGuidanceFromSettings(explicitnessLevel, spiciness)
       : explicitnessLevel >= 9
         ? "EXTREMELY EXPLICIT - Use very explicit, graphic language describing sexual acts, intimate moments, and explicit content in detail. Focus on lust, desire, and explicit sexual experiences."
         : explicitnessLevel >= 7
@@ -210,7 +241,7 @@ ${trendsContext}
 PRIMARY GOAL: Member retention and sustainable monetization on a paid fan feed (My Page).
 - Keep subscribers engaged, replying, and feeling they get exclusive value — reduce churn.
 - Balance free connection content, teasers, drops, and PPV — avoid constant hard-sell spam.
-- Sensual/flirty drops are OK when they fit the niche and tone ceiling — never graphic explicit content.
+- Sensual/flirty drops only when Content Preferences or personality explicitly call for them${hintSpicy ? " (creator preferences request sensual/spicy angles — OK within tone ceiling)" : " — otherwise default to lifestyle, connection, and niche-appropriate themes (not lingerie/OnlyFans by default)"}.
 - Borrow hooks and formats from Instagram, TikTok, and X where they fit a private feed (photo, video, text, poll).
 
 Content focus areas (mix across the week):
@@ -302,8 +333,9 @@ CRITICAL REQUIREMENTS:
 ${
   isMemberHub
     ? `- Ideas must support member retention first, then monetization (drops/PPV)
-- Mix connection, exclusives, polls, BTS, and monetized content — not only sexual themes
-- Respect tone ceiling — never graphic explicit content
+- Mix connection, exclusives, polls, BTS, and monetized content — do NOT default to lingerie/OnlyFans themes
+- Follow CREATOR PERSONALITY, AI personality, and Content Preferences tone sliders when provided
+- Respect tone ceiling — never graphic explicit content; sensual angles only when preferences/personality/hint request them
 - Engagement ideas: free posts that build habit and replies
 - Upsell ideas: tease upcoming drops/PPV without spamming
 - Retention ideas: rewards, exclusives, and "you matter" moments for loyal members

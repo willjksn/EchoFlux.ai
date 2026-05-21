@@ -3,19 +3,34 @@
  * Focus: member retention and engagement — not graphic explicit content or OnlyFans-only framing.
  */
 
-import { getAdultWeeklyTrends, getLatestTrends } from "./_trendsHelper.js";
+import { getLatestTrends } from "./_trendsHelper.js";
 
-/** Cached Mon/Thu Tavily digest: general social (IG, X, TikTok, etc.) + adult/creator trends. */
+/** Cached Mon/Thu Tavily digest: mainstream social trends (IG, X, TikTok) — not adult/OnlyFans defaults. */
 export async function getMemberHubTrendsContext(): Promise<string> {
-  const [social, adult] = await Promise.all([
-    getLatestTrends().catch(() => ""),
-    getAdultWeeklyTrends().catch(() => ""),
-  ]);
-  const parts = [social, adult].filter((p) => p && p.trim().length > 0);
-  if (parts.length === 0) {
-    return "Trend data unavailable. Use proven member-retention and social content best practices.";
+  const social = await getLatestTrends().catch(() => "");
+  if (social && social.trim().length > 0) {
+    return social;
   }
-  return parts.join("\n\n");
+  return "Trend data unavailable. Use proven member-retention and social content best practices.";
+}
+
+/** True when the creator's prompt explicitly asks for sensual/spicy/adult angles. */
+export function creatorHintRequestsSpicyContent(hint: string): boolean {
+  const h = (hint || "").toLowerCase();
+  return /\b(lingerie|bikini|swimwear|sexy|sensual|spicy|nsfw|nude|explicit|thirst|boudoir|onlyfans|ppv|tease|teasing|seductive|provocative|bedroom|lace)\b/.test(
+    h,
+  );
+}
+
+/** Blend profile explicitness with Content Preferences spiciness slider (0–100). */
+export function getMemberHubToneGuidanceFromSettings(
+  explicitnessLevel: number,
+  spiciness?: number,
+): string {
+  const spice = typeof spiciness === "number" ? Math.max(0, Math.min(100, Math.round(spiciness))) : 0;
+  const fromSpice = spice >= 70 ? 7 : spice >= 45 ? 5 : spice >= 20 ? 3 : 2;
+  const level = Math.min(10, Math.max(0, Math.min(Math.round(explicitnessLevel), fromSpice)));
+  return getMemberHubToneGuidance(level);
 }
 
 /**
@@ -35,11 +50,59 @@ export function getMemberHubToneGuidance(explicitnessLevel: number): string {
 export const MEMBER_HUB_RETENTION_SYSTEM = `
 MEMBER HUB CONTENT (My Page / paid fan feed):
 - Primary goal: keep paying members engaged, valued, and subscribed — reduce churn and ghosting.
-- Mix content types: connection posts, exclusives, polls, BTS, voice-note prompts, soft PPV/drop teases, rewards for loyal members, and variety (not only sexual themes).
+- DEFAULT to broad creator-appropriate topics: lifestyle, personality, hobbies, BTS, polls, Q&A, gratitude, milestones, humor, fitness, travel, art, music, pets, work life — match niche + personality + tone settings.
+- Do NOT default to lingerie, bikini, bedroom, or OnlyFans-style framing unless the creator hint or personality explicitly requests it.
+- Mix content types: connection posts, exclusives, polls, BTS, voice-note prompts, soft drop/PPV teases, rewards for loyal members.
 - Draw on what works on Instagram, TikTok, and X for hooks and formats, adapted for a private member feed (photo, video, text, poll — no reels/stories/carousels).
-- Sensual or flirty angles are OK when they fit the creator niche and tone ceiling — never graphic or pornographic.
+- Sensual or flirty angles are OK only when they fit creator hint, personality, niche, or tone ceiling — never graphic or pornographic.
 - Avoid repetitive hard-sell spam; balance free value with monetized drops/PPV.
 `.trim();
+
+export function buildMemberHubCreatorContext(opts: {
+  creatorPersonality: string;
+  aiPersonality: string;
+  aiTone: string;
+  niche: string;
+  toneSettings?: {
+    formality?: number;
+    humor?: number;
+    empathy?: number;
+    spiciness?: number;
+    profanity?: number;
+    emojiLevel?: number;
+  };
+  prioritizeCreatorPersonality: boolean;
+}): string {
+  const parts: string[] = [];
+  const personalityBlock = buildCreatorPersonalityBlock(
+    opts.creatorPersonality,
+    opts.prioritizeCreatorPersonality && !!opts.creatorPersonality.trim(),
+  );
+  if (personalityBlock) parts.push(personalityBlock);
+  if (opts.aiPersonality.trim()) {
+    parts.push(`AI PERSONALITY & TRAINING (Settings → Profile & AI):\n${opts.aiPersonality.trim()}`);
+  }
+  if (opts.aiTone.trim()) {
+    parts.push(`Default AI tone: ${opts.aiTone.trim()}`);
+  }
+  if (opts.niche.trim()) {
+    parts.push(`Niche: ${opts.niche.trim()}`);
+  }
+  const ts = opts.toneSettings;
+  if (ts && typeof ts === "object") {
+    const lines: string[] = [];
+    if (typeof ts.formality === "number") lines.push(`Formality: ${ts.formality}/100`);
+    if (typeof ts.humor === "number") lines.push(`Humor: ${ts.humor}/100`);
+    if (typeof ts.empathy === "number") lines.push(`Warmth: ${ts.empathy}/100`);
+    if (typeof ts.spiciness === "number") lines.push(`Spiciness: ${ts.spiciness}/100`);
+    if (typeof ts.profanity === "number") lines.push(`Profanity: ${ts.profanity}/100`);
+    if (typeof ts.emojiLevel === "number") lines.push(`Emoji level: ${ts.emojiLevel}/100`);
+    if (lines.length) {
+      parts.push(`CONTENT PREFERENCES (tone sliders):\n${lines.map((l) => `- ${l}`).join("\n")}`);
+    }
+  }
+  return parts.filter(Boolean).join("\n\n");
+}
 
 export function buildMemberHubNicheLine(niche?: string | null): string {
   const n = (niche || "").trim() || "Creator";
