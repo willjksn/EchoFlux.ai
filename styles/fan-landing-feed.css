@@ -1185,20 +1185,20 @@
   .stormij-theme.fan-hub-studio-shell {
     box-sizing: border-box;
     width: 100%;
-    max-width: none;
-    margin-left: -1.5rem;
-    margin-right: -1.5rem;
-    padding-left: 0;
-    padding-right: 0;
-    border-radius: 0;
-    border-left-width: 0;
-    border-right-width: 0;
-    box-shadow: none;
-    overflow-x: clip;
+    max-width: 100%;
+    margin-left: 0;
+    margin-right: 0;
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+    border-radius: 0 !important;
+    border-left-width: 0 !important;
+    border-right-width: 0 !important;
+    box-shadow: none !important;
+    overflow-x: hidden;
   }
 
   .stormij-theme.fan-hub-studio-shell > .fan-hub-studio-inner {
-    max-width: none;
+    max-width: none !important;
     width: 100%;
     margin-left: 0;
     margin-right: 0;
@@ -1206,26 +1206,18 @@
     padding-right: 0.9rem;
     box-sizing: border-box;
   }
-}
 
-@media (max-width: 480px) {
-  .stormij-theme.fan-hub-studio-shell > .fan-hub-studio-inner {
-    padding-left: 0.8rem;
-    padding-right: 0.8rem;
+  /* Feed uses same gutters as member .fan-member-content--feed (no extra 580px cap). */
+  .stormij-theme .fan-hub-posts-feed-shell.fan-member-content.fan-member-content--feed {
+    max-width: none;
+    width: 100%;
+    margin-left: 0;
+    margin-right: 0;
+    padding-left: 0.9rem;
+    padding-right: 0.9rem;
   }
-}
 
-/* Creator Fan Hub posts: same column as storefront .fan-member-content--feed */
-.fan-hub-posts-feed-bleed {
-  width: 100%;
-  max-width: none;
-  margin-left: 0;
-  margin-right: 0;
-  box-sizing: border-box;
-}
-
-@media (max-width: 1023px) {
-  /* Feed column only: cancel studio-inner side padding so gutters match member hub */
+  /* Cancel studio-inner side padding so feed gutters match member hub (single pad layer). */
   .stormij-theme .fan-hub-posts-feed-bleed {
     width: calc(100% + 1.8rem);
     margin-left: -0.9rem;
@@ -1234,6 +1226,16 @@
 }
 
 @media (max-width: 480px) {
+  .stormij-theme.fan-hub-studio-shell > .fan-hub-studio-inner {
+    padding-left: 0.8rem;
+    padding-right: 0.8rem;
+  }
+
+  .stormij-theme .fan-hub-posts-feed-shell.fan-member-content.fan-member-content--feed {
+    padding-left: 0.8rem;
+    padding-right: 0.8rem;
+  }
+
   .stormij-theme .fan-hub-posts-feed-bleed {
     width: calc(100% + 1.6rem);
     margin-left: -0.8rem;
@@ -1241,13 +1243,24 @@
   }
 }
 
-.stormij-theme .fan-hub-posts-feed-shell.fan-member-content.fan-member-content--feed {
-  box-sizing: border-box;
-  max-width: 580px;
+/* Creator Fan Hub posts: same column as storefront .fan-member-content--feed (desktop) */
+.fan-hub-posts-feed-bleed {
   width: 100%;
-  margin-left: auto;
-  margin-right: auto;
-  padding: 1.25rem;
+  max-width: none;
+  margin-left: 0;
+  margin-right: 0;
+  box-sizing: border-box;
+}
+
+@media (min-width: 1024px) {
+  .stormij-theme .fan-hub-posts-feed-shell.fan-member-content.fan-member-content--feed {
+    box-sizing: border-box;
+    max-width: 580px;
+    width: 100%;
+    margin-left: auto;
+    margin-right: auto;
+    padding: 1.25rem;
+  }
 }
 
 .stormij-theme .fan-hub-posts-feed-shell .fan-hub-feed-chrome {

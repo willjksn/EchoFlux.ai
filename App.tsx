@@ -1490,10 +1490,14 @@ const AppContent: React.FC = () => {
 
             {isTourActive && <InteractiveTour />}
             <Sidebar />
-            <div className="flex-1 flex flex-col overflow-hidden relative">
+            <div className="flex-1 flex flex-col overflow-hidden relative min-w-0 w-full">
                 <AnnouncementBanner />
                 <Header pageTitle={pageTitle} />
-                <main className="flex-1 overflow-x-hidden overflow-y-auto p-6 custom-scrollbar dark:custom-scrollbar">
+                <main
+                    className={`flex-1 min-w-0 overflow-x-hidden overflow-y-auto custom-scrollbar dark:custom-scrollbar ${
+                        activePage === 'fanHub' ? 'px-0 py-4 lg:p-6' : 'p-6'
+                    }`}
+                >
                     <MainContent />
                 </main>
                 {isCRMOpen && <CRMSidebar />}
