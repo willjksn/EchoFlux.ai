@@ -63,7 +63,16 @@ async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
   });
   if (!ok) return;
 
-  const { prompt, context, emojiEnabled, emojiIntensity, niche: bodyNiche, analyticsData } = req.body || {};
+  const {
+    prompt,
+    context,
+    emojiEnabled,
+    emojiIntensity,
+    niche: bodyNiche,
+    analyticsData,
+    creatorPersonality: bodyPersonality,
+    prioritizeCreatorPersonality = false,
+  } = req.body || {};
 
   if (!prompt || typeof prompt !== "string") {
     res.status(400).json({ error: "Missing or invalid 'prompt'" });

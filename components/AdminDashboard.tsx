@@ -325,6 +325,17 @@ function adminUserDisplayLabel(user: {
     return nameRaw || 'User';
 }
 
+function adminCreatorHandleLabel(raw: string | null | undefined): string {
+    const safe = safeUsernameForHandle(raw);
+    return safe ? `@${safe}` : "";
+}
+
+function adminCreatorHandleFromLabel(raw: string | null | undefined): string {
+    const value = typeof raw === "string" ? raw.trim() : "";
+    if (!value.startsWith("@")) return "";
+    return adminCreatorHandleLabel(value);
+}
+
 type FanHubMemberProfile = {
     displayName: string | null;
     email: string | null;
@@ -680,11 +691,12 @@ export const AdminDashboard: React.FC = () => {
         subscriptions: number;
         echofluxCommission: number;
         commissionRate: number;
-        topCreators: Array<{ id: string; name: string; email: string; revenue: number; commission: number }>;
+        topCreators: Array<{ id: string; name: string; handle: string; email: string; revenue: number; commission: number }>;
         recentTransactions: Array<{
             id: string;
             creatorId: string;
             creatorName: string;
+            creatorHandle: string;
             type: string;
             amount: number;
             commission: number;
@@ -903,6 +915,7 @@ export const AdminDashboard: React.FC = () => {
                     subscriptions: number;
                     byCreatorId: Record<string, number>;
                     creatorDisplayNames?: Record<string, string>;
+                    creatorHandles?: Record<string, string>;
                     recentTransactions: Array<{
                         id: string;
                         creatorId: string;
@@ -913,10 +926,23 @@ export const AdminDashboard: React.FC = () => {
                 };
 
                 const displayByCreatorId = data.creatorDisplayNames ?? {};
+                const handleByCreatorId = data.creatorHandles ?? {};
 
                 const resolveCreatorName = (creatorId: string) => {
                     const u = users.find((x) => x.id === creatorId);
                     return u?.name || displayByCreatorId[creatorId] || 'Unknown Creator';
+                };
+                const resolveCreatorHandle = (creatorId: string) => {
+                    const u = users.find((x) => x.id === creatorId);
+                    const fromUser = adminCreatorHandleLabel(
+                        (u as unknown as { username?: string | null; handle?: string | null } | undefined)?.username ||
+                        (u as unknown as { username?: string | null; handle?: string | null } | undefined)?.handle
+                    );
+                    return (
+                        fromUser ||
+                        adminCreatorHandleLabel(handleByCreatorId[creatorId]) ||
+                        adminCreatorHandleFromLabel(displayByCreatorId[creatorId])
+                    );
                 };
 
                 const totalRevenue = data.totalRevenue ?? 0;
@@ -928,6 +954,7 @@ export const AdminDashboard: React.FC = () => {
                         return {
                             id,
                             name: u?.name || displayByCreatorId[id] || 'Unknown Creator',
+                            handle: resolveCreatorHandle(id),
                             email: u?.email || '',
                             revenue,
                             commission: revenue * commissionRate,
@@ -940,6 +967,7 @@ export const AdminDashboard: React.FC = () => {
                     id: t.id,
                     creatorId: typeof t.creatorId === "string" ? t.creatorId : "",
                     creatorName: resolveCreatorName(typeof t.creatorId === "string" ? t.creatorId : ""),
+                    creatorHandle: resolveCreatorHandle(typeof t.creatorId === "string" ? t.creatorId : ""),
                     type: t.type,
                     amount: t.amount,
                     commission: t.amount * commissionRate,
@@ -2454,8 +2482,8 @@ export const AdminDashboard: React.FC = () => {
                                 <li key={creator.id} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
                                     <div className="flex items-center gap-3">
                                         <span className="text-lg font-bold text-gray-400 w-6">#{idx + 1}</span>
-                                        <div>
-                                            <p className="font-semibold text-gray-900 dark:text-white">{creator.name}</p>
+                                        <div className="min-w-0">
+                                            <p className="font-semibold text-gray-900 dark:text-white">{creator.handle || creator.name}</p>
                                             <p className="text-xs text-gray-500 dark:text-gray-400">{creator.email}</p>
                                         </div>
                                     </div>
@@ -2652,7 +2680,9 @@ export const AdminDashboard: React.FC = () => {
                                         Date.now() - tx.timestamp.getTime() > FAN_HUB_ADMIN_REFUND_WINDOW_MS;
                                     return (
                                     <tr key={tx.id} className="border-b border-gray-100 dark:border-gray-700">
-                                        <td className="p-3 text-sm text-gray-900 dark:text-white">{tx.creatorName}</td>
+                                        <td className="p-3 text-sm text-gray-900 dark:text-white">
+                                            <div className="font-medium">{tx.creatorHandle || tx.creatorName}</div>
+                                        </td>
                                         <td className="p-3">
                                             <span className={`px-2 py-1 text-xs font-semibold rounded-full ${
                                                 tx.type === 'tip' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300' :

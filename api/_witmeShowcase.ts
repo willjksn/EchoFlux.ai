@@ -39,7 +39,7 @@ function sanitizeString(value: unknown, max = 300): string {
 
 /** Showcase media: https URLs, or root-relative WitMe static OG paths (served from `public/`). */
 function sanitizeShowcaseImageUrl(value: unknown, max = 4096): string {
-  const s = typeof value === "string" ? value.trim().slice(0, max) : "";
+  let s = typeof value === "string" ? value.trim().slice(0, max) : "";
   if (!s) return "";
   const head = s.slice(0, 48).toLowerCase();
   if (head.includes("javascript:") || head.startsWith("data:") || head.includes("vbscript:")) {
@@ -50,6 +50,7 @@ function sanitizeShowcaseImageUrl(value: unknown, max = 4096): string {
     if (pathOnly.includes("..")) return "";
     const pl = pathOnly.toLowerCase();
     if (pl === "/witme-og.png" || pl === "/witme-og-discover.png") return pathOnly;
+    if (pl.startsWith("/witme-showcase/") && /\.(png|jpe?g|webp|gif)$/i.test(pl)) return pathOnly;
     return "";
   }
   if (s.startsWith("http://")) {

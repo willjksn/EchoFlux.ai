@@ -48,6 +48,59 @@ function normalizeOrderType(d: Record<string, unknown>): string {
   return "product";
 }
 
+function cleanCreatorHandle(raw: unknown): string {
+  if (typeof raw !== "string") return "";
+  return raw.trim().replace(/^@+/, "").toLowerCase().slice(0, 80);
+}
+
+async function resolveAdminCreatorHandles(
+  db: ReturnType<typeof getAdminDb>,
+  ids: string[],
+): Promise<Record<string, string>> {
+  if (!db) return {};
+  const unique = [...new Set(ids.filter((x) => x.trim()))];
+  const out: Record<string, string> = {};
+  if (unique.length === 0) return out;
+
+  const chunkSize = 30;
+  for (let i = 0; i < unique.length; i += chunkSize) {
+    const chunk = unique.slice(i, i + chunkSize);
+    const creatorSnaps = await db.getAll(...chunk.map((id) => db.collection("creators").doc(id)));
+    creatorSnaps.forEach((snap, j) => {
+      const id = chunk[j]!;
+      const handle = cleanCreatorHandle(snap.data()?.handle);
+      if (handle) out[id] = handle;
+    });
+  }
+
+  const missing = unique.filter((id) => !out[id]);
+  for (let i = 0; i < missing.length; i += chunkSize) {
+    const chunk = missing.slice(i, i + chunkSize);
+    const userSnaps = await db.getAll(...chunk.map((id) => db.collection("users").doc(id)));
+    userSnaps.forEach((snap, j) => {
+      const id = chunk[j]!;
+      const data = snap.data();
+      const handle = cleanCreatorHandle(data?.username) || cleanCreatorHandle(data?.handle);
+      if (handle) out[id] = handle;
+    });
+  }
+
+  const stillMissing = unique.filter((id) => !out[id]);
+  await Promise.all(
+    stillMissing.map(async (id) => {
+      try {
+        const snap = await db.collection("creatorHandles").where("creatorId", "==", id).limit(1).get();
+        const handle = cleanCreatorHandle(snap.docs[0]?.id);
+        if (handle) out[id] = handle;
+      } catch {
+        /* best-effort admin display only */
+      }
+    })
+  );
+
+  return out;
+}
+
 /**
  * GET: Aggregate Fan Hub Stripe order revenue across all creators (top-level `orders`).
  * Admin-only. Used by AdminDashboard; matches stripeWebhook Fan Hub writes.
@@ -151,6 +204,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const creatorIds = [...new Set(Object.keys(byCreatorId))];
     const { labels: creatorDisplayNames } = await resolveAdminCreatorLabels(db, creatorIds);
+    const creatorHandles = await resolveAdminCreatorHandles(db, creatorIds);
 
     return res.status(200).json({
       totalRevenue,
@@ -160,6 +214,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       subscriptions,
       byCreatorId,
       creatorDisplayNames,
+      creatorHandles,
       recentTransactions: recentSlice,
       orderCount: docs.length,
       periodDays: days,

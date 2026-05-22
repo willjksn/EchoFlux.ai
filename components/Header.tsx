@@ -411,9 +411,9 @@ export const Header: React.FC<HeaderProps> = ({ pageTitle }) => {
                                     <button
                                       type="button"
                                       onClick={() => handleReminderRowActivate(notification)}
-                                      className="w-full text-left hover:opacity-90 transition-opacity"
+                                      className="w-full min-w-0 text-left hover:opacity-90 transition-opacity"
                                     >
-                                      <div className="flex items-start">
+                                      <div className="flex min-w-0 items-start">
                                         <div className="flex-shrink-0 mt-1">
                                           <div className="relative">
                                             <div className={`p-2 rounded-full ${!notification.read ? (isUsageNotification ? 'bg-yellow-100 dark:bg-yellow-900/50' : isItTicketNotification ? 'bg-amber-100 dark:bg-amber-900/40' : 'bg-primary-100 dark:bg-primary-900/50') : 'bg-gray-100 dark:bg-gray-700'}`}>
@@ -422,8 +422,8 @@ export const Header: React.FC<HeaderProps> = ({ pageTitle }) => {
                                             {!notification.read && <span className="absolute top-0 right-0 h-2 w-2 bg-blue-500 rounded-full"></span>}
                                           </div>
                                         </div>
-                                        <div className="ml-3 w-0 flex-1">
-                                            <p className={`text-sm font-medium ${!notification.read ? 'text-gray-900 dark:text-white' : 'text-gray-600 dark:text-gray-300'}`}>{notification.text}</p>
+                                        <div className="ml-3 min-w-0 flex-1">
+                                            <p className={`text-sm font-medium [overflow-wrap:anywhere] ${!notification.read ? 'text-gray-900 dark:text-white' : 'text-gray-600 dark:text-gray-300'}`}>{notification.text}</p>
                                             <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{notification.timestamp}</p>
                                         </div>
                                       </div>
