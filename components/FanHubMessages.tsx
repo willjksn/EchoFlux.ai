@@ -273,6 +273,25 @@ export const FanHubMessages: React.FC = () => {
     handle?: string;
   } | null>(null);
 
+  /** Lets global assistant FAB sit above the mobile DM compose bar (see index.css). */
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    const mq = window.matchMedia("(max-width: 1023px)");
+    const sync = () => {
+      if (mq.matches && selectedThread) {
+        document.documentElement.setAttribute("data-fh-dm-thread-open", "1");
+      } else {
+        document.documentElement.removeAttribute("data-fh-dm-thread-open");
+      }
+    };
+    sync();
+    mq.addEventListener("change", sync);
+    return () => {
+      mq.removeEventListener("change", sync);
+      document.documentElement.removeAttribute("data-fh-dm-thread-open");
+    };
+  }, [selectedThread]);
+
   const isNearBottom = useCallback((el: HTMLElement | null): boolean => {
     if (!el) return true;
     const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;

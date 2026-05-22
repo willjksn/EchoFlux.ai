@@ -9415,6 +9415,12 @@ button.treat-card:hover:not(:disabled) .treat-card-cta {
 
   .fh-messages-hub.fh-messages-hub--thread-open .fh-dm-thread-compose {
     flex-shrink: 0;
+    /* Keep Send visible if assistant FAB overlaps the fixed pane edge */
+    padding-right: 0.5rem;
+  }
+
+  .fh-messages-hub.fh-messages-hub--thread-open .fh-dm-thread-compose .flex.gap-2.items-end {
+    padding-right: 3.25rem;
   }
 }
 

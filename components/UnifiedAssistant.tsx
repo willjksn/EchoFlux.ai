@@ -671,17 +671,17 @@ Just ask me how to do something or what you'd like to learn about!`;
 
   return (
     <>
-      <div className="fixed bottom-6 right-6 z-40">
+      <div className="echo-assistant-fab fixed bottom-6 right-6 z-40 max-lg:bottom-20">
         <button
           onClick={() => setIsOpen(!isOpen)}
-          className="bg-primary-600 text-white p-4 rounded-full shadow-lg hover:bg-primary-700 transition-transform transform hover:scale-110 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+          className="echo-assistant-fab__btn bg-primary-600 text-white p-4 max-lg:p-3 rounded-full shadow-lg hover:bg-primary-700 transition-all transform hover:scale-110 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
           aria-label="Toggle assistant"
         >
           <ChatIcon />
         </button>
       </div>
       
-      <div className={`fixed bottom-24 right-6 z-50 w-[calc(100%-3rem)] max-w-sm h-[60vh] bg-white dark:bg-gray-800 rounded-2xl shadow-2xl flex flex-col transition-all duration-300 ease-in-out ${isOpen ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10 pointer-events-none'}`}>
+      <div className={`echo-assistant-panel fixed bottom-24 right-6 z-50 w-[calc(100%-3rem)] max-w-sm h-[60vh] bg-white dark:bg-gray-800 rounded-2xl shadow-2xl flex flex-col transition-all duration-300 ease-in-out max-lg:bottom-36 ${isOpen ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10 pointer-events-none'}`}>
         {/* Header with Mode Toggle */}
         <div className="flex-shrink-0 flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
           <h3 className="text-lg font-bold text-gray-900 dark:text-white">EchoFlux.ai Assistant</h3>

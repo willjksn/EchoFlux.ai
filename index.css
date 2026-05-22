@@ -288,3 +288,24 @@ html.dark button:focus-visible {
   from { opacity: 0; }
   to { opacity: 1; }
 }
+
+/* Mobile Fan Hub DM thread: lift + shrink assistant FAB so Send stays tappable */
+@media (max-width: 1023px) {
+  html[data-fh-dm-thread-open] .echo-assistant-fab {
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 5.5rem);
+    right: max(1rem, env(safe-area-inset-right, 0px));
+  }
+
+  html[data-fh-dm-thread-open] .echo-assistant-fab__btn {
+    transform: scale(0.88);
+    padding: 0.65rem;
+  }
+
+  html[data-fh-dm-thread-open] .echo-assistant-fab__btn:hover {
+    transform: scale(0.95);
+  }
+
+  html[data-fh-dm-thread-open] .echo-assistant-panel {
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 9.5rem);
+  }
+}
