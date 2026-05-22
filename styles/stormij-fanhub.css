@@ -1926,6 +1926,23 @@ button.feed-card-action-count--clickable:hover {
 
 .feed-card-caption { font-size: 0.95rem; line-height: 1.55; margin: 0.3rem 0; color: #374151; white-space: pre-wrap; }
 .feed-card-caption .caption-username { font-weight: 600; margin-right: 0.4rem; color: var(--accent, #6366f1); }
+.feed-card-caption a.fan-rich-text-link,
+.feed-card-comment a.fan-rich-text-link,
+.feed-comments-modal-comment-body a.fan-rich-text-link,
+.feed-card-caption-overlay-text a.fan-rich-text-link,
+.fh-dm-bubble__body a.fan-rich-text-link {
+  color: var(--accent, #6366f1);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  word-break: break-word;
+}
+.feed-card-caption a.fan-rich-text-link:hover,
+.feed-card-comment a.fan-rich-text-link:hover,
+.feed-comments-modal-comment-body a.fan-rich-text-link:hover,
+.feed-card-caption-overlay-text a.fan-rich-text-link:hover,
+.fh-dm-bubble__body a.fan-rich-text-link:hover {
+  opacity: 0.85;
+}
 .dark .feed-card-caption { color: #e5e7eb; }
 .dark .feed-card-caption .caption-username { color: #e8a5c0; }
 

@@ -36,6 +36,7 @@ import { AudioLevelMeter } from "./AudioLevelMeter";
 import { RecordingDurationLabel } from "./RecordingDurationLabel";
 import { DmAudioPlayer } from "./DmAudioPlayer";
 import { usePremiumStudioTab } from "./PremiumStudioLayout";
+import { renderTextWithCustomEmoji, type SjHeartEmojiAccessContext } from "../src/lib/customEmoji";
 
 const VideoIcon = () => (
   <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -1109,6 +1110,10 @@ export const FanHubMessages: React.FC = () => {
   const creatorHandle = creatorBubbleProfile?.handle ?? user?.username;
   const creatorPrimary = formatCreatorDmBubblePrimaryLine(creatorDisplayName, creatorHandle);
   const creatorSecondary = formatCreatorDmBubbleSecondaryLine(creatorDisplayName, creatorHandle);
+  const sjHeartEmojiCtx: SjHeartEmojiAccessContext = {
+    creatorHandle,
+    viewerIsAdmin: user?.role === "Admin",
+  };
 
   return (
     <div className="max-w-7xl mx-auto p-4 sm:p-6 stormij-theme fh-messages-hub">
@@ -1247,7 +1252,7 @@ export const FanHubMessages: React.FC = () => {
                       </div>
                       {t.lastMessagePreview ? (
                         <p className="text-sm text-gray-500 dark:text-gray-400 truncate mt-0.5 text-left">
-                          {t.lastMessagePreview}
+                          {renderTextWithCustomEmoji(t.lastMessagePreview, sjHeartEmojiCtx)}
                         </p>
                       ) : null}
                     </div>
@@ -1471,7 +1476,7 @@ export const FanHubMessages: React.FC = () => {
                               )}
                               <div className="fh-dm-bubble__body">
                                 <DmMessageAttachmentStack attachments={msgAttachments} />
-                                {m.content?.trim() ? m.content : null}
+                                {m.content?.trim() ? renderTextWithCustomEmoji(m.content, sjHeartEmojiCtx) : null}
                                 {!m.content?.trim() && msgAttachments.length === 0 ? (
                                   <span className="italic opacity-70">(empty message)</span>
                                 ) : null}

@@ -118,6 +118,7 @@ import {
   restoreEchoFluxTabIcons,
 } from "../src/lib/witmeTabIcons";
 import { creatorIdFirestoreQueryVariants, normalizeCreatorId } from "../src/lib/creatorIdNormalize";
+import { renderTextWithCustomEmoji, type SjHeartEmojiAccessContext } from "../src/lib/customEmoji";
 
 const storefrontImageDownloadGuardProps = {
   draggable: false as const,
@@ -4573,6 +4574,10 @@ export const FanStorefrontView: React.FC = () => {
   const avatarCropStyle: React.CSSProperties = getAvatarCropStyle(creator.avatarObjectPosition);
   const creatorDmPrimary = formatCreatorDmBubblePrimaryLine(displayName, creator.handle);
   const creatorDmSecondary = formatCreatorDmBubbleSecondaryLine(displayName, creator.handle);
+  const sjHeartEmojiCtx: SjHeartEmojiAccessContext = useMemo(
+    () => ({ creatorHandle: creator.handle }),
+    [creator.handle]
+  );
 
   // Member view background - uses creator theme or neutral default
   const bg = theme?.background || defaultBg;
@@ -5749,7 +5754,7 @@ export const FanStorefrontView: React.FC = () => {
                                         {msgAttachments.length ? (
                                           <DmMessageAttachmentStack attachments={msgAttachments} />
                                         ) : null}
-                                        {m.content?.trim() ? m.content : null}
+                                        {m.content?.trim() ? renderTextWithCustomEmoji(m.content, sjHeartEmojiCtx) : null}
                                         {!m.content?.trim() && msgAttachments.length === 0 ? (
                                           <span className="italic opacity-70">(empty message)</span>
                                         ) : null}
