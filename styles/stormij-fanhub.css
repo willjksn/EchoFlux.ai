@@ -9350,6 +9350,44 @@ button.treat-card:hover:not(:disabled) .treat-card-cta {
   max-width: 100%;
 }
 
+/* Creator Messages — mobile master-detail inbox (list OR thread, not stacked). */
+@media (max-width: 1023px) {
+  .fh-messages-hub.fh-messages-hub--thread-open .fh-messages-hub__page-title {
+    display: none;
+  }
+
+  .fh-messages-hub.fh-messages-hub--thread-open .fh-dm-sidebar {
+    display: none;
+  }
+
+  .fh-messages-hub:not(.fh-messages-hub--thread-open) .fh-dm-thread-pane {
+    display: none;
+  }
+
+  .fh-messages-hub.fh-messages-hub--thread-open {
+    padding-top: 0.75rem;
+    padding-bottom: 0.75rem;
+  }
+
+  .fh-messages-hub.fh-messages-hub--thread-open .fh-dm-layout {
+    min-height: 0;
+  }
+
+  .fh-messages-hub.fh-messages-hub--thread-open .fh-dm-thread-pane {
+    min-height: 0;
+    height: calc(100dvh - 11.5rem);
+    max-height: calc(100dvh - 11.5rem);
+  }
+
+  .fh-messages-hub.fh-messages-hub--thread-open .fh-dm-messages-list {
+    flex: 1 1 0;
+    min-height: 0;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+  }
+}
+
 .stormij-theme .fh-dm-modal-overlay {
   position: fixed;
   inset: 0;

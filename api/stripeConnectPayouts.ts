@@ -90,14 +90,20 @@ function monthLabelFromKey(key: string): string {
   });
 }
 
-function last12MonthKeys(): string[] {
+/** Earliest month shown in Fan Hub payout history (newest first back through this month). */
+const PAYOUT_HISTORY_START_MONTH = "2026-03";
+
+function payoutHistoryMonthKeys(): string[] {
   const keys: string[] = [];
   const now = new Date();
-  for (let i = 0; i < 12; i++) {
-    const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - i, 1));
-    keys.push(`${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`);
+  const end = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+  const [startY, startM] = PAYOUT_HISTORY_START_MONTH.split("-").map(Number);
+  let cursor = new Date(Date.UTC(startY, startM - 1, 1));
+  while (cursor <= end) {
+    keys.push(`${cursor.getUTCFullYear()}-${String(cursor.getUTCMonth() + 1).padStart(2, "0")}`);
+    cursor = new Date(Date.UTC(cursor.getUTCFullYear(), cursor.getUTCMonth() + 1, 1));
   }
-  return keys;
+  return keys.reverse();
 }
 
 async function listPayoutsLast12Months(
@@ -142,7 +148,7 @@ function buildPayoutHistory(payouts: Stripe.Payout[]): {
     byMonth.set(key, list);
   }
 
-  const monthly: MonthlyPayoutSummary[] = last12MonthKeys().map((month) => {
+  const monthly: MonthlyPayoutSummary[] = payoutHistoryMonthKeys().map((month) => {
     const items = byMonth.get(month) ?? [];
     const totalCents = items.reduce((sum, p) => sum + p.amountCents, 0);
     return {
@@ -178,7 +184,7 @@ async function resolveStripeContext(decodedUid: string) {
 }
 
 /**
- * GET: Recent payouts (last 5) + last 12 months grouped by month.
+ * GET: Recent payouts (last 5) + monthly breakdown from PAYOUT_HISTORY_START_MONTH through current month.
  * POST: Platform owner only — pay out full available USD balance to bank.
  */
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -203,7 +209,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           isPlatformOwner: false,
           canManualPayout: false,
           recent: [],
-          monthly: last12MonthKeys().map((month) => ({
+          monthly: payoutHistoryMonthKeys().map((month) => ({
             month,
             label: monthLabelFromKey(month),
             totalCents: 0,

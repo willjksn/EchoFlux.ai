@@ -7,6 +7,7 @@ import React, {
   useMemo,
 } from "react";
 
+import { hasPlatformAdminAccess } from "../../src/lib/platformAdminAccess";
 import {
   Settings,
   TeamMember,
@@ -310,9 +311,17 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     };
   }, [user?.id]);
 
-  // Fetch admin alerts if user is admin
+  const isPlatformAdmin = hasPlatformAdminAccess(user);
+
+  // Drop platform admin alerts for regular creators (e.g. stale state after admin logout).
   useEffect(() => {
-    if (!user || user.role !== 'Admin') return;
+    if (isPlatformAdmin) return;
+    setNotifications((prev) => prev.filter((n) => !n.id.startsWith("admin-")));
+  }, [isPlatformAdmin, user?.id]);
+
+  // Fetch admin alerts if user is platform admin
+  useEffect(() => {
+    if (!user || !isPlatformAdmin) return;
     // Avoid false-positive admin listeners when user doc and auth uid are briefly out of sync.
     if (auth.currentUser?.uid && user.id && auth.currentUser.uid !== user.id) return;
 
@@ -364,7 +373,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       cancelled = true;
       unsubscribe?.();
     };
-  }, [user?.id, user?.role]);
+  }, [user?.id, isPlatformAdmin]);
 
   // Check usage limits and trial end dates when user data changes
   useEffect(() => {
@@ -416,6 +425,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         setMessages([]);
         setPosts([]);
         setCalendarEvents([]);
+        setNotifications([]);
+        setAnnouncements([]);
         setCrmStore({});
         setUserCustomVoices([]);
         setAutopilotCampaigns([]);

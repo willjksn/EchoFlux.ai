@@ -104,6 +104,12 @@ const MoreHorizontalIcon = () => (
   </svg>
 );
 
+const ChevronLeftIcon = () => (
+  <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+    <path d="M15 18l-6-6 6-6" strokeLinecap="round" strokeLinejoin="round" />
+  </svg>
+);
+
 /** Same rule as server `getThreadId` (deterministic doc id for fanDmThreads). */
 function threadIdForCreatorFan(creatorId: string, fanId: string): string {
   return [creatorId, fanId].sort().join("_");
@@ -240,6 +246,7 @@ export const FanHubMessages: React.FC = () => {
   const [deletingMessageId, setDeletingMessageId] = useState<string | null>(null);
   const messagesListRef = useRef<HTMLDivElement | null>(null);
   const messagesPaneRef = useRef<HTMLDivElement | null>(null);
+  const messagesBottomRef = useRef<HTMLDivElement | null>(null);
   const autoStickToBottomRef = useRef(true);
   /** After GET /api/fanDmMessages finishes, pin list scroll once (avoids scrollIntoView + wrong near-bottom on first paint). */
   const fhDmScrollAfterApiLoadRef = useRef(false);
@@ -275,8 +282,11 @@ export const FanHubMessages: React.FC = () => {
   const scrollMessagesToNewest = useCallback((opts?: { bringPaneIntoView?: boolean }) => {
     const run = () => {
       const listEl = messagesListRef.current;
-      if (opts?.bringPaneIntoView) {
-        messagesPaneRef.current?.scrollIntoView({ block: "nearest" });
+      if (opts?.bringPaneIntoView && messagesPaneRef.current && typeof window !== "undefined") {
+        const mobileInbox = window.matchMedia("(max-width: 1023px)").matches;
+        if (!mobileInbox) {
+          messagesPaneRef.current.scrollIntoView({ block: "nearest" });
+        }
       }
       if (listEl) {
         listEl.scrollTop = listEl.scrollHeight;
@@ -292,6 +302,7 @@ export const FanHubMessages: React.FC = () => {
     });
     window.setTimeout(run, 80);
     window.setTimeout(run, 240);
+    window.setTimeout(run, 480);
   }, []);
 
   /** Threads with at least one message (non-empty preview). Placeholder rows from join/checkout stay out until someone chats. */
@@ -525,6 +536,7 @@ export const FanHubMessages: React.FC = () => {
       return;
     }
     let cancelled = false;
+    setMessages([]);
     setMessagesLoading(true);
     fhDmScrollAfterApiLoadRef.current = true;
     autoStickToBottomRef.current = true;
@@ -710,6 +722,24 @@ export const FanHubMessages: React.FC = () => {
     fhDmScrollAfterApiLoadRef.current = true;
     scrollMessagesToNewest({ bringPaneIntoView: true });
   }, [selectedThread?.id, scrollMessagesToNewest]);
+
+  useEffect(() => {
+    const listEl = messagesListRef.current;
+    if (!listEl || !selectedThread || typeof ResizeObserver === "undefined") return;
+
+    const ro = new ResizeObserver(() => {
+      if (replyComposerFocusedRef.current) return;
+      if (fhDmScrollAfterApiLoadRef.current || autoStickToBottomRef.current) {
+        if (!fhDmScrollAfterApiLoadRef.current && !isNearBottom(listEl)) {
+          autoStickToBottomRef.current = false;
+          return;
+        }
+        listEl.scrollTop = listEl.scrollHeight;
+      }
+    });
+    ro.observe(listEl);
+    return () => ro.disconnect();
+  }, [selectedThread?.id, isNearBottom]);
 
   const sendDmWithPayload = async (content: string, attachments: DmAttachmentItem[]) => {
     if (!selectedThread || !creatorId) return;
@@ -1142,10 +1172,16 @@ export const FanHubMessages: React.FC = () => {
   };
 
   return (
-    <div className="max-w-7xl mx-auto p-4 sm:p-6 stormij-theme fh-messages-hub">
-      <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-6">Messages</h1>
-      <div className="flex gap-4 sm:gap-6 flex-col lg:flex-row">
-        <div className="w-full lg:w-96 flex-shrink-0 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 overflow-hidden lg:max-h-[min(90vh,900px)] lg:flex lg:flex-col">
+    <div
+      className={`max-w-7xl mx-auto p-4 sm:p-6 stormij-theme fh-messages-hub${
+        selectedThread ? " fh-messages-hub--thread-open" : ""
+      }`}
+    >
+      <h1 className="fh-messages-hub__page-title text-2xl font-bold text-gray-900 dark:text-white mb-6">
+        Messages
+      </h1>
+      <div className="fh-dm-layout flex gap-4 sm:gap-6 flex-col lg:flex-row min-h-0">
+        <div className="fh-dm-sidebar w-full lg:w-96 flex-shrink-0 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 overflow-hidden lg:max-h-[min(90vh,900px)] lg:flex lg:flex-col">
           <div className="fh-dm-sidebar-header">
             <h2>Chat</h2>
             <button
@@ -1365,7 +1401,10 @@ export const FanHubMessages: React.FC = () => {
             </ul>
           )}
         </div>
-        <div ref={messagesPaneRef} className="flex-1 min-w-0 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 overflow-hidden flex flex-col min-h-[min(78vh,700px)] lg:max-h-[min(90vh,900px)]">
+        <div
+          ref={messagesPaneRef}
+          className="fh-dm-thread-pane flex-1 min-w-0 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 overflow-hidden flex flex-col min-h-[min(78vh,700px)] lg:max-h-[min(90vh,900px)]"
+        >
           {!selectedThread ? (
             <div className="flex-1 flex items-center justify-center text-gray-500 dark:text-gray-400 text-sm">
               Select a conversation
@@ -1374,6 +1413,18 @@ export const FanHubMessages: React.FC = () => {
             <>
               <div className="p-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between gap-2">
                 <div className="flex items-center gap-3 min-w-0 flex-1">
+                  <button
+                    type="button"
+                    className="fh-dm-thread-back lg:hidden fh-dm-sidebar-icon-btn shrink-0"
+                    aria-label="Back to conversations"
+                    title="Back to conversations"
+                    onClick={() => {
+                      setThreadRowMenuOpenId(null);
+                      setSelectedThread(null);
+                    }}
+                  >
+                    <ChevronLeftIcon />
+                  </button>
                   <FanHubDmThreadRowAvatar
                     name={selectedThread.otherPartyDisplayName || "Member"}
                     avatarUrl={selectedThread.otherPartyAvatar}
@@ -1411,7 +1462,7 @@ export const FanHubMessages: React.FC = () => {
               </div>
               <div
                 ref={messagesListRef}
-                className="flex-1 overflow-y-auto p-4 space-y-2 min-w-0 flex flex-col"
+                className="fh-dm-messages-list flex-1 overflow-y-auto p-4 space-y-2 min-w-0 min-h-0 flex flex-col"
                 onScroll={(e) => {
                   autoStickToBottomRef.current = isNearBottom(e.currentTarget);
                 }}
@@ -1538,7 +1589,7 @@ export const FanHubMessages: React.FC = () => {
                     );
                   })
                 )}
-                <div aria-hidden className="shrink-0 h-px w-full" />
+                <div ref={messagesBottomRef} aria-hidden className="shrink-0 h-px w-full" />
               </div>
               <div className="p-4 border-t border-gray-200 dark:border-gray-700 space-y-2">
                 {isRecordingVoice && voiceMeterStream ? (

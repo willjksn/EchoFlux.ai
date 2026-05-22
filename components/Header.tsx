@@ -10,10 +10,10 @@ import { FanHubHelpChooserModal } from './FanHubHelpChooserModal';
 import { ShareReviewModal } from './ShareReviewModal';
 import { getAvatarCropStyle } from '../src/lib/avatarCrop';
 import { resolveApiUrl } from '../src/lib/resolveApiUrl';
-import {
-  dismissUsageNotificationId,
+import { dismissUsageNotificationId,
   dismissUsageNotificationIds,
 } from '../src/utils/usageNotificationDismissals';
+import { hasPlatformAdminAccess } from '../src/lib/platformAdminAccess';
 
 function shouldPersistBellDismissal(messageId?: string): boolean {
   return !!messageId && (messageId.startsWith('usage-') || messageId === 'trial-ending');
@@ -45,14 +45,15 @@ export const Header: React.FC<HeaderProps> = ({ pageTitle }) => {
   const notificationsRef = useRef<HTMLDivElement>(null);
   
   // Social inbox removed; show usage, announcements, and IT support ticket admin alerts.
+  const isPlatformAdmin = hasPlatformAdminAccess(user);
   const visibleNotifications = useMemo(() => {
     return notifications.filter(
       (n) =>
         n.messageId?.startsWith("usage-") ||
         n.messageId?.startsWith("announcement-") ||
-        n.messageId?.startsWith("admin-")
+        (isPlatformAdmin && n.messageId?.startsWith("admin-"))
     );
-  }, [notifications]);
+  }, [notifications, isPlatformAdmin]);
 
   const hasUnreadNotifications = useMemo(() => visibleNotifications.some(n => !n.read), [visibleNotifications]);
   const unreadVisibleCount = useMemo(
@@ -216,9 +217,9 @@ export const Header: React.FC<HeaderProps> = ({ pageTitle }) => {
   );
 
   const handleMarkAllAsRead = useCallback(() => {
-    const adminIds = notifications
-      .map((n) => adminAlertDocId(n.id))
-      .filter((x): x is string => Boolean(x));
+    const adminIds = isPlatformAdmin
+      ? notifications.map((n) => adminAlertDocId(n.id)).filter((x): x is string => Boolean(x))
+      : [];
     const usageIds = notifications.filter((n) => shouldPersistBellDismissal(n.messageId)).map((n) => n.id);
     if (usageIds.length) dismissUsageNotificationIds(user.id, usageIds);
     void (async () => {
@@ -231,11 +232,11 @@ export const Header: React.FC<HeaderProps> = ({ pageTitle }) => {
       }
       setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
     })();
-  }, [notifications, adminAlertDocId, markAdminAlertsReadRemote, showToast, setNotifications, user.id]);
+  }, [notifications, isPlatformAdmin, adminAlertDocId, markAdminAlertsReadRemote, showToast, setNotifications, user.id]);
 
   const ClientSwitcher: React.FC = () => {
     // Hide agency/client switching for now; leave available only for Admin
-    if (user.role !== 'Admin') {
+    if (user.role !== 'Admin' && !hasPlatformAdminAccess(user)) {
       return null;
     }
 

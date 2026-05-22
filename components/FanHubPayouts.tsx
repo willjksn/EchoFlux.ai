@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { doc, updateDoc, deleteField } from "firebase/firestore";
 import { useAppContext } from "./AppContext";
 import { auth, db } from "../firebaseConfig";
@@ -98,6 +98,66 @@ function formatPayoutDate(unixSeconds: number | null): string {
   } catch {
     return "—";
   }
+}
+
+/** Matches api/stripeConnectPayouts.ts — history from here through current month, newest first. */
+const PAYOUT_HISTORY_START_MONTH = "2026-03";
+
+const PayoutMonthChevron = ({ open }: { open?: boolean }) => (
+  <svg
+    className={`w-4 h-4 shrink-0 text-gray-500 dark:text-gray-400 transition-transform ${open ? "rotate-180" : ""}`}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    aria-hidden
+  >
+    <path d="M6 9l6 6 6-6" strokeLinecap="round" strokeLinejoin="round" />
+  </svg>
+);
+
+function MonthPayoutDetails({ month }: { month: StripeMonthlyPayoutSummary }) {
+  const [expanded, setExpanded] = useState(month.count > 0);
+  const summaryRight =
+    month.count > 0
+      ? `${formatCents(month.totalCents, month.currency)} · ${month.count} payout${month.count === 1 ? "" : "s"}`
+      : "No payouts";
+
+  return (
+    <details
+      open={expanded}
+      onToggle={(e) => setExpanded((e.currentTarget as HTMLDetailsElement).open)}
+      className="rounded-lg border border-gray-100 dark:border-gray-700 overflow-hidden"
+    >
+      <summary
+        className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 bg-gray-50 dark:bg-gray-900/40 text-sm cursor-pointer list-none [&::-webkit-details-marker]:hidden"
+        aria-label={`${expanded ? "Collapse" : "Expand"} ${month.label} payouts`}
+      >
+        <span className="flex items-center gap-2 min-w-0">
+          <PayoutMonthChevron open={expanded} />
+          <span className="font-medium text-gray-900 dark:text-white">{month.label}</span>
+        </span>
+        <span className="tabular-nums text-gray-700 dark:text-gray-300">{summaryRight}</span>
+      </summary>
+      {month.payouts.length > 0 ? (
+        <ul className="m-0 p-0 list-none divide-y divide-gray-100 dark:divide-gray-700">
+          {month.payouts.map((payout) => (
+            <li
+              key={payout.id}
+              className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 text-xs"
+            >
+              <span className="tabular-nums text-gray-800 dark:text-gray-200">
+                {formatCents(payout.amountCents, payout.currency)}
+              </span>
+              <span className="text-gray-500 dark:text-gray-400">
+                {formatPayoutDate(payout.arrivalDate ?? payout.createdAt)} · {formatPayoutStatus(payout.status)}
+              </span>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+    </details>
+  );
 }
 
 function StripeBalanceCard({
@@ -227,10 +287,13 @@ function StripePayoutHistoryCard({
   isPlatformOwner: boolean;
   onRefresh: () => void;
 }) {
-  const recent = history?.recent ?? [];
-  const monthly = history?.monthly ?? [];
-  const hasAnyPayouts = recent.length > 0 || monthly.some((m) => m.count > 0);
-
+  const monthly = useMemo(
+    () =>
+      [...(history?.monthly ?? [])]
+        .filter((m) => m.month >= PAYOUT_HISTORY_START_MONTH)
+        .sort((a, b) => b.month.localeCompare(a.month)),
+    [history?.monthly]
+  );
   return (
     <div className="mb-6 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-4 py-5 shadow-sm">
       <div className="flex flex-wrap items-start justify-between gap-3 mb-4">
@@ -240,8 +303,8 @@ function StripePayoutHistoryCard({
           </h3>
           <p className="text-xs text-gray-500 dark:text-gray-400 m-0">
             {isPlatformOwner
-              ? "Recent transfers from your main Stripe account to your bank."
-              : "Recent automatic payouts from your connected Stripe account."}
+              ? "Expand a month to see transfers from your main Stripe account to your bank."
+              : "Expand a month to see automatic payouts from your connected Stripe account."}
           </p>
         </div>
         <button
@@ -258,72 +321,14 @@ function StripePayoutHistoryCard({
         <p className="text-sm text-gray-500 dark:text-gray-400 m-0">Loading payout history…</p>
       ) : error ? (
         <p className="text-sm text-amber-700 dark:text-amber-300 m-0">{error}</p>
-      ) : !hasAnyPayouts ? (
-        <p className="text-sm text-gray-500 dark:text-gray-400 m-0">No payouts in the last 12 months yet.</p>
+      ) : monthly.length === 0 ? (
+        <p className="text-sm text-gray-500 dark:text-gray-400 m-0">No payouts since March 2026 yet.</p>
       ) : (
-        <>
-          <ul className="m-0 p-0 list-none divide-y divide-gray-100 dark:divide-gray-700 rounded-lg border border-gray-100 dark:border-gray-700 overflow-hidden">
-            {recent.map((payout) => (
-              <li
-                key={payout.id}
-                className="flex flex-wrap items-center justify-between gap-2 px-3 py-2.5 bg-gray-50/80 dark:bg-gray-900/30 text-sm"
-              >
-                <div className="min-w-0">
-                  <p className="m-0 font-medium tabular-nums text-gray-900 dark:text-white">
-                    {formatCents(payout.amountCents, payout.currency)}
-                  </p>
-                  <p className="m-0 text-xs text-gray-500 dark:text-gray-400">
-                    {formatPayoutDate(payout.arrivalDate ?? payout.createdAt)}
-                  </p>
-                </div>
-                <span className="text-xs font-medium capitalize text-gray-600 dark:text-gray-300">
-                  {formatPayoutStatus(payout.status)}
-                </span>
-              </li>
-            ))}
-          </ul>
-
-          <details className="mt-4 group">
-            <summary className="cursor-pointer text-sm font-medium text-indigo-600 dark:text-indigo-400 hover:underline list-none flex items-center gap-2">
-              <span className="group-open:rotate-90 transition-transform inline-block">▸</span>
-              Last 12 months
-            </summary>
-            <div className="mt-3 space-y-3">
-              {monthly.map((month) => (
-                <div
-                  key={month.month}
-                  className="rounded-lg border border-gray-100 dark:border-gray-700 overflow-hidden"
-                >
-                  <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 bg-gray-50 dark:bg-gray-900/40 text-sm">
-                    <span className="font-medium text-gray-900 dark:text-white">{month.label}</span>
-                    <span className="tabular-nums text-gray-700 dark:text-gray-300">
-                      {month.count > 0
-                        ? `${formatCents(month.totalCents, month.currency)} · ${month.count} payout${month.count === 1 ? "" : "s"}`
-                        : "No payouts"}
-                    </span>
-                  </div>
-                  {month.payouts.length > 0 && (
-                    <ul className="m-0 p-0 list-none divide-y divide-gray-100 dark:divide-gray-700">
-                      {month.payouts.map((payout) => (
-                        <li
-                          key={payout.id}
-                          className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 text-xs"
-                        >
-                          <span className="tabular-nums text-gray-800 dark:text-gray-200">
-                            {formatCents(payout.amountCents, payout.currency)}
-                          </span>
-                          <span className="text-gray-500 dark:text-gray-400">
-                            {formatPayoutDate(payout.arrivalDate ?? payout.createdAt)} · {formatPayoutStatus(payout.status)}
-                          </span>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </div>
-              ))}
-            </div>
-          </details>
-        </>
+        <div className="space-y-2">
+          {monthly.map((month) => (
+            <MonthPayoutDetails key={month.month} month={month} />
+          ))}
+        </div>
       )}
     </div>
   );
