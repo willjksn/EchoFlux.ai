@@ -4574,10 +4574,7 @@ export const FanStorefrontView: React.FC = () => {
   const avatarCropStyle: React.CSSProperties = getAvatarCropStyle(creator.avatarObjectPosition);
   const creatorDmPrimary = formatCreatorDmBubblePrimaryLine(displayName, creator.handle);
   const creatorDmSecondary = formatCreatorDmBubbleSecondaryLine(displayName, creator.handle);
-  const sjHeartEmojiCtx: SjHeartEmojiAccessContext = useMemo(
-    () => ({ creatorHandle: creator.handle }),
-    [creator.handle]
-  );
+  const sjHeartEmojiCtx: SjHeartEmojiAccessContext = { creatorHandle: creator.handle };
 
   // Member view background - uses creator theme or neutral default
   const bg = theme?.background || defaultBg;

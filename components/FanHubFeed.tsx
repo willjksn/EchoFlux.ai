@@ -989,7 +989,8 @@ function FeedCard({
   const likeCount = post.likeCount ?? 0;
   const likersListAvailable = (post.likedBy?.length ?? 0) > 0;
   const likeCountInteractive = Boolean(isAdminMode && likeCount > 0 && likersListAvailable);
-  const showLikeCount = Boolean(isAdminMode && likeCount > 0 && !post.hideLikeCounts);
+  const showLikeControls = Boolean(isAdminMode || !post.hideLikes);
+  const showLikeCount = Boolean(likeCount > 0 && (isAdminMode || !post.hideLikeCounts));
 
   useEffect(() => {
     if (!commentsOpen) return;
@@ -1697,7 +1698,7 @@ function FeedCard({
         </div>
       )}
 
-      {firstUrl && !post.hideLikes && (
+      {firstUrl && showLikeControls && (
         <div className="feed-card-actions">
           <span className="feed-card-action-group">
             <button
@@ -1804,7 +1805,7 @@ function FeedCard({
         )}
       </div>
 
-      {!firstUrl && !post.hideLikes && (
+      {!firstUrl && showLikeControls && (
         <div className="feed-card-text-only-footer">
           <div className="feed-card-actions">
             <span className="feed-card-action-group">
