@@ -28,6 +28,31 @@ interface StripeConnectBalance {
   pending: StripeBalanceEntry[];
 }
 
+interface StripePayoutRecord {
+  id: string;
+  amountCents: number;
+  currency: string;
+  status: string;
+  arrivalDate: number | null;
+  createdAt: number;
+  method: string | null;
+}
+
+interface StripeMonthlyPayoutSummary {
+  month: string;
+  label: string;
+  totalCents: number;
+  currency: string;
+  count: number;
+  payouts: StripePayoutRecord[];
+}
+
+interface StripePayoutHistory {
+  recent: StripePayoutRecord[];
+  monthly: StripeMonthlyPayoutSummary[];
+  canManualPayout: boolean;
+}
+
 function formatCents(cents: number, currency = "usd"): string {
   try {
     return new Intl.NumberFormat("en-US", {
@@ -45,18 +70,54 @@ function sumBalanceCents(entries: StripeBalanceEntry[], currency = "usd"): numbe
     .reduce((sum, entry) => sum + entry.amountCents, 0);
 }
 
+function formatPayoutStatus(status: string): string {
+  switch (status) {
+    case "paid":
+      return "Paid";
+    case "pending":
+      return "Pending";
+    case "in_transit":
+      return "In transit";
+    case "canceled":
+      return "Canceled";
+    case "failed":
+      return "Failed";
+    default:
+      return status.replace(/_/g, " ");
+  }
+}
+
+function formatPayoutDate(unixSeconds: number | null): string {
+  if (!unixSeconds) return "—";
+  try {
+    return new Date(unixSeconds * 1000).toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    });
+  } catch {
+    return "—";
+  }
+}
+
 function StripeBalanceCard({
   balance,
   loading,
   error,
   isPlatformOwner,
   onRefresh,
+  onRequestPayout,
+  payoutRequesting,
+  availableUsdCents,
 }: {
   balance: StripeConnectBalance | null;
   loading: boolean;
   error: string | null;
   isPlatformOwner: boolean;
   onRefresh: () => void;
+  onRequestPayout?: () => void;
+  payoutRequesting?: boolean;
+  availableUsdCents: number;
 }) {
   const availableUsd = sumBalanceCents(balance?.available ?? [], "usd");
   const pendingUsd = sumBalanceCents(balance?.pending ?? [], "usd");
@@ -74,7 +135,7 @@ function StripeBalanceCard({
           </h3>
           <p className="text-xs text-gray-500 dark:text-gray-400 m-0">
             {isPlatformOwner
-              ? "Main EchoFlux Stripe account. Payouts are handled automatically by Stripe."
+              ? "Main EchoFlux Stripe account. Request a payout when you want funds sent to your bank."
               : "Your connected Express account. Stripe sends payouts to your bank on its usual schedule."}
           </p>
         </div>
@@ -103,7 +164,9 @@ function StripeBalanceCard({
                 {formatCents(availableUsd)}
               </p>
               <p className="text-xs text-gray-500 dark:text-gray-400 m-0 mt-1">
-                Ready for Stripe&apos;s next automatic payout
+                {isPlatformOwner
+                  ? "Available to pay out to your bank"
+                  : "Ready for Stripe&apos;s next automatic payout"}
               </p>
             </div>
             <div className="rounded-lg border border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/40 px-4 py-3">
@@ -128,6 +191,138 @@ function StripeBalanceCard({
               ))}
             </ul>
           )}
+          {isPlatformOwner && onRequestPayout && (
+            <div className="mt-4 pt-4 border-t border-gray-100 dark:border-gray-700">
+              <button
+                type="button"
+                onClick={onRequestPayout}
+                disabled={payoutRequesting || availableUsdCents < 100}
+                className="inline-flex items-center justify-center px-4 py-2.5 rounded-lg text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 dark:bg-indigo-600 dark:hover:bg-indigo-500 disabled:opacity-50"
+              >
+                {payoutRequesting ? "Sending payout…" : "Pay out available balance"}
+              </button>
+              {availableUsdCents > 0 && availableUsdCents < 100 && (
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-2 mb-0">
+                  Minimum payout is $1.00.
+                </p>
+              )}
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+function StripePayoutHistoryCard({
+  history,
+  loading,
+  error,
+  isPlatformOwner,
+  onRefresh,
+}: {
+  history: StripePayoutHistory | null;
+  loading: boolean;
+  error: string | null;
+  isPlatformOwner: boolean;
+  onRefresh: () => void;
+}) {
+  const recent = history?.recent ?? [];
+  const monthly = history?.monthly ?? [];
+  const hasAnyPayouts = recent.length > 0 || monthly.some((m) => m.count > 0);
+
+  return (
+    <div className="mb-6 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-4 py-5 shadow-sm">
+      <div className="flex flex-wrap items-start justify-between gap-3 mb-4">
+        <div>
+          <h3 className="text-base font-semibold text-gray-900 dark:text-white m-0 mb-1">
+            Payout history
+          </h3>
+          <p className="text-xs text-gray-500 dark:text-gray-400 m-0">
+            {isPlatformOwner
+              ? "Recent transfers from your main Stripe account to your bank."
+              : "Recent automatic payouts from your connected Stripe account."}
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={onRefresh}
+          disabled={loading}
+          className="text-sm font-medium text-indigo-600 dark:text-indigo-400 underline underline-offset-2 hover:no-underline disabled:opacity-50"
+        >
+          Refresh
+        </button>
+      </div>
+
+      {loading && !history ? (
+        <p className="text-sm text-gray-500 dark:text-gray-400 m-0">Loading payout history…</p>
+      ) : error ? (
+        <p className="text-sm text-amber-700 dark:text-amber-300 m-0">{error}</p>
+      ) : !hasAnyPayouts ? (
+        <p className="text-sm text-gray-500 dark:text-gray-400 m-0">No payouts in the last 12 months yet.</p>
+      ) : (
+        <>
+          <ul className="m-0 p-0 list-none divide-y divide-gray-100 dark:divide-gray-700 rounded-lg border border-gray-100 dark:border-gray-700 overflow-hidden">
+            {recent.map((payout) => (
+              <li
+                key={payout.id}
+                className="flex flex-wrap items-center justify-between gap-2 px-3 py-2.5 bg-gray-50/80 dark:bg-gray-900/30 text-sm"
+              >
+                <div className="min-w-0">
+                  <p className="m-0 font-medium tabular-nums text-gray-900 dark:text-white">
+                    {formatCents(payout.amountCents, payout.currency)}
+                  </p>
+                  <p className="m-0 text-xs text-gray-500 dark:text-gray-400">
+                    {formatPayoutDate(payout.arrivalDate ?? payout.createdAt)}
+                  </p>
+                </div>
+                <span className="text-xs font-medium capitalize text-gray-600 dark:text-gray-300">
+                  {formatPayoutStatus(payout.status)}
+                </span>
+              </li>
+            ))}
+          </ul>
+
+          <details className="mt-4 group">
+            <summary className="cursor-pointer text-sm font-medium text-indigo-600 dark:text-indigo-400 hover:underline list-none flex items-center gap-2">
+              <span className="group-open:rotate-90 transition-transform inline-block">▸</span>
+              Last 12 months
+            </summary>
+            <div className="mt-3 space-y-3">
+              {monthly.map((month) => (
+                <div
+                  key={month.month}
+                  className="rounded-lg border border-gray-100 dark:border-gray-700 overflow-hidden"
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 bg-gray-50 dark:bg-gray-900/40 text-sm">
+                    <span className="font-medium text-gray-900 dark:text-white">{month.label}</span>
+                    <span className="tabular-nums text-gray-700 dark:text-gray-300">
+                      {month.count > 0
+                        ? `${formatCents(month.totalCents, month.currency)} · ${month.count} payout${month.count === 1 ? "" : "s"}`
+                        : "No payouts"}
+                    </span>
+                  </div>
+                  {month.payouts.length > 0 && (
+                    <ul className="m-0 p-0 list-none divide-y divide-gray-100 dark:divide-gray-700">
+                      {month.payouts.map((payout) => (
+                        <li
+                          key={payout.id}
+                          className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 text-xs"
+                        >
+                          <span className="tabular-nums text-gray-800 dark:text-gray-200">
+                            {formatCents(payout.amountCents, payout.currency)}
+                          </span>
+                          <span className="text-gray-500 dark:text-gray-400">
+                            {formatPayoutDate(payout.arrivalDate ?? payout.createdAt)} · {formatPayoutStatus(payout.status)}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              ))}
+            </div>
+          </details>
         </>
       )}
     </div>
@@ -140,6 +335,10 @@ export const FanHubPayouts: React.FC = () => {
   const [balance, setBalance] = useState<StripeConnectBalance | null>(null);
   const [balanceLoading, setBalanceLoading] = useState(false);
   const [balanceError, setBalanceError] = useState<string | null>(null);
+  const [payoutHistory, setPayoutHistory] = useState<StripePayoutHistory | null>(null);
+  const [payoutHistoryLoading, setPayoutHistoryLoading] = useState(false);
+  const [payoutHistoryError, setPayoutHistoryError] = useState<string | null>(null);
+  const [payoutRequesting, setPayoutRequesting] = useState(false);
   const [loading, setLoading] = useState(true);
   const [connecting, setConnecting] = useState(false);
   const [openingDashboard, setOpeningDashboard] = useState(false);
@@ -172,6 +371,37 @@ export const FanHubPayouts: React.FC = () => {
       setBalanceError("Could not load Stripe balance.");
     } finally {
       setBalanceLoading(false);
+    }
+  }, []);
+
+  const fetchPayoutHistory = useCallback(async () => {
+    setPayoutHistoryLoading(true);
+    setPayoutHistoryError(null);
+    try {
+      const token = auth.currentUser ? await auth.currentUser.getIdToken() : null;
+      const res = await fetch(resolveApiUrl("/api/stripeConnectPayouts"), {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setPayoutHistory(null);
+        setPayoutHistoryError(
+          typeof data.message === "string" && data.message.trim()
+            ? data.message
+            : "Could not load payout history.",
+        );
+        return;
+      }
+      setPayoutHistory({
+        recent: Array.isArray(data.recent) ? data.recent : [],
+        monthly: Array.isArray(data.monthly) ? data.monthly : [],
+        canManualPayout: !!data.canManualPayout,
+      });
+    } catch {
+      setPayoutHistory(null);
+      setPayoutHistoryError("Could not load payout history.");
+    } finally {
+      setPayoutHistoryLoading(false);
     }
   }, []);
 
@@ -208,8 +438,9 @@ export const FanHubPayouts: React.FC = () => {
     const hasAccount = !!status.stripeConnectAccountId;
     if (isPlatformOwner || (hasAccount && !status.reconnectRequired)) {
       void fetchBalance();
+      void fetchPayoutHistory();
     }
-  }, [status, fetchBalance]);
+  }, [status, fetchBalance, fetchPayoutHistory]);
 
   /** After Stripe Connect return/refresh URLs, re-fetch and clean query so status updates to green. */
   useEffect(() => {
@@ -218,10 +449,55 @@ export const FanHubPayouts: React.FC = () => {
     if (p.get("connect") !== "return" && p.get("connect") !== "refresh") return;
     void fetchStatus();
     void fetchBalance();
+    void fetchPayoutHistory();
     p.delete("connect");
     const qs = p.toString();
     window.history.replaceState({}, "", `${window.location.pathname}${qs ? `?${qs}` : ""}`);
-  }, [fetchStatus, fetchBalance]);
+  }, [fetchStatus, fetchBalance, fetchPayoutHistory]);
+
+  const handleRequestPayout = async () => {
+    const availableUsd = sumBalanceCents(balance?.available ?? [], "usd");
+    if (availableUsd < 100) {
+      showToast?.("Available balance is below the $1.00 minimum payout.", "error");
+      return;
+    }
+    if (
+      !window.confirm(
+        `Pay out ${formatCents(availableUsd)} to your bank? This uses your full available Stripe balance.`,
+      )
+    ) {
+      return;
+    }
+    setPayoutRequesting(true);
+    try {
+      const token = auth.currentUser ? await auth.currentUser.getIdToken() : null;
+      const res = await fetch(resolveApiUrl("/api/stripeConnectPayouts"), {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({}),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        showToast?.(
+          typeof data.message === "string" && data.message.trim()
+            ? data.message
+            : "Could not create payout.",
+          "error",
+        );
+        return;
+      }
+      showToast?.("Payout initiated. It may take a few business days to reach your bank.", "success");
+      await fetchBalance();
+      await fetchPayoutHistory();
+    } catch {
+      showToast?.("Could not create payout.", "error");
+    } finally {
+      setPayoutRequesting(false);
+    }
+  };
 
   const handleConnect = async () => {
     setConnecting(true);
@@ -393,6 +669,7 @@ export const FanHubPayouts: React.FC = () => {
       ? "Connect Stripe"
       : "Continue Stripe setup";
   const showBalance = isPlatformOwner || (hasAccount && !status?.reconnectRequired);
+  const availableUsdCents = sumBalanceCents(balance?.available ?? [], "usd");
 
   return (
     <div className="max-w-2xl mx-auto py-8 px-4">
@@ -410,6 +687,19 @@ export const FanHubPayouts: React.FC = () => {
           error={balanceError}
           isPlatformOwner={isPlatformOwner}
           onRefresh={() => void fetchBalance()}
+          onRequestPayout={isPlatformOwner ? () => void handleRequestPayout() : undefined}
+          payoutRequesting={payoutRequesting}
+          availableUsdCents={availableUsdCents}
+        />
+      )}
+
+      {showBalance && (
+        <StripePayoutHistoryCard
+          history={payoutHistory}
+          loading={payoutHistoryLoading}
+          error={payoutHistoryError}
+          isPlatformOwner={isPlatformOwner}
+          onRefresh={() => void fetchPayoutHistory()}
         />
       )}
 
