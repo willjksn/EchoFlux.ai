@@ -18,13 +18,162 @@ export interface StripeConnectStatus {
   reconnectRequired?: boolean;
 }
 
+interface StripeBalanceEntry {
+  currency: string;
+  amountCents: number;
+}
+
+interface StripeConnectBalance {
+  available: StripeBalanceEntry[];
+  pending: StripeBalanceEntry[];
+}
+
+function formatCents(cents: number, currency = "usd"): string {
+  try {
+    return new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency: currency.toUpperCase(),
+    }).format(cents / 100);
+  } catch {
+    return "$" + (cents / 100).toFixed(2);
+  }
+}
+
+function sumBalanceCents(entries: StripeBalanceEntry[], currency = "usd"): number {
+  return entries
+    .filter((entry) => entry.currency.toLowerCase() === currency.toLowerCase())
+    .reduce((sum, entry) => sum + entry.amountCents, 0);
+}
+
+function StripeBalanceCard({
+  balance,
+  loading,
+  error,
+  isPlatformOwner,
+  onRefresh,
+}: {
+  balance: StripeConnectBalance | null;
+  loading: boolean;
+  error: string | null;
+  isPlatformOwner: boolean;
+  onRefresh: () => void;
+}) {
+  const availableUsd = sumBalanceCents(balance?.available ?? [], "usd");
+  const pendingUsd = sumBalanceCents(balance?.pending ?? [], "usd");
+  const otherCurrencies = new Set<string>();
+  for (const entry of [...(balance?.available ?? []), ...(balance?.pending ?? [])]) {
+    if (entry.currency.toLowerCase() !== "usd") otherCurrencies.add(entry.currency.toLowerCase());
+  }
+
+  return (
+    <div className="mb-6 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-4 py-5 shadow-sm">
+      <div className="flex flex-wrap items-start justify-between gap-3 mb-4">
+        <div>
+          <h3 className="text-base font-semibold text-gray-900 dark:text-white m-0 mb-1">
+            Stripe balance
+          </h3>
+          <p className="text-xs text-gray-500 dark:text-gray-400 m-0">
+            {isPlatformOwner
+              ? "Main EchoFlux Stripe account. Payouts are handled automatically by Stripe."
+              : "Your connected Express account. Stripe sends payouts to your bank on its usual schedule."}
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={onRefresh}
+          disabled={loading}
+          className="text-sm font-medium text-indigo-600 dark:text-indigo-400 underline underline-offset-2 hover:no-underline disabled:opacity-50"
+        >
+          Refresh balance
+        </button>
+      </div>
+
+      {loading && !balance ? (
+        <p className="text-sm text-gray-500 dark:text-gray-400 m-0">Loading balance…</p>
+      ) : error ? (
+        <p className="text-sm text-amber-700 dark:text-amber-300 m-0">{error}</p>
+      ) : (
+        <>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="rounded-lg border border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/40 px-4 py-3">
+              <p className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400 m-0 mb-1">
+                Available
+              </p>
+              <p className="text-2xl font-semibold tabular-nums text-gray-900 dark:text-white m-0">
+                {formatCents(availableUsd)}
+              </p>
+              <p className="text-xs text-gray-500 dark:text-gray-400 m-0 mt-1">
+                Ready for Stripe&apos;s next automatic payout
+              </p>
+            </div>
+            <div className="rounded-lg border border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/40 px-4 py-3">
+              <p className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400 m-0 mb-1">
+                Pending
+              </p>
+              <p className="text-2xl font-semibold tabular-nums text-gray-900 dark:text-white m-0">
+                {formatCents(pendingUsd)}
+              </p>
+              <p className="text-xs text-gray-500 dark:text-gray-400 m-0 mt-1">
+                Still clearing before it becomes available
+              </p>
+            </div>
+          </div>
+          {otherCurrencies.size > 0 && (
+            <ul className="mt-3 mb-0 p-0 list-none text-xs text-gray-600 dark:text-gray-300 space-y-1">
+              {[...otherCurrencies].map((currency) => (
+                <li key={currency}>
+                  {currency.toUpperCase()}: {formatCents(sumBalanceCents(balance?.available ?? [], currency), currency)}{" "}
+                  available, {formatCents(sumBalanceCents(balance?.pending ?? [], currency), currency)} pending
+                </li>
+              ))}
+            </ul>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
 export const FanHubPayouts: React.FC = () => {
   const { showToast } = useAppContext();
   const [status, setStatus] = useState<StripeConnectStatus | null>(null);
+  const [balance, setBalance] = useState<StripeConnectBalance | null>(null);
+  const [balanceLoading, setBalanceLoading] = useState(false);
+  const [balanceError, setBalanceError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [connecting, setConnecting] = useState(false);
   const [openingDashboard, setOpeningDashboard] = useState(false);
   const [resetting, setResetting] = useState(false);
+
+  const fetchBalance = useCallback(async () => {
+    setBalanceLoading(true);
+    setBalanceError(null);
+    try {
+      const token = auth.currentUser ? await auth.currentUser.getIdToken() : null;
+      const res = await fetch(resolveApiUrl("/api/stripeConnectBalance"), {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setBalance(null);
+        setBalanceError(
+          typeof data.message === "string" && data.message.trim()
+            ? data.message
+            : "Could not load Stripe balance.",
+        );
+        return;
+      }
+      setBalance({
+        available: Array.isArray(data.available) ? data.available : [],
+        pending: Array.isArray(data.pending) ? data.pending : [],
+      });
+    } catch {
+      setBalance(null);
+      setBalanceError("Could not load Stripe balance.");
+    } finally {
+      setBalanceLoading(false);
+    }
+  }, []);
 
   const fetchStatus = useCallback(async () => {
     setLoading(true);
@@ -53,16 +202,26 @@ export const FanHubPayouts: React.FC = () => {
     void fetchStatus();
   }, [fetchStatus]);
 
+  useEffect(() => {
+    if (!status) return;
+    const isPlatformOwner = status.isPlatformOwner === true;
+    const hasAccount = !!status.stripeConnectAccountId;
+    if (isPlatformOwner || (hasAccount && !status.reconnectRequired)) {
+      void fetchBalance();
+    }
+  }, [status, fetchBalance]);
+
   /** After Stripe Connect return/refresh URLs, re-fetch and clean query so status updates to green. */
   useEffect(() => {
     if (typeof window === "undefined") return;
     const p = new URLSearchParams(window.location.search);
     if (p.get("connect") !== "return" && p.get("connect") !== "refresh") return;
     void fetchStatus();
+    void fetchBalance();
     p.delete("connect");
     const qs = p.toString();
     window.history.replaceState({}, "", `${window.location.pathname}${qs ? `?${qs}` : ""}`);
-  }, [fetchStatus]);
+  }, [fetchStatus, fetchBalance]);
 
   const handleConnect = async () => {
     setConnecting(true);
@@ -233,6 +392,7 @@ export const FanHubPayouts: React.FC = () => {
     : needsStart
       ? "Connect Stripe"
       : "Continue Stripe setup";
+  const showBalance = isPlatformOwner || (hasAccount && !status?.reconnectRequired);
 
   return (
     <div className="max-w-2xl mx-auto py-8 px-4">
@@ -242,6 +402,16 @@ export const FanHubPayouts: React.FC = () => {
           ? "As a platform owner, payments go directly to the main EchoFlux account."
           : "Connect Stripe so subscriptions, tips, and store purchases can reach your bank. Without this, checkout may fail or be blocked for your page."}
       </p>
+
+      {showBalance && (
+        <StripeBalanceCard
+          balance={balance}
+          loading={balanceLoading}
+          error={balanceError}
+          isPlatformOwner={isPlatformOwner}
+          onRefresh={() => void fetchBalance()}
+        />
+      )}
 
       {/* —— Creators: green when fully active —— */}
       {!isPlatformOwner && paymentsReady && (
