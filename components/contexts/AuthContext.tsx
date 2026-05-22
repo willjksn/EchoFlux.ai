@@ -162,6 +162,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                                     subscriptionStatus: 'canceled',
                                     cancelAtPeriodEnd: false,
                                 } as any, { merge: true });
+                                await syncCreatorAppClaimWithServer(fbUser);
                             }
                         }
 

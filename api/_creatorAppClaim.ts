@@ -4,49 +4,27 @@
  */
 import type { Firestore } from "firebase-admin/firestore";
 import type admin from "firebase-admin";
+import {
+  shouldHaveCreatorAppAccess as computeCreatorAppAccess,
+  type UserDocForCreatorAppClaim,
+} from "../src/lib/echoFluxSubscriptionAccess.js";
 
 export const CREATOR_APP_CLAIM = "creatorApp";
 
-const PAID_PLANS = new Set([
-  "Pro",
-  "Elite",
-  "Agency",
-  "OnlyFansStudio",
-  /** Invite checkout tiers ($1 / $2) after CreatorChoice Stripe subscription */
-  "CreatorPro",
-  "CreatorElite",
-]);
+export type UserDocForClaim = UserDocForCreatorAppClaim;
 
-export type UserDocForClaim = {
-  role?: string;
-  plan?: string | null;
-  hasCompletedOnboarding?: boolean;
-  accountOrigin?: string;
-  subscriptionStatus?: string;
-  inviteGrantPlan?: string;
-};
+export { PAID_ECHOFLUX_PLANS } from "../src/lib/echoFluxSubscriptionAccess.js";
+export {
+  hasActiveEchoFluxSubscription,
+  isPaidEchoFluxPlan,
+  isEchoFluxPaidSubscriptionLapsed,
+} from "../src/lib/echoFluxSubscriptionAccess.js";
 
 export function shouldHaveCreatorAppAccess(params: {
   userData: UserDocForClaim | undefined;
   creatorDocExists: boolean;
 }): boolean {
-  const d = params.userData || {};
-  if (d.role === "Admin") return true;
-  if (params.creatorDocExists) return true;
-  // CreatorChoice invite: Firestore stays plan Free until Stripe; must still use creator shell + plan picker.
-  if (
-    d.subscriptionStatus === "creator_invite_pending" &&
-    d.inviteGrantPlan === "CreatorChoice"
-  ) {
-    return true;
-  }
-  const plan = typeof d.plan === "string" ? d.plan : "";
-  if (plan && PAID_PLANS.has(plan)) return true;
-  // Fan Hub–provisioned accounts: never get the EchoFlux creator shell from onboarding alone
-  // (creators/{uid}, paid SaaS/invite tiers, and rules above still apply).
-  if (d.accountOrigin === "fan_hub") return false;
-  if (d.hasCompletedOnboarding === true) return true;
-  return false;
+  return computeCreatorAppAccess(params);
 }
 
 export async function applyCreatorAppClaim(

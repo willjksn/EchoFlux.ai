@@ -1,6 +1,8 @@
 import { VercelRequest, VercelResponse } from '@vercel/node';
 import Stripe from 'stripe';
 import { verifyAuth } from './verifyAuth.js';
+import { getAdminApp, getAdminDb } from './_firebaseAdmin.js';
+import { applyCreatorAppClaim } from './_creatorAppClaim.js';
 
 // Stripe init mirrors api/createCheckoutSession.ts so sandbox cancel/reactivate works.
 const stripeUseTestModeEnv = (process.env.STRIPE_USE_TEST_MODE || '').toString().toLowerCase().trim();
@@ -40,9 +42,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const userId = decodedToken.uid;
     const { action } = req.body; // 'cancel' or 'reactivate'
 
-    // Get user from Firestore to find Stripe subscription ID
-    const { getFirestore } = await import('firebase-admin/firestore');
-    const db = getFirestore();
+    const db = getAdminDb();
     const userDoc = await db.collection('users').doc(userId).get();
 
     if (!userDoc.exists) {
@@ -117,6 +117,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         : 'the end of your billing period';
 
       const periodEndIso = periodEnd ? new Date(periodEnd * 1000).toISOString() : null;
+      try {
+        await applyCreatorAppClaim(db, getAdminApp().auth(), userId);
+      } catch (e) {
+        console.warn('cancelSubscription: applyCreatorAppClaim failed:', e);
+      }
       return res.status(200).json({
         success: true,
         message: `Subscription will cancel at the end of your billing period (${endDate}). You'll retain full access until then.`,
@@ -160,6 +165,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         subscriptionCurrentPeriodEnd,
         subscriptionStatus: subscription.status,
       }, { merge: true });
+
+      try {
+        await applyCreatorAppClaim(db, getAdminApp().auth(), userId);
+      } catch (e) {
+        console.warn('cancelSubscription: applyCreatorAppClaim failed:', e);
+      }
 
       return res.status(200).json({
         success: true,

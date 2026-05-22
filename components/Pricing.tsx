@@ -8,11 +8,47 @@ import {
   echofluxAnnualTotalUsd,
   echofluxEffectiveMonthlyWhenAnnualUsd,
 } from '../constants';
+import {
+    canOpenCreatorBillingPortal,
+    openCreatorBillingPortal,
+} from '../src/lib/openCreatorBillingPortal';
+import {
+    hasUsedEchoFluxFreeTrial,
+    isEligibleForEchoFluxCheckoutTrial,
+} from '../src/lib/echoFluxTrialEligibility';
+import { hasActiveEchoFluxSubscription } from '../src/lib/echoFluxSubscriptionAccess';
+
+/** Rank on pricing cards (Pro/CreatorPro = 1, Elite/CreatorElite = 2). */
+function echoFluxPricingTierRank(plan: string | null | undefined): number {
+    if (plan === 'Elite' || plan === 'CreatorElite') return 2;
+    if (plan === 'Pro' || plan === 'CreatorPro') return 1;
+    return 0;
+}
+
+function isActiveEchoFluxPricingTier(
+    userPlan: string | null | undefined,
+    tierName: string,
+): boolean {
+    if (!userPlan) return false;
+    if (userPlan === tierName) return true;
+    if (tierName === 'Pro' && userPlan === 'CreatorPro') return true;
+    if (tierName === 'Elite' && userPlan === 'CreatorElite') return true;
+    return false;
+}
 
 interface PricingProps {
     onGetStartedClick?: () => void;
     onNavigateRequest?: (page: Page) => void;
+    /** When set (e.g. lapsed subscription shell), overrides default back-to-profile. */
+    onBack?: () => void;
+    backLabel?: string;
 }
+
+const ChevronLeftIcon = () => (
+    <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+        <path d="M15 18l-6-6 6-6" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+);
 
 // Creator SaaS: Pro and Elite only (no public free tier; access via invite grant or paid checkout).
 const creatorTiers = [
@@ -116,13 +152,14 @@ const creatorTiers = [
     // },
 ];
 
-export const Pricing: React.FC<PricingProps> = ({ onGetStartedClick, onNavigateRequest }) => {
+export const Pricing: React.FC<PricingProps> = ({ onGetStartedClick, onNavigateRequest, onBack, backLabel }) => {
     const { user, openPaymentModal, setActivePage, isAuthenticated, pricingView, setPricingView, showToast, setUser, setSelectedPlan } = useAppContext();
     const [billingCycle, setBillingCycle] = useState<'monthly' | 'annually'>('monthly');
     // Initialize view from context or userType, default to Creator
     const initialView = 'Creator';
     // Business view is hidden for now; keep type simple to avoid toggles.
     const [view, setView] = useState<'Creator'>(initialView);
+    const [billingPortalLoading, setBillingPortalLoading] = useState(false);
     
     // Handle Stripe success/cancel redirects
     useEffect(() => {
@@ -176,9 +213,39 @@ export const Pricing: React.FC<PricingProps> = ({ onGetStartedClick, onNavigateR
     const visibleTierNames: Array<string> = ['Pro', 'Elite'];
     const pricingTiers = creatorTiers.filter((tier) => visibleTierNames.includes(tier.name));
 
+    const inAppPricing = isAuthenticated && !onNavigateRequest;
+    const showBack = Boolean(onBack) || inAppPricing;
+    const handleBack = onBack ?? (() => setActivePage('profile'));
+    const backLabelText = backLabel ?? 'Back to Profile';
+    const showBillingPortal = inAppPricing && canOpenCreatorBillingPortal(user);
+    const trialAlreadyUsed = hasUsedEchoFluxFreeTrial(user);
+    const showTrialOffer = !trialAlreadyUsed;
+
+    const handleOpenBillingPortal = async () => {
+        setBillingPortalLoading(true);
+        try {
+            await openCreatorBillingPortal({ returnUrl: `${window.location.origin}/profile` });
+        } catch (e) {
+            showToast(e instanceof Error ? e.message : 'Could not open billing portal', 'error');
+            setBillingPortalLoading(false);
+        }
+    };
+
     return (
-        <div id="pricing" className="bg-gray-100 dark:bg-gray-800 py-24">
+        <div id="pricing" className={`bg-gray-100 dark:bg-gray-800 ${inAppPricing ? 'py-8' : 'py-24'}`}>
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                {showBack && (
+                    <div className="mb-6">
+                        <button
+                            type="button"
+                            onClick={handleBack}
+                            className="inline-flex items-center gap-1.5 text-sm font-medium text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300"
+                        >
+                            <ChevronLeftIcon />
+                            {backLabelText}
+                        </button>
+                    </div>
+                )}
                 <div className="text-center">
                     <h2 className="text-3xl font-extrabold text-gray-900 dark:text-white sm:text-4xl">
                         Simple, Transparent Pricing
@@ -187,6 +254,19 @@ export const Pricing: React.FC<PricingProps> = ({ onGetStartedClick, onNavigateR
                         Start with a 7-day free trial on Pro or Elite. Your fan-facing link is on witme.io; billing is through EchoFlux.
                         No charge until the trial ends. Cancel anytime.
                     </p>
+                    {showBillingPortal && (
+                        <p className="mt-3 text-sm text-gray-600 dark:text-gray-400">
+                            Need to update your card or view invoices?{' '}
+                            <button
+                                type="button"
+                                onClick={() => void handleOpenBillingPortal()}
+                                disabled={billingPortalLoading}
+                                className="font-medium text-primary-600 dark:text-primary-400 hover:underline disabled:opacity-50"
+                            >
+                                {billingPortalLoading ? 'Opening Stripe…' : 'Open Stripe billing portal'}
+                            </button>
+                        </p>
+                    )}
                 </div>
 
                 <div className="mt-8 flex flex-col items-center gap-4">
@@ -206,7 +286,13 @@ export const Pricing: React.FC<PricingProps> = ({ onGetStartedClick, onNavigateR
 
                 <div className="mt-10 grid gap-6 grid-cols-1 md:grid-cols-2 max-w-5xl mx-auto justify-items-center">
                     {pricingTiers.map((tier) => {
-                        const isCurrentPlan = currentPlan === tier.name;
+                        const userTierRank = echoFluxPricingTierRank(currentPlan);
+                        const tierRank = tier.name === 'Elite' ? 2 : 1;
+                        const hasActiveSub = user ? hasActiveEchoFluxSubscription(user) : false;
+                        const isCurrentPlan =
+                            hasActiveSub && isActiveEchoFluxPricingTier(currentPlan, tier.name);
+                        const isUpgrade =
+                            hasActiveSub && userTierRank > 0 && tierRank > userTierRank;
                         const price = billingCycle === 'monthly' ? tier.priceMonthly : tier.priceAnnually;
                         const annualTotal =
                           billingCycle === 'annually' && tier.priceMonthly > 0
@@ -228,8 +314,11 @@ export const Pricing: React.FC<PricingProps> = ({ onGetStartedClick, onNavigateR
                             }
                         };
                         
-                        let buttonText = 'Start 7-Day Trial';
+                        const tierTrialEligible =
+                            !isCurrentPlan && !isUpgrade && isEligibleForEchoFluxCheckoutTrial(user, tier.name);
+                        let buttonText = tierTrialEligible ? 'Start 7-Day Trial' : 'Subscribe Now';
                         if (isCurrentPlan) buttonText = 'Current Plan';
+                        else if (isUpgrade) buttonText = 'Upgrade Now';
 
                         return (
                             <div key={tier.name} className={`relative flex flex-col p-6 rounded-2xl shadow-lg transition-transform hover:-translate-y-1 ${tier.isRecommended ? 'bg-white dark:bg-gray-800 ring-2 ring-primary-500' : 'bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700'}`}>
@@ -241,9 +330,17 @@ export const Pricing: React.FC<PricingProps> = ({ onGetStartedClick, onNavigateR
                                 <h3 className="text-xl font-bold text-gray-900 dark:text-white mt-4">{(tier as any).displayName || tier.name}</h3>
                                 <div className="mt-2 min-h-[52px] space-y-1">
                                   <p className="text-sm text-gray-500 dark:text-gray-400">{tier.description}</p>
-                                  <p className="text-sm font-semibold text-primary-600 dark:text-primary-300">
-                                    Free 7-Day Trial • Cancel Anytime
-                                  </p>
+                                  {tierTrialEligible ? (
+                                    <p className="text-sm font-semibold text-primary-600 dark:text-primary-300">
+                                      One-time 7-day free trial • Cancel anytime
+                                    </p>
+                                  ) : !isCurrentPlan ? (
+                                    <p className="text-sm font-semibold text-gray-600 dark:text-gray-400">
+                                      {trialAlreadyUsed
+                                        ? 'Free trial already used — billed when you subscribe'
+                                        : 'Billed when you subscribe • Cancel anytime'}
+                                    </p>
+                                  ) : null}
                                 </div>
                                 <div className="mt-4">
                                     <>

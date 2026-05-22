@@ -15,6 +15,10 @@ import { PLATFORM_CAPABILITIES, hasCapability, getCapabilityDescription, getCapa
 import { isCreatorIdentityPlanClient } from '../src/lib/creatorIdentity/planGate';
 import { hasPremiumStudioRouteAccess } from '../src/utils/planAccess';
 import { EchoFluxHowItWorksModal } from './EchoFluxHowItWorksModal';
+import {
+    canOpenCreatorBillingPortal,
+    openCreatorBillingPortal,
+} from '../src/lib/openCreatorBillingPortal';
 
 const CreatorIdentityBuilder = lazy(() =>
     import('./CreatorIdentityBuilder').then((m) => ({ default: m.CreatorIdentityBuilder }))
@@ -207,6 +211,7 @@ type SettingsTab = 'general' | 'connections' | 'ai-training' | 'billing';
 export const Settings: React.FC = () => {
     const { user, setUser, settings, setSettings, setActivePage, selectedClient, userCustomVoices, setUserCustomVoices, showToast, setPricingView, socialAccounts } = useAppContext();
     const [activeTab, setActiveTab] = useState<SettingsTab>('general');
+    const [billingPortalLoading, setBillingPortalLoading] = useState(false);
     const [showCreatorIdentityBuilder, setShowCreatorIdentityBuilder] = useState(false);
     const [fileName, setFileName] = useState<string | null>(null);
     const [isUploadingVoice, setIsUploadingVoice] = useState(false);
@@ -946,6 +951,28 @@ export const Settings: React.FC = () => {
         }
     };
 
+    const showBillingPortal = canOpenCreatorBillingPortal(user);
+
+    const handleOpenBillingPortal = async () => {
+        setBillingPortalLoading(true);
+        try {
+            try {
+                localStorage.setItem('settingsActiveTab', 'billing');
+            } catch {
+                /* ignore */
+            }
+            await openCreatorBillingPortal({
+                returnUrl: `${window.location.origin}/settings`,
+            });
+        } catch (error: unknown) {
+            showToast(
+                error instanceof Error ? error.message : 'Could not open billing portal',
+                'error',
+            );
+            setBillingPortalLoading(false);
+        }
+    };
+
     const tabs: { id: SettingsTab; label: string; icon: React.ReactNode }[] = [
       { id: 'general', label: 'General', icon: <SettingsIcon /> },
       { id: 'connections', label: 'Connections', icon: <LinkIcon /> },
@@ -1472,8 +1499,31 @@ Return only the rewritten personality description.
                                      </div>
                                  )}
                              </div>
-                             <button onClick={() => setActivePage('pricing')} className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700">Manage Plan</button>
+                             <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
+                                 <button
+                                     onClick={() => setActivePage('pricing')}
+                                     className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700"
+                                 >
+                                     Manage Plan
+                                 </button>
+                                 {showBillingPortal && (
+                                     <button
+                                         type="button"
+                                         onClick={() => void handleOpenBillingPortal()}
+                                         disabled={billingPortalLoading}
+                                         className="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 disabled:opacity-50 font-medium"
+                                     >
+                                         {billingPortalLoading ? 'Opening Stripe…' : 'Update payment method'}
+                                     </button>
+                                 )}
+                             </div>
                          </div>
+                         {showBillingPortal && (
+                             <p className="mt-3 text-sm text-gray-600 dark:text-gray-400">
+                                 Update your card, view invoices, or manage cancellation in Stripe&apos;s secure customer portal.
+                                 Use <span className="font-medium">Manage Plan</span> to change between Pro and Elite.
+                             </p>
+                         )}
                          
                          {isSubscriptionCancelled && (
                              <div className="mt-4 p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg">

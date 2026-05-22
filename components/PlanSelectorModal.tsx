@@ -11,6 +11,7 @@ import {
   echofluxAnnualTotalUsd,
   echofluxEffectiveMonthlyWhenAnnualUsd,
 } from '../constants';
+import { hasUsedEchoFluxFreeTrial } from '../src/lib/echoFluxTrialEligibility';
 
 interface PlanSelectorModalProps {
     userType?: UserType; // Optional now since new users don't have userType yet
@@ -92,6 +93,7 @@ export const PlanSelectorModal: React.FC<PlanSelectorModalProps> = ({ userType, 
     const [billingCycle, setBillingCycle] = useState<'monthly' | 'annually'>('monthly');
 
     const isCreatorInvite = variant === 'creatorInvite';
+    const trialAlreadyUsed = hasUsedEchoFluxFreeTrial(user);
     const plans = isCreatorInvite ? creatorInvitePlans : creatorPlans;
 
     // If user exists, they've already created their account, so this is a confirmation step
@@ -275,7 +277,9 @@ export const PlanSelectorModal: React.FC<PlanSelectorModalProps> = ({ userType, 
                                 ? 'Invite pricing: $1/mo or $2/mo, billed monthly. No trial. After checkout you can connect Stripe for Fan Hub payouts.'
                                 : isConfirmingPlan
                                   ? 'Confirm your plan selection to continue.'
-                                  : 'Start with a free 7-day trial. Cancel anytime.'}
+                                  : trialAlreadyUsed
+                                    ? 'Subscribe to Pro or Elite. Your free trial has already been used on this account.'
+                                    : 'Start with a one-time 7-day free trial on Pro or Elite. Cancel anytime.'}
                         </p>
                     </div>
 

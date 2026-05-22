@@ -198,6 +198,26 @@ export async function runCreateCheckoutSession(req: VercelRequest, res: VercelRe
       });
     }
 
+    let trialEligibilityUser: Record<string, unknown> | undefined;
+    if (planName === 'Pro' || planName === 'Elite') {
+      try {
+        const db = getAdminDb();
+        const userSnap = await db.collection('users').doc(decodedToken.uid).get();
+        trialEligibilityUser = userSnap.exists ? (userSnap.data() as Record<string, unknown>) : undefined;
+      } catch (trialErr: unknown) {
+        console.error('createCheckoutSession: trial eligibility read failed:', trialErr);
+        return res.status(503).json({
+          error: 'Service unavailable',
+          message: 'Could not verify trial eligibility. Please try again.',
+        });
+      }
+    }
+
+    const { isEligibleForEchoFluxCheckoutTrial } = await import('../src/lib/echoFluxTrialEligibility.js');
+    const includeEchoFluxTrial =
+      isEligibleForEchoFluxCheckoutTrial(trialEligibilityUser, planName) &&
+      !INVITE_CREATOR_CHECKOUT_PLANS.has(planName);
+
     const planPrices = PLAN_PRICE_IDS[planName];
     if (!planPrices) {
       console.error(`Invalid plan name: ${planName}`);
@@ -311,8 +331,8 @@ export async function runCreateCheckoutSession(req: VercelRequest, res: VercelRe
       // Ensure the resulting subscription carries plan metadata, so future subscription.updated events
       // can reliably map back to the correct plan (without needing price→plan reverse mapping).
       subscription_data: {
-        // Do not pass trial_period_days: 0 — Stripe can reject it; omit the field for no trial (invite checkout).
-        ...(INVITE_CREATOR_CHECKOUT_PLANS.has(planName) ? {} : { trial_period_days: 7 }),
+        // Do not pass trial_period_days: 0 — Stripe can reject it; omit the field for no trial.
+        ...(includeEchoFluxTrial ? { trial_period_days: 7 } : {}),
         metadata: {
           planName,
           billingCycle,

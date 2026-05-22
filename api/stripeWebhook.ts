@@ -2,7 +2,7 @@ import { createHash } from 'crypto';
 import { VercelRequest, VercelResponse } from '@vercel/node';
 import Stripe from 'stripe';
 import { FieldValue, type Firestore } from 'firebase-admin/firestore';
-import { getAdminDb } from './_firebaseAdmin.js';
+import { getAdminApp, getAdminDb } from './_firebaseAdmin.js';
 import { recordPlanChangeEvent } from './_planChangeEvents.js';
 import { grantReferralRewardOnConversion } from './_grantReferralReward.js';
 import {
@@ -19,6 +19,7 @@ import {
   enrichBillingCountryFromCheckoutSession,
   enrichBillingCountryFromInvoice,
 } from './_stripeBillingCountry.js';
+import { applyCreatorAppClaim } from './_creatorAppClaim.js';
 
 // Check STRIPE_USE_TEST_MODE toggle first, then select appropriate key
 // Set STRIPE_USE_TEST_MODE=true in Vercel to use test mode, false or unset for live mode
@@ -77,6 +78,14 @@ async function readRawBody(req: VercelRequest): Promise<Buffer> {
     chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
   }
   return Buffer.concat(chunks);
+}
+
+async function syncCreatorAppClaimForUid(db: Firestore, uid: string): Promise<void> {
+  try {
+    await applyCreatorAppClaim(db, getAdminApp().auth(), uid);
+  } catch (e) {
+    console.warn(`syncCreatorAppClaimForUid(${uid}):`, e);
+  }
 }
 
 function verifyWebhookSignature(
@@ -1670,6 +1679,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                   ? new Date(cpe * 1000).toISOString()
                   : null;
 
+              const { shouldMarkEchoFluxFreeTrialUsed } = await import('../src/lib/echoFluxTrialEligibility.js');
               await userRef.set({
                 plan: planName,
                 userType: 'Creator', // Ensure userType is set for onboarding flow
@@ -1682,6 +1692,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                 subscriptionEndDate: null,
                 subscriptionCurrentPeriodEnd,
                 trialEndDate, // Store trial end date for notifications
+                ...(shouldMarkEchoFluxFreeTrialUsed(planName)
+                  ? { hasUsedEchoFluxFreeTrial: true }
+                  : {}),
                 monthlyCaptionGenerationsUsed: 0,
                 monthlyImageGenerationsUsed: 0,
                 monthlyVideoGenerationsUsed: 0,
@@ -1761,6 +1774,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
               ? new Date(periodEnd * 1000).toISOString()
               : null;
           
+          const { shouldMarkEchoFluxFreeTrialUsed: markTrialUsed } = await import(
+            '../src/lib/echoFluxTrialEligibility.js'
+          );
           await userDoc.ref.set({
             plan: planName,
             stripeSubscriptionId: subscription.id,
@@ -1772,8 +1788,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
               : null,
             subscriptionCurrentPeriodEnd,
             trialEndDate, // Update trial end date for notifications
+            ...(markTrialUsed(planName) ? { hasUsedEchoFluxFreeTrial: true } : {}),
           }, { merge: true });
 
+          await syncCreatorAppClaimForUid(db, userDoc.id);
           console.log(`Subscription updated for user ${userDoc.id}: ${subscription.status}`);
         }
         break;
@@ -1899,6 +1917,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         if (!usersSnapshot.empty) {
           const userDoc = usersSnapshot.docs[0];
           const userData = userDoc.data();
+
+          await userDoc.ref.set({ subscriptionStatus: 'past_due' }, { merge: true });
           
           // Create payment failure notification for user
           const userNotificationsRef = db.collection('users').doc(userDoc.id).collection('notifications');
@@ -1967,6 +1987,7 @@ Please check the admin dashboard for more details.`,
             // Don't fail the webhook if email fails
           }
 
+          await syncCreatorAppClaimForUid(db, userDoc.id);
           console.log(`Payment failed for user ${userDoc.id} - notifications created`);
         }
         break;

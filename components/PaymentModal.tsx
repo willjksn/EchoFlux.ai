@@ -5,6 +5,7 @@ import { PaymentPlan, Plan, User, UserType } from '../types';
 import { doc, setDoc, deleteField } from 'firebase/firestore';
 import { db } from '../firebaseConfig';
 import { createAccountFromPendingSignup } from '../src/utils/createAccountFromPendingSignup';
+import { isEligibleForEchoFluxCheckoutTrial } from '../src/lib/echoFluxTrialEligibility';
 
 export const PaymentModal: React.FC = () => {
     const { paymentPlan, closePaymentModal, user, setUser, setNotifications, selectedClient, setClients, showToast, setPricingView, setActivePage } = useAppContext();
@@ -537,6 +538,14 @@ export const PaymentModal: React.FC = () => {
                     ? 'Complete Your Purchase'
                     : 'Upgrade Your Plan';
         const hasStripeSubscription = Boolean((user as any)?.stripeSubscriptionId);
+        const checkoutTrialEligible =
+            !hasStripeSubscription &&
+            isEligibleForEchoFluxCheckoutTrial(user, paymentPlan.name);
+        const dueTodayCents = checkoutTrialEligible
+            ? 0
+            : paymentPlan.cycle === 'annually'
+              ? paymentPlan.price * 12
+              : paymentPlan.price;
 
         return (
             <>
@@ -575,14 +584,23 @@ export const PaymentModal: React.FC = () => {
                         ) : (
                             (() => {
                               const isAnnual = paymentPlan.cycle === 'annually';
-                              const dueToday = isAnnual ? paymentPlan.price * 12 : paymentPlan.price;
-                              const cycleLabel = isAnnual ? 'yr' : 'mo';
+                              const cycleLabel = checkoutTrialEligible ? 'today' : isAnnual ? 'yr' : 'mo';
                               return (
-                            <div className="bg-gray-100 dark:bg-gray-700 p-4 rounded-lg flex justify-between items-center">
+                            <div className="bg-gray-100 dark:bg-gray-700 p-4 rounded-lg">
+                                <div className="flex justify-between items-center">
                                 <span className="font-semibold text-gray-800 dark:text-gray-200">Amount Due Today</span>
                                 <span className="text-2xl font-bold text-gray-900 dark:text-white">
-                                  ${dueToday.toFixed(2)} <span className="text-base font-medium">/{cycleLabel}</span>
+                                  ${dueTodayCents.toFixed(2)}
+                                  {!checkoutTrialEligible && (
+                                    <span className="text-base font-medium">/{cycleLabel}</span>
+                                  )}
                                 </span>
+                                </div>
+                                {checkoutTrialEligible && (
+                                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+                                    7-day free trial — you won&apos;t be charged until the trial ends. One trial per account.
+                                  </p>
+                                )}
                             </div>
                               );
                             })()
@@ -612,7 +630,7 @@ export const PaymentModal: React.FC = () => {
                                             : prorationPreview
                                                 ? `$${(prorationPreview.amountDue / 100).toFixed(2)}`
                                                 : 'Calculated at checkout')
-                                        : `$${(paymentPlan.cycle === 'annually' ? paymentPlan.price * 12 : paymentPlan.price).toFixed(2)}`}
+                                        : `$${dueTodayCents.toFixed(2)}`}
                                 </div>
                             </div>
                         </div>
@@ -624,7 +642,9 @@ export const PaymentModal: React.FC = () => {
                                 ? (hasStripeSubscription ? 'Updating plan...' : 'Redirecting to checkout...')
                                 : (hasStripeSubscription
                                     ? (isDowngrade ? 'Confirm Downgrade' : 'Confirm Upgrade (Proration Applied)')
-                                    : `Continue to Checkout - $${(paymentPlan.cycle === 'annually' ? paymentPlan.price * 12 : paymentPlan.price).toFixed(2)}`)}
+                                    : checkoutTrialEligible
+                                      ? 'Continue to Checkout — $0 today'
+                                      : `Continue to Checkout - $${dueTodayCents.toFixed(2)}`)}
                         </button>
                         <p className="text-xs text-center text-gray-500 dark:text-gray-400 mt-2">
                             {hasStripeSubscription ? 'Proration & billing powered by Stripe' : 'Secure payment powered by Stripe'}

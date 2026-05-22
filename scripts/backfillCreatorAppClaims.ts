@@ -1,6 +1,6 @@
 /**
  * One-off: set Firebase Auth custom claim `creatorApp` for every `users/{uid}` doc.
- * Logic matches `api/_creatorAppClaim.ts`.
+ * Logic matches `src/lib/echoFluxSubscriptionAccess.ts`.
  *
  *   npx ts-node --esm scripts/backfillCreatorAppClaims.ts [--dry-run]
  *
@@ -10,6 +10,7 @@ import admin from "firebase-admin";
 import * as fs from "fs";
 import * as path from "path";
 import { fileURLToPath } from "url";
+import { shouldHaveCreatorAppAccess } from "../src/lib/echoFluxSubscriptionAccess.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -18,14 +19,6 @@ const SA =
   process.env.ECHOFLUX_SERVICE_ACCOUNT || path.join(PROJECT_ROOT, "echoflux-service-account.json");
 
 const CREATOR_APP_CLAIM = "creatorApp";
-const PAID_PLANS = new Set([
-  "Pro",
-  "Elite",
-  "Agency",
-  "OnlyFansStudio",
-  "CreatorPro",
-  "CreatorElite",
-]);
 
 type UserDoc = {
   role?: string;
@@ -34,24 +27,11 @@ type UserDoc = {
   accountOrigin?: string;
   subscriptionStatus?: string;
   inviteGrantPlan?: string;
+  cancelAtPeriodEnd?: boolean;
+  subscriptionEndDate?: string | null;
+  subscriptionCurrentPeriodEnd?: string | null;
+  stripeSubscriptionId?: string | null;
 };
-
-function shouldHaveCreatorAppAccess(userData: UserDoc | undefined, creatorDocExists: boolean): boolean {
-  const d = userData || {};
-  if (d.role === "Admin") return true;
-  if (creatorDocExists) return true;
-  if (
-    d.subscriptionStatus === "creator_invite_pending" &&
-    d.inviteGrantPlan === "CreatorChoice"
-  ) {
-    return true;
-  }
-  const plan = typeof d.plan === "string" ? d.plan : "";
-  if (plan && PAID_PLANS.has(plan)) return true;
-  if (d.accountOrigin === "fan_hub") return false;
-  if (d.hasCompletedOnboarding === true) return true;
-  return false;
-}
 
 async function applyClaim(
   db: admin.firestore.Firestore,
@@ -62,10 +42,10 @@ async function applyClaim(
     db.collection("users").doc(uid).get(),
     db.collection("creators").doc(uid).get(),
   ]);
-  const should = shouldHaveCreatorAppAccess(
-    userSnap.exists ? (userSnap.data() as UserDoc) : undefined,
-    creatorSnap.exists,
-  );
+  const should = shouldHaveCreatorAppAccess({
+    userData: userSnap.exists ? (userSnap.data() as UserDoc) : undefined,
+    creatorDocExists: creatorSnap.exists,
+  });
   const record = await auth.getUser(uid);
   const existing = (record.customClaims || {}) as Record<string, unknown>;
   await auth.setCustomUserClaims(uid, { ...existing, [CREATOR_APP_CLAIM]: should });
@@ -79,53 +59,51 @@ async function main() {
     console.error("Service account not found:", SA);
     process.exit(1);
   }
-  const key = JSON.parse(fs.readFileSync(SA, "utf8")) as admin.ServiceAccount;
-  if (!admin.apps.length) {
-    admin.initializeApp({ credential: admin.credential.cert(key) });
-  }
-  const db = admin.firestore();
-  const authSvc = admin.auth();
 
+  const serviceAccount = JSON.parse(fs.readFileSync(SA, "utf8"));
+  if (!admin.apps.length) {
+    admin.initializeApp({ credential: admin.credential.cert(serviceAccount) });
+  }
+
+  const db = admin.firestore();
+  const auth = admin.auth();
   const snap = await db.collection("users").get();
-  let ok = 0;
-  let fail = 0;
-  let skippedNoAuth = 0;
+  let changed = 0;
+  let granted = 0;
+  let revoked = 0;
+
   for (const doc of snap.docs) {
     const uid = doc.id;
+    const creatorSnap = await db.collection("creators").doc(uid).get();
+    const should = shouldHaveCreatorAppAccess({
+      userData: doc.data() as UserDoc,
+      creatorDocExists: creatorSnap.exists,
+    });
+
+    let current = false;
     try {
-      if (dryRun) {
-        const creatorSnap = await db.collection("creators").doc(uid).get();
-        const should = shouldHaveCreatorAppAccess(doc.data() as UserDoc, creatorSnap.exists);
-        console.log(`${uid}: would set creatorApp=${should}`);
-        ok++;
-        continue;
+      const record = await auth.getUser(uid);
+      current = (record.customClaims || {})[CREATOR_APP_CLAIM] === true;
+    } catch {
+      /* user missing in Auth */
+    }
+
+    if (current !== should) {
+      changed++;
+      if (should) granted++;
+      else revoked++;
+      if (!dryRun) {
+        await applyClaim(db, auth, uid);
       }
-      await applyClaim(db, authSvc, uid);
-      ok++;
-    } catch (e: unknown) {
-      const code =
-        e && typeof e === "object" && "code" in e
-          ? String((e as { code?: string }).code)
-          : e && typeof e === "object" && "errorInfo" in e
-            ? String((e as { errorInfo?: { code?: string } }).errorInfo?.code)
-            : "";
-      if (code === "auth/user-not-found") {
-        console.log(`${uid}: skipped (users/ doc exists but no Firebase Auth user — safe to delete stale doc or ignore)`);
-        skippedNoAuth++;
-        continue;
-      }
-      console.warn(uid, e);
-      fail++;
+      console.log(`${uid}: ${current ? "true" : "false"} -> ${should}`);
     }
   }
-  if (dryRun) {
-    console.log(`[DRY RUN] ${ok} users scanned`);
-  } else {
-    console.log(
-      `Done. ${ok} updated, ${fail} failed` +
-        (skippedNoAuth ? `, ${skippedNoAuth} skipped (no Auth user)` : ""),
-    );
-  }
+
+  console.log(
+    dryRun
+      ? `[dry-run] Would update ${changed} users (${granted} grant, ${revoked} revoke) of ${snap.size}`
+      : `Updated ${changed} users (${granted} grant, ${revoked} revoke) of ${snap.size}`,
+  );
 }
 
 main().catch((e) => {

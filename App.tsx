@@ -1456,8 +1456,26 @@ const AppContent: React.FC = () => {
     const isAdminUser = (user as { role?: string }).role === 'Admin';
     const trustedStaffEchoShell = !!(user.staffRoleFlags?.contentAudit || user.staffRoleFlags?.legalDisclosureReserve);
     if (!creatorAppAccess && !isAdminUser && !trustedStaffEchoShell) {
+        if (activePage === 'pricing') {
+            return (
+                <div className="min-h-screen bg-gray-100 dark:bg-gray-900">
+                    <Pricing
+                        onBack={() => setActivePage('dashboard')}
+                        backLabel="Back"
+                    />
+                </div>
+            );
+        }
         return (
-            <FanOnlyEchoFluxShell user={user} onLogout={handleLogout} onRefreshAccess={refreshCreatorAppAccess} />
+            <FanOnlyEchoFluxShell
+                user={user}
+                onLogout={handleLogout}
+                onRefreshAccess={refreshCreatorAppAccess}
+                onGoToPricing={() => {
+                    setPricingView('Creator');
+                    setActivePage('pricing');
+                }}
+            />
         );
     }
 

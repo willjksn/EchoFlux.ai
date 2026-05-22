@@ -116,6 +116,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       console.warn('verifyCheckoutSession: failed to resolve subscription from session:', err);
     }
 
+    const { shouldMarkEchoFluxFreeTrialUsed } = await import('../src/lib/echoFluxTrialEligibility.js');
     await db.collection('users').doc(decoded.uid).set(
       {
         plan: planName,
@@ -129,6 +130,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         stripeSubscriptionId: stripeSubscriptionId || undefined,
         subscriptionCurrentPeriodEnd: subscriptionCurrentPeriodEnd || undefined,
         trialEndDate: trialEndDate || undefined,
+        ...(shouldMarkEchoFluxFreeTrialUsed(planName)
+          ? { hasUsedEchoFluxFreeTrial: true }
+          : {}),
         monthlyCaptionGenerationsUsed: 0,
         monthlyImageGenerationsUsed: 0,
         monthlyVideoGenerationsUsed: 0,

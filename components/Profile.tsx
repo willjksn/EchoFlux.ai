@@ -28,6 +28,10 @@ import { listAll, getMetadata, ref } from 'firebase/storage';
 import { getAvatarCropStyle } from '../src/lib/avatarCrop';
 import { normalizePlanForLimitsClient } from '../src/lib/creatorIdentity/planGate';
 import {
+    canOpenCreatorBillingPortal,
+    openCreatorBillingPortal,
+} from '../src/lib/openCreatorBillingPortal';
+import {
   clampPan,
   formatObjectPositionPercentPair,
   parseObjectPositionPercentPair,
@@ -43,10 +47,22 @@ const SettingsSection: React.FC<{ title: string; children: React.ReactNode }> = 
 export const Profile: React.FC = () => {
     const { user, setUser, setActivePage, selectedClient, clients, setClients, showToast, openPaymentModal, setPricingView } = useAppContext();
     const creatorHandleFromDoc = useCreatorHandle(user?.id);
+    const showBillingPortal = canOpenCreatorBillingPortal(user);
+
+    const handleOpenBillingPortal = async () => {
+        setBillingPortalLoading(true);
+        try {
+            await openCreatorBillingPortal({ returnUrl: `${window.location.origin}/profile` });
+        } catch (e) {
+            showToast(e instanceof Error ? e.message : 'Could not open billing portal', 'error');
+            setBillingPortalLoading(false);
+        }
+    };
     const allowSjHeartEmoji = canUseSjHeartEmoji({
         creatorHandle: creatorHandleFromDoc,
         viewerIsAdmin: user?.role === 'Admin',
     });
+    const [billingPortalLoading, setBillingPortalLoading] = useState(false);
     const [isEditing, setIsEditing] = useState(false);
     const [editableUser, setEditableUser] = useState<User | null>(user);
     const fileInputRef = useRef<HTMLInputElement>(null);
@@ -497,7 +513,7 @@ export const Profile: React.FC = () => {
                                 </div>
                                 <div>
                                     <p className="text-sm text-gray-500 dark:text-gray-400">Current Plan</p>
-                                    <div className="flex items-center gap-2 mt-1">
+                                    <div className="flex flex-wrap items-center gap-2 mt-1">
                                         <span className={`px-3 py-1 text-xs font-semibold rounded-full ${user.plan ? planColorMap[user.plan] || planColorMap.Free : planColorMap.Free}`}>
                                             {user.plan}
                                         </span>
@@ -511,6 +527,16 @@ export const Profile: React.FC = () => {
                                             {user.plan === 'Free' ? 'Upgrade' : 'Manage Plan'}
                                         </button>
                                     </div>
+                                    {showBillingPortal && (
+                                        <button
+                                            type="button"
+                                            onClick={() => void handleOpenBillingPortal()}
+                                            disabled={billingPortalLoading}
+                                            className="mt-2 inline-flex items-center justify-center px-3 py-1.5 text-xs font-semibold rounded-lg bg-primary-600 text-white shadow-sm hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800 disabled:opacity-50 disabled:cursor-not-allowed"
+                                        >
+                                            {billingPortalLoading ? 'Opening Stripe…' : 'Update payment method in Stripe'}
+                                        </button>
+                                    )}
                                 </div>
                             </div>
                             <div className="flex items-center space-x-4">

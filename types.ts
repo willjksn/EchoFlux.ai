@@ -948,6 +948,8 @@ export interface User {
   /** Current Stripe billing period end (ISO); updated on subscription webhooks — for renewal / remaining access UI */
   subscriptionCurrentPeriodEnd?: string;
   trialEndDate?: string; // ISO timestamp when trial period ends (for trial notifications)
+  /** Set when creator completes any EchoFlux SaaS subscription (trial or paid); blocks future 7-day trials. */
+  hasUsedEchoFluxFreeTrial?: boolean;
   /** Stripe subscription status (e.g. active, trialing) — merged from Firestore */
   subscriptionStatus?: string;
   billingCycle?: 'monthly' | 'annually' | 'annual'; // Stripe webhook may use `annual` for yearly
