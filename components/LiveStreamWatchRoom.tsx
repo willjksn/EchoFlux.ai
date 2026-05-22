@@ -115,7 +115,11 @@ export const LiveStreamWatchRoom: React.FC<LiveStreamWatchRoomProps> = ({ creato
             ref={iframeRef}
             title="Live stream"
             src={dailyUrl}
-            allow="camera; microphone; fullscreen; display-capture"
+            allow={
+              role === "presenter"
+                ? "camera; microphone; fullscreen; display-capture"
+                : "fullscreen"
+            }
             className="absolute inset-0 w-full h-full border-0"
           />
         ) : null}

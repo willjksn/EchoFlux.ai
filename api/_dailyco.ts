@@ -14,7 +14,7 @@ interface DailyRoomConfig {
   name: string;
   privacy?: 'public' | 'private';
   properties?: {
-    exp?: number;  // Expiration timestamp
+    exp?: number;
     max_participants?: number;
     enable_chat?: boolean;
     enable_screenshare?: boolean;
@@ -23,6 +23,9 @@ interface DailyRoomConfig {
     eject_at_room_exp?: boolean;
     enable_hidden_participants?: boolean;
     enable_mesh_sfu?: boolean;
+    owner_only_broadcast?: boolean;
+    enable_people_ui?: boolean;
+    enable_hand_raising?: boolean;
     experimental_optimize_large_calls?: boolean;
     permissions?: {
       canSend?: boolean | string[];
@@ -55,6 +58,12 @@ interface DailyTokenConfig {
   enable_screenshare?: boolean;
   start_video_off?: boolean;
   start_audio_off?: boolean;
+  permissions?: {
+    canSend?: boolean | string[];
+    hasPresence?: boolean;
+    canReceive?: Record<string, unknown>;
+    canAdmin?: boolean | string[];
+  };
 }
 
 function formatDailyApiErrorBody(errorData: Record<string, unknown>, status: number, statusText: string): string {
@@ -197,8 +206,47 @@ function sanitizeDailyRoomSegment(id: string): string {
 const DAILY_ROOM_NAME_OK = /^[A-Za-z0-9_-]{1,128}$/;
 
 /**
- * Large broadcast room for fan live streams (Daily interactive live streaming / Prebuilt).
- * Reuses an existing room if the name already exists.
+ * Fan Hub live stream rooms: one broadcaster (owner), many passive viewers.
+ * - owner_only_broadcast: only owners can publish A/V in Prebuilt
+ * - enable_hidden_participants: non-owners are hidden from the participant grid
+ */
+function liveStreamBroadcastRoomProperties(expirationTime: number): DailyRoomConfig["properties"] {
+  return {
+    exp: expirationTime,
+    eject_at_room_exp: true,
+    enable_chat: true,
+    enable_screenshare: false,
+    start_video_off: true,
+    start_audio_off: true,
+    owner_only_broadcast: true,
+    enable_hidden_participants: true,
+    enable_hand_raising: false,
+    enable_people_ui: false,
+    permissions: {
+      canSend: false,
+      canAdmin: false,
+      hasPresence: false,
+      canReceive: { base: true },
+    },
+  };
+}
+
+async function applyLiveStreamBroadcastRoomConfig(
+  roomName: string,
+  expirationTime: number,
+): Promise<DailyRoom> {
+  return dailyFetch<DailyRoom>(`/rooms/${encodeURIComponent(roomName)}`, {
+    method: "POST",
+    body: JSON.stringify({
+      privacy: "private",
+      properties: liveStreamBroadcastRoomProperties(expirationTime),
+    }),
+  });
+}
+
+/**
+ * Large broadcast room for fan live streams (Daily Prebuilt).
+ * Creates or refreshes room config so only the host publishes; fans watch passively.
  */
 export async function createOrGetLiveStreamBroadcastRoom(
   creatorId: string,
@@ -212,24 +260,24 @@ export async function createOrGetLiveStreamBroadcastRoom(
     throw new Error(`Daily.co: room name failed validation after sanitize: ${roomName}`);
   }
 
+  const hours = Math.min(Math.max(durationHours, 1), 72);
+  const expirationTime = Math.floor(Date.now() / 1000) + hours * 3600;
+  const broadcastProps = liveStreamBroadcastRoomProperties(expirationTime);
+
   const existing = await getRoomDetails(roomName);
   if (existing?.url) {
+    try {
+      await applyLiveStreamBroadcastRoomConfig(roomName, expirationTime);
+    } catch (e) {
+      console.warn("applyLiveStreamBroadcastRoomConfig (existing room):", e);
+    }
     return { roomUrl: existing.url, roomName: existing.name || roomName };
   }
 
-  const hours = Math.min(Math.max(durationHours, 1), 72);
-  const expirationTime = Math.floor(Date.now() / 1000) + hours * 3600;
-
-  // Minimal properties: omit max_participants (Daily default is 200). Extra flags have caused invalid-request-error on some domains.
-  const createBody = {
+  const createBody: DailyRoomConfig = {
     name: roomName,
-    privacy: "private" as const,
-    properties: {
-      exp: expirationTime,
-      enable_chat: true,
-      enable_screenshare: true,
-      eject_at_room_exp: true,
-    },
+    privacy: "private",
+    properties: broadcastProps,
   };
 
   try {
@@ -242,9 +290,13 @@ export async function createOrGetLiveStreamBroadcastRoom(
       roomName: room.name,
     };
   } catch (e) {
-    // Duplicate name / race: first GET missed, POST failed — room may exist now.
     const retry = await getRoomDetails(roomName);
     if (retry?.url) {
+      try {
+        await applyLiveStreamBroadcastRoomConfig(roomName, expirationTime);
+      } catch (updateErr) {
+        console.warn("applyLiveStreamBroadcastRoomConfig (race retry):", updateErr);
+      }
       return { roomUrl: retry.url, roomName: retry.name || roomName };
     }
     throw e;
@@ -252,7 +304,7 @@ export async function createOrGetLiveStreamBroadcastRoom(
 }
 
 /**
- * Meeting token for broadcast presenter (owner) or passive viewer (hidden participant).
+ * Meeting token for broadcast presenter (owner) or passive hidden viewer.
  */
 export async function createLiveStreamMeetingToken(
   roomName: string,
@@ -264,20 +316,29 @@ export async function createLiveStreamMeetingToken(
   const isPresenter = role === 'presenter';
   const expirationTime = Math.floor(Date.now() / 1000) + (durationMinutes + 5) * 60;
 
+  const properties: DailyTokenConfig = {
+    room_name: roomName,
+    user_name: userName,
+    user_id: userId,
+    is_owner: isPresenter,
+    exp: expirationTime,
+    enable_screenshare: isPresenter,
+    start_video_off: !isPresenter,
+    start_audio_off: !isPresenter,
+  };
+
+  if (!isPresenter) {
+    properties.permissions = {
+      canSend: false,
+      canAdmin: false,
+      hasPresence: false,
+      canReceive: { base: true },
+    };
+  }
+
   const tokenResponse = await dailyFetch<DailyMeetingToken>('/meeting-tokens', {
     method: 'POST',
-    body: JSON.stringify({
-      properties: {
-        room_name: roomName,
-        user_name: userName,
-        user_id: userId,
-        is_owner: isPresenter,
-        exp: expirationTime,
-        enable_screenshare: isPresenter,
-        start_video_off: !isPresenter,
-        start_audio_off: !isPresenter,
-      },
-    }),
+    body: JSON.stringify({ properties }),
   });
 
   return tokenResponse.token;
