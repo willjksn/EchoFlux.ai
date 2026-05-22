@@ -1780,27 +1780,25 @@ function FeedCard({
             </p>
           </div>
         )}
-        {!post.hideComments && (
+        {!post.hideComments && firstUrl && (
           <>
             {visibleComments.length > 0 && (
               <button type="button" className="feed-card-view-comments" onClick={() => setCommentsOpen(true)}>
                 View all {visibleComments.length} comments
               </button>
             )}
-            {(firstUrl || visibleComments.length > 0) && (
-              <div className="feed-card-comments-list">
-                {visibleComments.length === 0 ? (
-                  <div className="feed-card-comment feed-card-comment-empty">No comments yet.</div>
-                ) : (
-                  visibleComments.slice(0, 2).map((c, i) => (
-                    <div key={i} className="feed-card-comment">
-                      <span className="comment-username">{feedCommentAuthorLabel(c)}</span>
-                      {renderTextWithCustomEmoji(c.text, sjHeartEmojiCtx)}
-                    </div>
-                  ))
-                )}
-              </div>
-            )}
+            <div className="feed-card-comments-list">
+              {visibleComments.length === 0 ? (
+                <div className="feed-card-comment feed-card-comment-empty">No comments yet.</div>
+              ) : (
+                visibleComments.slice(0, 2).map((c, i) => (
+                  <div key={i} className="feed-card-comment">
+                    <span className="comment-username">{feedCommentAuthorLabel(c)}</span>
+                    {renderTextWithCustomEmoji(c.text, sjHeartEmojiCtx)}
+                  </div>
+                ))
+              )}
+            </div>
           </>
         )}
       </div>
@@ -1861,6 +1859,28 @@ function FeedCard({
               <BookmarkOutline />
               <BookmarkFilled />
             </button>
+          </div>
+        </div>
+      )}
+
+      {!post.hideComments && !firstUrl && (
+        <div className="feed-card-body feed-card-body--comments-tail">
+          {visibleComments.length > 0 && (
+            <button type="button" className="feed-card-view-comments" onClick={() => setCommentsOpen(true)}>
+              View all {visibleComments.length} comments
+            </button>
+          )}
+          <div className="feed-card-comments-list">
+            {visibleComments.length === 0 ? (
+              <div className="feed-card-comment feed-card-comment-empty">No comments yet.</div>
+            ) : (
+              visibleComments.slice(0, 2).map((c, i) => (
+                <div key={i} className="feed-card-comment">
+                  <span className="comment-username">{feedCommentAuthorLabel(c)}</span>
+                  {renderTextWithCustomEmoji(c.text, sjHeartEmojiCtx)}
+                </div>
+              ))
+            )}
           </div>
         </div>
       )}

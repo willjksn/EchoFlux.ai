@@ -2335,6 +2335,13 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
                       />
                     </div>
 
+                    <div className="feed-card-body">
+                      <p className="m-0">
+                        <span style={{ fontWeight: 600, color: primary, marginRight: "0.35rem" }}>{displayName}</span>
+                        Good morning everyone 🌸
+                      </p>
+                    </div>
+
                     <div className="feed-card-actions">
                       <button type="button" className="feed-card-action-link">
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -2359,31 +2366,25 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
                       </button>
                     </div>
 
-                    <div className="feed-card-body">
-                      <p className="m-0">
-                        <span style={{ fontWeight: 600, color: primary, marginRight: "0.35rem" }}>{displayName}</span>
-                        Good morning everyone 🌸
-                      </p>
+                    <div className="fan-feed-post-footer">
                       <button
                         type="button"
-                        className="mt-2 fan-feed-view-comments-link"
+                        className="fan-feed-view-comments-link"
                         style={{ color: isDark ? `${textColor}99` : undefined }}
                       >
                         View all 2 comments
                       </button>
-                      <div className="mt-1.5">
-                        <p className="m-0">
-                          <span style={{ fontWeight: 600, marginRight: "0.35rem" }}>sarah_m</span>
-                          Love this! ☕
-                        </p>
-                        <p className="m-0 mt-1">
-                          <span style={{ fontWeight: 600, marginRight: "0.35rem" }}>jules_k</span>
-                          This made my morning 💗
-                        </p>
-                      </div>
+                      <p className="fan-feed-inline-comment-preview m-0 text-sm">
+                        <span style={{ fontWeight: 600, marginRight: "0.35rem" }}>sarah_m</span>
+                        Love this! ☕
+                      </p>
+                      <p className="fan-feed-inline-comment-preview m-0 mt-1 text-sm">
+                        <span style={{ fontWeight: 600, marginRight: "0.35rem" }}>jules_k</span>
+                        This made my morning 💗
+                      </p>
                       <button
                         type="button"
-                        className="mt-2 fan-feed-view-post-link"
+                        className="fan-feed-view-post-link"
                         style={{ color: isDark ? `${textColor}cc` : undefined }}
                       >
                         View post

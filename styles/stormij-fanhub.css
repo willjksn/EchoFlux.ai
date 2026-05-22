@@ -1121,7 +1121,16 @@ html.dark .stormij-theme.stormij-theme--light .dark\:hover\:text-primary-300:hov
   padding-top: 1rem;
 }
 .feed-card-text-only-footer {
-  padding: 0.5rem 1rem 1rem;
+  padding: 0;
+}
+.feed-card-text-only-footer .feed-card-actions {
+  padding: 0.45rem 1rem 0.5rem;
+  border-bottom: none;
+}
+
+.feed-card-body--comments-tail {
+  padding-top: 0.35rem;
+  padding-bottom: 0.75rem;
 }
 
 /* Card Header */

@@ -2787,6 +2787,22 @@ export const FanMemberFeed: React.FC<FanMemberFeedProps> = ({
                 </div>
               ) : null}
 
+              <div className="feed-card-body">
+                <MemberFeedCaptionBody
+                  displayName={displayName}
+                  primary={primary}
+                  content={post.content}
+                  sjHeartEmojiCtx={sjHeartEmojiCtx}
+                />
+                <FanMemberPostPollView poll={post.poll} fanId={fanId} onVote={(idx) => handlePollVote(post, idx)} />
+                <FanMemberPostTipGoalView
+                  tipGoal={post.tipGoal}
+                  primary={primary}
+                  showTipButton={!feedSettings?.hideTipButton && tipsEnabled}
+                  onSendTip={() => openTipSheet(post.id)}
+                />
+              </div>
+
               <div className="feed-card-actions">
                 {!(feedSettings?.hideLikes || post.hideLikes) && (
                   <button
@@ -2858,22 +2874,6 @@ export const FanMemberFeed: React.FC<FanMemberFeedProps> = ({
                     <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />
                   </svg>
                 </button>
-              </div>
-
-              <div className="feed-card-body">
-                <MemberFeedCaptionBody
-                  displayName={displayName}
-                  primary={primary}
-                  content={post.content}
-                  sjHeartEmojiCtx={sjHeartEmojiCtx}
-                />
-                <FanMemberPostPollView poll={post.poll} fanId={fanId} onVote={(idx) => handlePollVote(post, idx)} />
-                <FanMemberPostTipGoalView
-                  tipGoal={post.tipGoal}
-                  primary={primary}
-                  showTipButton={!feedSettings?.hideTipButton && tipsEnabled}
-                  onSendTip={() => openTipSheet(post.id)}
-                />
               </div>
 
               {!(feedSettings?.hideComments || post.hideComments) && (
@@ -3596,6 +3596,20 @@ export const FanMemberSaved: React.FC<FanMemberSavedProps> = ({
                   />
                 </div>
               ) : null}
+              <div className="fan-feed-post-content">
+                <MemberFeedCaptionBody
+                  displayName={displayName}
+                  primary={primary}
+                  content={post.content}
+                  sjHeartEmojiCtx={sjHeartEmojiCtxSaved}
+                />
+                <FanMemberPostPollView poll={post.poll} fanId={fanId} onVote={(idx) => handlePollVoteSaved(post, idx)} />
+                <FanMemberPostTipGoalView
+                  tipGoal={post.tipGoal}
+                  primary={primary}
+                  showTipButton={false}
+                />
+              </div>
               <div className="fan-feed-post-actions">
                 <button
                   type="button"
@@ -3610,20 +3624,6 @@ export const FanMemberSaved: React.FC<FanMemberSavedProps> = ({
                   </svg>
                   <span>{unsavingId === post.id ? "Removing…" : "Saved"}</span>
                 </button>
-              </div>
-              <div className="fan-feed-post-content">
-                <MemberFeedCaptionBody
-                  displayName={displayName}
-                  primary={primary}
-                  content={post.content}
-                  sjHeartEmojiCtx={sjHeartEmojiCtxSaved}
-                />
-                <FanMemberPostPollView poll={post.poll} fanId={fanId} onVote={(idx) => handlePollVoteSaved(post, idx)} />
-                <FanMemberPostTipGoalView
-                  tipGoal={post.tipGoal}
-                  primary={primary}
-                  showTipButton={false}
-                />
               </div>
               {!(feedSettings?.hideComments || post.hideComments) && (
                 <div className="fan-feed-post-footer">
