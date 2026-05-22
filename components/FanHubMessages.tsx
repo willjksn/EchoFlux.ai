@@ -239,6 +239,7 @@ export const FanHubMessages: React.FC = () => {
   const [deletingThreadId, setDeletingThreadId] = useState<string | null>(null);
   const [deletingMessageId, setDeletingMessageId] = useState<string | null>(null);
   const messagesListRef = useRef<HTMLDivElement | null>(null);
+  const messagesPaneRef = useRef<HTMLDivElement | null>(null);
   const autoStickToBottomRef = useRef(true);
   /** After GET /api/fanDmMessages finishes, pin list scroll once (avoids scrollIntoView + wrong near-bottom on first paint). */
   const fhDmScrollAfterApiLoadRef = useRef(false);
@@ -269,6 +270,28 @@ export const FanHubMessages: React.FC = () => {
     if (!el) return true;
     const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
     return distanceFromBottom <= 72;
+  }, []);
+
+  const scrollMessagesToNewest = useCallback((opts?: { bringPaneIntoView?: boolean }) => {
+    const run = () => {
+      const listEl = messagesListRef.current;
+      if (opts?.bringPaneIntoView) {
+        messagesPaneRef.current?.scrollIntoView({ block: "nearest" });
+      }
+      if (listEl) {
+        listEl.scrollTop = listEl.scrollHeight;
+        autoStickToBottomRef.current = true;
+      }
+    };
+
+    run();
+    if (typeof window === "undefined") return;
+    window.requestAnimationFrame(() => {
+      run();
+      window.requestAnimationFrame(run);
+    });
+    window.setTimeout(run, 80);
+    window.setTimeout(run, 240);
   }, []);
 
   /** Threads with at least one message (non-empty preview). Placeholder rows from join/checkout stay out until someone chats. */
@@ -504,6 +527,8 @@ export const FanHubMessages: React.FC = () => {
     let cancelled = false;
     setMessagesLoading(true);
     fhDmScrollAfterApiLoadRef.current = true;
+    autoStickToBottomRef.current = true;
+    scrollMessagesToNewest({ bringPaneIntoView: true });
     setMessagesError(null);
     fetchMessagesForThread(selectedThread).then(({ messages: list, error, labels, hasMoreOlder: more }) => {
       if (!cancelled) {
@@ -518,7 +543,7 @@ export const FanHubMessages: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, [selectedThread?.id, creatorId, fetchMessagesForThread]);
+  }, [selectedThread?.id, creatorId, fetchMessagesForThread, scrollMessagesToNewest]);
 
   // True realtime updates for active thread (efficient read stream).
   useEffect(() => {
@@ -668,8 +693,7 @@ export const FanHubMessages: React.FC = () => {
 
     if (fhDmScrollAfterApiLoadRef.current) {
       fhDmScrollAfterApiLoadRef.current = false;
-      listEl.scrollTop = listEl.scrollHeight;
-      autoStickToBottomRef.current = true;
+      scrollMessagesToNewest({ bringPaneIntoView: true });
       return;
     }
 
@@ -678,12 +702,14 @@ export const FanHubMessages: React.FC = () => {
       autoStickToBottomRef.current = false;
       return;
     }
-    listEl.scrollTop = listEl.scrollHeight;
-  }, [selectedThread?.id, messages, messagesLoading, isNearBottom]);
+    scrollMessagesToNewest();
+  }, [selectedThread?.id, messages, messagesLoading, isNearBottom, scrollMessagesToNewest]);
 
   useEffect(() => {
     autoStickToBottomRef.current = true;
-  }, [selectedThread?.id]);
+    fhDmScrollAfterApiLoadRef.current = true;
+    scrollMessagesToNewest({ bringPaneIntoView: true });
+  }, [selectedThread?.id, scrollMessagesToNewest]);
 
   const sendDmWithPayload = async (content: string, attachments: DmAttachmentItem[]) => {
     if (!selectedThread || !creatorId) return;
@@ -1216,7 +1242,10 @@ export const FanHubMessages: React.FC = () => {
                     type="button"
                     onClick={() => {
                       setThreadRowMenuOpenId(null);
+                      fhDmScrollAfterApiLoadRef.current = true;
+                      autoStickToBottomRef.current = true;
                       setSelectedThread(t);
+                      scrollMessagesToNewest({ bringPaneIntoView: true });
                     }}
                     className={`fh-dm-thread-row__main flex items-start gap-3 transition ${
                       selectedThread?.id === t.id ? "fh-selected-soft" : ""
@@ -1336,7 +1365,7 @@ export const FanHubMessages: React.FC = () => {
             </ul>
           )}
         </div>
-        <div className="flex-1 min-w-0 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 overflow-hidden flex flex-col min-h-[min(78vh,700px)] lg:max-h-[min(90vh,900px)]">
+        <div ref={messagesPaneRef} className="flex-1 min-w-0 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 overflow-hidden flex flex-col min-h-[min(78vh,700px)] lg:max-h-[min(90vh,900px)]">
           {!selectedThread ? (
             <div className="flex-1 flex items-center justify-center text-gray-500 dark:text-gray-400 text-sm">
               Select a conversation
