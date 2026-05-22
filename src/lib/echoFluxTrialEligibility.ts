@@ -20,6 +20,35 @@ export type EchoFluxTrialEligibilityUser = {
   subscriptionStartDate?: string | null;
   plan?: string | null;
   subscriptionStatus?: string | null;
+  /** Set when account was created or upgraded via creator invite code. */
+  inviteGrantPlan?: string | null;
+};
+
+/** Invite checkout (CreatorPro/CreatorElite / CreatorChoice) never includes a 7-day trial. */
+export function isEchoFluxInviteCreatorAccount(
+  user: EchoFluxTrialEligibilityUser | null | undefined,
+): boolean {
+  if (!user) return false;
+
+  const plan = typeof user.plan === "string" ? user.plan.trim() : "";
+  if (plan === "CreatorPro" || plan === "CreatorElite") return true;
+
+  const status = (user.subscriptionStatus || "").toLowerCase().trim();
+  if (status === "creator_invite_pending" || status === "invite_grant") return true;
+
+  const grant = typeof user.inviteGrantPlan === "string" ? user.inviteGrantPlan.trim() : "";
+  if (grant) return true;
+
+  return false;
+};
+
+/** Whether Pricing / onboarding copy should advertise the 7-day trial. */
+export function canShowEchoFluxTrialMarketing(
+  user: EchoFluxTrialEligibilityUser | null | undefined,
+): boolean {
+  if (isEchoFluxInviteCreatorAccount(user)) return false;
+  if (user && hasUsedEchoFluxFreeTrial(user)) return false;
+  return true;
 };
 
 /** True if this creator has already used (or is using) their one EchoFlux free trial. */
@@ -69,6 +98,7 @@ export function isEligibleForEchoFluxCheckoutTrial(
   planName: string,
 ): boolean {
   if (!ECHOFLUX_TRIAL_CHECKOUT_PLANS.has(planName)) return false;
+  if (isEchoFluxInviteCreatorAccount(user)) return false;
   return !hasUsedEchoFluxFreeTrial(user);
 }
 

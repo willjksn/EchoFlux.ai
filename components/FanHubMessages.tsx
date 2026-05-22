@@ -1403,7 +1403,7 @@ export const FanHubMessages: React.FC = () => {
         </div>
         <div
           ref={messagesPaneRef}
-          className="fh-dm-thread-pane flex-1 min-w-0 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 overflow-hidden flex flex-col min-h-[min(78vh,700px)] lg:max-h-[min(90vh,900px)]"
+          className="fh-dm-thread-pane flex-1 min-w-0 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 overflow-hidden flex flex-col min-h-[min(78vh,700px)] max-lg:min-h-0 lg:max-h-[min(90vh,900px)]"
         >
           {!selectedThread ? (
             <div className="flex-1 flex items-center justify-center text-gray-500 dark:text-gray-400 text-sm">
@@ -1411,7 +1411,7 @@ export const FanHubMessages: React.FC = () => {
             </div>
           ) : (
             <>
-              <div className="p-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between gap-2">
+              <div className="fh-dm-thread-header p-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between gap-2 shrink-0">
                 <div className="flex items-center gap-3 min-w-0 flex-1">
                   <button
                     type="button"
@@ -1591,7 +1591,7 @@ export const FanHubMessages: React.FC = () => {
                 )}
                 <div ref={messagesBottomRef} aria-hidden className="shrink-0 h-px w-full" />
               </div>
-              <div className="p-4 border-t border-gray-200 dark:border-gray-700 space-y-2">
+              <div className="fh-dm-thread-compose p-4 border-t border-gray-200 dark:border-gray-700 space-y-2 shrink-0">
                 {isRecordingVoice && voiceMeterStream ? (
                   <div className="space-y-1 w-full max-w-md">
                     <RecordingDurationLabel active={isRecordingVoice} />

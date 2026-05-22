@@ -13,6 +13,7 @@ import {
     openCreatorBillingPortal,
 } from '../src/lib/openCreatorBillingPortal';
 import {
+    canShowEchoFluxTrialMarketing,
     hasUsedEchoFluxFreeTrial,
     isEligibleForEchoFluxCheckoutTrial,
 } from '../src/lib/echoFluxTrialEligibility';
@@ -251,8 +252,17 @@ export const Pricing: React.FC<PricingProps> = ({ onGetStartedClick, onNavigateR
                         Simple, Transparent Pricing
                     </h2>
                     <p className="mt-4 text-lg text-gray-500 dark:text-gray-400">
-                        Start with a 7-day free trial on Pro or Elite. Your fan-facing link is on witme.io; billing is through EchoFlux.
-                        No charge until the trial ends. Cancel anytime.
+                        {showTrialOffer ? (
+                            <>
+                                Start with a one-time 7-day free trial on Pro or Elite. Your fan-facing link is on witme.io;
+                                billing is through EchoFlux. No charge until the trial ends. Cancel anytime.
+                            </>
+                        ) : (
+                            <>
+                                Choose Pro or Elite to subscribe. Your fan-facing link is on witme.io; billing is through
+                                EchoFlux. Cancel anytime.
+                            </>
+                        )}
                     </p>
                     {showBillingPortal && (
                         <p className="mt-3 text-sm text-gray-600 dark:text-gray-400">
