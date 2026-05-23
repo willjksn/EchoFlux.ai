@@ -1114,7 +1114,7 @@ export const Settings: React.FC = () => {
                             <button onClick={handleRestartOnboarding} className="px-4 py-2 bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300 rounded-md hover:bg-red-200 transition-colors text-sm font-medium">
                                 Restart Onboarding
                             </button>
-                            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">This will reset your workspace settings and allow you to choose between Creator or Business mode again.</p>
+                            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">This will reset your workspace settings and walk you through creator onboarding again.</p>
                         </SettingsSection>
                     </>
                 )}

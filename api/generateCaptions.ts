@@ -493,6 +493,9 @@ async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
         })
       : "";
 
+  const personalityAllowsVibe = Boolean(
+    usePersonalityOverrideBool && personalityForPrompt && /\bvibes?\b/i.test(personalityForPrompt),
+  );
   const sanitizedFavoriteHashtags = favoriteHashtags ? sanitizeForAI(favoriteHashtags, 500) : undefined;
   const sanitizedMediaFingerprint =
     typeof mediaFingerprint === "string" && mediaFingerprint.trim()
@@ -896,7 +899,7 @@ FAN HUB — FRESH GENERATION (must differ from prior runs):
 - mediaFingerprint: ${sanitizedMediaFingerprint || "not provided"}
 - Do NOT output a generic filler caption (e.g. repeated "thanks for being here" / "your support means everything" as the whole post).
 - Change hook, structure, emoji placement, and optional question or on-page CTA — never follow / follow-for-more / recruit-new-fan phrasing.
-- If media is attached, include at least one concrete detail grounded in what is shown (action, setting, mood, outfit, lighting, or vibe).
+- If media is attached, include at least one concrete detail grounded in what is shown (action, setting, mood, outfit, lighting, or expression).
 `
       : "";
 
@@ -1176,7 +1179,7 @@ CAPTION VARIANTS (SOCIAL PLATFORMS):
 ${isFanHubCaption ? `
 FAN HUB — SINGLE CAPTION:
 - Return exactly one caption in the JSON array. Make it feel natural for people already on this page; no follow / subscribe / find-me-on-[app] recruitment.
-- Do NOT end with a question. Do NOT use hottie, spill the tea, what's your vibe, what's on the radio, or similar lame closers.
+- Do NOT end with a question. Do NOT use hottie, spill the tea, what's your vibe, what's on the radio, vibe/vibes as filler, or similar lame closers.
 - Treat every request as brand new: write the full caption from scratch for this media; never assume the creator is editing an existing draft in the UI.
 ` : ''}
 ${isExplicitContent ? `
@@ -1402,7 +1405,7 @@ ${includeAiHashtags
 
   try {
     const maxRetries = isVideo ? 5 : 3;
-    const maxCheesyRetries = isFanHubCaption ? 1 : 0;
+    const maxCheesyRetries = 1;
 
     console.log("[generateCaptions] Starting generation:", {
       isVideo,
@@ -1417,7 +1420,7 @@ ${includeAiHashtags
           ? prompt
           : `${prompt}
 
-🚨 PRIOR CAPTION REJECTED — too cheesy (engagement-bait question, "hottie", radio/vibe hooks, invented scenarios).
+🚨 PRIOR CAPTION REJECTED — too cheesy (engagement-bait question, "hottie", radio hooks, overused "vibe/vibes", invented scenarios).
 ${getAntiLameCaptionBlock()}
 Generate a completely NEW caption. End on a STATEMENT (no question). Ground in visible media details only.`;
 
@@ -1453,10 +1456,10 @@ Generate a completely NEW caption. End on a STATEMENT (no question). Ground in v
       captions = await parseCaptionsFromModelText(rawText);
 
       const firstCaption = typeof captions[0]?.caption === "string" ? captions[0].caption : "";
-      if (!isFanHubCaption || !firstCaption || !isCheesyCaption(firstCaption)) {
+      if (!firstCaption || !isCheesyCaption(firstCaption, { personalityAllowsVibe })) {
         break;
       }
-      console.warn("[generateCaptions] Cheesy Fan Hub caption detected — retrying once", {
+      console.warn("[generateCaptions] Cheesy caption detected — retrying once", {
         caption: firstCaption.slice(0, 120),
       });
     }

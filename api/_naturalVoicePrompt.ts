@@ -44,6 +44,18 @@ const STALE_AI_DEFAULT_PHRASES = [
   "double tap if",
   "who else",
   "am i the only one",
+  "the vibe",
+  "this vibe",
+  "that vibe",
+  "whole vibe",
+  "love the vibe",
+  "catch the vibe",
+  "positive vibes",
+  "bad vibes",
+  "summer vibes",
+  "night vibe",
+  "the vibes",
+  "giving vibes",
 ];
 
 function contextGuidance(context: NaturalVoiceContext): string {
@@ -193,11 +205,15 @@ ${boundaries}
 - Do NOT force a question or CTA. Ground the caption in the media, then sound current and human—not sanitized or templated.`;
 }
 
-export function isCheesyCaption(text: string): boolean {
+export function isCheesyCaption(
+  text: string,
+  opts?: { personalityAllowsVibe?: boolean },
+): boolean {
   const t = String(text || "").trim();
   if (!t) return false;
   const lower = t.toLowerCase();
   if (STALE_AI_DEFAULT_PHRASES.some((p) => lower.includes(p.toLowerCase()))) return true;
+  if (!opts?.personalityAllowsVibe && /\bvibes?\b/i.test(t)) return true;
   const patterns = [
     /\bhottie\b/i,
     /\bhotty\b/i,
@@ -223,6 +239,7 @@ NO LAME / CHEESY CAPTIONS (HARD RULES — caption outputs only):
 - Do NOT end with engagement-bait questions: "what's playing on the radio", "what's your vibe", "what's your go-to", "what do you think", "tell me…", "who else…", "am I the only one…", "comment your…", "rate this…".
 - Do NOT use cringe fan-address pet names unless Personality Override literally uses that exact term: hottie, hotty, bestie, loves, lovelies, babe (as generic audience address).
 - Do NOT invent scenes the media does not support (radio/playlist, midnight cruise, road trip, "this beauty" car hype) unless clearly shown or the personality always talks that way.
+- Do NOT use "vibe" or "vibes" unless Personality Override literally contains that word — use specific words instead: mood, lighting, energy, attitude, tone, feel, look, setting, moment.
 - For engagement goals: earn attention with a bold statement, specific detail, or attitude — NOT a quiz question tacked on the end.
 
 BAD — never write like this:
@@ -248,7 +265,8 @@ CURRENT / TRENDING LANGUAGE (USE THIS — sounds human and of-the-moment):
 - Slang from trends is encouraged when it fits the creator's personality/tone sliders and goal—not banned, just natural.
 - Trend phrasing must still fit: (a) this creator's personality/tone, (b) what's in the media, (c) the platform.
 - Prefer CURRENT hot phrases from the research over dead 2022–2024 viral templates in the stale ban list below.
-- One well-placed current phrase + a specific detail beats generic hype ("vibes", "energy", "living my best life").`;
+- One well-placed current phrase + a specific detail beats generic hype ("vibes", "energy", "living my best life").
+- Do NOT lean on "vibe/vibes" as a crutch — name what you actually mean (mood, lighting, attitude, tone, feel).`;
 }
 
 /** Prompt block injected into Gemini requests for captions, ideas, strategy, and monetization plans. */
@@ -274,7 +292,7 @@ ${boundariesBlock}
 
 STALE AI-DEFAULT PHRASES (hard ban — models overuse these; they sound fake even when "trendy"):
 Do NOT use: ${staleBanned}.
-Also avoid empty filler: "loving this moment", "feeling grateful", "so grateful", "check this out", "can't even", "obsessed with this", "here for it", "that time of year".
+Also avoid empty filler: "loving this moment", "feeling grateful", "so grateful", "check this out", "can't even", "obsessed with this", "here for it", "that time of year", "vibe", "vibes" (use mood/lighting/energy/attitude instead — unless Personality Override uses "vibe").
 On Fan Hub / My Page: never "link in bio" (fans are already on the page).
 
 ENGAGEMENT (captions):
