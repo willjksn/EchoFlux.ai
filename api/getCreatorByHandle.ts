@@ -5,6 +5,11 @@ import { mergeFanHubStorefrontTheme } from "./_mergeFanHubStorefrontTheme.js";
 import { normalizeHeroMediaForStorefront } from "./_storefrontHeroNormalize.js";
 import { jsonSafeForApiResponse } from "./_jsonSafeForApiResponse.js";
 import { verifyAuth } from "./verifyAuth.js";
+import {
+  isCreatorEchoFluxStorefrontActive,
+  STOREFRONT_SUSPENDED_PUBLIC_MESSAGE,
+  type CreatorStorefrontUserFields,
+} from "../src/lib/creatorStorefrontActive.js";
 
 type GeoAccessInviteCode = {
   code?: string;
@@ -285,8 +290,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         | { hideLikeCounts?: boolean; hideComments?: boolean; hideLikes?: boolean; hideTipButton?: boolean }
         | undefined
     ) || undefined;
-    const publicTreatsOnLanding = creatorData.publicTreatsOnLanding === true;
+    const publicTreatsOnLandingRaw = creatorData.publicTreatsOnLanding === true;
     const fanAuthBranding = creatorData.fanAuthBranding || undefined;
+
+    const userSnap = await db.collection("users").doc(creatorId).get();
+    const storefrontActive = isCreatorEchoFluxStorefrontActive(
+      creatorId,
+      userSnap.exists ? (userSnap.data() as CreatorStorefrontUserFields) : undefined,
+    );
+    const publicTreatsOnLanding = storefrontActive && publicTreatsOnLandingRaw;
 
     const heroMediaNorm = normalizeHeroMediaForStorefront(
       cd?.heroMedia,
@@ -335,9 +347,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         presetId: theme.presetId,
       },
       heroLayout: (creatorData.heroLayout as "default" | "centered" | "split" | "splitRight") || "default",
+      storefrontActive,
+      storefrontSuspendedMessage: storefrontActive ? undefined : STOREFRONT_SUSPENDED_PUBLIC_MESSAGE,
       sections: {
         feed: sections.feed !== false,
-        treats: sections.treats !== false,
+        treats: storefrontActive && sections.treats !== false,
         tip: sections.tip !== false,
         messages: sections.messages !== false,
         about: false,

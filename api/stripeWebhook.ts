@@ -1792,6 +1792,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           }, { merge: true });
 
           await syncCreatorAppClaimForUid(db, userDoc.id);
+
+          try {
+            const { clearPeriodBillingReminders, syncEchoFluxDefaultCardForUser } = await import(
+              "./_echoFluxBillingReminders.js"
+            );
+            if (
+              (subscription.status === "active" || subscription.status === "trialing") &&
+              !subscription.cancel_at_period_end
+            ) {
+              await clearPeriodBillingReminders(db, userDoc.id, subscriptionCurrentPeriodEnd);
+            }
+            await syncEchoFluxDefaultCardForUser(db, userDoc.id);
+          } catch (reminderErr) {
+            console.warn("subscription.updated billing reminders:", reminderErr);
+          }
+
           console.log(`Subscription updated for user ${userDoc.id}: ${subscription.status}`);
         }
         break;
@@ -1888,7 +1904,40 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             }
           }
 
+          try {
+            const { clearCardBillingReminders, syncEchoFluxDefaultCardForUser } = await import(
+              "./_echoFluxBillingReminders.js"
+            );
+            await clearCardBillingReminders(db, userDoc.id);
+            await syncEchoFluxDefaultCardForUser(db, userDoc.id);
+          } catch (reminderErr) {
+            console.warn("invoice.payment_succeeded billing reminders:", reminderErr);
+          }
+
           console.log(`Payment succeeded for user ${userDoc.id}`);
+        }
+        break;
+      }
+
+      case "payment_method.attached": {
+        const pm = event.data.object as Stripe.PaymentMethod;
+        const customerId = stripeRefId(pm.customer);
+        if (!customerId) break;
+
+        const usersSnapshot = await db
+          .collection("users")
+          .where("stripeCustomerId", "==", customerId)
+          .limit(1)
+          .get();
+
+        if (!usersSnapshot.empty) {
+          const uid = usersSnapshot.docs[0].id;
+          try {
+            const { syncEchoFluxDefaultCardForUser } = await import("./_echoFluxBillingReminders.js");
+            await syncEchoFluxDefaultCardForUser(db, uid);
+          } catch (reminderErr) {
+            console.warn("payment_method.attached billing reminders:", reminderErr);
+          }
         }
         break;
       }

@@ -947,6 +947,13 @@ export interface User {
   subscriptionStartDate?: string; // ISO timestamp when current subscription started
   /** Current Stripe billing period end (ISO); updated on subscription webhooks — for renewal / remaining access UI */
   subscriptionCurrentPeriodEnd?: string;
+  /** Cached default card exp for billing reminders (platform Stripe customer). */
+  echoFluxDefaultCardExp?: { expMonth: number; expYear: number; last4?: string; brand?: string };
+  echoFluxBillingReminderState?: {
+    periodAnchor?: string | null;
+    cardAnchor?: string | null;
+    sent?: { period?: number[]; card?: number[] };
+  };
   trialEndDate?: string; // ISO timestamp when trial period ends (for trial notifications)
   /** Set when creator completes any EchoFlux SaaS subscription (trial or paid); blocks future 7-day trials. */
   hasUsedEchoFluxFreeTrial?: boolean;

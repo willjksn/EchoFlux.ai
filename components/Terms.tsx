@@ -5,7 +5,7 @@ export const Terms: React.FC = () => {
         <div className="max-w-4xl mx-auto space-y-8">
             <div className="bg-white dark:bg-gray-800 p-8 rounded-xl shadow-md">
                 <h2 className="text-3xl font-bold text-gray-900 dark:text-white">Terms of Service</h2>
-                <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">Last updated: May 19, 2026</p>
+                <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">Last updated: May 22, 2026</p>
 
                 <div className="mt-6 prose prose-lg dark:prose-invert max-w-none text-gray-700 dark:text-gray-300">
                     <p>
@@ -80,6 +80,15 @@ export const Terms: React.FC = () => {
                         Creators are responsible for their page settings, offer details, posted content, pricing, and fan communications.
                         Creators must comply with applicable laws (including consumer, tax, and intellectual property laws).
                     </p>
+                    <ul className="list-disc pl-6 space-y-2 mt-2">
+                        <li>
+                            <strong>Active EchoFlux required for witme:</strong> Your public witme.io page, fan checkout, and store stay
+                            available for new fans only while your EchoFlux subscription is active (or trialing). If your EchoFlux plan
+                            lapses or is canceled, new fan subscriptions and store sales on witme are paused, the member hub Store tab is
+                            inactive, and existing fan recurring memberships are scheduled to end at each fan&apos;s current billing period
+                            without further rebilling.
+                        </li>
+                    </ul>
 
                     <h3 className="text-xl font-bold text-gray-900 dark:text-white mt-8 mb-2">5. Fan Responsibilities</h3>
                     <p>

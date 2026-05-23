@@ -16,7 +16,12 @@ import { dismissUsageNotificationId,
 import { hasPlatformAdminAccess } from '../src/lib/platformAdminAccess';
 
 function shouldPersistBellDismissal(messageId?: string): boolean {
-  return !!messageId && (messageId.startsWith('usage-') || messageId === 'trial-ending');
+  return (
+    !!messageId &&
+    (messageId.startsWith('usage-') ||
+      messageId === 'trial-ending' ||
+      messageId === 'echoflux-billing')
+  );
 }
 
 interface HeaderProps {
@@ -50,6 +55,7 @@ export const Header: React.FC<HeaderProps> = ({ pageTitle }) => {
     return notifications.filter(
       (n) =>
         n.messageId?.startsWith("usage-") ||
+        n.messageId === "echoflux-billing" ||
         n.messageId?.startsWith("announcement-") ||
         (isPlatformAdmin && n.messageId?.startsWith("admin-"))
     );

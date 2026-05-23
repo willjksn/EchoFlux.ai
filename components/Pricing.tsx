@@ -40,7 +40,7 @@ function isActiveEchoFluxPricingTier(
 interface PricingProps {
     onGetStartedClick?: () => void;
     onNavigateRequest?: (page: Page) => void;
-    /** When set (e.g. lapsed subscription shell), overrides default back-to-profile. */
+    /** Optional back control (e.g. lapsed subscription shell only). */
     onBack?: () => void;
     backLabel?: string;
 }
@@ -215,9 +215,8 @@ export const Pricing: React.FC<PricingProps> = ({ onGetStartedClick, onNavigateR
     const pricingTiers = creatorTiers.filter((tier) => visibleTierNames.includes(tier.name));
 
     const inAppPricing = isAuthenticated && !onNavigateRequest;
-    const showBack = Boolean(onBack) || inAppPricing;
-    const handleBack = onBack ?? (() => setActivePage('profile'));
-    const backLabelText = backLabel ?? 'Back to Profile';
+    const showBack = Boolean(onBack);
+    const backLabelText = backLabel ?? 'Back';
     const showBillingPortal = inAppPricing && canOpenCreatorBillingPortal(user);
     const trialAlreadyUsed = hasUsedEchoFluxFreeTrial(user);
     const showTrialOffer = !trialAlreadyUsed;
@@ -235,11 +234,11 @@ export const Pricing: React.FC<PricingProps> = ({ onGetStartedClick, onNavigateR
     return (
         <div id="pricing" className={`bg-gray-100 dark:bg-gray-800 ${inAppPricing ? 'py-8' : 'py-24'}`}>
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-                {showBack && (
+                {showBack && onBack && (
                     <div className="mb-6">
                         <button
                             type="button"
-                            onClick={handleBack}
+                            onClick={onBack}
                             className="inline-flex items-center gap-1.5 text-sm font-medium text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300"
                         >
                             <ChevronLeftIcon />

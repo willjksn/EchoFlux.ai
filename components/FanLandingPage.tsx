@@ -102,6 +102,9 @@ interface FanLandingPageProps {
   homeHref?: string;
   /** Full page reload loses React state — prime landing intent when the Witme logo points at the same storefront (creator preview). */
   primeLandingIntentBeforeLogoNavigation?: boolean;
+  /** Creator EchoFlux lapsed — hide store preview and disable new signups. */
+  storefrontSuspended?: boolean;
+  storefrontSuspendedMessage?: string;
 }
 
 function buildStorefrontConfig(
@@ -181,6 +184,8 @@ export const FanLandingPage: React.FC<FanLandingPageProps> = (props) => {
     privacyHref: privacyHrefProp,
     homeHref,
     primeLandingIntentBeforeLogoNavigation = false,
+    storefrontSuspended = false,
+    storefrontSuspendedMessage,
   } = props;
 
   const { theme, monetization, landingContent: creatorLandingContent } = creator;
@@ -349,9 +354,31 @@ export const FanLandingPage: React.FC<FanLandingPageProps> = (props) => {
   const tipsEnabled = monetization?.tipsEnabled !== false;
 
   const effectiveText = isDarkMode ? "#f5f5f5" : theme?.text || "#1f2937";
+  const suspendedNotice =
+    storefrontSuspendedMessage?.trim() ||
+    "This creator page is temporarily unavailable for new signups.";
+  const guardedSubscribe = storefrontSuspended ? () => undefined : onSubscribe;
+  const guardedJoinFree = storefrontSuspended ? undefined : onJoinFree;
 
   return (
     <>
+      {storefrontSuspended ? (
+        <div
+          className="mx-auto max-w-3xl px-4 pt-4 sm:px-6"
+          role="status"
+        >
+          <p
+            className="rounded-xl border px-4 py-3 text-sm"
+            style={{
+              borderColor: "color-mix(in srgb, var(--fan-primary, #6366f1) 35%, transparent)",
+              backgroundColor: "color-mix(in srgb, var(--fan-primary, #6366f1) 8%, white)",
+              color: effectiveText,
+            }}
+          >
+            {suspendedNotice}
+          </p>
+        </div>
+      ) : null}
       <StorefrontPreview
         config={previewConfig}
         previewMode="landing"
@@ -362,8 +389,8 @@ export const FanLandingPage: React.FC<FanLandingPageProps> = (props) => {
           onOpenSignup: openFanAuthSignup,
           onOpenLogin: openFanAuthLogin,
           onLogout,
-          onSubscribe,
-          onJoinFree,
+          onSubscribe: guardedSubscribe,
+          onJoinFree: guardedJoinFree,
           subscribing,
           joiningFree,
           isDarkMode,

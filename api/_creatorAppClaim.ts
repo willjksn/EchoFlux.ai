@@ -8,6 +8,7 @@ import {
   shouldHaveCreatorAppAccess as computeCreatorAppAccess,
   type UserDocForCreatorAppClaim,
 } from "../src/lib/echoFluxSubscriptionAccess.js";
+import { syncCreatorStorefrontLifecycle } from "./_creatorStorefrontLifecycle.js";
 
 export const CREATOR_APP_CLAIM = "creatorApp";
 
@@ -47,5 +48,12 @@ export async function applyCreatorAppClaim(
     ...existing,
     [CREATOR_APP_CLAIM]: should,
   });
+
+  try {
+    await syncCreatorStorefrontLifecycle(db, uid);
+  } catch (e) {
+    console.warn(`applyCreatorAppClaim: syncCreatorStorefrontLifecycle(${uid}):`, e);
+  }
+
   return should;
 }

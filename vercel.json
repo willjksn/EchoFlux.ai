@@ -114,6 +114,10 @@
       "schedule": "0 13 * * *"
     },
     {
+      "path": "/api/cronEchoFluxBillingReminders",
+      "schedule": "0 14 * * *"
+    },
+    {
       "path": "/api/cronSendScheduledEmails",
       "schedule": "*/5 * * * *"
     },

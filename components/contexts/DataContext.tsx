@@ -398,7 +398,24 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       
       return prevNotifications;
     });
-  }, [user?.monthlyCaptionGenerationsUsed, user?.monthlyImageGenerationsUsed, user?.monthlyVideoGenerationsUsed, user?.storageUsed, user?.storageLimit, user?.plan, user?.id, (user as any)?.trialEndDate, usageStatsForNotifications]);
+  }, [
+    user?.monthlyCaptionGenerationsUsed,
+    user?.monthlyImageGenerationsUsed,
+    user?.monthlyVideoGenerationsUsed,
+    user?.storageUsed,
+    user?.storageLimit,
+    user?.plan,
+    user?.id,
+    (user as any)?.trialEndDate,
+    (user as any)?.subscriptionEndDate,
+    (user as any)?.subscriptionCurrentPeriodEnd,
+    (user as any)?.cancelAtPeriodEnd,
+    (user as any)?.subscriptionStatus,
+    (user as any)?.stripeSubscriptionId,
+    (user as any)?.echoFluxBillingReminderState,
+    (user as any)?.echoFluxDefaultCardExp,
+    usageStatsForNotifications,
+  ]);
 
   /*--------------------------------------------------------------------
     SEEDING HELPERS

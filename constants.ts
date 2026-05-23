@@ -314,7 +314,7 @@ This is a default template. Creators should review and adapt this text with lega
  * Creators may edit or replace this text. Not a substitute for legal advice.
  * Strong content-protection language retained; expanded for subscriptions, tips, store purchases, platform role, liability.
  */
-export const DEFAULT_TERMS_OF_SERVICE = `Last updated: April 3, 2026
+export const DEFAULT_TERMS_OF_SERVICE = `Last updated: May 22, 2026
 1. ACCEPTANCE
 By using this creator page and related fan features (the "Service"), you agree to these Terms and the Privacy Policy on this page.
 
@@ -332,6 +332,9 @@ Not every feature is available on every creator page. The creator controls which
 
 6. PAYMENTS AND RENEWALS
 Payments are processed through Stripe. Memberships may renew automatically until canceled. Pricing and billing terms are shown at checkout.
+
+6a. CREATOR ECHOFLUX STATUS AND YOUR MEMBERSHIP
+This page stays visible for existing members when the creator's EchoFlux studio subscription ends or is canceled, but new signups, store purchases, and other new paid activity on this page are paused until the creator renews. If you have a recurring paid membership, you keep access through the end of the billing period you already paid for; we schedule your membership not to renew after that period while the creator's EchoFlux plan is inactive. We do not charge you for a new membership period after that paid period ends unless the creator renews EchoFlux and you choose to subscribe again.
 
 7. REFUNDS AND ACCOUNT DELETION
 Unless required by law or stated at checkout, digital purchases are generally final after delivery. Charge issues should be reported promptly. If you delete your fan account, access ends immediately and recurring memberships are canceled so you are not charged again; that does not automatically refund amounts already billed for the current period unless required by law or stated at checkout. Canceling a membership without deleting your account usually keeps access until the end of the period you already paid for.

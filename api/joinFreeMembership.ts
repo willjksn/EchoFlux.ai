@@ -62,6 +62,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(400).json({ error: "This creator requires a paid subscription" });
     }
 
+    const { assertCreatorStorefrontAcceptsNewFans } = await import("./_creatorStorefrontLifecycle.js");
+    const storefrontGate = await assertCreatorStorefrontAcceptsNewFans(db, creatorId);
+    if (!storefrontGate.ok) {
+      return res.status(storefrontGate.status).json({
+        error: storefrontGate.error,
+        code: storefrontGate.code,
+      });
+    }
+
     // Check if fan is already a member
     const fanRef = db.collection("creators").doc(creatorId).collection("fans").doc(fanId);
     const fanSnap = await fanRef.get();

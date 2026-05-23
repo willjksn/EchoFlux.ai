@@ -19,6 +19,7 @@ import {
     canOpenCreatorBillingPortal,
     openCreatorBillingPortal,
 } from '../src/lib/openCreatorBillingPortal';
+import { EchoFluxBillingCardOnFile } from './EchoFluxBillingCardSummary';
 
 const CreatorIdentityBuilder = lazy(() =>
     import('./CreatorIdentityBuilder').then((m) => ({ default: m.CreatorIdentityBuilder }))
@@ -1519,12 +1520,15 @@ Return only the rewritten personality description.
                              </div>
                          </div>
                          {showBillingPortal && (
-                             <p className="mt-3 text-sm text-gray-600 dark:text-gray-400">
-                                 Update your card, view invoices, or manage cancellation in Stripe&apos;s secure customer portal.
-                                 Use <span className="font-medium">Manage Plan</span> to change between Pro and Elite.
-                             </p>
+                             <>
+                                 <p className="mt-3 text-sm text-gray-600 dark:text-gray-400">
+                                     Update your card, view invoices, or manage cancellation in Stripe&apos;s secure customer portal.
+                                     Use <span className="font-medium">Manage Plan</span> to change between Pro and Elite.
+                                 </p>
+                                 <EchoFluxBillingCardOnFile />
+                             </>
                          )}
-                         
+
                          {isSubscriptionCancelled && (
                              <div className="mt-4 p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg">
                                  <div className="flex items-start gap-3">

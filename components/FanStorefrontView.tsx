@@ -41,6 +41,7 @@ import type {
   LandingSectionListMarker,
 } from "../types";
 import { normalizeTreatProductsFromApi } from "../src/lib/treatProductsNormalize";
+import { STOREFRONT_SUSPENDED_PUBLIC_MESSAGE } from "../src/lib/creatorStorefrontActive";
 import { getTreatProductTypeDisplayLabel } from "../src/lib/treatProductTypeLabel";
 import { FanLandingPage } from "./FanLandingPage";
 import { FanAuthModal } from "./FanAuthModal";
@@ -314,6 +315,9 @@ export type StorefrontCreator = {
   sectionsOrder?: string[];
   /** Store items visible on the public landing page as a preview. */
   publicTreatsOnLanding?: boolean;
+  /** False when creator EchoFlux subscription is lapsed — no new signups or store. */
+  storefrontActive?: boolean;
+  storefrontSuspendedMessage?: string;
   rules?: { boundariesText?: string };
   spicyMode?: boolean;
   monetization?: CreatorMonetization;
@@ -2965,6 +2969,10 @@ export const FanStorefrontView: React.FC = () => {
     if (isAuto) {
       autoSubscribeRedirectingRef.current = true;
     }
+    if (!creatorStorefrontActive) {
+      showToast(storefrontSuspendedMessage, "info");
+      return false;
+    }
     setSubscribing(true);
     try {
       const token = await auth.currentUser.getIdToken(true);
@@ -3029,6 +3037,10 @@ export const FanStorefrontView: React.FC = () => {
   };
 
   const handleJoinFree = async () => {
+    if (!creatorStorefrontActive) {
+      showToast(storefrontSuspendedMessage, "info");
+      return;
+    }
     if (!creator?.creatorId || !auth.currentUser) {
       setFanAuthPaidDetailsStep(false);
       setFanAuthView("signup");
@@ -4036,6 +4048,16 @@ export const FanStorefrontView: React.FC = () => {
 
   // Membership gating values must be computed before any early return to keep hook order stable.
   const creatorRequiresPaidMembership = creator?.monetization?.freeAccessEnabled !== true;
+  const creatorStorefrontActive = creator?.storefrontActive !== false;
+  const storefrontSuspendedMessage =
+    creator?.storefrontSuspendedMessage?.trim() || STOREFRONT_SUSPENDED_PUBLIC_MESSAGE;
+
+  useEffect(() => {
+    if (!creatorStorefrontActive && activeTab === "treats") {
+      setActiveTab("feed");
+    }
+  }, [creatorStorefrontActive, activeTab]);
+
   const hasPaidMembershipBase = subscribed && membershipType === "paid";
   const paidPageUnsubscribedBase = creatorRequiresPaidMembership && membershipType !== "paid";
   const hasAccessByCurrentMembershipBase =
@@ -4617,6 +4639,7 @@ export const FanStorefrontView: React.FC = () => {
   /** `?preview=member` — show full shell like a subscribed member (ignore purchase-only / paywall nav). */
   const baseMemberTabKeys = (sectionsOrder || ["feed", "treats", "tip", "messages"])
     .filter((key) => key !== "about" && key !== "saved" && (sections as Record<string, boolean>)?.[key] !== false)
+    .filter((key) => creatorStorefrontActive || key !== "treats")
     .filter((key) => previewMember || !purchaseOnlyAccess || key === "treats" || key === "tip");
   const memberTabKeys = (() => {
     const keys = [...baseMemberTabKeys];
@@ -4825,8 +4848,10 @@ export const FanStorefrontView: React.FC = () => {
           isLoggedIn={showGuestAuthCtasOnLanding ? false : isLoggedIn}
           onLogout={showGuestAuthCtasOnLanding ? undefined : handleLogout}
           primeLandingIntentBeforeLogoNavigation={showGuestAuthCtasOnLanding}
-          publicTreatsOnLanding={creator.publicTreatsOnLanding === true}
-          sectionsTreatsEnabled={creator.sections?.treats !== false}
+          publicTreatsOnLanding={creatorStorefrontActive && creator.publicTreatsOnLanding === true}
+          sectionsTreatsEnabled={creatorStorefrontActive && creator.sections?.treats !== false}
+          storefrontSuspended={!creatorStorefrontActive}
+          storefrontSuspendedMessage={storefrontSuspendedMessage}
           landingTreatProducts={landingTreatsProducts}
           landingTreatsLoading={landingTreatsLoading}
           onRefreshLandingTreats={() => setLandingTreatsRefreshNonce((n) => n + 1)}
@@ -5191,13 +5216,25 @@ export const FanStorefrontView: React.FC = () => {
           <nav className="storefront-header-nav">
             {memberTabKeys.map((key) => {
               const isTip = key === "tip";
+              const storeTabInactive = key === "treats" && !creatorStorefrontActive;
               return (
                 <button
                   key={key}
                   type="button"
-                  onClick={() => setActiveTabWithUrl(key as typeof activeTab)}
-                  className={`storefront-nav-btn ${isTip ? "storefront-nav-tip" : ""} ${activeTab === key ? "active" : ""}`}
-                  title={key === "saved" ? "Saved posts" : undefined}
+                  disabled={storeTabInactive}
+                  onClick={() => {
+                    if (storeTabInactive) return;
+                    setActiveTabWithUrl(key as typeof activeTab);
+                  }}
+                  className={`storefront-nav-btn ${isTip ? "storefront-nav-tip" : ""} ${activeTab === key ? "active" : ""} ${storeTabInactive ? "opacity-50 cursor-not-allowed" : ""}`}
+                  title={
+                    storeTabInactive
+                      ? "Store is closed while this creator renews EchoFlux"
+                      : key === "saved"
+                        ? "Saved posts"
+                        : undefined
+                  }
+                  aria-disabled={storeTabInactive || undefined}
                 >
                   {key === "feed" && (
                     <svg className="storefront-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -6168,7 +6205,7 @@ export const FanStorefrontView: React.FC = () => {
                       <button
                         type="button"
                         onClick={creator.monetization?.freeAccessEnabled ? handleJoinFree : handleSubscribe}
-                        disabled={joiningFree || subscribing}
+                        disabled={joiningFree || subscribing || !creatorStorefrontActive}
                         className="storefront-cancel-membership-btn"
                         style={{
                           color: primary,
@@ -6192,7 +6229,7 @@ export const FanStorefrontView: React.FC = () => {
                       <button
                         type="button"
                         onClick={handleSubscribe}
-                        disabled={subscribing}
+                        disabled={subscribing || !creatorStorefrontActive}
                         className="storefront-cancel-membership-btn"
                         style={{
                           color: primary,

@@ -281,6 +281,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(403).json({ error: "You cannot purchase from this creator" });
     }
 
+    const { assertCreatorStorefrontAcceptsNewFans } = await import("./_creatorStorefrontLifecycle.js");
+    const storefrontGate = await assertCreatorStorefrontAcceptsNewFans(db, creatorId);
+    if (!storefrontGate.ok) {
+      return res.status(storefrontGate.status).json({
+        error: storefrontGate.error,
+        code: storefrontGate.code,
+      });
+    }
+
     const creatorSnap = await db.collection("creators").doc(creatorId).get();
     const creatorData = creatorSnap.data() as {
       stripeConnectAccountId?: string;

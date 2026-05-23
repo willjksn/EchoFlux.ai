@@ -1,6 +1,16 @@
 import { User, Notification, Plan } from '../../types';
 import { normalizePlanForLimitsClient } from '../lib/creatorIdentity/planGate';
 import { usageNotificationMonthKey } from './usageNotificationDismissals';
+import { ackEchoFluxBillingReminder } from '../lib/ackEchoFluxBillingReminder';
+import {
+  buildCardReminderNotificationText,
+  buildPeriodReminderNotificationText,
+  evaluateCardBillingReminder,
+  evaluatePeriodBillingReminder,
+  notificationIdForBillingReminder,
+  type EchoFluxBillingReminderState,
+  type EchoFluxDefaultCardExp,
+} from '../lib/echoFluxBillingReminders';
 
 // Define usage limits for each plan
 const USAGE_LIMITS: Record<Plan, {
@@ -439,6 +449,76 @@ export function checkTrialEndDate(
 }
 
 /**
+ * EchoFlux plan renewal / cancel-at-period-end and card expiration (7, 3, 1 days).
+ * Server tracks sent days so fixing billing before the next threshold skips later reminders.
+ */
+export function checkEchoFluxBillingReminders(
+  user: User,
+  existingNotifications: Notification[],
+  dismissedUsageIds?: Set<string>,
+): Notification | null {
+  const u = user as User & {
+    subscriptionStatus?: string;
+    cancelAtPeriodEnd?: boolean;
+    subscriptionEndDate?: string | null;
+    subscriptionCurrentPeriodEnd?: string | null;
+    stripeSubscriptionId?: string | null;
+    echoFluxBillingReminderState?: EchoFluxBillingReminderState;
+    echoFluxDefaultCardExp?: EchoFluxDefaultCardExp;
+  };
+
+  const state = u.echoFluxBillingReminderState;
+  const period = evaluatePeriodBillingReminder(u, state);
+  if (period) {
+    const id = notificationIdForBillingReminder("period", period.anchor, period.day);
+    if (
+      dismissedUsageIds?.has(id) ||
+      existingNotifications.some((n) => n.id === id || (n.messageId === "echoflux-billing" && !n.read))
+    ) {
+      return null;
+    }
+    void ackEchoFluxBillingReminder({
+      kind: "period",
+      anchor: period.anchor,
+      day: period.day,
+    });
+    return {
+      id,
+      text: buildPeriodReminderNotificationText(period.day, period.cancelAtPeriodEnd),
+      timestamp: "Just now",
+      read: false,
+      messageId: "echoflux-billing",
+    };
+  }
+
+  const card = evaluateCardBillingReminder(u.echoFluxDefaultCardExp, state, u);
+  if (card) {
+    const id = notificationIdForBillingReminder("card", card.anchor, card.day);
+    if (
+      dismissedUsageIds?.has(id) ||
+      existingNotifications.some((n) => n.id === id || (n.messageId === "echoflux-billing" && !n.read))
+    ) {
+      return null;
+    }
+    void ackEchoFluxBillingReminder({
+      kind: "card",
+      anchor: card.anchor,
+      day: card.day,
+    });
+    const cardMeta = u.echoFluxDefaultCardExp!;
+    return {
+      id,
+      text: buildCardReminderNotificationText(card.day, cardMeta),
+      timestamp: "Just now",
+      read: false,
+      messageId: "echoflux-billing",
+    };
+  }
+
+  return null;
+}
+
+/**
  * Check all usage types and return notifications to add
  */
 function pushUnlessDismissed(
@@ -464,6 +544,9 @@ export function checkAllUsageLimits(
   if (trialCheck.shouldNotify) {
     pushUnlessDismissed(notifications, trialCheck.notification, dismissed);
   }
+
+  const billingReminder = checkEchoFluxBillingReminders(user, existingNotifications, dismissed);
+  pushUnlessDismissed(notifications, billingReminder, dismissed);
 
   // Check storage usage
   const storageCheck = checkStorageUsage(user, existingNotifications);
