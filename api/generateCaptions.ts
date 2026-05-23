@@ -25,7 +25,7 @@ import {
   buildCreatorIdentityBackgroundPromptBlock,
   buildCreatorIdentityBaselinePromptBlock,
 } from "./_creatorIdentityPrompt.js";
-import { getNaturalVoicePromptBlock, getCaptionVoicePriorityBlock, getTrendingLanguageGuidanceBlock, buildToneSlidersPromptBlock, hasToneSliderSettings } from "./_naturalVoicePrompt.js";
+import { getNaturalVoicePromptBlock, getCaptionVoicePriorityBlock, getTrendingLanguageGuidanceBlock, buildToneSlidersPromptBlock, hasToneSliderSettings, getAntiLameCaptionBlock, isCheesyCaption } from "./_naturalVoicePrompt.js";
 import { buildMemberHubCreatorContext } from "./_memberHubContentContext.js";
 
 async function getGeminiShared() {
@@ -866,7 +866,7 @@ ONLYFANS EXPLICIT MODE (HIGH INTENSITY):
         ? `
 MEDIA + CAPTION STRATEGY (Fan Hub / My Page — members already here):
 - Media is attached; the caption must be grounded in what is visible while still sounding natural for the member feed.
-- Prefer hooks that fit an existing member feed: mood, story, questions, appreciation — not recruiting followers or public-platform growth.
+- Prefer hooks that fit an existing member feed: mood, story, appreciation — not recruiting followers, public-platform growth, or quiz-style closing questions.
 - When personality is on, that voice wins over generic social tactics, but it still must connect to this exact media.
 `
         : `
@@ -1168,14 +1168,15 @@ CRITICAL - VARIETY REQUIREMENT:
 ${!isOnlyFansPlatform && !isFanHubCaption ? `
 CAPTION VARIANTS (SOCIAL PLATFORMS):
 - Return 3 variants that feel meaningfully different:
-  - Variant 1: Short + punchy hook + clear CTA
-  - Variant 2: Micro-story / personal angle (creator POV) + soft CTA
-  - Variant 3: Value/insight bullets or 2-line structure + engagement question
+  - Variant 1: Short + punchy statement grounded in the media
+  - Variant 2: Micro-story / personal angle (creator POV) — end on a line, not a question
+  - Variant 3: Two-line structure — observation + attitude (no engagement question)
 - Keep each variant within platform limits (if multiple platforms selected, obey the strictest limit).
 ` : ''}
 ${isFanHubCaption ? `
 FAN HUB — SINGLE CAPTION:
 - Return exactly one caption in the JSON array. Make it feel natural for people already on this page; no follow / subscribe / find-me-on-[app] recruitment.
+- Do NOT end with a question. Do NOT use hottie, spill the tea, what's your vibe, what's on the radio, or similar lame closers.
 - Treat every request as brand new: write the full caption from scratch for this media; never assume the creator is editing an existing draft in the UI.
 ` : ''}
 ${isExplicitContent ? `
@@ -1363,14 +1364,10 @@ ${includeAiHashtags
 ` : ''}
 `.trim();
 
-  const parts: any[] = [{ text: prompt }];
-
-  // Attach media:
-  // - Single media: attach inlineData
-  // - Carousel: attach ALL media items so the model can summarize the set
+  const mediaParts: any[] = [];
   if (finalMediaList.length > 0) {
     for (const m of finalMediaList) {
-      parts.push({
+      mediaParts.push({
         inlineData: {
           data: m.data,
           mimeType: m.mimeType,
@@ -1378,7 +1375,7 @@ ${includeAiHashtags
       });
     }
   } else if (finalMedia) {
-    parts.push({
+    mediaParts.push({
       inlineData: {
         data: finalMedia.data,
         mimeType: finalMedia.mimeType,
@@ -1386,58 +1383,91 @@ ${includeAiHashtags
     });
   }
 
+  const parseCaptionsFromModelText = async (raw: string): Promise<CaptionResult[]> => {
+    let parsed: any;
+    try {
+      const { parseJSON } = await getGeminiShared();
+      parsed = parseJSON(raw);
+    } catch {
+      parsed = [{ caption: raw, hashtags: [] }];
+    }
+    if (Array.isArray(parsed)) return parsed;
+    if (Array.isArray(parsed?.captions)) return parsed.captions;
+    return [{ caption: raw, hashtags: [] }];
+  };
+
   // Generate captions via Gemini
   let rawText: string;
+  let captions: CaptionResult[] = [];
 
   try {
-    // Use more retries for videos due to longer processing time
-    // Increase timeout for longer videos
     const maxRetries = isVideo ? 5 : 3;
-    
-    // Log before generation for debugging
-    console.log('[generateCaptions] Starting generation:', {
+    const maxCheesyRetries = isFanHubCaption ? 1 : 0;
+
+    console.log("[generateCaptions] Starting generation:", {
       isVideo,
       isCarousel,
       hasMedia: !!finalMedia || finalMediaList.length > 0,
       maxRetries,
     });
-    
-    const result = await generateWithRetry(
-      model,
-      {
-        contents: [{ role: "user", parts }],
-        generationConfig: {
-          responseMimeType: "application/json",
-          temperature: isFanHubCaption ? (hasRandomSeed ? 0.96 : 0.9) : 0.7,
-          topP: isFanHubCaption && hasRandomSeed ? 0.98 : 0.9,
-          topK: 40,
-        },
-      },
-      maxRetries,
-      isVideo
-    );
 
-    if (!result?.response || typeof result.response.text !== "function") {
-      console.error("Bad Gemini response:", result);
-      res.status(200).json([
+    for (let cheesyAttempt = 0; cheesyAttempt <= maxCheesyRetries; cheesyAttempt++) {
+      const textPrompt =
+        cheesyAttempt === 0
+          ? prompt
+          : `${prompt}
+
+🚨 PRIOR CAPTION REJECTED — too cheesy (engagement-bait question, "hottie", radio/vibe hooks, invented scenarios).
+${getAntiLameCaptionBlock()}
+Generate a completely NEW caption. End on a STATEMENT (no question). Ground in visible media details only.`;
+
+      const parts: any[] = [{ text: textPrompt }, ...mediaParts];
+
+      const result = await generateWithRetry(
+        model,
         {
-          caption: "AI returned malformed response. Try again.",
-          hashtags: [],
+          contents: [{ role: "user", parts }],
+          generationConfig: {
+            responseMimeType: "application/json",
+            temperature: isFanHubCaption ? (hasRandomSeed ? 0.96 : 0.9) : 0.7,
+            topP: isFanHubCaption && hasRandomSeed ? 0.98 : 0.9,
+            topK: 40,
+          },
         },
-      ]);
-      return;
+        maxRetries,
+        isVideo,
+      );
+
+      if (!result?.response || typeof result.response.text !== "function") {
+        console.error("Bad Gemini response:", result);
+        res.status(200).json([
+          {
+            caption: "AI returned malformed response. Try again.",
+            hashtags: [],
+          },
+        ]);
+        return;
+      }
+
+      rawText = result.response.text().trim();
+      captions = await parseCaptionsFromModelText(rawText);
+
+      const firstCaption = typeof captions[0]?.caption === "string" ? captions[0].caption : "";
+      if (!isFanHubCaption || !firstCaption || !isCheesyCaption(firstCaption)) {
+        break;
+      }
+      console.warn("[generateCaptions] Cheesy Fan Hub caption detected — retrying once", {
+        caption: firstCaption.slice(0, 120),
+      });
     }
 
-    rawText = result.response.text().trim();
-    
-    // Log successful generation
     if (rawText) {
-      console.log('[generateCaptions] Successfully generated captions:', {
+      console.log("[generateCaptions] Successfully generated captions:", {
         isVideo,
         textLength: rawText.length,
       });
     } else {
-      console.warn('[generateCaptions] Empty response text received');
+      console.warn("[generateCaptions] Empty response text received");
     }
   } catch (err: any) {
     console.error("[generateCaptions] AI error:", {
@@ -1488,27 +1518,7 @@ ${includeAiHashtags
     return;
   }
 
-  // Parse JSON response
-  let parsed: any;
-  try {
-    const { parseJSON } = await getGeminiShared();
-    parsed = parseJSON(rawText);
-  } catch (err) {
-    console.warn("JSON parse failed:", err);
-    parsed = [{ caption: rawText, hashtags: [] }];
-  }
-
-  let captions: CaptionResult[];
-
-  if (Array.isArray(parsed)) {
-    captions = parsed;
-  } else if (Array.isArray(parsed?.captions)) {
-    captions = parsed.captions;
-  } else {
-    captions = [{ caption: rawText, hashtags: [] }];
-  }
-
-  // OnlyFans does not use hashtags. Enforce empty hashtags to keep output clean and consistent.
+  // Post-process parsed captions (OnlyFans hashtags, plain text, strip tags)
   if (isOnlyFansPlatform) {
     captions = (captions || []).map((c: any) => ({
       ...c,

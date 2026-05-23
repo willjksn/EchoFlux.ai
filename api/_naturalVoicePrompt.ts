@@ -30,6 +30,20 @@ const STALE_AI_DEFAULT_PHRASES = [
   "spill the tea, loves",
   "hey loves",
   "hey lovelies",
+  "hottie",
+  "hotty",
+  "what's your vibe",
+  "whats your vibe",
+  "what's playing on the radio",
+  "whats playing on the radio",
+  "what's on the radio",
+  "whats on the radio",
+  "what are you listening to",
+  "what do you think",
+  "rate this 1-10",
+  "double tap if",
+  "who else",
+  "am i the only one",
 ];
 
 function contextGuidance(context: NaturalVoiceContext): string {
@@ -46,7 +60,7 @@ function contextGuidance(context: NaturalVoiceContext): string {
     default:
       return `- Write ready-to-post copy: specific, conversational, like something you'd actually type—not a marketing blurb.
 - Ground in at least one concrete detail from the media or moment, then let voice + current trend language shape how it sounds.
-- Questions are OPTIONAL. Statements, observations, and attitude lines are often stronger than forced engagement bait.`;
+- Questions are RARE. Default to ending on a statement, attitude line, or mood — not a question to the audience.`;
   }
 }
 
@@ -179,6 +193,46 @@ ${boundaries}
 - Do NOT force a question or CTA. Ground the caption in the media, then sound current and human—not sanitized or templated.`;
 }
 
+export function isCheesyCaption(text: string): boolean {
+  const t = String(text || "").trim();
+  if (!t) return false;
+  const lower = t.toLowerCase();
+  if (STALE_AI_DEFAULT_PHRASES.some((p) => lower.includes(p.toLowerCase()))) return true;
+  const patterns = [
+    /\bhottie\b/i,
+    /\bhotty\b/i,
+    /what'?s playing on the radio/i,
+    /what'?s on the radio/i,
+    /what'?s your vibe/i,
+    /what'?s your go-?to/i,
+    /what do you think/i,
+    /tell me in the comments/i,
+    /this beauty for a (midnight )?cruise/i,
+    /about to take this beauty/i,
+  ];
+  if (patterns.some((r) => r.test(t))) return true;
+  if (/\?\s*$/.test(t) && /(radio|vibe|go-?to|hottie|hotty|who else|rate this|comment)/i.test(t)) return true;
+  return false;
+}
+
+/** Hard rules against cheesy AI captions (questions, pet names, invented scenarios). */
+export function getAntiLameCaptionBlock(): string {
+  return `
+NO LAME / CHEESY CAPTIONS (HARD RULES — caption outputs only):
+- Default: 1–3 sentences, first-person creator POV, at least one concrete detail from the media → END on a statement (not a question).
+- Do NOT end with engagement-bait questions: "what's playing on the radio", "what's your vibe", "what's your go-to", "what do you think", "tell me…", "who else…", "am I the only one…", "comment your…", "rate this…".
+- Do NOT use cringe fan-address pet names unless Personality Override literally uses that exact term: hottie, hotty, bestie, loves, lovelies, babe (as generic audience address).
+- Do NOT invent scenes the media does not support (radio/playlist, midnight cruise, road trip, "this beauty" car hype) unless clearly shown or the personality always talks that way.
+- For engagement goals: earn attention with a bold statement, specific detail, or attitude — NOT a quiz question tacked on the end.
+
+BAD — never write like this:
+"About to take this beauty for a midnight cruise. 😈 What's playing on the radio tonight, hottie?"
+
+GOOD — aim for this quality:
+"Off-shoulder black, heels on concrete, Mercedes hood catching the garage light. Night out started right here."
+"Leaning on the grille in this dress — fluorescent light, zero rush."`.trim();
+}
+
 /** Extra guidance when weekly/live trend research is present in the prompt. */
 export function getTrendingLanguageGuidanceBlock(hasTrendContext: boolean): string {
   if (!hasTrendContext) {
@@ -223,9 +277,13 @@ Do NOT use: ${staleBanned}.
 Also avoid empty filler: "loving this moment", "feeling grateful", "so grateful", "check this out", "can't even", "obsessed with this", "here for it", "that time of year".
 On Fan Hub / My Page: never "link in bio" (fans are already on the page).
 
-ENGAGEMENT:
-- Do NOT end every caption with a question. Questions are optional—use only when they fit naturally.
-- Avoid recycled engagement hooks ("tell me in the comments", "what's your go-to") unless trend research shows that exact hook is hot AND it fits this post.
+ENGAGEMENT (captions):
+- DEFAULT: no closing question. ~90% of captions should end on a statement.
+- Questions are rare — only when genuinely natural, not as a template.
+- Never use recycled hooks: "tell me in the comments", "what's your go-to", "what's your vibe", "what's playing on…", "who relates?", "this is your sign".
+- Engagement goal ≠ mandatory question. A sharp line about what's in the photo beats "what do you think?" every time.
+
+${context === "caption" ? getAntiLameCaptionBlock() : ""}
 
 FINAL CHECK:
 - Would a real creator in this niche post this today? If it sounds like ChatGPT circa 2023, rewrite with current language + one specific detail from the media or moment.

@@ -115,7 +115,9 @@ FAN HUB / MY PAGE — STRATEGY (MEMBER-ONLY CONTEXT):
 - Readers are already on this creator's personal fan / member page. Do NOT write as if recruiting strangers from a public FYP or feed.
 - FORBIDDEN: asking to follow, follow for more, follow if you liked the video, hit follow, turn on notifications to follow, "new here?", "road to X followers", "help me grow", smash follow, or any variant of gaining new followers / subscribers on other apps.
 - FORBIDDEN: generic open-platform growth hooks (Instagram/TikTok/X discovery tone) unless USER INSTRUCTIONS explicitly ask for them.
-- OK: voice, mood, story, humor, questions, appreciation for supporters, comments/replies, tips or unlocks if it fits the product — all without implying the reader is not already a member.
+- OK: voice, mood, story, humor, appreciation for supporters — all without implying the reader is not already a member.
+- Prefer statements over questions. If you ask something, it must feel spontaneous — never a template ("what do you think?", "what's your vibe?").
+- FORBIDDEN in Fan Hub captions: hottie/hotty/bestie/loves as generic fan address (unless USER INSTRUCTIONS or Personality Override use those exact terms).
 `;
 
   switch (goal) {
@@ -134,10 +136,10 @@ FAN HUB / MY PAGE — STRATEGY (MEMBER-ONLY CONTEXT):
     case 'Community Engagement':
     case 'Customer Engagement':
       return `${header}
-- Conversation starters, polls-in-text, "your turn" — for people already in the community.`;
+- Deepen connection with bold statements, inside jokes, or specific details from the post — not quiz-style questions at the end.`;
     case 'Increase Engagement':
       return `${header}
-- Prefer comments, replies, saves-on-page, and discussion — not "double tap if", "share to grow", or follow bait.`;
+- Prefer comments earned by a strong line or visible detail — not "double tap if", "share to grow", follow bait, or forced closing questions.`;
     default:
       return `${header}
 - Align with the selected goal using member-appropriate language only (no public-platform growth tactics).`;
@@ -156,11 +158,11 @@ export function getFanHubCaptionGoalCTAs(goal: string): string {
       return '- Voice and memorable lines for people already here: "who relates?", "this is so us" — never follow me / follow for / tag someone who doesn\'t follow you yet';
     case 'Community Engagement':
     case 'Customer Engagement':
-      return '- "Comment your take", "What would you do?", "Stories from you guys?" — member conversation, not growth CTAs';
+      return '- Strong statements that invite replies naturally — avoid "What do you think?", "What\'s your vibe?", "Comment below" templates';
     case 'Increase Engagement':
-      return '- "Comment your answer", "Save this for later", "Agree or disagree?" — no double-tap / follow-if / FYP language';
+      return '- Memorable lines grounded in the post — not "Agree or disagree?", "Rate this", or other quiz-style closers';
     default:
-      return '- Member-appropriate CTAs only; questions and replies welcome — never ask to follow or grow audience';
+      return '- Member-appropriate tone — statements over bait questions; never ask to follow or grow audience';
   }
 }
 
