@@ -446,7 +446,7 @@ CRITICAL — OVERRIDE-FIRST PLANNING:
 - This block is the top priority for HOW captions sound (word choice, humor, energy, slang, attitude). Every caption must read like THIS person typed it on their phone — not like a strategist, narrator, or generic influencer.
 - On Elite, Creator Identity (if shown above as background) must not override this block when they conflict.
 - ${rawNiche ? `Post ideas from the user: "${rawNiche}". Topics and angles should reflect these ideas AND this voice; if anything conflicts, Personality Override wins for wording.` : `The user did not specify post ideas—propose specific content ideas that fit this override voice, aligned with goal (${goalStr}), platform focus (${platformFocus || "Mixed / All"}), and audience (${effectiveAudience}).`}
-- Research and trends above/below inform WHAT to post, timing, and formats — do NOT import their tone of voice into captions. Never replace this override with "best practices" speak.
+- Research and trends above/below inform WHAT to post, timing, formats, and CURRENT phrasing people use — captions should sound like the override first, then weave in hot/current language when it fits (not stale AI templates).
 - Strategy "Tone" dropdown is secondary when this block is present. Emoji and profanity rules come from Settings (see WRITING STYLE in parameters).
 - Steer tactics toward "${goalStr}" using approaches that still sound like this creator.
 
@@ -481,7 +481,7 @@ Incorporate relevant hashtags into the strategy recommendations where appropriat
 
     const strategistOpening =
       usePersonalityBool && !rawNiche
-        ? `You are an elite content strategist. Market research and trends appear first for topics and timing; the PERSONALITY OVERRIDE section (after that context) is the PRIMARY anchor for caption voice and authenticity. Use research for WHAT/when — never for generic influencer diction in captions. Audience: ${effectiveAudience}.`
+        ? `You are an elite content strategist. Market research and trends appear first for topics, timing, and current language; the PERSONALITY OVERRIDE section (after that context) is the PRIMARY anchor for caption voice. Use research for what's hot and when — captions should sound like the override plus current phrasing when it fits. Audience: ${effectiveAudience}.`
         : usePersonalityBool && rawNiche
           ? `You are an elite content strategist. Blend the user's post ideas ("${rawNiche}") with their Personality Override (full block below, after research/trends). Post ideas steer topics; the override steers every caption's voice. Target audience: ${effectiveAudience}.`
           : hasIdentityBaseline && !rawNiche
@@ -490,7 +490,7 @@ Incorporate relevant hashtags into the strategy recommendations where appropriat
 
     const primaryStrategySourceInstruction =
       usePersonalityBool && !rawNiche
-        ? `3. PRIMARY STRATEGY SOURCE: Personality Override (voice + differentiated topics) + trend/research for timing and formats + goal (${goalStr}). Research suggests themes; captions must still sound like the override block — not like the research prose.`
+        ? `3. PRIMARY STRATEGY SOURCE: Personality Override (voice + differentiated topics) + trend/research for timing, formats, and current phrasing + goal (${goalStr}). Captions: override voice first, then natural trend language when it fits — not stale AI templates.`
         : usePersonalityBool && rawNiche
           ? `3. PRIMARY STRATEGY SOURCE: Post ideas ("${rawNiche}") define topics; Personality Override defines caption voice; research/trends refine angles and timing. Do not let research replace the override voice in "caption" fields.`
           : hasIdentityBaseline && !usePersonalityBool
@@ -514,8 +514,12 @@ ${analyticsData
 `
       : "";
 
+    const hasTrendContext = Boolean(currentTrends && currentTrends.trim() && !/unavailable|general best practices/i.test(currentTrends));
     const prompt = `
-${getNaturalVoicePromptBlock("strategy")}
+${getNaturalVoicePromptBlock("strategy", {
+  hasTrendContext,
+  usePersonalityOverride: usePersonalityBool,
+})}
 
 ${strategistOpening}
 
@@ -628,7 +632,7 @@ ${durationWeeks === 1 ? '⚠️ CRITICAL: Generate EXACTLY 1 WEEK (7 days) of co
      - Include engaging body content (not a boring title or outline)
      - End with the CTA; include 3-5 relevant hashtags at the end when the platform uses hashtags (unless OnlyFans/Fan Hub)
      - ${usePersonalityBool ? `Voice: mirror PERSONALITY OVERRIDE & BRAND VOICE exactly for diction and attitude; use WRITING STYLE above only for emoji count and profanity` : hasIdentityBaseline ? `Voice: align with Creator Identity baseline and tone (${tone}); follow WRITING STYLE PREFERENCES` : `Match tone (${tone}); follow WRITING STYLE PREFERENCES above for emoji density, warmth, humor, and formality`}
-     - Sound human and platform-native, not generic or robotic — follow NATURAL HUMAN VOICE rules at the top (no viral clichés, no "vibes"/"energy" filler)
+     - Sound human, current, and platform-native — use trend research for hot phrasing when it fits; avoid stale AI templates and empty filler
 ${durationWeeks === 1 ? '- Provide comprehensive, detailed content across all 7 days with variety' : ''}
 - Distribute content across platforms: ${platforms.join(', ')}
  - DO NOT just provide topic names - provide FULL detailed descriptions for each content item

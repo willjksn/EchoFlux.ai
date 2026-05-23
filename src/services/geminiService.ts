@@ -123,12 +123,13 @@ export async function generateCaptions(opts: {
   creatorPersonality?: string | null; // Creator personality description
   favoriteHashtags?: string | null; // Favorite hashtags
   emojiIntensity?: number | null; // Emoji level from settings (0-100)
-  toneSettings?: { // Full tone settings from user preferences
+  toneSettings?: {
     formality?: number;
     humor?: number;
     empathy?: number;
     spiciness?: number;
     profanity?: number;
+    emojiLevel?: number;
   } | null;
 }) {
   const { mediaUrl, mediaUrls, mediaData, goal, tone, promptText, platforms, usePersonality, useFavoriteHashtags, creatorPersonality, favoriteHashtags, emojiIntensity, toneSettings } = opts;

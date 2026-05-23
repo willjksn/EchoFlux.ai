@@ -2647,6 +2647,7 @@ const CaptionGenerator: React.FC = () => {
               empathy: settings.tone.empathy,
               spiciness: settings.tone.spiciness,
               profanity: settings.tone.profanity,
+              emojiLevel: settings.tone.emojiLevel,
             } : null,
           });
 
@@ -3444,6 +3445,7 @@ const CaptionGenerator: React.FC = () => {
           empathy: settings.tone.empathy,
           spiciness: settings.tone.spiciness,
           profanity: settings.tone.profanity,
+          emojiLevel: settings.tone.emojiLevel,
         } : null,
       });
 
@@ -4339,6 +4341,7 @@ const CaptionGenerator: React.FC = () => {
                     empathy: settings.tone.empathy,
                     spiciness: settings.tone.spiciness,
                     profanity: settings.tone.profanity,
+                    emojiLevel: settings.tone.emojiLevel,
                   } : null}
                   onTogglePersonality={() => setUsePersonality(prev => !prev)}
                   onToggleHashtags={() => setUseFavoriteHashtags(prev => !prev)}
@@ -4387,6 +4390,7 @@ const CaptionGenerator: React.FC = () => {
                   empathy: settings.tone.empathy,
                   spiciness: settings.tone.spiciness,
                   profanity: settings.tone.profanity,
+                  emojiLevel: settings.tone.emojiLevel,
                 } : null}
                 onTogglePersonality={() => setUsePersonality(prev => !prev)}
                 onToggleHashtags={() => setUseFavoriteHashtags(prev => !prev)}

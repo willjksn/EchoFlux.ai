@@ -289,8 +289,15 @@ VOICE PRIORITY (PERSONALITY OVERRIDE OFF):
 `
           : "";
 
+    const hasMonetizationTrendContext = Boolean(
+      trendsContext && trendsContext.trim() && !/unavailable|best practices/i.test(trendsContext),
+    );
+
     const prompt = `
-${getNaturalVoicePromptBlock("monetization")}
+${getNaturalVoicePromptBlock("monetization", {
+  hasTrendContext: hasMonetizationTrendContext,
+  usePersonalityOverride: Boolean(isMemberHub && prioritizePersonality && personalityText.trim()),
+})}
 
 ${personalityBlock ? `${personalityBlock}\n\n` : ""}${memberHubVoicePriority}You are an expert monetization strategist for ${
       isMemberHub ? "paid member hubs (My Page) and creator fan feeds" : "OnlyFans creators specializing in adult/explicit content monetization"

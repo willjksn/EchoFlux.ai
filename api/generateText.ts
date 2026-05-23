@@ -218,8 +218,16 @@ ${explicitnessContext ? `\nEXPLICITNESS LEVEL: ${explicitnessLevel}/10\n${explic
       Boolean(prioritizeCreatorPersonality),
     );
 
+    const hasTextTrendContext = Boolean(
+      (isMemberHub && memberHubTrends && !/unavailable/i.test(memberHubTrends)) ||
+        (isOnlyFansPlatform && onlyfansWeeklyTrends && !/unavailable/i.test(onlyfansWeeklyTrends)),
+    );
+
     const aiPrompt = `
-${getNaturalVoicePromptBlock(isMemberHub ? "ideas" : "caption")}
+${getNaturalVoicePromptBlock(isMemberHub ? "ideas" : "caption", {
+  hasTrendContext: hasTextTrendContext,
+  usePersonalityOverride: Boolean(prioritizeCreatorPersonality && personalityText.trim()),
+})}
 
 ${personalityBlock ? `${personalityBlock}\n\n` : ""}You are an expert social media copywriter and content creator${
       isMemberHub

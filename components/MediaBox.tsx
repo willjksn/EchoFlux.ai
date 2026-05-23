@@ -144,6 +144,7 @@ interface MediaBoxProps {
     empathy?: number;
     spiciness?: number;
     profanity?: number;
+    emojiLevel?: number;
   } | null;
   onTogglePersonality?: () => void;
   onToggleHashtags?: () => void;
@@ -191,7 +192,7 @@ export const MediaBox: React.FC<MediaBoxProps> = ({
     const base: Record<string, number> = { ...(toneSettings || {}) };
     const g = user?.settings?.tone;
     if (g && typeof g === "object") {
-      for (const key of ["formality", "humor", "empathy", "spiciness", "profanity"] as const) {
+      for (const key of ["formality", "humor", "empathy", "spiciness", "profanity", "emojiLevel"] as const) {
         const gv = g[key];
         if ((base[key] === undefined || base[key] === null) && typeof gv === "number") {
           base[key] = gv;
@@ -199,7 +200,7 @@ export const MediaBox: React.FC<MediaBoxProps> = ({
       }
     }
     return Object.keys(base).length > 0
-      ? (base as { formality?: number; humor?: number; empathy?: number; spiciness?: number; profanity?: number })
+      ? (base as { formality?: number; humor?: number; empathy?: number; spiciness?: number; profanity?: number; emojiLevel?: number })
       : null;
   }, [toneSettings, user?.settings?.tone]);
   const creatorHandleFromDoc = useCreatorHandle(user?.id);

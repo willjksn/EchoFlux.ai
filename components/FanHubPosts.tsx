@@ -1590,6 +1590,8 @@ Write 2-4 sentences that are engaging and on-topic.`;
           tone: effectiveTone,
           usePersonality,
           useFavoriteHashtags: false,
+          emojiEnabled: (user?.settings?.tone?.emojiLevel ?? 50) > 0,
+          emojiIntensity: user?.settings?.tone?.emojiLevel ?? 50,
           creatorPersonality:
             user?.settings?.creatorPersonality?.trim() ||
             ((user as { creatorPersonality?: string } | null | undefined)?.creatorPersonality?.trim()) ||
@@ -1597,7 +1599,16 @@ Write 2-4 sentences that are engaging and on-topic.`;
           mediaFingerprint,
           avoidCaptions,
           toneSettings: {
-            spiciness: spicyLevel * 10,
+            ...(user?.settings?.tone
+              ? {
+                  formality: user.settings.tone.formality,
+                  humor: user.settings.tone.humor,
+                  empathy: user.settings.tone.empathy,
+                  spiciness: user.settings.tone.spiciness ?? spicyLevel * 10,
+                  profanity: user.settings.tone.profanity,
+                  emojiLevel: user.settings.tone.emojiLevel,
+                }
+              : { spiciness: spicyLevel * 10 }),
             randomSeed: regenerationNonce,
           },
         }),

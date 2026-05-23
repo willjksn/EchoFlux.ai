@@ -25,7 +25,8 @@ import {
   buildCreatorIdentityBackgroundPromptBlock,
   buildCreatorIdentityBaselinePromptBlock,
 } from "./_creatorIdentityPrompt.js";
-import { getNaturalVoicePromptBlock } from "./_naturalVoicePrompt.js";
+import { getNaturalVoicePromptBlock, getCaptionVoicePriorityBlock, getTrendingLanguageGuidanceBlock, buildToneSlidersPromptBlock, hasToneSliderSettings } from "./_naturalVoicePrompt.js";
+import { buildMemberHubCreatorContext } from "./_memberHubContentContext.js";
 
 async function getGeminiShared() {
   try {
@@ -391,6 +392,7 @@ async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
       empathy?: number;
       spiciness?: number;
       profanity?: number;
+      emojiLevel?: number;
       randomSeed?: number;
     };
   } = req.body || {};
@@ -443,6 +445,54 @@ async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
   }
   /** Pro & Elite: when true, saved Creator Personality strongly guides this run (Personality Override). */
   const usePersonalityOverrideBool = Boolean(usePersonality && personalityForPrompt?.trim());
+
+  const settingsBlock = (firestoreUserData?.settings || {}) as {
+    tone?: {
+      formality?: number;
+      humor?: number;
+      empathy?: number;
+      spiciness?: number;
+      profanity?: number;
+      emojiLevel?: number;
+    };
+    creatorPersonality?: string;
+  };
+  const firestoreTone = settingsBlock.tone;
+  const effectiveToneSettings = {
+    formality: toneSettings?.formality ?? firestoreTone?.formality,
+    humor: toneSettings?.humor ?? firestoreTone?.humor,
+    empathy: toneSettings?.empathy ?? firestoreTone?.empathy,
+    spiciness: toneSettings?.spiciness ?? firestoreTone?.spiciness,
+    profanity: toneSettings?.profanity ?? firestoreTone?.profanity,
+    emojiLevel: toneSettings?.emojiLevel ?? firestoreTone?.emojiLevel,
+    randomSeed: toneSettings?.randomSeed,
+  };
+  const resolvedEmojiIntensity =
+    typeof emojiIntensity === "number"
+      ? emojiIntensity
+      : typeof effectiveToneSettings.emojiLevel === "number"
+        ? effectiveToneSettings.emojiLevel
+        : 50;
+  const resolvedEmojiEnabled = emojiEnabled !== false && resolvedEmojiIntensity > 0;
+  const aiPersonalityFromProfile =
+    typeof firestoreUserData?.aiPersonality === "string" ? firestoreUserData.aiPersonality.trim() : "";
+  const aiToneFromProfile =
+    typeof firestoreUserData?.aiTone === "string" ? firestoreUserData.aiTone.trim() : "";
+  const nicheFromProfile =
+    typeof firestoreUserData?.niche === "string" ? firestoreUserData.niche.trim().slice(0, 120) : "";
+
+  const aiProfileVoiceBlock =
+    !usePersonalityOverrideBool
+      ? buildMemberHubCreatorContext({
+          creatorPersonality: "",
+          aiPersonality: aiPersonalityFromProfile,
+          aiTone: aiToneFromProfile,
+          niche: nicheFromProfile,
+          toneSettings: effectiveToneSettings,
+          prioritizeCreatorPersonality: false,
+        })
+      : "";
+
   const sanitizedFavoriteHashtags = favoriteHashtags ? sanitizeForAI(favoriteHashtags, 500) : undefined;
   const sanitizedMediaFingerprint =
     typeof mediaFingerprint === "string" && mediaFingerprint.trim()
@@ -826,10 +876,16 @@ MEDIA + CAPTION STRATEGY (general / non-explicit):
 `
       : "";
 
-  const naturalVoiceBlock = getNaturalVoicePromptBlock("caption");
+  const hasTrendContext = Boolean(
+    currentTrends && currentTrends.trim() && !/unavailable|general best practices/i.test(currentTrends),
+  );
+  const naturalVoiceBlock = getNaturalVoicePromptBlock("caption", {
+    hasTrendContext,
+    usePersonalityOverride: usePersonalityOverrideBool,
+  });
   const fanHubAntiClicheBlock = isFanHubCaption
     ? `${naturalVoiceBlock}
-- Fan Hub / My Page: write for members already here—personal and close, not public-platform viral hooks or follow-bait.`
+- Fan Hub / My Page: write for members already here—personal and close. Current conversational language is OK; skip public follow-bait ("follow for more", FYP, link in bio).`
     : naturalVoiceBlock;
 
   const fanHubVarietyBlock =
@@ -869,7 +925,7 @@ NATURAL SOCIAL CAPTION STYLE (Instagram / TikTok / public socials):
 - Do NOT write bland generic captions like "loving this moment", "feeling good", "vibes", or "check this out" unless the image clearly supports that exact wording.
 - Ground every caption in at least one concrete visual detail from the uploaded media: setting, object, outfit, lighting, expression, action, color, product, or mood.
 - Write like the creator is posting casually, not like a brand or marketing assistant.
-- Prefer a simple structure: hook or observation + short personal line + natural question/CTA.
+- Prefer a simple structure: concrete observation + short personal line. A question or soft CTA is optional—not required.
 - Use emojis naturally (usually 1-4) and only where they fit the image and tone.
 - If the image includes a product, object, car, room, outfit, or setup, make the caption specific enough that it could not apply to any random photo.
 - Avoid over-explaining the plan. The final caption should be ready to paste into the social app.
@@ -880,13 +936,11 @@ NATURAL SOCIAL CAPTION STYLE (Instagram / TikTok / public socials):
     isFanHubCaption && usePersonalityOverrideBool
       ? `
 FAN HUB / MY PAGE WITH PERSONALITY OVERRIDE ENABLED:
-- The PERSONALITY OVERRIDE block below is PRIMARY for vocabulary, cadence, humor, flirt level, and attitude — do not layer generic influencer slang on top of it.
-- The creator personality is the main voice, but the uploaded image/video is REQUIRED context.
-- Blend the personality with at least one concrete visual detail from the media (action, setting, mood, outfit, lighting, expression, object, movement, or vibe).
-- Do not write a caption based only on generic personality language; it must feel like it belongs to this exact image/video.
-- Do NOT use CTA-style endings such as "comment below", "tell me", "subscribe", "join", "tip", "DM me", "check my story", or "link in bio".
-- Make it feel like a natural member-page post from this creator: personal, close, relaxed, and worth reading without asking the fan to do something.
-- A subtle reflective line is OK; avoid marketing language.
+CREATION ORDER: (1) Personality Override → (2) analyze media → (3) GOAL + tone label → (4) trend language → (5) tone sliders (secondary).
+- The PERSONALITY OVERRIDE block below is PRIMARY for vocabulary, cadence, humor, flirt level, profanity, and attitude.
+- Slang, swearing, and spicy lines are fine when the override + goal support them — do not sanitize into generic safe copy.
+- The uploaded image/video is REQUIRED context — include at least one concrete visible detail.
+- Do NOT force a question, "comment below", subscribe/join/tip CTAs, or "link in bio".
 `
       : "";
 
@@ -894,25 +948,32 @@ FAN HUB / MY PAGE WITH PERSONALITY OVERRIDE ENABLED:
     isFanHubCaption && !usePersonalityOverrideBool && (Boolean(finalMedia) || finalMediaList.length > 0)
       ? `
 FAN HUB / MY PAGE WITHOUT PERSONALITY OVERRIDE:
-- Personality Override is OFF or empty. The media analysis is the primary source of truth.
-- Look closely at the image/video and write a detailed, engaging caption grounded in what is actually visible.
-- Mention at least one specific visual detail: setting, colors, lighting, outfit, pose/action, expression, object, camera angle, movement, or overall vibe.
-- Do NOT fall back to generic member-community filler. The caption should not be able to fit any random image/video.
-- Keep it natural and ready to post; do not sound like an image-analysis report.
+CREATION ORDER: (1) analyze media → (2) AI personality & training → (3) tone sliders + tone label + GOAL → (4) trend language.
+- Ground the caption in what is visible, then apply AI personality and sliders — including spiciness and profanity when configured.
+- Slang, swearing, and flirt/tease are welcome at the levels set in Content Preferences; do not default to bland sanitized copy.
+- Do NOT force questions or generic member-community filler.
 `
       : "";
+
+  const hasAttachedMedia = Boolean(finalMedia) || finalMediaList.length > 0 || normalizedCaptionMediaSlots.length > 0;
+  const captionVoicePriorityBlock = getCaptionVoicePriorityBlock(usePersonalityOverrideBool, hasAttachedMedia);
 
   // Build prompt — Fan Hub / My Page: one plain caption (matches composer UX)
   const desiredCaptionCount = isOnlyFansPlatform ? 5 : isFanHubCaption ? 1 : 3;
   // For carousels, we generate the same number of variants, but each must summarize all media.
   const prompt = `
 ${strategicMediaCaptionHint}
+${captionVoicePriorityBlock}
 ${fanHubAntiClicheBlock}
 ${fanHubVarietyBlock}
 ${fanHubAvoidRepeatBlock}
 ${naturalSocialCaptionBlock}
 ${fanHubPersonalityBlock}
 ${fanHubNoPersonalityMediaBlock}
+${!usePersonalityOverrideBool && aiProfileVoiceBlock ? `
+AI PROFILE & TONE (Personality Override OFF — apply after media analysis):
+${aiProfileVoiceBlock}
+` : ""}
 ${sanitizedPromptText ? `
 🚨 USER INSTRUCTIONS ARE PRIMARY (MUST FOLLOW FIRST) 🚨
 - The user provided specific instructions or suggestions for what they want in the caption (see "Extra instructions" / USER INSTRUCTIONS below).
@@ -935,7 +996,10 @@ You are a world-class social media copywriter${isExplicitContent ? ' specializin
 
 ${goalContext ? `PRIMARY GOAL: ${sanitizedGoal || goal}\n${goalContext}\n` : sanitizedGoal || goal ? `PRIMARY GOAL: ${sanitizedGoal || goal}\n` : ''}
 
-${currentTrends ? `CURRENT SOCIAL MEDIA TRENDS (from weekly research):\n${currentTrends}\n` : ''}
+${currentTrends ? `CURRENT SOCIAL MEDIA TRENDS (from weekly research — USE for how people talk NOW; weave naturally into captions when it fits creator + media):
+${currentTrends}
+${getTrendingLanguageGuidanceBlock(true)}
+` : ''}
 
 ${onlyfansResearch ? `ONLYFANS-SPECIFIC RESEARCH & BEST PRACTICES:\n${onlyfansResearch}\n` : ''}
 
@@ -969,9 +1033,9 @@ ${platforms.map(platform => {
 - Audience: people already on this member page — NOT Instagram/TikTok/X strangers. Do NOT ask anyone to follow you, follow for more, follow if they liked the video, hit follow, turn on notifications to follow, or any "grow my following" / FYP / discovery language.
 - Optimal length: 100-500 characters. Write personal content for your existing fan community.
 - Focus on connection, exclusivity, retention, tips, and comments — optimize for member engagement and "sticky" feed behavior, without recruiting new followers.
-- When LIVE WEB RESEARCH (Tavily) appears above, use it only if it fits a member-page tone (ignore generic viral follow-bait patterns).
-- The caption does NOT have to literally describe the image/video if a stronger angle serves engagement (story, hot take, question, trend tie-in) — still keep the post believable for the media when media is attached.
-- When "Use creator personality" is on, that voice is PRIMARY; trends and goal support it — never default to generic influencer follow hooks.
+- When LIVE WEB RESEARCH (Tavily) appears above, use it for current language and angles when it fits a member-page tone (skip follow-bait / FYP patterns only).
+- The caption does NOT have to literally describe the image/video if a stronger angle serves engagement (story, hot take, current trend tie-in) — still keep the post believable for the media when media is attached.
+- When "Use creator personality" is on, that voice is PRIMARY; current trends and goal support it — use what's hot when it fits, never default to stale AI templates.
 - Use casual, authentic language. Emojis are encouraged (2-4) when they fit the voice.
 - If the user provides specific keywords or themes, you MUST incorporate them directly into the caption.
 - Each API request is independent: output one complete standalone caption for the attached media only. Do not extend, partially reuse, or append to a hypothetical prior caption—no "another thought:", "also,", or stacking a new sentence onto an old hook.`;
@@ -1006,22 +1070,13 @@ ${platforms.map(platform => {
 CRITICAL: Ensure all captions respect the character limits and hashtag counts specified for the target platform(s). If OnlyFans or My Page is selected, hashtags MUST be empty (return "hashtags": []). ${!includeAiHashtags ? "For this request: do NOT use hashtags anywhere — return \"hashtags\": [] for every caption and do not put #words in the caption body." : ""}
 
 EMOJI GUIDELINES (ALL SOCIAL PLATFORMS):
-${getEmojiInstructions({ enabled: emojiEnabled !== false, intensity: emojiIntensity ?? 5 })}${emojiEnabled !== false ? ` Choose emojis that match the tone (examples: ${getEmojiExamplesForTone(tone)}). Emojis should enhance the caption naturally.` : ''}
+${getEmojiInstructions({ enabled: resolvedEmojiEnabled, intensity: resolvedEmojiIntensity })}${resolvedEmojiEnabled ? ` Choose emojis that match the tone (examples: ${getEmojiExamplesForTone(tone)}). Follow the Emoji usage slider above when present.` : ''}
 ` : ''}
-${toneSettings ? usePersonalityOverrideBool ? `
-🎨 WRITING STYLE PREFERENCES (PERSONALITY OVERRIDE ACTIVE):
-- Personality Override is primary for voice, vocabulary, profanity, flirtiness, and spicy/bold language.
-- Ignore formality, humor, empathy, spiciness, and profanity sliders whenever they conflict with the personality.
-- If the personality is calm, quiet, soft, classy, gentle, reserved, clean, wholesome, or similar, do NOT add profanity, aggressive flirtiness, or spicy wording.
-- Only use flirtiness or profanity if the personality itself clearly calls for it.
-${toneSettings.randomSeed !== undefined ? `- Random seed: ${toneSettings.randomSeed}` : ''}
+${hasToneSliderSettings(effectiveToneSettings) ? usePersonalityOverrideBool ? `
+${buildToneSlidersPromptBlock(effectiveToneSettings, { secondaryToPersonalityOverride: true })}
+${effectiveToneSettings.randomSeed !== undefined ? `- Random seed: ${effectiveToneSettings.randomSeed}` : ''}
 ` : `
-🎨 WRITING STYLE PREFERENCES (Apply to ALL generated content):
-${toneSettings.formality !== undefined ? `- Formality Level (${toneSettings.formality}/100): ${toneSettings.formality < 30 ? 'Very casual, use slang and informal language' : toneSettings.formality < 50 ? 'Casual and conversational' : toneSettings.formality < 70 ? 'Balanced, slightly professional' : 'Professional and polished language'}` : ''}
-${toneSettings.humor !== undefined ? `- Humor Level (${toneSettings.humor}/100): ${toneSettings.humor < 30 ? 'Keep it serious, minimal humor' : toneSettings.humor < 50 ? 'Light occasional humor' : toneSettings.humor < 70 ? 'Witty and playful throughout' : 'Very funny, comedic tone with jokes'}` : ''}
-${toneSettings.empathy !== undefined ? `- Empathy Level (${toneSettings.empathy}/100): ${toneSettings.empathy < 30 ? 'Direct and straightforward' : toneSettings.empathy < 50 ? 'Friendly but not overly warm' : toneSettings.empathy < 70 ? 'Warm and understanding' : 'Very supportive, emotionally connected'}` : ''}
-${toneSettings.profanity !== undefined && toneSettings.profanity > 0 ? `- Profanity Level (${toneSettings.profanity}/100): ${toneSettings.profanity < 30 ? 'Very mild (damn, hell)' : toneSettings.profanity < 50 ? 'Moderate casual swearing' : toneSettings.profanity < 70 ? 'Frequent casual swearing' : 'Heavy profanity is acceptable'}` : '- Profanity: Keep language clean, no swearing'}
-${toneSettings.spiciness !== undefined && toneSettings.spiciness > 0 ? `- Boldness/Spiciness (${toneSettings.spiciness}/100): ${toneSettings.spiciness < 30 ? 'Slightly suggestive' : toneSettings.spiciness < 50 ? 'Flirty and teasing' : toneSettings.spiciness < 70 ? 'Bold and provocative' : 'Very bold, edgy, and provocative'}` : ''}
+${buildToneSlidersPromptBlock(effectiveToneSettings)}
 ` : ''}
 
 CRITICAL - PERSPECTIVE REQUIREMENT (MUST FOLLOW):
@@ -1059,9 +1114,11 @@ ${usePersonalityOverrideBool && personalityForPrompt ? `
 ${personalityForPrompt}
 
 PERSONALITY OVERRIDE (ENABLED):
-- The creator turned ON Personality Override. This text is the PRIMARY authority for voice, vocabulary, attitude, humor level, formality, and brand style in the captions.
+- CREATION ORDER: (1) this override → (2) analyze media → (3) GOAL + tone label → (4) trend language → (5) tone sliders (secondary).
+- This text is the PRIMARY authority for voice, vocabulary, attitude, humor, profanity, flirtiness, and brand style.
+- Slang, swearing, and spice are allowed when this override + goal support them — do not sanitize into generic influencer-safe copy.
 - On Elite, Creator Identity (if present above) is BACKGROUND only when it conflicts—always follow this override for voice.
-- The selected tone label (${sanitizedTone || tone || "friendly"}), PRIMARY GOAL voice-framing, emoji "match tone" examples, and ALL tone sliders (formality, humor, empathy, spiciness, profanity) are SECONDARY. If any of them conflict with the override text, follow the override—not the tone label or sliders.
+- The selected tone label (${sanitizedTone || tone || "friendly"}), PRIMARY GOAL voice-framing, and ALL tone sliders (formality, humor, warmth/empathy, emoji usage, spiciness, profanity) are SECONDARY. If any conflict with the override, follow the override.
 - If this personality reads calm, quiet, soft, reserved, classy, clean, or gentle, do NOT add profanity, heavy flirtiness, or spicy/bold wording just because sliders are high.
 - Only use profanity or flirtiness when the personality itself clearly supports that style.
 - User-provided caption instructions (USER INSTRUCTIONS / Extra instructions) still define topic, angle, and must-haves; write those in the same authentic voice as the override.

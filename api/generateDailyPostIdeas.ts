@@ -290,7 +290,10 @@ Prioritize shotList blueprints members can execute today. Hooks should complemen
   
   return `You are a content strategist for social creators. Generate ${ideaCount} FRESH, UNIQUE post ideas for today.
 
-${getNaturalVoicePromptBlock("ideas")}
+${getNaturalVoicePromptBlock("ideas", {
+  hasTrendContext: Boolean(useTrends && trendContext),
+  usePersonalityOverride: Boolean(personalityPrimary),
+})}
 
 UNIQUENESS REQUIREMENT (CRITICAL):
 - Session ID: ${uniqueSeed}
@@ -315,7 +318,7 @@ ${creatorContext}
 ${personalityPrimary ? `VOICE PRIORITY (PERSONALITY OVERRIDE ON):
 1. CREATOR PERSONALITY (override) — PRIMARY for voice, attitude, hooks, and caption style.
 2. AI PERSONALITY & TRAINING + CONTENT PREFERENCES (tone sliders) in the same block — SECONDARY; apply after the override where they fit.
-3. TRENDS — topics and formats only; do not import trend-speak into hooks.
+3. TRENDS — use current hooks/phrases from trend research when they fit this creator + idea; avoid stale AI-default templates from the stale ban list.
 - When override and sliders conflict, the override wins.
 - Still align topics and CTAs with GOAL: ${goal}.
 ` : `PERSONALITY OVERRIDE OFF:
