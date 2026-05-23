@@ -34,7 +34,51 @@ export function filterEmojisForSjHeartAccess(emojis: readonly Emoji[], allowSjHe
 
 type TextSegment = { kind: "text"; value: string };
 type UrlSegment = { kind: "url"; href: string; display: string };
-type RichTextSegment = TextSegment | UrlSegment;
+type MarkdownLinkSegment = { kind: "markdownLink"; href: string; label: string };
+type UrlRichTextSegment = TextSegment | UrlSegment;
+type TopRichTextSegment = TextSegment | MarkdownLinkSegment;
+
+const MARKDOWN_LINK_PATTERN =
+  /\[([^\]]+)\]\(\s*(https?:\/\/[^\s)]+|www\.[^\s)]+)\s*\)/gi;
+
+function splitTextByMarkdownLinks(text: string): TopRichTextSegment[] {
+  if (!/\[[^\]]+\]\(\s*(?:https?:\/\/|www\.)/i.test(text)) {
+    return [{ kind: "text", value: text }];
+  }
+
+  const segments: TopRichTextSegment[] = [];
+  let lastIndex = 0;
+  const re = new RegExp(MARKDOWN_LINK_PATTERN.source, MARKDOWN_LINK_PATTERN.flags);
+  let match: RegExpExecArray | null;
+
+  while ((match = re.exec(text)) !== null) {
+    const raw = match[0];
+    const start = match.index;
+    if (start > lastIndex) {
+      segments.push({ kind: "text", value: text.slice(lastIndex, start) });
+    }
+    const label = (match[1] ?? "").trim() || "Link";
+    let href = (match[2] ?? "").trim();
+    if (href.startsWith("www.")) href = `https://${href}`;
+    try {
+      const parsed = new URL(href);
+      if (parsed.protocol === "http:" || parsed.protocol === "https:") {
+        segments.push({ kind: "markdownLink", href: parsed.href, label });
+      } else {
+        segments.push({ kind: "text", value: raw });
+      }
+    } catch {
+      segments.push({ kind: "text", value: raw });
+    }
+    lastIndex = start + raw.length;
+  }
+
+  if (lastIndex < text.length) {
+    segments.push({ kind: "text", value: text.slice(lastIndex) });
+  }
+
+  return segments.length ? segments : [{ kind: "text", value: text }];
+}
 
 function trimUrlMatch(raw: string): { href: string; display: string } | null {
   let display = raw;
@@ -52,12 +96,12 @@ function trimUrlMatch(raw: string): { href: string; display: string } | null {
   }
 }
 
-function splitTextByUrls(text: string): RichTextSegment[] {
+function splitTextByUrls(text: string): UrlRichTextSegment[] {
   if (!/(?:https?:\/\/|www\.)/i.test(text)) {
     return [{ kind: "text", value: text }];
   }
 
-  const segments: RichTextSegment[] = [];
+  const segments: UrlRichTextSegment[] = [];
   let lastIndex = 0;
   const re = new RegExp(URL_PATTERN.source, URL_PATTERN.flags);
   let match: RegExpExecArray | null;
@@ -123,30 +167,31 @@ function renderSjHeartEmojiInText(
   return nodes;
 }
 
-export function renderTextWithCustomEmoji(
-  text: string | null | undefined,
-  ctx?: SjHeartEmojiAccessContext
-): React.ReactNode {
-  const value = text ?? "";
-  if (!value) return value;
+function renderTextChunkWithUrlsAndEmoji(
+  text: string,
+  ctx: SjHeartEmojiAccessContext | undefined,
+  keyPrefix: string
+): React.ReactNode[] {
+  const hasUrl = /(?:https?:\/\/|www\.)/i.test(text);
+  const hasEmoji = text.includes(SJ_HEART_TOKEN) && canUseSjHeartEmoji(ctx ?? {});
 
-  const hasUrl = /(?:https?:\/\/|www\.)/i.test(value);
-  const hasEmoji = value.includes(SJ_HEART_TOKEN) && canUseSjHeartEmoji(ctx ?? {});
-
-  if (!hasUrl && !hasEmoji) return value;
-
-  if (!hasUrl) {
-    return renderSjHeartEmojiInText(value, ctx, "root");
+  if (!hasUrl && !hasEmoji) {
+    return text ? [text] : [];
   }
 
-  const segments = splitTextByUrls(value);
+  if (!hasUrl) {
+    const rendered = renderSjHeartEmojiInText(text, ctx, keyPrefix);
+    return rendered == null || rendered === "" ? [] : [rendered];
+  }
+
+  const urlSegments = splitTextByUrls(text);
   const nodes: React.ReactNode[] = [];
 
-  segments.forEach((seg, i) => {
+  urlSegments.forEach((seg, i) => {
     if (seg.kind === "url") {
       nodes.push(
         <a
-          key={`url-${i}`}
+          key={`${keyPrefix}-url-${i}`}
           href={seg.href}
           target="_blank"
           rel="noopener noreferrer"
@@ -158,14 +203,63 @@ export function renderTextWithCustomEmoji(
       return;
     }
 
-    const rendered = renderSjHeartEmojiInText(seg.value, ctx, `t-${i}`);
+    const rendered = renderSjHeartEmojiInText(seg.value, ctx, `${keyPrefix}-t-${i}`);
     if (rendered == null || rendered === "") return;
-    if (typeof rendered === "string") {
-      nodes.push(rendered);
-      return;
-    }
-    nodes.push(<React.Fragment key={`txt-${i}`}>{rendered}</React.Fragment>);
+    nodes.push(
+      typeof rendered === "string" ? (
+        rendered
+      ) : (
+        <React.Fragment key={`${keyPrefix}-txt-${i}`}>{rendered}</React.Fragment>
+      )
+    );
   });
 
-  return nodes.length === 1 ? nodes[0] : nodes;
+  return nodes;
+}
+
+export function renderTextWithCustomEmoji(
+  text: string | null | undefined,
+  ctx?: SjHeartEmojiAccessContext
+): React.ReactNode {
+  const value = text ?? "";
+  if (!value) return value;
+
+  const hasMarkdownLink = /\[[^\]]+\]\(\s*(?:https?:\/\/|www\.)/i.test(value);
+  const hasBareUrl = /(?:https?:\/\/|www\.)/i.test(value);
+  const hasEmoji = value.includes(SJ_HEART_TOKEN) && canUseSjHeartEmoji(ctx ?? {});
+
+  if (!hasMarkdownLink && !hasBareUrl && !hasEmoji) return value;
+
+  if (!hasMarkdownLink) {
+    const nodes = renderTextChunkWithUrlsAndEmoji(value, ctx, "root");
+    if (nodes.length === 0) return value;
+    return nodes.length === 1 ? nodes[0] : nodes;
+  }
+
+  const topSegments = splitTextByMarkdownLinks(value);
+  const nodes: React.ReactNode[] = [];
+
+  topSegments.forEach((seg, i) => {
+    if (seg.kind === "markdownLink") {
+      const labelNodes = renderTextChunkWithUrlsAndEmoji(seg.label, ctx, `md-${i}`);
+      nodes.push(
+        <a
+          key={`md-link-${i}`}
+          href={seg.href}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="fan-rich-text-link"
+        >
+          {labelNodes.length === 1 ? labelNodes[0] : labelNodes}
+        </a>
+      );
+      return;
+    }
+
+    nodes.push(...renderTextChunkWithUrlsAndEmoji(seg.value, ctx, `blk-${i}`));
+  });
+
+  const filtered = nodes.filter((n) => n != null && n !== "");
+  if (filtered.length === 0) return value;
+  return filtered.length === 1 ? filtered[0] : filtered;
 }

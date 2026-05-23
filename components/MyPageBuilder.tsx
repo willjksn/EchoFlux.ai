@@ -1776,7 +1776,11 @@ export const MyPageBuilder: React.FC = () => {
     }
   };
   // Helper to update social links
-  const updateSocialLink = (platform: keyof Omit<StorefrontSocialLinks, "custom">, field: "url" | "show", value: string | boolean) => {
+  const updateSocialLink = (
+    platform: keyof Omit<StorefrontSocialLinks, "custom">,
+    field: "url" | "show" | "showInMemberHub",
+    value: string | boolean
+  ) => {
     const current = draft.socialLinks ?? { ...DEFAULT_SOCIAL_LINKS };
     const platformData = current[platform] ?? { url: "", show: true };
     updateDraft({
@@ -1794,13 +1798,17 @@ export const MyPageBuilder: React.FC = () => {
     updateDraft({
       socialLinks: {
         ...current,
-        custom: [...customLinks, { name: "", url: "", show: true }],
+        custom: [...customLinks, { name: "", url: "", show: true, showInMemberHub: false }],
       },
     });
   };
 
   // Helper to update a custom social link
-  const updateCustomSocialLink = (index: number, field: "name" | "url" | "show", value: string | boolean) => {
+  const updateCustomSocialLink = (
+    index: number,
+    field: "name" | "url" | "show" | "showInMemberHub",
+    value: string | boolean
+  ) => {
     const current = draft.socialLinks ?? { ...DEFAULT_SOCIAL_LINKS };
     const customLinks = [...(current.custom ?? [])];
     if (customLinks[index]) {
@@ -2622,7 +2630,10 @@ export const MyPageBuilder: React.FC = () => {
           {/* Social Links */}
           <CollapsibleSection title="Social Links">
             <div className="space-y-3 pt-4">
-              <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">Add your social media links. Toggle visibility on/off.</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
+                Add URLs for each platform. Use <strong>Landing</strong> for the public page and <strong>Member</strong> for the
+                Social popup in the Fan Hub header — they are independent.
+              </p>
               {([
                 { key: "instagram" as const, icon: <InstagramIcon />, placeholder: "https://instagram.com/..." },
                 { key: "x" as const, icon: <XIcon />, placeholder: "https://x.com/..." },
@@ -2631,38 +2642,55 @@ export const MyPageBuilder: React.FC = () => {
                 { key: "facebook" as const, icon: <FacebookIcon />, placeholder: "https://facebook.com/..." },
                 { key: "amazon" as const, icon: <AmazonBrandIcon />, placeholder: "https://www.amazon.com/shop/..." },
               ]).map(({ key, icon, placeholder }) => (
-                <div key={key} className="flex items-center gap-2">
-                  <span className="text-gray-500 dark:text-gray-400 w-6">{icon}</span>
+                <div key={key} className="flex flex-wrap items-center gap-2">
+                  <span className="text-gray-500 dark:text-gray-400 w-6 shrink-0">{icon}</span>
                   <input
                     type="url"
                     value={draft.socialLinks?.[key]?.url ?? ""}
                     onChange={(e) => updateSocialLink(key, "url", e.target.value)}
                     placeholder={placeholder}
-                    className={`flex-1 px-3 py-1.5 ${landingEditorControlClass}`}
+                    className={`flex-1 min-w-[10rem] px-3 py-1.5 ${landingEditorControlClass}`}
                     style={{
                       fontFamily: currentLandingFontFamily,
                       color: landingPreviewThemeText,
                       fontSize: "0.875rem",
                     }}
                   />
-                  <button
-                    type="button"
-                    onClick={() => updateSocialLink(key, "show", !draft.socialLinks?.[key]?.show)}
-                    className={`px-2 py-1 text-xs rounded ${
-                      draft.socialLinks?.[key]?.show !== false
-                        ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
-                        : "bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400"
-                    }`}
-                  >
-                    {draft.socialLinks?.[key]?.show !== false ? "Show" : "Hide"}
-                  </button>
+                  <div className="flex items-center gap-1 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => updateSocialLink(key, "show", draft.socialLinks?.[key]?.show === false)}
+                      className={`px-2 py-1 text-xs rounded ${
+                        draft.socialLinks?.[key]?.show !== false
+                          ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
+                          : "bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400"
+                      }`}
+                      title="Show on public landing page"
+                    >
+                      Landing
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        updateSocialLink(key, "showInMemberHub", !draft.socialLinks?.[key]?.showInMemberHub)
+                      }
+                      className={`px-2 py-1 text-xs rounded ${
+                        draft.socialLinks?.[key]?.showInMemberHub === true
+                          ? "bg-primary-100 text-primary-800 dark:bg-primary-900/40 dark:text-primary-300"
+                          : "bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400"
+                      }`}
+                      title="Show in member Fan Hub header Social popup"
+                    >
+                      Member
+                    </button>
+                  </div>
                 </div>
               ))}
 
               {/* Custom Social Links */}
               {(draft.socialLinks?.custom ?? []).map((link, index) => (
-                <div key={`custom-${index}`} className="flex items-center gap-2">
-                  <span className="text-gray-500 dark:text-gray-400 w-6">
+                <div key={`custom-${index}`} className="flex flex-wrap items-center gap-2">
+                  <span className="text-gray-500 dark:text-gray-400 w-6 shrink-0">
                     <GlobeIcon className="w-5 h-5" />
                   </span>
                   <input
@@ -2682,24 +2710,39 @@ export const MyPageBuilder: React.FC = () => {
                     value={link.url}
                     onChange={(e) => updateCustomSocialLink(index, "url", e.target.value)}
                     placeholder="https://..."
-                    className={`flex-1 px-3 py-1.5 ${landingEditorControlClass}`}
+                    className={`flex-1 min-w-[10rem] px-3 py-1.5 ${landingEditorControlClass}`}
                     style={{
                       fontFamily: currentLandingFontFamily,
                       color: landingPreviewThemeText,
                       fontSize: "0.875rem",
                     }}
                   />
-                  <button
-                    type="button"
-                    onClick={() => updateCustomSocialLink(index, "show", !link.show)}
-                    className={`px-2 py-1 text-xs rounded ${
-                      link.show
-                        ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
-                        : "bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400"
-                    }`}
-                  >
-                    {link.show ? "Show" : "Hide"}
-                  </button>
+                  <div className="flex items-center gap-1 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => updateCustomSocialLink(index, "show", !link.show)}
+                      className={`px-2 py-1 text-xs rounded ${
+                        link.show !== false
+                          ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
+                          : "bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400"
+                      }`}
+                      title="Show on public landing page"
+                    >
+                      Landing
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => updateCustomSocialLink(index, "showInMemberHub", !link.showInMemberHub)}
+                      className={`px-2 py-1 text-xs rounded ${
+                        link.showInMemberHub === true
+                          ? "bg-primary-100 text-primary-800 dark:bg-primary-900/40 dark:text-primary-300"
+                          : "bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400"
+                      }`}
+                      title="Show in member Fan Hub header Social popup"
+                    >
+                      Member
+                    </button>
+                  </div>
                   <button
                     type="button"
                     onClick={() => removeCustomSocialLink(index)}

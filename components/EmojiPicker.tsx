@@ -295,6 +295,7 @@ export const EmojiButton: React.FC<EmojiButtonProps> = ({ onSelect, includeSjHea
       <button
         ref={buttonRef}
         type="button"
+        onMouseDown={(e) => e.preventDefault()}
         onClick={handleOpen}
         className={`px-2.5 py-2 rounded-lg border transition-colors text-base flex items-center justify-center ${
           open

@@ -44,6 +44,8 @@ import { normalizeTreatProductsFromApi } from "../src/lib/treatProductsNormalize
 import { STOREFRONT_SUSPENDED_PUBLIC_MESSAGE } from "../src/lib/creatorStorefrontActive";
 import { getTreatProductTypeDisplayLabel } from "../src/lib/treatProductTypeLabel";
 import { FanLandingPage } from "./FanLandingPage";
+import { MemberHubSocialLinksButton } from "./StorefrontSocialLinksUI";
+import { hasStorefrontSocialLinksOnSurface } from "../src/lib/storefrontSocialLinks";
 import { FanAuthModal } from "./FanAuthModal";
 import { FanMemberFeed, FanMemberSaved, fetchFanMemberPostForPurchases } from "./FanMemberFeed";
 import { MemberUsernameGateModal } from "./MemberUsernameGateModal";
@@ -1498,22 +1500,11 @@ export const FanStorefrontView: React.FC = () => {
     return score;
   }, []);
 
-  const hasVisibleSocialLinks = useCallback((socialLinks: StorefrontSocialLinks | undefined): boolean => {
-    if (!socialLinks || typeof socialLinks !== "object") return false;
-    const hasUrl = (url?: string) => typeof url === "string" && url.trim().length > 0;
-    if (hasUrl(socialLinks.instagram?.url) && socialLinks.instagram?.show !== false) return true;
-    if (hasUrl(socialLinks.x?.url) && socialLinks.x?.show !== false) return true;
-    if (hasUrl(socialLinks.tiktok?.url) && socialLinks.tiktok?.show !== false) return true;
-    if (hasUrl(socialLinks.youtube?.url) && socialLinks.youtube?.show !== false) return true;
-    if (hasUrl(socialLinks.facebook?.url) && socialLinks.facebook?.show !== false) return true;
-    if (hasUrl(socialLinks.amazon?.url) && socialLinks.amazon?.show !== false) return true;
-    const legacyTwitter = (socialLinks as StorefrontSocialLinks & { twitter?: { url?: string; show?: boolean } }).twitter;
-    if (hasUrl(legacyTwitter?.url) && legacyTwitter?.show !== false) return true;
-    if (Array.isArray(socialLinks.custom)) {
-      return socialLinks.custom.some((c) => hasUrl(c?.url) && c?.show !== false);
-    }
-    return false;
-  }, []);
+  const hasVisibleSocialLinks = useCallback(
+    (socialLinks: StorefrontSocialLinks | undefined) =>
+      hasStorefrontSocialLinksOnSurface(socialLinks, "landing"),
+    []
+  );
 
   useEffect(() => {
     if (typeof document === "undefined") return;
@@ -5218,8 +5209,8 @@ export const FanStorefrontView: React.FC = () => {
               const isTip = key === "tip";
               const storeTabInactive = key === "treats" && !creatorStorefrontActive;
               return (
+                <Fragment key={key}>
                 <button
-                  key={key}
                   type="button"
                   disabled={storeTabInactive}
                   onClick={() => {
@@ -5298,8 +5289,23 @@ export const FanStorefrontView: React.FC = () => {
                     ) : null}
                   </span>
                 </button>
+                {key === "messages" ? (
+                  <MemberHubSocialLinksButton
+                    socialLinks={creator?.socialLinks}
+                    primary={primary}
+                    variant="storefront"
+                  />
+                ) : null}
+                </Fragment>
               );
             })}
+            {!memberTabKeys.includes("messages") ? (
+              <MemberHubSocialLinksButton
+                socialLinks={creator?.socialLinks}
+                primary={primary}
+                variant="storefront"
+              />
+            ) : null}
           </nav>
           <div className="storefront-header-actions">
             {isLoggedIn && (

@@ -239,14 +239,20 @@ export interface CreatorMonetization {
 /** Social link configuration for a single platform */
 export interface SocialLinkConfig {
     url: string;
+    /** Show on public landing page */
     show: boolean;
+    /** Show in member Fan Hub header social popup */
+    showInMemberHub?: boolean;
 }
 
 /** All social links for a creator's storefront */
 export interface CustomSocialLink {
     name: string;
     url: string;
+    /** Show on public landing page */
     show: boolean;
+    /** Show in member Fan Hub header social popup */
+    showInMemberHub?: boolean;
     icon?: string;
 }
 

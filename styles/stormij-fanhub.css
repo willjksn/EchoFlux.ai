@@ -8437,6 +8437,109 @@ button.treat-card:hover:not(:disabled) .treat-card-cta {
   border-color: color-mix(in srgb, var(--fan-primary, #6366f1) 35%, transparent);
 }
 
+.storefront-nav-btn.storefront-nav-social {
+  flex-shrink: 0;
+}
+.storefront-social-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 120;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  background: rgba(15, 23, 42, 0.45);
+}
+.storefront-social-modal {
+  width: min(100%, 28rem);
+  border-radius: 1rem;
+  background: #fff;
+  border: 1px solid rgba(156, 163, 175, 0.35);
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.18);
+  padding: 0.85rem 1rem;
+}
+.dark .storefront-social-modal {
+  background: #111827;
+  border-color: rgba(75, 85, 99, 0.5);
+}
+.storefront-social-modal-head {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  min-width: 0;
+}
+.storefront-social-modal-title {
+  margin: 0;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: #111827;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+.storefront-social-modal-icons {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.dark .storefront-social-modal-title {
+  color: #f3f4f6;
+}
+.storefront-social-modal-close {
+  border: none;
+  background: none;
+  font-size: 1.5rem;
+  line-height: 1;
+  color: #6b7280;
+  cursor: pointer;
+  padding: 0 0.25rem;
+  flex-shrink: 0;
+  margin-left: 0.15rem;
+}
+.storefront-social-modal-empty {
+  margin: 0;
+  font-size: 0.875rem;
+  color: #6b7280;
+  flex: 1 1 auto;
+  text-align: right;
+}
+.storefront-social-modal-link {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.2rem;
+  text-decoration: none;
+  flex-shrink: 0;
+}
+.storefront-social-modal-icon {
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 0.65rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.15s ease;
+}
+.storefront-social-modal-link:hover .storefront-social-modal-icon {
+  transform: scale(1.08);
+}
+.storefront-social-modal-label {
+  font-size: 0.65rem;
+  font-weight: 600;
+  color: #4b5563;
+  max-width: 4.5rem;
+  text-align: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dark .storefront-social-modal-label {
+  color: #9ca3af;
+}
+
 .storefront-nav-icon {
   width: 18px;
   height: 18px;

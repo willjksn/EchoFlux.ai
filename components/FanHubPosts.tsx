@@ -42,6 +42,8 @@ import { EmojiButton } from "./EmojiPicker";
 import { useCreatorHandle } from "../src/hooks/useCreatorHandle";
 import { canUseSjHeartEmoji } from "../src/lib/customEmoji";
 import { maybeTrimVideoForCaption } from "../src/lib/videoCaptionClip";
+import { insertTextAtCaret, type TextCaretRange } from "../src/lib/insertTextAtCaret";
+import { formatFanMarkdownLink } from "../src/lib/fanRichTextLinks";
 import { resolveApiUrl, DEV_API_404_USER_HINT } from "../src/lib/resolveApiUrl";
 import type { LiveStreamEventStatus, LiveStreamPromoOnPost } from "../types";
 import { hasLiveStreamAccess, hasPremiumStudioRouteAccess } from "../src/utils/planAccess";
@@ -686,6 +688,63 @@ export const FanHubPosts: React.FC = () => {
   const [usePersonality, setUsePersonality] = useState(true);
   const [generating, setGenerating] = useState(false);
   const generatedCaptionHistoryRef = useRef<Map<string, string[]>>(new Map());
+  const captionTextareaRef = useRef<HTMLTextAreaElement>(null);
+  const captionCaretRef = useRef<TextCaretRange>({ start: 0, end: 0 });
+  const pollQuestionInputRef = useRef<HTMLInputElement>(null);
+  const pollQuestionCaretRef = useRef<TextCaretRange>({ start: 0, end: 0 });
+  const pollOptionInputRefs = useRef<(HTMLInputElement | null)[]>([]);
+  const pollOptionCaretRefs = useRef<TextCaretRange[]>([]);
+  const tipGoalDescriptionInputRef = useRef<HTMLInputElement>(null);
+  const tipGoalDescriptionCaretRef = useRef<TextCaretRange>({ start: 0, end: 0 });
+  const overlayTextareaRef = useRef<HTMLTextAreaElement>(null);
+  const overlayTextCaretRef = useRef<TextCaretRange>({ start: 0, end: 0 });
+  const [captionLinkOpen, setCaptionLinkOpen] = useState(false);
+  const [captionLinkLabel, setCaptionLinkLabel] = useState("");
+  const [captionLinkUrl, setCaptionLinkUrl] = useState("");
+
+  const syncTextCaret = (
+    el: HTMLTextAreaElement | HTMLInputElement | null,
+    value: string,
+    target: React.MutableRefObject<TextCaretRange>
+  ) => {
+    if (!el) return;
+    target.current = {
+      start: el.selectionStart ?? value.length,
+      end: el.selectionEnd ?? value.length,
+    };
+  };
+
+  const syncPollOptionCaret = (index: number, el: HTMLInputElement, value: string) => {
+    pollOptionCaretRefs.current[index] = {
+      start: el.selectionStart ?? value.length,
+      end: el.selectionEnd ?? value.length,
+    };
+  };
+
+  const insertCaptionNamedLink = () => {
+    const snippet = formatFanMarkdownLink(captionLinkLabel, captionLinkUrl);
+    if (!snippet) {
+      showToast?.("Enter link text and a valid URL (https://…)", "error");
+      return;
+    }
+    syncTextCaret(captionTextareaRef.current, caption, captionCaretRef);
+    const withSpacing =
+      caption.length > 0 && !/\s$/.test(caption.slice(0, captionCaretRef.current.start))
+        ? ` ${snippet}`
+        : snippet;
+    insertTextAtCaret(
+      caption,
+      withSpacing,
+      captionTextareaRef.current,
+      setCaption,
+      2200,
+      captionCaretRef.current
+    );
+    setCaptionLinkLabel("");
+    setCaptionLinkUrl("");
+    setCaptionLinkOpen(false);
+    showToast?.("Link added to caption", "success");
+  };
   
   // Locked content
   const [lockEnabled, setLockEnabled] = useState(false);
@@ -2723,23 +2782,90 @@ Write 2-4 sentences that are engaging and on-topic.`;
                 
                 <div className="relative mb-3">
                   <textarea
+                    ref={captionTextareaRef}
                     value={caption}
                     onChange={(e) => setCaption(e.target.value)}
+                    onSelect={(e) => syncTextCaret(e.currentTarget, caption, captionCaretRef)}
+                    onKeyUp={(e) => syncTextCaret(e.currentTarget, caption, captionCaretRef)}
+                    onClick={(e) => syncTextCaret(e.currentTarget, caption, captionCaretRef)}
                     placeholder="Write your caption..."
                     rows={4}
                     maxLength={2200}
                     className="w-full px-3 py-2 pr-12 border border-gray-200 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white resize-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                   />
                   <div className="absolute right-2 top-2">
-                    <EmojiButton includeSjHeartEmoji={includeSjHeartEmoji} onSelect={(emoji) => setCaption((prev) => prev + emoji)} />
+                    <EmojiButton
+                      includeSjHeartEmoji={includeSjHeartEmoji}
+                      onSelect={(emoji) => {
+                        syncTextCaret(captionTextareaRef.current, caption, captionCaretRef);
+                        insertTextAtCaret(
+                          caption,
+                          emoji,
+                          captionTextareaRef.current,
+                          setCaption,
+                          2200,
+                          captionCaretRef.current
+                        );
+                      }}
+                    />
                   </div>
                   <div className="absolute right-2 bottom-2 text-xs text-gray-400">
                     {caption.length}/2200
                   </div>
                 </div>
-                
+                <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
+                  Paste a URL to auto-link, or use <strong>Named link</strong> to show custom text (e.g. My Amazon).
+                </p>
+                {captionLinkOpen ? (
+                  <div className="mb-3 rounded-lg border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700/50 p-3 space-y-2">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      <input
+                        type="text"
+                        value={captionLinkLabel}
+                        onChange={(e) => setCaptionLinkLabel(e.target.value)}
+                        placeholder='Link text (e.g. My Amazon)'
+                        className="px-3 py-1.5 text-sm border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+                      />
+                      <input
+                        type="url"
+                        value={captionLinkUrl}
+                        onChange={(e) => setCaptionLinkUrl(e.target.value)}
+                        placeholder="https://amazon.com/…"
+                        className="px-3 py-1.5 text-sm border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+                      />
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={() => insertCaptionNamedLink()}
+                        className="px-3 py-1.5 text-sm font-medium rounded-lg bg-primary-600 text-white hover:bg-primary-700"
+                      >
+                        Insert link
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setCaptionLinkOpen(false);
+                          setCaptionLinkLabel("");
+                          setCaptionLinkUrl("");
+                        }}
+                        className="px-3 py-1.5 text-sm text-gray-600 dark:text-gray-300"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                ) : null}
+
                 {/* AI Tools */}
                 <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setCaptionLinkOpen((o) => !o)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 border border-gray-300 dark:border-gray-600 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 transition"
+                  >
+                    Named link
+                  </button>
                   <button
                     type="button"
                     onClick={() => generateCaption("generate")}
@@ -3229,25 +3355,59 @@ Write 2-4 sentences that are engaging and on-topic.`;
                   </h4>
                   <div className="mb-3 flex items-center gap-2">
                     <input
+                      ref={pollQuestionInputRef}
                       type="text"
                       value={pollQuestion}
                       onChange={(e) => setPollQuestion(e.target.value)}
+                      onSelect={(e) => syncTextCaret(e.currentTarget, pollQuestion, pollQuestionCaretRef)}
+                      onKeyUp={(e) => syncTextCaret(e.currentTarget, pollQuestion, pollQuestionCaretRef)}
+                      onClick={(e) => syncTextCaret(e.currentTarget, pollQuestion, pollQuestionCaretRef)}
                       placeholder="Ask a question..."
                       className="min-w-0 flex-1 px-3 py-2 border border-primary-200 dark:border-primary-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
                     />
-                    <EmojiButton includeSjHeartEmoji={includeSjHeartEmoji} onSelect={(emoji) => setPollQuestion((prev) => prev + emoji)} />
+                    <EmojiButton
+                      includeSjHeartEmoji={includeSjHeartEmoji}
+                      onSelect={(emoji) =>
+                        insertTextAtCaret(
+                          pollQuestion,
+                          emoji,
+                          pollQuestionInputRef.current,
+                          setPollQuestion,
+                          undefined,
+                          pollQuestionCaretRef.current
+                        )
+                      }
+                    />
                   </div>
                   <div className="space-y-2">
                     {pollOptions.map((option, index) => (
                       <div key={index} className="flex items-center gap-2">
                         <input
+                          ref={(el) => {
+                            pollOptionInputRefs.current[index] = el;
+                          }}
                           type="text"
                           value={option}
                           onChange={(e) => updatePollOption(index, e.target.value)}
+                          onSelect={(e) => syncPollOptionCaret(index, e.currentTarget, option)}
+                          onKeyUp={(e) => syncPollOptionCaret(index, e.currentTarget, option)}
+                          onClick={(e) => syncPollOptionCaret(index, e.currentTarget, option)}
                           placeholder={`Option ${index + 1}`}
                           className="flex-1 px-3 py-2 border border-primary-200 dark:border-primary-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm"
                         />
-                        <EmojiButton includeSjHeartEmoji={includeSjHeartEmoji} onSelect={(emoji) => updatePollOption(index, `${option}${emoji}`)} />
+                        <EmojiButton
+                          includeSjHeartEmoji={includeSjHeartEmoji}
+                          onSelect={(emoji) =>
+                            insertTextAtCaret(
+                              option,
+                              emoji,
+                              pollOptionInputRefs.current[index],
+                              (next) => updatePollOption(index, next),
+                              undefined,
+                              pollOptionCaretRefs.current[index]
+                            )
+                          }
+                        />
                         {pollOptions.length > 2 && (
                           <button type="button" onClick={() => removePollOption(index)} className="p-2 text-red-500 hover:text-red-600">
                             <TrashIcon />
@@ -3272,13 +3432,29 @@ Write 2-4 sentences that are engaging and on-topic.`;
                   </h4>
                   <div className="mb-3 flex items-center gap-2">
                     <input
+                      ref={tipGoalDescriptionInputRef}
                       type="text"
                       value={tipGoalDescription}
                       onChange={(e) => setTipGoalDescription(e.target.value)}
+                      onSelect={(e) => syncTextCaret(e.currentTarget, tipGoalDescription, tipGoalDescriptionCaretRef)}
+                      onKeyUp={(e) => syncTextCaret(e.currentTarget, tipGoalDescription, tipGoalDescriptionCaretRef)}
+                      onClick={(e) => syncTextCaret(e.currentTarget, tipGoalDescription, tipGoalDescriptionCaretRef)}
                       placeholder="What's the goal? (e.g., Help me reach my goal!)"
                       className="min-w-0 flex-1 px-3 py-2 border border-primary-200 dark:border-primary-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
                     />
-                    <EmojiButton includeSjHeartEmoji={includeSjHeartEmoji} onSelect={(emoji) => setTipGoalDescription((prev) => prev + emoji)} />
+                    <EmojiButton
+                      includeSjHeartEmoji={includeSjHeartEmoji}
+                      onSelect={(emoji) =>
+                        insertTextAtCaret(
+                          tipGoalDescription,
+                          emoji,
+                          tipGoalDescriptionInputRef.current,
+                          setTipGoalDescription,
+                          undefined,
+                          tipGoalDescriptionCaretRef.current
+                        )
+                      }
+                    />
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="text-sm text-primary-700 dark:text-primary-300">Target:</span>
@@ -3305,13 +3481,29 @@ Write 2-4 sentences that are engaging and on-topic.`;
                   </h4>
                   <div className="mb-3 flex items-start gap-2">
                     <textarea
+                      ref={overlayTextareaRef}
                       value={overlayText}
                       onChange={(e) => setOverlayText(e.target.value)}
+                      onSelect={(e) => syncTextCaret(e.currentTarget, overlayText, overlayTextCaretRef)}
+                      onKeyUp={(e) => syncTextCaret(e.currentTarget, overlayText, overlayTextCaretRef)}
+                      onClick={(e) => syncTextCaret(e.currentTarget, overlayText, overlayTextCaretRef)}
                       placeholder="Text to show on image..."
                       rows={2}
                       className="min-w-0 flex-1 px-3 py-2 border border-primary-200 dark:border-primary-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white resize-none"
                     />
-                    <EmojiButton includeSjHeartEmoji={includeSjHeartEmoji} onSelect={(emoji) => setOverlayText((prev) => prev + emoji)} />
+                    <EmojiButton
+                      includeSjHeartEmoji={includeSjHeartEmoji}
+                      onSelect={(emoji) =>
+                        insertTextAtCaret(
+                          overlayText,
+                          emoji,
+                          overlayTextareaRef.current,
+                          setOverlayText,
+                          undefined,
+                          overlayTextCaretRef.current
+                        )
+                      }
+                    />
                   </div>
                   <div className="flex flex-wrap gap-3 mb-3">
                     <div className="flex items-center gap-2">
