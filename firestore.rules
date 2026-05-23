@@ -431,6 +431,12 @@ service cloud.firestore {
           || (isAuthenticated()
             && (!('creatorTestOnly' in resource.data) || resource.data.creatorTestOnly != true));
         allow create, update, delete: if isOwner(creatorId) && creatorLiveStreamPlanEligible();
+
+        /** Live viewer roster for host UI (writes via Admin API on token / leave). */
+        match /participants/{participantId} {
+          allow read: if isOwner(creatorId);
+          allow write: if false;
+        }
       }
 
       /** Subscriber / member mirror under creator (Dashboard fan stats; writes via Admin / webhooks) */

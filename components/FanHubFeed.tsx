@@ -36,6 +36,12 @@ import {
 import { renderTextWithCustomEmoji, type SjHeartEmojiAccessContext } from "../src/lib/customEmoji";
 import { EmojiIcon } from "./icons/UIIcons";
 import { FeedCommentListAvatar } from "./FeedCommentAvatar";
+import { FeedCommentThreadList } from "./FeedCommentThreadList";
+import {
+  insertCreatorCommentInThread,
+  visibleFeedCommentEntries,
+  type FeedStoredComment,
+} from "../src/lib/feedCommentThread";
 import { useFanFeedCommentEmojiPicker } from "./fanFeedCommentEmojiPicker";
 import {
   captureFanFeedCarouselScrollSnaps,
@@ -158,15 +164,7 @@ export type FeedPost = {
   createdAt?: { toDate: () => Date } | string;
   likeCount: number;
   likedBy?: string[];
-  comments: {
-    username?: string;
-    author?: string;
-    text: string;
-    hidden?: boolean;
-    authorId?: string;
-    isCreatorReply?: boolean;
-    authorPhotoURL?: string;
-  }[];
+  comments: FeedStoredComment[];
   captionStyle?: "static" | "scroll-up" | "scroll-across" | "dissolve";
   overlayText?: string;
   overlayTextColor?: string;
@@ -920,6 +918,11 @@ function FeedCard({
   const [likeSaving, setLikeSaving] = useState(false);
   const [modalComment, setModalComment] = useState("");
   const [modalCommentSaving, setModalCommentSaving] = useState(false);
+  const [replyTarget, setReplyTarget] = useState<{
+    index: number;
+    authorId: string;
+    authorLabel: string;
+  } | null>(null);
   const commentEmoji = useFanFeedCommentEmojiPicker({
     composeSurfaceOpen: commentsOpen,
     commentText: modalComment,
@@ -929,7 +932,11 @@ function FeedCard({
   });
   const prevCommentsOpenRef = useRef(false);
   const hasOpenedCommentsRef = useRef(false);
-  const visibleComments = useMemo(() => post.comments.filter((c) => !c.hidden), [post.comments]);
+  const visibleCommentEntries = useMemo(() => visibleFeedCommentEntries(post.comments), [post.comments]);
+  const visibleComments = useMemo(
+    () => visibleCommentEntries.map((e) => e.comment),
+    [visibleCommentEntries]
+  );
   const isLiked = !!currentUserId && (post.likedBy ?? []).includes(currentUserId);
   const isSaved = savedPostIds.includes(post.id);
   const feedVideoRef = useRef<HTMLVideoElement | null>(null);
@@ -1073,6 +1080,10 @@ function FeedCard({
 
   useEffect(() => {
     if (commentsOpen) setFeedVideoMediaHover(false);
+  }, [commentsOpen]);
+
+  useEffect(() => {
+    if (!commentsOpen) setReplyTarget(null);
   }, [commentsOpen]);
 
   useEffect(() => {
@@ -1334,23 +1345,28 @@ function FeedCard({
         if (!snap.exists()) throw new Error("Post not found.");
         const data = snap.data() as Record<string, unknown>;
         const existing = Array.isArray(data.comments) ? (data.comments as FeedPost["comments"]) : [];
-        nextComments = [
-          ...existing,
-          {
-            username,
-            author: username,
-            text: text.slice(0, 500),
-            authorId: currentUserId,
-            isCreatorReply: true,
-            ...(typeof creatorAvatar === "string" && creatorAvatar.trim()
-              ? { authorPhotoURL: creatorAvatar.trim() }
-              : {}),
-          },
-        ];
+        const newComment: FeedStoredComment = {
+          username,
+          author: username,
+          text: text.slice(0, 500),
+          authorId: currentUserId,
+          isCreatorReply: true,
+          ...(typeof creatorAvatar === "string" && creatorAvatar.trim()
+            ? { authorPhotoURL: creatorAvatar.trim() }
+            : {}),
+          ...(replyTarget
+            ? {
+                replyToAuthorId: replyTarget.authorId,
+                replyToAuthor: replyTarget.authorLabel,
+              }
+            : {}),
+        };
+        nextComments = insertCreatorCommentInThread(existing, newComment, replyTarget?.index ?? null);
         tx.update(postRef, { comments: nextComments });
       });
       onCommentsUpdated?.(post.id, nextComments);
       setModalComment("");
+      setReplyTarget(null);
     } finally {
       setModalCommentSaving(false);
     }
@@ -2020,44 +2036,41 @@ function FeedCard({
                     </div>
                   ) : null}
                   <div className="feed-comments-modal-list">
-                    {visibleComments.length === 0 ? (
+                    {visibleCommentEntries.length === 0 ? (
                       <p className="feed-comments-modal-empty">No comments yet.</p>
                     ) : (
-                      visibleComments.map((c, idx) => {
-                        const authorName = feedCommentAuthorLabel(c);
-                        const isCreatorComment =
-                          !!c.isCreatorReply ||
-                          (!!currentUserId &&
-                            typeof c.authorId === "string" &&
-                            c.authorId.length > 0 &&
-                            c.authorId === currentUserId);
-                        return (
-                          <div className="feed-comments-modal-item" key={`${idx}-${c.text.slice(0, 12)}`}>
-                            <FeedCommentListAvatar authorLabel={authorName} photoURL={c.authorPhotoURL} />
-                            <div className="feed-comments-modal-item-body">
-                              <p className="feed-comments-modal-text">
-                                <span className="feed-comments-modal-comment-author-row">
-                                  <span className="comment-username">{authorName}</span>
-                                  <span
-                                    className={
-                                      isCreatorComment
-                                        ? "feed-comments-modal-role-badge feed-comments-modal-role-badge--creator"
-                                        : "feed-comments-modal-role-badge feed-comments-modal-role-badge--fan"
-                                    }
-                                  >
-                                    {isCreatorComment ? "Creator" : "Fan"}
-                                  </span>
-                                </span>
-                                <span className="feed-comments-modal-comment-body">{renderTextWithCustomEmoji(c.text, sjHeartEmojiCtx)}</span>
-                              </p>
-                            </div>
-                          </div>
-                        );
-                      })
+                      <FeedCommentThreadList
+                        entries={visibleCommentEntries}
+                        creatorId={currentUserId}
+                        sjHeartEmojiCtx={sjHeartEmojiCtx}
+                        allowCreatorReplyToFan={isAdminMode}
+                        onReplyToFan={
+                          isAdminMode && currentUserId
+                            ? (target) => {
+                                setReplyTarget(target);
+                                commentEmoji.commentInputRef.current?.focus();
+                              }
+                            : undefined
+                        }
+                      />
                     )}
                   </div>
                   {currentUserId && (
                     <form className="feed-comments-modal-compose" onSubmit={submitModalComment}>
+                      {replyTarget ? (
+                        <div className="feed-comments-modal-replying-banner">
+                          <span>
+                            Replying to <strong>{replyTarget.authorLabel}</strong>
+                          </span>
+                          <button
+                            type="button"
+                            className="feed-comments-modal-replying-cancel"
+                            onClick={() => setReplyTarget(null)}
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      ) : null}
                       <div className="feed-comments-modal-item-avatar feed-comments-modal-compose-avatar" aria-hidden>
                         {creatorAvatar ? (
                           <img
@@ -2078,7 +2091,11 @@ function FeedCard({
                             className="feed-comments-modal-compose-input"
                             value={modalComment}
                             onChange={(e) => setModalComment(e.target.value)}
-                            placeholder="Write a comment..."
+                            placeholder={
+                              replyTarget
+                                ? `Reply to ${replyTarget.authorLabel}…`
+                                : "Write a comment..."
+                            }
                             maxLength={500}
                           />
                           <button

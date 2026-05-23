@@ -9,6 +9,7 @@ import { checkApiKeys } from "./_errorHandler.js";
 import { sendCreatorHubNotification } from "./_fanNotifications.js";
 import { normalizePlanForLimits } from "./_planLimits.js";
 import { buildCreatorImageUrlSet, fanAvatarUrlOrUndefined } from "../src/lib/fanAvatar.js";
+import { countCreatorRepliesToFan } from "../src/lib/feedCommentThread.js";
 
 type Comment = {
   username?: string;
@@ -19,6 +20,8 @@ type Comment = {
   isCreatorReply?: boolean;
   /** Persisted HTTPS URL safe to show beside the comment when available */
   authorPhotoURL?: string;
+  replyToAuthorId?: string;
+  replyToAuthor?: string;
 };
 
 const INLINE_POST_IMAGE_MAX_BYTES = 4 * 1024 * 1024;
@@ -304,12 +307,18 @@ async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
           creatorData.avatar,
           (creatorData as { imageUrl?: string }).imageUrl
         );
+        const replyToAuthor =
+          usernamePublic && /^[a-z0-9_]{2,32}$/i.test(usernamePublic)
+            ? `@${usernamePublic.toLowerCase()}`
+            : displayFromAuth || "Fan";
         nextComments.push({
           authorId: creatorIdStr,
           author: creatorName,
           username: creatorName,
           text: replyText,
           isCreatorReply: true,
+          replyToAuthorId: tokenUser.uid,
+          replyToAuthor,
           ...(creatorAvatarUrl ? { authorPhotoURL: creatorAvatarUrl } : {}),
         });
       } catch (err) {

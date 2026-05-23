@@ -2891,6 +2891,76 @@ button.feed-card-action-count--clickable:hover {
   flex: 1;
   min-width: 0;
 }
+.feed-comments-modal-thread {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+.feed-comments-modal-item--reply {
+  margin-left: 2.75rem;
+  padding-top: 0.35rem;
+  padding-bottom: 0.35rem;
+}
+.feed-comments-modal-reply-to {
+  display: block;
+  font-size: 0.75rem;
+  color: #6b7280;
+  margin-top: 0.15rem;
+}
+.dark .feed-comments-modal-reply-to {
+  color: #9ca3af;
+}
+.feed-comments-modal-reply-to-target {
+  font-weight: 600;
+  color: #374151;
+}
+.dark .feed-comments-modal-reply-to-target {
+  color: #e5e7eb;
+}
+.feed-comments-modal-reply-btn {
+  margin-top: 0.25rem;
+  padding: 0;
+  border: none;
+  background: none;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #6b7280;
+  cursor: pointer;
+}
+.feed-comments-modal-reply-btn:hover {
+  color: #111827;
+  text-decoration: underline;
+}
+.dark .feed-comments-modal-reply-btn {
+  color: #9ca3af;
+}
+.dark .feed-comments-modal-reply-btn:hover {
+  color: #f3f4f6;
+}
+.feed-comments-modal-replying-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.35rem 0.75rem 0;
+  font-size: 0.8rem;
+  color: #4b5563;
+}
+.dark .feed-comments-modal-replying-banner {
+  color: #9ca3af;
+}
+.feed-comments-modal-replying-cancel {
+  padding: 0;
+  border: none;
+  background: none;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #6b7280;
+  cursor: pointer;
+}
+.feed-comments-modal-replying-cancel:hover {
+  text-decoration: underline;
+}
 .feed-comments-modal-text {
   margin: 0;
   font-size: 0.9375rem;

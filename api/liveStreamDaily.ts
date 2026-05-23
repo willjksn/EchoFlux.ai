@@ -14,6 +14,11 @@ import {
 import { userMayUseLiveStreaming } from "./_liveStreamAccess.js";
 import { fanHubListLabelFromInput, safeUsernameForHandle } from "../src/lib/fanHubDisplay.js";
 import { syncLiveStreamTicketOrdersForStream } from "./_syncLiveStreamTicketOrders.js";
+import {
+  clearLiveStreamParticipants,
+  recordLiveStreamViewerJoin,
+  recordLiveStreamViewerLeave,
+} from "./_liveStreamParticipants.js";
 
 const TOKEN_DURATION_MIN = 360;
 
@@ -158,6 +163,7 @@ function parseLiveStreamDailyBody(req: { body?: unknown }): {
  * - { action: "goLive", streamId } — creator; creates/refreshes Daily room, sets stream + promo post to live
  * - { action: "endLive", streamId } — creator; marks stream ended, syncs promo post
  * - { action: "token", creatorId, streamId } — creator (presenter) or entitled fan (viewer); stream must be `live`
+ * - { action: "leaveViewer", creatorId, streamId } — fan left the broadcast (updates host roster)
  */
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (applyBrowserApiCors(req, res)) return;
@@ -231,6 +237,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         await syncLiveStreamPromoStatusOnPostCollections(db, uid, streamId, "live");
 
         try {
+          await clearLiveStreamParticipants(db, uid, streamId);
+        } catch (e) {
+          console.warn("clearLiveStreamParticipants (goLive):", e);
+        }
+
+        try {
           await syncLiveStreamTicketOrdersForStream(db, uid, streamId);
         } catch (e) {
           console.warn("syncLiveStreamTicketOrdersForStream (goLive):", e);
@@ -240,6 +252,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
 
       // endLive
+      try {
+        await clearLiveStreamParticipants(db, uid, streamId);
+      } catch (e) {
+        console.warn("clearLiveStreamParticipants (endLive):", e);
+      }
+
       await streamRef.update({
         status: "ended",
         endedAt: FieldValue.serverTimestamp(),
@@ -317,12 +335,36 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const role = isHost ? "presenter" : "viewer";
       const token = await createLiveStreamMeetingToken(roomName, uid, userName, role, TOKEN_DURATION_MIN);
 
+      if (!isHost) {
+        try {
+          await recordLiveStreamViewerJoin(db, creatorId, streamId, uid, userName);
+        } catch (e) {
+          console.warn("recordLiveStreamViewerJoin:", e);
+        }
+      }
+
       return res.status(200).json({
         token,
         roomUrl,
         roomName,
         role,
       });
+    }
+
+    if (action === "leaveViewer") {
+      const creatorId = typeof body.creatorId === "string" ? body.creatorId.trim() : "";
+      if (!creatorId) {
+        return res.status(400).json({ error: "creatorId is required" });
+      }
+      if (uid === creatorId) {
+        return res.status(200).json({ ok: true });
+      }
+      try {
+        await recordLiveStreamViewerLeave(db, creatorId, streamId, uid);
+      } catch (e) {
+        console.warn("recordLiveStreamViewerLeave:", e);
+      }
+      return res.status(200).json({ ok: true });
     }
 
     return res.status(400).json({ error: "Unknown action" });

@@ -27,7 +27,8 @@ import { resolveFanMemberCommentComposePhotoFromUserDoc } from "../src/lib/fanMe
 import { getAvatarCropStyle } from "../src/lib/avatarCrop";
 import { inferIsVideoFromUrl, normalizePostMediaTypes } from "../src/lib/mediaUrlInfer";
 import { getFeedGridCoverMedia, isFeedGridCoverLockedForViewer } from "../src/lib/feedGridCover";
-import { FeedCommentListAvatar } from "./FeedCommentAvatar";
+import { FeedCommentThreadList } from "./FeedCommentThreadList";
+import { visibleFeedCommentEntries } from "../src/lib/feedCommentThread";
 import { DmAudioPlayer } from "./DmAudioPlayer";
 import { ViewPostModalVideo } from "./ViewPostModalVideo";
 import { FeedVideoPlaybackErrorOverlay } from "./FeedVideoPlaybackError";
@@ -511,6 +512,8 @@ export type FanMemberPostComment = {
   isCreatorReply?: boolean;
   /** From Firestore when present (HTTPS); client shows initials if missing/failed load */
   authorPhotoURL?: string;
+  replyToAuthorId?: string;
+  replyToAuthor?: string;
 };
 
 type FanMemberPostPoll = {
@@ -906,6 +909,12 @@ function postFromFirestore(
       ...(typeof o.authorId === "string" && o.authorId.trim() ? { authorId: o.authorId.trim() } : {}),
       isCreatorReply: !!o.isCreatorReply,
       ...(authorPhotoRaw ? { authorPhotoURL: authorPhotoRaw } : {}),
+      ...(typeof o.replyToAuthorId === "string" && o.replyToAuthorId.trim()
+        ? { replyToAuthorId: o.replyToAuthorId.trim() }
+        : {}),
+      ...(typeof o.replyToAuthor === "string" && o.replyToAuthor.trim()
+        ? { replyToAuthor: o.replyToAuthor.trim() }
+        : {}),
     });
   }
   const lc = parseLockedContent(data.lockedContent);
@@ -2068,38 +2077,21 @@ function FanMemberPostDetailModal({
                       {!post.commentsList?.length ? (
                         <p className="feed-comments-modal-empty">No comments yet.</p>
                       ) : (
-                        post.commentsList.map((c, idx) => {
-                          const isCreatorComment =
-                            !!c.isCreatorReply ||
-                            (!!creatorId &&
-                              typeof c.authorId === "string" &&
-                              c.authorId.length > 0 &&
-                              c.authorId === creatorId);
-                          return (
-                            <div className="feed-comments-modal-item" key={`${post.id}-c-${idx}`}>
-                              <FeedCommentListAvatar authorLabel={c.author} photoURL={c.authorPhotoURL} />
-                              <div className="feed-comments-modal-item-body">
-                                <p className="feed-comments-modal-text">
-                                  <span className="feed-comments-modal-comment-author-row">
-                                    <span className="comment-username">{c.author}</span>
-                                    <span
-                                      className={
-                                        isCreatorComment
-                                          ? "feed-comments-modal-role-badge feed-comments-modal-role-badge--creator"
-                                          : "feed-comments-modal-role-badge feed-comments-modal-role-badge--fan"
-                                      }
-                                    >
-                                      {isCreatorComment ? "Creator" : "Fan"}
-                                    </span>
-                                  </span>
-                                  <span className="feed-comments-modal-comment-body">
-                                    {renderTextWithCustomEmoji(c.text, sjHeartEmojiCtx)}
-                                  </span>
-                                </p>
-                              </div>
-                            </div>
-                          );
-                        })
+                        <FeedCommentThreadList
+                          entries={visibleFeedCommentEntries(
+                            post.commentsList.map((c) => ({
+                              author: c.author,
+                              text: c.text,
+                              authorId: c.authorId,
+                              isCreatorReply: c.isCreatorReply,
+                              authorPhotoURL: c.authorPhotoURL,
+                              replyToAuthorId: c.replyToAuthorId,
+                              replyToAuthor: c.replyToAuthor,
+                            }))
+                          )}
+                          creatorId={creatorId}
+                          sjHeartEmojiCtx={sjHeartEmojiCtx}
+                        />
                       )}
                     </div>
                     {onSubmitComment ? (
