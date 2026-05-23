@@ -25,6 +25,7 @@ import {
   buildCreatorIdentityBackgroundPromptBlock,
   buildCreatorIdentityBaselinePromptBlock,
 } from "./_creatorIdentityPrompt.js";
+import { getNaturalVoicePromptBlock } from "./_naturalVoicePrompt.js";
 
 async function getGeminiShared() {
   try {
@@ -825,13 +826,11 @@ MEDIA + CAPTION STRATEGY (general / non-explicit):
 `
       : "";
 
-  const fanHubStockPhraseBan = `
-FAN HUB — NO STOCK INFLUENCER / SLANG CLICHÉS (unless the PERSONALITY OVERRIDE text below explicitly uses that exact phrase):
-- Do NOT use: "spill the tea", "spilling the tea", "say less", "it's giving", "main character energy", "understood the assignment", "rent free", "living rent free", "low-key obsessed", "obsessed with this", "tell me you're … without telling me", "this is your sign", "that's it, that's the post", "don't mind me just …", "felt cute might delete", "IYKYK", "no thoughts just vibes", "chef's kiss", "ate and left no crumbs", "slay", "periodt", "bestie", "the way I …", "not me …", "POV:" (as a hackneyed opener).
-- Avoid recycled TikTok/Twitter cadence; write like this creator on their member page, not a generic viral caption bot.
-`;
-
-  const fanHubAntiClicheBlock = isFanHubCaption ? fanHubStockPhraseBan : "";
+  const naturalVoiceBlock = getNaturalVoicePromptBlock("caption");
+  const fanHubAntiClicheBlock = isFanHubCaption
+    ? `${naturalVoiceBlock}
+- Fan Hub / My Page: write for members already here—personal and close, not public-platform viral hooks or follow-bait.`
+    : naturalVoiceBlock;
 
   const fanHubVarietyBlock =
     isFanHubCaption && hasRandomSeed
@@ -932,7 +931,7 @@ YOU MUST GENERATE EXPLICIT, UNCENSORED, RAW, ADULT CONTENT CAPTIONS.
 - This is for adult content platforms - explicit content is REQUIRED and EXPECTED
 
 ` : ''}
-You are a world-class social media copywriter${isExplicitContent ? ' specializing in EXPLICIT adult content platforms' : ''}.
+You are a world-class social media copywriter${isExplicitContent ? ' specializing in EXPLICIT adult content platforms' : ''}. Every caption must read like a real creator typed it—not a generic AI influencer bot. Follow NATURAL HUMAN VOICE rules above.
 
 ${goalContext ? `PRIMARY GOAL: ${sanitizedGoal || goal}\n${goalContext}\n` : sanitizedGoal || goal ? `PRIMARY GOAL: ${sanitizedGoal || goal}\n` : ''}
 

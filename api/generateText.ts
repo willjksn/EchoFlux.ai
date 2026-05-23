@@ -16,6 +16,7 @@ import { getEmojiInstructions, getEmojiExamplesForTone } from "./_emojiHelper.js
 import { getAdminDb } from "./_firebaseAdmin.js";
 import { buildCacheKey, getCachedResponse, setCachedResponse } from "./_aiCache.js";
 import { canUseAi, recordAiUsage } from "./_aiUsage.js";
+import { getNaturalVoicePromptBlock } from "./_naturalVoicePrompt.js";
 
 async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
   if (req.method !== "POST") {
@@ -218,6 +219,8 @@ ${explicitnessContext ? `\nEXPLICITNESS LEVEL: ${explicitnessLevel}/10\n${explic
     );
 
     const aiPrompt = `
+${getNaturalVoicePromptBlock(isMemberHub ? "ideas" : "caption")}
+
 ${personalityBlock ? `${personalityBlock}\n\n` : ""}You are an expert social media copywriter and content creator${
       isMemberHub
         ? " specializing in paid member hubs and subscriber retention"

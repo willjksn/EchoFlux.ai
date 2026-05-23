@@ -25,11 +25,12 @@ export interface CaptionUsage {
 
 const CAPTION_LIMITS: Record<string, number> = {
   Free: 10,        // 10 captions per month
+  Caption: 100,    // Caption plan
   Pro: 500,        // 500 captions per month
   Elite: 1500,     // 1500 captions per month
   Agency: 1000,    // 1000 captions per month
   Admin: 999999,   // Effectively unlimited
-  // OnlyFansStudio is part of Elite plan, so it shares the same 1500 allowance
+  // OnlyFansStudio / CreatorElite normalize to Elite via normalizePlanForLimits
 };
 
 /**

@@ -49,6 +49,7 @@ export function getMemberHubToneGuidance(explicitnessLevel: number): string {
 
 export const MEMBER_HUB_RETENTION_SYSTEM = `
 MEMBER HUB CONTENT (My Page / paid fan feed):
+- Voice: natural, human, specific — never generic viral filler ("spill the tea", "gym vibes", "it's giving", "main character energy", etc.).
 - Primary goal: keep paying members engaged, valued, and subscribed — reduce churn and ghosting.
 - DEFAULT to broad creator-appropriate topics: lifestyle, personality, hobbies, BTS, polls, Q&A, gratitude, milestones, humor, fitness, travel, art, music, pets, work life — match niche + personality + tone settings.
 - Do NOT default to lingerie, bikini, bedroom, or OnlyFans-style framing unless the creator hint or personality explicitly requests it.

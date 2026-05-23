@@ -16,6 +16,7 @@ import {
   getMemberHubToneGuidanceFromSettings,
   getMemberHubTrendsContext,
 } from "./_memberHubContentContext.js";
+import { getNaturalVoicePromptBlock } from "./_naturalVoicePrompt.js";
 
 export interface DailyPostIdeaPayload {
   id: string;
@@ -289,6 +290,8 @@ Prioritize shotList blueprints members can execute today. Hooks should complemen
   
   return `You are a content strategist for social creators. Generate ${ideaCount} FRESH, UNIQUE post ideas for today.
 
+${getNaturalVoicePromptBlock("ideas")}
+
 UNIQUENESS REQUIREMENT (CRITICAL):
 - Session ID: ${uniqueSeed}
 - EVERY idea must be completely NEW and DIFFERENT from anything you've generated before
@@ -361,7 +364,7 @@ OUTPUT STRICT JSON ONLY (no markdown, no code fence):
 IMPORTANT RULES:
 - shotList must have ${platform === "fan_hub" ? "4-5" : "3-5"} SPECIFIC, ACTIONABLE items (not vague like "nice pose" - say exactly what pose, what angle, what to wear)
 ${platform === "fan_hub" ? `- REJECT caption-only ideas: if shotList would be empty, rewrite until shotList fully describes what to create
-- hook should be a COMPLETE member-feed caption (2-4 sentences) that pairs with the shotList — do NOT repeat shotList items verbatim as the only content` : `- hook should be a COMPLETE caption ready to copy/paste, not just one sentence — scroll-stopping and conversational, not a dull restatement of the title; always first-person creator voice, not "explaining" the post in third person`}
+- hook should be a COMPLETE member-feed caption (2-4 sentences) that pairs with the shotList — do NOT repeat shotList items verbatim as the only content` : `- hook should be a COMPLETE caption ready to copy/paste, not just one sentence — scroll-stopping and conversational, not a dull restatement of the title; always first-person creator voice, not "explaining" the post in third person; must pass NATURAL HUMAN VOICE rules above (no viral clichés or generic "vibes" copy)`}
 - NEVER prefix hook or captionStarter with "Reel:", "Post:", "Story:", or similar format labels (format is in the JSON "format" field only)
 - Be EXPLICIT about what the content should include${platform === "fan_hub" ? `
 - DO NOT include hashtags for My Page/Fan Hub content

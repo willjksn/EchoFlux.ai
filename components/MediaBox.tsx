@@ -563,6 +563,18 @@ export const MediaBox: React.FC<MediaBoxProps> = ({
     }
   };
 
+  const selectedPlatformForCaption = (Object.keys(mediaItem.selectedPlatforms || {}) as Platform[]).find(
+    (p) => mediaItem.selectedPlatforms?.[p]
+  );
+  const generateBlockedReason = !mediaItem.previewUrl
+    ? 'Upload media first'
+    : !selectedPlatformForCaption
+      ? 'Select a platform above'
+      : !canGenerate
+        ? 'Monthly caption limit reached'
+        : null;
+  const canClickGenerate = !generateBlockedReason && !isGenerating;
+
   const handleGenerate = async () => {
     const additional = mediaItem.additionalImages || [];
     const hasAdditional = additional.length > 0;
@@ -1360,25 +1372,49 @@ ${contextLines || 'None'}
 
       {/* Generate Button - Prominent CTA */}
       {mediaItem.previewUrl && (
-        <button
-          onClick={handleGenerate}
-          disabled={!canGenerate || isGenerating}
-          className="w-full mb-4 flex items-center justify-center gap-2 px-4 py-3 text-sm font-semibold text-white bg-gradient-to-r from-primary-600 to-indigo-600 rounded-xl hover:from-primary-700 hover:to-indigo-700 transition-all shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          {isGenerating ? (
-            <>
-              <RefreshIcon className="w-4 h-4 animate-spin" />
-              Generating...
-            </>
-          ) : (
-            <>
-              <SparklesIcon className="w-4 h-4" />
-              {mediaItem.additionalImages && mediaItem.additionalImages.length > 0
-                ? 'Generate Caption for Carousel'
-                : 'Generate AI Caption'}
-            </>
-          )}
-        </button>
+        <div className="mb-4">
+          <button
+            type="button"
+            onClick={handleGenerate}
+            disabled={!canClickGenerate}
+            title={generateBlockedReason ?? undefined}
+            className="w-full flex items-center justify-center gap-2 px-4 py-3 text-sm font-semibold text-white bg-gradient-to-r from-primary-600 to-indigo-600 rounded-xl hover:from-primary-700 hover:to-indigo-700 transition-all shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isGenerating ? (
+              <>
+                <RefreshIcon className="w-4 h-4 animate-spin" />
+                Generating...
+              </>
+            ) : (
+              <>
+                <SparklesIcon className="w-4 h-4" />
+                {mediaItem.additionalImages && mediaItem.additionalImages.length > 0
+                  ? 'Generate Caption for Carousel'
+                  : 'Generate AI Caption'}
+              </>
+            )}
+          </button>
+          {generateBlockedReason && !isGenerating ? (
+            <p className="mt-2 text-xs text-center text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 rounded-lg py-2 px-2">
+              {generateBlockedReason === 'Monthly caption limit reached' ? (
+                <>
+                  {generateBlockedReason}.{' '}
+                  {onUpgradeClick ? (
+                    <button
+                      type="button"
+                      className="underline font-medium"
+                      onClick={onUpgradeClick}
+                    >
+                      Upgrade for more
+                    </button>
+                  ) : null}
+                </>
+              ) : (
+                generateBlockedReason
+              )}
+            </p>
+          ) : null}
+        </div>
       )}
 
       {/* Caption Results - Card style */}

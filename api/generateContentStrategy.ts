@@ -17,6 +17,7 @@ import {
   buildCreatorIdentityBaselinePromptBlock,
   strategyNicheSeedFromIdentity,
 } from "./_creatorIdentityPrompt.js";
+import { getNaturalVoicePromptBlock } from "./_naturalVoicePrompt.js";
 
 export default async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
   if (req.method !== "POST") {
@@ -514,6 +515,8 @@ ${analyticsData
       : "";
 
     const prompt = `
+${getNaturalVoicePromptBlock("strategy")}
+
 ${strategistOpening}
 
 ${creatorProfileGuidance}
@@ -625,7 +628,7 @@ ${durationWeeks === 1 ? '⚠️ CRITICAL: Generate EXACTLY 1 WEEK (7 days) of co
      - Include engaging body content (not a boring title or outline)
      - End with the CTA; include 3-5 relevant hashtags at the end when the platform uses hashtags (unless OnlyFans/Fan Hub)
      - ${usePersonalityBool ? `Voice: mirror PERSONALITY OVERRIDE & BRAND VOICE exactly for diction and attitude; use WRITING STYLE above only for emoji count and profanity` : hasIdentityBaseline ? `Voice: align with Creator Identity baseline and tone (${tone}); follow WRITING STYLE PREFERENCES` : `Match tone (${tone}); follow WRITING STYLE PREFERENCES above for emoji density, warmth, humor, and formality`}
-     - Sound human and platform-native, not generic or robotic
+     - Sound human and platform-native, not generic or robotic — follow NATURAL HUMAN VOICE rules at the top (no viral clichés, no "vibes"/"energy" filler)
 ${durationWeeks === 1 ? '- Provide comprehensive, detailed content across all 7 days with variety' : ''}
 - Distribute content across platforms: ${platforms.join(', ')}
  - DO NOT just provide topic names - provide FULL detailed descriptions for each content item

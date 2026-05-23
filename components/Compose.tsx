@@ -52,6 +52,7 @@ import { MediaItemState } from '../types';
 import { publishFacebookPost, publishInstagramPost, publishTweet, publishPinterestPin } from '../src/services/socialMediaService';
 import { PinterestBoardSelectionModal } from './PinterestBoardSelectionModal';
 import { hasCalendarAccess, hasEliteAccess } from '../src/utils/planAccess';
+import { getClientCaptionAllowance } from '../src/lib/captionUsageLimits';
 import {
   isComposeStrategyHandoffActive,
   setComposeStrategyHandoffActive,
@@ -441,29 +442,8 @@ const CaptionGenerator: React.FC = () => {
   const isAgencyPlan = user?.plan === 'Agency';
   const isAdminOrAgency = user?.role === 'Admin' || user?.plan === 'Agency';
 
-  // Caption limits including new plans, with safe default
-  const captionLimits = useMemo(
-    () => ({
-      Free: 10, // Free plan: 10 AI captions/month
-      Caption: 100, // Caption Pro plan: 100 captions/month
-      Pro: 500,
-      Elite: 1500,
-      Agency: 10000, // Agency plan: 10,000 captions/month (soft cap, overage fees apply)
-      Starter: 1000,
-      Growth: 2500
-    }),
-    []
-  );
-
-  const planKey =
-    (user?.plan as keyof typeof captionLimits) && captionLimits[user!.plan as keyof typeof captionLimits] !== undefined
-      ? (user!.plan as keyof typeof captionLimits)
-      : 'Free';
-
-  const limit = captionLimits[planKey];
-  const usage = user?.monthlyCaptionGenerationsUsed || 0;
-  const canGenerate = usage < limit;
-  const usageLeft = limit - usage;
+  const captionAllowance = useMemo(() => getClientCaptionAllowance(user), [user]);
+  const { limit, usageLeft, canGenerate } = captionAllowance;
 
   // Dynamic goal/tone options
   const userPlan = user?.plan || 'Free';

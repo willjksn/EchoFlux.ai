@@ -14,6 +14,7 @@ import {
   getMemberHubTrendsContext,
   MEMBER_HUB_RETENTION_SYSTEM,
 } from "./_memberHubContentContext.js";
+import { getNaturalVoicePromptBlock } from "./_naturalVoicePrompt.js";
 
 async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
   if (req.method !== "POST") {
@@ -289,6 +290,8 @@ VOICE PRIORITY (PERSONALITY OVERRIDE OFF):
           : "";
 
     const prompt = `
+${getNaturalVoicePromptBlock("monetization")}
+
 ${personalityBlock ? `${personalityBlock}\n\n` : ""}${memberHubVoicePriority}You are an expert monetization strategist for ${
       isMemberHub ? "paid member hubs (My Page) and creator fan feeds" : "OnlyFans creators specializing in adult/explicit content monetization"
     }.
