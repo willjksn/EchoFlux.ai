@@ -105,13 +105,17 @@ export const LiveStreamPromoBanner: React.FC<{
       const steps =
         streamLiveEffective ? (
           <>
-            Fans tap <strong>Watch live</strong>. Your camera and mic are in the host window — tap <strong>Open broadcast (host)</strong> if you closed it.
+            Fans tap <strong>Watch live</strong>. Your camera and mic are in the host window — tap{" "}
+            <strong>Open broadcast (host)</strong> if you closed it. When you&apos;re done, tap{" "}
+            <strong>End stream</strong> here — closing the window alone doesn&apos;t end the show for fans.
           </>
         ) : streamEnded ? (
           <>This stream has ended. Use <strong>Edit stream post</strong> if you need to change the text.</>
         ) : (
           <>
-            Start with <strong>Go live</strong>, then <strong>Open broadcast (host)</strong> when Daily asks for camera and mic.
+            Start with <strong>Go live</strong>, then <strong>Open broadcast (host)</strong> when Daily asks for camera
+            and mic. After the show, tap <strong>End stream</strong> on this post — otherwise fans can still join and see
+            a waiting screen.
           </>
         );
       const primaryLabel = streamEnded ? "Edit stream post" : streamLiveEffective ? "Manage broadcast" : "Open stream controls";
@@ -153,6 +157,12 @@ export const LiveStreamPromoBanner: React.FC<{
             <button type="button" className="live-stream-promo-banner__cta live-stream-promo-banner__cta--active" onClick={onOpenStreamControls}>
               {primaryLabel}
             </button>
+          ) : null}
+          {canUseInlineHost && streamLiveEffective ? (
+            <p className="live-stream-promo-banner__creator-end-reminder text-[11px] text-amber-800 dark:text-amber-200/90 m-0 leading-snug">
+              Remember to tap <strong>End stream</strong> when you finish. Fans can still connect to an unended stream
+              and see a waiting message.
+            </p>
           ) : null}
           <p className="live-stream-promo-banner__creator-status" role="status">
             <span className="live-stream-promo-banner__status-pill">{stLabel}</span>

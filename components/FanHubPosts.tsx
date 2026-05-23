@@ -809,10 +809,23 @@ export const FanHubPosts: React.FC = () => {
     [liveStreamPromoEnabled, pollEnabled, pollQuestion, pollOptions],
   );
 
+  /** Live stream promo is the post body — caption/media optional when title + go-live are set. */
+  const hasLiveStreamPromoReady = useMemo(
+    () =>
+      liveStreamPromoEnabled &&
+      liveStreamTitle.trim().length > 0 &&
+      liveStreamStartLocal.trim().length > 0 &&
+      Number.isFinite(Date.parse(liveStreamStartLocal)),
+    [liveStreamPromoEnabled, liveStreamTitle, liveStreamStartLocal],
+  );
+
   const hasFanHubPublishableComposerContent = useMemo(
     () =>
-      caption.trim().length > 0 || media.length > 0 || hasStandaloneFanHubPollReady,
-    [caption, media.length, hasStandaloneFanHubPollReady],
+      hasLiveStreamPromoReady ||
+      caption.trim().length > 0 ||
+      media.length > 0 ||
+      hasStandaloneFanHubPollReady,
+    [caption, media.length, hasStandaloneFanHubPollReady, hasLiveStreamPromoReady],
   );
 
   // Text Overlay
@@ -1764,7 +1777,9 @@ Write 2-4 sentences that are engaging and on-topic.`;
 
     if (!hasFanHubPublishableComposerContent) {
       showToast?.(
-        "Add a caption, media, or a poll with a question and at least two choices",
+        liveStreamPromoEnabled
+          ? "Add a stream title and go-live time"
+          : "Add a caption, media, or a poll with a question and at least two choices",
         "error",
       );
       return;
@@ -3225,6 +3240,17 @@ Write 2-4 sentences that are engaging and on-topic.`;
                               Open broadcast (host)
                             </button>
                           </div>
+                          {liveStreamComposerStatus === "live" ? (
+                            <p className="text-[11px] text-amber-800 dark:text-amber-200/90 leading-snug">
+                              Finished? Tap <strong>End stream</strong> on this post in your feed when you wrap up. If you
+                              forget, fans can still join and see a waiting screen.
+                            </p>
+                          ) : (
+                            <p className="text-[11px] text-gray-600 dark:text-gray-400 leading-snug">
+                              After the show, use <strong className="text-gray-700 dark:text-gray-300">End stream</strong>{" "}
+                              on this post in your feed — not just closing the broadcast window.
+                            </p>
+                          )}
                         </div>
                       ) : liveStreamPromoEnabled && creatorCanLiveStream ? (
                         <p className="text-[11px] text-amber-700 dark:text-amber-300/90 bg-amber-50/80 dark:bg-amber-950/30 border border-amber-200/60 dark:border-amber-900/40 rounded-lg px-2.5 py-2">
@@ -3633,11 +3659,7 @@ Write 2-4 sentences that are engaging and on-topic.`;
                 <button
                   type="button"
                   onClick={() => handlePublish("published")}
-                  disabled={
-                    publishing ||
-                    !hasFanHubPublishableComposerContent ||
-                    (liveStreamPromoEnabled && (!liveStreamTitle.trim() || !liveStreamStartLocal.trim()))
-                  }
+                  disabled={publishing || !hasFanHubPublishableComposerContent}
                   className="px-6 py-2.5 bg-gradient-to-r from-primary-500 to-primary-600 text-white rounded-lg font-semibold disabled:opacity-50 hover:from-primary-600 hover:to-primary-700 transition shadow-lg shadow-primary-500/25"
                 >
                   {publishing ? "Publishing..." : "Publish Now"}
@@ -3775,6 +3797,11 @@ Write 2-4 sentences that are engaging and on-topic.`;
                 <ul className="list-disc list-inside space-y-1 text-[13px] leading-relaxed text-gray-600 dark:text-gray-400">
                   <li>This post publishes to your feed now. The stream card shows your title and scheduled go-live time.</li>
                   <li>Use <strong className="text-gray-800 dark:text-gray-200">Go live</strong> when you start.</li>
+                  <li>
+                    When the show is over, tap <strong className="text-gray-800 dark:text-gray-200">End stream</strong> on
+                    this post in your feed (or in the composer). If you skip that step, fans can still open the room and
+                    see a message that they&apos;re waiting for you to start — even though you&apos;re done.
+                  </li>
                 </ul>
               </section>
               <section>
