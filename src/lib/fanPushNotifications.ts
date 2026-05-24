@@ -1,4 +1,5 @@
 import { getMessaging, getToken, deleteToken, isSupported, onMessage, type Messaging } from "firebase/messaging";
+import { onAuthStateChanged } from "firebase/auth";
 import app, { auth } from "../../firebaseConfig";
 import { resolveApiUrl } from "./resolveApiUrl";
 
@@ -7,6 +8,7 @@ const PUSH_DECLINED_KEY = "echoflux:push-declined";
 const PUSH_REGISTERED_KEY = "echoflux:push-token-registered";
 const PUSH_REGISTERED_UID_KEY = "echoflux:push-registered-uid";
 const PUSH_TOKEN_KEY = "echoflux:push-fcm-token";
+const PUSH_SYNC_THROTTLE_MS = 60_000;
 export const PUSH_STATE_EVENT = "echoflux:push-state-changed";
 const SW_READY_MS = 25_000;
 const FCM_TOKEN_MS = 25_000;
@@ -114,28 +116,65 @@ export function clearLocalPushRegistrationState(): void {
   emitPushStateChanged();
 }
 
-function pushTokenRegisteredForCurrentUser(): boolean {
-  if (!hasRegisteredPushToken()) return false;
-  const uid = auth.currentUser?.uid;
-  if (!uid) return false;
-  return localStorage.getItem(PUSH_REGISTERED_UID_KEY) === uid;
-}
-
 /**
- * Attach this device's FCM token to the signed-in user when notifications are already allowed.
- * Runs after account switches (uid mismatch) and on first visit with permission granted.
+ * Re-attach this device's FCM token to the signed-in user when notifications are allowed.
+ * Idempotent (arrayUnion on server); throttled to avoid hammering getToken on every render.
  */
 export async function syncWebPushForCurrentUser(): Promise<string | null> {
   if (!(await isWebPushSupported())) return null;
   if (typeof Notification === "undefined" || Notification.permission !== "granted") return null;
-  if (!auth.currentUser) return null;
-  if (pushTokenRegisteredForCurrentUser()) return null;
+  const user = auth.currentUser;
+  if (!user) return null;
   if (localStorage.getItem(PUSH_DECLINED_KEY) === "1") return null;
+
+  const throttleKey = `echoflux:push-sync-at:${user.uid}`;
+  const last = Number(sessionStorage.getItem(throttleKey) || 0);
+  const now = Date.now();
+  if (now - last < PUSH_SYNC_THROTTLE_MS) return null;
+  sessionStorage.setItem(throttleKey, String(now));
+
   try {
     return await registerMemberWebPush({ force: true });
   } catch {
+    sessionStorage.removeItem(throttleKey);
     return null;
   }
+}
+
+/**
+ * Keep push tokens aligned with the signed-in account (login, account switch, app resume).
+ * Call once from the app shell (EchoFlux + witme member hub).
+ */
+export function startWebPushAuthSync(): () => void {
+  if (typeof window === "undefined" || !VAPID_KEY?.trim()) {
+    return () => undefined;
+  }
+
+  const runSync = () => {
+    void syncWebPushForCurrentUser();
+  };
+
+  runSync();
+
+  const unsubAuth = onAuthStateChanged(auth, (user) => {
+    if (user) {
+      runSync();
+      return;
+    }
+    clearLocalPushRegistrationState();
+  });
+
+  const onVisible = () => {
+    if (document.visibilityState === "visible") runSync();
+  };
+  document.addEventListener("visibilitychange", onVisible);
+  window.addEventListener("focus", runSync);
+
+  return () => {
+    unsubAuth();
+    document.removeEventListener("visibilitychange", onVisible);
+    window.removeEventListener("focus", runSync);
+  };
 }
 
 function emitPushStateChanged(): void {

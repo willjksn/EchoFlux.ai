@@ -1,4 +1,6 @@
 import React, { useCallback, useEffect, useState } from "react";
+import { auth } from "../firebaseConfig";
+import { resolveApiUrl } from "../src/lib/resolveApiUrl";
 import {
   disableWebPush,
   isBrowserPushEnabled,
@@ -28,13 +30,37 @@ export const BrowserPushSettings: React.FC<BrowserPushSettingsProps> = ({
   const [permission, setPermission] = useState<NotificationPermission>(() =>
     typeof Notification !== "undefined" ? Notification.permission : "default",
   );
+  const [serverDeviceCount, setServerDeviceCount] = useState<number | null>(null);
+
+  const refreshServerStatus = useCallback(async () => {
+    const user = auth.currentUser;
+    if (!user) {
+      setServerDeviceCount(null);
+      return;
+    }
+    try {
+      const token = await user.getIdToken();
+      const res = await fetch(resolveApiUrl("/api/fanPushToken"), {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) {
+        setServerDeviceCount(null);
+        return;
+      }
+      const data = (await res.json()) as { deviceCount?: number };
+      setServerDeviceCount(typeof data.deviceCount === "number" ? data.deviceCount : null);
+    } catch {
+      setServerDeviceCount(null);
+    }
+  }, []);
 
   const sync = useCallback(() => {
     setEnabled(isBrowserPushEnabled());
     if (typeof Notification !== "undefined") {
       setPermission(Notification.permission);
     }
-  }, []);
+    void refreshServerStatus();
+  }, [refreshServerStatus]);
 
   useEffect(() => {
     void isWebPushSupported().then(setSupported);
@@ -118,6 +144,13 @@ export const BrowserPushSettings: React.FC<BrowserPushSettingsProps> = ({
       ? enabledHelp
       : disabledHelp;
 
+  const serverStatusLine =
+    enabled && serverDeviceCount !== null
+      ? serverDeviceCount > 0
+        ? `This device is registered (${serverDeviceCount} device${serverDeviceCount === 1 ? "" : "s"} on your account).`
+        : "Browser permission is on, but this device is not registered yet — turn the toggle off and on to retry."
+      : null;
+
   return (
     <div className="space-y-2">
       <div className={`flex items-center justify-between gap-3 ${loading ? "opacity-60" : ""}`}>
@@ -164,6 +197,19 @@ export const BrowserPushSettings: React.FC<BrowserPushSettingsProps> = ({
       >
         {statusHelp}
       </p>
+      {serverStatusLine ? (
+        <p
+          className={`text-xs ${
+            serverDeviceCount === 0
+              ? "text-amber-700 dark:text-amber-300"
+              : isMember
+                ? "fan-member-about-text m-0 opacity-80"
+                : "text-gray-500 dark:text-gray-400"
+          }`}
+        >
+          {serverStatusLine}
+        </p>
+      ) : null}
       {permissionDenied ? (
         <button
           type="button"

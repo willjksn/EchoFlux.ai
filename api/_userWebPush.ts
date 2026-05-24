@@ -69,7 +69,10 @@ export async function sendUserWebPush(params: {
   const tokens = Array.isArray(userData?.fcmTokens)
     ? (userData!.fcmTokens as string[]).filter((t) => typeof t === "string" && t.trim())
     : [];
-  if (tokens.length === 0) return;
+  if (tokens.length === 0) {
+    console.warn("sendUserWebPush: no fcmTokens for user", userId, { type: params.data?.type });
+    return;
+  }
 
   const tokenOwners = new Map<string, string>();
   tokens.forEach((t) => tokenOwners.set(t, userId));

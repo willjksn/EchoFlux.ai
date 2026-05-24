@@ -14,14 +14,31 @@ type Body = {
 async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
   if (applyBrowserApiCors(req, res)) return;
 
-  if (req.method !== "POST") {
-    res.status(405).json({ error: "Method not allowed" });
-    return;
-  }
-
   const decoded = await verifyAuth(req);
   if (!decoded?.uid) {
     res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+
+  const db = getAdminDb();
+  const userRef = db.collection("users").doc(decoded.uid);
+
+  if (req.method === "GET") {
+    const snap = await userRef.get();
+    const data = snap.data() as { fcmTokens?: unknown; pushNotificationsEnabled?: boolean } | undefined;
+    const tokens = Array.isArray(data?.fcmTokens)
+      ? (data!.fcmTokens as string[]).filter((t) => typeof t === "string" && t.trim())
+      : [];
+    res.status(200).json({
+      ok: true,
+      pushNotificationsEnabled: data?.pushNotificationsEnabled !== false,
+      deviceCount: tokens.length,
+    });
+    return;
+  }
+
+  if (req.method !== "POST") {
+    res.status(405).json({ error: "Method not allowed" });
     return;
   }
 
@@ -38,9 +55,6 @@ async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
   const body = (req.body || {}) as Body;
   const actionRaw = body.action === "unregister" ? "unregister" : body.action === "disable" ? "disable" : "register";
   const token = typeof body.token === "string" ? body.token.trim() : "";
-
-  const db = getAdminDb();
-  const userRef = db.collection("users").doc(decoded.uid);
 
   if (actionRaw === "disable") {
     const updates: Record<string, unknown> = {

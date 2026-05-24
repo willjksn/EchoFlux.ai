@@ -58,9 +58,9 @@ import { InviteRequiredPage } from './components/InviteRequiredPage';
 import { isInviteOnlyMode } from './src/utils/inviteOnly';
 import { PremiumStudioLayout } from './components/PremiumStudioLayout';
 import {
-  hasRegisteredPushToken,
+  isBrowserPushEnabled,
   listenForForegroundPush,
-  syncWebPushForCurrentUser,
+  startWebPushAuthSync,
 } from './src/lib/fanPushNotifications';
 import { captureFanHubPushDeeplinkFromUrl } from './src/lib/fanHubNotificationRouting';
 
@@ -1220,17 +1220,16 @@ const AppContent: React.FC = () => {
         }
     }, [isAuthenticated, user, bypassMaintenance]);
 
-    /** EchoFlux: register this device's push token for the signed-in creator/admin account. */
+    /** EchoFlux + witme: keep FCM token on the signed-in account (login / resume). */
     useEffect(() => {
-        if (fanOnlyEarlyExitShell || !isAuthenticated || !user) return;
-        if (!import.meta.env.VITE_FIREBASE_VAPID_KEY) return;
-        void syncWebPushForCurrentUser();
-    }, [fanOnlyEarlyExitShell, isAuthenticated, user?.id]);
+        if (fanOnlyEarlyExitShell) return;
+        return startWebPushAuthSync();
+    }, [fanOnlyEarlyExitShell]);
 
     /** Foreground push toasts when browser notifications are already enabled. */
     useEffect(() => {
         if (fanOnlyEarlyExitShell || !isAuthenticated || !user) return;
-        if (!hasRegisteredPushToken()) return;
+        if (!isBrowserPushEnabled()) return;
         const unsubForeground = listenForForegroundPush((title, body) => {
             showToast?.(`${title}${body ? `: ${body}` : ''}`, 'info');
         });

@@ -94,9 +94,8 @@ import { FanHubNotificationBell, type FanHubNotificationNavigatePayload } from "
 import { BrowserPushSettings } from "./BrowserPushSettings";
 import {
   clearLocalPushRegistrationState,
-  hasRegisteredPushToken,
+  isBrowserPushEnabled,
   listenForForegroundPush,
-  syncWebPushForCurrentUser,
 } from "../src/lib/fanPushNotifications";
 import { getAvatarCropStyle } from "../src/lib/avatarCrop";
 import { resolveStoreCopy } from "../src/lib/storefrontStoreCopy";
@@ -2148,17 +2147,10 @@ export const FanStorefrontView: React.FC = () => {
     };
   }, [isLoggedIn, creator?.creatorId, showToast]);
 
-  /** Member hub: attach push token to this fan account when permission was already granted. */
-  useEffect(() => {
-    if (!isLoggedIn || !creator?.creatorId || !auth.currentUser || previewMember) return;
-    if (!import.meta.env.VITE_FIREBASE_VAPID_KEY) return;
-    void syncWebPushForCurrentUser();
-  }, [isLoggedIn, creator?.creatorId, previewMember]);
-
   /** Member hub: foreground toast when a push arrives while this tab is open. */
   useEffect(() => {
     if (!isLoggedIn || !creator?.creatorId || !auth.currentUser || previewMember) return;
-    if (!hasRegisteredPushToken()) return;
+    if (!isBrowserPushEnabled()) return;
 
     const unsubForeground = listenForForegroundPush((title, body) => {
       showToast?.(`${title}${body ? `: ${body}` : ""}`, "info");

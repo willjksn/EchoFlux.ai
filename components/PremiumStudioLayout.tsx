@@ -15,7 +15,7 @@ import {
 } from './useUnreadNewMessageNotifications';
 import { useCreatorLiveChatSessionsCount } from './useCreatorLiveChatSessionsCount';
 import { EchoFluxHowItWorksModal } from './EchoFluxHowItWorksModal';
-import { hasRegisteredPushToken, listenForForegroundPush, syncWebPushForCurrentUser } from '../src/lib/fanPushNotifications';
+import { isBrowserPushEnabled, listenForForegroundPush } from '../src/lib/fanPushNotifications';
 
 const FAN_HUB_PREVIEW_THEME_STORAGE_KEY = 'echoflux:fanhub-preview-theme';
 const FAN_HUB_PREVIEW_THEME_EVENT = 'echoflux:fanhub-preview-theme-changed';
@@ -189,13 +189,7 @@ export const PremiumStudioLayout: React.FC<PremiumStudioLayoutProps> = ({ childr
   const { showToast } = useUI();
 
   useEffect(() => {
-    if (!isFanHub || !auth.currentUser) return;
-    if (!import.meta.env.VITE_FIREBASE_VAPID_KEY) return;
-    void syncWebPushForCurrentUser();
-  }, [isFanHub]);
-
-  useEffect(() => {
-    if (!isFanHub || !auth.currentUser || !hasRegisteredPushToken()) return;
+    if (!isFanHub || !auth.currentUser || !isBrowserPushEnabled()) return;
     const unsubForeground = listenForForegroundPush((title, body) => {
       showToast?.(`${title}${body ? `: ${body}` : ''}`, 'info');
     });
