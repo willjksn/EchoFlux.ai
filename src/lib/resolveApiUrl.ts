@@ -8,13 +8,28 @@ function witmeHostname(hostname: string): boolean {
   return h === "witme.io" || h.endsWith(".witme.io");
 }
 
-/** Firebase-hosted witme with no `/api` must call echoflux.ai (CORS required). Witme domains on Vercel with `/api` can set this true to skip cross-origin entirely. */
+/** Firebase-hosted witme (static only) can set VITE_WITME_USE_CANONICAL_API=1 to call echoflux.ai/api with CORS. */
+function witmeUsesCanonicalApi(): boolean {
+  const v =
+    typeof import.meta.env.VITE_WITME_USE_CANONICAL_API === "string"
+      ? import.meta.env.VITE_WITME_USE_CANONICAL_API.trim().toLowerCase()
+      : "";
+  return v === "1" || v === "true" || v === "yes";
+}
+
+/**
+ * Witme on Vercel shares this deployment's `/api` — use same-origin by default.
+ * Legacy opt-in: VITE_WITME_USE_SAME_ORIGIN_API=false forces cross-origin to echoflux.ai.
+ */
 function witmeUsesSameOriginApi(): boolean {
+  if (witmeUsesCanonicalApi()) return false;
   const v =
     typeof import.meta.env.VITE_WITME_USE_SAME_ORIGIN_API === "string"
       ? import.meta.env.VITE_WITME_USE_SAME_ORIGIN_API.trim().toLowerCase()
       : "";
-  return v === "1" || v === "true" || v === "yes";
+  if (v === "0" || v === "false" || v === "no") return false;
+  if (v === "1" || v === "true" || v === "yes") return true;
+  return true;
 }
 
 /**
@@ -26,9 +41,11 @@ function witmeUsesSameOriginApi(): boolean {
  *
  * In production, if unset, we send `/api` to **echoflux.ai** when the page is on:
  * - Firebase default hosts (`*.web.app`, `*.firebaseapp.com`)
- * - **witme.io** (including paths like `/stormijxo` — only the hostname matters)
  * - Hostnames in **VITE_CUSTOM_STOREFRONT_HOSTS** (e.g. apex custom domains that serve the SPA
  *   but do not run serverless `/api` on the same host)
+ *
+ * **witme.io** defaults to same-origin `/api` (same Vercel deployment). Set
+ * `VITE_WITME_USE_CANONICAL_API=1` only for static Firebase-hosted witme without `/api`.
  */
 function productionApiBase(): string {
   const raw =
@@ -47,7 +64,7 @@ function productionApiBase(): string {
   const useCanonical =
     h.endsWith(".web.app") ||
     h.endsWith(".firebaseapp.com") ||
-    witmeHostname(h) ||
+    (witmeHostname(h) && witmeUsesCanonicalApi()) ||
     customHosts.includes(normalized);
   if (useCanonical) return CANONICAL_ECHOFLUX_API_ORIGIN;
   return "";

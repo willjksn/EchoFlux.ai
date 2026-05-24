@@ -4,6 +4,7 @@ import { getAdminDb } from "./_firebaseAdmin.js";
 import { verifyAuth } from "./verifyAuth.js";
 import { enforceRateLimit } from "./_rateLimit.js";
 import { withErrorHandling } from "./_errorHandler.js";
+import { applyBrowserApiCors } from "./_browserApiCors.js";
 
 type Body = {
   action?: "register" | "unregister" | "disable";
@@ -11,6 +12,8 @@ type Body = {
 };
 
 async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
+  if (applyBrowserApiCors(req, res)) return;
+
   if (req.method !== "POST") {
     res.status(405).json({ error: "Method not allowed" });
     return;
