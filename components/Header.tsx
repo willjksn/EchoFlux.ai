@@ -1,7 +1,8 @@
 
 import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { SunIcon, MoonIcon, BellIcon, MenuIcon, LogoutIcon, ChatIcon, BriefcaseIcon, WarningIcon } from './icons/UIIcons';
-import { Client, Notification } from '../types';
+import { Client } from '../types';
+import type { Notification as AppNotification } from '../types';
 import { useAppContext } from './AppContext';
 import { auth } from '../firebaseConfig';
 import { OFFLINE_MODE, ECHOFLUX_APP_ACCENT_HEX } from '../constants';
@@ -234,7 +235,7 @@ export const Header: React.FC<HeaderProps> = ({ pageTitle }) => {
 
   /** Row tap: mark read and close only — no surprise navigation (pricing/admin/dashboard). */
   const handleReminderRowActivate = useCallback(
-    (notification: Notification) => {
+    (notification: AppNotification) => {
       if (shouldPersistBellDismissal(notification.messageId)) {
         dismissUsageNotificationId(user.id, notification.id);
       }
