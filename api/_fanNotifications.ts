@@ -247,6 +247,66 @@ export async function getUnreadCount(fanId: string): Promise<number> {
   return snapshot.data().count;
 }
 
+const MEMBER_HUB_ORIGIN = "https://witme.io";
+
+/** `creatorHandles/{handle}` stores `{ creatorId }` — handle is the document id, not a field. */
+export async function resolveCreatorHandleById(creatorId: string): Promise<string | null> {
+  const cid = creatorId.trim();
+  if (!cid) return null;
+  const db = getAdminDb();
+
+  try {
+    const snap = await db.collection("creatorHandles").where("creatorId", "==", cid).limit(1).get();
+    if (!snap.empty) {
+      const handle = snap.docs[0].id.trim().replace(/^@/, "").toLowerCase();
+      if (handle) return handle;
+    }
+  } catch {
+    /* ignore */
+  }
+
+  try {
+    const creatorSnap = await db.collection("creators").doc(cid).get();
+    const raw =
+      typeof creatorSnap.data()?.handle === "string" ? creatorSnap.data()!.handle.trim() : "";
+    const handle = raw.replace(/^@/, "").toLowerCase();
+    if (handle) return handle;
+  } catch {
+    /* ignore */
+  }
+
+  return null;
+}
+
+export async function resolveMemberHubNewMessagePushLink(
+  creatorId: string,
+  threadId: string,
+): Promise<string | undefined> {
+  const handle = await resolveCreatorHandleById(creatorId);
+  if (!handle) return undefined;
+  const base = `${MEMBER_HUB_ORIGIN}/${encodeURIComponent(handle)}`;
+  const tid = threadId.trim();
+  return tid ? `${base}/messages?threadId=${encodeURIComponent(tid)}` : `${base}/messages`;
+}
+
+function resolveMemberHubPushLink(
+  creatorHandle: string,
+  type: string,
+  data?: Record<string, string>,
+): string {
+  const clean = encodeURIComponent(creatorHandle.replace(/^@/, "").toLowerCase());
+  const base = `${MEMBER_HUB_ORIGIN}/${clean}`;
+  if (type === "new_message") {
+    const threadId = data?.threadId?.trim();
+    return threadId
+      ? `${base}/messages?threadId=${encodeURIComponent(threadId)}`
+      : `${base}/messages`;
+  }
+  if (type === "new_post") return `${base}/feed`;
+  if (type === "purchase_confirmed" || type === "content_unlocked") return `${base}/purchases`;
+  return `${base}/feed`;
+}
+
 /**
  * Send push notification (placeholder - implement with FCM or similar)
  */
@@ -269,20 +329,9 @@ async function resolveRecipientPushLink(
   if (!creatorId) return undefined;
 
   try {
-    const handleSnap = await db.collection("creatorHandles").doc(creatorId).get();
-    const handle = typeof handleSnap.data()?.handle === "string" ? handleSnap.data()!.handle.trim() : "";
+    const handle = await resolveCreatorHandleById(creatorId);
     if (!handle) return undefined;
-    const clean = encodeURIComponent(handle.replace(/^@/, ""));
-    const base = `https://witme.io/${clean}`;
-    if (type === "new_message") {
-      const threadId = data?.threadId?.trim();
-      return threadId
-        ? `${base}/messages?threadId=${encodeURIComponent(threadId)}`
-        : `${base}/messages`;
-    }
-    if (type === "new_post") return `${base}/feed`;
-    if (type === "purchase_confirmed" || type === "content_unlocked") return `${base}/purchases`;
-    return `${base}/feed`;
+    return resolveMemberHubPushLink(handle, type, data);
   } catch {
     return undefined;
   }
@@ -363,6 +412,21 @@ export async function scheduleReminder(params: {
   return docRef.id;
 }
 
+function orderSessionFiveMinuteReminderDocIds(orderId: string): { fan: string; creator: string } {
+  const base = `order_${orderId}_session_5min_reminder`;
+  return { fan: base, creator: `${base}_creator` };
+}
+
+/** Remove pending fan + creator session reminders when an order is unscheduled or finished. */
+export async function deleteOrderSessionFiveMinuteReminders(orderId: string): Promise<void> {
+  const db = getAdminDb();
+  const ids = orderSessionFiveMinuteReminderDocIds(orderId);
+  await Promise.all([
+    db.collection('scheduled_notifications').doc(ids.fan).delete().catch(() => undefined),
+    db.collection('scheduled_notifications').doc(ids.creator).delete().catch(() => undefined),
+  ]);
+}
+
 /**
  * Upsert the fan's "5 minutes before session start" reminder for a scheduled joint order.
  * Deterministic doc id so rescheduling replaces the same pending reminder.
@@ -377,7 +441,7 @@ export async function upsertOrderSessionFiveMinuteReminder(params: {
   creatorId: string;
 }): Promise<void> {
   const db = getAdminDb();
-  const docId = `order_${params.orderId}_session_5min_reminder`;
+  const docId = orderSessionFiveMinuteReminderDocIds(params.orderId).fan;
   const ref = db.collection('scheduled_notifications').doc(docId);
   const reminderAt = new Date(params.sessionStart.getTime() - 5 * 60 * 1000);
   const now = new Date();
@@ -411,6 +475,65 @@ export async function upsertOrderSessionFiveMinuteReminder(params: {
 }
 
 /**
+ * Upsert the creator's "5 minutes before session start" reminder for a scheduled joint order.
+ */
+export async function upsertCreatorOrderSessionFiveMinuteReminder(params: {
+  orderId: string;
+  creatorId: string;
+  fanId?: string;
+  jointKind: 'video_call' | 'chat_session';
+  sessionStart: Date;
+  itemName: string;
+  whenLabel: string;
+}): Promise<void> {
+  const db = getAdminDb();
+  const docId = orderSessionFiveMinuteReminderDocIds(params.orderId).creator;
+  const ref = db.collection('scheduled_notifications').doc(docId);
+  const reminderAt = new Date(params.sessionStart.getTime() - 5 * 60 * 1000);
+  const now = new Date();
+
+  if (reminderAt.getTime() <= now.getTime()) {
+    await ref.delete().catch(() => undefined);
+    return;
+  }
+
+  let fanLabel = 'a fan';
+  const fanId = typeof params.fanId === 'string' ? params.fanId.trim() : '';
+  if (fanId && !fanId.startsWith('guest_')) {
+    try {
+      fanLabel = await resolveFanHubMemberDisplayLabel({
+        creatorId: params.creatorId,
+        fanId,
+      });
+    } catch {
+      /* keep default */
+    }
+  }
+
+  const isVideo = params.jointKind === 'video_call';
+  const snap = await ref.get();
+  const payload: Record<string, unknown> = {
+    creatorId: params.creatorId,
+    type: isVideo ? 'video_chat_reminder' : 'session_reminder',
+    title: isVideo ? 'Video call in 5 minutes' : 'Chat session in 5 minutes',
+    body: `${params.itemName} with ${fanLabel} starts at ${params.whenLabel}. Open Fan Hub to join.`,
+    data: {
+      orderId: params.orderId,
+      fanId,
+      jointKind: params.jointKind,
+      destination: isVideo ? 'videoChats' : 'sessions',
+    },
+    scheduledFor: reminderAt.toISOString(),
+    sent: false,
+    updatedAt: now.toISOString(),
+  };
+  if (!snap.exists) {
+    payload.createdAt = now.toISOString();
+  }
+  await ref.set(payload, { merge: true });
+}
+
+/**
  * Process scheduled reminders (called by cron job)
  */
 export async function processScheduledReminders(): Promise<number> {
@@ -427,17 +550,44 @@ export async function processScheduledReminders(): Promise<number> {
   
   for (const doc of snapshot.docs) {
     const data = doc.data();
-    
+    const creatorId = typeof data.creatorId === 'string' ? data.creatorId.trim() : '';
+    const fanId = typeof data.fanId === 'string' ? data.fanId.trim() : '';
+    const typeRaw = typeof data.type === 'string' ? data.type : 'session_reminder';
+    const fanReminderTypes = new Set<FanNotificationType>(['video_chat_reminder', 'session_reminder']);
+    const type = fanReminderTypes.has(typeRaw as FanNotificationType)
+      ? (typeRaw as FanNotificationType)
+      : 'session_reminder';
+    const title = typeof data.title === 'string' ? data.title : 'Session reminder';
+    const body = typeof data.body === 'string' ? data.body : '';
+    const notifyData =
+      data.data && typeof data.data === 'object' && !Array.isArray(data.data)
+        ? (data.data as Record<string, string>)
+        : undefined;
+
     try {
-      await sendFanNotification({
-        fanId: data.fanId,
-        type: data.type,
-        title: data.title,
-        body: data.body,
-        data: data.data,
-        sendPush: true,
-      });
-      
+      if (creatorId) {
+        await sendCreatorHubNotification({
+          creatorId,
+          type,
+          title,
+          body,
+          data: notifyData,
+          sendPush: true,
+        });
+      } else if (fanId) {
+        await sendFanNotification({
+          fanId,
+          type,
+          title,
+          body,
+          data: notifyData,
+          sendPush: true,
+        });
+      } else {
+        console.warn(`Scheduled notification ${doc.id} has no creatorId or fanId`);
+        continue;
+      }
+
       await doc.ref.update({ sent: true, sentAt: now.toISOString() });
       processed++;
     } catch (error) {

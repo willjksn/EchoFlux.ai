@@ -302,8 +302,8 @@ export function listenForForegroundPush(onPayload?: (title: string, body: string
     return null;
   }
   return onMessage(messaging, (payload) => {
-    const title = payload.notification?.title || payload.data?.title || "EchoFlux";
-    const body = payload.notification?.body || payload.data?.body || "";
+    const title = payload.data?.title || payload.notification?.title || "EchoFlux";
+    const body = payload.data?.body || payload.notification?.body || "";
     const url = typeof payload.data?.url === "string" ? payload.data.url.trim() : "";
     onPayload?.(title, body);
     if (Notification.permission === "granted" && document.visibilityState === "visible") {

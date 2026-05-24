@@ -12,7 +12,11 @@ import {
   parseIncomingFanDmAttachments,
   previewTextForFanDmAttachments,
 } from "../src/lib/fanDmAttachments.js";
-import { sendFanNotification } from "./_fanNotifications.js";
+import {
+  resolveMemberHubNewMessagePushLink,
+  sendCreatorHubNotification,
+  sendFanNotification,
+} from "./_fanNotifications.js";
 import type { Firestore } from "firebase-admin/firestore";
 
 /** Vercel usually parses JSON; some proxies / versions may leave a string or Buffer. */
@@ -237,17 +241,33 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     try {
       if (!creatorMutedThisThread && !skipNotifyForLiveSession) {
-        await sendFanNotification({
-          fanId: recipientId,
-          type: "new_message",
-          title: uid === fanIdFinal ? "New message from a fan" : "New reply from creator",
-          body: (content || previewText).slice(0, 200),
-          data: {
-            threadId,
+        const notifyTitle =
+          uid === fanIdFinal ? "New message from a fan" : "New reply from creator";
+        const notifyBody = (content || previewText).slice(0, 200);
+        const notifyData = {
+          threadId,
+          creatorId: creatorIdFinal,
+          fanId: fanIdFinal,
+        };
+
+        if (recipientId === creatorIdFinal) {
+          await sendCreatorHubNotification({
             creatorId: creatorIdFinal,
-            fanId: fanIdFinal,
-          },
-        });
+            type: "new_message",
+            title: notifyTitle,
+            body: notifyBody,
+            data: notifyData,
+          });
+        } else {
+          const pushUrl = await resolveMemberHubNewMessagePushLink(creatorIdFinal, threadId);
+          await sendFanNotification({
+            fanId: recipientId,
+            type: "new_message",
+            title: notifyTitle,
+            body: notifyBody,
+            data: pushUrl ? { ...notifyData, url: pushUrl } : notifyData,
+          });
+        }
       }
     } catch (notifyErr) {
       console.error("fanDmSend: notification failed (message still sent)", notifyErr);

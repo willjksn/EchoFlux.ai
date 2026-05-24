@@ -62,11 +62,13 @@ async function ensureMessaging() {
   }
   const messaging = firebase.messaging();
   messaging.onBackgroundMessage(function (payload) {
-    const title = payload.notification?.title || payload.data?.title || "EchoFlux";
-    const body = payload.notification?.body || payload.data?.body || "";
-    const link = payload.data?.url || payload.fcmOptions?.link || "";
     const data = { ...(payload.data || {}) };
+    const title = data.title || payload.notification?.title || "EchoFlux";
+    const body = data.body || payload.notification?.body || "";
+    const link = data.url || payload.fcmOptions?.link || "";
     if (link && !data.url) data.url = link;
+    delete data.title;
+    delete data.body;
     self.registration.showNotification(title, {
       body,
       icon: "/favicon.ico",

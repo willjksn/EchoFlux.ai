@@ -94,7 +94,9 @@ import { FanHubNotificationBell, type FanHubNotificationNavigatePayload } from "
 import { BrowserPushSettings } from "./BrowserPushSettings";
 import {
   hasRegisteredPushToken,
+  isWebPushSupported,
   listenForForegroundPush,
+  registerWebPush,
 } from "../src/lib/fanPushNotifications";
 import { getAvatarCropStyle } from "../src/lib/avatarCrop";
 import { resolveStoreCopy } from "../src/lib/storefrontStoreCopy";
@@ -2146,7 +2148,24 @@ export const FanStorefrontView: React.FC = () => {
     };
   }, [isLoggedIn, creator?.creatorId, showToast]);
 
-  /** Member hub: foreground push when already enabled via EchoFlux (Settings / header bell). */
+  /** Member hub: register push on this device when permission was already granted (e.g. phone PWA). */
+  useEffect(() => {
+    if (!isLoggedIn || !creator?.creatorId || !auth.currentUser || previewMember) return;
+    if (!import.meta.env.VITE_FIREBASE_VAPID_KEY) return;
+
+    void (async () => {
+      try {
+        if (!(await isWebPushSupported())) return;
+        if (typeof Notification === "undefined" || Notification.permission !== "granted") return;
+        if (hasRegisteredPushToken()) return;
+        await registerWebPush();
+      } catch {
+        /* bell opt-in remains available */
+      }
+    })();
+  }, [isLoggedIn, creator?.creatorId, previewMember]);
+
+  /** Member hub: foreground toast when a push arrives while this tab is open. */
   useEffect(() => {
     if (!isLoggedIn || !creator?.creatorId || !auth.currentUser || previewMember) return;
     if (!hasRegisteredPushToken()) return;

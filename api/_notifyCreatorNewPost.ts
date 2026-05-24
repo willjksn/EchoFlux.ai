@@ -6,9 +6,18 @@ const MAX_MEMBERS_PER_POST = 500;
 
 async function resolveCreatorPushLabel(db: ReturnType<typeof getAdminDb>, creatorId: string): Promise<string> {
   try {
-    const handleSnap = await db.collection("creatorHandles").doc(creatorId).get();
-    const handle = typeof handleSnap.data()?.handle === "string" ? handleSnap.data()!.handle.trim() : "";
-    if (handle) return handle.startsWith("@") ? handle : `@${handle}`;
+    const snap = await db.collection("creatorHandles").where("creatorId", "==", creatorId).limit(1).get();
+    if (!snap.empty) {
+      const handle = snap.docs[0].id.trim();
+      if (handle) return handle.startsWith("@") ? handle : `@${handle}`;
+    }
+  } catch {
+    /* ignore */
+  }
+  try {
+    const creatorSnap = await db.collection("creators").doc(creatorId).get();
+    const raw = typeof creatorSnap.data()?.handle === "string" ? creatorSnap.data()!.handle.trim() : "";
+    if (raw) return raw.startsWith("@") ? raw : `@${raw}`;
   } catch {
     /* ignore */
   }

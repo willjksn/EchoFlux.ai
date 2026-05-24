@@ -47,19 +47,21 @@ export async function sendFcmMulticast(params: {
   const invalidTokens: string[] = [];
   const invalidByUser = new Map<string, Set<string>>();
 
-  const data: Record<string, string> = {};
+  const data: Record<string, string> = {
+    title: params.title,
+    body: params.body,
+  };
   for (const [k, v] of Object.entries(params.data || {})) {
     if (typeof v === "string") data[k] = v;
   }
+  if (params.link && !data.url) data.url = params.link;
 
   for (const batch of chunk(tokens, 500)) {
     try {
+      // Data-only payload: SW `onBackgroundMessage` shows one notification.
+      // Including `notification` here too would make the browser show a second copy.
       const response = await messaging.sendEachForMulticast({
         tokens: batch,
-        notification: {
-          title: params.title,
-          body: params.body,
-        },
         data,
         webpush: params.link
           ? {

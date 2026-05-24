@@ -3,8 +3,10 @@ import { getAdminDb } from "./_firebaseAdmin.js";
 import { verifyAuth } from "./verifyAuth.js";
 import { creatorIdFirestoreQueryVariants, normalizeCreatorId } from "../src/lib/creatorIdNormalize.js";
 import {
+  deleteOrderSessionFiveMinuteReminders,
   sendCreatorHubNotification,
   sendFanNotification,
+  upsertCreatorOrderSessionFiveMinuteReminder,
   upsertOrderSessionFiveMinuteReminder,
 } from "./_fanNotifications.js";
 import {
@@ -161,6 +163,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     await ref.set(patch, { merge: true });
 
+    if (scheduleStatus === "cancelled" || scheduleStatus === "completed" || scheduleStatus === "pending") {
+      try {
+        await deleteOrderSessionFiveMinuteReminders(orderId);
+      } catch (e) {
+        console.error("updateCreatorOrderSchedule: delete 5min reminders failed", e);
+      }
+    }
+
     const productIdForKind =
       typeof data?.productId === "string" && data.productId.trim()
         ? data.productId.trim()
@@ -241,21 +251,38 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         typeof body.scheduledStartIso === "string" && body.scheduledStartIso.trim()
           ? body.scheduledStartIso.trim()
           : "";
-      if (fanUid && isoRaw) {
+      if (isoRaw) {
         const sessionStart = new Date(isoRaw);
         if (!Number.isNaN(sessionStart.getTime())) {
-          try {
-            await upsertOrderSessionFiveMinuteReminder({
-              orderId,
-              fanId: fanUid,
-              jointKind,
-              sessionStart,
-              itemName,
-              whenLabel: when,
-              creatorId: storedCreatorId || storedCreatorRaw,
-            });
-          } catch (e) {
-            console.error("updateCreatorOrderSchedule: 5min reminder upsert failed", e);
+          if (fanUid) {
+            try {
+              await upsertOrderSessionFiveMinuteReminder({
+                orderId,
+                fanId: fanUid,
+                jointKind,
+                sessionStart,
+                itemName,
+                whenLabel: when,
+                creatorId: storedCreatorId || storedCreatorRaw,
+              });
+            } catch (e) {
+              console.error("updateCreatorOrderSchedule: fan 5min reminder upsert failed", e);
+            }
+          }
+          if (storedCreatorId) {
+            try {
+              await upsertCreatorOrderSessionFiveMinuteReminder({
+                orderId,
+                creatorId: storedCreatorId,
+                fanId: fanUid || fanId,
+                jointKind,
+                sessionStart,
+                itemName,
+                whenLabel: when,
+              });
+            } catch (e) {
+              console.error("updateCreatorOrderSchedule: creator 5min reminder upsert failed", e);
+            }
           }
         }
       }

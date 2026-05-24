@@ -6,7 +6,7 @@ import { verifyAuth } from "./verifyAuth.js";
 import { processScheduledReminders } from "./_fanNotifications.js";
 
 /**
- * Sends due fan reminders (e.g. 5 minutes before a scheduled 1:1 video/chat session).
+ * Sends due fan and creator reminders (e.g. 5 minutes before a scheduled 1:1 video/chat session).
  * Vercel Cron: run every few minutes so reminders are not late.
  */
 export default async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
