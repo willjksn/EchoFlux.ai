@@ -11,6 +11,28 @@ const SW_READY_MS = 25_000;
 const FCM_TOKEN_MS = 25_000;
 const AUTH_TOKEN_MS = 15_000;
 const API_REGISTER_MS = 15_000;
+const SW_PING_MS = 12_000;
+
+function cleanEnv(value: unknown): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const trimmed = value.trim().replace(/^["']|["']$/g, "");
+  return trimmed || undefined;
+}
+
+function getFirebaseMessagingConfigFromEnv(): Record<string, string> | null {
+  const config = {
+    apiKey: cleanEnv(import.meta.env.VITE_FIREBASE_API_KEY),
+    authDomain: cleanEnv(import.meta.env.VITE_FIREBASE_AUTH_DOMAIN),
+    projectId: cleanEnv(import.meta.env.VITE_FIREBASE_PROJECT_ID),
+    storageBucket: cleanEnv(import.meta.env.VITE_FIREBASE_STORAGE_BUCKET),
+    messagingSenderId: cleanEnv(import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID),
+    appId: cleanEnv(import.meta.env.VITE_FIREBASE_APP_ID),
+  };
+  if (!config.apiKey || !config.projectId || !config.messagingSenderId || !config.appId) {
+    return null;
+  }
+  return config as Record<string, string>;
+}
 
 function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
   return Promise.race([
@@ -86,7 +108,53 @@ function emitPushStateChanged(): void {
   window.dispatchEvent(new CustomEvent(PUSH_STATE_EVENT));
 }
 
+async function assertServiceWorkerScriptAvailable(): Promise<void> {
+  const res = await withTimeout(
+    fetch("/firebase-messaging-sw.js", { cache: "no-store" }),
+    8000,
+    "Service worker script check",
+  );
+  const contentType = res.headers.get("content-type") || "";
+  if (!res.ok || contentType.includes("text/html")) {
+    throw new Error(
+      "Push service worker is not available on this site yet. Wait for the latest deploy to finish, then hard-refresh (Ctrl+Shift+R) and try again.",
+    );
+  }
+}
+
+async function primeMessagingServiceWorker(registration: ServiceWorkerRegistration): Promise<void> {
+  const worker = registration.active || registration.waiting || registration.installing;
+  if (!worker) {
+    throw new Error("Service worker did not activate");
+  }
+
+  const config = getFirebaseMessagingConfigFromEnv();
+  if (config) {
+    worker.postMessage({ type: "INIT_FCM_CONFIG", config });
+  }
+
+  await withTimeout(
+    new Promise<void>((resolve, reject) => {
+      const onMessage = (event: MessageEvent) => {
+        const data = event.data as { type?: string; ok?: boolean; error?: string } | null;
+        if (!data || data.type !== "PONG_FCM") return;
+        navigator.serviceWorker.removeEventListener("message", onMessage);
+        if (data.ok) {
+          resolve();
+        } else {
+          reject(new Error(data.error || "FCM service worker failed to initialize"));
+        }
+      };
+      navigator.serviceWorker.addEventListener("message", onMessage);
+      worker.postMessage({ type: "PING_FCM" });
+    }),
+    SW_PING_MS,
+    "FCM service worker init",
+  );
+}
+
 async function getMessagingServiceWorkerRegistration(): Promise<ServiceWorkerRegistration> {
+  await assertServiceWorkerScriptAvailable();
   const registration = await navigator.serviceWorker.register("/firebase-messaging-sw.js", {
     scope: "/",
     updateViaCache: "none",
@@ -96,7 +164,9 @@ async function getMessagingServiceWorkerRegistration(): Promise<ServiceWorkerReg
   } catch {
     /* ignore — offline or throttled */
   }
-  return withTimeout(navigator.serviceWorker.ready, SW_READY_MS, "Service worker ready");
+  const ready = await withTimeout(navigator.serviceWorker.ready, SW_READY_MS, "Service worker ready");
+  await primeMessagingServiceWorker(ready);
+  return ready;
 }
 
 /**
@@ -155,9 +225,11 @@ export async function registerMemberWebPush(options?: { force?: boolean }): Prom
     if (/vapid|401|403|permission/i.test(msg)) {
       throw new Error(`Invalid push key or permission issue: ${msg}`);
     }
-    if (/service worker|push service|not supported|failed-service-worker/i.test(msg)) {
+    if (/service worker|push service|not supported|failed-service-worker|text\/html/i.test(msg)) {
       throw new Error(
-        "Notification service worker failed to start. Hard-refresh the page (Ctrl+Shift+R) and try again.",
+        msg.includes("not available on this site")
+          ? msg
+          : "Notification service worker failed to start. Wait for deploy to finish, hard-refresh (Ctrl+Shift+R), and try again.",
       );
     }
     throw new Error(`Could not get push token: ${msg}`);

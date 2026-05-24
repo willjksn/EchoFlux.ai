@@ -15,6 +15,14 @@
     ],
     "rewrites": [
       {
+        "source": "/firebase-messaging-sw.js",
+        "destination": "/firebase-messaging-sw.js"
+      },
+      {
+        "source": "/firebase-messaging-config.json",
+        "destination": "/firebase-messaging-config.json"
+      },
+      {
         "source": "**",
         "destination": "/index.html"
       }

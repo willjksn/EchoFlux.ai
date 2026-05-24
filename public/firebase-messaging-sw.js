@@ -3,12 +3,24 @@ importScripts("https://www.gstatic.com/firebasejs/12.12.1/firebase-app-compat.js
 importScripts("https://www.gstatic.com/firebasejs/12.12.1/firebase-messaging-compat.js");
 
 /*__FIREBASE_MESSAGING_CONFIG__*/
-const FIREBASE_MESSAGING_CONFIG = null;
+const FIREBASE_MESSAGING_CONFIG = {
+  "apiKey": "AIzaSyDELlBoSYwj8SDMTbBEbrUtJo7F3z1VKHE",
+  "authDomain": "engageai-8f76f.firebaseapp.com",
+  "projectId": "engageai-8f76f",
+  "storageBucket": "engageai-8f76f.firebasestorage.app",
+  "messagingSenderId": "771601258972",
+  "appId": "1:771601258972:web:c3e71e2280b50b1954d719"
+};
 
 let messagingReady = false;
 let configLoadPromise = null;
+/** Config pushed from the page before getToken (matches VITE_FIREBASE_* in the main bundle). */
+let runtimeConfigOverride = null;
 
 function configFromInline() {
+  if (runtimeConfigOverride && typeof runtimeConfigOverride === "object") {
+    return runtimeConfigOverride;
+  }
   if (FIREBASE_MESSAGING_CONFIG && typeof FIREBASE_MESSAGING_CONFIG === "object") {
     return FIREBASE_MESSAGING_CONFIG;
   }
@@ -69,6 +81,46 @@ async function ensureMessaging() {
   });
   messagingReady = true;
 }
+
+function resetMessagingState() {
+  messagingReady = false;
+  configLoadPromise = null;
+}
+
+function replyToClient(event, payload) {
+  const target = event.source;
+  if (target && typeof target.postMessage === "function") {
+    target.postMessage(payload);
+  }
+}
+
+self.addEventListener("message", function (event) {
+  const data = event.data;
+  if (!data || typeof data !== "object") return;
+
+  if (data.type === "INIT_FCM_CONFIG" && data.config && typeof data.config === "object") {
+    runtimeConfigOverride = data.config;
+    resetMessagingState();
+    void ensureMessaging().catch(function (err) {
+      console.error("[FCM SW] runtime config init failed:", err);
+    });
+    return;
+  }
+
+  if (data.type === "PING_FCM") {
+    void ensureMessaging()
+      .then(function () {
+        replyToClient(event, { type: "PONG_FCM", ok: true });
+      })
+      .catch(function (err) {
+        replyToClient(event, {
+          type: "PONG_FCM",
+          ok: false,
+          error: err && err.message ? err.message : String(err),
+        });
+      });
+  }
+});
 
 self.addEventListener("install", function (event) {
   self.skipWaiting();

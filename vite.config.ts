@@ -1,5 +1,7 @@
 import { defineConfig, loadEnv } from "vite";
 import react from "@vitejs/plugin-react";
+import fs from "node:fs";
+import path from "node:path";
 
 /** Strip quotes and whitespace from .env values */
 function trimEnvValue(v: string | undefined): string {
@@ -73,6 +75,20 @@ export default defineConfig(({ mode }) => {
               );
             }
           });
+        },
+      },
+      {
+        name: "verify-fcm-service-worker",
+        closeBundle() {
+          const outDir = path.resolve(process.cwd(), "dist");
+          for (const file of ["firebase-messaging-sw.js", "firebase-messaging-config.json"]) {
+            const target = path.join(outDir, file);
+            if (!fs.existsSync(target)) {
+              throw new Error(
+                `[build] Missing ${file} in dist/. Run npm run build (writes FCM assets from VITE_FIREBASE_*).`,
+              );
+            }
+          }
         },
       },
     ],
