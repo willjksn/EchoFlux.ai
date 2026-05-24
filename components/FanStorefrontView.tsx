@@ -93,10 +93,10 @@ import { isProtectedLockedMediaUrl } from "../src/lib/lockedPostMedia";
 import { FanHubNotificationBell, type FanHubNotificationNavigatePayload } from "./FanHubNotificationBell";
 import { BrowserPushSettings } from "./BrowserPushSettings";
 import {
+  clearLocalPushRegistrationState,
   hasRegisteredPushToken,
-  isWebPushSupported,
   listenForForegroundPush,
-  registerWebPush,
+  syncWebPushForCurrentUser,
 } from "../src/lib/fanPushNotifications";
 import { getAvatarCropStyle } from "../src/lib/avatarCrop";
 import { resolveStoreCopy } from "../src/lib/storefrontStoreCopy";
@@ -2148,21 +2148,11 @@ export const FanStorefrontView: React.FC = () => {
     };
   }, [isLoggedIn, creator?.creatorId, showToast]);
 
-  /** Member hub: register push on this device when permission was already granted (e.g. phone PWA). */
+  /** Member hub: attach push token to this fan account when permission was already granted. */
   useEffect(() => {
     if (!isLoggedIn || !creator?.creatorId || !auth.currentUser || previewMember) return;
     if (!import.meta.env.VITE_FIREBASE_VAPID_KEY) return;
-
-    void (async () => {
-      try {
-        if (!(await isWebPushSupported())) return;
-        if (typeof Notification === "undefined" || Notification.permission !== "granted") return;
-        if (hasRegisteredPushToken()) return;
-        await registerWebPush();
-      } catch {
-        /* bell opt-in remains available */
-      }
-    })();
+    void syncWebPushForCurrentUser();
   }, [isLoggedIn, creator?.creatorId, previewMember]);
 
   /** Member hub: foreground toast when a push arrives while this tab is open. */
@@ -3251,6 +3241,7 @@ export const FanStorefrontView: React.FC = () => {
   const handleLogout = async () => {
     setProfileMenuOpen(false);
     try {
+      clearLocalPushRegistrationState();
       await auth.signOut();
       setIsLoggedIn(false);
       setMembershipType(null);
@@ -3612,6 +3603,7 @@ export const FanStorefrontView: React.FC = () => {
       showToast("Your account was deleted.", "success");
       closeFanDeleteModal();
       try {
+        clearLocalPushRegistrationState();
         await auth.signOut();
       } catch {
         /* ignore */

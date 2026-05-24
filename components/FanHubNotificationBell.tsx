@@ -88,6 +88,8 @@ export type FanHubNotificationBellProps = {
   showToast?: (message: string, type: "success" | "error" | "info") => void;
   /** Member storefront: one-time opt-in banner in the bell dropdown (hidden once enabled). */
   enablePushOptIn?: boolean;
+  /** Member vs creator copy for push opt-in banner */
+  pushOptInMode?: "member" | "creator";
   /** Creator name for member push opt-in copy */
   pushOptInCreatorName?: string;
 };
@@ -138,6 +140,7 @@ export const FanHubNotificationBell: React.FC<FanHubNotificationBellProps> = ({
   hidden = false,
   showToast,
   enablePushOptIn = false,
+  pushOptInMode = "member",
   pushOptInCreatorName = "",
 }) => {
   const [uid, setUid] = useState<string | null>(() => auth.currentUser?.uid ?? null);
@@ -172,7 +175,7 @@ export const FanHubNotificationBell: React.FC<FanHubNotificationBellProps> = ({
     return () => window.removeEventListener(PUSH_STATE_EVENT, syncPushState);
   }, [syncPushState]);
 
-  const showMemberPushOptIn =
+  const showPushOptIn =
     enablePushOptIn &&
     pushSupported &&
     !pushEnabled &&
@@ -206,6 +209,10 @@ export const FanHubNotificationBell: React.FC<FanHubNotificationBellProps> = ({
   };
 
   const pushOptInCreatorLabel = pushOptInCreatorName.trim() || "this creator";
+  const pushOptInDescription =
+    pushOptInMode === "creator"
+      ? "Get browser alerts when fans message you, buy from your store, or when sessions are coming up. Manage anytime in Settings."
+      : `Get browser alerts when ${pushOptInCreatorLabel} posts, messages you, or schedules live sessions. Manage anytime in Profile.`;
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, (u) => setUid(u?.uid ?? null));
@@ -445,7 +452,7 @@ export const FanHubNotificationBell: React.FC<FanHubNotificationBellProps> = ({
               ) : null}
             </div>
           </div>
-          {showMemberPushOptIn ? (
+          {showPushOptIn ? (
             <div
               className="px-3 py-2 border-b border-black/5 dark:border-slate-700"
               style={{
@@ -455,8 +462,7 @@ export const FanHubNotificationBell: React.FC<FanHubNotificationBellProps> = ({
               }}
             >
               <p className="text-xs text-gray-700 dark:text-gray-300 mb-2">
-                Get browser alerts when {pushOptInCreatorLabel} posts, messages you, or schedules
-                live sessions. Manage anytime in Profile.
+                {pushOptInDescription}
               </p>
               <button
                 type="button"

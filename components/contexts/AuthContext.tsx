@@ -1,5 +1,6 @@
 import React, { createContext, useState, useEffect, useContext, ReactNode } from 'react';
 import { onAuthStateChanged, signOut, type User as FirebaseAuthUser } from 'firebase/auth';
+import { clearLocalPushRegistrationState } from '../../src/lib/fanPushNotifications';
 import { doc, getDoc, setDoc, deleteField } from 'firebase/firestore';
 import { auth, db } from '../../firebaseConfig';
 import { User, SocialStats, Platform, Plan } from '../../types';
@@ -413,6 +414,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             } catch {}
         }
 
+        clearLocalPushRegistrationState();
         await signOut(auth);
         setUserState(null);
         setCreatorAppAccess(false);

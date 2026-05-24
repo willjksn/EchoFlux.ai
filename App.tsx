@@ -60,6 +60,7 @@ import { PremiumStudioLayout } from './components/PremiumStudioLayout';
 import {
   hasRegisteredPushToken,
   listenForForegroundPush,
+  syncWebPushForCurrentUser,
 } from './src/lib/fanPushNotifications';
 import { captureFanHubPushDeeplinkFromUrl } from './src/lib/fanHubNotificationRouting';
 
@@ -1218,6 +1219,13 @@ const AppContent: React.FC = () => {
             }
         }
     }, [isAuthenticated, user, bypassMaintenance]);
+
+    /** EchoFlux: register this device's push token for the signed-in creator/admin account. */
+    useEffect(() => {
+        if (fanOnlyEarlyExitShell || !isAuthenticated || !user) return;
+        if (!import.meta.env.VITE_FIREBASE_VAPID_KEY) return;
+        void syncWebPushForCurrentUser();
+    }, [fanOnlyEarlyExitShell, isAuthenticated, user?.id]);
 
     /** Foreground push toasts when browser notifications are already enabled. */
     useEffect(() => {

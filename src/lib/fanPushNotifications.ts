@@ -5,6 +5,7 @@ import { resolveApiUrl } from "./resolveApiUrl";
 const VAPID_KEY = import.meta.env.VITE_FIREBASE_VAPID_KEY as string | undefined;
 const PUSH_DECLINED_KEY = "echoflux:push-declined";
 const PUSH_REGISTERED_KEY = "echoflux:push-token-registered";
+const PUSH_REGISTERED_UID_KEY = "echoflux:push-registered-uid";
 const PUSH_TOKEN_KEY = "echoflux:push-fcm-token";
 export const PUSH_STATE_EVENT = "echoflux:push-state-changed";
 const SW_READY_MS = 25_000;
@@ -99,8 +100,42 @@ async function registerTokenWithServer(token: string): Promise<void> {
     throw new Error(data.error || `Failed to register push token (${res.status})`);
   }
   localStorage.setItem(PUSH_REGISTERED_KEY, token.slice(0, 24));
+  localStorage.setItem(PUSH_REGISTERED_UID_KEY, user.uid);
   localStorage.setItem(PUSH_TOKEN_KEY, token);
   emitPushStateChanged();
+}
+
+/** Clear browser-only push state (e.g. on logout). Server tokens stay on the account. */
+export function clearLocalPushRegistrationState(): void {
+  if (typeof window === "undefined") return;
+  localStorage.removeItem(PUSH_REGISTERED_KEY);
+  localStorage.removeItem(PUSH_REGISTERED_UID_KEY);
+  localStorage.removeItem(PUSH_TOKEN_KEY);
+  emitPushStateChanged();
+}
+
+function pushTokenRegisteredForCurrentUser(): boolean {
+  if (!hasRegisteredPushToken()) return false;
+  const uid = auth.currentUser?.uid;
+  if (!uid) return false;
+  return localStorage.getItem(PUSH_REGISTERED_UID_KEY) === uid;
+}
+
+/**
+ * Attach this device's FCM token to the signed-in user when notifications are already allowed.
+ * Runs after account switches (uid mismatch) and on first visit with permission granted.
+ */
+export async function syncWebPushForCurrentUser(): Promise<string | null> {
+  if (!(await isWebPushSupported())) return null;
+  if (typeof Notification === "undefined" || Notification.permission !== "granted") return null;
+  if (!auth.currentUser) return null;
+  if (pushTokenRegisteredForCurrentUser()) return null;
+  if (localStorage.getItem(PUSH_DECLINED_KEY) === "1") return null;
+  try {
+    return await registerMemberWebPush({ force: true });
+  } catch {
+    return null;
+  }
 }
 
 function emitPushStateChanged(): void {
@@ -280,6 +315,7 @@ export async function disableWebPush(): Promise<void> {
   }
 
   localStorage.removeItem(PUSH_REGISTERED_KEY);
+  localStorage.removeItem(PUSH_REGISTERED_UID_KEY);
   localStorage.removeItem(PUSH_TOKEN_KEY);
   localStorage.removeItem(PUSH_DECLINED_KEY);
   emitPushStateChanged();
@@ -289,6 +325,9 @@ export function isBrowserPushEnabled(): boolean {
   if (typeof window === "undefined") return false;
   if (!hasRegisteredPushToken()) return false;
   if (typeof Notification !== "undefined" && Notification.permission !== "granted") return false;
+  if (auth.currentUser?.uid && localStorage.getItem(PUSH_REGISTERED_UID_KEY) !== auth.currentUser.uid) {
+    return false;
+  }
   return true;
 }
 
