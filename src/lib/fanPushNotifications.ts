@@ -7,8 +7,10 @@ const PUSH_DECLINED_KEY = "echoflux:push-declined";
 const PUSH_REGISTERED_KEY = "echoflux:push-token-registered";
 const PUSH_TOKEN_KEY = "echoflux:push-fcm-token";
 export const PUSH_STATE_EVENT = "echoflux:push-state-changed";
-const SW_READY_MS = 20_000;
-const FCM_TOKEN_MS = 20_000;
+const SW_READY_MS = 25_000;
+const FCM_TOKEN_MS = 25_000;
+const AUTH_TOKEN_MS = 15_000;
+const API_REGISTER_MS = 15_000;
 
 function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
   return Promise.race([
@@ -29,18 +31,47 @@ export async function isWebPushSupported(): Promise<boolean> {
   }
 }
 
+async function assertPushConfigAvailable(): Promise<void> {
+  if (!VAPID_KEY?.trim()) {
+    throw new Error("Push is not configured (missing VITE_FIREBASE_VAPID_KEY)");
+  }
+  try {
+    const res = await withTimeout(
+      fetch("/firebase-messaging-config.json", { cache: "no-store" }),
+      8000,
+      "FCM config check",
+    );
+    if (!res.ok) {
+      throw new Error("Push service worker config is missing on this site — redeploy with VITE_FIREBASE_* set");
+    }
+    const cfg = (await res.json()) as { apiKey?: string; projectId?: string };
+    if (!cfg?.apiKey || !cfg?.projectId) {
+      throw new Error("Push service worker config is incomplete — check VITE_FIREBASE_* on the deployment");
+    }
+  } catch (e) {
+    if (e instanceof Error && /timed out|missing|incomplete/i.test(e.message)) {
+      throw e;
+    }
+    throw new Error("Could not verify push configuration — try again or redeploy the app");
+  }
+}
+
 async function registerTokenWithServer(token: string): Promise<void> {
   const user = auth.currentUser;
   if (!user) throw new Error("Not signed in");
-  const idToken = await user.getIdToken();
-  const res = await fetch(resolveApiUrl("/api/fanPushToken"), {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${idToken}`,
-    },
-    body: JSON.stringify({ action: "register", token }),
-  });
+  const idToken = await withTimeout(user.getIdToken(), AUTH_TOKEN_MS, "Auth token");
+  const res = await withTimeout(
+    fetch(resolveApiUrl("/api/fanPushToken"), {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${idToken}`,
+      },
+      body: JSON.stringify({ action: "register", token }),
+    }),
+    API_REGISTER_MS,
+    "Push token registration",
+  );
   if (!res.ok) {
     const data = (await res.json().catch(() => ({}))) as { error?: string };
     throw new Error(data.error || `Failed to register push token (${res.status})`);
@@ -55,34 +86,17 @@ function emitPushStateChanged(): void {
   window.dispatchEvent(new CustomEvent(PUSH_STATE_EVENT));
 }
 
-async function waitForActiveServiceWorker(registration: ServiceWorkerRegistration): Promise<ServiceWorkerRegistration> {
-  if (registration.active) return registration;
-  await withTimeout(
-    new Promise<ServiceWorkerRegistration>((resolve, reject) => {
-      const sw = registration.installing || registration.waiting;
-      if (!sw) {
-        reject(new Error("Service worker did not install"));
-        return;
-      }
-      const onStateChange = () => {
-        if (sw.state === "activated") {
-          sw.removeEventListener("statechange", onStateChange);
-          resolve(registration);
-        } else if (sw.state === "redundant") {
-          sw.removeEventListener("statechange", onStateChange);
-          reject(new Error("Service worker became redundant"));
-        }
-      };
-      sw.addEventListener("statechange", onStateChange);
-      if (sw.state === "activated") {
-        sw.removeEventListener("statechange", onStateChange);
-        resolve(registration);
-      }
-    }),
-    SW_READY_MS,
-    "Service worker activation",
-  );
-  return registration;
+async function getMessagingServiceWorkerRegistration(): Promise<ServiceWorkerRegistration> {
+  const registration = await navigator.serviceWorker.register("/firebase-messaging-sw.js", {
+    scope: "/",
+    updateViaCache: "none",
+  });
+  try {
+    await registration.update();
+  } catch {
+    /* ignore — offline or throttled */
+  }
+  return withTimeout(navigator.serviceWorker.ready, SW_READY_MS, "Service worker ready");
 }
 
 /**
@@ -93,9 +107,7 @@ export async function registerMemberWebPush(options?: { force?: boolean }): Prom
   if (!(await isWebPushSupported())) {
     throw new Error("Web push is not supported in this browser");
   }
-  if (!VAPID_KEY?.trim()) {
-    throw new Error("Push is not configured (missing VITE_FIREBASE_VAPID_KEY)");
-  }
+  await assertPushConfigAvailable();
   if (!options?.force && localStorage.getItem(PUSH_DECLINED_KEY) === "1") {
     return null;
   }
@@ -114,11 +126,7 @@ export async function registerMemberWebPush(options?: { force?: boolean }): Prom
 
   let registration: ServiceWorkerRegistration;
   try {
-    registration = await navigator.serviceWorker.register("/firebase-messaging-sw.js", {
-      scope: "/",
-      updateViaCache: "none",
-    });
-    registration = await waitForActiveServiceWorker(registration);
+    registration = await getMessagingServiceWorkerRegistration();
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     throw new Error(`Could not start notification service worker: ${msg}`);
@@ -136,7 +144,7 @@ export async function registerMemberWebPush(options?: { force?: boolean }): Prom
   try {
     token = await withTimeout(
       getToken(messaging, {
-        vapidKey: VAPID_KEY.trim(),
+        vapidKey: VAPID_KEY!.trim(),
         serviceWorkerRegistration: registration,
       }),
       FCM_TOKEN_MS,
@@ -146,6 +154,11 @@ export async function registerMemberWebPush(options?: { force?: boolean }): Prom
     const msg = e instanceof Error ? e.message : String(e);
     if (/vapid|401|403|permission/i.test(msg)) {
       throw new Error(`Invalid push key or permission issue: ${msg}`);
+    }
+    if (/service worker|push service|not supported|failed-service-worker/i.test(msg)) {
+      throw new Error(
+        "Notification service worker failed to start. Hard-refresh the page (Ctrl+Shift+R) and try again.",
+      );
     }
     throw new Error(`Could not get push token: ${msg}`);
   }
@@ -163,18 +176,22 @@ export async function disableWebPush(): Promise<void> {
   const storedToken = localStorage.getItem(PUSH_TOKEN_KEY)?.trim() || "";
   const user = auth.currentUser;
   if (user) {
-    const idToken = await user.getIdToken();
-    const res = await fetch(resolveApiUrl("/api/fanPushToken"), {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${idToken}`,
-      },
-      body: JSON.stringify({
-        action: "disable",
-        ...(storedToken ? { token: storedToken } : {}),
+    const idToken = await withTimeout(user.getIdToken(), AUTH_TOKEN_MS, "Auth token");
+    const res = await withTimeout(
+      fetch(resolveApiUrl("/api/fanPushToken"), {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${idToken}`,
+        },
+        body: JSON.stringify({
+          action: "disable",
+          ...(storedToken ? { token: storedToken } : {}),
+        }),
       }),
-    });
+      API_REGISTER_MS,
+      "Push disable",
+    );
     if (!res.ok) {
       const data = (await res.json().catch(() => ({}))) as { error?: string };
       throw new Error(data.error || `Failed to disable push (${res.status})`);

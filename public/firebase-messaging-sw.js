@@ -6,14 +6,54 @@ importScripts("https://www.gstatic.com/firebasejs/12.12.1/firebase-messaging-com
 const FIREBASE_MESSAGING_CONFIG = null;
 
 let messagingReady = false;
+let configLoadPromise = null;
+
+function configFromInline() {
+  if (FIREBASE_MESSAGING_CONFIG && typeof FIREBASE_MESSAGING_CONFIG === "object") {
+    return FIREBASE_MESSAGING_CONFIG;
+  }
+  return null;
+}
+
+async function loadFirebaseConfig() {
+  const inline = configFromInline();
+  if (inline) return inline;
+
+  const controller = new AbortController();
+  const timer = setTimeout(function () {
+    controller.abort();
+  }, 5000);
+
+  try {
+    const res = await fetch("/firebase-messaging-config.json", {
+      cache: "no-store",
+      signal: controller.signal,
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    if (data && typeof data === "object" && data.apiKey && data.projectId) {
+      return data;
+    }
+    return null;
+  } catch (err) {
+    console.warn("[FCM SW] config fetch failed:", err);
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
 
 async function ensureMessaging() {
   if (messagingReady) return;
-  if (!FIREBASE_MESSAGING_CONFIG || typeof FIREBASE_MESSAGING_CONFIG !== "object") {
+  if (!configLoadPromise) {
+    configLoadPromise = loadFirebaseConfig();
+  }
+  const config = await configLoadPromise;
+  if (!config) {
     throw new Error("FCM service worker config missing — rebuild with VITE_FIREBASE_* env vars");
   }
   if (!firebase.apps.length) {
-    firebase.initializeApp(FIREBASE_MESSAGING_CONFIG);
+    firebase.initializeApp(config);
   }
   const messaging = firebase.messaging();
   messaging.onBackgroundMessage(function (payload) {
@@ -30,15 +70,24 @@ async function ensureMessaging() {
   messagingReady = true;
 }
 
-self.addEventListener("install", function () {
+self.addEventListener("install", function (event) {
   self.skipWaiting();
+  event.waitUntil(
+    ensureMessaging().catch(function (err) {
+      console.error("[FCM SW] install init failed:", err);
+    }),
+  );
 });
 
 self.addEventListener("activate", function (event) {
-  event.waitUntil(self.clients.claim());
-  void ensureMessaging().catch(function (err) {
-    console.error("[FCM SW] activate init failed:", err);
-  });
+  event.waitUntil(
+    Promise.all([
+      self.clients.claim(),
+      ensureMessaging().catch(function (err) {
+        console.error("[FCM SW] activate init failed:", err);
+      }),
+    ]),
+  );
 });
 
 self.addEventListener("notificationclick", function (event) {
@@ -55,8 +104,4 @@ self.addEventListener("notificationclick", function (event) {
       if (self.clients.openWindow) return self.clients.openWindow(url);
     }),
   );
-});
-
-void ensureMessaging().catch(function (err) {
-  console.error("[FCM SW] init failed:", err);
 });

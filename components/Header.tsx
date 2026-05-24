@@ -98,10 +98,12 @@ export const Header: React.FC<HeaderProps> = ({ pageTitle }) => {
       } else {
         showToast?.('Could not enable push notifications', 'error');
       }
+      syncPushState();
     } catch (e) {
       console.error('[Header] push opt-in', e);
       const msg = e instanceof Error ? e.message : 'Could not enable push notifications';
       showToast?.(msg, 'error');
+      syncPushState();
     } finally {
       setPushLoading(false);
     }
