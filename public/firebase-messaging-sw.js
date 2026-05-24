@@ -3,14 +3,7 @@ importScripts("https://www.gstatic.com/firebasejs/12.12.1/firebase-app-compat.js
 importScripts("https://www.gstatic.com/firebasejs/12.12.1/firebase-messaging-compat.js");
 
 /*__FIREBASE_MESSAGING_CONFIG__*/
-const FIREBASE_MESSAGING_CONFIG = {
-  "apiKey": "AIzaSyDELlBoSYwj8SDMTbBEbrUtJo7F3z1VKHE",
-  "authDomain": "engageai-8f76f.firebaseapp.com",
-  "projectId": "engageai-8f76f",
-  "storageBucket": "engageai-8f76f.firebasestorage.app",
-  "messagingSenderId": "771601258972",
-  "appId": "1:771601258972:web:c3e71e2280b50b1954d719"
-};
+const FIREBASE_MESSAGING_CONFIG = null;
 
 let messagingReady = false;
 let configLoadPromise = null;
@@ -71,12 +64,14 @@ async function ensureMessaging() {
   messaging.onBackgroundMessage(function (payload) {
     const title = payload.notification?.title || payload.data?.title || "EchoFlux";
     const body = payload.notification?.body || payload.data?.body || "";
-    const link = payload.fcmOptions?.link || payload.data?.url;
+    const link = payload.data?.url || payload.fcmOptions?.link || "";
+    const data = { ...(payload.data || {}) };
+    if (link && !data.url) data.url = link;
     self.registration.showNotification(title, {
       body,
       icon: "/favicon.ico",
       badge: "/favicon.ico",
-      data: { ...payload.data, url: link },
+      data,
     });
   });
   messagingReady = true;
@@ -144,16 +139,40 @@ self.addEventListener("activate", function (event) {
 
 self.addEventListener("notificationclick", function (event) {
   event.notification.close();
-  const url = event.notification?.data?.url || "/";
+  const data = event.notification?.data || {};
+  const url =
+    (typeof data.url === "string" && data.url.trim()) ||
+    (typeof data.link === "string" && data.link.trim()) ||
+    self.location.origin + "/";
+
   event.waitUntil(
     self.clients.matchAll({ type: "window", includeUncontrolled: true }).then(function (clientList) {
-      for (const client of clientList) {
-        if ("focus" in client) {
-          client.navigate(url);
-          return client.focus();
+      var targetOrigin = self.location.origin;
+      try {
+        targetOrigin = new URL(url).origin;
+      } catch (err) {
+        /* keep SW origin */
+      }
+
+      for (var i = 0; i < clientList.length; i++) {
+        var client = clientList[i];
+        try {
+          var clientOrigin = new URL(client.url).origin;
+          if (clientOrigin === targetOrigin && "focus" in client) {
+            if ("navigate" in client && typeof client.navigate === "function") {
+              return client.navigate(url).then(function () {
+                return client.focus();
+              });
+            }
+            client.focus();
+            return undefined;
+          }
+        } catch (err) {
+          /* try next client */
         }
       }
       if (self.clients.openWindow) return self.clients.openWindow(url);
+      return undefined;
     }),
   );
 });

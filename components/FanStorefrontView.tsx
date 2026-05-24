@@ -3735,6 +3735,14 @@ export const FanStorefrontView: React.FC = () => {
   }, [creator?.creatorId]);
 
   useEffect(() => {
+    if (typeof window === "undefined") return;
+    const threadId = new URLSearchParams(window.location.search).get("threadId")?.trim();
+    if (!threadId) return;
+    setDmPreferredThreadId(threadId);
+    setActiveTab("messages");
+  }, []);
+
+  useEffect(() => {
     if (activeTab === "messages" && creator?.creatorId && isLoggedIn) {
       void fetchDmThreadAndMessages({ messageLimit: 50 });
     }

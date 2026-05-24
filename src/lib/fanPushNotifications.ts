@@ -302,12 +302,18 @@ export function listenForForegroundPush(onPayload?: (title: string, body: string
     return null;
   }
   return onMessage(messaging, (payload) => {
-    const title = payload.notification?.title || "EchoFlux";
-    const body = payload.notification?.body || "";
+    const title = payload.notification?.title || payload.data?.title || "EchoFlux";
+    const body = payload.notification?.body || payload.data?.body || "";
+    const url = typeof payload.data?.url === "string" ? payload.data.url.trim() : "";
     onPayload?.(title, body);
     if (Notification.permission === "granted" && document.visibilityState === "visible") {
       try {
-        new Notification(title, { body, icon: "/favicon.ico" });
+        const n = new Notification(title, { body, icon: "/favicon.ico", data: { url } });
+        n.onclick = () => {
+          n.close();
+          window.focus();
+          if (url) window.location.assign(url);
+        };
       } catch {
         /* ignore */
       }

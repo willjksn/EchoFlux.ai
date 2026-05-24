@@ -61,6 +61,7 @@ import {
   hasRegisteredPushToken,
   listenForForegroundPush,
 } from './src/lib/fanPushNotifications';
+import { captureFanHubPushDeeplinkFromUrl } from './src/lib/fanHubNotificationRouting';
 
 // Lazy load heavy components for code splitting
 const OnlyFansStudio = lazy(() => import('./components/OnlyFansStudio').then(module => ({ default: module.OnlyFansStudio })));
@@ -472,6 +473,11 @@ const AppContent: React.FC = () => {
 
     const { isAuthenticated, isAuthLoading, user, setUser, activePage, setActivePage, startTour, isTourActive, toast, showToast, isCRMOpen, setPricingView, handleLogout, selectedPlan, setSelectedPlan, openPaymentModal, isPaymentModalOpen, socialAccounts, creatorAppAccess, refreshCreatorAppAccess } = appContext;
 
+    /** Keep Fan Hub push deep links before auth guards rewrite `/fan-hub` → `/`. */
+    useLayoutEffect(() => {
+        captureFanHubPushDeeplinkFromUrl();
+    }, []);
+
     useOAuthReturnHandler({ showToast, socialAccounts, isAuthLoading, skip: fanOnlyEarlyExitShell });
     
     const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
@@ -576,6 +582,9 @@ const AppContent: React.FC = () => {
         if (isAuthenticated) return;
 
         const path = window.location.pathname || '/';
+        if (path === '/fan-hub') {
+            captureFanHubPushDeeplinkFromUrl();
+        }
         const isProtectedRoute = path === '/dashboard' ||
             path === '/analytics' ||
             path === '/settings' ||

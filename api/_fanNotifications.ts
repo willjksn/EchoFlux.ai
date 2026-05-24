@@ -274,7 +274,12 @@ async function resolveRecipientPushLink(
     if (!handle) return undefined;
     const clean = encodeURIComponent(handle.replace(/^@/, ""));
     const base = `https://witme.io/${clean}`;
-    if (type === "new_message") return `${base}/messages`;
+    if (type === "new_message") {
+      const threadId = data?.threadId?.trim();
+      return threadId
+        ? `${base}/messages?threadId=${encodeURIComponent(threadId)}`
+        : `${base}/messages`;
+    }
     if (type === "new_post") return `${base}/feed`;
     if (type === "purchase_confirmed" || type === "content_unlocked") return `${base}/purchases`;
     return `${base}/feed`;

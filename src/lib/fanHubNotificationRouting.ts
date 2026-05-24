@@ -1,6 +1,27 @@
 /** sessionStorage: Fan Hub tab/thread after navigating from EchoFlux header (Firestore bell). */
 export const FAN_HUB_DEEPLINK_STORAGE_KEY = 'echoflux:fanhub-deeplink';
 
+/** Persist Fan Hub push / notification URL params before auth redirects strip the path. */
+export function captureFanHubPushDeeplinkFromUrl(): void {
+  if (typeof window === 'undefined') return;
+  try {
+    const path = window.location.pathname || '';
+    if (path !== '/fan-hub') return;
+    const params = new URLSearchParams(window.location.search);
+    const tab = params.get('tab')?.trim() || '';
+    const threadId = params.get('threadId')?.trim() || '';
+    const postId = params.get('postId')?.trim() || '';
+    const fanId = params.get('fanId')?.trim() || '';
+    if (!tab && !threadId && !postId && !fanId) return;
+    sessionStorage.setItem(
+      FAN_HUB_DEEPLINK_STORAGE_KEY,
+      JSON.stringify({ tab: tab || undefined, threadId: threadId || undefined, postId: postId || undefined, fanId: fanId || undefined }),
+    );
+  } catch {
+    /* ignore */
+  }
+}
+
 export function resolveFanHubNotificationTarget(
   type: string,
   data: Record<string, string>
