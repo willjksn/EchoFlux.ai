@@ -14,6 +14,12 @@ import { dismissUsageNotificationId,
   dismissUsageNotificationIds,
 } from '../src/utils/usageNotificationDismissals';
 import { hasPlatformAdminAccess } from '../src/lib/platformAdminAccess';
+import {
+  clearPushDeclined,
+  hasRegisteredPushToken,
+  isWebPushSupported,
+  registerWebPush,
+} from '../src/lib/fanPushNotifications';
 
 function shouldPersistBellDismissal(messageId?: string): boolean {
   return (
@@ -44,6 +50,44 @@ export const Header: React.FC<HeaderProps> = ({ pageTitle }) => {
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [creatorHelpFlow, setCreatorHelpFlow] = useState<'closed' | 'chooser' | 'report' | 'contact'>('closed');
   const [isReviewOpen, setIsReviewOpen] = useState(false);
+  const [pushSupported, setPushSupported] = useState(false);
+  const [pushRegistered, setPushRegistered] = useState(() => hasRegisteredPushToken());
+  const [pushLoading, setPushLoading] = useState(false);
+  const [pushPermission, setPushPermission] = useState<NotificationPermission>(() =>
+    typeof Notification !== 'undefined' ? Notification.permission : 'default',
+  );
+
+  useEffect(() => {
+    void isWebPushSupported().then(setPushSupported);
+    setPushRegistered(hasRegisteredPushToken());
+  }, [user.id]);
+
+  const showHeaderPushOptIn =
+    pushSupported &&
+    !pushRegistered &&
+    pushPermission !== 'denied' &&
+    !!import.meta.env.VITE_FIREBASE_VAPID_KEY;
+
+  const handleEnableHeaderPush = async () => {
+    if (pushLoading) return;
+    setPushLoading(true);
+    clearPushDeclined();
+    try {
+      const token = await registerWebPush({ force: true });
+      if (typeof Notification !== 'undefined') setPushPermission(Notification.permission);
+      if (token) {
+        setPushRegistered(true);
+        showToast?.('Push notifications enabled', 'success');
+      } else if (Notification.permission === 'denied') {
+        showToast?.('Notifications blocked in browser settings', 'error');
+      }
+    } catch (e) {
+      console.error('[Header] push opt-in', e);
+      showToast?.('Could not enable push notifications', 'error');
+    } finally {
+      setPushLoading(false);
+    }
+  };
 
   const profileRef = useRef<HTMLDivElement>(null);
   const clientSwitcherRef = useRef<HTMLDivElement>(null);
@@ -405,6 +449,23 @@ export const Header: React.FC<HeaderProps> = ({ pageTitle }) => {
                           </div>
                         ) : null}
                     </div>
+                    {showHeaderPushOptIn ? (
+                      <div className="px-3 py-2 border-b border-gray-200 dark:border-gray-700 bg-indigo-50/80 dark:bg-indigo-950/30">
+                        <p className="text-xs text-gray-700 dark:text-gray-300 mb-2">
+                          {isPlatformAdmin
+                            ? 'Get browser notifications for admin alerts and account reminders.'
+                            : 'Get browser notifications for account alerts and Fan Hub activity.'}
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => void handleEnableHeaderPush()}
+                          disabled={pushLoading}
+                          className="w-full text-xs font-semibold rounded-lg px-3 py-2 text-white bg-primary-600 hover:bg-primary-700 disabled:opacity-60"
+                        >
+                          {pushLoading ? 'Enabling…' : 'Enable push notifications'}
+                        </button>
+                      </div>
+                    ) : null}
                     <div className="py-1 max-h-80 overflow-y-auto">
                         {visibleNotifications.length > 0 ? visibleNotifications.map(notification => {
                             const isUsageNotification = notification.messageId?.startsWith('usage-');

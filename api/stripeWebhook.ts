@@ -20,6 +20,7 @@ import {
   enrichBillingCountryFromInvoice,
 } from './_stripeBillingCountry.js';
 import { applyCreatorAppClaim } from './_creatorAppClaim.js';
+import { pushForAdminAlert } from './_userWebPush.js';
 
 // Check STRIPE_USE_TEST_MODE toggle first, then select appropriate key
 // Set STRIPE_USE_TEST_MODE=true in Vercel to use test mode, false or unset for live mode
@@ -1999,6 +2000,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           };
           
           await adminAlertsRef.add(alertData);
+          void pushForAdminAlert({
+            type: 'payment_failed',
+            title: 'Payment failed',
+            message: alertData.message,
+          }).catch((e) => console.warn('stripeWebhook admin push:', e));
 
           // Send email notification for critical payment failures
           try {

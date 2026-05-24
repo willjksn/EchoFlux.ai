@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { generateCaptions, generateReply, saveGeneratedContent, analyzePostForPlatforms } from "../src/services/geminiService";
 import { CaptionResult, Platform, MediaItem, Client, User, HashtagSet, Post, CalendarEvent } from '../types';
 import { OFFLINE_MODE } from '../constants';
+import { scheduleMyPageFanPost } from '../src/lib/scheduleMyPageFanPost';
 import {
   SparklesIcon,
   UploadIcon,
@@ -113,6 +114,28 @@ const isSpeechRecognitionSupported = !!SpeechRecognition;
  * initialized for and only clear compose state on logout or account switch.
  */
 let composeShellLastUserId: string | null = null;
+
+async function maybeScheduleMyPageFromCompose(
+  creatorId: string,
+  captionText: string,
+  scheduledDateIso: string,
+  platforms: Platform[],
+  mediaUrl?: string,
+  mediaUrls?: string[],
+  mediaType?: "image" | "video" | "audio" | "text",
+): Promise<void> {
+  if (!platforms.includes("My Page")) return;
+  const urls = (mediaUrls && mediaUrls.length > 0 ? mediaUrls : mediaUrl ? [mediaUrl] : []).filter(
+    (u): u is string => typeof u === "string" && !!u.trim(),
+  );
+  await scheduleMyPageFanPost(db, {
+    creatorId,
+    body: captionText,
+    mediaUrls: urls,
+    mediaTypes: urls.map(() => (mediaType === "video" ? "video" : "image")),
+    scheduledAt: new Date(scheduledDateIso),
+  });
+}
 
 const CaptionGenerator: React.FC = () => {
   const {
@@ -1208,14 +1231,28 @@ const CaptionGenerator: React.FC = () => {
         const itemPlatforms = (Object.keys(item.selectedPlatforms || {}) as Platform[]).filter(
           p => item.selectedPlatforms?.[p]
         );
+        const socialPlatforms = itemPlatforms.filter((p) => p !== "My Page");
+        const hasMyPage = itemPlatforms.includes("My Page");
 
-        if (user) {
+        if (user && hasMyPage && item.scheduledDate) {
+          await maybeScheduleMyPageFromCompose(
+            user.id,
+            item.captionText,
+            item.scheduledDate,
+            itemPlatforms,
+            mediaUrl,
+            undefined,
+            item.type,
+          );
+        }
+
+        if (user && socialPlatforms.length > 0) {
           const newPost: Post = {
             id: postId,
             content: item.captionText,
             mediaUrl: mediaUrl,
             mediaType: item.type,
-            platforms: itemPlatforms,
+            platforms: socialPlatforms,
             status: 'Scheduled',
             author: { name: user.name, avatar: user.avatar },
             comments: [],
@@ -1226,6 +1263,8 @@ const CaptionGenerator: React.FC = () => {
 
           const safePost = JSON.parse(JSON.stringify(newPost));
           await setDoc(doc(db, 'users', user.id, 'posts', postId), safePost);
+        } else if (user && hasMyPage && !socialPlatforms.length) {
+          // My Page-only schedule is stored on creators/{uid}/fanPosts (calendar reads that collection).
         }
 
         // Don't create calendar events manually - Calendar component auto-creates from posts with scheduledDate
@@ -1717,13 +1756,29 @@ const CaptionGenerator: React.FC = () => {
           }
         }
 
+        const socialPlatforms = platformsToPost.filter((p) => p !== "My Page");
+        const hasMyPage = platformsToPost.includes("My Page");
+
+        if (user && hasMyPage && item.scheduledDate) {
+          await maybeScheduleMyPageFromCompose(
+            user.id,
+            item.captionText,
+            item.scheduledDate,
+            platformsToPost,
+            mediaUrl,
+            mediaUrls,
+            item.type,
+          );
+        }
+
+        if (user && socialPlatforms.length > 0) {
         const newPost: Post = {
           id: postId,
           content: item.captionText,
           mediaUrl: mediaUrl,
           mediaUrls: mediaUrls,
           mediaType: item.type,
-          platforms: platformsToPost,
+          platforms: socialPlatforms,
           status: 'Scheduled',
           author: { name: user.name, avatar: user.avatar },
           comments: [],
@@ -1736,6 +1791,7 @@ const CaptionGenerator: React.FC = () => {
 
         const safePost = JSON.parse(JSON.stringify(newPost));
         await setDoc(doc(db, 'users', user.id, 'posts', postId), safePost);
+        }
       }
 
       // Legacy path: immediate Meta native schedule when handleScheduleMedia is used (e.g. AI auto-schedule)
@@ -3205,13 +3261,31 @@ const CaptionGenerator: React.FC = () => {
           scheduledDate = draftDate.toISOString();
         }
 
+        const socialPlatforms = platformsToPost.filter((p) => p !== "My Page");
+        const hasMyPage = platformsToPost.includes("My Page");
+
+        if (user && status === "Scheduled" && hasMyPage && item.scheduledDate) {
+          await maybeScheduleMyPageFromCompose(
+            user.id,
+            item.captionText,
+            item.scheduledDate,
+            platformsToPost,
+            mediaUrl,
+            mediaUrls,
+            item.type,
+          );
+        }
+
+        if (user && (socialPlatforms.length > 0 || status === "Draft")) {
+          const platformsForPost = status === "Draft" ? platformsToPost : socialPlatforms;
+
         const newPost: Post = {
           id: postId,
           content: item.captionText,
           mediaUrl: mediaUrl,
           mediaUrls: mediaUrls,
           mediaType: item.type,
-          platforms: platformsToPost,
+          platforms: platformsForPost,
           status: status,
           author: { name: user.name, avatar: user.avatar },
           comments: [],
@@ -3229,6 +3303,7 @@ const CaptionGenerator: React.FC = () => {
 
         const safePost = JSON.parse(JSON.stringify(newPost));
         await setDoc(doc(db, 'users', user.id, 'posts', postId), safePost);
+        }
 
         // Note: Calendar events are automatically derived from posts with scheduledDate
         // No need to create separate calendar events - Calendar component reads from posts
@@ -3270,9 +3345,12 @@ const CaptionGenerator: React.FC = () => {
             : 'your calendar';
           const autoNote =
             item.autoPublishAtSchedule !== false
-              ? ' Auto-post is on for connected platforms.'
-              : ' Reminder only (auto-post off).';
-          showToast(`Scheduled for ${when}.${autoNote}`, 'success');
+              ? ' Auto-post is on for connected social platforms.'
+              : ' Reminder only for social (auto-post off).';
+          const myPageNote = platformsToPost.includes('My Page')
+            ? ' My Page publishes to your member feed at that time.'
+            : '';
+          showToast(`Scheduled for ${when}.${autoNote}${myPageNote}`, 'success');
           setActivePage('calendar');
         }
       } else {

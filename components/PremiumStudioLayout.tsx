@@ -15,6 +15,10 @@ import {
 } from './useUnreadNewMessageNotifications';
 import { useCreatorLiveChatSessionsCount } from './useCreatorLiveChatSessionsCount';
 import { EchoFluxHowItWorksModal } from './EchoFluxHowItWorksModal';
+import {
+  listenForForegroundPush,
+  registerWebPush,
+} from '../src/lib/fanPushNotifications';
 
 const FAN_HUB_PREVIEW_THEME_STORAGE_KEY = 'echoflux:fanhub-preview-theme';
 const FAN_HUB_PREVIEW_THEME_EVENT = 'echoflux:fanhub-preview-theme-changed';
@@ -186,6 +190,21 @@ export const PremiumStudioLayout: React.FC<PremiumStudioLayoutProps> = ({ childr
   const fanTheme = useCreatorFanHubTheme(creatorId);
   const [previewTheme, setPreviewTheme] = useState<Partial<typeof fanTheme> | null>(null);
   const { showToast } = useUI();
+
+  useEffect(() => {
+    if (!isFanHub || !auth.currentUser) return;
+    const unsubForeground = listenForForegroundPush((title, body) => {
+      showToast?.(`${title}${body ? `: ${body}` : ''}`, 'info');
+    });
+    const timer = window.setTimeout(() => {
+      void registerWebPush();
+    }, 2000);
+    return () => {
+      window.clearTimeout(timer);
+      unsubForeground?.();
+    };
+  }, [isFanHub, showToast]);
+
   useEffect(() => {
     if (!isFanHub || typeof window === 'undefined') {
       setPreviewTheme(null);
@@ -332,6 +351,8 @@ export const PremiumStudioLayout: React.FC<PremiumStudioLayoutProps> = ({ childr
             onNavigate={handleFanHubNotificationNavigate}
             hidden={suppressFanHubDmNotifications}
             showToast={showToast}
+            enablePushOptIn
+            pushOptInMessage="Get browser notifications for Fan Hub activity (messages, purchases, members)."
           />
         ) : (
           <button

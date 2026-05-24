@@ -102,6 +102,10 @@
       "schedule": "*/15 * * * *"
     },
     {
+      "path": "/api/cronPublishScheduledFanPosts",
+      "schedule": "*/5 * * * *"
+    },
+    {
       "path": "/api/cronRefreshXTokens",
       "schedule": "*/30 * * * *"
     },

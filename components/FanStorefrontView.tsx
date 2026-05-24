@@ -91,6 +91,10 @@ import { inferIsVideoFromUrl } from "../src/lib/mediaUrlInfer";
 import { fetchCreatorFanPostMedia } from "../src/lib/fetchCreatorFanPostMedia";
 import { isProtectedLockedMediaUrl } from "../src/lib/lockedPostMedia";
 import { FanHubNotificationBell, type FanHubNotificationNavigatePayload } from "./FanHubNotificationBell";
+import {
+  listenForForegroundPush,
+  registerMemberWebPush,
+} from "../src/lib/fanPushNotifications";
 import { getAvatarCropStyle } from "../src/lib/avatarCrop";
 import { resolveStoreCopy } from "../src/lib/storefrontStoreCopy";
 import { resolveTipFooterEmoji, resolveTipSectionCopy } from "../src/lib/tipSectionCopy";
@@ -2140,6 +2144,24 @@ export const FanStorefrontView: React.FC = () => {
       window.clearInterval(timer);
     };
   }, [isLoggedIn, creator?.creatorId, showToast]);
+
+  /** Member hub: register web push after login (soft prompt) + foreground notifications. */
+  useEffect(() => {
+    if (!isLoggedIn || !creator?.creatorId || !auth.currentUser || previewMember) return;
+
+    const unsubForeground = listenForForegroundPush((title, body) => {
+      showToast?.(`${title}${body ? `: ${body}` : ""}`, "info");
+    });
+
+    const timer = window.setTimeout(() => {
+      void registerMemberWebPush();
+    }, 2500);
+
+    return () => {
+      window.clearTimeout(timer);
+      unsubForeground?.();
+    };
+  }, [isLoggedIn, creator?.creatorId, previewMember, showToast]);
 
   const echofluxContactPageLabel = useMemo(() => {
     const h = creator?.handle?.trim();
@@ -4399,6 +4421,10 @@ export const FanStorefrontView: React.FC = () => {
         goTab("messages");
         return;
       }
+      if (p.type === "new_post") {
+        goTab("feed");
+        return;
+      }
       if (
         p.type === "video_chat_accepted" ||
         p.type === "video_chat_starting" ||
@@ -5316,6 +5342,7 @@ export const FanStorefrontView: React.FC = () => {
                 onNavigate={handleFanHubNotificationNavigate}
                 hidden={memberSuppressDmNotifications}
                 showToast={showToast}
+                enablePushOptIn
               />
             )}
             {isLoggedIn && nextSessionAlert ? (

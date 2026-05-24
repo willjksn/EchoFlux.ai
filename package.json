@@ -10,7 +10,7 @@
     "dev": "vite",
     "dev:api": "tsx scripts/local-api-smoke-server.ts",
     "dev:vercel": "vercel dev",
-    "build": "vite build",
+    "build": "node scripts/write-firebase-messaging-config.mjs && vite build",
     "preview": "vite preview",
     "env:backup-local": "node scripts/backup-env-local.mjs",
     "env:snapshot:vercel": "vercel env pull .env.vercel.snapshot",

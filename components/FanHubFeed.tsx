@@ -345,7 +345,7 @@ function firestoreDocToFeedPost(docSnap: QueryDocumentSnapshot<DocumentData>, is
   if (s === "draft") status = "draft";
   else if (s === "scheduled") status = "scheduled";
   else status = "published";
-  if (status !== "published") return null;
+  if (status !== "published" && !isAdminMode) return null;
 
   const createdRaw = d.createdAt ?? d.publishedAt;
   let createdAt: FeedPost["createdAt"] = new Date().toISOString();

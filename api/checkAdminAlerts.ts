@@ -5,6 +5,7 @@ import { getAdminApp } from './_firebaseAdmin.js';
 import { hasPlatformAdminAccess } from './_platformAdminAccess.js';
 import { checkAdminAlerts } from '../src/utils/adminNotifications.js';
 import { sendEmail } from './_mailer.js';
+import { pushForAdminAlert } from './_userWebPush.js';
 
 /** Same-origin `/api` base for server-side fetch (never use client loopback Origin on Vercel). */
 const CANONICAL_PUBLIC_ORIGIN = 'https://echoflux.ai';
@@ -157,6 +158,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           read: false,
         });
         createdAlerts.push(alert);
+        void pushForAdminAlert({
+          type: alert.type,
+          title: alert.title,
+          message: alert.message,
+        }).catch((e) => console.warn('checkAdminAlerts push:', e));
         
         // Track critical alerts for email notification
         if (alert.severity === 'critical') {

@@ -45,6 +45,10 @@ import {
 } from './icons/PlatformIcons';
 import { useAppContext } from './AppContext';
 import { hasCalendarAccess, hasEliteAccess } from '../src/utils/planAccess';
+import {
+  localDatetimeLocalInputValue,
+  minScheduleDatetimeLocalInput,
+} from '../src/lib/localDateTimeInput';
 import { MediaLibraryItem } from '../types';
 import { db } from '../firebaseConfig';
 import { collection, getDocs, query, orderBy, setDoc, doc, addDoc, Timestamp, deleteDoc } from 'firebase/firestore';
@@ -1744,27 +1748,8 @@ ${contextLines || 'None'}
         </label>
         <input
           type="datetime-local"
-          value={mediaItem.scheduledDate ? (() => {
-            // Convert ISO string to local datetime-local format
-            const date = new Date(mediaItem.scheduledDate);
-            const year = date.getFullYear();
-            const month = String(date.getMonth() + 1).padStart(2, '0');
-            const day = String(date.getDate()).padStart(2, '0');
-            const hours = String(date.getHours()).padStart(2, '0');
-            const minutes = String(date.getMinutes()).padStart(2, '0');
-            const formatted = `${year}-${month}-${day}T${hours}:${minutes}`;
-            console.log('MediaBox: Formatting date for input:', {
-              scheduledDate: mediaItem.scheduledDate,
-              dateObject: date.toString(),
-              year,
-              month,
-              day,
-              hours,
-              minutes,
-              formatted
-            });
-            return formatted;
-          })() : ''}
+          min={minScheduleDatetimeLocalInput()}
+          value={mediaItem.scheduledDate ? localDatetimeLocalInputValue(new Date(mediaItem.scheduledDate)) : ''}
           onChange={(e) => {
             if (user?.plan === 'Free') {
               showToast('Upgrade to Pro or Elite to schedule posts', 'info');
@@ -1808,7 +1793,11 @@ ${contextLines || 'None'}
           <span
             id={`media-box-autopost-label-${index}`}
             className="min-w-0 flex-1 text-[11px] font-medium leading-tight text-gray-700 dark:text-gray-300"
-            title="When on, posts to selected platforms at the scheduled time. Off = calendar reminder only."
+            title={
+              mediaItem.selectedPlatforms?.['My Page'] && platformsToPost.length === 1
+                ? 'My Page always publishes to your member feed at the scheduled time.'
+                : 'When on, posts to selected social platforms at the scheduled time. My Page always auto-publishes when selected. Off = calendar reminder only for social.'
+            }
           >
             Auto-post when due
           </span>

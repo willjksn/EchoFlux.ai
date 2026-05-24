@@ -57,6 +57,10 @@ import { ResetPassword } from './components/ResetPassword';
 import { InviteRequiredPage } from './components/InviteRequiredPage';
 import { isInviteOnlyMode } from './src/utils/inviteOnly';
 import { PremiumStudioLayout } from './components/PremiumStudioLayout';
+import {
+  listenForForegroundPush,
+  registerWebPush,
+} from './src/lib/fanPushNotifications';
 
 // Lazy load heavy components for code splitting
 const OnlyFansStudio = lazy(() => import('./components/OnlyFansStudio').then(module => ({ default: module.OnlyFansStudio })));
@@ -1205,6 +1209,21 @@ const AppContent: React.FC = () => {
             }
         }
     }, [isAuthenticated, user, bypassMaintenance]);
+
+    /** Creators + admins: register web push for in-app bell parity (Fan Hub + header alerts). */
+    useEffect(() => {
+        if (fanOnlyEarlyExitShell || !isAuthenticated || !user) return;
+        const unsubForeground = listenForForegroundPush((title, body) => {
+            showToast?.(`${title}${body ? `: ${body}` : ''}`, 'info');
+        });
+        const timer = window.setTimeout(() => {
+            void registerWebPush();
+        }, 2500);
+        return () => {
+            window.clearTimeout(timer);
+            unsubForeground?.();
+        };
+    }, [fanOnlyEarlyExitShell, isAuthenticated, user?.id, showToast]);
 
     if (isWitmeDiscoverPath) {
         return <WitmeDiscoverPage />;

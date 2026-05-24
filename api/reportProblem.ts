@@ -4,6 +4,7 @@ import { getVerifyAuth, withErrorHandling } from "./_errorHandler.js";
 import { sendSupportTicketAcknowledgmentEmail } from "./_supportTicketAcknowledgmentEmail.js";
 import { appendAttachmentsToMessageBody, sanitizeSupportAttachmentUrlsForUid } from "./_supportAttachmentUrls.js";
 import { memberFacingReplyBrandForReporterKind } from "./_supportTicketBranding.js";
+import { pushForAdminAlert } from "./_userWebPush.js";
 
 async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
   if (req.method !== "POST") {
@@ -210,6 +211,12 @@ async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
   });
 
   await batch.commit();
+
+  void pushForAdminAlert({
+    type: "support_ticket_created",
+    title: "New support ticket",
+    message: `${bucket === "contact" ? "Contact" : reporterKind === "creator" ? "Creator" : "Fan"} ticket from ${reporterName}`,
+  }).catch((e) => console.warn("reportProblem admin push:", e));
 
   void sendSupportTicketAcknowledgmentEmail({
     to: user.email,

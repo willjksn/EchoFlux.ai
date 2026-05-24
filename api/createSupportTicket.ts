@@ -4,6 +4,7 @@ import { verifyAuth } from "./verifyAuth.js";
 import { sendSupportTicketAcknowledgmentEmail } from "./_supportTicketAcknowledgmentEmail.js";
 import { appendAttachmentsToMessageBody, sanitizeSupportAttachmentUrlsForUid } from "./_supportAttachmentUrls.js";
 import { memberFacingReplyBrandForReporterKind } from "./_supportTicketBranding.js";
+import { pushForAdminAlert } from "./_userWebPush.js";
 
 type ReporterKind = "fan" | "creator";
 
@@ -170,6 +171,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     });
 
     await batch.commit();
+
+    void pushForAdminAlert({
+      type: "support_ticket_created",
+      title: "New support ticket",
+      message: `${baseTicket.reporterKind === "creator" ? "Creator" : "Fan"} report from ${baseTicket.reporterName}`,
+    }).catch((e) => console.warn("createSupportTicket admin push:", e));
 
     void sendSupportTicketAcknowledgmentEmail({
       to: authUser.email,

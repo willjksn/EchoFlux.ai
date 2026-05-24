@@ -5,7 +5,7 @@ import { InstagramIcon, TikTokIcon, XIcon, ThreadsIcon, YouTubeIcon, LinkedInIco
 import { PlusIcon, SparklesIcon, XMarkIcon, TrashIcon, DownloadIcon, CheckCircleIcon, CopyIcon, SendIcon } from './icons/UIIcons';
 import { useAppContext } from './AppContext';
 import { db, auth } from '../firebaseConfig';
-import { doc, setDoc, deleteDoc, deleteField, updateDoc, collection, query, orderBy, onSnapshot, getDocs } from 'firebase/firestore';
+import { doc, setDoc, deleteDoc, deleteField, updateDoc, collection, query, orderBy, onSnapshot, getDocs, where } from 'firebase/firestore';
 import { hasCapability } from '../src/services/platformCapabilities';
 import { generateCaptions } from '../src/services/geminiService';
 import { UpgradePrompt } from './UpgradePrompt';
@@ -106,6 +106,16 @@ export const Calendar: React.FC = () => {
             ticketCents: number;
             creatorTestOnly: boolean;
             description?: string;
+        }>
+    >([]);
+
+    const [fanHubSchedulePosts, setFanHubSchedulePosts] = useState<
+        Array<{
+            fanPostId: string;
+            title: string;
+            dateISO: string;
+            status: 'scheduled' | 'draft' | 'published';
+            thumbnail?: string;
         }>
     >([]);
 
@@ -271,6 +281,56 @@ export const Calendar: React.FC = () => {
         return () => unsubscribe();
     }, [user?.id]);
 
+    // Fan Hub / My Page scheduled posts (`creators/{uid}/fanPosts` with status scheduled or draft).
+    useEffect(() => {
+        if (!user?.id) {
+            setFanHubSchedulePosts([]);
+            return;
+        }
+        const colRef = collection(db, 'creators', user.id, 'fanPosts');
+        const q = query(colRef, where('status', 'in', ['scheduled', 'draft', 'published']));
+        const unsubscribe = onSnapshot(
+            q,
+            (snapshot) => {
+                const next: Array<{
+                    fanPostId: string;
+                    title: string;
+                    dateISO: string;
+                    status: 'scheduled' | 'draft' | 'published';
+                    thumbnail?: string;
+                }> = [];
+                snapshot.forEach((docSnap) => {
+                    const d = docSnap.data() as Record<string, unknown>;
+                    const rawStatus = String(d.status ?? '').trim().toLowerCase();
+                    if (rawStatus !== 'scheduled' && rawStatus !== 'draft' && rawStatus !== 'published') return;
+                    const dateISO = isoFromLiveStreamScheduledStart(d.scheduledAt);
+                    if (!dateISO) return;
+                    const body = typeof d.body === 'string' ? d.body.trim() : '';
+                    const title = body
+                        ? body.length > 48
+                            ? `${body.slice(0, 48)}…`
+                            : body
+                        : 'My Page post';
+                    const mediaUrls = Array.isArray(d.mediaUrls)
+                        ? (d.mediaUrls as string[]).filter((u) => typeof u === 'string' && u.trim())
+                        : [];
+                    next.push({
+                        fanPostId: docSnap.id,
+                        title,
+                        dateISO,
+                        status: rawStatus as 'scheduled' | 'draft' | 'published',
+                        thumbnail: mediaUrls[0],
+                    });
+                });
+                setFanHubSchedulePosts(next);
+            },
+            (error) => {
+                console.error('Error loading Fan Hub scheduled posts:', error);
+            },
+        );
+        return () => unsubscribe();
+    }, [user?.id]);
+
     // Calendar should ONLY show posts with scheduledDate (Scheduled or Published status)
     // Derive events directly from Posts, not from separate calendar_events collection
     // Also include reminders
@@ -361,6 +421,19 @@ export const Calendar: React.FC = () => {
             } as any;
         });
         
+        const fanHubCalendarEvents: CalendarEvent[] = fanHubSchedulePosts.map((p) => ({
+            id: `fanhub-post-${p.fanPostId}`,
+            title: p.title,
+            date: p.dateISO,
+            type: 'Post',
+            platform: 'My Page' as Platform,
+            status: (p.status === 'scheduled' ? 'Scheduled' : p.status === 'draft' ? 'Draft' : 'Published') as
+                | 'Scheduled'
+                | 'Draft'
+                | 'Published',
+            thumbnail: p.thumbnail,
+        }));
+
         if (!posts || !Array.isArray(posts)) {
             const reminderEvents: CalendarEvent[] = reminders.map(reminder => ({
                 id: `reminder-${reminder.id}`,
@@ -373,7 +446,7 @@ export const Calendar: React.FC = () => {
                 reminderDescription: reminder.description,
                 thumbnail: undefined,
             } as any));
-            return [...reminderEvents, ...purchaseCalendarEvents, ...liveStreamCalendarEvents].sort(
+            return [...reminderEvents, ...purchaseCalendarEvents, ...liveStreamCalendarEvents, ...fanHubCalendarEvents].sort(
                 (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
             );
         }
@@ -381,15 +454,22 @@ export const Calendar: React.FC = () => {
         // Get all posts that have scheduledDate (Scheduled, Published, or Draft)
         // Include Draft posts - they should appear in Calendar if they have a scheduledDate
         // Filter out OnlyFans posts - they should only appear in OnlyFans Studio calendar
+        // My Page-only compose schedules live on creators/{uid}/fanPosts (fanHubCalendarEvents).
         const scheduledPosts = posts.filter(p => 
             p.scheduledDate && 
             (p.status === 'Scheduled' || p.status === 'Published' || p.status === 'Draft') &&
-            !(p.platforms && (p.platforms as any[]).includes('OnlyFans')) // Exclude OnlyFans posts
+            !(p.platforms && (p.platforms as any[]).includes('OnlyFans')) &&
+            !(
+                Array.isArray(p.platforms) &&
+                p.platforms.length === 1 &&
+                (p.platforms as Platform[])[0] === 'My Page'
+            )
         );
         
         // Create calendar events from posts (Scheduled, Published, and Draft)
         const eventsFromPosts: CalendarEvent[] = scheduledPosts.map(post => {
-            const platforms = post.platforms || [];
+            const platforms = (post.platforms || []).filter((platform) => platform !== 'My Page');
+            if (platforms.length === 0) return [];
             const previewUrl = post.mediaUrl || (Array.isArray(post.mediaUrls) ? post.mediaUrls[0] : undefined);
             // For videos, check if there's a thumbnail URL, otherwise use the video URL itself
             const isVideo = post.mediaType === 'video';
@@ -575,7 +655,7 @@ export const Calendar: React.FC = () => {
         } as any));
         
         // Combine and sort by date
-        const allEvents = [...filteredPostEvents, ...reminderEvents, ...purchaseCalendarEvents, ...liveStreamCalendarEvents].sort((a, b) => 
+        const allEvents = [...filteredPostEvents, ...reminderEvents, ...purchaseCalendarEvents, ...liveStreamCalendarEvents, ...fanHubCalendarEvents].sort((a, b) => 
             new Date(a.date).getTime() - new Date(b.date).getTime()
         );
         
@@ -609,7 +689,7 @@ export const Calendar: React.FC = () => {
         }
         
         return allEvents;
-    }, [calendarEvents, posts, reminders, purchaseEvents, liveStreamScheduleEvents, currentDate]);
+    }, [calendarEvents, posts, reminders, purchaseEvents, liveStreamScheduleEvents, fanHubSchedulePosts, currentDate]);
 
     // Auto-select event from dashboard navigation
     useEffect(() => {
@@ -1563,16 +1643,23 @@ export const Calendar: React.FC = () => {
         try {
             const token = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
             if (!token) throw new Error('Must be logged in');
-            const res = await fetch('/api/autoPostScheduled?debug=1', {
-                method: 'GET',
-                headers: { Authorization: `Bearer ${token}` },
-            });
-            const data = await res.json().catch(() => ({}));
-            if (!res.ok) throw new Error(data.message || data.error || 'Request failed');
-            const msg = data.posted > 0
-                ? `Posted ${data.posted} to X. Processed: ${data.processed}, In DB: ${data.totalScheduledInDb}`
-                : `Processed: ${data.processed}, Posted: 0. Total Scheduled: ${data.totalScheduledInDb}. ${data.errors?.length ? data.errors.join('; ') : ''}`;
-            showToast(msg, data.posted > 0 ? 'success' : 'info');
+            const [socialRes, fanRes] = await Promise.all([
+                fetch('/api/autoPostScheduled?debug=1', {
+                    method: 'GET',
+                    headers: { Authorization: `Bearer ${token}` },
+                }),
+                fetch('/api/cronPublishScheduledFanPosts', {
+                    method: 'GET',
+                    headers: { Authorization: `Bearer ${token}` },
+                }),
+            ]);
+            const data = await socialRes.json().catch(() => ({}));
+            const fanData = await fanRes.json().catch(() => ({}));
+            if (!socialRes.ok && !fanRes.ok) {
+                throw new Error(data.message || data.error || fanData.message || 'Request failed');
+            }
+            const msg = `Social posted ${data.posted ?? 0} (processed ${data.processed ?? 0}). My Page published ${fanData.published ?? 0}.`;
+            showToast(msg, (data.posted ?? 0) > 0 || (fanData.published ?? 0) > 0 ? 'success' : 'info');
         } catch (e: any) {
             showToast(e?.message || 'Failed to run scheduled posts', 'error');
         } finally {
@@ -2030,7 +2117,16 @@ export const Calendar: React.FC = () => {
                                                 Auto-post when due
                                             </span>
                                             <p className="text-xs text-amber-800/90 dark:text-amber-200/90 mt-1 leading-snug">
-                                                At the scheduled time, publishes to selected platforms (X, Instagram, Facebook) when connected.
+                                                {selectedEvent.event.id.startsWith('fanhub-post-') ? (
+                                                    <>At the scheduled time, publishes to your My Page member feed automatically.</>
+                                                ) : (
+                                                    <>
+                                                        At the scheduled time, publishes to selected social platforms (X, Instagram, Facebook) when connected.
+                                                        {selectedEvent.post.platforms?.includes('My Page') ? (
+                                                            <span className="block mt-1">My Page publishes via a separate scheduled fan feed post.</span>
+                                                        ) : null}
+                                                    </>
+                                                )}
                                                 {selectedEvent.post.platforms?.includes('X') && !socialAccounts?.X?.connected ? (
                                                     <span className="block mt-1 font-medium">
                                                         Connect X in Settings for automatic posting.

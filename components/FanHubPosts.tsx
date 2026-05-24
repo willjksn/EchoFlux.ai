@@ -16,6 +16,7 @@ import {
   updateDoc,
   deleteField,
   deleteDoc,
+  Timestamp,
   type DocumentData,
   type QueryDocumentSnapshot,
 } from "firebase/firestore";
@@ -47,6 +48,12 @@ import { formatFanMarkdownLink } from "../src/lib/fanRichTextLinks";
 import { resolveApiUrl, DEV_API_404_USER_HINT } from "../src/lib/resolveApiUrl";
 import type { LiveStreamEventStatus, LiveStreamPromoOnPost } from "../types";
 import { hasLiveStreamAccess, hasPremiumStudioRouteAccess } from "../src/utils/planAccess";
+import {
+  isScheduleTimeInFuture,
+  localCalendarDateFromDate,
+  localDateInputValue,
+  localTimeInputValue,
+} from "../src/lib/localDateTimeInput";
 import { ErrorBoundary } from "./ErrorBoundary";
 import { ECHOFLUX_ELITE_MONTHLY_USD } from "../constants";
 import { LiveStreamWatchRoom } from "./LiveStreamWatchRoom";
@@ -895,17 +902,16 @@ export const FanHubPosts: React.FC = () => {
     viewerIsAdmin: user?.role === "Admin",
   });
   
-  // Get minimum date (today) for date picker
-  const getMinDate = () => {
-    const today = new Date();
-    return today.toISOString().split("T")[0];
-  };
+  // Get minimum date (today, local timezone — not UTC via toISOString)
+  const getMinDate = () => localDateInputValue();
   
-  // Get minimum time if date is today
+  // Get minimum time if date is today (round up 1 minute so "now" isn't rejected on submit)
   const getMinTime = () => {
     if (scheduleDate === getMinDate()) {
       const now = new Date();
-      return `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+      now.setSeconds(0, 0);
+      now.setMinutes(now.getMinutes() + 1);
+      return localTimeInputValue(now);
     }
     return "00:00";
   };
@@ -1939,7 +1945,7 @@ Write 2-4 sentences that are engaging and on-topic.`;
 
       // Get calendar date from scheduled time or now
       const postDate = scheduledDateTime || new Date();
-      const calendarDate = postDate.toISOString().split("T")[0]; // YYYY-MM-DD
+      const calendarDate = localCalendarDateFromDate(postDate);
       const calendarTime = `${String(postDate.getHours()).padStart(2, "0")}:${String(postDate.getMinutes()).padStart(2, "0")}`; // HH:MM
       
       const lockedContentForPost: LockedPostContent | undefined =
@@ -2002,7 +2008,7 @@ Write 2-4 sentences that are engaging and on-topic.`;
       
       // Add scheduling fields
       if (status === "scheduled" && scheduledDateTime) {
-        (postData as Record<string, unknown>).scheduledAt = scheduledDateTime;
+        (postData as Record<string, unknown>).scheduledAt = Timestamp.fromDate(scheduledDateTime);
       }
       
       if (status === "published" && !editingPostId) {
@@ -2098,6 +2104,7 @@ Write 2-4 sentences that are engaging and on-topic.`;
       }
 
       // Save to Firestore (update existing when editing, otherwise create new)
+      let notifyNewPostId: string | null = null;
       if (editingPostId) {
         await setDoc(doc(db, "creators", creatorId, "fanPosts", editingPostId), postData, { merge: true });
         const privateMediaRef = doc(db, "creators", creatorId, "fanPostPrivateMedia", editingPostId);
@@ -2114,6 +2121,7 @@ Write 2-4 sentences that are engaging and on-topic.`;
         }
       } else {
         const postRef = await addDoc(collection(db, "creators", creatorId, "fanPosts"), postData);
+        if (status === "published") notifyNewPostId = postRef.id;
         if (lockedContentForPost) {
           await setDoc(doc(db, "creators", creatorId, "fanPostPrivateMedia", postRef.id), {
             creatorId,
@@ -2152,11 +2160,24 @@ Write 2-4 sentences that are engaging and on-topic.`;
           }
         }
       }
+
+      if (status === "published" && notifyNewPostId && !liveStreamCreatorTestOnly) {
+        void fetch(resolveApiUrl("/api/notifyFanHubNewPost"), {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ postId: notifyNewPostId }),
+        }).catch((notifyErr) => {
+          console.warn("notifyFanHubNewPost failed:", notifyErr);
+        });
+      }
       
       const message = status === "draft" 
         ? "Draft saved" 
         : status === "scheduled" 
-          ? `Scheduled for ${postDate.toLocaleDateString()} at ${calendarTime}`
+          ? `Scheduled for ${postDate.toLocaleDateString()} at ${calendarTime}. It will appear on your calendar and publish to My Page automatically.`
           : editingPostId
             ? "Post updated"
             : "Post published!";
@@ -2186,8 +2207,8 @@ Write 2-4 sentences that are engaging and on-topic.`;
     }
     
     const scheduledDateTime = new Date(`${scheduleDate}T${scheduleTime}`);
-    if (scheduledDateTime <= new Date()) {
-      showToast?.("Scheduled time must be in the future", "error");
+    if (!isScheduleTimeInFuture(scheduledDateTime)) {
+      showToast?.("Scheduled time must be at least one minute from now", "error");
       return;
     }
     

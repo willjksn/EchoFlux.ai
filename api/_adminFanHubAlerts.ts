@@ -4,6 +4,7 @@ import {
   resolveAdminCreatorLabels,
 } from "./_adminCreatorLabel.js";
 import { resolveFanHubMemberDisplayLabel } from "./_fanNotifications.js";
+import { resolveAdminDashboardPushLink, sendPlatformAdminWebPush } from "./_userWebPush.js";
 
 /**
  * EchoFlux admin header bell (`admin_alerts` → DataContext for role Admin).
@@ -39,4 +40,15 @@ export async function notifyEchoFluxAdminFanHubMemberJoined(params: {
     read: false,
     createdAt: new Date(),
   });
+
+  try {
+    await sendPlatformAdminWebPush({
+      title: "New Fan Hub member",
+      body: `${fanLabel} joined ${creatorLabel} (${kind})`,
+      data: { type: "fan_hub_member_joined", creatorId: params.creatorId },
+      link: resolveAdminDashboardPushLink(),
+    });
+  } catch (e) {
+    console.warn("notifyEchoFluxAdminFanHubMemberJoined push failed:", e);
+  }
 }

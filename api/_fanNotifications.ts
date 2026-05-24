@@ -9,12 +9,14 @@
  */
 
 import { getAdminDb } from './_firebaseAdmin.js';
+import { resolveCreatorFanHubPushLink, sendUserWebPush } from './_userWebPush.js';
 
 export type FanNotificationType = 
   | 'video_chat_accepted'
   | 'video_chat_starting'
   | 'video_chat_reminder'
   | 'new_message'
+  | 'new_post'
   | 'session_starting'
   | 'session_reminder'
   | 'live_session_scheduled'
@@ -47,15 +49,17 @@ export async function sendCreatorHubNotification(params: {
   title: string;
   body: string;
   data?: Record<string, string>;
+  sendPush?: boolean;
 }): Promise<string> {
   const db = getAdminDb();
   const now = new Date();
+  const data = params.data || {};
   const notification = {
     fanId: '',
     type: params.type,
     title: params.title,
     body: params.body,
-    data: params.data || {},
+    data,
     read: false,
     createdAt: now.toISOString(),
     expiresAt: new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString(),
@@ -63,6 +67,21 @@ export async function sendCreatorHubNotification(params: {
   const coll = db.collection('users').doc(params.creatorId).collection('notifications');
   const docRef = coll.doc();
   await docRef.set({ ...notification, id: docRef.id });
+
+  if (params.sendPush !== false) {
+    try {
+      await sendUserWebPush({
+        userId: params.creatorId,
+        title: params.title,
+        body: params.body,
+        data: { ...data, type: params.type },
+        link: resolveCreatorFanHubPushLink(params.type, data),
+      });
+    } catch (e) {
+      console.warn('sendCreatorHubNotification push failed:', params.creatorId, e);
+    }
+  }
+
   return docRef.id;
 }
 
@@ -149,9 +168,12 @@ export async function sendFanNotification(params: {
   await db.collection('users').doc(params.fanId)
     .collection('notifications').doc(docRef.id).set(notification);
 
-  // TODO: Send push notification if user has enabled
-  if (params.sendPush) {
-    await sendPushNotification(params.fanId, params.title, params.body, params.data);
+  const shouldPush = params.sendPush !== false;
+  if (shouldPush) {
+    await sendPushNotification(params.fanId, params.title, params.body, {
+      ...(params.data || {}),
+      type: params.type,
+    });
   }
 
   // TODO: Send email notification if user has enabled
@@ -228,25 +250,55 @@ export async function getUnreadCount(fanId: string): Promise<number> {
 /**
  * Send push notification (placeholder - implement with FCM or similar)
  */
+async function resolveRecipientPushLink(
+  userId: string,
+  type: string,
+  data?: Record<string, string>,
+): Promise<string | undefined> {
+  if (typeof data?.url === "string" && data.url.trim()) {
+    return data.url.trim();
+  }
+
+  const db = getAdminDb();
+  const creatorSnap = await db.collection("creators").doc(userId).get();
+  if (creatorSnap.exists) {
+    return resolveCreatorFanHubPushLink(type, data);
+  }
+
+  const creatorId = data?.creatorId?.trim();
+  if (!creatorId) return undefined;
+
+  try {
+    const handleSnap = await db.collection("creatorHandles").doc(creatorId).get();
+    const handle = typeof handleSnap.data()?.handle === "string" ? handleSnap.data()!.handle.trim() : "";
+    if (!handle) return undefined;
+    const clean = encodeURIComponent(handle.replace(/^@/, ""));
+    const base = `https://witme.io/${clean}`;
+    if (type === "new_message") return `${base}/messages`;
+    if (type === "new_post") return `${base}/feed`;
+    if (type === "purchase_confirmed" || type === "content_unlocked") return `${base}/purchases`;
+    return `${base}/feed`;
+  } catch {
+    return undefined;
+  }
+}
+
 async function sendPushNotification(
-  fanId: string, 
+  userId: string, 
   title: string, 
   body: string, 
   data?: Record<string, string>
 ): Promise<void> {
-  const db = getAdminDb();
-  
-  // Get user's FCM tokens
-  const userDoc = await db.collection('users').doc(fanId).get();
-  const userData = userDoc.data();
-  
-  if (!userData?.fcmTokens || !Array.isArray(userData.fcmTokens)) {
-    return;
-  }
+  const type = typeof data?.type === "string" ? data.type : "";
+  const link = await resolveRecipientPushLink(userId, type, data);
 
-  // TODO: Implement actual FCM push notification
-  // For now, just log
-  console.log(`[Push] Would send to ${fanId}: ${title} - ${body}`, data);
+  await sendUserWebPush({
+    userId,
+    title,
+    body,
+    data,
+    link,
+  });
 }
 
 /**

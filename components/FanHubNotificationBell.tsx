@@ -10,6 +10,12 @@ import {
 } from "firebase/firestore";
 import { auth, db } from "../firebaseConfig";
 import { resolveApiUrl } from "../src/lib/resolveApiUrl";
+import {
+  clearPushDeclined,
+  hasRegisteredPushToken,
+  isWebPushSupported,
+  registerMemberWebPush,
+} from "../src/lib/fanPushNotifications";
 
 /** Writes go through Vercel + Admin SDK so client Firestore rules cannot block mark-read / delete. */
 async function fanNotificationMutateApi(action: "mark_read" | "delete", notificationIds: string[]): Promise<void> {
@@ -79,6 +85,10 @@ export type FanHubNotificationBellProps = {
   hidden?: boolean;
   /** Optional toast when dismiss / clear succeeds or fails (e.g. from `useAppContext` or `useUI`). */
   showToast?: (message: string, type: "success" | "error" | "info") => void;
+  /** Member hub: offer browser push opt-in inside the dropdown. */
+  enablePushOptIn?: boolean;
+  /** Custom copy for the push opt-in banner. */
+  pushOptInMessage?: string;
 };
 
 function notificationDataAsStrings(raw: unknown): Record<string, string> {
@@ -126,6 +136,8 @@ export const FanHubNotificationBell: React.FC<FanHubNotificationBellProps> = ({
   onNavigate,
   hidden = false,
   showToast,
+  enablePushOptIn = false,
+  pushOptInMessage = "Get notified when this creator posts.",
 }) => {
   const [uid, setUid] = useState<string | null>(() => auth.currentUser?.uid ?? null);
   const [open, setOpen] = useState(false);
@@ -133,6 +145,12 @@ export const FanHubNotificationBell: React.FC<FanHubNotificationBellProps> = ({
   const [listenError, setListenError] = useState<string | null>(null);
   const [clearingAll, setClearingAll] = useState(false);
   const [dismissingIds, setDismissingIds] = useState<Set<string>>(() => new Set());
+  const [pushSupported, setPushSupported] = useState(false);
+  const [pushRegistered, setPushRegistered] = useState(() => hasRegisteredPushToken());
+  const [pushLoading, setPushLoading] = useState(false);
+  const [pushPermission, setPushPermission] = useState<NotificationPermission>(() =>
+    typeof Notification !== "undefined" ? Notification.permission : "default",
+  );
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const mutedThreadIds = useDmMutedThreadIds(uid);
 
@@ -140,6 +158,47 @@ export const FanHubNotificationBell: React.FC<FanHubNotificationBellProps> = ({
     const unsub = onAuthStateChanged(auth, (u) => setUid(u?.uid ?? null));
     return () => unsub();
   }, []);
+
+  useEffect(() => {
+    if (!enablePushOptIn || !uid) return;
+    void isWebPushSupported().then(setPushSupported);
+    setPushRegistered(hasRegisteredPushToken());
+    if (typeof Notification !== "undefined") {
+      setPushPermission(Notification.permission);
+    }
+  }, [enablePushOptIn, uid]);
+
+  const handleEnablePush = async () => {
+    if (pushLoading) return;
+    setPushLoading(true);
+    clearPushDeclined();
+    try {
+      const token = await registerMemberWebPush({ force: true });
+      if (typeof Notification !== "undefined") {
+        setPushPermission(Notification.permission);
+      }
+      if (token) {
+        setPushRegistered(true);
+        showToast?.("Push notifications enabled", "success");
+      } else if (Notification.permission === "denied") {
+        showToast?.("Notifications blocked in browser settings", "error");
+      } else {
+        showToast?.("Could not enable push notifications", "error");
+      }
+    } catch (e) {
+      console.error("[FanHubNotificationBell] push opt-in", e);
+      showToast?.("Could not enable push notifications", "error");
+    } finally {
+      setPushLoading(false);
+    }
+  };
+
+  const showPushPrompt =
+    enablePushOptIn &&
+    pushSupported &&
+    !pushRegistered &&
+    pushPermission !== "denied" &&
+    !!import.meta.env.VITE_FIREBASE_VAPID_KEY;
 
   useEffect(() => {
     if (!uid || hidden) {
@@ -374,6 +433,22 @@ export const FanHubNotificationBell: React.FC<FanHubNotificationBellProps> = ({
               ) : null}
             </div>
           </div>
+          {showPushPrompt ? (
+            <div className="px-3 py-2 border-b border-black/5 dark:border-slate-700 bg-indigo-50/80 dark:bg-indigo-950/30">
+              <p className="text-xs text-gray-700 dark:text-gray-300 mb-2">
+                {pushOptInMessage}
+              </p>
+              <button
+                type="button"
+                onClick={() => void handleEnablePush()}
+                disabled={pushLoading}
+                className="w-full text-xs font-semibold rounded-lg px-3 py-2 text-white disabled:opacity-60"
+                style={{ backgroundColor: accentColor || "var(--fan-primary, #6366f1)" }}
+              >
+                {pushLoading ? "Enabling…" : "Enable push notifications"}
+              </button>
+            </div>
+          ) : null}
           <div className="max-h-80 overflow-y-auto">
             {listenError ? (
               <p className="p-3 text-xs text-amber-700 dark:text-amber-300">{listenError}</p>
