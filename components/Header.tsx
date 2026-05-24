@@ -81,10 +81,13 @@ export const Header: React.FC<HeaderProps> = ({ pageTitle }) => {
         showToast?.('Push notifications enabled', 'success');
       } else if (Notification.permission === 'denied') {
         showToast?.('Notifications blocked in browser settings', 'error');
+      } else {
+        showToast?.('Could not enable push notifications', 'error');
       }
     } catch (e) {
       console.error('[Header] push opt-in', e);
-      showToast?.('Could not enable push notifications', 'error');
+      const msg = e instanceof Error ? e.message : 'Could not enable push notifications';
+      showToast?.(msg, 'error');
     } finally {
       setPushLoading(false);
     }

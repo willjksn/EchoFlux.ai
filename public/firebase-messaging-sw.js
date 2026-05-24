@@ -2,15 +2,18 @@
 importScripts("https://www.gstatic.com/firebasejs/12.12.1/firebase-app-compat.js");
 importScripts("https://www.gstatic.com/firebasejs/12.12.1/firebase-messaging-compat.js");
 
+/*__FIREBASE_MESSAGING_CONFIG__*/
+const FIREBASE_MESSAGING_CONFIG = null;
+
 let messagingReady = false;
 
 async function ensureMessaging() {
   if (messagingReady) return;
-  const res = await fetch("/firebase-messaging-config.json");
-  if (!res.ok) throw new Error("Missing firebase-messaging-config.json");
-  const config = await res.json();
+  if (!FIREBASE_MESSAGING_CONFIG || typeof FIREBASE_MESSAGING_CONFIG !== "object") {
+    throw new Error("FCM service worker config missing — rebuild with VITE_FIREBASE_* env vars");
+  }
   if (!firebase.apps.length) {
-    firebase.initializeApp(config);
+    firebase.initializeApp(FIREBASE_MESSAGING_CONFIG);
   }
   const messaging = firebase.messaging();
   messaging.onBackgroundMessage(function (payload) {
@@ -32,7 +35,10 @@ self.addEventListener("install", function () {
 });
 
 self.addEventListener("activate", function (event) {
-  event.waitUntil(ensureMessaging().then(function () { return self.clients.claim(); }));
+  event.waitUntil(self.clients.claim());
+  void ensureMessaging().catch(function (err) {
+    console.error("[FCM SW] activate init failed:", err);
+  });
 });
 
 self.addEventListener("notificationclick", function (event) {
@@ -51,6 +57,6 @@ self.addEventListener("notificationclick", function (event) {
   );
 });
 
-ensureMessaging().catch(function (err) {
+void ensureMessaging().catch(function (err) {
   console.error("[FCM SW] init failed:", err);
 });

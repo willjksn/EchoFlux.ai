@@ -187,7 +187,8 @@ export const FanHubNotificationBell: React.FC<FanHubNotificationBellProps> = ({
       }
     } catch (e) {
       console.error("[FanHubNotificationBell] push opt-in", e);
-      showToast?.("Could not enable push notifications", "error");
+      const msg = e instanceof Error ? e.message : "Could not enable push notifications";
+      showToast?.(msg, "error");
     } finally {
       setPushLoading(false);
     }

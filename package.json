@@ -7,7 +7,7 @@
     "node": "22.x"
   },
   "scripts": {
-    "dev": "vite",
+    "dev": "node scripts/write-firebase-messaging-config.mjs && vite",
     "dev:api": "tsx scripts/local-api-smoke-server.ts",
     "dev:vercel": "vercel dev",
     "build": "node scripts/write-firebase-messaging-config.mjs && vite build",

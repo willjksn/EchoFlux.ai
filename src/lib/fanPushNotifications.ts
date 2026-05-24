@@ -1,23 +1,20 @@
-import { getApps, initializeApp } from "firebase/app";
 import { getMessaging, getToken, isSupported, onMessage, type Messaging } from "firebase/messaging";
-import { auth } from "../../firebaseConfig";
+import app, { auth } from "../../firebaseConfig";
 import { resolveApiUrl } from "./resolveApiUrl";
 
 const VAPID_KEY = import.meta.env.VITE_FIREBASE_VAPID_KEY as string | undefined;
 const PUSH_DECLINED_KEY = "echoflux:push-declined";
 const PUSH_REGISTERED_KEY = "echoflux:push-token-registered";
+const SW_READY_MS = 20_000;
+const FCM_TOKEN_MS = 20_000;
 
-function messagingApp() {
-  const existing = getApps();
-  if (existing.length > 0) return existing[0];
-  return initializeApp({
-    apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
-    authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
-    projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
-    storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
-    messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
-    appId: import.meta.env.VITE_FIREBASE_APP_ID,
-  });
+function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) => {
+      window.setTimeout(() => reject(new Error(`${label} timed out after ${Math.round(ms / 1000)}s`)), ms);
+    }),
+  ]);
 }
 
 export async function isWebPushSupported(): Promise<boolean> {
@@ -32,7 +29,7 @@ export async function isWebPushSupported(): Promise<boolean> {
 
 async function registerTokenWithServer(token: string): Promise<void> {
   const user = auth.currentUser;
-  if (!user) return;
+  if (!user) throw new Error("Not signed in");
   const idToken = await user.getIdToken();
   const res = await fetch(resolveApiUrl("/api/fanPushToken"), {
     method: "POST",
@@ -44,25 +41,58 @@ async function registerTokenWithServer(token: string): Promise<void> {
   });
   if (!res.ok) {
     const data = (await res.json().catch(() => ({}))) as { error?: string };
-    throw new Error(data.error || "Failed to register push token");
+    throw new Error(data.error || `Failed to register push token (${res.status})`);
   }
   localStorage.setItem(PUSH_REGISTERED_KEY, token.slice(0, 24));
 }
 
+async function waitForActiveServiceWorker(registration: ServiceWorkerRegistration): Promise<ServiceWorkerRegistration> {
+  if (registration.active) return registration;
+  await withTimeout(
+    new Promise<ServiceWorkerRegistration>((resolve, reject) => {
+      const sw = registration.installing || registration.waiting;
+      if (!sw) {
+        reject(new Error("Service worker did not install"));
+        return;
+      }
+      const onStateChange = () => {
+        if (sw.state === "activated") {
+          sw.removeEventListener("statechange", onStateChange);
+          resolve(registration);
+        } else if (sw.state === "redundant") {
+          sw.removeEventListener("statechange", onStateChange);
+          reject(new Error("Service worker became redundant"));
+        }
+      };
+      sw.addEventListener("statechange", onStateChange);
+      if (sw.state === "activated") {
+        sw.removeEventListener("statechange", onStateChange);
+        resolve(registration);
+      }
+    }),
+    SW_READY_MS,
+    "Service worker activation",
+  );
+  return registration;
+}
+
 /**
- * Request browser permission and register FCM token for the signed-in member.
- * Returns null when unsupported, denied, or not configured.
+ * Request browser permission and register FCM token for the signed-in user.
+ * Throws on configuration or network errors so callers can show actionable messages.
  */
 export async function registerMemberWebPush(options?: { force?: boolean }): Promise<string | null> {
-  if (!(await isWebPushSupported())) return null;
+  if (!(await isWebPushSupported())) {
+    throw new Error("Web push is not supported in this browser");
+  }
   if (!VAPID_KEY?.trim()) {
-    console.warn("[push] VITE_FIREBASE_VAPID_KEY is not set");
-    return null;
+    throw new Error("Push is not configured (missing VITE_FIREBASE_VAPID_KEY)");
   }
   if (!options?.force && localStorage.getItem(PUSH_DECLINED_KEY) === "1") {
     return null;
   }
-  if (!auth.currentUser) return null;
+  if (!auth.currentUser) {
+    throw new Error("Sign in to enable push notifications");
+  }
 
   let permission = Notification.permission;
   if (permission === "default") {
@@ -73,15 +103,47 @@ export async function registerMemberWebPush(options?: { force?: boolean }): Prom
     return null;
   }
 
-  const registration = await navigator.serviceWorker.register("/firebase-messaging-sw.js");
-  await navigator.serviceWorker.ready;
+  let registration: ServiceWorkerRegistration;
+  try {
+    registration = await navigator.serviceWorker.register("/firebase-messaging-sw.js", {
+      scope: "/",
+      updateViaCache: "none",
+    });
+    registration = await waitForActiveServiceWorker(registration);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    throw new Error(`Could not start notification service worker: ${msg}`);
+  }
 
-  const messaging: Messaging = getMessaging(messagingApp());
-  const token = await getToken(messaging, {
-    vapidKey: VAPID_KEY.trim(),
-    serviceWorkerRegistration: registration,
-  });
-  if (!token) return null;
+  let messaging: Messaging;
+  try {
+    messaging = getMessaging(app);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    throw new Error(`Firebase messaging unavailable: ${msg}`);
+  }
+
+  let token: string | undefined;
+  try {
+    token = await withTimeout(
+      getToken(messaging, {
+        vapidKey: VAPID_KEY.trim(),
+        serviceWorkerRegistration: registration,
+      }),
+      FCM_TOKEN_MS,
+      "FCM token request",
+    );
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    if (/vapid|401|403|permission/i.test(msg)) {
+      throw new Error(`Invalid push key or permission issue: ${msg}`);
+    }
+    throw new Error(`Could not get push token: ${msg}`);
+  }
+
+  if (!token) {
+    throw new Error("FCM returned no token — check VAPID key and service worker config");
+  }
 
   await registerTokenWithServer(token);
   return token;
@@ -92,7 +154,7 @@ export function listenForForegroundPush(onPayload?: (title: string, body: string
   if (typeof window === "undefined" || !VAPID_KEY?.trim()) return null;
   let messaging: Messaging;
   try {
-    messaging = getMessaging(messagingApp());
+    messaging = getMessaging(app);
   } catch {
     return null;
   }

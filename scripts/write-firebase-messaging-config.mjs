@@ -1,5 +1,5 @@
 /**
- * Writes public/firebase-messaging-config.json for the FCM service worker.
+ * Injects Firebase config into the FCM service worker and writes firebase-messaging-config.json.
  * Uses VITE_FIREBASE_* from the environment (Vercel build or local .env.local).
  */
 import fs from "node:fs";
@@ -46,13 +46,38 @@ const config = {
   appId: clean(process.env.VITE_FIREBASE_APP_ID),
 };
 
+const swPath = path.join(root, "public", "firebase-messaging-sw.js");
+const configJsonPath = path.join(root, "public", "firebase-messaging-config.json");
+const marker = "/*__FIREBASE_MESSAGING_CONFIG__*/";
+const configPattern =
+  /\/\*__FIREBASE_MESSAGING_CONFIG__\*\/[\s\S]*?const FIREBASE_MESSAGING_CONFIG = (?:null|\{[\s\S]*?\});/;
+
 if (!config.apiKey || !config.projectId || !config.messagingSenderId || !config.appId) {
   console.warn(
-    "[write-firebase-messaging-config] Missing VITE_FIREBASE_* vars — skipping (push SW may not init locally).",
+    "[write-firebase-messaging-config] Missing VITE_FIREBASE_* vars — push SW will not initialize until configured.",
   );
+  if (fs.existsSync(swPath)) {
+    const sw = fs.readFileSync(swPath, "utf8");
+    fs.writeFileSync(
+      swPath,
+      sw.replace(configPattern, `${marker}\nconst FIREBASE_MESSAGING_CONFIG = null;`),
+    );
+  }
   process.exit(0);
 }
 
-const outPath = path.join(root, "public", "firebase-messaging-config.json");
-fs.writeFileSync(outPath, JSON.stringify(config, null, 2));
-console.log("[write-firebase-messaging-config] Wrote", outPath);
+fs.writeFileSync(configJsonPath, JSON.stringify(config, null, 2));
+console.log("[write-firebase-messaging-config] Wrote", configJsonPath);
+
+const configLiteral = JSON.stringify(config, null, 2);
+let swSource = fs.readFileSync(swPath, "utf8");
+if (!swSource.includes(marker)) {
+  console.error("[write-firebase-messaging-config] SW template marker missing in firebase-messaging-sw.js");
+  process.exit(1);
+}
+swSource = swSource.replace(
+  configPattern,
+  `${marker}\nconst FIREBASE_MESSAGING_CONFIG = ${configLiteral};`,
+);
+fs.writeFileSync(swPath, swSource);
+console.log("[write-firebase-messaging-config] Injected config into", swPath);
