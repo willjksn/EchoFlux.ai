@@ -58,8 +58,8 @@ import { InviteRequiredPage } from './components/InviteRequiredPage';
 import { isInviteOnlyMode } from './src/utils/inviteOnly';
 import { PremiumStudioLayout } from './components/PremiumStudioLayout';
 import {
+  hasRegisteredPushToken,
   listenForForegroundPush,
-  registerWebPush,
 } from './src/lib/fanPushNotifications';
 
 // Lazy load heavy components for code splitting
@@ -1210,17 +1210,14 @@ const AppContent: React.FC = () => {
         }
     }, [isAuthenticated, user, bypassMaintenance]);
 
-    /** Creators + admins: register web push for in-app bell parity (Fan Hub + header alerts). */
+    /** Foreground push toasts when browser notifications are already enabled. */
     useEffect(() => {
         if (fanOnlyEarlyExitShell || !isAuthenticated || !user) return;
+        if (!hasRegisteredPushToken()) return;
         const unsubForeground = listenForForegroundPush((title, body) => {
             showToast?.(`${title}${body ? `: ${body}` : ''}`, 'info');
         });
-        const timer = window.setTimeout(() => {
-            void registerWebPush();
-        }, 2500);
         return () => {
-            window.clearTimeout(timer);
             unsubForeground?.();
         };
     }, [fanOnlyEarlyExitShell, isAuthenticated, user?.id, showToast]);

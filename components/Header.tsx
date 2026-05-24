@@ -17,8 +17,9 @@ import { dismissUsageNotificationId,
 import { hasPlatformAdminAccess } from '../src/lib/platformAdminAccess';
 import {
   clearPushDeclined,
-  hasRegisteredPushToken,
+  isBrowserPushEnabled,
   isWebPushSupported,
+  PUSH_STATE_EVENT,
   registerWebPush,
 } from '../src/lib/fanPushNotifications';
 
@@ -52,20 +53,33 @@ export const Header: React.FC<HeaderProps> = ({ pageTitle }) => {
   const [creatorHelpFlow, setCreatorHelpFlow] = useState<'closed' | 'chooser' | 'report' | 'contact'>('closed');
   const [isReviewOpen, setIsReviewOpen] = useState(false);
   const [pushSupported, setPushSupported] = useState(false);
-  const [pushRegistered, setPushRegistered] = useState(() => hasRegisteredPushToken());
+  const [pushEnabled, setPushEnabled] = useState(() => isBrowserPushEnabled());
   const [pushLoading, setPushLoading] = useState(false);
   const [pushPermission, setPushPermission] = useState<NotificationPermission>(() =>
     typeof Notification !== 'undefined' ? Notification.permission : 'default',
   );
 
+  const syncPushState = useCallback(() => {
+    setPushEnabled(isBrowserPushEnabled());
+    if (typeof Notification !== 'undefined') {
+      setPushPermission(Notification.permission);
+    }
+  }, []);
+
   useEffect(() => {
     void isWebPushSupported().then(setPushSupported);
-    setPushRegistered(hasRegisteredPushToken());
-  }, [user.id]);
+    syncPushState();
+  }, [user.id, syncPushState]);
+
+  useEffect(() => {
+    const onPushState = () => syncPushState();
+    window.addEventListener(PUSH_STATE_EVENT, onPushState);
+    return () => window.removeEventListener(PUSH_STATE_EVENT, onPushState);
+  }, [syncPushState]);
 
   const showHeaderPushOptIn =
     pushSupported &&
-    !pushRegistered &&
+    !pushEnabled &&
     pushPermission !== 'denied' &&
     !!import.meta.env.VITE_FIREBASE_VAPID_KEY;
 
@@ -77,7 +91,7 @@ export const Header: React.FC<HeaderProps> = ({ pageTitle }) => {
       const token = await registerWebPush({ force: true });
       if (typeof Notification !== 'undefined') setPushPermission(Notification.permission);
       if (token) {
-        setPushRegistered(true);
+        setPushEnabled(true);
         showToast?.('Push notifications enabled', 'success');
       } else if (Notification.permission === 'denied') {
         showToast?.('Notifications blocked in browser settings', 'error');
@@ -146,6 +160,7 @@ export const Header: React.FC<HeaderProps> = ({ pageTitle }) => {
   };
   
   const handleToggleNotifications = () => {
+    syncPushState();
     setIsNotificationsOpen((prev) => !prev);
   };
 
@@ -456,9 +471,8 @@ export const Header: React.FC<HeaderProps> = ({ pageTitle }) => {
                     {showHeaderPushOptIn ? (
                       <div className="px-3 py-2 border-b border-gray-200 dark:border-gray-700 bg-indigo-50/80 dark:bg-indigo-950/30">
                         <p className="text-xs text-gray-700 dark:text-gray-300 mb-2">
-                          {isPlatformAdmin
-                            ? 'Get browser notifications for admin alerts and account reminders.'
-                            : 'Get browser notifications for account alerts and Fan Hub activity.'}
+                          Get browser notifications for Fan Hub activity, account alerts
+                          {isPlatformAdmin ? ', and admin alerts' : ''}. Manage anytime in Settings.
                         </p>
                         <button
                           type="button"

@@ -91,9 +91,10 @@ import { inferIsVideoFromUrl } from "../src/lib/mediaUrlInfer";
 import { fetchCreatorFanPostMedia } from "../src/lib/fetchCreatorFanPostMedia";
 import { isProtectedLockedMediaUrl } from "../src/lib/lockedPostMedia";
 import { FanHubNotificationBell, type FanHubNotificationNavigatePayload } from "./FanHubNotificationBell";
+import { BrowserPushSettings } from "./BrowserPushSettings";
 import {
+  hasRegisteredPushToken,
   listenForForegroundPush,
-  registerMemberWebPush,
 } from "../src/lib/fanPushNotifications";
 import { getAvatarCropStyle } from "../src/lib/avatarCrop";
 import { resolveStoreCopy } from "../src/lib/storefrontStoreCopy";
@@ -2145,20 +2146,16 @@ export const FanStorefrontView: React.FC = () => {
     };
   }, [isLoggedIn, creator?.creatorId, showToast]);
 
-  /** Member hub: register web push after login (soft prompt) + foreground notifications. */
+  /** Member hub: foreground push when already enabled via EchoFlux (Settings / header bell). */
   useEffect(() => {
     if (!isLoggedIn || !creator?.creatorId || !auth.currentUser || previewMember) return;
+    if (!hasRegisteredPushToken()) return;
 
     const unsubForeground = listenForForegroundPush((title, body) => {
       showToast?.(`${title}${body ? `: ${body}` : ""}`, "info");
     });
 
-    const timer = window.setTimeout(() => {
-      void registerMemberWebPush();
-    }, 2500);
-
     return () => {
-      window.clearTimeout(timer);
       unsubForeground?.();
     };
   }, [isLoggedIn, creator?.creatorId, previewMember, showToast]);
@@ -5342,7 +5339,8 @@ export const FanStorefrontView: React.FC = () => {
                 onNavigate={handleFanHubNotificationNavigate}
                 hidden={memberSuppressDmNotifications}
                 showToast={showToast}
-                enablePushOptIn
+                enablePushOptIn={hasMemberAreaAccess && !previewMember}
+                pushOptInCreatorName={typeof displayName === "string" ? displayName : ""}
               />
             )}
             {isLoggedIn && nextSessionAlert ? (
@@ -6209,6 +6207,23 @@ export const FanStorefrontView: React.FC = () => {
                     </div>
                   </div>
                 </div>
+                {hasMemberAreaAccess && !previewMember ? (
+                  <div className="fan-member-about-section">
+                    <h3 className="fan-member-about-heading">Notifications</h3>
+                    <div
+                      className="fan-profile-panel"
+                      style={{
+                        borderColor: "color-mix(in srgb, var(--fan-primary, #6366f1) 24%, transparent)",
+                      }}
+                    >
+                      <BrowserPushSettings
+                        variant="member"
+                        creatorDisplayName={typeof displayName === "string" ? displayName : ""}
+                        showToast={showToast}
+                      />
+                    </div>
+                  </div>
+                ) : null}
                 <div className="fan-member-about-section">
                   <h3 className="fan-member-about-heading">Membership</h3>
                   <div

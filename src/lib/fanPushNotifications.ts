@@ -1,10 +1,12 @@
-import { getMessaging, getToken, isSupported, onMessage, type Messaging } from "firebase/messaging";
+import { getMessaging, getToken, deleteToken, isSupported, onMessage, type Messaging } from "firebase/messaging";
 import app, { auth } from "../../firebaseConfig";
 import { resolveApiUrl } from "./resolveApiUrl";
 
 const VAPID_KEY = import.meta.env.VITE_FIREBASE_VAPID_KEY as string | undefined;
 const PUSH_DECLINED_KEY = "echoflux:push-declined";
 const PUSH_REGISTERED_KEY = "echoflux:push-token-registered";
+const PUSH_TOKEN_KEY = "echoflux:push-fcm-token";
+export const PUSH_STATE_EVENT = "echoflux:push-state-changed";
 const SW_READY_MS = 20_000;
 const FCM_TOKEN_MS = 20_000;
 
@@ -44,6 +46,13 @@ async function registerTokenWithServer(token: string): Promise<void> {
     throw new Error(data.error || `Failed to register push token (${res.status})`);
   }
   localStorage.setItem(PUSH_REGISTERED_KEY, token.slice(0, 24));
+  localStorage.setItem(PUSH_TOKEN_KEY, token);
+  emitPushStateChanged();
+}
+
+function emitPushStateChanged(): void {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(new CustomEvent(PUSH_STATE_EVENT));
 }
 
 async function waitForActiveServiceWorker(registration: ServiceWorkerRegistration): Promise<ServiceWorkerRegistration> {
@@ -147,6 +156,51 @@ export async function registerMemberWebPush(options?: { force?: boolean }): Prom
 
   await registerTokenWithServer(token);
   return token;
+}
+
+/** Turn off browser push for this account on the server and clear local registration state. */
+export async function disableWebPush(): Promise<void> {
+  const storedToken = localStorage.getItem(PUSH_TOKEN_KEY)?.trim() || "";
+  const user = auth.currentUser;
+  if (user) {
+    const idToken = await user.getIdToken();
+    const res = await fetch(resolveApiUrl("/api/fanPushToken"), {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${idToken}`,
+      },
+      body: JSON.stringify({
+        action: "disable",
+        ...(storedToken ? { token: storedToken } : {}),
+      }),
+    });
+    if (!res.ok) {
+      const data = (await res.json().catch(() => ({}))) as { error?: string };
+      throw new Error(data.error || `Failed to disable push (${res.status})`);
+    }
+  }
+
+  if (VAPID_KEY?.trim()) {
+    try {
+      const messaging = getMessaging(app);
+      await deleteToken(messaging);
+    } catch {
+      /* ignore — token may already be gone */
+    }
+  }
+
+  localStorage.removeItem(PUSH_REGISTERED_KEY);
+  localStorage.removeItem(PUSH_TOKEN_KEY);
+  localStorage.removeItem(PUSH_DECLINED_KEY);
+  emitPushStateChanged();
+}
+
+export function isBrowserPushEnabled(): boolean {
+  if (typeof window === "undefined") return false;
+  if (!hasRegisteredPushToken()) return false;
+  if (typeof Notification !== "undefined" && Notification.permission !== "granted") return false;
+  return true;
 }
 
 /** Foreground push — show a native notification when the tab is open. */

@@ -20,6 +20,7 @@ import {
     openCreatorBillingPortal,
 } from '../src/lib/openCreatorBillingPortal';
 import { EchoFluxBillingCardOnFile } from './EchoFluxBillingCardSummary';
+import { BrowserPushSettings } from './BrowserPushSettings';
 
 const CreatorIdentityBuilder = lazy(() =>
     import('./CreatorIdentityBuilder').then((m) => ({ default: m.CreatorIdentityBuilder }))
@@ -1074,6 +1075,9 @@ export const Settings: React.FC = () => {
                               )}
                           </SettingsSection>
                         )}
+                        <SettingsSection title="Notifications">
+                            <BrowserPushSettings showToast={showToast} />
+                        </SettingsSection>
                         <SettingsSection title="Safety & Accessibility">
                             <ToggleSwitch label="Safe Mode" enabled={settings.safeMode} onChange={(val) => updateSetting('safeMode', val)} />
                             <p className="text-sm text-gray-500 dark:text-gray-400">Prevents the AI from generating replies with profanity or discussing sensitive topics.</p>

@@ -6,7 +6,7 @@ import { enforceRateLimit } from "./_rateLimit.js";
 import { withErrorHandling } from "./_errorHandler.js";
 
 type Body = {
-  action?: "register" | "unregister";
+  action?: "register" | "unregister" | "disable";
   token?: string;
 };
 
@@ -33,15 +33,33 @@ async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
   if (!rlOk) return;
 
   const body = (req.body || {}) as Body;
-  const action = body.action === "unregister" ? "unregister" : "register";
+  const actionRaw = body.action === "unregister" ? "unregister" : body.action === "disable" ? "disable" : "register";
   const token = typeof body.token === "string" ? body.token.trim() : "";
+
+  const db = getAdminDb();
+  const userRef = db.collection("users").doc(decoded.uid);
+
+  if (actionRaw === "disable") {
+    const updates: Record<string, unknown> = {
+      pushNotificationsEnabled: false,
+      updatedAt: FieldValue.serverTimestamp(),
+    };
+    if (token) {
+      updates.fcmTokens = FieldValue.arrayRemove(token);
+    } else {
+      updates.fcmTokens = [];
+    }
+    await userRef.set(updates, { merge: true });
+    res.status(200).json({ ok: true, action: "disable" });
+    return;
+  }
+
   if (!token || token.length < 20) {
     res.status(400).json({ error: "Valid FCM token required" });
     return;
   }
 
-  const db = getAdminDb();
-  const userRef = db.collection("users").doc(decoded.uid);
+  const action = actionRaw;
 
   if (action === "unregister") {
     await userRef.set(
