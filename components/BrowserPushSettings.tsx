@@ -46,8 +46,28 @@ export const BrowserPushSettings: React.FC<BrowserPushSettingsProps> = ({
     return () => window.removeEventListener(PUSH_STATE_EVENT, sync);
   }, [sync]);
 
+  /** Re-check after user changes site notification permission in browser settings. */
+  useEffect(() => {
+    const onFocus = () => sync();
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onFocus);
+    return () => {
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onFocus);
+    };
+  }, [sync]);
+
+  const permissionDenied = permission === "denied";
+
   const handleToggle = async (next: boolean) => {
     if (loading) return;
+    if (next && permissionDenied) {
+      showToast?.(
+        "Notifications are blocked for this site. Allow them in your browser settings, then return here.",
+        "error",
+      );
+      return;
+    }
     setLoading(true);
     try {
       if (next) {
@@ -84,17 +104,6 @@ export const BrowserPushSettings: React.FC<BrowserPushSettingsProps> = ({
     );
   }
 
-  if (permission === "denied") {
-    return (
-      <div className="space-y-2">
-        <p className={`text-sm ${isMember ? "fan-member-about-text m-0" : "text-gray-700 dark:text-gray-300"}`}>
-          Notifications are blocked in your browser. Enable them in your browser or device settings,
-          then return here to turn push back on.
-        </p>
-      </div>
-    );
-  }
-
   const enabledHelp = isMember
     ? `You’ll get browser alerts when ${creatorLabel} posts, messages you, or schedules live sessions. Your in-app bell keeps the full history.`
     : "You’ll get browser alerts for Fan Hub activity, account reminders, and admin alerts (when applicable). In-app bells still show your full history.";
@@ -103,9 +112,15 @@ export const BrowserPushSettings: React.FC<BrowserPushSettingsProps> = ({
     ? `Enable to receive browser alerts when ${creatorLabel} posts or messages you.`
     : "Enable to receive browser alerts for Fan Hub posts, messages, purchases, and account reminders. You can also enable from the EchoFlux header bell.";
 
+  const statusHelp = permissionDenied
+    ? "Notifications are blocked in your browser. Open your browser or device settings, allow notifications for this site, then return here and turn the toggle on."
+    : enabled
+      ? enabledHelp
+      : disabledHelp;
+
   return (
     <div className="space-y-2">
-      <div className={`flex items-center justify-between ${loading ? "opacity-60" : ""}`}>
+      <div className={`flex items-center justify-between gap-3 ${loading ? "opacity-60" : ""}`}>
         <span
           className={
             isMember
@@ -117,12 +132,17 @@ export const BrowserPushSettings: React.FC<BrowserPushSettingsProps> = ({
         </span>
         <button
           type="button"
-          disabled={loading}
+          disabled={loading || (permissionDenied && !enabled)}
           onClick={() => void handleToggle(!enabled)}
           className={`${
             enabled ? "bg-primary-600" : "bg-gray-200 dark:bg-gray-600"
-          } relative inline-flex h-6 w-11 items-center rounded-full transition-colors disabled:cursor-not-allowed`}
+          } relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors disabled:cursor-not-allowed disabled:opacity-50`}
           aria-pressed={enabled}
+          title={
+            permissionDenied && !enabled
+              ? "Allow notifications for this site in browser settings first"
+              : undefined
+          }
         >
           <span
             className={`${
@@ -131,9 +151,30 @@ export const BrowserPushSettings: React.FC<BrowserPushSettingsProps> = ({
           />
         </button>
       </div>
-      <p className={`text-sm ${isMember ? "fan-member-about-text m-0 opacity-90" : "text-gray-500 dark:text-gray-400"}`}>
-        {enabled ? enabledHelp : disabledHelp}
+      <p
+        className={`text-sm ${
+          permissionDenied
+            ? isMember
+              ? "fan-member-about-text m-0 text-amber-800 dark:text-amber-200"
+              : "text-amber-700 dark:text-amber-300"
+            : isMember
+              ? "fan-member-about-text m-0 opacity-90"
+              : "text-gray-500 dark:text-gray-400"
+        }`}
+      >
+        {statusHelp}
       </p>
+      {permissionDenied ? (
+        <button
+          type="button"
+          onClick={() => sync()}
+          className={`text-xs font-medium underline ${
+            isMember ? "fan-member-about-text m-0" : "text-primary-600 dark:text-primary-400"
+          }`}
+        >
+          I updated browser settings — check again
+        </button>
+      ) : null}
     </div>
   );
 };
