@@ -19,6 +19,10 @@ import {
   recordLiveStreamViewerJoin,
   recordLiveStreamViewerLeave,
 } from "./_liveStreamParticipants.js";
+import {
+  endLiveStreamBroadcast,
+  syncLiveStreamPromoStatusOnPostCollections,
+} from "./_liveStreamEndCore.js";
 
 const TOKEN_DURATION_MIN = 360;
 
@@ -36,38 +40,6 @@ async function isPaidSubscriber(db: Firestore, creatorId: string, fanId: string)
     .get();
   if (!snap.exists) return false;
   return isPaidLikeStatus(snap.data()?.status);
-}
-
-/**
- * Denormalized `liveStreamPromo.streamStatus` on feed posts must match `liveStreams.status`
- * so fans see Watch live / On air toggle off when the host ends the broadcast.
- * Updates every matching doc (handles missing `promoPostId` on the stream doc or failed one-off syncs).
- */
-async function syncLiveStreamPromoStatusOnPostCollections(
-  db: Firestore,
-  creatorId: string,
-  streamId: string,
-  streamStatus: "live" | "ended"
-): Promise<void> {
-  const paths: ReadonlyArray<readonly [string, string, string]> = [
-    ["creators", creatorId, "fanPosts"],
-    ["creators", creatorId, "posts"],
-    ["users", creatorId, "posts"],
-  ];
-  const patch: Record<string, unknown> = {
-    "liveStreamPromo.streamStatus": streamStatus,
-    updatedAt: FieldValue.serverTimestamp(),
-  };
-  for (const segs of paths) {
-    try {
-      const col = db.collection(segs[0]).doc(segs[1]).collection(segs[2]);
-      const snap = await col.where("liveStreamPromo.streamId", "==", streamId).limit(25).get();
-      if (snap.empty) continue;
-      await Promise.all(snap.docs.map((d) => d.ref.update(patch)));
-    } catch (e) {
-      console.warn("liveStreamDaily: syncLiveStreamPromoStatusOnPostCollections", segs.join("/"), e);
-    }
-  }
 }
 
 async function fanCanWatchStream(
@@ -164,6 +136,8 @@ function parseLiveStreamDailyBody(req: { body?: unknown }): {
  * - { action: "endLive", streamId } — creator; marks stream ended, syncs promo post
  * - { action: "token", creatorId, streamId } — creator (presenter) or entitled fan (viewer); stream must be `live`
  * - { action: "leaveViewer", creatorId, streamId } — fan left the broadcast (updates host roster)
+ * - { action: "hostHeartbeat", streamId } — creator still in broadcast (prevents idle auto-end)
+ * - { action: "hostLeave", streamId } — creator closed broadcast UI; auto-end after 5 min if not ended manually
  */
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (applyBrowserApiCors(req, res)) return;
@@ -227,10 +201,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           return res.status(400).json({ error: "Cannot go live on a cancelled stream" });
         }
         const { roomUrl, roomName } = await createOrGetLiveStreamBroadcastRoom(uid, streamId, 48);
+        const nowIso = new Date().toISOString();
         await streamRef.update({
           status: "live",
           dailyRoomName: roomName,
           dailyRoomUrl: roomUrl,
+          liveStartedAt: FieldValue.serverTimestamp(),
+          hostLastSeenAt: nowIso,
+          hostLeftAt: FieldValue.delete(),
           updatedAt: FieldValue.serverTimestamp(),
         });
 
@@ -251,24 +229,41 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return res.status(200).json({ ok: true, roomUrl, roomName });
       }
 
-      // endLive
-      try {
-        await clearLiveStreamParticipants(db, uid, streamId);
-      } catch (e) {
-        console.warn("clearLiveStreamParticipants (endLive):", e);
+      const ended = await endLiveStreamBroadcast(db, uid, streamId);
+      if (!ended.ok) {
+        return res.status(ended.status).json({ error: ended.error });
       }
-
-      await streamRef.update({
-        status: "ended",
-        endedAt: FieldValue.serverTimestamp(),
-        updatedAt: FieldValue.serverTimestamp(),
-      });
-      await syncLiveStreamPromoStatusOnPostCollections(db, uid, streamId, "ended");
       try {
         await syncLiveStreamTicketOrdersForStream(db, uid, streamId);
       } catch (e) {
         console.warn("syncLiveStreamTicketOrdersForStream (endLive):", e);
       }
+      return res.status(200).json({ ok: true, participantMinutes: ended.participantMinutes });
+    }
+
+    if (action === "hostHeartbeat" || action === "hostLeave") {
+      const streamRef = db.collection("creators").doc(uid).collection("liveStreams").doc(streamId);
+      const snap = await streamRef.get();
+      if (!snap.exists) {
+        return res.status(404).json({ error: "Stream not found" });
+      }
+      const sdata = snap.data() as Record<string, unknown>;
+      if (String(sdata.status ?? "").trim().toLowerCase() !== "live") {
+        return res.status(200).json({ ok: true, ignored: true });
+      }
+      const nowIso = new Date().toISOString();
+      if (action === "hostHeartbeat") {
+        await streamRef.update({
+          hostLastSeenAt: nowIso,
+          hostLeftAt: FieldValue.delete(),
+          updatedAt: FieldValue.serverTimestamp(),
+        });
+        return res.status(200).json({ ok: true });
+      }
+      await streamRef.update({
+        hostLeftAt: nowIso,
+        updatedAt: FieldValue.serverTimestamp(),
+      });
       return res.status(200).json({ ok: true });
     }
 
@@ -334,6 +329,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const userName = await dailyParticipantDisplayName(db, uid, decoded, isHost);
       const role = isHost ? "presenter" : "viewer";
       const token = await createLiveStreamMeetingToken(roomName, uid, userName, role, TOKEN_DURATION_MIN);
+
+      if (isHost) {
+        await streamRef.update({
+          hostLastSeenAt: new Date().toISOString(),
+          hostLeftAt: FieldValue.delete(),
+          updatedAt: FieldValue.serverTimestamp(),
+        });
+      }
 
       if (!isHost) {
         try {

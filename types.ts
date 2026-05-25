@@ -606,6 +606,20 @@ export interface CreatorLiveStreamFirestore {
   /** Daily.co Prebuilt room (set when creator starts broadcast) */
   dailyRoomName?: string;
   dailyRoomUrl?: string;
+  /** Set when host taps Go live (for Daily minute tracking). */
+  liveStartedAt?: unknown;
+  /** Updated while host is in the broadcast UI (heartbeat). */
+  hostLastSeenAt?: string;
+  /** Set when host leaves broadcast without End stream; cron auto-ends after 5 min. */
+  hostLeftAt?: string;
+  endedAt?: unknown;
+  autoEnded?: boolean;
+  autoEndedAt?: string;
+  /** Logged once on End stream — platform Daily.co participant-minutes. */
+  usageLoggedAt?: string;
+  usageParticipantMinutes?: number;
+  liveDurationMinutes?: number;
+  liveViewerCountAtEnd?: number;
   /** Hide from fans + block fan checkout/watch; creator-only rehearsal */
   creatorTestOnly?: boolean;
   createdAt?: unknown;

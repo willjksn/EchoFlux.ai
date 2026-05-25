@@ -90,6 +90,38 @@ export const LiveStreamWatchRoom: React.FC<LiveStreamWatchRoomProps> = ({
   const isPresenter = role === "presenter";
 
   useEffect(() => {
+    if (!isPresenter || loading || error || !creatorId || !streamId) return undefined;
+
+    const ping = (action: "hostHeartbeat" | "hostLeave") => {
+      if (!auth.currentUser) return;
+      void auth.currentUser.getIdToken().then((t) => {
+        if (!t) return;
+        void fetch(resolveApiUrl("/api/liveStreamDaily"), {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${t}`,
+          },
+          body: JSON.stringify({ action, streamId }),
+          keepalive: action === "hostLeave",
+        });
+      });
+    };
+
+    const heartbeat = window.setInterval(() => ping("hostHeartbeat"), 60_000);
+    ping("hostHeartbeat");
+
+    const onPageHide = () => ping("hostLeave");
+    window.addEventListener("pagehide", onPageHide);
+
+    return () => {
+      window.clearInterval(heartbeat);
+      window.removeEventListener("pagehide", onPageHide);
+      ping("hostLeave");
+    };
+  }, [isPresenter, loading, error, creatorId, streamId]);
+
+  useEffect(() => {
     if (!isPresenter || !creatorId || !streamId) return undefined;
     const q = query(
       collection(db, "creators", creatorId, "liveStreams", streamId, "participants"),
@@ -165,10 +197,26 @@ export const LiveStreamWatchRoom: React.FC<LiveStreamWatchRoomProps> = ({
         </div>
         <button
           type="button"
-          onClick={onClose}
+          onClick={() => {
+            if (isPresenter && auth.currentUser) {
+              void auth.currentUser.getIdToken().then((t) => {
+                if (!t) return;
+                void fetch(resolveApiUrl("/api/liveStreamDaily"), {
+                  method: "POST",
+                  headers: {
+                    "Content-Type": "application/json",
+                    Authorization: `Bearer ${t}`,
+                  },
+                  body: JSON.stringify({ action: "hostLeave", streamId }),
+                  keepalive: true,
+                });
+              });
+            }
+            onClose();
+          }}
           className="shrink-0 px-4 py-2 rounded-lg bg-gray-800 text-white text-sm font-medium hover:bg-gray-700 border border-gray-700"
         >
-          Leave
+          {isPresenter ? "Leave broadcast" : "Leave"}
         </button>
       </div>
 

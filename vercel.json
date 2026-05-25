@@ -121,6 +121,10 @@
       "schedule": "*/5 * * * *"
     },
     {
+      "path": "/api/cronAutoEndLiveStreams",
+      "schedule": "* * * * *"
+    },
+    {
       "path": "/api/cronRefreshXTokens",
       "schedule": "*/30 * * * *"
     },

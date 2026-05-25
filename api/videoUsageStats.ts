@@ -17,6 +17,18 @@ import {
   updateCreatorMonthlyLimit 
 } from "./_videoUsageTracking.js";
 import type { PlatformVideoStats } from "./_videoUsageTracking.js";
+import {
+  dailyBillingCycleMonthKey,
+  dailyBillingCycleLabel,
+  dailyBillingCycleResetsOnLabel,
+  dailyCycleBaselineMinutes,
+  dailyCycleBaselineSessions,
+  effectiveParticipantMinutes,
+  effectiveTotalSessions,
+  estimatedDailyCostUsd,
+  freeTierStatus,
+  DAILY_FREE_TIER_MINUTES,
+} from "../src/lib/dailyUsageCycle.js";
 
 // Admin user IDs (should be in environment or database)
 const ADMIN_UIDS = process.env.ADMIN_UIDS?.split(',') || [];
@@ -32,7 +44,7 @@ async function isAdmin(uid: string): Promise<boolean> {
 }
 
 function monthKeyFromDate(d: Date): string {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+  return dailyBillingCycleMonthKey(d);
 }
 
 function monthStartEnd(monthKey: string): { startMs: number; endMs: number } {
@@ -65,6 +77,25 @@ function parseIsoMs(value: unknown): number | null {
   return null;
 }
 
+function mergeMonthStats(
+  aggregated: PlatformVideoStats,
+  fallback: PlatformVideoStats,
+): PlatformVideoStats {
+  return {
+    ...aggregated,
+    totalSessions: Math.max(aggregated.totalSessions || 0, fallback.totalSessions || 0),
+    totalParticipantMinutes: Math.max(
+      aggregated.totalParticipantMinutes || 0,
+      fallback.totalParticipantMinutes || 0,
+    ),
+    totalRevenue: Math.max(aggregated.totalRevenue || 0, fallback.totalRevenue || 0),
+    totalCommission: Math.max(aggregated.totalCommission || 0, fallback.totalCommission || 0),
+    uniqueCreators: Math.max(aggregated.uniqueCreators || 0, fallback.uniqueCreators || 0),
+    uniqueFans: Math.max(aggregated.uniqueFans || 0, fallback.uniqueFans || 0),
+    updatedAt: fallback.updatedAt || aggregated.updatedAt,
+  };
+}
+
 async function buildFallbackCurrentMonthStats(db: FirebaseFirestore.Firestore, month: string): Promise<PlatformVideoStats> {
   const { startMs, endMs } = monthStartEnd(month);
   const sessionsSnap = await db.collectionGroup("liveVideoChats").where("status", "==", "completed").get();
@@ -75,6 +106,49 @@ async function buildFallbackCurrentMonthStats(db: FirebaseFirestore.Firestore, m
   let totalCommission = 0;
   const creators = new Set<string>();
   const fans = new Set<string>();
+  const seenSessionKeys = new Set<string>();
+
+  const recordSession = (
+    sessionKey: string,
+    opts: { participantMinutes?: number; creatorId?: string; fanId?: string; revenueCents?: number; commissionCents?: number },
+  ) => {
+    if (!sessionKey || seenSessionKeys.has(sessionKey)) return;
+    seenSessionKeys.add(sessionKey);
+    totalSessions += 1;
+    const pm = Math.max(0, Math.round(opts.participantMinutes ?? 0));
+    if (pm > 0) totalParticipantMinutes += pm;
+    const revenue = Math.max(0, opts.revenueCents ?? 0);
+    const commission = Math.max(0, opts.commissionCents ?? 0);
+    totalRevenue += revenue;
+    totalCommission += commission;
+    if (opts.creatorId) creators.add(opts.creatorId);
+    if (opts.fanId) fans.add(opts.fanId);
+  };
+
+  try {
+    const logsSnap = await db.collection("video_usage_logs").where("month", "==", month).limit(5000).get();
+    logsSnap.forEach((doc) => {
+      const d = doc.data() as {
+        sessionId?: string;
+        participantMinutes?: number;
+        creatorId?: string;
+        fanId?: string;
+        amountPaidByFan?: number;
+        echofluxCommission?: number;
+      };
+      const sessionKey =
+        typeof d.sessionId === "string" && d.sessionId.trim() ? d.sessionId.trim() : `log_${doc.id}`;
+      recordSession(sessionKey, {
+        participantMinutes: typeof d.participantMinutes === "number" ? d.participantMinutes : 0,
+        creatorId: typeof d.creatorId === "string" ? d.creatorId : undefined,
+        fanId: typeof d.fanId === "string" ? d.fanId : undefined,
+        revenueCents: typeof d.amountPaidByFan === "number" ? d.amountPaidByFan : 0,
+        commissionCents: typeof d.echofluxCommission === "number" ? d.echofluxCommission : 0,
+      });
+    });
+  } catch (e) {
+    console.warn("buildFallbackCurrentMonthStats: video_usage_logs scan failed", e);
+  }
 
   sessionsSnap.forEach((doc) => {
     const d = doc.data() as {
@@ -98,13 +172,52 @@ async function buildFallbackCurrentMonthStats(db: FirebaseFirestore.Firestore, m
     const creatorEarnings =
       typeof d.creatorEarningsCents === "number" && Number.isFinite(d.creatorEarningsCents) ? d.creatorEarningsCents : 0;
 
-    totalSessions += 1;
-    totalParticipantMinutes += Math.max(0, duration * 2);
-    totalRevenue += Math.max(0, amount);
-    totalCommission += Math.max(0, amount - creatorEarnings);
-    if (d.creatorId) creators.add(d.creatorId);
-    if (d.fanId) fans.add(d.fanId);
+    const pm = Math.max(0, duration * 2);
+    recordSession(`vc_${doc.id}`, {
+      participantMinutes: pm,
+      creatorId: d.creatorId,
+      fanId: d.fanId,
+      revenueCents: Math.max(0, amount),
+      commissionCents: Math.max(0, amount - creatorEarnings),
+    });
   });
+
+  try {
+    const streamsSnap = await db.collectionGroup("liveStreams").where("status", "==", "ended").limit(2000).get();
+    streamsSnap.forEach((doc) => {
+      const d = doc.data() as {
+        usageLoggedAt?: unknown;
+        usageParticipantMinutes?: number;
+        endedAt?: unknown;
+        liveStartedAt?: unknown;
+        dailyRoomName?: string;
+        creatorId?: string;
+      };
+      const roomName = typeof d.dailyRoomName === "string" ? d.dailyRoomName.trim() : "";
+      const endedMs = parseIsoMs(d.endedAt) ?? parseIsoMs(d.usageLoggedAt);
+      const startedMs = parseIsoMs(d.liveStartedAt);
+      const inCycle =
+        (endedMs != null && endedMs >= startMs && endedMs < endMs) ||
+        (startedMs != null && startedMs >= startMs && startedMs < endMs);
+      if (!inCycle || !roomName) return;
+
+      const pm =
+        typeof d.usageParticipantMinutes === "number" && Number.isFinite(d.usageParticipantMinutes)
+          ? d.usageParticipantMinutes
+          : 0;
+      const creatorId =
+        typeof d.creatorId === "string" && d.creatorId.trim()
+          ? d.creatorId.trim()
+          : doc.ref.path.match(/^creators\/([^/]+)\//)?.[1];
+      recordSession(`ls_${creatorId || "unknown"}_${doc.id}`, {
+        participantMinutes: pm,
+        creatorId,
+        fanId: "live_broadcast",
+      });
+    });
+  } catch (e) {
+    console.warn("buildFallbackCurrentMonthStats: liveStreams scan failed", e);
+  }
 
   const FREE_TIER_MINUTES = 10000;
   const DAILY_COST_PER_PARTICIPANT_MINUTE = 0.004;
@@ -165,20 +278,30 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     try {
       const months = parseInt(req.query.months as string) || 3;
       const stats = await getPlatformVideoStats(months);
+      const cycleMonth = dailyBillingCycleMonthKey(new Date());
 
-      // Fallback: if pre-aggregated stats are empty, derive current month directly from completed sessions.
-      if (stats.length > 0) {
-        const current = stats[0];
-        const looksEmpty =
-          (current?.totalSessions || 0) === 0 &&
-          (current?.totalParticipantMinutes || 0) === 0 &&
-          (current?.totalRevenue || 0) === 0 &&
-          (current?.totalCommission || 0) === 0;
-        if (looksEmpty) {
-          const currentMonth = monthKeyFromDate(new Date());
-          stats[0] = await buildFallbackCurrentMonthStats(db, currentMonth);
-        }
+      let currentIdx = stats.findIndex((s) => s.month === cycleMonth);
+      if (currentIdx < 0) {
+        stats.unshift({
+          month: cycleMonth,
+          totalSessions: 0,
+          totalParticipantMinutes: 0,
+          estimatedCost: 0,
+          totalRevenue: 0,
+          totalCommission: 0,
+          uniqueCreators: 0,
+          uniqueFans: 0,
+          updatedAt: new Date().toISOString(),
+        });
+        currentIdx = 0;
+      } else if (currentIdx > 0) {
+        const [entry] = stats.splice(currentIdx, 1);
+        stats.unshift(entry);
+        currentIdx = 0;
       }
+
+      const fallback = await buildFallbackCurrentMonthStats(db, cycleMonth);
+      stats[0] = mergeMonthStats(stats[0], fallback);
       
       // Calculate totals
       const totals = stats.reduce((acc, month) => ({
@@ -195,20 +318,40 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         totalCommission: 0,
       });
 
-      // Current month status
       const currentMonth = stats[0];
-      const FREE_TIER_MINUTES = 10000;
-      const freeMinutesRemaining = Math.max(0, FREE_TIER_MINUTES - (currentMonth?.totalParticipantMinutes || 0));
-      const isOverFreeTier = (currentMonth?.totalParticipantMinutes || 0) >= FREE_TIER_MINUTES;
+      const trackedMinutes = currentMonth?.totalParticipantMinutes || 0;
+      const trackedSessions = currentMonth?.totalSessions || 0;
+      const baselineMinutes = dailyCycleBaselineMinutes(cycleMonth);
+      const baselineSessions = dailyCycleBaselineSessions(cycleMonth);
+      const effectiveMinutes = effectiveParticipantMinutes(cycleMonth, trackedMinutes);
+      const effectiveSessions = effectiveTotalSessions(cycleMonth, trackedSessions);
+      const tier = freeTierStatus(effectiveMinutes);
 
       return res.status(200).json({
         monthlyStats: stats,
         totals,
+        billingCycle: {
+          monthKey: cycleMonth,
+          label: dailyBillingCycleLabel(cycleMonth),
+          resetsOn: dailyBillingCycleResetsOnLabel(cycleMonth),
+          startDay: 1,
+          baselineMinutes,
+          baselineSessions,
+          trackedParticipantMinutes: trackedMinutes,
+          trackedSessions,
+        },
         currentMonth: {
           ...currentMonth,
-          freeMinutesRemaining,
-          isOverFreeTier,
-          freeTierLimit: FREE_TIER_MINUTES,
+          trackedSessions,
+          baselineSessions,
+          totalSessions: effectiveSessions,
+          trackedParticipantMinutes: trackedMinutes,
+          baselineParticipantMinutes: baselineMinutes,
+          totalParticipantMinutes: effectiveMinutes,
+          estimatedCost: estimatedDailyCostUsd(effectiveMinutes),
+          freeMinutesRemaining: tier.freeMinutesRemaining,
+          isOverFreeTier: tier.isOverFreeTier,
+          freeTierLimit: DAILY_FREE_TIER_MINUTES,
         },
       });
     } catch (e) {

@@ -731,9 +731,23 @@ export const AdminDashboard: React.FC = () => {
 
     // Video Chat Usage Stats
     const [videoUsageStats, setVideoUsageStats] = useState<{
+        billingCycle?: {
+            monthKey: string;
+            label: string;
+            resetsOn: string;
+            startDay: number;
+            baselineMinutes: number;
+            baselineSessions?: number;
+            trackedParticipantMinutes: number;
+            trackedSessions?: number;
+        };
         currentMonth: {
             totalSessions: number;
             totalParticipantMinutes: number;
+            trackedSessions?: number;
+            baselineSessions?: number;
+            trackedParticipantMinutes?: number;
+            baselineParticipantMinutes?: number;
             estimatedCost: number;
             totalRevenue: number;
             totalCommission: number;
@@ -2749,8 +2763,26 @@ export const AdminDashboard: React.FC = () => {
             <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-md">
                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
                     <div>
-                        <h3 className="text-xl font-bold text-gray-900 dark:text-white">Video Chat Usage (Daily.co)</h3>
-                        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Track video call minutes, costs, and revenue</p>
+                        <h3 className="text-xl font-bold text-gray-900 dark:text-white">Daily.co usage (video + live)</h3>
+                        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                            Participant minutes include 1:1 video chat and Fan Hub go-live broadcasts, aligned with your Daily.co
+                            billing cycle (resets on the 1st). Baseline minutes from Daily.co are added for the current cycle so
+                            totals match your dashboard; new usage is tracked when hosts end streams.
+                        </p>
+                        {videoUsageStats?.billingCycle ? (
+                            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                Current cycle: {videoUsageStats.billingCycle.label}
+                                {videoUsageStats.billingCycle.resetsOn
+                                    ? ` · Resets ${videoUsageStats.billingCycle.resetsOn}`
+                                    : null}
+                                {videoUsageStats.billingCycle.baselineMinutes > 0
+                                    ? ` · Daily.co baseline ${videoUsageStats.billingCycle.baselineMinutes.toLocaleString()} min + ${(videoUsageStats.billingCycle.trackedParticipantMinutes || 0).toLocaleString()} tracked`
+                                    : null}
+                                {(videoUsageStats.billingCycle.baselineSessions || 0) > 0
+                                    ? ` · ${videoUsageStats.billingCycle.baselineSessions} baseline sessions + ${videoUsageStats.billingCycle.trackedSessions ?? 0} tracked`
+                                    : null}
+                            </p>
+                        ) : null}
                     </div>
                 </div>
                 
@@ -2784,7 +2816,7 @@ export const AdminDashboard: React.FC = () => {
                                 <p className="text-2xl font-bold text-blue-900 dark:text-blue-100">{videoUsageStats?.currentMonth?.totalSessions || 0}</p>
                             </div>
                             <div className="p-4 bg-gradient-to-br from-cyan-50 to-cyan-100 dark:from-cyan-900/20 dark:to-cyan-800/20 rounded-lg border border-cyan-200 dark:border-cyan-700">
-                                <p className="text-xs font-medium text-cyan-700 dark:text-cyan-300 mb-1">Participant Minutes</p>
+                                <p className="text-xs font-medium text-cyan-700 dark:text-cyan-300 mb-1">Participant Minutes (1:1 + live)</p>
                                 <p className="text-2xl font-bold text-cyan-900 dark:text-cyan-100">{(videoUsageStats?.currentMonth?.totalParticipantMinutes || 0).toLocaleString()}</p>
                             </div>
                             <div className="p-4 bg-gradient-to-br from-red-50 to-red-100 dark:from-red-900/20 dark:to-red-800/20 rounded-lg border border-red-200 dark:border-red-700">
@@ -3141,7 +3173,7 @@ export const AdminDashboard: React.FC = () => {
                                                             {typeof liveStreamsOverview.streamsWithDailyRoomTouched30d === "number"
                                                                 ? `${liveStreamsOverview.streamsWithDailyRoomTouched30d.toLocaleString()} stream doc(s) with a Daily room updated in the last 30d`
                                                                 : "stream docs with a Daily room in the sample"}
-                                                            , ~42 min × ~5 participants × $0.004/participant-min (same scale as video chat cost above). Not a bill — confirm in Daily.co.
+                                                            , ~42 min × ~5 participants × $0.004/participant-min when streams ended before tracking shipped. New go-live sessions log real minutes into the counter above when the host taps End stream. Confirm in Daily.co.
                                                         </p>
                                                     </div>
                                                 </div>

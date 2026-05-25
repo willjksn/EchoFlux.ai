@@ -8,11 +8,14 @@
  */
 
 import { getAdminDb } from './_firebaseAdmin.js';
+import {
+  dailyBillingCycleMonthKey,
+  DAILY_FREE_TIER_MINUTES,
+  marginalCostForNewParticipantMinutes,
+} from '../src/lib/dailyUsageCycle.js';
 
-// Daily.co pricing: $0.004 per participant-minute after free tier
-// 10,000 free participant-minutes per month
 const DAILY_COST_PER_PARTICIPANT_MINUTE = 0.004;
-const FREE_TIER_MINUTES = 10000;
+const FREE_TIER_MINUTES = DAILY_FREE_TIER_MINUTES;
 
 export interface VideoUsageLog {
   id?: string;
@@ -27,6 +30,8 @@ export interface VideoUsageLog {
   creatorEarnings: number; // cents
   timestamp: string;
   month: string; // YYYY-MM for aggregation
+  /** `live_broadcast` = Fan Hub go-live; default / omitted = 1:1 video chat */
+  source?: "video_chat" | "live_broadcast";
 }
 
 export interface CreatorVideoQuota {
@@ -66,22 +71,17 @@ export async function trackVideoUsage(params: {
 }): Promise<void> {
   const db = getAdminDb();
   const now = new Date();
-  const month = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-  
+  const month = dailyBillingCycleMonthKey(now);
+
   const participantMinutes = params.durationMinutes * 2;
-  
-  // Get current monthly usage to determine if we're in free tier
+
   const monthlyStats = await getMonthlyPlatformStats(month);
-  const totalMinutesSoFar = monthlyStats?.totalParticipantMinutes || 0;
-  
-  // Calculate cost (only charged after free tier)
-  let estimatedCost = 0;
-  if (totalMinutesSoFar >= FREE_TIER_MINUTES) {
-    estimatedCost = participantMinutes * DAILY_COST_PER_PARTICIPANT_MINUTE;
-  } else if (totalMinutesSoFar + participantMinutes > FREE_TIER_MINUTES) {
-    const billableMinutes = (totalMinutesSoFar + participantMinutes) - FREE_TIER_MINUTES;
-    estimatedCost = billableMinutes * DAILY_COST_PER_PARTICIPANT_MINUTE;
-  }
+  const trackedMinutesSoFar = monthlyStats?.totalParticipantMinutes || 0;
+  const estimatedCost = marginalCostForNewParticipantMinutes(
+    month,
+    trackedMinutesSoFar,
+    participantMinutes,
+  );
 
   const usageLog: Omit<VideoUsageLog, 'id'> = {
     creatorId: params.creatorId,
@@ -95,6 +95,7 @@ export async function trackVideoUsage(params: {
     creatorEarnings: params.creatorEarningsCents,
     timestamp: now.toISOString(),
     month,
+    source: "video_chat",
   };
 
   // Store individual usage log
@@ -384,6 +385,55 @@ export async function updateCreatorMonthlyLimit(creatorId: string, newLimit: num
     monthlyMinutesLimit: newLimit,
     updatedAt: new Date().toISOString(),
   }, { merge: true });
+}
+
+/**
+ * Fan Hub go-live broadcasts (Daily.co). Counts toward the same 10k platform participant-minutes
+ * free tier as 1:1 video chat. Does not consume per-creator video chat plan quota.
+ */
+export async function trackLiveBroadcastUsage(params: {
+  creatorId: string;
+  streamId: string;
+  durationMinutes: number;
+  /** Fans who received a viewer token this session (roster size at end). */
+  viewerCount: number;
+}): Promise<{ participantMinutes: number }> {
+  const db = getAdminDb();
+  const now = new Date();
+  const month = dailyBillingCycleMonthKey(now);
+  const durationMinutes = Math.max(1, Math.round(params.durationMinutes));
+  const viewers = Math.max(0, Math.round(params.viewerCount));
+  /** Host + each viewer assumed in-room for full broadcast duration (Daily participant-minutes). */
+  const participantMinutes = durationMinutes * (1 + viewers);
+  const sessionId = `ls_${params.creatorId}_${params.streamId}`;
+
+  const monthlyStats = await getMonthlyPlatformStats(month);
+  const trackedMinutesSoFar = monthlyStats?.totalParticipantMinutes || 0;
+  const estimatedCost = marginalCostForNewParticipantMinutes(
+    month,
+    trackedMinutesSoFar,
+    participantMinutes,
+  );
+
+  const usageLog: Omit<VideoUsageLog, "id"> = {
+    creatorId: params.creatorId,
+    fanId: "live_broadcast",
+    sessionId,
+    durationMinutes,
+    participantMinutes,
+    estimatedCost,
+    amountPaidByFan: 0,
+    echofluxCommission: 0,
+    creatorEarnings: 0,
+    timestamp: now.toISOString(),
+    month,
+    source: "live_broadcast",
+  };
+
+  await db.collection("video_usage_logs").add(usageLog);
+  await updatePlatformStats(month, usageLog);
+
+  return { participantMinutes };
 }
 
 /**
