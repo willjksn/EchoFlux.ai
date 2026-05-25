@@ -21,7 +21,11 @@ import {
   type QueryDocumentSnapshot,
   type DocumentData,
 } from "firebase/firestore";
-import { db } from "../firebaseConfig";
+import { db, auth } from "../firebaseConfig";
+import {
+  buildPostRevenueFromOrders,
+  buildStreamIdToPostIdMap,
+} from "../src/lib/fanHubPostRevenue";
 import { isMediaSlotLocked, isProtectedLockedMediaUrl, type LockedPostContent } from "../src/lib/lockedPostMedia";
 import { getAvatarCropStyle } from "../src/lib/avatarCrop";
 import { inferIsVideoFromUrl, normalizePostMediaTypes } from "../src/lib/mediaUrlInfer";
@@ -781,6 +785,7 @@ function FeedCard({
   creatorFanPreviewUrl,
   liveStreamCreatorBroadcast,
   liveStreamHostActiveStreamId,
+  postRevenueCents,
 }: {
   post: FeedPost;
   creatorName: string;
@@ -811,6 +816,8 @@ function FeedCard({
   liveStreamCreatorBroadcast?: Omit<LiveStreamCreatorBroadcastProps, "streamId">;
   /** Matches `liveStreamBroadcast` in Fan Hub — enables host buttons before Firestore sync */
   liveStreamHostActiveStreamId?: string | null;
+  /** Creator-only: post-attributed revenue for badge */
+  postRevenueCents?: number;
 }) {
   const countBadgeStyle = useMemo(
     () => feedCardCountThemedStyle(creatorThemePrimary),
@@ -1423,6 +1430,11 @@ function FeedCard({
               {isDraft ? "Draft" : "Scheduled"}
             </span>
           )}
+          {isAdminMode && typeof postRevenueCents === "number" && postRevenueCents > 0 ? (
+            <span className="feed-card-status-badge revenue" title="Post-attributed revenue (unlocks, tips, live tickets)">
+              ${(postRevenueCents / 100).toFixed(2)} earned
+            </span>
+          ) : null}
         </div>
         <span className="feed-card-time">{dateStr}</span>
         
@@ -2239,6 +2251,7 @@ export const FanHubFeed: React.FC<{
     autoReplyChance: 25,
   });
   const [feedSettingsSaving, setFeedSettingsSaving] = useState(false);
+  const [postRevenueCentsById, setPostRevenueCentsById] = useState<Record<string, number>>({});
   const [creatorStorefront, setCreatorStorefront] = useState<{
     displayName?: string;
     avatar?: string;
@@ -2272,6 +2285,44 @@ export const FanHubFeed: React.FC<{
     if (typeof window === "undefined") return undefined;
     return `${window.location.origin}/${encodeURIComponent(h)}?preview=member`;
   }, [creatorStorefront.handle]);
+
+  useEffect(() => {
+    if (!isAdminMode || !creatorId) {
+      setPostRevenueCentsById({});
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      try {
+        const token = auth.currentUser ? await auth.currentUser.getIdToken() : null;
+        const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
+        const res = await fetch(
+          `/api/creatorOrders?limit=1000&creatorId=${encodeURIComponent(creatorId)}`,
+          { headers },
+        );
+        if (!res.ok || cancelled) return;
+        const data = (await res.json()) as { orders?: Record<string, unknown>[] };
+        const orders = data.orders ?? [];
+        const streamMap = buildStreamIdToPostIdMap(
+          posts.map((p) => ({
+            id: p.id,
+            liveStreamStreamId: p.liveStreamPromo?.streamId ?? null,
+          })),
+        );
+        const revenueMap = buildPostRevenueFromOrders(orders, streamMap);
+        const next: Record<string, number> = {};
+        revenueMap.forEach((row, postId) => {
+          if (row.totalCents > 0) next[postId] = row.totalCents;
+        });
+        if (!cancelled) setPostRevenueCentsById(next);
+      } catch {
+        if (!cancelled) setPostRevenueCentsById({});
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [isAdminMode, creatorId, posts]);
 
   useEffect(() => {
     if (!creatorId || !db) {
@@ -2887,6 +2938,7 @@ export const FanHubFeed: React.FC<{
                 creatorFanPreviewUrl={isAdminMode ? creatorFanPreviewUrl : undefined}
                 liveStreamCreatorBroadcast={isAdminMode ? liveStreamCreatorBroadcast : undefined}
                 liveStreamHostActiveStreamId={isAdminMode ? liveStreamHostActiveStreamId : undefined}
+                postRevenueCents={isAdminMode ? postRevenueCentsById[post.id] : undefined}
               />
             ))}
           </div>
@@ -2927,6 +2979,11 @@ export const FanHubFeed: React.FC<{
                   ) : (
                     <div className="feed-grid-item-text">{post.body?.slice(0, 100)}</div>
                   )}
+                  {isAdminMode && (postRevenueCentsById[post.id] ?? 0) > 0 ? (
+                    <span className="feed-grid-revenue-badge">
+                      ${((postRevenueCentsById[post.id] ?? 0) / 100).toFixed(0)}
+                    </span>
+                  ) : null}
                 </button>
               );
             })}

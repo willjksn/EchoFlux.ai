@@ -18,6 +18,10 @@ import {
   strategyNicheSeedFromIdentity,
 } from "./_creatorIdentityPrompt.js";
 import { getNaturalVoicePromptBlock } from "./_naturalVoicePrompt.js";
+import {
+  buildFanHubPostRevenuePromptBlock,
+  fetchFanHubPostRevenueAnalyticsContext,
+} from "./_fanHubPostRevenueContext.js";
 
 export default async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
   if (req.method !== "POST") {
@@ -227,54 +231,17 @@ ${toneSettings.emojiLevel !== undefined ? `- Emoji usage (${toneSettings.emojiLe
     let fanHubAnalyticsContext = '';
     if (isMyPagePlatform) {
       try {
-        const postsSnap = await db.collection("creators").doc(authUser.uid).collection("fanPosts")
-          .orderBy("createdAt", "desc").limit(20).get();
-        
-        let totalLikes = 0;
-        let totalComments = 0;
-        const postTypes: Record<string, number> = {};
-        
-        postsSnap.forEach((doc) => {
-          const data = doc.data();
-          totalLikes += data.likes || 0;
-          totalComments += data.commentsCount || 0;
-          const type = data.mediaType || "text";
-          postTypes[type] = (postTypes[type] || 0) + 1;
+        const ctx = await fetchFanHubPostRevenueAnalyticsContext(db, authUser.uid);
+        fanHubAnalyticsContext = buildFanHubPostRevenuePromptBlock(ctx);
+        console.log("[generateContentStrategy] Fan Hub analytics fetched:", {
+          postCount: ctx.topPostTypes.length,
+          avgLikes: ctx.avgLikes,
+          avgComments: ctx.avgComments,
+          recentTips: ctx.recentTips,
+          postAttributedRevenueDollars: ctx.postAttributedRevenueDollars,
         });
-        
-        const postCount = postsSnap.size || 1;
-        const topTypes = Object.entries(postTypes)
-          .sort((a, b) => b[1] - a[1])
-          .slice(0, 3)
-          .map(([t]) => t);
-        
-        // Get recent tips count
-        const weekAgo = new Date();
-        weekAgo.setDate(weekAgo.getDate() - 7);
-        const tipsSnap = await db.collection("purchases")
-          .where("creatorId", "==", authUser.uid)
-          .where("type", "==", "tip")
-          .where("createdAt", ">=", weekAgo.toISOString())
-          .get();
-        
-        const avgLikes = Math.round(totalLikes / postCount);
-        const avgComments = Math.round(totalComments / postCount);
-        const recentTips = tipsSnap.size;
-        
-        fanHubAnalyticsContext = `
-MY PAGE / FAN HUB ANALYTICS (use to tailor content strategy):
-- Your top performing post types: ${topTypes.length > 0 ? topTypes.join(", ") : "varied content"}
-- Average likes per post: ${avgLikes}
-- Average comments per post: ${avgComments}
-- Best engagement times: evenings and weekends
-- Recent tip activity: ${recentTips} tips this week
-
-Generate ideas that mirror your top-performing content patterns. Focus on what drives engagement, tips, and subscriber retention.
-DO NOT include hashtags for My Page content - this is a private fan platform, not social media.
-`;
-        console.log('[generateContentStrategy] Fan Hub analytics fetched:', { postCount, avgLikes, avgComments, recentTips });
       } catch (e) {
-        console.warn('[generateContentStrategy] Failed to fetch Fan Hub analytics:', e);
+        console.warn("[generateContentStrategy] Failed to fetch Fan Hub analytics:", e);
       }
     }
 

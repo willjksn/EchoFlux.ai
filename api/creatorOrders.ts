@@ -36,6 +36,8 @@ export type CreatorOrder = {
   deliveredBy?: string | null;
   /** Live stream ticket checkout metadata (`orders.streamId`). */
   streamId?: string | null;
+  /** Feed post for PPV unlocks and on-post tips (`orders.postId`). */
+  postId?: string | null;
 };
 
 function hasPlatformAdminAccess(userData: Record<string, unknown> | undefined): boolean {
@@ -175,6 +177,7 @@ function mapDocToOrder(docSnap: QueryDocumentSnapshot): CreatorOrder {
     return toLegacyAmountCents(d.amount);
   })();
   const streamIdRaw = typeof d.streamId === "string" ? d.streamId.trim() : "";
+  const postIdRaw = typeof d.postId === "string" ? d.postId.trim() : "";
   const linkedGuest =
     typeof d.linkedFromGuestFanId === "string" && d.linkedFromGuestFanId.trim()
       ? d.linkedFromGuestFanId.trim()
@@ -225,6 +228,7 @@ function mapDocToOrder(docSnap: QueryDocumentSnapshot): CreatorOrder {
     deliveredAt: typeof d.deliveredAt === "string" ? d.deliveredAt : null,
     deliveredBy: typeof d.deliveredBy === "string" ? d.deliveredBy : null,
     streamId: streamIdRaw || null,
+    postId: postIdRaw || null,
   };
 }
 

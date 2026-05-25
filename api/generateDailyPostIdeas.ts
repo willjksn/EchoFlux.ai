@@ -17,6 +17,7 @@ import {
   getMemberHubTrendsContext,
 } from "./_memberHubContentContext.js";
 import { getNaturalVoicePromptBlock } from "./_naturalVoicePrompt.js";
+import { fetchFanHubPostRevenueAnalyticsContext } from "./_fanHubPostRevenueContext.js";
 
 export interface DailyPostIdeaPayload {
   id: string;
@@ -110,6 +111,11 @@ function buildPrompt(opts: {
     avgComments?: number;
     topEngagementTimes?: string[];
     recentTips?: number;
+    postAttributedRevenueDollars?: number;
+    avgRevenuePerEarningPostDollars?: number;
+    postsWithRevenue?: number;
+    topEarningPostLines?: string[];
+    topEngagementPostLines?: string[];
   };
   creatorGender?: string;
   targetAudienceGender?: string;
@@ -278,8 +284,16 @@ FAN HUB ANALYTICS CONTEXT:
 - Average comments per post: ${opts.fanHubAnalytics.avgComments || "N/A"}
 - Best engagement times: ${opts.fanHubAnalytics.topEngagementTimes?.join(", ") || "varies"}
 - Recent tip activity: ${opts.fanHubAnalytics.recentTips || 0} tips this week
+- Post-attributed revenue: $${(opts.fanHubAnalytics.postAttributedRevenueDollars ?? 0).toFixed(2)}
+- Avg revenue per earning post: $${(opts.fanHubAnalytics.avgRevenuePerEarningPostDollars ?? 0).toFixed(2)} (${opts.fanHubAnalytics.postsWithRevenue ?? 0} posts)
 
-Generate ideas that mirror your top-performing content patterns. Focus on what drives engagement, tips, and subscriber retention.
+Top earning posts (prioritize similar formats/topics):
+${(opts.fanHubAnalytics.topEarningPostLines?.length ? opts.fanHubAnalytics.topEarningPostLines : ["No post-attributed revenue yet"]).map((l) => `- ${l}`).join("\n")}
+
+Top engagement posts (likes/comments — may differ from earners):
+${(opts.fanHubAnalytics.topEngagementPostLines?.length ? opts.fanHubAnalytics.topEngagementPostLines : ["Not enough engagement data yet"]).map((l) => `- ${l}`).join("\n")}
+
+Generate ideas that mirror top earners AND top engagement when they align. When they diverge, suggest paid/locked versions of high-engagement posts and more teaser content around high-earning formats.
 ` : ""}
 Prioritize shotList blueprints members can execute today. Hooks should complement the visual/text — never replace the blueprint.
 `
@@ -551,43 +565,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
     let fanHubAnalytics = undefined;
     if (platform === "fan_hub" && analyzeMyPageEngagement) {
       try {
-        const postsSnap = await db.collection("creators").doc(authUser.uid).collection("fanPosts")
-          .orderBy("createdAt", "desc").limit(20).get();
-        
-        let totalLikes = 0;
-        let totalComments = 0;
-        const postTypes: Record<string, number> = {};
-        
-        postsSnap.forEach((doc) => {
-          const data = doc.data();
-          totalLikes += data.likes || 0;
-          totalComments += data.commentsCount || 0;
-          const type = data.mediaType || "text";
-          postTypes[type] = (postTypes[type] || 0) + 1;
-        });
-        
-        const postCount = postsSnap.size || 1;
-        const topTypes = Object.entries(postTypes)
-          .sort((a, b) => b[1] - a[1])
-          .slice(0, 3)
-          .map(([t]) => t);
-        
-        // Get recent tips count
-        const weekAgo = new Date();
-        weekAgo.setDate(weekAgo.getDate() - 7);
-        const tipsSnap = await db.collection("purchases")
-          .where("creatorId", "==", authUser.uid)
-          .where("type", "==", "tip")
-          .where("createdAt", ">=", weekAgo.toISOString())
-          .get();
-        
-        fanHubAnalytics = {
-          topPostTypes: topTypes,
-          avgLikes: Math.round(totalLikes / postCount),
-          avgComments: Math.round(totalComments / postCount),
-          topEngagementTimes: ["evenings", "weekends"],
-          recentTips: tipsSnap.size,
-        };
+        fanHubAnalytics = await fetchFanHubPostRevenueAnalyticsContext(db, authUser.uid);
       } catch (e) {
         console.warn("Failed to fetch fan hub analytics:", e);
       }

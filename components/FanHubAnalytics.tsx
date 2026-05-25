@@ -13,6 +13,13 @@ import { formatFanDisplayLabel } from "../src/lib/fanHubDisplay";
 import { inferIsAudioFromUrl, inferIsVideoFromUrl, normalizePostMediaTypes } from "../src/lib/mediaUrlInfer";
 import { hasLiveStreamAccess } from "../src/utils/planAccess";
 import { classifyFanHubOrderLedgerKind, isGuestCheckoutFanId } from "../src/lib/fanHubOrderLedger";
+import {
+  buildPostRevenueFromOrders,
+  buildStreamIdToPostIdMap,
+  enrichPostRevenueRows,
+  summarizePostRevenue,
+  type EnrichedPostRevenueRow,
+} from "../src/lib/fanHubPostRevenue";
 
 type DateRange = "7d" | "30d" | "90d" | "all";
 
@@ -95,6 +102,27 @@ interface EngagementStats {
   totalLikes: number;
   topLikes: EngagementHighlight | null;
   topComments: EngagementHighlight | null;
+}
+
+interface FanPostAnalyticsRow {
+  id: string;
+  body: string;
+  thumbUrl: string | null;
+  thumbIsVideo: boolean;
+  likes: number;
+  comments: number;
+  status: string;
+  at: Date;
+  liveStreamStreamId: string | null;
+}
+
+interface PostRevenueStats {
+  totalAttributedCents: number;
+  postsWithRevenue: number;
+  avgRevenuePerEarningPostCents: number;
+  topEarner: EnrichedPostRevenueRow | null;
+  topEngagementEarner: EnrichedPostRevenueRow | null;
+  rows: EnrichedPostRevenueRow[];
 }
 
 /** Creator-facing live stream business metrics (no infra cost / runaway signals). */
@@ -501,16 +529,14 @@ function pickPostThumbFromDoc(x: Record<string, unknown>): { thumbUrl: string | 
   return { thumbUrl: null, thumbIsVideo: false };
 }
 
-function parseFanPostForAnalytics(docSnap: QueryDocumentSnapshot): {
-  id: string;
-  body: string;
-  thumbUrl: string | null;
-  thumbIsVideo: boolean;
-  likes: number;
-  comments: number;
-  status: string;
-  at: Date;
-} | null {
+function parseLiveStreamStreamIdFromDoc(x: Record<string, unknown>): string | null {
+  const raw = x.liveStreamPromo;
+  if (!raw || typeof raw !== "object") return null;
+  const streamId = (raw as { streamId?: unknown }).streamId;
+  return typeof streamId === "string" && streamId.trim() ? streamId.trim() : null;
+}
+
+function parseFanPostForAnalytics(docSnap: QueryDocumentSnapshot): FanPostAnalyticsRow | null {
   const x = docSnap.data() as Record<string, unknown>;
   const status = String(x.status ?? "published").trim().toLowerCase();
   if (status === "draft") return null;
@@ -554,17 +580,21 @@ function parseFanPostForAnalytics(docSnap: QueryDocumentSnapshot): {
     comments,
     status,
     at,
+    liveStreamStreamId: parseLiveStreamStreamIdFromDoc(x),
   };
 }
 
-async function loadEngagementStats(creatorUserId: string): Promise<EngagementStats> {
-  const empty: EngagementStats = {
+async function loadFanPostAnalytics(creatorUserId: string): Promise<{
+  engagement: EngagementStats;
+  posts: FanPostAnalyticsRow[];
+}> {
+  const emptyEngagement: EngagementStats = {
     postsThisMonth: 0,
     totalLikes: 0,
     topLikes: null,
     topComments: null,
   };
-  if (!db) return empty;
+  if (!db) return { engagement: emptyEngagement, posts: [] };
 
   const now = new Date();
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
@@ -581,13 +611,13 @@ async function loadEngagementStats(creatorUserId: string): Promise<EngagementSta
     try {
       snapshots = (await getDocs(collection(db, "creators", creatorUserId, "fanPosts"))).docs;
     } catch {
-      return empty;
+      return { engagement: emptyEngagement, posts: [] };
     }
   }
 
   const parsed = snapshots
     .map(parseFanPostForAnalytics)
-    .filter((p): p is NonNullable<typeof p> => p != null);
+    .filter((p): p is FanPostAnalyticsRow => p != null);
   const published = parsed.filter((p) => p.status === "published");
 
   let totalLikes = 0;
@@ -613,7 +643,81 @@ async function loadEngagementStats(creatorUserId: string): Promise<EngagementSta
     if (!topComments || p.comments > topComments.comments) topComments = h;
   }
 
-  return { postsThisMonth, totalLikes, topLikes, topComments };
+  return {
+    engagement: { postsThisMonth, totalLikes, topLikes, topComments },
+    posts: published,
+  };
+}
+
+function buildPostRevenueStats(
+  orders: Record<string, unknown>[],
+  posts: FanPostAnalyticsRow[],
+  startDate: Date | null,
+): PostRevenueStats {
+  const postMetaById = new Map(
+    posts.map((p) => [
+      p.id,
+      {
+        id: p.id,
+        body: p.body,
+        thumbUrl: p.thumbUrl,
+        thumbIsVideo: p.thumbIsVideo,
+        likes: p.likes,
+        comments: p.comments,
+        liveStreamStreamId: p.liveStreamStreamId,
+      },
+    ]),
+  );
+  const streamMap = buildStreamIdToPostIdMap(posts);
+  const startMs = startDate ? startDate.getTime() : null;
+  const revenueMap = buildPostRevenueFromOrders(orders, streamMap, { startMs });
+  const summary = summarizePostRevenue(revenueMap);
+  const rows = enrichPostRevenueRows(summary, postMetaById);
+  const topEarner = rows[0] ?? null;
+  const postsInRange = startDate ? posts.filter((p) => p.at >= startDate) : posts;
+  const topEngagement = [...postsInRange]
+    .sort((a, b) => b.likes + b.comments * 2 - (a.likes + a.comments * 2))[0];
+  const topEngagementEarner = topEngagement
+    ? rows.find((r) => r.postId === topEngagement.id) ??
+      ({
+        ...emptyRow(topEngagement.id),
+        body: topEngagement.body,
+        thumbUrl: topEngagement.thumbUrl,
+        thumbIsVideo: topEngagement.thumbIsVideo,
+        likes: topEngagement.likes,
+        comments: topEngagement.comments,
+        vsAvgPct: null,
+      } satisfies EnrichedPostRevenueRow)
+    : null;
+
+  return {
+    totalAttributedCents: summary.totalAttributedCents,
+    postsWithRevenue: summary.postsWithRevenue,
+    avgRevenuePerEarningPostCents: summary.avgRevenuePerEarningPostCents,
+    topEarner,
+    topEngagementEarner,
+    rows,
+  };
+}
+
+function emptyRow(postId: string) {
+  return {
+    postId,
+    unlocksCents: 0,
+    unlockCount: 0,
+    tipsCents: 0,
+    tipCount: 0,
+    liveTicketCents: 0,
+    liveTicketCount: 0,
+    totalCents: 0,
+    totalPurchaseCount: 0,
+  };
+}
+
+function formatVsAvgPct(vsAvgPct: number | null): string {
+  if (vsAvgPct == null) return "";
+  if (vsAvgPct >= 0) return `+${vsAvgPct}% vs avg earning post`;
+  return `${vsAvgPct}% vs avg earning post`;
 }
 
 function EngagementMediaThumb({ url, isVideo }: { url: string | null; isVideo: boolean }) {
@@ -689,6 +793,15 @@ export const FanHubAnalytics: React.FC = () => {
     topLikes: null,
     topComments: null,
   });
+  const [postRevenue, setPostRevenue] = useState<PostRevenueStats>({
+    totalAttributedCents: 0,
+    postsWithRevenue: 0,
+    avgRevenuePerEarningPostCents: 0,
+    topEarner: null,
+    topEngagementEarner: null,
+    rows: [],
+  });
+  const [expandPostRevenueList, setExpandPostRevenueList] = useState(false);
   const [showLast12, setShowLast12] = useState(true);
   const [countrySpendSectionCompact, setCountrySpendSectionCompact] = useState(false);
   const creatorId = auth.currentUser?.uid ?? user?.id ?? "";
@@ -725,6 +838,7 @@ export const FanHubAnalytics: React.FC = () => {
   useEffect(() => {
     setExpandTopFansList(false);
     setExpandRecentTransactionsList(false);
+    setExpandPostRevenueList(false);
     setCountrySpendSectionCompact(false);
   }, [dateRange]);
 
@@ -783,7 +897,7 @@ export const FanHubAnalytics: React.FC = () => {
       const startDate = getDateRangeStart(dateRange);
 
       // Overlap HTTP + Firestore reads that don't depend on each other (same results as sequential).
-      const [orders, prefMeta, engagement] = await Promise.all([
+      const [orders, prefMeta, fanPostAnalytics] = await Promise.all([
         (async (): Promise<any[]> => {
           const ordersRes = await fetch(
             `/api/creatorOrders?limit=1000&creatorId=${encodeURIComponent(creatorId)}`,
@@ -809,17 +923,20 @@ export const FanHubAnalytics: React.FC = () => {
           }
           return m;
         })(),
-        loadEngagementStats(creatorId).catch((engErr: unknown) => {
+        loadFanPostAnalytics(creatorId).catch((engErr: unknown) => {
           console.warn("FanHubAnalytics: engagement load failed", engErr);
           return {
-            postsThisMonth: 0,
-            totalLikes: 0,
-            topLikes: null,
-            topComments: null,
-          } satisfies EngagementStats;
+            engagement: {
+              postsThisMonth: 0,
+              totalLikes: 0,
+              topLikes: null,
+              topComments: null,
+            },
+            posts: [],
+          };
         }),
       ]);
-      setEngagement(engagement);
+      setEngagement(fanPostAnalytics.engagement);
 
       // Filter orders by date range
       const filteredOrders = orders.filter((o: any) => {
@@ -828,6 +945,13 @@ export const FanHubAnalytics: React.FC = () => {
         return orderDate >= startDate;
       });
       setRangeOrders(filteredOrders);
+      setPostRevenue(
+        buildPostRevenueStats(
+          orders as Record<string, unknown>[],
+          fanPostAnalytics.posts,
+          startDate,
+        ),
+      );
 
       if (hasLiveStreamAccess(user)) {
         const liveBiz = await loadLiveStreamBizMetrics(
@@ -1683,6 +1807,197 @@ export const FanHubAnalytics: React.FC = () => {
         <p className="mt-3 text-xs" style={{ color: "color-mix(in srgb, var(--fan-text, #111827) 50%, transparent)" }}>
           Highlights use up to 500 recent feed posts. Totals count all published posts in that set.
         </p>
+      </section>
+
+      {/* Post-level revenue — unlocks, on-post tips, live tickets */}
+      <section
+        className="rounded-2xl border p-5 sm:p-6"
+        style={{
+          background:
+            "linear-gradient(180deg, color-mix(in srgb, var(--fan-primary, #be185d) 5%, var(--fan-bg, #ffffff)) 0%, var(--fan-bg, #ffffff) 100%)",
+          borderColor: "color-mix(in srgb, var(--fan-primary, #be185d) 20%, var(--fan-border, #e5e7eb))",
+        }}
+      >
+        <div className="flex items-center gap-2 mb-2">
+          <span
+            className="w-1 h-5 rounded-full shrink-0"
+            style={{ background: "var(--fan-primary, #be185d)" }}
+            aria-hidden
+          />
+          <h2
+            className="text-xs sm:text-sm font-semibold tracking-[0.12em] uppercase"
+            style={{ color: "var(--fan-text, #111827)" }}
+          >
+            Post performance
+          </h2>
+        </div>
+        <p className="text-xs text-gray-500 dark:text-gray-400 mb-5">
+          Revenue attributed to each post (PPV unlocks, tips on the post, live stream tickets). Subscriptions and store
+          sales are not tied to a single post.
+        </p>
+
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-5">
+          <div className="bg-white dark:bg-gray-900/40 rounded-xl border border-black/[0.06] dark:border-white/10 p-4 shadow-sm">
+            <p className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-1">Post-attributed revenue</p>
+            <p className="text-3xl font-bold tabular-nums" style={{ color: "var(--fan-primary, #be185d)" }}>
+              {formatCents(postRevenue.totalAttributedCents)}
+            </p>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Selected date range</p>
+          </div>
+          <div className="bg-white dark:bg-gray-900/40 rounded-xl border border-black/[0.06] dark:border-white/10 p-4 shadow-sm">
+            <p className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-1">Avg per earning post</p>
+            <p className="text-3xl font-bold tabular-nums" style={{ color: "var(--fan-primary, #be185d)" }}>
+              {postRevenue.postsWithRevenue > 0
+                ? formatCents(postRevenue.avgRevenuePerEarningPostCents)
+                : "—"}
+            </p>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+              {postRevenue.postsWithRevenue} post{postRevenue.postsWithRevenue === 1 ? "" : "s"} with revenue
+            </p>
+          </div>
+          <div className="bg-white dark:bg-gray-900/40 rounded-xl border border-black/[0.06] dark:border-white/10 p-4 shadow-sm">
+            <p className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-1">Focus signal</p>
+            <p className="text-sm font-medium text-gray-800 dark:text-gray-200 mt-2 leading-snug">
+              {postRevenue.topEarner && postRevenue.topEngagementEarner &&
+              postRevenue.topEarner.postId !== postRevenue.topEngagementEarner.postId
+                ? "Your top earner and top engagement post differ — consider paid versions of high-engagement posts."
+                : postRevenue.topEarner
+                  ? "Your best engagement and revenue may align on the same post — make more like it."
+                  : "Publish locked drops and on-post tip CTAs to start seeing per-post revenue."}
+            </p>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-5">
+          {(
+            [
+              { title: "Top earner", row: postRevenue.topEarner, metric: "revenue" as const },
+              {
+                title: "Top engagement",
+                row: postRevenue.topEngagementEarner,
+                metric: "engagement" as const,
+              },
+            ] as const
+          ).map(({ title, row, metric }) => (
+            <div
+              key={title}
+              className="bg-white dark:bg-gray-900/40 rounded-xl border border-black/[0.06] dark:border-white/10 p-4 shadow-sm"
+            >
+              <p className="font-semibold text-base" style={{ color: "var(--fan-primary, #be185d)" }}>
+                {title}
+              </p>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">Selected date range</p>
+              {row ? (
+                <div className="flex gap-3">
+                  <div className="w-20 h-20 shrink-0 rounded-lg overflow-hidden bg-gray-100 dark:bg-gray-800 border border-gray-100 dark:border-gray-700">
+                    <EngagementMediaThumb url={row.thumbUrl} isVideo={row.thumbIsVideo} />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm text-gray-700 dark:text-gray-300 line-clamp-3">{row.body || "—"}</p>
+                    <p className="mt-2 text-sm font-medium tabular-nums" style={{ color: "var(--fan-primary, #be185d)" }}>
+                      {metric === "revenue" ? (
+                        <>
+                          {formatCents(row.totalCents)}
+                          {row.vsAvgPct != null ? (
+                            <span className="text-gray-500 dark:text-gray-400 font-normal ml-2">
+                              ({formatVsAvgPct(row.vsAvgPct)})
+                            </span>
+                          ) : null}
+                        </>
+                      ) : (
+                        <>
+                          {row.likes} likes · {row.comments} comments
+                          {row.totalCents > 0 ? (
+                            <span className="text-gray-500 dark:text-gray-400 font-normal ml-2">
+                              · {formatCents(row.totalCents)} earned
+                            </span>
+                          ) : null}
+                        </>
+                      )}
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <p className="text-sm text-gray-500 dark:text-gray-400">No data in this period yet.</p>
+              )}
+            </div>
+          ))}
+        </div>
+
+        {postRevenue.rows.length > 0 ? (
+          <div className="bg-white dark:bg-gray-900/40 rounded-xl border border-black/[0.06] dark:border-white/10 overflow-hidden shadow-sm">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-gray-100 dark:border-gray-700 text-left text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                    <th className="px-4 py-3 font-medium">Post</th>
+                    <th className="px-4 py-3 font-medium text-right">Unlocks</th>
+                    <th className="px-4 py-3 font-medium text-right">Tips</th>
+                    <th className="px-4 py-3 font-medium text-right">Live</th>
+                    <th className="px-4 py-3 font-medium text-right">Total</th>
+                    <th className="px-4 py-3 font-medium text-right">Engagement</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(expandPostRevenueList
+                    ? postRevenue.rows
+                    : postRevenue.rows.slice(0, FAN_HUB_ANALYTICS_LIST_PREVIEW)
+                  ).map((row) => (
+                    <tr
+                      key={row.postId}
+                      className="border-b border-gray-50 dark:border-gray-800/80 last:border-0"
+                    >
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-3 min-w-[12rem]">
+                          <div className="w-10 h-10 shrink-0 rounded-md overflow-hidden bg-gray-100 dark:bg-gray-800">
+                            <EngagementMediaThumb url={row.thumbUrl} isVideo={row.thumbIsVideo} />
+                          </div>
+                          <span className="line-clamp-2 text-gray-800 dark:text-gray-200">{row.body || "Post"}</span>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 text-right tabular-nums text-gray-700 dark:text-gray-300">
+                        {row.unlocksCents > 0 ? formatCents(row.unlocksCents) : "—"}
+                      </td>
+                      <td className="px-4 py-3 text-right tabular-nums text-gray-700 dark:text-gray-300">
+                        {row.tipsCents > 0 ? formatCents(row.tipsCents) : "—"}
+                      </td>
+                      <td className="px-4 py-3 text-right tabular-nums text-gray-700 dark:text-gray-300">
+                        {row.liveTicketCents > 0 ? formatCents(row.liveTicketCents) : "—"}
+                      </td>
+                      <td className="px-4 py-3 text-right tabular-nums font-semibold" style={{ color: "var(--fan-primary, #be185d)" }}>
+                        {formatCents(row.totalCents)}
+                        {row.vsAvgPct != null ? (
+                          <span className="block text-[11px] font-normal text-gray-500 dark:text-gray-400">
+                            {formatVsAvgPct(row.vsAvgPct)}
+                          </span>
+                        ) : null}
+                      </td>
+                      <td className="px-4 py-3 text-right tabular-nums text-gray-600 dark:text-gray-400">
+                        {row.likes} · {row.comments}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            {postRevenue.rows.length > FAN_HUB_ANALYTICS_LIST_PREVIEW ? (
+              <div className="p-3 border-t border-gray-100 dark:border-gray-700">
+                <button
+                  type="button"
+                  onClick={() => setExpandPostRevenueList((v) => !v)}
+                  className="text-sm font-medium text-indigo-600 dark:text-indigo-400 hover:underline"
+                >
+                  {expandPostRevenueList ? "Show less" : `Show all (${postRevenue.rows.length})`}
+                </button>
+              </div>
+            ) : null}
+          </div>
+        ) : (
+          <p className="text-sm text-gray-500 dark:text-gray-400">
+            No post-attributed revenue in this period. Tips and unlocks need a linked post; general tips without a post
+            appear in totals above but not here.
+          </p>
+        )}
       </section>
 
       {/* Two Column Layout: Top Fans & Recent Transactions */}

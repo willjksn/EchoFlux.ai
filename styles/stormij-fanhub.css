@@ -1208,6 +1208,28 @@ html.dark .stormij-theme.stormij-theme--light .dark\:hover\:text-primary-300:hov
 .feed-card-status-badge.scheduled {
   background: var(--accent, #6366f1);
 }
+.feed-card-status-badge.revenue {
+  background: rgba(16, 185, 129, 0.92);
+  color: #fff;
+  text-transform: none;
+  letter-spacing: 0.02em;
+}
+
+.feed-grid-revenue-badge {
+  position: absolute;
+  top: 0.45rem;
+  right: 0.45rem;
+  z-index: 2;
+  padding: 0.15rem 0.45rem;
+  border-radius: 999px;
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  background: rgba(16, 185, 129, 0.92);
+  color: #fff;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
+  pointer-events: none;
+}
 
 /* Admin Menu */
 .feed-card-header-menu-wrap {
