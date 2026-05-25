@@ -98,8 +98,21 @@ export function formatRemainingAccessForFanRow(input: {
   accessEnd: Date | null;
   /** Fan doc `canceledAt` when subscription ended but `subscriptionCurrentPeriodEnd` was never stored */
   canceledAt?: Date | null;
+  /**
+   * Fan doc missing `subscriptionStatus` but orders / Stripe show a current paying member
+   * (User Management plan badge uses the same inference).
+   */
+  treatAsActiveMember?: boolean;
 }): string {
   const st = (input.subscriptionStatus || "").toLowerCase();
+  const inferActive =
+    input.treatAsActiveMember === true &&
+    st !== "canceled" &&
+    st !== "cancelled" &&
+    st !== "past_due" &&
+    st !== "expired" &&
+    st !== "unpaid" &&
+    st !== "incomplete_expired";
   const now = Date.now();
   const endMs =
     input.accessEnd && Number.isFinite(input.accessEnd.getTime())
@@ -134,7 +147,7 @@ export function formatRemainingAccessForFanRow(input: {
     return "Cancelled — billing period end not recorded";
   }
 
-  if (st === "active" || st === "trialing") {
+  if (st === "active" || st === "trialing" || inferActive) {
     if (input.cancelAtPeriodEnd) {
       const u = untilPhrase();
       if (u) return u;
