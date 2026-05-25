@@ -1531,7 +1531,7 @@ export const OnlyFansFans: React.FC = () => {
                         ? 'Paid access ended when their billing period ended. Card stays for history; it updates if they resubscribe.'
                         : undefined
                 }
-                className={`relative h-full min-h-[11rem] flex flex-col p-4 rounded-lg border-2 transition-all ${
+                className={`relative flex h-full min-h-[11rem] flex-col p-4 rounded-lg border-2 transition-all ${
                     accessExpired
                         ? 'cursor-not-allowed opacity-[0.82] grayscale-[0.55] hover:shadow-none'
                         : 'cursor-pointer hover:shadow-lg'
@@ -1545,7 +1545,7 @@ export const OnlyFansFans: React.FC = () => {
                           : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 hover:border-primary-300 dark:hover:border-primary-700'
                 }`}
             >
-                <div className="absolute top-2 right-2 z-10 flex min-h-[1.75rem] items-start justify-end gap-1">
+                <div className="mb-3 flex shrink-0 flex-wrap items-center justify-end gap-1">
                     {(accessExpired || prefs.subscriptionTier) && (
                         <span
                             className={`px-2 py-1 text-xs font-semibold text-white rounded-full ${getTierColor(prefs.subscriptionTier, accessExpired)}`}
@@ -1579,11 +1579,11 @@ export const OnlyFansFans: React.FC = () => {
                     </button>
                 </div>
 
-                <div className="flex min-h-0 flex-1 flex-col pr-44">
-                    <div className="flex min-h-0 flex-1 items-start gap-3">
+                <div className="flex min-h-0 flex-1 flex-col gap-3">
+                    <div className="flex min-w-0 items-start gap-3">
                         <FanGridAvatar avatarUrl={fan.avatarUrl} name={fan.name} muted={accessExpired} />
 
-                        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+                        <div className="flex min-w-0 flex-1 flex-col">
                             <h4 className="font-semibold text-gray-900 dark:text-white truncate">{fan.name}</h4>
                             {prefs.email ? (
                                 <p className="mt-0.5 truncate text-xs text-gray-500 dark:text-gray-400">{prefs.email}</p>
@@ -1643,46 +1643,6 @@ export const OnlyFansFans: React.FC = () => {
                                         })()}
                                     </div>
                                 )}
-                                {fan.purchaseIdentity && (
-                                    <div className="mt-2 pt-2 border-t border-gray-100 dark:border-gray-700/80">
-                                        <div className="text-[10px] font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">
-                                            Fan Hub revenue
-                                        </div>
-                                        {fanSpendLoading ? (
-                                            <span className="text-[10px] text-gray-400">Loading…</span>
-                                        ) : (
-                                            <div className="grid grid-cols-2 gap-x-2 gap-y-0.5 mt-1 text-[10px] text-gray-700 dark:text-gray-300">
-                                                {(() => {
-                                                    const s = fanSpendSummaries[fan.id];
-                                                    if (!s) {
-                                                        return (
-                                                            <span className="text-gray-400 col-span-2">No ledger match yet</span>
-                                                        );
-                                                    }
-                                                    const rows: [string, number][] = [
-                                                        ['Tips', s.tipsCents],
-                                                        ['Unlocks', s.unlocksCents],
-                                                        ['Subs', s.subscriptionsCents],
-                                                        ['Store', s.storeCents],
-                                                    ];
-                                                    return (
-                                                        <>
-                                                            {rows.flatMap(([label, cents]) => [
-                                                                <span key={`${label}-l`}>{label}</span>,
-                                                                <span
-                                                                    key={`${label}-v`}
-                                                                    className="tabular-nums text-right font-medium"
-                                                                >
-                                                                    {formatUsdFromCents(cents)}
-                                                                </span>,
-                                                            ])}
-                                                        </>
-                                                    );
-                                                })()}
-                                            </div>
-                                        )}
-                                    </div>
-                                )}
                             </div>
 
                             {(prefs.favoriteSessionType || prefs.preferredTone || prefs.communicationStyle) && (
@@ -1712,6 +1672,44 @@ export const OnlyFansFans: React.FC = () => {
                             )}
                         </div>
                     </div>
+
+                    {fan.purchaseIdentity ? (
+                        <div className="w-full shrink-0 border-t border-gray-100 pt-2 dark:border-gray-700/80">
+                            <div className="text-[10px] font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-400">
+                                Fan Hub revenue
+                            </div>
+                            {fanSpendLoading ? (
+                                <span className="text-[10px] text-gray-400">Loading…</span>
+                            ) : (
+                                <div className="mt-1 grid grid-cols-2 gap-x-3 gap-y-1 text-[10px] text-gray-700 dark:text-gray-300 sm:grid-cols-4">
+                                    {(() => {
+                                        const s = fanSpendSummaries[fan.id];
+                                        if (!s) {
+                                            return (
+                                                <span className="col-span-2 text-gray-400 sm:col-span-4">
+                                                    No ledger match yet
+                                                </span>
+                                            );
+                                        }
+                                        const rows: [string, number][] = [
+                                            ['Tips', s.tipsCents],
+                                            ['Unlocks', s.unlocksCents],
+                                            ['Subs', s.subscriptionsCents],
+                                            ['Store', s.storeCents],
+                                        ];
+                                        return rows.map(([label, cents]) => (
+                                            <div key={label} className="flex min-w-0 items-baseline justify-between gap-2 sm:flex-col sm:justify-start sm:gap-0">
+                                                <span className="shrink-0">{label}</span>
+                                                <span className="tabular-nums font-medium sm:text-right">
+                                                    {formatUsdFromCents(cents)}
+                                                </span>
+                                            </div>
+                                        ));
+                                    })()}
+                                </div>
+                            )}
+                        </div>
+                    ) : null}
 
                     <div className="mt-auto flex min-h-[1.25rem] shrink-0 flex-wrap gap-1 border-t border-gray-100 pt-3 dark:border-gray-700/50">
                         {(() => {
