@@ -102,6 +102,31 @@ const CloseIcon = () => (
   </svg>
 );
 
+const ChevronIcon: React.FC<{ expanded: boolean }> = ({ expanded }) => (
+  <svg
+    className={`w-3.5 h-3.5 transition-transform ${expanded ? "" : "-rotate-90"}`}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    aria-hidden
+  >
+    <polyline points="6 9 12 15 18 9" />
+  </svg>
+);
+
+const FANHUB_USERS_EXPIRED_COLLAPSED_KEY = "fanhub-users-expired-members-collapsed";
+
+function readExpiredMembersCollapsedPreference(): boolean {
+  try {
+    return localStorage.getItem(FANHUB_USERS_EXPIRED_COLLAPSED_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
 function formatCents(cents: number): string {
   if (cents === 0) return "—";
   return "$" + (cents / 100).toFixed(2);
@@ -366,6 +391,7 @@ export const FanHubUsers: React.FC = () => {
   const [isGrantingMinutes, setIsGrantingMinutes] = useState(false);
   const [cancelSubLoading, setCancelSubLoading] = useState(false);
   const [sendingReset, setSendingReset] = useState(false);
+  const [expiredMembersCollapsed, setExpiredMembersCollapsed] = useState(readExpiredMembersCollapsedPreference);
 
   // Empty placeholder - users will be loaded from database
   // Demo users are not shown to new creators
@@ -1794,12 +1820,50 @@ export const FanHubUsers: React.FC = () => {
     );
   };
 
-  const SectionHeader: React.FC<{ title: string; count: number }> = ({ title, count }) => (
+  const toggleExpiredMembersCollapsed = () => {
+    setExpiredMembersCollapsed((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem(FANHUB_USERS_EXPIRED_COLLAPSED_KEY, next ? "1" : "0");
+      } catch {
+        /* ignore */
+      }
+      return next;
+    });
+  };
+
+  const SectionHeader: React.FC<{
+    title: string;
+    count: number;
+    collapsible?: boolean;
+    collapsed?: boolean;
+    onToggleCollapse?: () => void;
+  }> = ({ title, count, collapsible, collapsed, onToggleCollapse }) => (
     <tr className="bg-gray-50 dark:bg-gray-800/50">
       <td colSpan={11} className="px-4 py-2">
-        <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-          {title} ({count})
-        </span>
+        {collapsible && onToggleCollapse ? (
+          <button
+            type="button"
+            onClick={onToggleCollapse}
+            className="w-full flex items-center justify-between gap-2 text-left group"
+            aria-expanded={!collapsed}
+          >
+            <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider group-hover:text-gray-700 dark:group-hover:text-gray-300">
+              {title} ({count})
+              {collapsed ? (
+                <span className="ml-2 normal-case font-normal text-gray-400 dark:text-gray-500">— hidden</span>
+              ) : null}
+            </span>
+            <span className="inline-flex items-center gap-1 text-xs font-medium text-gray-600 dark:text-gray-300 shrink-0">
+              {collapsed ? "Show" : "Hide"}
+              <ChevronIcon expanded={!collapsed} />
+            </span>
+          </button>
+        ) : (
+          <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+            {title} ({count})
+          </span>
+        )}
       </td>
     </tr>
   );
@@ -2018,10 +2082,17 @@ export const FanHubUsers: React.FC = () => {
                 {/* Members — expired access (billing period ended) */}
                 {showMembersExpiredSection && membersExpired.length > 0 && (
                   <>
-                    <SectionHeader title="Members — expired" count={membersExpired.length} />
-                    {membersExpired.map((fanUser) => (
-                      <UserRow key={fanUser.id} fanUser={fanUser} memberSection="expired" />
-                    ))}
+                    <SectionHeader
+                      title="Members — expired"
+                      count={membersExpired.length}
+                      collapsible
+                      collapsed={expiredMembersCollapsed}
+                      onToggleCollapse={toggleExpiredMembersCollapsed}
+                    />
+                    {!expiredMembersCollapsed &&
+                      membersExpired.map((fanUser) => (
+                        <UserRow key={fanUser.id} fanUser={fanUser} memberSection="expired" />
+                      ))}
                   </>
                 )}
 
