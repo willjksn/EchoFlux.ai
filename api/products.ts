@@ -4,6 +4,13 @@ import { getAdminDb } from "./_firebaseAdmin.js";
 import { verifyAuth } from "./verifyAuth.js";
 import type { TreatProduct, TreatProductType } from "../types";
 import { creatorIdFirestoreQueryVariants, normalizeCreatorId } from "../src/lib/creatorIdNormalize.js";
+import {
+  normalizePackPreviewIndices,
+  parseDigitalPackMediaItems,
+  parsePreviewMediaIndices,
+  parseTreatProductPackFields,
+  sanitizeTreatProductForPublicView,
+} from "../src/lib/digitalPackProduct.js";
 
 const COLLECTION = "products";
 
@@ -80,7 +87,36 @@ function toProduct(doc: FirebaseFirestore.DocumentSnapshot): TreatProduct {
         : undefined,
     createdAt,
     updatedAt,
+    ...parseTreatProductPackFields(d),
   };
+}
+
+function packFieldsFromBody(body: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  if (body.fulfillmentItems !== undefined) {
+    const items = parseDigitalPackMediaItems(body.fulfillmentItems);
+    out.fulfillmentItems = items.length > 0 ? items : null;
+    out.teaserItems = FieldValue.delete();
+    if (body.previewMediaIndices !== undefined) {
+      const indices = normalizePackPreviewIndices(
+        parsePreviewMediaIndices(body.previewMediaIndices, items.length),
+        items
+      );
+      out.previewMediaIndices = indices.length > 0 ? indices : null;
+    }
+  } else if (body.previewMediaIndices !== undefined) {
+    const indices = Array.isArray(body.previewMediaIndices)
+      ? (body.previewMediaIndices as unknown[])
+          .map((v) => (typeof v === "number" && Number.isFinite(v) ? Math.floor(v) : NaN))
+          .filter((n) => Number.isFinite(n))
+      : [];
+    out.previewMediaIndices = indices.length > 0 ? indices : null;
+  }
+  if (body.salesVoiceTeaserUrl !== undefined) {
+    const u = typeof body.salesVoiceTeaserUrl === "string" ? body.salesVoiceTeaserUrl.trim() : "";
+    out.salesVoiceTeaserUrl = u || null;
+  }
+  return out;
 }
 
 /**
@@ -150,6 +186,33 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const bTime = b.createdAt ? new Date(b.createdAt).getTime() : 0;
         return bTime - aTime; // descending
       });
+      let unlockedProductIds = new Set<string>();
+      if (!isCreator && decoded?.uid) {
+        try {
+          const grantSnap = await db
+            .collection("creatorEntitlements")
+            .doc(normParam)
+            .collection("grants")
+            .doc(decoded.uid)
+            .get();
+          const unlocked = grantSnap.data()?.unlockedProductIds;
+          if (Array.isArray(unlocked)) {
+            unlockedProductIds = new Set(
+              unlocked.filter((id): id is string => typeof id === "string" && id.trim() !== "")
+            );
+          }
+        } catch (grantErr) {
+          console.warn("products GET: grant lookup failed", grantErr);
+        }
+      }
+      if (!isCreator) {
+        products = products.map((p) =>
+          sanitizeTreatProductForPublicView(p, {
+            isCreator: false,
+            fanHasPurchased: unlockedProductIds.has(p.id),
+          })
+        );
+      }
       res.setHeader("Cache-Control", "private, no-store, max-age=0");
       return res.status(200).json({ products });
     } catch (e: unknown) {
@@ -216,6 +279,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       };
       if (typeDisplayLabelRaw) doc.typeDisplayLabel = typeDisplayLabelRaw;
       if (quantityLimit !== undefined) doc.quantityLimit = quantityLimit;
+      Object.assign(doc, packFieldsFromBody(body));
       await ref.set(doc);
       const product = toProduct(await ref.get());
       return res.status(201).json({ product });
@@ -271,6 +335,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         if (next !== undefined) {
           updates.typeDisplayLabel = next === null ? FieldValue.delete() : next;
         }
+      }
+      const packPatch = packFieldsFromBody(body);
+      for (const [k, v] of Object.entries(packPatch)) {
+        if (v === null) updates[k] = FieldValue.delete();
+        else updates[k] = v;
       }
 
       await ref.update(updates);

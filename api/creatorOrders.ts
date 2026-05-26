@@ -3,6 +3,10 @@ import type { Firestore, QueryDocumentSnapshot } from "firebase-admin/firestore"
 import { getAdminDb } from "./_firebaseAdmin.js";
 import { syncRecentFanHubProductCheckouts } from "./_syncRecentFanHubProductCheckouts.js";
 import { verifyAuth } from "./verifyAuth.js";
+import {
+  orderHasAutoDigitalPackFulfillment,
+  parseDigitalPackMediaItems,
+} from "../src/lib/digitalPackProduct.js";
 
 export type CreatorOrder = {
   id: string;
@@ -38,6 +42,8 @@ export type CreatorOrder = {
   streamId?: string | null;
   /** Feed post for PPV unlocks and on-post tips (`orders.postId`). */
   postId?: string | null;
+  deliveryItems?: { type: "image" | "video" | "audio"; url: string; sortOrder?: number }[];
+  digitalPackFulfillment?: boolean;
 };
 
 function hasPlatformAdminAccess(userData: Record<string, unknown> | undefined): boolean {
@@ -229,6 +235,11 @@ function mapDocToOrder(docSnap: QueryDocumentSnapshot): CreatorOrder {
     deliveredBy: typeof d.deliveredBy === "string" ? d.deliveredBy : null,
     streamId: streamIdRaw || null,
     postId: postIdRaw || null,
+    deliveryItems: (() => {
+      const items = parseDigitalPackMediaItems(d.deliveryItems);
+      return items.length > 0 ? items : undefined;
+    })(),
+    digitalPackFulfillment: orderHasAutoDigitalPackFulfillment(d) ? true : undefined,
   };
 }
 

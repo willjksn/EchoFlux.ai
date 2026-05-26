@@ -22,6 +22,9 @@ import { useCreatorFanHubTheme } from "../src/hooks/useCreatorFanHubTheme";
 import { isJointLiveSessionProductId, jointSessionKindFromProductId } from "../src/lib/treatSessionClassification";
 import { usePremiumStudioTab } from "./PremiumStudioLayout";
 import VideoCallRoom from "./VideoCallRoom";
+import { DigitalPackDeliveryGallery } from "./DigitalPackDeliveryGallery";
+import { orderHasAutoDigitalPackFulfillment, parseDigitalPackMediaItems } from "../src/lib/digitalPackProduct";
+import type { DigitalPackMediaItem } from "../types";
 import {
   AUDIO_RECORDER_TIMESLICE_MS,
   VIDEO_RECORDER_TIMESLICE_MS,
@@ -58,6 +61,8 @@ type Purchase = {
   deliveredAt: Date | null;
   isDemo?: boolean;
   orderType?: string;
+  deliveryItems?: DigitalPackMediaItem[];
+  digitalPackFulfillment?: boolean;
 };
 
 type VaultItem = {
@@ -188,6 +193,15 @@ function isPostUnlockOrderType(raw: string): boolean {
 /** Paid feed unlock — entitlement is applied immediately; no calendar or delivery workflow. */
 function isPostUnlockPurchase(p: Purchase): boolean {
   return isPostUnlockOrderType(p.orderType || "") || isPostUnlockOrderType(String(p.treatType || ""));
+}
+
+function isAutoFulfilledDigitalPackPurchase(p: Purchase): boolean {
+  return (
+    p.digitalPackFulfillment === true ||
+    (Array.isArray(p.deliveryItems) &&
+      p.deliveryItems.length > 0 &&
+      p.deliveryStatus === "delivered")
+  );
 }
 
 /** Past scheduled start + grace: treat ticket as fulfilled if Firestore still says pending/scheduled/live-synced. */
@@ -586,6 +600,15 @@ export const FanHubPurchases: React.FC = () => {
             deliveredAt: o.deliveredAt ? new Date(o.deliveredAt) : null,
             isDemo: false,
             orderType,
+            deliveryItems: (() => {
+              const items = parseDigitalPackMediaItems(o.deliveryItems);
+              return items.length > 0 ? items : undefined;
+            })(),
+            digitalPackFulfillment:
+              o.digitalPackFulfillment === true ||
+              orderHasAutoDigitalPackFulfillment(o as Record<string, unknown>)
+                ? true
+                : undefined,
           };
         });
         setPurchases(realPurchases);
@@ -1733,7 +1756,9 @@ export const FanHubPurchases: React.FC = () => {
             const liveStreamTicketPurchase = isLiveStreamTicketPurchase(p);
             const nonDeliverablePurchase = tipPurchase || subscriptionPurchase || postUnlockPurchase;
             /** Live stream tickets + instant digital orders — no calendar / manual delivery controls. */
-            const skipManualFulfillment = nonDeliverablePurchase || liveStreamTicketPurchase;
+            const digitalPackPurchase = isAutoFulfilledDigitalPackPurchase(p);
+            const skipManualFulfillment =
+              nonDeliverablePurchase || liveStreamTicketPurchase || digitalPackPurchase;
             const eff = purchaseEffectiveForUi(p);
             const isDelivered = eff.deliveryStatus === "delivered";
             const isPending = eff.scheduleStatus === "pending" && !isDelivered;
@@ -1789,6 +1814,11 @@ export const FanHubPurchases: React.FC = () => {
                         Unlocked in feed
                       </span>
                     )}
+                    {digitalPackPurchase && (
+                      <span className="purchases-status-badge purchases-status-completed">
+                        Digital pack delivered
+                      </span>
+                    )}
                     {liveStreamTicketPurchase && (
                       <span
                         className={`purchases-status-badge ${
@@ -1822,6 +1852,10 @@ export const FanHubPurchases: React.FC = () => {
                     )}
                   </div>
                 </div>
+
+                {digitalPackPurchase && isDelivered && p.deliveryItems && p.deliveryItems.length > 0 ? (
+                  <DigitalPackDeliveryGallery items={p.deliveryItems} />
+                ) : null}
 
                 {/* Actions */}
                 <div className="purchases-card-actions">

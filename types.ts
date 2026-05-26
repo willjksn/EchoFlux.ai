@@ -655,6 +655,15 @@ export interface CreatorFanHubPostFirestore {
   publishedAt?: unknown;
 }
 
+/** One image, video, or voice clip in a digital pack (teaser or fulfillment). */
+export type DigitalPackMediaKind = 'image' | 'video' | 'audio';
+
+export interface DigitalPackMediaItem {
+    type: DigitalPackMediaKind;
+    url: string;
+    sortOrder?: number;
+}
+
 /** Single product in the fan store (Firestore: products/{productId}). */
 export interface TreatProduct {
     id: string;
@@ -673,6 +682,17 @@ export interface TreatProduct {
     mediaUrl?: string;
     /** Card thumbnail/preview image URL */
     imageUrl?: string;
+    /**
+     * @deprecated Legacy separate teasers — merged into `fulfillmentItems` on read.
+     * New packs use `previewMediaIndices` only.
+     */
+    teaserItems?: DigitalPackMediaItem[];
+    /** Indexes into `fulfillmentItems` for sharp pre-purchase preview images (max 2). */
+    previewMediaIndices?: number[];
+    /** Short sales voice clip fans can play before buying (not in the delivered pack). */
+    salesVoiceTeaserUrl?: string;
+    /** Full pack — images, videos, voice; non-preview slots gated/blurred until purchase. */
+    fulfillmentItems?: DigitalPackMediaItem[];
     archived: boolean;
     /** When false, product is hidden everywhere (unpublished) */
     visible: boolean;

@@ -41,6 +41,14 @@ import type {
   LandingSectionListMarker,
 } from "../types";
 import { normalizeTreatProductsFromApi } from "../src/lib/treatProductsNormalize";
+import {
+  parseTreatProductPackFields,
+  isDigitalPackProductType,
+  parseDigitalPackMediaItems,
+  orderHasAutoDigitalPackFulfillment,
+} from "../src/lib/digitalPackProduct";
+import { DigitalPackStorePreview } from "./DigitalPackStorePreview";
+import { DigitalPackDeliveryGallery } from "./DigitalPackDeliveryGallery";
 import { STOREFRONT_SUSPENDED_PUBLIC_MESSAGE } from "../src/lib/creatorStorefrontActive";
 import { getTreatProductTypeDisplayLabel } from "../src/lib/treatProductTypeLabel";
 import { FanLandingPage } from "./FanLandingPage";
@@ -218,6 +226,7 @@ async function loadTreatProductsViaFirestore(
         soldCount: toOptionalNonNegativeInt(x.soldCount),
         createdAt: String(x.createdAt ?? ""),
         updatedAt: String(x.updatedAt ?? ""),
+        ...parseTreatProductPackFields(x),
       });
     }
   }
@@ -396,6 +405,8 @@ type FanDeliveryPurchase = {
   deliveryText?: string | null;
   deliveryUrl?: string | null;
   deliveredAt?: string | null;
+  deliveryItems?: import("../types").DigitalPackMediaItem[];
+  digitalPackFulfillment?: boolean;
 };
 
 type DmLiveSession = {
@@ -720,6 +731,14 @@ function FanMemberPurchaseItemBody({
       ) : o.deliveryStatus === "delivered" ? (
         <>
           <span className="fan-member-treat-owned">Delivered</span>
+          {o.deliveryItems && o.deliveryItems.length > 0 ? (
+            <DigitalPackDeliveryGallery
+              items={o.deliveryItems}
+              imageGuardProps={storefrontImageDownloadGuardProps}
+              videoGuardProps={storefrontVideoDownloadGuardProps}
+              audioGuardProps={storefrontAudioDownloadGuardProps}
+            />
+          ) : null}
           {o.deliveryType === "text" && o.deliveryText ? (
             <div className="fan-profile-panel" style={{ marginTop: "0.6rem" }}>
               <p className="fan-member-about-text" style={{ whiteSpace: "pre-wrap" }}>
@@ -2727,6 +2746,13 @@ export const FanStorefrontView: React.FC = () => {
             deliveryText: typeof raw.deliveryText === "string" ? raw.deliveryText : null,
             deliveryUrl: typeof raw.deliveryUrl === "string" ? raw.deliveryUrl : null,
             deliveredAt: typeof raw.deliveredAt === "string" ? raw.deliveredAt : null,
+            ...(() => {
+              const items = parseDigitalPackMediaItems(raw.deliveryItems);
+              return {
+                deliveryItems: items.length > 0 ? items : undefined,
+                digitalPackFulfillment: orderHasAutoDigitalPackFulfillment(raw) ? true : undefined,
+              };
+            })(),
           });
         }
         if (byEmailSnap) {
@@ -2765,6 +2791,13 @@ export const FanStorefrontView: React.FC = () => {
               deliveryText: typeof raw.deliveryText === "string" ? raw.deliveryText : null,
               deliveryUrl: typeof raw.deliveryUrl === "string" ? raw.deliveryUrl : null,
               deliveredAt: typeof raw.deliveredAt === "string" ? raw.deliveredAt : null,
+              ...(() => {
+                const items = parseDigitalPackMediaItems(raw.deliveryItems);
+                return {
+                  deliveryItems: items.length > 0 ? items : undefined,
+                  digitalPackFulfillment: orderHasAutoDigitalPackFulfillment(raw) ? true : undefined,
+                };
+              })(),
             });
           }
         }
@@ -5541,6 +5574,16 @@ export const FanStorefrontView: React.FC = () => {
                         >
                           {categoryLine ? <p className="fan-member-treat-type">{categoryLine}</p> : null}
                           <h3 className="fan-member-treat-title">{p.title}</h3>
+                          {isDigitalPackProductType(p.type) ? (
+                            <DigitalPackStorePreview
+                              product={p}
+                              owned={owned}
+                              compact
+                              imageGuardProps={storefrontImageDownloadGuardProps}
+                              videoGuardProps={storefrontVideoDownloadGuardProps}
+                              audioGuardProps={storefrontAudioDownloadGuardProps}
+                            />
+                          ) : null}
                           {p.description && (
                             <p className="fan-member-treat-desc">{p.description}</p>
                           )}

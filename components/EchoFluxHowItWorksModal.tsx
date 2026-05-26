@@ -8,6 +8,8 @@ type Props = {
   title: string;
   subtitle?: string;
   children: React.ReactNode;
+  /** e.g. z-[1100] when opening above another modal */
+  overlayClassName?: string;
 };
 
 /**
@@ -20,12 +22,13 @@ export const EchoFluxHowItWorksModal: React.FC<Props> = ({
   title,
   subtitle,
   children,
+  overlayClassName = "z-[62]",
 }) => {
   if (!open) return null;
 
   return (
     <div
-      className="fixed inset-0 z-[62] flex items-start justify-center overflow-y-auto bg-black/50 p-4"
+      className={`fixed inset-0 ${overlayClassName} flex items-start justify-center overflow-y-auto bg-black/50 p-4`}
       role="presentation"
       onClick={onClose}
     >

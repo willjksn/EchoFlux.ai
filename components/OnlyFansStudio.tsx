@@ -898,9 +898,11 @@ export const OnlyFansStudio: React.FC<{ mode?: 'studio' | 'fanHub' }> = ({ mode 
         }
         if (fanTab === 'treats') {
             return wrap(
-                <StudioSuspense label="Loading store…">
-                    <TreatsStore />
-                </StudioSuspense>
+                <ErrorBoundary>
+                    <StudioSuspense label="Loading store…">
+                        <TreatsStore />
+                    </StudioSuspense>
+                </ErrorBoundary>
             );
         }
         if (fanTab === 'messages') {

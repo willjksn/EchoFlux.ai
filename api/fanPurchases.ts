@@ -2,6 +2,10 @@ import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { getAdminDb } from "./_firebaseAdmin.js";
 import { syncRecentFanHubProductCheckouts } from "./_syncRecentFanHubProductCheckouts.js";
 import { verifyAuth } from "./verifyAuth.js";
+import {
+  orderHasAutoDigitalPackFulfillment,
+  parseDigitalPackMediaItems,
+} from "../src/lib/digitalPackProduct.js";
 
 type FanPurchaseType = "product" | "post_unlock" | "unlock" | "tip" | "subscription" | "live_stream_ticket";
 
@@ -28,6 +32,8 @@ type FanPurchase = {
   deliveryText?: string | null;
   deliveryUrl?: string | null;
   deliveredAt?: string | null;
+  deliveryItems?: { type: "image" | "video" | "audio"; url: string; sortOrder?: number }[];
+  digitalPackFulfillment?: boolean;
 };
 
 function unknownDateToMs(raw: unknown): number | null {
@@ -131,6 +137,11 @@ function mapDocToPurchase(id: string, d: Record<string, unknown>): FanPurchase {
     deliveryText: typeof d.deliveryText === "string" ? d.deliveryText : null,
     deliveryUrl: typeof d.deliveryUrl === "string" ? d.deliveryUrl : null,
     deliveredAt: typeof d.deliveredAt === "string" ? d.deliveredAt : null,
+    deliveryItems: (() => {
+      const items = parseDigitalPackMediaItems(d.deliveryItems);
+      return items.length > 0 ? items : undefined;
+    })(),
+    digitalPackFulfillment: orderHasAutoDigitalPackFulfillment(d) ? true : undefined,
   };
 }
 

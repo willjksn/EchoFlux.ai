@@ -27,6 +27,20 @@ import { EmojiButton } from "./EmojiPicker";
 import { canUseSjHeartEmoji } from "../src/lib/customEmoji";
 import { useCreatorHandle } from "../src/hooks/useCreatorHandle";
 import { renderTitleWithEmojiSpans } from "../src/lib/renderTitleWithEmojiSpans";
+import {
+  defaultPackPreviewIndices,
+  derivePackCoverImageUrl,
+  isDigitalPackProductType,
+  normalizePackPreviewIndices,
+  parseTreatProductPackFields,
+  productHasDigitalPackFulfillment,
+} from "../src/lib/digitalPackProduct";
+import type { DigitalPackMediaItem } from "../types";
+import { DigitalPackEditor } from "./DigitalPackEditor";
+import {
+  DigitalPackHowItWorksButton,
+  DigitalPackHowItWorksModal,
+} from "./DigitalPackHowItWorks";
 
 function formatPrice(cents: number | null | undefined): string {
   const n = Number(cents);
@@ -84,6 +98,28 @@ function treatProductQuantityString(product: TreatProduct | null | undefined): s
 }
 
 /** Blank → unlimited (`null`). Use `null` (not `undefined`) in PATCH bodies so JSON includes the key. */
+function digitalPackSaveFields(
+  type: TreatProductType,
+  fulfillmentItems: DigitalPackMediaItem[],
+  previewMediaIndices: number[],
+  salesVoiceTeaserUrl?: string
+): {
+  fulfillmentItems?: DigitalPackMediaItem[];
+  previewMediaIndices?: number[];
+  salesVoiceTeaserUrl?: string;
+  imageUrl?: string;
+} {
+  if (!isDigitalPackProductType(type)) return {};
+  const previews = normalizePackPreviewIndices(previewMediaIndices, fulfillmentItems);
+  const indices = previews.length > 0 ? previews : defaultPackPreviewIndices(fulfillmentItems);
+  return {
+    fulfillmentItems,
+    previewMediaIndices: indices,
+    ...(salesVoiceTeaserUrl?.trim() ? { salesVoiceTeaserUrl: salesVoiceTeaserUrl.trim() } : {}),
+    imageUrl: derivePackCoverImageUrl(fulfillmentItems, indices),
+  };
+}
+
 function parseTreatQuantityLimitInput(raw: string): number | null {
   const t = raw.trim();
   if (t === "") return null;
@@ -134,6 +170,7 @@ function firestoreDocToTreatProduct(d: QueryDocumentSnapshot): TreatProduct {
     soldCount,
     createdAt,
     updatedAt,
+    ...parseTreatProductPackFields(x),
   };
 }
 
@@ -211,6 +248,9 @@ export const TreatsStore: React.FC = () => {
   const [treatsDataReady, setTreatsDataReady] = useState(false);
   const [editing, setEditing] = useState<TreatProduct | null>(null);
   const [showForm, setShowForm] = useState(false);
+  /** Bump when opening add modal so a fresh ProductForm mounts (avoids stale HMR/state). */
+  const [addProductFormKey, setAddProductFormKey] = useState(0);
+  const [productsLoadError, setProductsLoadError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   /** Row-level PATCH (publish / placement) so other cards don’t disable or flash. */
   const [patchingId, setPatchingId] = useState<string | null>(null);
@@ -286,6 +326,7 @@ export const TreatsStore: React.FC = () => {
           }
         }
         setProducts(prods);
+        setProductsLoadError(null);
         return;
       }
       const data = await res.json().catch(() => ({}));
@@ -294,6 +335,9 @@ export const TreatsStore: React.FC = () => {
       console.warn("Products API error (trying Firestore fallback):", e);
       if (!db) {
         setProducts([]);
+        setProductsLoadError(
+          e instanceof Error ? e.message : "Could not load products. Check your connection and retry."
+        );
         return;
       }
       try {
@@ -328,9 +372,17 @@ export const TreatsStore: React.FC = () => {
           return bTime - aTime;
         });
         setProducts(list);
+        setProductsLoadError(null);
       } catch (fe) {
         console.warn("Firestore products load failed:", fe);
         setProducts([]);
+        setProductsLoadError(
+          fe instanceof Error
+            ? fe.message
+            : e instanceof Error
+              ? e.message
+              : "Could not load products. Check your connection and retry."
+        );
       }
     } finally {
       if (!quiet) {
@@ -488,6 +540,10 @@ export const TreatsStore: React.FC = () => {
       showInMemberStore?: boolean;
       quantityLimit?: number | null;
       typeDisplayLabel?: string | null;
+      imageUrl?: string;
+      previewMediaIndices?: number[];
+      fulfillmentItems?: DigitalPackMediaItem[];
+      salesVoiceTeaserUrl?: string;
     }) => {
       if (!db || !creatorId || !auth.currentUser) return false;
       const now = new Date().toISOString();
@@ -498,7 +554,7 @@ export const TreatsStore: React.FC = () => {
         description: payload.description?.trim() ? payload.description.trim() : null,
         priceCents: Math.max(0, payload.priceCents),
         mediaUrl: payload.mediaUrl?.trim() ? payload.mediaUrl.trim() : null,
-        imageUrl: null,
+        imageUrl: payload.imageUrl?.trim() ? payload.imageUrl.trim() : null,
         archived: false,
         visible: payload.visible,
         showOnLandingPage: payload.showOnLandingPage !== false,
@@ -516,6 +572,9 @@ export const TreatsStore: React.FC = () => {
           ? payload.typeDisplayLabel.trim().slice(0, TREAT_PRODUCT_TYPE_DISPLAY_MAX_LEN)
           : "";
       if (label) docData.typeDisplayLabel = label;
+      if (payload.fulfillmentItems?.length) docData.fulfillmentItems = payload.fulfillmentItems;
+      if (payload.previewMediaIndices?.length) docData.previewMediaIndices = payload.previewMediaIndices;
+      if (payload.salesVoiceTeaserUrl?.trim()) docData.salesVoiceTeaserUrl = payload.salesVoiceTeaserUrl.trim();
       await addDoc(collection(db, "products"), docData);
       return true;
     },
@@ -533,8 +592,18 @@ export const TreatsStore: React.FC = () => {
     showInMemberStore?: boolean;
     quantityLimit?: number | null;
     typeDisplayLabel?: string | null;
+    previewMediaIndices?: number[];
+    fulfillmentItems?: DigitalPackMediaItem[];
+    salesVoiceTeaserUrl?: string;
   }) => {
     if (!creatorId) return;
+    if (
+      isDigitalPackProductType(payload.type) &&
+      !productHasDigitalPackFulfillment(payload.type, payload.fulfillmentItems)
+    ) {
+      showToast?.("Add at least one file to your pack.", "error");
+      return;
+    }
     setSaving(true);
     const labelTrim =
       typeof payload.typeDisplayLabel === "string"
@@ -553,6 +622,14 @@ export const TreatsStore: React.FC = () => {
       quantityLimit: payload.quantityLimit,
     };
     if (labelTrim) bodyObj.typeDisplayLabel = labelTrim;
+    const packExtras = digitalPackSaveFields(
+      payload.type,
+      payload.fulfillmentItems ?? [],
+      payload.previewMediaIndices ?? [],
+      payload.salesVoiceTeaserUrl
+    );
+    Object.assign(bodyObj, packExtras);
+    const savePayload = { ...payload, ...packExtras };
     const body = JSON.stringify(bodyObj);
 
     const finishOk = (msg: string) => {
@@ -574,7 +651,7 @@ export const TreatsStore: React.FC = () => {
           body,
         });
       } catch {
-        if (await createProductViaFirestore(payload)) {
+        if (await createProductViaFirestore(savePayload)) {
           finishOk("Product added (saved directly — API unreachable; use Vercel dev or DEV_API_PROXY for API mode).");
           return;
         }
@@ -587,7 +664,7 @@ export const TreatsStore: React.FC = () => {
         return;
       }
 
-      if ((res.status >= 500 || res.status === 404) && (await createProductViaFirestore(payload))) {
+      if ((res.status >= 500 || res.status === 404) && (await createProductViaFirestore(savePayload))) {
         finishOk("Product added (saved directly — API unavailable).");
         return;
       }
@@ -617,6 +694,9 @@ export const TreatsStore: React.FC = () => {
       /** Pass null to clear limit (unlimited). Omit field only when not changing quantity. */
       quantityLimit: number | null;
       sortOrder: number;
+      previewMediaIndices?: number[];
+      fulfillmentItems?: DigitalPackMediaItem[];
+      salesVoiceTeaserUrl?: string | null;
     }>,
     options?: { useGlobalSaving?: boolean; quietUi?: boolean }
   ) => {
@@ -877,6 +957,14 @@ export const TreatsStore: React.FC = () => {
 
   return (
     <main className="treats-main">
+      {productsLoadError ? (
+        <div className="treats-load-error" role="alert">
+          <p>{productsLoadError}</p>
+          <button type="button" className="treats-load-error-retry" onClick={() => void fetchProducts()}>
+            Retry
+          </button>
+        </div>
+      ) : null}
       <div className={`treats-top-row${viewMode === "fan" ? " treats-top-row--fan-only" : ""}`}>
         {viewMode === "manage" ? (
           <section className="treats-store-header">
@@ -1047,6 +1135,7 @@ export const TreatsStore: React.FC = () => {
               className="treats-add-btn"
               onClick={() => {
                 setEditing(null);
+                setAddProductFormKey((k) => k + 1);
                 setShowForm(true);
               }}
             >
@@ -1100,6 +1189,7 @@ export const TreatsStore: React.FC = () => {
                       <InlineEditForm
                         key={p.id}
                         product={p}
+                        creatorId={creatorId || ""}
                         includeSjHeartEmoji={includeSjHeartEmoji}
                         onSave={(payload) =>
                           handleUpdate(p.id, {
@@ -1111,6 +1201,9 @@ export const TreatsStore: React.FC = () => {
                             visible: payload.visible,
                             quantityLimit: payload.quantityLimit,
                             typeDisplayLabel: payload.typeDisplayLabel,
+                            previewMediaIndices: payload.previewMediaIndices,
+                            fulfillmentItems: payload.fulfillmentItems,
+                            salesVoiceTeaserUrl: payload.salesVoiceTeaserUrl ?? null,
                           })
                         }
                         onCancel={() => setEditing(null)}
@@ -1246,13 +1339,12 @@ export const TreatsStore: React.FC = () => {
 
       {showForm && (
         <ProductForm
-          key="treats-add-product"
+          key={`treats-add-product-${addProductFormKey}`}
           product={null}
+          creatorId={creatorId || ""}
           includeSjHeartEmoji={includeSjHeartEmoji}
           onSave={handleCreate}
-          onClose={() => {
-            setShowForm(false);
-          }}
+          onClose={() => setShowForm(false)}
           saving={saving}
         />
       )}
@@ -1262,6 +1354,7 @@ export const TreatsStore: React.FC = () => {
 
 const InlineEditForm: React.FC<{
   product: TreatProduct;
+  creatorId: string;
   includeSjHeartEmoji: boolean;
   onSave: (payload: {
     type: TreatProductType;
@@ -1273,16 +1366,27 @@ const InlineEditForm: React.FC<{
     visible: boolean;
     quantityLimit?: number | null;
     typeDisplayLabel?: string | null;
+    previewMediaIndices?: number[];
+    fulfillmentItems?: DigitalPackMediaItem[];
+    salesVoiceTeaserUrl?: string;
   }) => Promise<void>;
   onCancel: () => void;
   saving: boolean;
-}> = ({ product, includeSjHeartEmoji, onSave, onCancel, saving }) => {
+}> = ({ product, creatorId, includeSjHeartEmoji, onSave, onCancel, saving }) => {
   const [title, setTitle] = useState(product.title);
   const [priceDollars, setPriceDollars] = useState(() => treatProductToPriceDollarString(product));
   const [description, setDescription] = useState(product.description ?? "");
+  const [fulfillmentItems, setFulfillmentItems] = useState<DigitalPackMediaItem[]>(
+    product.fulfillmentItems ?? []
+  );
+  const [previewMediaIndices, setPreviewMediaIndices] = useState<number[]>(
+    product.previewMediaIndices ?? defaultPackPreviewIndices(product.fulfillmentItems ?? [])
+  );
+  const [salesVoiceTeaserUrl, setSalesVoiceTeaserUrl] = useState(product.salesVoiceTeaserUrl ?? "");
   const [imageUrl, setImageUrl] = useState(product.imageUrl ?? "");
   const [quantityLimit, setQuantityLimit] = useState(() => treatProductQuantityString(product));
   const [typeDisplayLabel, setTypeDisplayLabel] = useState(() => product.typeDisplayLabel ?? "");
+  const [showPackHelp, setShowPackHelp] = useState(false);
 
   const onInlinePriceChange = (raw: string) => {
     if (raw === "") {
@@ -1302,22 +1406,37 @@ const InlineEditForm: React.FC<{
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim()) return;
+    if (
+      isDigitalPackProductType(product.type) &&
+      !productHasDigitalPackFulfillment(product.type, fulfillmentItems)
+    ) {
+      return;
+    }
     await onSave({
       type: product.type,
       title: title.trim(),
       description: description.trim() || undefined,
       priceCents: Math.round(parseFloat(priceDollars || "0") * 100),
       mediaUrl: product.mediaUrl,
-      imageUrl: imageUrl.trim() || undefined,
+      imageUrl: isDigitalPackProductType(product.type)
+        ? derivePackCoverImageUrl(fulfillmentItems, previewMediaIndices, product.imageUrl)
+        : imageUrl.trim() || undefined,
       visible: product.visible,
       quantityLimit: parseTreatQuantityLimitInput(quantityLimit),
       typeDisplayLabel:
         typeDisplayLabel.trim().slice(0, TREAT_PRODUCT_TYPE_DISPLAY_MAX_LEN) || null,
+      ...digitalPackSaveFields(product.type, fulfillmentItems, previewMediaIndices, salesVoiceTeaserUrl),
     });
   };
 
   return (
     <form onSubmit={handleSubmit} className="treat-inline-form">
+      {isDigitalPackProductType(product.type) ? (
+        <div className="treat-inline-form-help-row">
+          <DigitalPackHowItWorksButton onClick={() => setShowPackHelp(true)} />
+        </div>
+      ) : null}
+      <DigitalPackHowItWorksModal open={showPackHelp} onClose={() => setShowPackHelp(false)} />
       <div className="treat-inline-field">
         <label>Name</label>
         <div className="treat-inline-input-row">
@@ -1385,15 +1504,30 @@ const InlineEditForm: React.FC<{
           </span>
         </div>
       </div>
-      <div className="treat-inline-field">
-        <label>Card image URL (optional)</label>
-        <input
-          type="url"
-          value={imageUrl}
-          onChange={(e) => setImageUrl(e.target.value)}
-          placeholder="https://…"
+      {isDigitalPackProductType(product.type) ? (
+        <DigitalPackEditor
+          creatorId={creatorId}
+          productId={product.id}
+          productType={product.type}
+          fulfillmentItems={fulfillmentItems}
+          onFulfillmentItemsChange={setFulfillmentItems}
+          previewMediaIndices={previewMediaIndices}
+          onPreviewMediaIndicesChange={setPreviewMediaIndices}
+          salesVoiceTeaserUrl={salesVoiceTeaserUrl}
+          onSalesVoiceTeaserUrlChange={setSalesVoiceTeaserUrl}
+          disabled={saving}
         />
-      </div>
+      ) : (
+        <div className="treat-inline-field">
+          <label>Card image URL (optional)</label>
+          <input
+            type="url"
+            value={imageUrl}
+            onChange={(e) => setImageUrl(e.target.value)}
+            placeholder="https://…"
+          />
+        </div>
+      )}
       <div className="treat-inline-field">
         <label>Quantity left (decremented on each purchase)</label>
         <input
@@ -1419,6 +1553,8 @@ const InlineEditForm: React.FC<{
 
 const ProductForm: React.FC<{
   product: TreatProduct | null;
+  initialType?: TreatProductType;
+  creatorId: string;
   includeSjHeartEmoji: boolean;
   onSave: (payload: {
     type: TreatProductType;
@@ -1426,16 +1562,20 @@ const ProductForm: React.FC<{
     description?: string;
     priceCents: number;
     mediaUrl?: string;
+    imageUrl?: string;
     visible: boolean;
     showOnLandingPage?: boolean;
     showInMemberStore?: boolean;
     quantityLimit?: number | null;
     typeDisplayLabel?: string | null;
+    previewMediaIndices?: number[];
+    fulfillmentItems?: DigitalPackMediaItem[];
+    salesVoiceTeaserUrl?: string;
   }) => Promise<void>;
   onClose: () => void;
   saving: boolean;
-}> = ({ product, includeSjHeartEmoji, onSave, onClose, saving }) => {
-  const type: TreatProductType = product?.type ?? "custom";
+}> = ({ product, initialType = "custom", creatorId, includeSjHeartEmoji, onSave, onClose, saving }) => {
+  const [type, setType] = useState<TreatProductType>(product?.type ?? initialType);
   const [title, setTitle] = useState(() => product?.title ?? "");
   const [description, setDescription] = useState(() => product?.description ?? "");
   /** Dollar string while typing — do not normalize on every keystroke (breaks cursor / decimals). */
@@ -1443,6 +1583,14 @@ const ProductForm: React.FC<{
   const [mediaUrl, setMediaUrl] = useState(() => (product?.mediaUrl != null ? String(product.mediaUrl) : ""));
   const [quantityLimit, setQuantityLimit] = useState(() => treatProductQuantityString(product));
   const [typeDisplayLabel, setTypeDisplayLabel] = useState(() => product?.typeDisplayLabel ?? "");
+  const [fulfillmentItems, setFulfillmentItems] = useState<DigitalPackMediaItem[]>(
+    product?.fulfillmentItems ?? []
+  );
+  const [previewMediaIndices, setPreviewMediaIndices] = useState<number[]>(
+    product?.previewMediaIndices ?? defaultPackPreviewIndices(product?.fulfillmentItems ?? [])
+  );
+  const [salesVoiceTeaserUrl, setSalesVoiceTeaserUrl] = useState(product?.salesVoiceTeaserUrl ?? "");
+  const [showPackHelp, setShowPackHelp] = useState(false);
 
   const onPriceDollarsChange = (raw: string) => {
     if (raw === "") {
@@ -1469,6 +1617,9 @@ const ProductForm: React.FC<{
     e.preventDefault();
     const cents = Math.round(parseFloat(priceDollars || "0") * 100) || 0;
     if (!title.trim()) return;
+    if (isDigitalPackProductType(type) && !productHasDigitalPackFulfillment(type, fulfillmentItems)) {
+      return;
+    }
     await onSave({
       type,
       title: title.trim(),
@@ -1479,19 +1630,72 @@ const ProductForm: React.FC<{
       quantityLimit: parseTreatQuantityLimitInput(quantityLimit),
       typeDisplayLabel:
         typeDisplayLabel.trim().slice(0, TREAT_PRODUCT_TYPE_DISPLAY_MAX_LEN) || null,
+      ...digitalPackSaveFields(type, fulfillmentItems, previewMediaIndices, salesVoiceTeaserUrl),
     });
   };
 
+  const isPack = isDigitalPackProductType(type);
+  const modalTitle = product ? "Edit product" : isPack ? "Add digital pack" : "Add product";
+  const modalSubtitle = product
+    ? isPack
+      ? "Update pack assets, pricing, and how it appears in your store."
+      : "Update pricing and how this treat appears in your store."
+    : isPack
+      ? "Upload your pack once, pick preview photos — the rest stays blurred until fans buy."
+      : "List a treat fans can buy; you deliver manually from Purchases.";
+
   return (
-    <div className="treats-form-backdrop" onClick={onClose}>
-      <div className="treats-form-modal" onClick={(e) => e.stopPropagation()}>
+    <div className="treats-form-backdrop" onClick={onClose} role="presentation">
+      <div
+        className={`treats-form-modal${isPack ? " treats-form-modal--wide" : ""}`}
+        onClick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="treats-form-title"
+      >
+        <div className="treats-form-modal__accent" aria-hidden />
         <div className="treats-form-header">
-          <h2>{product ? "Edit product" : "Add product"}</h2>
-          <button type="button" className="treats-form-close" onClick={onClose}>
+          <div className="treats-form-header__text">
+            <p className="treats-form-eyebrow">Treats store</p>
+            <h2 id="treats-form-title">{modalTitle}</h2>
+            <p className="treats-form-subtitle">{modalSubtitle}</p>
+            {isPack ? (
+              <DigitalPackHowItWorksButton
+                className="treats-form-how-it-works-trigger"
+                onClick={() => setShowPackHelp(true)}
+              />
+            ) : null}
+          </div>
+          <button type="button" className="treats-form-close" onClick={onClose} aria-label="Close">
             ×
           </button>
         </div>
-        <form onSubmit={handleSubmit} className="treats-form-body">
+        <form id="treats-product-form" onSubmit={handleSubmit} className="treats-form-body">
+          {!product ? (
+            <div className="treats-form-section treats-form-section--kind">
+              <p className="treats-form-section-title">Product kind</p>
+              <div className="treats-form-kind-pills" role="group" aria-label="Product kind">
+                <button
+                  type="button"
+                  className={`treats-form-kind-pill${type === "custom" ? " treats-form-kind-pill--active" : ""}`}
+                  onClick={() => setType("custom")}
+                >
+                  <span className="treats-form-kind-pill__label">Custom treat</span>
+                  <span className="treats-form-kind-pill__hint">You deliver after purchase</span>
+                </button>
+                <button
+                  type="button"
+                  className={`treats-form-kind-pill${type === "bundle" ? " treats-form-kind-pill--active" : ""}`}
+                  onClick={() => setType("bundle")}
+                >
+                  <span className="treats-form-kind-pill__label">Digital pack</span>
+                  <span className="treats-form-kind-pill__hint">Auto-deliver on checkout</span>
+                </button>
+              </div>
+            </div>
+          ) : null}
+          <div className="treats-form-section">
+            <p className="treats-form-section-title">Details</p>
           <div className="treats-form-field">
             <label>Title *</label>
             <div className="treat-inline-input-row">
@@ -1592,16 +1796,46 @@ const ProductForm: React.FC<{
               />
             </div>
           )}
+          </div>
+          {isDigitalPackProductType(type) ? (
+            <div className="treats-form-section treats-form-section--pack">
+              <p className="treats-form-section-title">Pack assets</p>
+              <DigitalPackEditor
+                creatorId={creatorId}
+                productId={product?.id ?? null}
+                productType={type}
+                fulfillmentItems={fulfillmentItems}
+                onFulfillmentItemsChange={setFulfillmentItems}
+                previewMediaIndices={previewMediaIndices}
+                onPreviewMediaIndicesChange={setPreviewMediaIndices}
+                salesVoiceTeaserUrl={salesVoiceTeaserUrl}
+                onSalesVoiceTeaserUrlChange={setSalesVoiceTeaserUrl}
+                disabled={saving}
+              />
+            </div>
+          ) : null}
+        </form>
+        <div className="treats-form-footer">
           <div className="treats-form-actions">
             <button type="button" className="treats-form-cancel" onClick={onClose}>
               Cancel
             </button>
-            <button type="submit" className="treats-form-submit" disabled={saving || !title.trim()}>
-              {saving ? "Saving..." : product ? "Update" : "Add"}
+            <button
+              type="submit"
+              form="treats-product-form"
+              className="treats-form-submit"
+              disabled={
+                saving ||
+                !title.trim() ||
+                (isDigitalPackProductType(type) && fulfillmentItems.length === 0)
+              }
+            >
+              {saving ? "Saving..." : product ? "Save changes" : isPack ? "Publish pack" : "Add product"}
             </button>
           </div>
-        </form>
+        </div>
       </div>
+      <DigitalPackHowItWorksModal open={showPackHelp} onClose={() => setShowPackHelp(false)} />
     </div>
   );
 };

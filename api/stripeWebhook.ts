@@ -21,6 +21,7 @@ import {
 } from './_stripeBillingCountry.js';
 import { applyCreatorAppClaim } from './_creatorAppClaim.js';
 import { pushForAdminAlert } from './_userWebPush.js';
+import { applyDigitalPackFulfillmentIfNeeded } from './_digitalPackFulfillment.js';
 
 // Check STRIPE_USE_TEST_MODE toggle first, then select appropriate key
 // Set STRIPE_USE_TEST_MODE=true in Vercel to use test mode, false or unset for live mode
@@ -789,6 +790,12 @@ export async function processFanHubCheckoutSessionCompleted(
       const totalOrders = (stats?.totalOrders ?? 0) + 1;
       await statsRef.set({ totalRevenueCents: totalRevenue, totalOrders, updatedAt: now }, { merge: true });
       console.log(`Fan hub: product checkout creator=${creatorId} fan=${fanId} product=${productId}`);
+
+      try {
+        await applyDigitalPackFulfillmentIfNeeded(db, session.id, productId, now);
+      } catch (packErr) {
+        console.error('applyDigitalPackFulfillmentIfNeeded (product checkout):', packErr);
+      }
     }
 
     await trySendCreatorHubProductPurchaseBell(db, session.id, session);
