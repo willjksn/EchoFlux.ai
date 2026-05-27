@@ -579,34 +579,41 @@ function FanPurchaseUnlockedPostBlock({ creatorId, postId }: { creatorId: string
         </div>
       ) : null}
       {row.mediaUrls.length > 0 ? (
-        <div className="fan-member-purchase-unlock-media-stack">
+        <div className="digital-pack-delivery-gallery fan-member-purchase-unlock-delivery">
           {row.mediaUrls.map((url, i) => {
             const declared = row.mediaTypes[i] === "video" ? "video" : "image";
             const isVideo = declared === "video" || inferIsVideoFromUrl(url);
             if (isVideo) {
               return (
-                <video
+                <div
                   key={`${url}-${i}`}
-                  src={url}
-                  controls
-                  playsInline
-                  preload="metadata"
-                  className="fan-member-purchase-unlock-preview-video"
-                  {...storefrontVideoDownloadGuardProps}
-                />
+                  className="digital-pack-delivery-item digital-pack-delivery-item--video"
+                >
+                  <video
+                    src={url}
+                    controls
+                    playsInline
+                    preload="metadata"
+                    className="digital-pack-delivery-item__video"
+                    {...storefrontVideoDownloadGuardProps}
+                  />
+                </div>
               );
             }
             return (
-              <div key={`unlock-img-slot-${i}-${url}`} className="fan-member-purchase-unlock-img-slot">
+              <div
+                key={`unlock-img-slot-${i}-${url}`}
+                className="digital-pack-delivery-item digital-pack-delivery-item--image"
+              >
                 <StorefrontGuardedImage
                   src={url}
-                  className="fan-member-purchase-unlock-preview-img"
+                  className="digital-pack-delivery-item__img"
                   fit="contain"
                   position="top center"
                 />
                 <button
                   type="button"
-                  className="fan-member-purchase-unlock-expand-btn"
+                  className="digital-pack-delivery-item__expand"
                   aria-label="Expand image"
                   onClick={() => setExpandedImageUrl(url)}
                 >
@@ -633,8 +640,7 @@ function FanPurchaseUnlockedPostBlock({ creatorId, postId }: { creatorId: string
       {expandedImageUrl && typeof document !== "undefined"
         ? createPortal(
             <div
-              className="fan-member-purchase-unlock-lightbox fixed inset-0 z-[120] flex flex-col items-center justify-center gap-3 p-4"
-              style={{ backgroundColor: "rgba(0,0,0,0.85)" }}
+              className="digital-pack-delivery-lightbox"
               role="dialog"
               aria-modal="true"
               aria-label="Expanded purchase image"
@@ -644,19 +650,15 @@ function FanPurchaseUnlockedPostBlock({ creatorId, postId }: { creatorId: string
             >
               <button
                 type="button"
-                className="fan-member-purchase-unlock-lightbox-close shrink-0 rounded-full px-4 py-2 text-sm font-semibold text-white"
-                style={{
-                  backgroundColor: "color-mix(in srgb, var(--fan-primary, #6366f1) 65%, #334155)",
-                  border: "1px solid rgba(255,255,255,0.25)",
-                }}
+                className="digital-pack-delivery-lightbox__close"
                 onClick={() => setExpandedImageUrl(null)}
               >
                 Close
               </button>
-              <div onClick={(e) => e.stopPropagation()}>
+              <div className="digital-pack-delivery-lightbox__stage" onClick={(e) => e.stopPropagation()}>
                 <StorefrontGuardedImage
                   src={expandedImageUrl}
-                  className="fan-member-purchase-unlock-lightbox__media"
+                  className="digital-pack-delivery-lightbox__img"
                   fit="contain"
                   position="center"
                 />
@@ -763,23 +765,29 @@ function FanMemberPurchaseDeliveryContent({
         </div>
       ) : null}
       {o.deliveryType === "video" && o.deliveryUrl ? (
-        <video
-          src={o.deliveryUrl}
-          controls
-          playsInline
-          preload="metadata"
-          className="fan-member-purchase-legacy-media"
-          {...storefrontVideoDownloadGuardProps}
-        />
+        <div className="digital-pack-delivery-gallery">
+          <div className="digital-pack-delivery-item digital-pack-delivery-item--video">
+            <video
+              src={o.deliveryUrl}
+              controls
+              playsInline
+              preload="metadata"
+              className="digital-pack-delivery-item__video"
+              {...storefrontVideoDownloadGuardProps}
+            />
+          </div>
+        </div>
       ) : null}
       {o.deliveryType === "image" && o.deliveryUrl ? (
-        <div className="fan-member-purchase-unlock-img-slot">
-          <StorefrontGuardedImage
-            src={o.deliveryUrl}
-            className="fan-member-purchase-unlock-preview-img"
-            fit="contain"
-            position="top center"
-          />
+        <div className="digital-pack-delivery-gallery">
+          <div className="digital-pack-delivery-item digital-pack-delivery-item--image">
+            <StorefrontGuardedImage
+              src={o.deliveryUrl}
+              className="digital-pack-delivery-item__img"
+              fit="contain"
+              position="top center"
+            />
+          </div>
         </div>
       ) : null}
       {o.deliveryType === "audio" && o.deliveryUrl ? (

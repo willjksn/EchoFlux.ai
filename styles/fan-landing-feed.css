@@ -3136,79 +3136,17 @@
   max-height: 6rem;
 }
 
-.fan-member-purchase-unlock-media-stack,
+/* Feed unlock media uses .digital-pack-delivery-* (same sizing as digital pack cards). */
+.fan-member-purchase-unlock-delivery {
+  margin-top: 0.15rem;
+}
+
 .fan-member-purchase-unlock-audio-stack {
   display: flex;
   flex-direction: column;
   gap: 0.45rem;
   width: 100%;
   min-width: 0;
-}
-
-.fan-member-purchase-unlock-img-slot {
-  position: relative;
-  width: 100%;
-  min-width: 0;
-}
-
-.fan-member-purchase-unlock-expand-btn {
-  position: absolute;
-  bottom: 0.5rem;
-  right: 0.5rem;
-  padding: 0.38rem 0.75rem;
-  border: none;
-  border-radius: 999px;
-  font-size: 0.78rem;
-  font-weight: 600;
-  cursor: pointer;
-  color: #fff;
-  background: color-mix(in srgb, var(--fan-text, #1f2937) 52%, transparent);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.25);
-}
-
-.fan-member-purchase-unlock-expand-btn:hover {
-  background: color-mix(in srgb, var(--fan-text, #1f2937) 68%, transparent);
-}
-
-.fan-member-purchase-unlock-expand-btn:focus-visible {
-  outline: 2px solid var(--fan-accent, var(--fan-primary, #6366f1));
-  outline-offset: 2px;
-}
-
-.fan-member-purchase-unlock-preview-video,
-.fan-member-purchase-unlock-preview-img {
-  width: 100%;
-  min-height: min(280px, 40vh);
-  max-height: min(480px, 58vh);
-  object-fit: contain;
-  object-position: center top;
-  display: block;
-  border-radius: 10px;
-  box-sizing: border-box;
-}
-
-.storefront-guarded-image.fan-member-purchase-unlock-preview-img {
-  width: 100%;
-  min-height: min(300px, 44vh);
-  height: min(400px, 54vh);
-  max-height: min(480px, 58vh);
-  display: block;
-  border-radius: 10px;
-  background-repeat: no-repeat;
-  background-color: color-mix(in srgb, var(--fan-text, #1f2937) 6%, transparent);
-  border: 1px solid color-mix(in srgb, var(--fan-text, #1f2937) 10%, transparent);
-  box-sizing: border-box;
-}
-
-.fan-member-purchase-unlock-lightbox__media,
-.storefront-guarded-image.fan-member-purchase-unlock-lightbox__media {
-  width: min(92vw, 980px);
-  height: min(78vh, 860px);
-  min-height: min(55vh, 420px);
-  max-height: 82vh;
-  border-radius: 12px;
 }
 
 .fan-member-purchase-unlock-audio-stack audio {
@@ -3229,16 +3167,6 @@
 
 .fan-member-purchases-compact .fan-member-purchase-unlock-preview-text {
   max-height: 4.5rem;
-}
-
-.fan-member-purchases-compact .fan-member-purchase-unlock-preview-img,
-.fan-member-purchases-compact .fan-member-purchase-unlock-preview-video {
-  max-height: min(240px, 36vh);
-}
-
-.fan-member-purchases-compact .fan-member-purchase-unlock-preview-video {
-  min-height: 132px;
-  background: color-mix(in srgb, var(--fan-text, #1f2937) 10%, transparent);
 }
 
 .fan-member-purchases-compact .fan-member-purchase-unlock-preview-body {
@@ -3275,24 +3203,6 @@ html.dark .fan-member-purchases-compact .fan-member-purchase-unlock-preview-body
 
 .fan-member-purchases-expanded-grid .fan-member-purchase-unlock-preview-text {
   max-height: none;
-}
-
-.fan-member-purchases-expanded-grid .fan-member-purchase-unlock-preview-img,
-.fan-member-purchases-expanded-grid .fan-member-purchase-unlock-preview-video,
-.fan-member-purchases-expanded-grid .storefront-guarded-image.fan-member-purchase-unlock-preview-img,
-.fan-member-purchases-list--cards .fan-member-purchase-unlock-preview-img,
-.fan-member-purchases-list--cards .fan-member-purchase-unlock-preview-video,
-.fan-member-purchases-list--cards .storefront-guarded-image.fan-member-purchase-unlock-preview-img,
-.fan-member-purchase-row--expanded .fan-member-purchase-unlock-preview-img,
-.fan-member-purchase-row--expanded .fan-member-purchase-unlock-preview-video,
-.fan-member-purchase-row--expanded .storefront-guarded-image.fan-member-purchase-unlock-preview-img {
-  max-height: min(480px, 58vh);
-}
-
-.fan-member-purchases-list--cards .storefront-guarded-image.fan-member-purchase-unlock-preview-img,
-.fan-member-purchase-row--expanded .storefront-guarded-image.fan-member-purchase-unlock-preview-img {
-  min-height: min(300px, 44vh);
-  height: min(400px, 54vh);
 }
 
 @media (max-width: 520px) {

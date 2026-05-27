@@ -8833,6 +8833,7 @@ button.treat-card:hover:not(:disabled) .treat-card-cta {
 .digital-pack-delivery-item__video {
   display: block;
   width: 100%;
+  height: min(420px, 56vh);
   max-height: min(480px, 58vh);
   min-height: min(280px, 42vh);
   object-fit: contain;
