@@ -689,7 +689,84 @@ function fanPurchaseRowStatus(o: FanDeliveryPurchase): string {
   return "Pending";
 }
 
-/** Shared media / actions for one purchase (full cards and compact expanded rows). */
+/** Delivered purchase media — pack gallery or legacy single delivery fields (not both). */
+function FanMemberPurchaseDeliveryContent({
+  o,
+  primary,
+}: {
+  o: FanDeliveryPurchase;
+  primary: string;
+}) {
+  const packItems = o.deliveryItems && o.deliveryItems.length > 0 ? o.deliveryItems : null;
+
+  if (packItems) {
+    return (
+      <DigitalPackDeliveryGallery
+        items={packItems}
+        imageGuardProps={storefrontImageDownloadGuardProps}
+        videoGuardProps={storefrontVideoDownloadGuardProps}
+        audioGuardProps={storefrontAudioDownloadGuardProps}
+      />
+    );
+  }
+
+  if (o.deliveryStatus !== "delivered") return null;
+
+  return (
+    <>
+      {o.deliveryType === "text" && o.deliveryText ? (
+        <div className="fan-profile-panel fan-member-purchase-text-panel">
+          <p className="fan-member-about-text" style={{ whiteSpace: "pre-wrap" }}>
+            {o.deliveryText}
+          </p>
+        </div>
+      ) : null}
+      {o.deliveryType === "video" && o.deliveryUrl ? (
+        <video
+          src={o.deliveryUrl}
+          controls
+          playsInline
+          preload="metadata"
+          className="fan-member-purchase-legacy-media"
+          {...storefrontVideoDownloadGuardProps}
+        />
+      ) : null}
+      {o.deliveryType === "image" && o.deliveryUrl ? (
+        <div className="fan-member-purchase-unlock-img-slot">
+          <img
+            src={o.deliveryUrl}
+            alt="Delivered purchase media"
+            loading="lazy"
+            className="fan-member-purchase-unlock-preview-img"
+            {...storefrontImageDownloadGuardProps}
+          />
+        </div>
+      ) : null}
+      {o.deliveryType === "audio" && o.deliveryUrl ? (
+        <audio
+          src={o.deliveryUrl}
+          controls
+          preload="metadata"
+          className="fan-member-purchase-legacy-audio"
+          {...storefrontAudioDownloadGuardProps}
+        />
+      ) : null}
+      {o.deliveryType === "link" && o.deliveryUrl ? (
+        <a
+          href={o.deliveryUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="fan-member-treat-buy fan-member-purchase-link-btn"
+          style={{ backgroundColor: primary }}
+        >
+          Open link
+        </a>
+      ) : null}
+    </>
+  );
+}
+
+/** Shared media for one purchase row (inside expanded details body). */
 function FanMemberPurchaseItemBody({
   o,
   creatorId,
@@ -699,94 +776,77 @@ function FanMemberPurchaseItemBody({
   creatorId: string | undefined;
   primary: string;
 }) {
+  if (o.type === "tip") {
+    return <p className="fan-member-purchase-body-note">Tip recorded — no delivery media.</p>;
+  }
+  if (o.type === "subscription") {
+    return <p className="fan-member-purchase-body-note">Membership payment — access is on your member hub.</p>;
+  }
+  if (o.type === "post_unlock") {
+    return o.postId && creatorId ? (
+      <FanPurchaseUnlockedPostBlock creatorId={creatorId} postId={o.postId} />
+    ) : (
+      <p className="fan-member-about-text fan-member-purchase-body-note">
+        Post details aren&apos;t linked to this receipt.
+      </p>
+    );
+  }
+  if (o.type === "live_stream_ticket") {
+    return <p className="fan-member-purchase-body-note">{fanPurchaseRowStatus(o)}</p>;
+  }
+  if (o.deliveryStatus === "delivered") {
+    return <FanMemberPurchaseDeliveryContent o={o} primary={primary} />;
+  }
+  return <p className="fan-member-purchase-body-note">Pending delivery from the creator.</p>;
+}
+
+function FanMemberPurchaseRow({
+  o,
+  creatorId,
+  primary,
+  cardChrome,
+}: {
+  o: FanDeliveryPurchase;
+  creatorId: string | undefined;
+  primary: string;
+  cardChrome: boolean;
+}) {
+  const hasDeliveredMedia =
+    (o.deliveryItems && o.deliveryItems.length > 0) ||
+    (o.deliveryStatus === "delivered" &&
+      (Boolean(o.deliveryText) ||
+        Boolean(o.deliveryUrl) ||
+        o.type === "post_unlock"));
+
   return (
-    <div className="fan-member-treat-action fan-member-purchase-item-body">
-      {o.type === "tip" ? (
-        <span className="fan-member-treat-owned">Tip paid</span>
-      ) : o.type === "subscription" ? (
-        <span className="fan-member-treat-owned">Membership active</span>
-      ) : o.type === "post_unlock" ? (
-        <>
-          <span className="fan-member-treat-owned">Unlocked</span>
-          {o.postId && creatorId ? (
-            <FanPurchaseUnlockedPostBlock creatorId={creatorId} postId={o.postId} />
-          ) : (
-            <p className="fan-member-about-text" style={{ marginTop: "0.5rem", opacity: 0.85 }}>
-              Post details aren&apos;t linked to this receipt.
-            </p>
-          )}
-        </>
-      ) : o.type === "live_stream_ticket" ? (
-        <span className="fan-member-treat-owned">{fanPurchaseRowStatus(o)}</span>
-      ) : o.deliveryStatus === "delivered" ? (
-        <>
-          <span className="fan-member-treat-owned">Delivered</span>
-          {o.deliveryItems && o.deliveryItems.length > 0 ? (
-            <DigitalPackDeliveryGallery
-              items={o.deliveryItems}
-              imageGuardProps={storefrontImageDownloadGuardProps}
-              videoGuardProps={storefrontVideoDownloadGuardProps}
-              audioGuardProps={storefrontAudioDownloadGuardProps}
-            />
-          ) : null}
-          {o.deliveryType === "text" && o.deliveryText ? (
-            <div className="fan-profile-panel" style={{ marginTop: "0.6rem" }}>
-              <p className="fan-member-about-text" style={{ whiteSpace: "pre-wrap" }}>
-                {o.deliveryText}
-              </p>
+    <details
+      className={`fan-member-purchase-row${cardChrome ? " fan-member-purchase-row--card" : ""}`}
+    >
+      <summary className="fan-member-purchase-row__summary">
+        <span className="fan-member-purchase-compact-type">{fanPurchaseTypeLabel(o)}</span>
+        <span className="fan-member-purchase-compact-title">{o.productTitle || "Purchase"}</span>
+        <span className="fan-member-purchase-compact-status">{fanPurchaseRowStatus(o)}</span>
+        {o.amountCents > 0 || o.type === "tip" || o.type === "subscription" ? (
+          <span className="fan-member-purchase-compact-price">{formatPrice(o.amountCents)}</span>
+        ) : (
+          <span className="fan-member-purchase-compact-price fan-member-purchase-compact-price--muted">—</span>
+        )}
+      </summary>
+      <div className="fan-member-purchase-row__body">
+        {hasDeliveredMedia ? (
+          <details className="fan-member-purchase-media-details" open={o.type === "post_unlock"}>
+            <summary className="fan-member-purchase-media-details__summary">
+              {o.type === "post_unlock" ? "View unlocked post" : "View delivery"}
+            </summary>
+            <div className="fan-member-purchase-media-details__content">
+              <FanMemberPurchaseItemBody o={o} creatorId={creatorId} primary={primary} />
             </div>
-          ) : null}
-          {o.deliveryType === "video" && o.deliveryUrl ? (
-            <video
-              src={o.deliveryUrl}
-              controls
-              playsInline
-              preload="metadata"
-              style={{ width: "100%", marginTop: "0.6rem", borderRadius: 10 }}
-              {...storefrontVideoDownloadGuardProps}
-            />
-          ) : null}
-          {o.deliveryType === "image" && o.deliveryUrl ? (
-            <img
-              src={o.deliveryUrl}
-              alt="Delivered purchase media"
-              loading="lazy"
-              style={{ width: "100%", marginTop: "0.6rem", borderRadius: 10 }}
-              {...storefrontImageDownloadGuardProps}
-            />
-          ) : null}
-          {o.deliveryType === "audio" && o.deliveryUrl ? (
-            <audio
-              src={o.deliveryUrl}
-              controls
-              preload="metadata"
-              style={{ width: "100%", marginTop: "0.6rem" }}
-              {...storefrontAudioDownloadGuardProps}
-            />
-          ) : null}
-          {o.deliveryType === "link" && o.deliveryUrl ? (
-            <a
-              href={o.deliveryUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="fan-member-treat-buy"
-              style={{
-                marginTop: "0.6rem",
-                display: "inline-flex",
-                alignItems: "center",
-                justifyContent: "center",
-                textDecoration: "none",
-                backgroundColor: primary,
-              }}
-            >
-              Open link
-            </a>
-          ) : null}
-        </>
-      ) : (
-        <span className="fan-member-treat-owned">Pending delivery</span>
-      )}
-    </div>
+          </details>
+        ) : (
+          <FanMemberPurchaseItemBody o={o} creatorId={creatorId} primary={primary} />
+        )}
+      </div>
+    </details>
   );
 }
 
@@ -1308,7 +1368,7 @@ export const FanStorefrontView: React.FC = () => {
     if (!uid || !cid) return null;
     return `fanMemberPurchasesCompact:${uid}:${cid}`;
   }, [fanAuthUid, creator?.creatorId]);
-  const [memberPurchasesListCompact, setMemberPurchasesListCompact] = useState(false);
+  const [memberPurchasesListCompact, setMemberPurchasesListCompact] = useState(true);
   const setMemberPurchasesListCompactPersisted = useCallback(
     (compact: boolean) => {
       setMemberPurchasesListCompact(compact);
@@ -5654,102 +5714,58 @@ export const FanStorefrontView: React.FC = () => {
                   </div>
                 ) : treatsLoading ? (
                   <p className="fan-member-loading">Loading your purchases...</p>
-                ) : memberPurchasesListCompact ? (
-                  <div className="fan-member-purchases-compact">
-                    {fanPurchasesDisplayRows.map((o) => (
-                      <details key={`order-${o.id}`} className="fan-member-purchase-compact">
-                        <summary className="fan-member-purchase-compact-summary">
-                          <span className="fan-member-purchase-compact-type">{fanPurchaseTypeLabel(o)}</span>
-                          <span className="fan-member-purchase-compact-title">{o.productTitle || "Purchase"}</span>
-                          <span className="fan-member-purchase-compact-status">{fanPurchaseRowStatus(o)}</span>
-                          {o.amountCents > 0 || o.type === "tip" || o.type === "subscription" ? (
-                            <span className="fan-member-purchase-compact-price">{formatPrice(o.amountCents)}</span>
-                          ) : (
-                            <span className="fan-member-purchase-compact-price fan-member-purchase-compact-price--muted">
-                              —
-                            </span>
-                          )}
-                        </summary>
-                        <div className="fan-member-purchase-compact-body">
-                          <FanMemberPurchaseItemBody
-                            o={o}
-                            creatorId={creator?.creatorId}
-                            primary={primary}
-                          />
-                        </div>
-                      </details>
-                    ))}
-                    {legacyUnlockedTreatPurchases.map((p) => {
-                      const categoryLine = getTreatProductTypeDisplayLabel(p);
-                      return (
-                      <details key={p.id} className="fan-member-purchase-compact">
-                        <summary className="fan-member-purchase-compact-summary">
-                          {categoryLine ? (
-                            <span className="fan-member-purchase-compact-type">{categoryLine}</span>
-                          ) : null}
-                          <span className="fan-member-purchase-compact-title">{p.title}</span>
-                          <span className="fan-member-purchase-compact-status">Purchased</span>
-                          <span className="fan-member-purchase-compact-price">{formatPrice(p.priceCents)}</span>
-                        </summary>
-                        <div className="fan-member-purchase-compact-body">
-                          {p.description ? (
-                            <p className="fan-member-about-text" style={{ marginBottom: "0.65rem" }}>
-                              {p.description}
-                            </p>
-                          ) : null}
-                          <button
-                            type="button"
-                            className="fan-member-treat-buy"
-                            style={{ backgroundColor: primary }}
-                            onClick={() => setActiveTabWithUrl("treats")}
-                          >
-                            Open in Store
-                          </button>
-                        </div>
-                      </details>
-                      );
-                    })}
-                  </div>
                 ) : (
-                  <div className="fan-member-treats-grid fan-member-purchases-expanded-grid">
+                  <div
+                    className={
+                      memberPurchasesListCompact
+                        ? "fan-member-purchases-compact"
+                        : "fan-member-purchases-list fan-member-purchases-list--cards"
+                    }
+                  >
                     {fanPurchasesDisplayRows.map((o) => (
-                      <div key={`order-${o.id}`} className="fan-member-treat-card">
-                        <p className="fan-member-treat-type">{fanPurchaseTypeLabel(o)}</p>
-                        <h3 className="fan-member-treat-title">{o.productTitle || "Purchase"}</h3>
-                        {o.amountCents > 0 ? (
-                          <p className="fan-member-treat-price">{formatPrice(o.amountCents)}</p>
-                        ) : o.type === "tip" || o.type === "subscription" ? (
-                          <p className="fan-member-treat-price">{formatPrice(o.amountCents)}</p>
-                        ) : null}
-                        <FanMemberPurchaseItemBody
-                          o={o}
-                          creatorId={creator?.creatorId}
-                          primary={primary}
-                        />
-                      </div>
+                      <FanMemberPurchaseRow
+                        key={`order-${o.id}`}
+                        o={o}
+                        creatorId={creator?.creatorId}
+                        primary={primary}
+                        cardChrome={!memberPurchasesListCompact}
+                      />
                     ))}
                     {legacyUnlockedTreatPurchases.map((p) => {
                       const categoryLine = getTreatProductTypeDisplayLabel(p);
                       return (
-                      <div key={p.id} className="fan-member-treat-card">
-                        {categoryLine ? <p className="fan-member-treat-type">{categoryLine}</p> : null}
-                        <h3 className="fan-member-treat-title">{p.title}</h3>
-                        {p.description ? (
-                          <p className="fan-member-treat-desc">{p.description}</p>
-                        ) : null}
-                        <p className="fan-member-treat-price">{formatPrice(p.priceCents)}</p>
-                        <div className="fan-member-treat-action">
-                          <span className="fan-member-treat-owned">Purchased</span>
-                          <button
-                            type="button"
-                            className="fan-member-treat-buy"
-                            style={{ backgroundColor: primary }}
-                            onClick={() => setActiveTabWithUrl("treats")}
-                          >
-                            Open in Store
-                          </button>
-                        </div>
-                      </div>
+                        <details
+                          key={p.id}
+                          className={`fan-member-purchase-row${
+                            !memberPurchasesListCompact ? " fan-member-purchase-row--card" : ""
+                          }`}
+                        >
+                          <summary className="fan-member-purchase-row__summary">
+                            {categoryLine ? (
+                              <span className="fan-member-purchase-compact-type">{categoryLine}</span>
+                            ) : null}
+                            <span className="fan-member-purchase-compact-title">{p.title}</span>
+                            <span className="fan-member-purchase-compact-status">Purchased</span>
+                            <span className="fan-member-purchase-compact-price">
+                              {formatPrice(p.priceCents)}
+                            </span>
+                          </summary>
+                          <div className="fan-member-purchase-row__body">
+                            {p.description ? (
+                              <p className="fan-member-about-text" style={{ marginBottom: "0.65rem" }}>
+                                {p.description}
+                              </p>
+                            ) : null}
+                            <button
+                              type="button"
+                              className="fan-member-treat-buy"
+                              style={{ backgroundColor: primary }}
+                              onClick={() => setActiveTabWithUrl("treats")}
+                            >
+                              Open in Store
+                            </button>
+                          </div>
+                        </details>
                       );
                     })}
                   </div>

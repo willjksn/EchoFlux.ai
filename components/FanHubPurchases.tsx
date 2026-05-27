@@ -204,6 +204,14 @@ function isAutoFulfilledDigitalPackPurchase(p: Purchase): boolean {
   );
 }
 
+const CREATOR_DIGITAL_PACK_TYPE_LABEL = "Digital pack";
+
+function digitalPackItemCountLabel(items: DigitalPackMediaItem[] | undefined): string | null {
+  const n = items?.length ?? 0;
+  if (n <= 0) return null;
+  return `${n} ${n === 1 ? "item" : "items"}`;
+}
+
 /** Past scheduled start + grace: treat ticket as fulfilled if Firestore still says pending/scheduled/live-synced. */
 const LIVE_STREAM_TICKET_STALE_AFTER_MS = 6 * 60 * 60 * 1000;
 
@@ -252,6 +260,7 @@ function purchaseEffectiveForUi(p: Purchase): {
 function creatorPurchaseTypeLabel(p: Purchase): string {
   if (isTipPurchase(p)) return "Tip";
   if (isSubscriptionPurchase(p)) return "Membership";
+  if (isAutoFulfilledDigitalPackPurchase(p)) return CREATOR_DIGITAL_PACK_TYPE_LABEL;
   const t = (p.orderType || "").trim().toLowerCase();
   if (t === "post_unlock") return "Feed unlock";
   if (t === "live_stream_ticket") return "Live stream";
@@ -260,6 +269,11 @@ function creatorPurchaseTypeLabel(p: Purchase): string {
 
 function creatorPurchaseStatusLine(p: Purchase): string {
   const eff = purchaseEffectiveForUi(p);
+  if (isAutoFulfilledDigitalPackPurchase(p)) {
+    const count = digitalPackItemCountLabel(p.deliveryItems);
+    if (eff.deliveryStatus === "delivered") return count ? `Delivered · ${count}` : "Pack delivered";
+    return "Pending";
+  }
   if (isTipPurchase(p)) return "Tip received";
   if (isSubscriptionPurchase(p)) return "Subscription payment";
   if (isPostUnlockPurchase(p)) return "Unlocked in feed";
@@ -452,7 +466,7 @@ export const FanHubPurchases: React.FC = () => {
     () => (user?.id ? `fanhubCreatorPurchasesCompact:${user.id}` : null),
     [user?.id],
   );
-  const [creatorPurchasesListCompact, setCreatorPurchasesListCompact] = useState(false);
+  const [creatorPurchasesListCompact, setCreatorPurchasesListCompact] = useState(true);
   const setCreatorPurchasesListCompactPersisted = useCallback(
     (compact: boolean) => {
       setCreatorPurchasesListCompact(compact);
@@ -1771,7 +1785,18 @@ export const FanHubPurchases: React.FC = () => {
               <>
                 <div className="purchases-card-header">
                   <div className="purchases-card-info">
+                    {digitalPackPurchase ? (
+                      <p className="purchases-card-category">{CREATOR_DIGITAL_PACK_TYPE_LABEL}</p>
+                    ) : null}
                     <p className="purchases-card-product">{p.productName}</p>
+                    {(() => {
+                      const packCount = digitalPackPurchase
+                        ? digitalPackItemCountLabel(p.deliveryItems)
+                        : null;
+                      return packCount ? (
+                        <p className="purchases-card-pack-meta">{packCount} delivered</p>
+                      ) : null;
+                    })()}
                     <p className="purchases-card-meta">
                       {(() => {
                         const fanLabel = purchaseFanLabel(p);
@@ -1854,7 +1879,13 @@ export const FanHubPurchases: React.FC = () => {
                 </div>
 
                 {digitalPackPurchase && isDelivered && p.deliveryItems && p.deliveryItems.length > 0 ? (
-                  <DigitalPackDeliveryGallery items={p.deliveryItems} />
+                  <details className="purchases-pack-delivery-details">
+                    <summary className="purchases-pack-delivery-details__summary">
+                      View delivered pack — {p.productName} ({p.deliveryItems.length}{" "}
+                      {p.deliveryItems.length === 1 ? "item" : "items"})
+                    </summary>
+                    <DigitalPackDeliveryGallery items={p.deliveryItems} />
+                  </details>
                 ) : null}
 
                 {/* Actions */}

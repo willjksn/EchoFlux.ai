@@ -225,6 +225,7 @@ export const PremiumStudioLayout: React.FC<PremiumStudioLayoutProps> = ({ childr
     const sans = fontFamily ? ({ '--fan-sans': fontFamily } as React.CSSProperties) : {};
     const baseTokens = {
       '--fan-primary': primary,
+      '--fan-accent': primary,
       '--fan-accent-soft': `color-mix(in srgb, ${primary} 14%, transparent)`,
       '--fan-accent-hover': accentHover,
       ...sans,
@@ -254,17 +255,8 @@ export const PremiumStudioLayout: React.FC<PremiumStudioLayoutProps> = ({ childr
     <>
       <div
         className={`mb-4 flex flex-wrap items-center justify-between gap-2 pb-2 ${
-          isFanHub ? 'border-b' : 'border-b border-gray-200 dark:border-gray-700'
+          isFanHub ? 'fan-hub-studio-tabs border-b' : 'border-b border-gray-200 dark:border-gray-700'
         }`}
-        style={
-          isFanHub
-            ? {
-                borderColor: fanHubSurfaceIsDark
-                  ? `${effectiveFanTheme.primary}40`
-                  : `${effectiveFanTheme.primary}33`,
-              }
-            : undefined
-        }
       >
         <div className="flex flex-wrap gap-1 min-w-0 flex-1">
           {tabIds.map((id) => (
