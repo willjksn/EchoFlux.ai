@@ -142,6 +142,7 @@ export const FanMemberDigitalPackTreatCard: React.FC<FanMemberDigitalPackTreatCa
                   product={product}
                   owned={owned}
                   fanFacing
+                  layout="modal"
                   imageGuardProps={imageGuardProps}
                   videoGuardProps={videoGuardProps}
                   audioGuardProps={audioGuardProps}

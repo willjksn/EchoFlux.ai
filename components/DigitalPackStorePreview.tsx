@@ -8,6 +8,7 @@ import {
   isProtectedPackMediaUrl,
   normalizePackPreviewIndices,
   parseDigitalPackMediaItems,
+  type DigitalPackMediaItem,
 } from "../src/lib/digitalPackProduct";
 import { mediaPreviewBlurFilterStyle } from "../src/lib/feedMediaPreviewBlur";
 import { StorefrontGuardedImage } from "../src/lib/storefrontMediaGuard";
@@ -18,11 +19,32 @@ type Props = {
   owned?: boolean;
   /** Fan/member storefront — use guarded media (no native img hover menus). */
   fanFacing?: boolean;
+  /** `modal` = full pack popup (contain media, no cropped faces). */
+  layout?: "card" | "modal";
   imageGuardProps?: React.ImgHTMLAttributes<HTMLImageElement>;
   videoGuardProps?: React.VideoHTMLAttributes<HTMLVideoElement>;
   audioGuardProps?: React.AudioHTMLAttributes<HTMLAudioElement>;
   compact?: boolean;
 };
+
+function isStreamableMediaUrl(url: string | undefined): boolean {
+  const u = typeof url === "string" ? url.trim() : "";
+  return u.startsWith("http://") || u.startsWith("https://") || u.startsWith("blob:");
+}
+
+/** Before purchase, fans never get playable pack video/audio URLs (avoids black empty `<video>` boxes). */
+function packSlotShowsLockedPlaceholder(
+  item: DigitalPackMediaItem,
+  owned: boolean,
+  isPreview: boolean,
+  fanFacing: boolean
+): boolean {
+  if (owned) return false;
+  if (fanFacing && (item.type === "video" || item.type === "audio")) return true;
+  if (isProtectedPackMediaUrl(item.url)) return true;
+  if (!isPreview && (item.type === "video" || item.type === "audio")) return true;
+  return false;
+}
 
 function PackPreviewImage({
   src,
@@ -58,6 +80,7 @@ export const DigitalPackStorePreview: React.FC<Props> = ({
   product,
   owned = false,
   fanFacing = false,
+  layout = "card",
   imageGuardProps,
   videoGuardProps,
   audioGuardProps,
@@ -106,10 +129,15 @@ export const DigitalPackStorePreview: React.FC<Props> = ({
 
   const gridCols =
     gridSlots.length <= 1 ? "1fr" : gridSlots.length === 2 ? "repeat(2, 1fr)" : "repeat(2, 1fr)";
+  const isModal = layout === "modal";
+  const imageFit: "contain" | "cover" = isModal || !fanFacing ? "contain" : "cover";
+  const imagePosition = isModal || fanFacing ? "top center" : "center";
 
   return (
     <div
-      className={`digital-pack-store-preview${compact ? " digital-pack-store-preview--compact" : ""}`}
+      className={`digital-pack-store-preview${compact ? " digital-pack-store-preview--compact" : ""}${
+        isModal ? " digital-pack-store-preview--modal" : ""
+      }${fanFacing && !isModal ? " digital-pack-store-preview--fan-card" : ""}`}
     >
       {showHero ? (
         <div
@@ -122,8 +150,8 @@ export const DigitalPackStorePreview: React.FC<Props> = ({
               fanFacing={fanFacing}
               imageGuardProps={imageGuardProps}
               className="digital-pack-store-cover"
-              fit={fanFacing ? "cover" : "contain"}
-              position={fanFacing ? "top center" : "center"}
+              fit={imageFit}
+              position={imagePosition}
             />
           ))}
         </div>
@@ -137,12 +165,11 @@ export const DigitalPackStorePreview: React.FC<Props> = ({
         >
           {gridSlots.map(({ item, idx }) => {
             const isPreview = isPackMediaSlotPreview(idx, previewIndices, owned);
-            const lockedPlaceholder =
-              !owned &&
-              !isPreview &&
-              (isProtectedPackMediaUrl(item.url) || item.type === "video" || item.type === "audio");
+            const lockedPlaceholder = packSlotShowsLockedPlaceholder(item, owned, isPreview, fanFacing);
             const blurredImage =
               !owned && !isPreview && item.type === "image" && item.url && !isProtectedPackMediaUrl(item.url);
+            const showPlayableVideo =
+              item.type === "video" && isStreamableMediaUrl(item.url) && (owned || (!fanFacing && isPreview));
             return (
               <div
                 key={`${item.url}-${idx}`}
@@ -151,9 +178,13 @@ export const DigitalPackStorePreview: React.FC<Props> = ({
                 }`}
               >
                 {lockedPlaceholder ? (
-                  <div className="digital-pack-slot__locked">
+                  <div
+                    className={`digital-pack-slot__locked${
+                      item.type === "video" ? " digital-pack-slot__locked--video" : ""
+                    }${item.type === "audio" ? " digital-pack-slot__locked--audio" : ""}`}
+                  >
                     <span className="digital-pack-slot__locked-label">
-                      {item.type === "video" ? "Video" : item.type === "audio" ? "Voice" : "Photo"} in pack
+                      {item.type === "video" ? "Video in pack" : item.type === "audio" ? "Voice in pack" : "Photo in pack"}
                     </span>
                   </div>
                 ) : null}
@@ -162,8 +193,8 @@ export const DigitalPackStorePreview: React.FC<Props> = ({
                     <StorefrontGuardedImage
                       src={item.url}
                       className="digital-pack-slot__media digital-pack-slot__media--image"
-                      fit="cover"
-                      position="center"
+                      fit={imageFit}
+                      position={imagePosition}
                       extraStyle={blurredImage ? blurStyle : undefined}
                     />
                   ) : (
@@ -177,14 +208,15 @@ export const DigitalPackStorePreview: React.FC<Props> = ({
                     />
                   )
                 ) : null}
-                {!lockedPlaceholder && item.type === "video" ? (
+                {showPlayableVideo ? (
                   <video
                     src={item.url}
-                    muted
+                    controls={owned || fanFacing}
+                    muted={!owned && !fanFacing}
                     playsInline
                     preload="metadata"
                     className="digital-pack-slot__media digital-pack-slot__media--video"
-                    style={isPreview ? undefined : blurStyle}
+                    style={isPreview && !owned ? blurStyle : undefined}
                     {...videoGuardProps}
                   />
                 ) : null}

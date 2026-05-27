@@ -5516,6 +5516,78 @@ button.treat-card:hover:not(:disabled) .treat-card-cta {
   );
 }
 
+.digital-pack-slot__locked--video {
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.digital-pack-slot__locked--video::before {
+  content: "";
+  display: block;
+  width: 2.5rem;
+  height: 2.5rem;
+  flex-shrink: 0;
+  border-radius: 9999px;
+  background: color-mix(in srgb, var(--fan-primary, #6366f1) 22%, #cbd5e1);
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='black'%3E%3Cpath d='M8 5v14l11-7z'/%3E%3C/svg%3E");
+  mask-repeat: no-repeat;
+  mask-position: center;
+  mask-size: 55%;
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='black'%3E%3Cpath d='M8 5v14l11-7z'/%3E%3C/svg%3E");
+  -webkit-mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  -webkit-mask-size: 55%;
+}
+
+.digital-pack-store-preview--modal .digital-pack-teaser-grid {
+  max-height: none;
+  gap: 0.5rem;
+}
+
+.digital-pack-store-preview--modal .digital-pack-store-cover-row {
+  max-height: 16rem;
+}
+
+.digital-pack-store-preview--modal .digital-pack-store-cover,
+.digital-pack-store-preview--modal .storefront-guarded-image.digital-pack-store-cover {
+  max-height: 16rem;
+  min-height: 10rem;
+}
+
+.digital-pack-store-preview--modal .digital-pack-slot {
+  background: color-mix(in srgb, var(--fan-primary, #6366f1) 4%, #f8fafc);
+}
+
+.digital-pack-store-preview--modal .digital-pack-slot--locked .digital-pack-slot__locked {
+  aspect-ratio: 4 / 5;
+  min-height: 9rem;
+}
+
+.digital-pack-store-preview--modal .storefront-guarded-image.digital-pack-slot__media--image {
+  aspect-ratio: 4 / 5;
+  min-height: 9rem;
+  max-height: 14rem;
+  background-color: #f8fafc;
+}
+
+.digital-pack-store-preview--modal .digital-pack-slot__media--image {
+  aspect-ratio: 4 / 5;
+  min-height: 9rem;
+  max-height: 14rem;
+  object-fit: contain;
+  object-position: top center;
+  background: #f8fafc;
+}
+
+.digital-pack-store-preview--modal .digital-pack-slot__media--video {
+  aspect-ratio: 4 / 5;
+  min-height: 9rem;
+  max-height: 14rem;
+  width: 100%;
+  object-fit: contain;
+  background: #0f172a;
+}
+
 .digital-pack-slot--blurred {
   overflow: hidden;
 }
