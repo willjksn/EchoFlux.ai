@@ -109,12 +109,14 @@ export const DigitalPackDeliveryGallery: React.FC<Props> = ({
               >
                 Close
               </button>
-              <StorefrontGuardedImage
-                src={expandedImageUrl}
-                className="digital-pack-delivery-lightbox__img"
-                fit="contain"
-                position="center"
-              />
+              <div className="digital-pack-delivery-lightbox__stage">
+                <StorefrontGuardedImage
+                  src={expandedImageUrl}
+                  className="digital-pack-delivery-lightbox__img"
+                  fit="contain"
+                  position="center"
+                />
+              </div>
             </div>,
             document.body
           )
