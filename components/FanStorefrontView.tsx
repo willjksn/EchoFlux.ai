@@ -111,7 +111,6 @@ import { resolveStoreCopy } from "../src/lib/storefrontStoreCopy";
 import { resolveTipFooterEmoji, resolveTipSectionCopy } from "../src/lib/tipSectionCopy";
 import { normalizeMemberUsername, validateMemberUsernameFormat } from "../src/lib/memberUsername";
 import { mergeFanHubStorefrontTheme } from "../src/lib/mergeFanHubStorefrontTheme";
-import { useCreatorFanHubTheme } from "../src/hooks/useCreatorFanHubTheme";
 import { normalizeHeroMediaForStorefront } from "../src/lib/storefrontHeroNormalize";
 import { useAppContext } from "./AppContext";
 import { isConfiguredCustomStorefrontHost } from "../src/lib/storefrontCustomDomain";
@@ -692,6 +691,26 @@ function fanPurchaseTypeLabel(o: FanDeliveryPurchase): string {
 function formatPrice(cents: number | null | undefined): string {
   const n = typeof cents === "number" && Number.isFinite(cents) ? Math.max(0, cents) : 0;
   return `$${(n / 100).toFixed(2)}`;
+}
+
+/** Same preset merge as getCreatorByHandle — member hub must use API storefront theme, not a separate Firestore read. */
+function storefrontMemberThemeColors(
+  themeRaw: StorefrontCreator["theme"] | undefined,
+  defaults: { primary: string; background: string }
+) {
+  const m = mergeFanHubStorefrontTheme(
+    themeRaw && typeof themeRaw === "object" ? (themeRaw as Record<string, unknown>) : undefined
+  );
+  const primary = m.primary || defaults.primary;
+  return {
+    primary,
+    background: m.background || defaults.background,
+    text: m.text || "#1f2937",
+    textMuted: m.textMuted,
+    border: m.border || "#e5e7eb",
+    accentHover: m.accentHover || primary,
+    fontFamily: m.fontFamily || themeRaw?.fontFamily,
+  };
 }
 
 function fanPurchaseRowStatus(o: FanDeliveryPurchase): string {
@@ -1383,8 +1402,6 @@ export const FanStorefrontView: React.FC = () => {
     return !!p.handle || !isConfiguredCustomStorefrontHost(window.location.hostname);
   });
   const [creator, setCreator] = useState<StorefrontCreator | null>(null);
-  /** Same merged theme as creator Fan Hub (preset + Firestore), not raw API theme blobs. */
-  const fanHubTheme = useCreatorFanHubTheme(creator?.creatorId);
   const [subscribed, setSubscribed] = useState<boolean>(false);
   const [memberUsernameRequired, setMemberUsernameRequired] = useState(false);
   const [cancelMembershipLoading, setCancelMembershipLoading] = useState(false);
@@ -4230,6 +4247,10 @@ export const FanStorefrontView: React.FC = () => {
   /* Neutral theme defaults - creators should customize */
   const defaultBg = "#fafafa";
   const defaultPrimary = "#6366f1";
+  const memberVisualTheme = useMemo(
+    () => storefrontMemberThemeColors(creator?.theme, { primary: defaultPrimary, background: defaultBg }),
+    [creator?.theme]
+  );
 
   // Membership gating values must be computed before any early return to keep hook order stable.
   const creatorRequiresPaidMembership = creator?.monetization?.freeAccessEnabled !== true;
@@ -4691,7 +4712,7 @@ export const FanStorefrontView: React.FC = () => {
   }, [creator]);
 
   if (loading) {
-    const loadingPrimary = creator?.theme?.primary || defaultPrimary;
+    const loadingPrimary = memberVisualTheme.primary;
     return (
       <>
         <div className="stormij-theme stormij-theme--light storefront-landing-wrap min-h-screen flex items-center justify-center">
@@ -4800,12 +4821,12 @@ export const FanStorefrontView: React.FC = () => {
   const creatorDmSecondary = formatCreatorDmBubbleSecondaryLine(displayName, creator.handle);
   const sjHeartEmojiCtx: SjHeartEmojiAccessContext = { creatorHandle: creator.handle };
 
-  // Member hub colors — match creator Fan Hub (useCreatorFanHubTheme), not stale preset-only API theme.
-  const bg = fanHubTheme.background || theme?.background || defaultBg;
-  const primary = fanHubTheme.primary || theme?.primary || defaultPrimary;
-  const memberThemeBorder = fanHubTheme.border || theme?.border || "#e5e7eb";
-  const memberThemeText = fanHubTheme.text || theme?.text || "#1f2937";
-  const memberThemeAccentHover = fanHubTheme.accentHover || theme?.accentHover || primary;
+  // Member hub colors — merged storefront theme from getCreatorByHandle (same source fans see on landing).
+  const bg = memberVisualTheme.background;
+  const primary = memberVisualTheme.primary;
+  const memberThemeBorder = memberVisualTheme.border;
+  const memberThemeText = memberVisualTheme.text;
+  const memberThemeAccentHover = memberVisualTheme.accentHover;
   const profileFieldLabelColor =
     "color-mix(in srgb, var(--fan-primary, #6366f1) 72%, var(--fan-text, #1f2937) 28%)";
   const memberSinceLabel = (() => {
@@ -5121,7 +5142,7 @@ export const FanStorefrontView: React.FC = () => {
     );
   }
 
-  const globalFont = theme?.fontFamily || "Inter, sans-serif";
+  const globalFont = memberVisualTheme.fontFamily || "Inter, sans-serif";
 
   return (
     <div
