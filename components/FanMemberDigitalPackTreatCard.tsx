@@ -1,9 +1,7 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import type { TreatProduct } from "../types";
-import { digitalPackCoverUrl } from "../src/lib/digitalPackProduct";
 import { DigitalPackStorePreview } from "./DigitalPackStorePreview";
-import { StorefrontGuardedImage } from "../src/lib/storefrontMediaGuard";
 import { XMarkIcon } from "./icons/UIIcons";
 
 type GuardImg = React.ImgHTMLAttributes<HTMLImageElement>;
@@ -46,7 +44,6 @@ export const FanMemberDigitalPackTreatCard: React.FC<FanMemberDigitalPackTreatCa
   audioGuardProps,
 }) => {
   const [detailOpen, setDetailOpen] = useState(false);
-  const coverUrl = digitalPackCoverUrl(product);
 
   const closeDetail = useCallback(() => setDetailOpen(false), []);
 
@@ -70,28 +67,13 @@ export const FanMemberDigitalPackTreatCard: React.FC<FanMemberDigitalPackTreatCa
     <>
       <div className="fan-member-treat-card fan-member-treat-card--pack-collapsed">
         {categoryLine ? <p className="fan-member-treat-type">{categoryLine}</p> : null}
+        <h3 className="fan-member-treat-title">{product.title}</h3>
         <button
           type="button"
-          className="fan-member-treat-pack-hit"
+          className="fan-member-treat-pack-open-link"
           onClick={() => setDetailOpen(true)}
-          aria-label={`View ${product.title} pack contents`}
         >
-          {coverUrl ? (
-            <div className="fan-member-treat-pack-thumb-wrap">
-              <StorefrontGuardedImage
-                src={coverUrl}
-                className="fan-member-treat-pack-thumb"
-                fit="cover"
-                position="center"
-              />
-            </div>
-          ) : (
-            <div className="fan-member-treat-pack-thumb-wrap fan-member-treat-pack-thumb-wrap--empty">
-              <span className="fan-member-treat-pack-thumb-placeholder">Pack</span>
-            </div>
-          )}
-          <h3 className="fan-member-treat-title fan-member-treat-title--in-hit">{product.title}</h3>
-          <span className="fan-member-treat-pack-view-hint">View pack contents</span>
+          View pack contents
         </button>
         {product.description ? (
           <p className="fan-member-treat-desc fan-member-treat-desc--clamped">{product.description}</p>

@@ -5401,6 +5401,7 @@ button.treat-card:hover:not(:disabled) .treat-card-cta {
   max-height: 14rem;
   aspect-ratio: 4 / 3;
   border-radius: 10px;
+  background-position: top center;
 }
 
 .digital-pack-store-preview--compact .digital-pack-store-cover,

@@ -2692,69 +2692,29 @@
   flex-direction: column;
 }
 
-.fan-member-treat-pack-hit {
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  width: 100%;
+.fan-member-treat-pack-open-link {
+  display: inline-block;
   margin: 0 0 0.5rem;
   padding: 0;
   border: none;
-  background: transparent;
-  text-align: left;
+  background: none;
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: color-mix(in srgb, var(--fan-primary, #6366f1) 78%, #64748b);
   cursor: pointer;
-  border-radius: 12px;
-  transition: background-color 0.15s ease, box-shadow 0.15s ease;
+  text-align: left;
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
 
-.fan-member-treat-pack-hit:hover {
-  background: color-mix(in srgb, var(--fan-primary, #6366f1) 6%, transparent);
+.fan-member-treat-pack-open-link:hover {
+  color: var(--fan-primary, #6366f1);
 }
 
-.fan-member-treat-pack-hit:focus-visible {
+.fan-member-treat-pack-open-link:focus-visible {
   outline: 2px solid var(--fan-primary, #6366f1);
   outline-offset: 2px;
-}
-
-.fan-member-treat-pack-thumb-wrap {
-  width: 100%;
-  aspect-ratio: 16 / 10;
-  border-radius: 12px;
-  overflow: hidden;
-  margin-bottom: 0.65rem;
-  background: color-mix(in srgb, var(--fan-primary, #6366f1) 8%, #f1f5f9);
-}
-
-.fan-member-treat-pack-thumb-wrap--empty {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.fan-member-treat-pack-thumb,
-.storefront-guarded-image.fan-member-treat-pack-thumb {
-  width: 100%;
-  height: 100%;
-  min-height: 100%;
-  border-radius: 12px;
-}
-
-.fan-member-treat-pack-thumb-placeholder {
-  font-size: 0.75rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: color-mix(in srgb, var(--fan-primary, #6366f1) 55%, #64748b);
-}
-
-.fan-member-treat-title--in-hit {
-  margin-bottom: 0.2rem;
-}
-
-.fan-member-treat-pack-view-hint {
-  font-size: 0.78rem;
-  font-weight: 600;
-  color: color-mix(in srgb, var(--fan-primary, #6366f1) 72%, #64748b);
+  border-radius: 4px;
 }
 
 .fan-member-treat-desc--clamped {

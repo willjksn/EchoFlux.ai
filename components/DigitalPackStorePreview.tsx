@@ -30,15 +30,17 @@ function PackPreviewImage({
   imageGuardProps,
   className,
   fit = "contain",
+  position = "top center",
 }: {
   src: string;
   fanFacing: boolean;
   imageGuardProps?: React.ImgHTMLAttributes<HTMLImageElement>;
   className: string;
   fit?: "contain" | "cover";
+  position?: string;
 }) {
   if (fanFacing) {
-    return <StorefrontGuardedImage src={src} className={className} fit={fit} position="top center" />;
+    return <StorefrontGuardedImage src={src} className={className} fit={fit} position={position} />;
   }
   return (
     <img
@@ -121,6 +123,7 @@ export const DigitalPackStorePreview: React.FC<Props> = ({
               imageGuardProps={imageGuardProps}
               className="digital-pack-store-cover"
               fit={fanFacing ? "cover" : "contain"}
+              position={fanFacing ? "top center" : "center"}
             />
           ))}
         </div>
@@ -193,7 +196,7 @@ export const DigitalPackStorePreview: React.FC<Props> = ({
                     <span>Voice in pack</span>
                   </div>
                 ) : null}
-                {!owned && !isPreview && !locked ? (
+                {!owned && !isPreview && !lockedPlaceholder ? (
                   <span className="digital-pack-slot__badge" aria-hidden>
                     Unlock
                   </span>
