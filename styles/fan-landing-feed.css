@@ -1359,15 +1359,20 @@
   gap: 1.25rem;
 }
 
-/* Post Card - Light Stormij Style */
+/* Post Card — creator theme (not fixed Stormij pink) */
 .fan-feed-post {
-  background: linear-gradient(180deg, #fff 0%, #fef8f9 50%, #fdf4f6 100%);
-  border: 1px solid rgba(201, 112, 130, 0.2);
+  background: linear-gradient(
+    180deg,
+    #fff 0%,
+    color-mix(in srgb, var(--fan-primary, #6366f1) 4%, #fff) 50%,
+    color-mix(in srgb, var(--fan-primary, #6366f1) 7%, var(--fan-bg, #fafafa)) 100%
+  );
+  border: 1px solid color-mix(in srgb, var(--fan-primary, #6366f1) 18%, var(--fan-border, #e5e7eb));
   border-radius: 16px;
   overflow: hidden;
   box-shadow:
-    0 4px 6px -1px rgba(201, 112, 130, 0.06),
-    0 10px 20px -5px rgba(201, 112, 130, 0.08),
+    0 4px 6px -1px color-mix(in srgb, var(--fan-primary, #6366f1) 8%, transparent),
+    0 10px 20px -5px color-mix(in srgb, var(--fan-primary, #6366f1) 10%, transparent),
     0 1px 3px rgba(45, 31, 36, 0.04);
   transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
 }
@@ -1375,10 +1380,10 @@
 .fan-feed-post:hover {
   transform: translateY(-2px);
   box-shadow:
-    0 12px 24px -8px rgba(201, 112, 130, 0.12),
-    0 20px 40px -12px rgba(201, 112, 130, 0.1),
+    0 12px 24px -8px color-mix(in srgb, var(--fan-primary, #6366f1) 14%, transparent),
+    0 20px 40px -12px color-mix(in srgb, var(--fan-primary, #6366f1) 12%, transparent),
     0 2px 6px rgba(45, 31, 36, 0.06);
-  border-color: rgba(201, 112, 130, 0.25);
+  border-color: color-mix(in srgb, var(--fan-primary, #6366f1) 24%, var(--fan-border, #e5e7eb));
 }
 
 .fan-feed-post-header {
@@ -3172,17 +3177,27 @@
 }
 
 .fan-member-purchase-unlock-preview-video,
-.fan-member-purchase-unlock-preview-img {
+.fan-member-purchase-unlock-preview-img,
+.storefront-guarded-image.fan-member-purchase-unlock-preview-img {
   width: 100%;
   height: auto;
+  min-height: 120px;
   max-height: min(340px, 50vh);
   object-fit: contain;
   object-position: center top;
   display: block;
   border-radius: 10px;
-  background: color-mix(in srgb, var(--fan-text, #1f2937) 6%, transparent);
+  background-repeat: no-repeat;
+  background-color: color-mix(in srgb, var(--fan-text, #1f2937) 6%, transparent);
   border: 1px solid color-mix(in srgb, var(--fan-text, #1f2937) 10%, transparent);
   box-sizing: border-box;
+}
+
+.fan-member-purchase-unlock-lightbox__media {
+  width: min(100%, 920px);
+  min-height: 200px;
+  max-height: 85vh;
+  border-radius: 12px;
 }
 
 .fan-member-purchase-unlock-audio-stack audio {

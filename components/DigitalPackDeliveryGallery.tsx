@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import type { DigitalPackMediaItem } from "../types";
 import { inferIsVideoFromUrl } from "../src/lib/mediaUrlInfer";
+import { StorefrontGuardedImage } from "../src/lib/storefrontMediaGuard";
 
 type Props = {
   items: DigitalPackMediaItem[];
@@ -43,12 +44,11 @@ export const DigitalPackDeliveryGallery: React.FC<Props> = ({
           if (item.type === "image") {
             return (
               <div key={key} className="digital-pack-delivery-item digital-pack-delivery-item--image">
-                <img
+                <StorefrontGuardedImage
                   src={item.url}
-                  alt=""
-                  loading="lazy"
                   className="digital-pack-delivery-item__img"
-                  {...imageGuardProps}
+                  fit="contain"
+                  position="top center"
                 />
                 <button
                   type="button"
@@ -109,12 +109,11 @@ export const DigitalPackDeliveryGallery: React.FC<Props> = ({
               >
                 Close
               </button>
-              <img
+              <StorefrontGuardedImage
                 src={expandedImageUrl}
-                alt=""
                 className="digital-pack-delivery-lightbox__img"
-                {...imageGuardProps}
-                onClick={(e) => e.stopPropagation()}
+                fit="contain"
+                position="center"
               />
             </div>,
             document.body

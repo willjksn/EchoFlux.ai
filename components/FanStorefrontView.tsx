@@ -142,6 +142,7 @@ import {
   storefrontAudioDownloadGuardProps,
   storefrontImageDownloadGuardProps,
   storefrontVideoDownloadGuardProps,
+  StorefrontGuardedImage,
 } from "../src/lib/storefrontMediaGuard";
 
 /** Ensure member-store products have usable Firestore ids (avoids every row showing “Processing…” when id is missing or duplicated). */
@@ -597,12 +598,11 @@ function FanPurchaseUnlockedPostBlock({ creatorId, postId }: { creatorId: string
             }
             return (
               <div key={`unlock-img-slot-${i}-${url}`} className="fan-member-purchase-unlock-img-slot">
-                <img
+                <StorefrontGuardedImage
                   src={url}
-                  alt=""
-                  loading="lazy"
                   className="fan-member-purchase-unlock-preview-img"
-                  {...storefrontImageDownloadGuardProps}
+                  fit="contain"
+                  position="top center"
                 />
                 <button
                   type="button"
@@ -653,13 +653,14 @@ function FanPurchaseUnlockedPostBlock({ creatorId, postId }: { creatorId: string
               >
                 Close
               </button>
-              <img
-                src={expandedImageUrl}
-                alt=""
-                className="max-h-[85vh] max-w-full rounded-xl object-contain shadow-2xl"
-                {...storefrontImageDownloadGuardProps}
-                onClick={(e) => e.stopPropagation()}
-              />
+              <div onClick={(e) => e.stopPropagation()}>
+                <StorefrontGuardedImage
+                  src={expandedImageUrl}
+                  className="fan-member-purchase-unlock-lightbox__media"
+                  fit="contain"
+                  position="center"
+                />
+              </div>
             </div>,
             document.body,
           )
@@ -773,12 +774,11 @@ function FanMemberPurchaseDeliveryContent({
       ) : null}
       {o.deliveryType === "image" && o.deliveryUrl ? (
         <div className="fan-member-purchase-unlock-img-slot">
-          <img
+          <StorefrontGuardedImage
             src={o.deliveryUrl}
-            alt="Delivered purchase media"
-            loading="lazy"
             className="fan-member-purchase-unlock-preview-img"
-            {...storefrontImageDownloadGuardProps}
+            fit="contain"
+            position="top center"
           />
         </div>
       ) : null}
@@ -5435,7 +5435,7 @@ export const FanStorefrontView: React.FC = () => {
         data-witme-member-header="wordmark-only"
         style={{
           backgroundColor: `color-mix(in srgb, ${primary} 8%, ${bg})`,
-          borderBottom: `1px solid color-mix(in srgb, ${primary} 14%, ${memberThemeBorder})`,
+          borderBottom: `1px solid color-mix(in srgb, ${primary} 20%, ${memberThemeBorder})`,
         }}
       >
         <div className="storefront-member-header-row flex items-center justify-between px-4 sm:px-6 py-3 gap-2 min-w-0 max-w-[1360px] mx-auto w-full">

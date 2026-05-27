@@ -8830,13 +8830,16 @@ button.treat-card:hover:not(:disabled) .treat-card-cta {
 }
 
 .digital-pack-delivery-item__img,
-.digital-pack-delivery-item__video {
+.digital-pack-delivery-item__video,
+.storefront-guarded-image.digital-pack-delivery-item__img {
   display: block;
   width: 100%;
   max-height: min(340px, 52vh);
+  min-height: 120px;
   object-fit: contain;
   object-position: center top;
   box-sizing: border-box;
+  background-repeat: no-repeat;
 }
 
 .digital-pack-delivery-item__audio {
@@ -8883,11 +8886,12 @@ button.treat-card:hover:not(:disabled) .treat-card-cta {
   cursor: pointer;
 }
 
-.digital-pack-delivery-lightbox__img {
+.digital-pack-delivery-lightbox__img,
+.storefront-guarded-image.digital-pack-delivery-lightbox__img {
+  width: min(100%, 920px);
   max-height: 85vh;
-  max-width: 100%;
+  min-height: 200px;
   border-radius: 12px;
-  object-fit: contain;
 }
 
 /* Buttons */
@@ -9282,7 +9286,7 @@ button.treat-card:hover:not(:disabled) .treat-card-cta {
 
 /* Member hub: inline header style sets border from loaded creator primary (avoids stale CSS shorthand). */
 header.storefront-member-header[data-witme-member-header="wordmark-only"] {
-  border-bottom-color: color-mix(in srgb, var(--fan-primary) 14%, var(--fan-border, #e5e7eb));
+  border-bottom-color: color-mix(in srgb, var(--fan-primary) 20%, var(--fan-border, #e5e7eb));
 }
 .dark .stormij-theme:not(.stormij-theme--light) .storefront-member-header {
   border-bottom-color: color-mix(in srgb, var(--fan-primary) 22%, #334155);
