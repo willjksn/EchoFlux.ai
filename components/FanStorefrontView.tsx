@@ -673,6 +673,11 @@ function fanPurchaseTypeLabel(o: FanDeliveryPurchase): string {
   return (o.type || "product").replace(/_/g, " ");
 }
 
+function formatPrice(cents: number | null | undefined): string {
+  const n = typeof cents === "number" && Number.isFinite(cents) ? Math.max(0, cents) : 0;
+  return `$${(n / 100).toFixed(2)}`;
+}
+
 function fanPurchaseRowStatus(o: FanDeliveryPurchase): string {
   if (o.type === "tip") return "Tip paid";
   if (o.type === "subscription") return "Membership active";
@@ -3224,7 +3229,6 @@ export const FanStorefrontView: React.FC = () => {
     }
   };
 
-  const formatPrice = (cents: number) => "$" + (cents / 100).toFixed(2);
   const formatRemaining = (seconds: number) => {
     const safe = Math.max(0, Math.floor(seconds || 0));
     const mins = Math.floor(safe / 60);
@@ -5316,8 +5320,8 @@ export const FanStorefrontView: React.FC = () => {
         className="storefront-member-header storefront-member-header--leftnav"
         data-witme-member-header="wordmark-only"
         style={{
-          backgroundColor: `${primary}14`,
-          borderBottomColor: `color-mix(in srgb, ${primary} 14%, ${theme?.border || "#e5e7eb"})`,
+          backgroundColor: `color-mix(in srgb, ${primary} 8%, ${bg})`,
+          borderBottom: `1px solid color-mix(in srgb, ${primary} 14%, ${theme?.border || "#e5e7eb"})`,
         }}
       >
         <div className="storefront-member-header-row flex items-center justify-between px-4 sm:px-6 py-3 gap-2 min-w-0 max-w-[1360px] mx-auto w-full">

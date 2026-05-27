@@ -9186,6 +9186,7 @@ button.treat-card:hover:not(:disabled) .treat-card-cta {
   align-items: center;
   justify-content: space-between;
   padding: 0;
+  /* Border/background tuned per-page via inline creator theme on member hub header */
   border-bottom: 1px solid color-mix(in srgb, var(--fan-primary, #6366f1) 12%, var(--fan-border, #e5e7eb));
   background: linear-gradient(
     180deg,
@@ -9199,12 +9200,17 @@ button.treat-card:hover:not(:disabled) .treat-card-cta {
 }
 
 .stormij-theme .storefront-member-header {
-  border-bottom: 1px solid color-mix(in srgb, var(--fan-primary) 12%, var(--fan-border, #e5e7eb));
+  border-bottom-color: color-mix(in srgb, var(--fan-primary) 12%, var(--fan-border, #e5e7eb));
   background: linear-gradient(
     180deg,
     color-mix(in srgb, var(--fan-primary) 2.5%, #ffffff) 0%,
     color-mix(in srgb, var(--fan-primary) 1%, var(--fan-bg, #fafafa)) 100%
   );
+}
+
+/* Member hub: inline header style sets border from loaded creator primary (avoids stale CSS shorthand). */
+header.storefront-member-header[data-witme-member-header="wordmark-only"] {
+  border-bottom-color: color-mix(in srgb, var(--fan-primary) 14%, var(--fan-border, #e5e7eb));
 }
 .dark .stormij-theme:not(.stormij-theme--light) .storefront-member-header {
   border-bottom-color: color-mix(in srgb, var(--fan-primary) 22%, #334155);

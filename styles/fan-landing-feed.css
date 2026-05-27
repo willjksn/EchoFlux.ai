@@ -1386,8 +1386,12 @@
   align-items: center;
   padding: 1rem 1.25rem;
   gap: 0.75rem;
-  background: linear-gradient(180deg, rgba(255,255,255,0.95) 0%, rgba(253, 244, 246, 0.6) 100%);
-  border-bottom: 1px solid rgba(201, 112, 130, 0.15);
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.95) 0%,
+    color-mix(in srgb, var(--fan-primary, #6366f1) 5%, #ffffff) 100%
+  );
+  border-bottom: 1px solid color-mix(in srgb, var(--fan-primary, #6366f1) 14%, var(--fan-border, #e5e7eb));
 }
 
 .fan-feed-post-avatar {
@@ -2447,7 +2451,7 @@
 
 .fan-feed-comment {
   padding: 0.5rem 0;
-  border-bottom: 1px solid rgba(201, 112, 130, 0.08);
+  border-bottom: 1px solid color-mix(in srgb, var(--fan-primary, #6366f1) 10%, var(--fan-border, #e5e7eb));
 }
 
 .fan-feed-comment:last-child {
