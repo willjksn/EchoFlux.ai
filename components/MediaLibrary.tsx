@@ -14,6 +14,8 @@ import {
   effectiveBlobType,
   fileExtensionForAudioMime,
   normalizeVoiceRecordingFileType,
+  requestMicrophoneStream,
+  microphoneAccessErrorMessage,
   stopMediaRecorderSafe,
 } from '../src/lib/browserMediaRecording';
 import { AudioLevelMeter } from './AudioLevelMeter';
@@ -555,25 +557,21 @@ export const MediaLibrary: React.FC = () => {
 
   // Voice recording functions
   const [isRequestingMic, setIsRequestingMic] = useState(false);
-  
-  const startRecording = async () => {
-    let stream: MediaStream | null = null;
-    try {
-      try {
-        const permissionStatus = await navigator.permissions.query({ name: 'microphone' as PermissionName });
-        if (permissionStatus.state === 'denied') {
-          showToast('Microphone access was denied. Please enable it in your browser settings.', 'error');
-          return;
-        }
-        if (permissionStatus.state === 'prompt') {
-          setIsRequestingMic(true);
-          showToast('Please allow microphone access to record voice notes', 'info');
-        }
-      } catch {
-        /* permissions.query unsupported */
-      }
+  const voiceRecordOpeningRef = useRef(false);
 
-      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+  const startRecording = async () => {
+    if (voiceRecordOpeningRef.current) return;
+    if (typeof MediaRecorder === "undefined") {
+      showToast('Voice recording is not supported in this browser. Try Chrome or Edge on desktop.', 'error');
+      return;
+    }
+    let stream: MediaStream | null = null;
+    voiceRecordOpeningRef.current = true;
+    const micPromise = requestMicrophoneStream();
+    setIsRequestingMic(true);
+    try {
+      showToast('Allow microphone access when your browser asks.', 'info');
+      stream = await micPromise;
       setIsRequestingMic(false);
       setVoiceMeterStream(stream);
       setVoiceMeterKey((k) => k + 1);
@@ -586,77 +584,102 @@ export const MediaLibrary: React.FC = () => {
       await new Promise((r) => setTimeout(r, 1000));
       setRecordingCountdown(null);
 
-      const mediaRecorder = createAudioMediaRecorder(stream);
-      const requestedMime = mediaRecorder.mimeType || undefined;
-      mediaRecorderRef.current = mediaRecorder;
-      audioChunksRef.current = [];
-      
-      mediaRecorder.ondataavailable = (e) => {
-        if (e.data.size > 0) {
-          audioChunksRef.current.push(e.data);
-        }
+      const wireVoiceRecorder = (rec: MediaRecorder) => {
+        const requestedMime = rec.mimeType || undefined;
+        mediaRecorderRef.current = rec;
+        audioChunksRef.current = [];
+
+        rec.ondataavailable = (e) => {
+          if (e.data.size > 0) {
+            audioChunksRef.current.push(e.data);
+          }
+        };
+
+        rec.onstop = async () => {
+          setVoiceMeterStream(null);
+          stream?.getTracks().forEach((t) => t.stop());
+          const blobType = effectiveBlobType(rec, requestedMime);
+          const audioBlob = new Blob(audioChunksRef.current, { type: blobType });
+
+          const voiceUid = auth.currentUser?.uid ?? user?.id;
+          if (!voiceUid) {
+            showToast('Please sign in to save recordings', 'error');
+            setIsRecording(false);
+            return;
+          }
+
+          if (audioBlob.size < 256) {
+            showToast('Recording was too short or empty.', 'error');
+            setIsRecording(false);
+            return;
+          }
+
+          setIsSavingVoice(true);
+
+          try {
+            const normType = normalizeVoiceRecordingFileType(blobType);
+            const ext = fileExtensionForAudioMime(normType);
+            const timestamp = Date.now();
+            const fileName = `voice_${timestamp}.${ext}`;
+            const storagePath = `users/${voiceUid}/media_library/${fileName}`;
+            const storageRef = ref(storage, storagePath);
+
+            await uploadBytes(storageRef, audioBlob, { contentType: normType });
+            const mediaUrl = await getDownloadURL(storageRef);
+
+            const mediaItem: MediaLibraryItem = {
+              id: timestamp.toString(),
+              userId: voiceUid,
+              url: mediaUrl,
+              name: fileName,
+              type: 'audio',
+              mimeType: normType,
+              size: audioBlob.size,
+              uploadedAt: new Date().toISOString(),
+              usedInPosts: [],
+              tags: ['voice-recording'],
+              folderId: selectedFolderId,
+            };
+
+            await setDoc(doc(db, 'users', voiceUid, 'media_library', mediaItem.id), mediaItem);
+
+            setMediaItems(prev => [mediaItem, ...prev]);
+            showToast('Voice note saved to vault', 'success');
+          } catch (error) {
+            console.error('Failed to save voice recording:', error);
+            showToast('Failed to save voice recording', 'error');
+          } finally {
+            setIsSavingVoice(false);
+            setIsRecording(false);
+          }
+        };
       };
-      
-      mediaRecorder.onstop = async () => {
-        setVoiceMeterStream(null);
-        stream?.getTracks().forEach((t) => t.stop());
-        const blobType = effectiveBlobType(mediaRecorder, requestedMime);
-        const audioBlob = new Blob(audioChunksRef.current, { type: blobType });
-        
-        const voiceUid = auth.currentUser?.uid ?? user?.id;
-        if (!voiceUid) {
-          showToast('Please sign in to save recordings', 'error');
-          setIsRecording(false);
-          return;
-        }
-        
-        if (audioBlob.size < 256) {
-          showToast('Recording was too short or empty.', 'error');
-          setIsRecording(false);
-          return;
-        }
-        
-        setIsSavingVoice(true);
-        
+
+      let primary: MediaRecorder;
+      try {
+        primary = createAudioMediaRecorder(stream);
+      } catch {
+        primary = new MediaRecorder(stream);
+      }
+      wireVoiceRecorder(primary);
+
+      try {
+        primary.start(AUDIO_RECORDER_TIMESLICE_MS);
+      } catch (startErr) {
+        console.warn('MediaLibrary: MediaRecorder.start failed, retrying default', startErr);
+        const fallback = new MediaRecorder(stream);
+        wireVoiceRecorder(fallback);
         try {
-          const normType = normalizeVoiceRecordingFileType(blobType);
-          const ext = fileExtensionForAudioMime(normType);
-          const timestamp = Date.now();
-          const fileName = `voice_${timestamp}.${ext}`;
-          const storagePath = `users/${voiceUid}/media_library/${fileName}`;
-          const storageRef = ref(storage, storagePath);
-          
-          await uploadBytes(storageRef, audioBlob, { contentType: normType });
-          const mediaUrl = await getDownloadURL(storageRef);
-          
-          const mediaItem: MediaLibraryItem = {
-            id: timestamp.toString(),
-            userId: voiceUid,
-            url: mediaUrl,
-            name: fileName,
-            type: 'audio',
-            mimeType: normType,
-            size: audioBlob.size,
-            uploadedAt: new Date().toISOString(),
-            usedInPosts: [],
-            tags: ['voice-recording'],
-            folderId: selectedFolderId,
-          };
-          
-          await setDoc(doc(db, 'users', voiceUid, 'media_library', mediaItem.id), mediaItem);
-          
-          setMediaItems(prev => [mediaItem, ...prev]);
-          showToast('Voice note saved to vault', 'success');
-        } catch (error) {
-          console.error('Failed to save voice recording:', error);
-          showToast('Failed to save voice recording', 'error');
-        } finally {
-          setIsSavingVoice(false);
+          fallback.start(AUDIO_RECORDER_TIMESLICE_MS);
+        } catch (e2) {
+          console.error('MediaLibrary: voice recorder failed', e2);
+          stream.getTracks().forEach((t) => t.stop());
+          setVoiceMeterStream(null);
           setIsRecording(false);
+          showToast('Could not start voice recording. Try another browser or check mic settings.', 'error');
+          return;
         }
-      };
-      
-      mediaRecorder.start(AUDIO_RECORDER_TIMESLICE_MS);
+      }
       setIsRecording(true);
     } catch (error: unknown) {
       console.error('Failed to start recording:', error);
@@ -664,19 +687,9 @@ export const MediaLibrary: React.FC = () => {
       setIsRequestingMic(false);
       setRecordingCountdown(null);
       setVoiceMeterStream(null);
-      
-      // Provide specific error messages
-      if (error instanceof Error) {
-        if (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError') {
-          showToast('Microphone access denied. Please allow microphone access in your browser settings.', 'error');
-        } else if (error.name === 'NotFoundError') {
-          showToast('No microphone found. Please connect a microphone and try again.', 'error');
-        } else {
-          showToast('Could not access microphone. Please check your settings.', 'error');
-        }
-      } else {
-        showToast('Could not access microphone', 'error');
-      }
+      showToast(microphoneAccessErrorMessage(error), 'error');
+    } finally {
+      voiceRecordOpeningRef.current = false;
     }
   };
 
@@ -760,7 +773,8 @@ export const MediaLibrary: React.FC = () => {
                   </button>
                 ) : (
                   <button
-                    onClick={startRecording}
+                    type="button"
+                    onClick={() => void startRecording()}
                     className="px-4 py-2 text-sm bg-primary-600 text-white rounded-md hover:bg-primary-700 flex items-center gap-2"
                   >
                     <MicrophoneIcon className="w-4 h-4" />

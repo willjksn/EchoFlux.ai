@@ -31,6 +31,8 @@ import {
   fileExtensionForVideoMime,
   normalizeVoiceRecordingFileType,
   stopMediaRecorderSafe,
+  requestMicrophoneStream,
+  microphoneAccessErrorMessage,
   waitUntilVideoTrackLive,
   waitUntilAudioTrackLive,
 } from "../src/lib/browserMediaRecording";
@@ -39,6 +41,11 @@ import { DmAudioPlayer } from "./DmAudioPlayer";
 import { RecordingDurationLabel } from "./RecordingDurationLabel";
 import { FanHubFeed, type FeedPost } from "./FanHubFeed";
 import { usePremiumStudioTab } from "./PremiumStudioLayout";
+import {
+  fanHubOutlineTabStyle,
+  fanHubThemeBackgroundIsDark,
+  fanHubTokensFromCssBridge,
+} from "../src/lib/fanHubTheme";
 import { EmojiButton } from "./EmojiPicker";
 import { useCreatorHandle } from "../src/hooks/useCreatorHandle";
 import { canUseSjHeartEmoji } from "../src/lib/customEmoji";
@@ -636,6 +643,18 @@ export const FanHubPosts: React.FC = () => {
   const hasPostsAiAccess = hasPremiumStudioRouteAccess(user);
   const [postsAiPanel, setPostsAiPanel] = useState<PostsAiPanel | null>(null);
   const premiumTab = usePremiumStudioTab();
+  const fanHubTheme = useMemo(
+    () =>
+      fanHubTokensFromCssBridge(
+        premiumTab?.fanHubCssVarBridge as Record<string, string> | undefined
+      ),
+    [premiumTab?.fanHubCssVarBridge]
+  );
+  const fanHubSurfaceIsDark = useMemo(
+    () => (fanHubTheme ? fanHubThemeBackgroundIsDark(fanHubTheme.background) : false),
+    [fanHubTheme]
+  );
+  const fanThemePrimary = fanHubTheme?.primary ?? "#6366f1";
   const pendingFeedPostId = premiumTab?.pendingFeedPostId ?? null;
   const clearPendingFeedPostId = premiumTab?.clearPendingFeedPostId;
   const [feedDeeplinkPostId, setFeedDeeplinkPostId] = useState<string | null>(null);
@@ -1186,38 +1205,22 @@ export const FanHubPosts: React.FC = () => {
   // Voice recording
   const [isSavingVoice, setIsSavingVoice] = useState(false);
   const [isRequestingMic, setIsRequestingMic] = useState(false);
-  
+  const voiceRecordOpeningRef = useRef(false);
+
   const startRecording = async () => {
-    if (isRecordingVideo || isSavingVideo) return;
+    if (isRecordingVideo || isSavingVideo || voiceRecordOpeningRef.current) return;
+    if (typeof MediaRecorder === "undefined") {
+      showToast?.("Voice recording is not supported in this browser. Try Chrome or Edge on desktop.", "error");
+      return;
+    }
     let stream: MediaStream | null = null;
+    voiceRecordOpeningRef.current = true;
+    /** Start mic immediately while the click still has user activation (before any await). */
+    const micPromise = requestMicrophoneStream();
+    setIsRequestingMic(true);
     try {
-      try {
-        const permissionStatus = await navigator.permissions.query({ name: "microphone" as PermissionName });
-        if (permissionStatus.state === "denied") {
-          showToast?.("Microphone access was denied. Please enable it in your browser settings.", "error");
-          return;
-        }
-        if (permissionStatus.state === "prompt") {
-          setIsRequestingMic(true);
-          showToast?.("Please allow microphone access to record voice notes", "info");
-        }
-      } catch {
-        /* Safari / some browsers: permissions.query not supported — continue to getUserMedia */
-      }
-
-      // Same shape as Vault (proven working); open mic before countdown so the level meter + graph stay active
-      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      stream.getAudioTracks().forEach((t) => {
-        t.enabled = true;
-      });
-      await waitUntilAudioTrackLive(stream);
-      if (stream.getAudioTracks().length === 0) {
-        stream.getTracks().forEach((t) => t.stop());
-        setVoiceMeterStream(null);
-        showToast?.("No microphone track available. Check browser permissions.", "error");
-        return;
-      }
-
+      showToast?.("Allow microphone access when your browser asks.", "info");
+      stream = await micPromise;
       setIsRequestingMic(false);
       setVoiceMeterStream(stream);
       setVoiceMeterKey((k) => k + 1);
@@ -1337,19 +1340,9 @@ export const FanHubPosts: React.FC = () => {
       setIsRequestingMic(false);
       setRecordingCountdown(null);
       setVoiceMeterStream(null);
-      
-      // Provide specific error messages
-      if (error instanceof Error) {
-        if (error.name === "NotAllowedError" || error.name === "PermissionDeniedError") {
-          showToast?.("Microphone access denied. Please allow microphone access in your browser settings.", "error");
-        } else if (error.name === "NotFoundError") {
-          showToast?.("No microphone found. Please connect a microphone and try again.", "error");
-        } else {
-          showToast?.("Could not access microphone. Please check your settings.", "error");
-        }
-      } else {
-        showToast?.("Could not access microphone", "error");
-      }
+      showToast?.(microphoneAccessErrorMessage(error), "error");
+    } finally {
+      voiceRecordOpeningRef.current = false;
     }
   };
 
@@ -2478,32 +2471,49 @@ Write 2-4 sentences that are engaging and on-topic.`;
           <button
             type="button"
             onClick={() => openPostsAiPanel("ideas")}
-            className={`fh-posts-plan-tab flex items-center gap-2 px-3 py-2 rounded-lg border text-sm font-medium transition ${
-              postsAiPanel === "ideas" ? "fh-posts-plan-tab--active" : ""
-            }`}
+            className="fh-posts-plan-tab flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition outline-none"
+            style={
+              fanHubTheme
+                ? fanHubOutlineTabStyle(postsAiPanel === "ideas", fanHubTheme, fanHubSurfaceIsDark)
+                : undefined
+            }
           >
             <SparklesIcon />
             Post ideas
             {!hasPostsAiAccess ? (
-              <span className="text-[10px] font-semibold uppercase text-primary-600">Elite</span>
+              <span
+                className="text-[10px] font-semibold uppercase"
+                style={{ color: fanThemePrimary }}
+              >
+                Elite
+              </span>
             ) : null}
           </button>
           <button
             type="button"
             onClick={() => openPostsAiPanel("drops")}
-            className={`fh-posts-plan-tab flex items-center gap-2 px-3 py-2 rounded-lg border text-sm font-medium transition ${
-              postsAiPanel === "drops" ? "fh-posts-plan-tab--active" : ""
-            }`}
+            className="fh-posts-plan-tab flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition outline-none"
+            style={
+              fanHubTheme
+                ? fanHubOutlineTabStyle(postsAiPanel === "drops", fanHubTheme, fanHubSurfaceIsDark)
+                : undefined
+            }
           >
             Drop plan
             {!hasPostsAiAccess ? (
-              <span className="text-[10px] font-semibold uppercase text-primary-600">Elite</span>
+              <span
+                className="text-[10px] font-semibold uppercase"
+                style={{ color: fanThemePrimary }}
+              >
+                Elite
+              </span>
             ) : null}
           </button>
           <button
             type="button"
             onClick={() => setShowComposer(true)}
             className="flex items-center gap-2 px-4 py-2 fh-btn transition font-medium"
+            style={fanHubTheme ? { backgroundColor: fanThemePrimary } : undefined}
           >
             <PlusIcon />
             New Post
@@ -2703,7 +2713,11 @@ Write 2-4 sentences that are engaging and on-topic.`;
                         </span>
                       ) : null}
                     </div>
-                    <AudioLevelMeter key={`post-voice-${voiceMeterKey}`} stream={voiceMeterStream} />
+                    <AudioLevelMeter
+                      key={`post-voice-${voiceMeterKey}`}
+                      stream={voiceMeterStream}
+                      barColor={fanThemePrimary}
+                    />
                   </div>
                 ) : null}
                 {videoLiveStream ? (
@@ -2734,7 +2748,7 @@ Write 2-4 sentences that are engaging and on-topic.`;
                     type="button"
                     onClick={() => fileInputRef.current?.click()}
                     disabled={uploading}
-                    className="flex items-center gap-2 px-3 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 text-sm font-medium transition"
+                    className="fh-media-btn fh-media-btn--neutral"
                   >
                     <UploadIcon />
                     {uploading ? `Uploading ${uploadProgress}%` : "Upload"}
@@ -2742,40 +2756,46 @@ Write 2-4 sentences that are engaging and on-topic.`;
                   <button
                     type="button"
                     onClick={() => setShowVault(true)}
-                    className="flex items-center gap-2 px-3 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 text-sm font-medium transition"
+                    className="fh-media-btn fh-media-btn--neutral"
                   >
                     <FolderIcon />
                     From Vault
                   </button>
                   {isSavingVoice ? (
-                    <div className="flex items-center gap-2 px-3 py-2 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 rounded-lg text-sm font-medium">
-                      <div className="w-4 h-4 border-2 border-purple-500 border-t-transparent rounded-full animate-spin"></div>
+                    <div className="fh-media-status fh-media-status--pending">
+                      <div
+                        className="w-4 h-4 border-2 border-t-transparent rounded-full animate-spin"
+                        style={{ borderColor: fanThemePrimary, borderTopColor: "transparent" }}
+                      />
                       Saving to vault...
                     </div>
                   ) : isRequestingMic ? (
-                    <div className="flex items-center gap-2 px-3 py-2 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-lg text-sm font-medium">
-                      <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+                    <div className="fh-media-status fh-media-status--pending">
+                      <div
+                        className="w-4 h-4 border-2 border-t-transparent rounded-full animate-spin"
+                        style={{ borderColor: fanThemePrimary, borderTopColor: "transparent" }}
+                      />
                       Allow microphone...
                     </div>
                   ) : !isRecording && recordingCountdown === null ? (
                     <button
                       type="button"
-                      onClick={startRecording}
+                      onClick={() => void startRecording()}
                       disabled={isRecordingVideo || isSavingVideo}
-                      className="flex items-center gap-2 px-3 py-2 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 rounded-lg hover:bg-purple-200 dark:hover:bg-purple-900/50 text-sm font-medium transition disabled:opacity-45 disabled:pointer-events-none"
+                      className="fh-media-btn fh-media-btn--voice disabled:opacity-45 disabled:pointer-events-none"
                     >
                       <MicIcon />
                       Record Voice
                     </button>
                   ) : recordingCountdown !== null ? (
-                    <div className="flex items-center gap-2 px-3 py-2 bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300 rounded-lg text-sm font-medium">
+                    <div className="fh-media-status fh-media-status--countdown">
                       Starting in {recordingCountdown}...
                     </div>
                   ) : (
                     <button
                       type="button"
                       onClick={stopRecording}
-                      className="flex items-center gap-2 px-3 py-2 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 rounded-lg hover:bg-red-200 dark:hover:bg-red-900/50 text-sm font-medium transition animate-pulse"
+                      className="fh-media-btn fh-media-btn--recording animate-pulse"
                     >
                       <StopIcon />
                       Stop Recording

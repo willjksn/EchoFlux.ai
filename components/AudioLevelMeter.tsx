@@ -7,12 +7,12 @@ type Props = {
 };
 
 /**
- * Live frequency bars. Resumes AudioContext + silent gain → Safari pumps the graph.
+ * Live input level bars. Uses time-domain samples (works better for voice than frequency bins).
  */
 export const AudioLevelMeter: React.FC<Props> = ({
   stream,
   className = "",
-  barColor = "var(--accent, #db2777)",
+  barColor = "var(--fan-primary, #6366f1)",
 }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const rafRef = useRef<number>(0);
@@ -20,10 +20,18 @@ export const AudioLevelMeter: React.FC<Props> = ({
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!stream || !canvas) return;
-    if (stream.getAudioTracks().length === 0) return;
+    const tracks = stream.getAudioTracks();
+    if (tracks.length === 0) return;
 
     let cancelled = false;
-    const audioCtx = new AudioContext();
+    const Ctx =
+      typeof window !== "undefined"
+        ? window.AudioContext ||
+          (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
+        : undefined;
+    if (!Ctx) return;
+
+    const audioCtx = new Ctx();
     let source: MediaStreamAudioSourceNode | null = null;
     let analyser: AnalyserNode | null = null;
     let gain: GainNode | null = null;
@@ -32,15 +40,15 @@ export const AudioLevelMeter: React.FC<Props> = ({
       if (cancelled) return;
       source = audioCtx.createMediaStreamSource(stream);
       analyser = audioCtx.createAnalyser();
-      analyser.fftSize = 256;
-      analyser.smoothingTimeConstant = 0.55;
+      analyser.fftSize = 512;
+      analyser.smoothingTimeConstant = 0.35;
       gain = audioCtx.createGain();
       gain.gain.value = 0;
       source.connect(analyser);
       analyser.connect(gain);
       gain.connect(audioCtx.destination);
 
-      const data = new Uint8Array(analyser.frequencyBinCount);
+      const timeData = new Uint8Array(analyser.fftSize);
       const bars = 16;
       const dpr = typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1;
 
@@ -61,19 +69,19 @@ export const AudioLevelMeter: React.FC<Props> = ({
         ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
         ctx.clearRect(0, 0, w, h);
 
-        analyser.getByteFrequencyData(data);
-        const step = Math.max(1, Math.floor(data.length / bars));
-        const gap = 2;
-        const barW = (w - gap * (bars - 1)) / bars;
+        analyser.getByteTimeDomainData(timeData);
+        const step = Math.max(1, Math.floor(timeData.length / bars));
 
         for (let i = 0; i < bars; i++) {
-          let sum = 0;
+          let peak = 0;
           for (let j = 0; j < step; j++) {
-            sum += data[i * step + j] ?? 0;
+            const v = (timeData[i * step + j] ?? 128) - 128;
+            peak = Math.max(peak, Math.abs(v));
           }
-          const avg = sum / step / 255;
-          const barHeight = Math.max(3, avg * h * 1.45);
-          const x = i * (barW + gap);
+          const level = peak / 128;
+          const barHeight = Math.max(3, level * h * 1.1);
+          const barW = (w - 2 * (bars - 1)) / bars;
+          const x = i * (barW + 2);
           const y = h - barHeight;
           ctx.fillStyle = barColor;
           ctx.beginPath();
@@ -91,7 +99,17 @@ export const AudioLevelMeter: React.FC<Props> = ({
       draw();
     };
 
-    void audioCtx.resume().then(startGraph).catch(startGraph);
+    const resume = async () => {
+      try {
+        if (audioCtx.state === "suspended") {
+          await audioCtx.resume();
+        }
+      } catch {
+        /* autoplay policy — meter may stay flat until next gesture */
+      }
+      startGraph();
+    };
+    void resume();
 
     return () => {
       cancelled = true;
@@ -110,7 +128,9 @@ export const AudioLevelMeter: React.FC<Props> = ({
   if (!stream?.getAudioTracks().length) return null;
 
   return (
-    <div className={`rounded-lg border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-900/50 px-2 py-1.5 ${className}`}>
+    <div
+      className={`rounded-lg border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-900/50 px-2 py-1.5 ${className}`}
+    >
       <p className="text-[10px] uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-1 font-medium">
         Input level
       </p>

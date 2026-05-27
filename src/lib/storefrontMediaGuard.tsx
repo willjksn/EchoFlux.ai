@@ -22,6 +22,8 @@ type GuardedImageProps = {
   className?: string;
   fit?: "contain" | "cover";
   position?: string;
+  /** e.g. locked pack teaser blur */
+  extraStyle?: React.CSSProperties;
 };
 
 /**
@@ -33,6 +35,7 @@ export const StorefrontGuardedImage: React.FC<GuardedImageProps> = ({
   className = "",
   fit = "contain",
   position = "top center",
+  extraStyle,
 }) => (
   <div
     className={`storefront-guarded-image${className ? ` ${className}` : ""}`}
@@ -42,6 +45,7 @@ export const StorefrontGuardedImage: React.FC<GuardedImageProps> = ({
       backgroundImage: `url("${src.replace(/"/g, '\\"')}")`,
       backgroundSize: fit,
       backgroundPosition: position,
+      ...extraStyle,
     }}
   />
 );

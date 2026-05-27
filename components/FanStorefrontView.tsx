@@ -47,7 +47,7 @@ import {
   parseDigitalPackMediaItems,
   orderHasAutoDigitalPackFulfillment,
 } from "../src/lib/digitalPackProduct";
-import { DigitalPackStorePreview } from "./DigitalPackStorePreview";
+import { FanMemberDigitalPackTreatCard } from "./FanMemberDigitalPackTreatCard";
 import { DigitalPackDeliveryGallery } from "./DigitalPackDeliveryGallery";
 import { STOREFRONT_SUSPENDED_PUBLIC_MESSAGE } from "../src/lib/creatorStorefrontActive";
 import { getTreatProductTypeDisplayLabel } from "../src/lib/treatProductTypeLabel";
@@ -5255,7 +5255,10 @@ export const FanStorefrontView: React.FC = () => {
       <header
         className="storefront-member-header storefront-member-header--leftnav"
         data-witme-member-header="wordmark-only"
-        style={{ backgroundColor: `${primary}14` }}
+        style={{
+          backgroundColor: `${primary}14`,
+          borderBottomColor: `color-mix(in srgb, ${primary} 14%, ${theme?.border || "#e5e7eb"})`,
+        }}
       >
         <div className="storefront-member-header-row flex items-center justify-between px-4 sm:px-6 py-3 gap-2 min-w-0 max-w-[1360px] mx-auto w-full">
           <div className="storefront-header-left storefront-header-left--witme-wordmark flex items-center min-h-0 min-w-0">
@@ -5557,27 +5560,34 @@ export const FanStorefrontView: React.FC = () => {
                       const buyLabel =
                         isPurchasingThis ? "Processing…" : owned ? "Buy again" : "Purchase";
                       const categoryLine = getTreatProductTypeDisplayLabel(p);
+                      if (isDigitalPackProductType(p.type)) {
+                        return (
+                          <FanMemberDigitalPackTreatCard
+                            key={`member-treat-${productRowId}-${index}`}
+                            product={p}
+                            categoryLine={categoryLine}
+                            owned={owned}
+                            soldOut={soldOut}
+                            isPurchasing={isPurchasingThis}
+                            buyLabel={buyLabel}
+                            priceLabel={formatPrice(p.priceCents)}
+                            remainingLabel={hasLimit ? `${remaining} left` : null}
+                            primaryColor={primary}
+                            onPurchase={() => handlePurchase(productRowId)}
+                            imageGuardProps={storefrontImageDownloadGuardProps}
+                            videoGuardProps={storefrontVideoDownloadGuardProps}
+                            audioGuardProps={storefrontAudioDownloadGuardProps}
+                          />
+                        );
+                      }
+
                       return (
-                        <div
-                          key={`member-treat-${productRowId}-${index}`}
-                          className="fan-member-treat-card"
-                        >
+                        <div key={`member-treat-${productRowId}-${index}`} className="fan-member-treat-card">
                           {categoryLine ? <p className="fan-member-treat-type">{categoryLine}</p> : null}
                           <h3 className="fan-member-treat-title">{p.title}</h3>
-                          {isDigitalPackProductType(p.type) ? (
-                            <DigitalPackStorePreview
-                              product={p}
-                              owned={owned}
-                              fanFacing
-                              compact
-                              imageGuardProps={storefrontImageDownloadGuardProps}
-                              videoGuardProps={storefrontVideoDownloadGuardProps}
-                              audioGuardProps={storefrontAudioDownloadGuardProps}
-                            />
-                          ) : null}
-                          {p.description && (
+                          {p.description ? (
                             <p className="fan-member-treat-desc">{p.description}</p>
-                          )}
+                          ) : null}
                           <p className="fan-member-treat-price">{formatPrice(p.priceCents)}</p>
                           {hasLimit ? (
                             <p className="fan-member-treat-desc" style={{ marginTop: "-0.2rem" }}>

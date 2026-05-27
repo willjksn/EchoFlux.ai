@@ -140,6 +140,93 @@ export function normalizeVoiceRecordingFileType(mime: string): string {
 }
 
 /** Request final chunk then stop (when supported). */
+export type MicrophoneAccessErrorCode =
+  | "SECURE_CONTEXT"
+  | "UNAVAILABLE"
+  | "DENIED"
+  | "NO_TRACK";
+
+function micError(code: MicrophoneAccessErrorCode, message: string): Error {
+  return Object.assign(new Error(message), { code });
+}
+
+/** User-facing message for mic failures from {@link requestMicrophoneStream}. */
+export function microphoneAccessErrorMessage(err: unknown): string {
+  const code = (err as { code?: MicrophoneAccessErrorCode })?.code;
+  if (code === "SECURE_CONTEXT") return "Microphone requires HTTPS or localhost.";
+  if (code === "UNAVAILABLE") return "Microphone is not available in this browser.";
+  if (code === "DENIED") return "Microphone access was denied. Allow it in your browser settings.";
+  if (code === "NO_TRACK") return "No microphone track detected. Check your device.";
+  if (err instanceof DOMException) {
+    if (err.name === "NotAllowedError" || err.name === "PermissionDeniedError") {
+      return "Microphone access denied. Click Allow when your browser asks.";
+    }
+    if (err.name === "NotFoundError") return "No microphone found. Connect a mic and try again.";
+  }
+  return err instanceof Error ? err.message : "Could not access microphone.";
+}
+
+function mapGetUserMediaError(err: unknown): Error {
+  if ((err as { code?: MicrophoneAccessErrorCode })?.code) {
+    return err instanceof Error ? err : micError("UNAVAILABLE", "Microphone error");
+  }
+  if (err instanceof DOMException) {
+    if (err.name === "NotAllowedError" || err.name === "PermissionDeniedError") {
+      return micError("DENIED", err.message);
+    }
+    if (err.name === "NotFoundError" || err.name === "DevicesNotFoundError") {
+      return micError("NO_TRACK", err.message);
+    }
+    if (err.name === "NotReadableError" || err.name === "TrackStartError") {
+      return micError("NO_TRACK", "Microphone is in use by another app.");
+    }
+  }
+  return err instanceof Error ? err : micError("UNAVAILABLE", "Could not access microphone.");
+}
+
+/**
+ * Open the mic for recording. Call synchronously from a click handler (do not await other work first).
+ * getUserMedia is started before any await so the browser permission prompt keeps user activation.
+ */
+export function requestMicrophoneStream(): Promise<MediaStream> {
+  if (typeof window !== "undefined" && !window.isSecureContext) {
+    return Promise.reject(micError("SECURE_CONTEXT", "Secure context required"));
+  }
+  if (!navigator.mediaDevices?.getUserMedia) {
+    return Promise.reject(micError("UNAVAILABLE", "getUserMedia missing"));
+  }
+
+  const openMic = () =>
+    navigator.mediaDevices.getUserMedia({
+      audio: {
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true,
+      },
+    });
+
+  const streamPromise = openMic().catch((err) => {
+    if (err instanceof DOMException && err.name === "OverconstrainedError") {
+      return navigator.mediaDevices.getUserMedia({ audio: true });
+    }
+    throw err;
+  });
+
+  return streamPromise
+    .catch(mapGetUserMediaError)
+    .then(async (stream) => {
+      for (const t of stream.getAudioTracks()) {
+        t.enabled = true;
+      }
+      await waitUntilAudioTrackLive(stream, 4000);
+      if (stream.getAudioTracks().length === 0) {
+        stream.getTracks().forEach((t) => t.stop());
+        throw micError("NO_TRACK", "No audio track");
+      }
+      return stream;
+    });
+}
+
 export function stopMediaRecorderSafe(rec: MediaRecorder | null): void {
   if (!rec || rec.state === "inactive") return;
   try {

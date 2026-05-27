@@ -120,7 +120,7 @@ export const DigitalPackStorePreview: React.FC<Props> = ({
               fanFacing={fanFacing}
               imageGuardProps={imageGuardProps}
               className="digital-pack-store-cover"
-              fit="contain"
+              fit={fanFacing ? "cover" : "contain"}
             />
           ))}
         </div>
@@ -134,26 +134,34 @@ export const DigitalPackStorePreview: React.FC<Props> = ({
         >
           {gridSlots.map(({ item, idx }) => {
             const isPreview = isPackMediaSlotPreview(idx, previewIndices, owned);
-            const locked = !owned && isProtectedPackMediaUrl(item.url);
+            const lockedPlaceholder =
+              !owned &&
+              !isPreview &&
+              (isProtectedPackMediaUrl(item.url) || item.type === "video" || item.type === "audio");
+            const blurredImage =
+              !owned && !isPreview && item.type === "image" && item.url && !isProtectedPackMediaUrl(item.url);
             return (
               <div
                 key={`${item.url}-${idx}`}
-                className={`digital-pack-slot${locked ? " digital-pack-slot--locked" : ""}`}
+                className={`digital-pack-slot${lockedPlaceholder ? " digital-pack-slot--locked" : ""}${
+                  blurredImage ? " digital-pack-slot--blurred" : ""
+                }`}
               >
-                {locked ? (
+                {lockedPlaceholder ? (
                   <div className="digital-pack-slot__locked">
                     <span className="digital-pack-slot__locked-label">
                       {item.type === "video" ? "Video" : item.type === "audio" ? "Voice" : "Photo"} in pack
                     </span>
                   </div>
                 ) : null}
-                {!locked && item.type === "image" ? (
+                {!lockedPlaceholder && item.type === "image" ? (
                   fanFacing ? (
                     <StorefrontGuardedImage
                       src={item.url}
                       className="digital-pack-slot__media digital-pack-slot__media--image"
                       fit="cover"
                       position="center"
+                      extraStyle={blurredImage ? blurStyle : undefined}
                     />
                   ) : (
                     <img
@@ -166,7 +174,7 @@ export const DigitalPackStorePreview: React.FC<Props> = ({
                     />
                   )
                 ) : null}
-                {!locked && item.type === "video" ? (
+                {!lockedPlaceholder && item.type === "video" ? (
                   <video
                     src={item.url}
                     muted
@@ -177,7 +185,7 @@ export const DigitalPackStorePreview: React.FC<Props> = ({
                     {...videoGuardProps}
                   />
                 ) : null}
-                {!locked && item.type === "audio" ? (
+                {!lockedPlaceholder && item.type === "audio" ? (
                   <div
                     className="digital-pack-slot__audio digital-pack-slot__media"
                     style={isPreview ? undefined : blurStyle}

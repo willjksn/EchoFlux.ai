@@ -16,21 +16,10 @@ import {
 import { useCreatorLiveChatSessionsCount } from './useCreatorLiveChatSessionsCount';
 import { EchoFluxHowItWorksModal } from './EchoFluxHowItWorksModal';
 import { isBrowserPushEnabled, listenForForegroundPush } from '../src/lib/fanPushNotifications';
+import { fanHubThemeBackgroundIsDark } from '../src/lib/fanHubTheme';
 
 const FAN_HUB_PREVIEW_THEME_STORAGE_KEY = 'echoflux:fanhub-preview-theme';
 const FAN_HUB_PREVIEW_THEME_EVENT = 'echoflux:fanhub-preview-theme-changed';
-
-/** Use storefront background luminance — not EchoFlux app dark mode — so Fan Hub tabs match My Page colors. */
-function fanHubThemeBackgroundIsDark(backgroundHex: string): boolean {
-  const h = backgroundHex.trim();
-  const m = /^#([a-fA-F0-9]{6})$/i.exec(h);
-  if (!m) return false;
-  const r = parseInt(m[1].slice(0, 2), 16) / 255;
-  const g = parseInt(m[1].slice(2, 4), 16) / 255;
-  const b = parseInt(m[1].slice(4, 6), 16) / 255;
-  const l = 0.2126 * r + 0.7152 * g + 0.0722 * b;
-  return l < 0.45;
-}
 
 /** Pending selection when jumping from Messages (or elsewhere) to Fans tab. */
 export type PendingFansTabSelection = {

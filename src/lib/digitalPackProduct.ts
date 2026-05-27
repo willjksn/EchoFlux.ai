@@ -100,18 +100,35 @@ export function isPackMediaSlotPreview(
   return previewIndices.includes(slotIndex);
 }
 
-/** Storefront / public API: preview slots keep real URLs; everything else is opaque. */
+/**
+ * Storefront / public API: sharp preview slots keep real URLs.
+ * Non-preview images keep URLs for blurred teasers in the UI; video/audio URLs are opaque.
+ */
 export function packMediaForStorefront(
   items: DigitalPackMediaItem[],
   previewIndices: number[],
   viewerHasFullAccess: boolean
 ): DigitalPackMediaItem[] {
   if (viewerHasFullAccess) return items;
-  return items.map((item, index) =>
-    isPackMediaSlotPreview(index, previewIndices, false)
-      ? item
-      : { ...item, url: protectedPackMediaPlaceholder(index) }
+  return items.map((item, index) => {
+    if (isPackMediaSlotPreview(index, previewIndices, false)) return item;
+    if (item.type === "image" && item.url && !isProtectedPackMediaUrl(item.url)) {
+      return item;
+    }
+    return { ...item, url: protectedPackMediaPlaceholder(index) };
+  });
+}
+
+/** Sharp cover for store grid cards and product.imageUrl fallback. */
+export function digitalPackCoverUrl(product: Pick<TreatProduct, "type" | "imageUrl" | "fulfillmentItems" | "previewMediaIndices">): string | undefined {
+  if (!isDigitalPackProductType(product.type)) return product.imageUrl?.trim() || undefined;
+  const items = parseDigitalPackMediaItems(product.fulfillmentItems);
+  if (items.length === 0) return product.imageUrl?.trim() || undefined;
+  const previewIndices = normalizePackPreviewIndices(
+    product.previewMediaIndices ?? defaultPackPreviewIndices(items),
+    items
   );
+  return derivePackCoverImageUrl(items, previewIndices, product.imageUrl);
 }
 
 export function derivePackCoverImageUrl(

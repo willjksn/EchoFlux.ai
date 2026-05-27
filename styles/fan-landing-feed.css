@@ -2501,7 +2501,12 @@
   transform: translateX(-50%);
   width: 60px;
   height: 3px;
-  background: linear-gradient(90deg, transparent, var(--fan-accent), transparent);
+  background: linear-gradient(
+    90deg,
+    transparent,
+    color-mix(in srgb, var(--fan-primary, #6366f1) 55%, transparent),
+    transparent
+  );
   opacity: 0.5;
   border-radius: 2px;
 }
@@ -2679,6 +2684,174 @@
 .fan-member-treat-buy:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+/* Digital pack — collapsed card matches other treats; full preview opens in modal */
+.fan-member-treat-card--pack-collapsed {
+  display: flex;
+  flex-direction: column;
+}
+
+.fan-member-treat-pack-hit {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  width: 100%;
+  margin: 0 0 0.5rem;
+  padding: 0;
+  border: none;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  border-radius: 12px;
+  transition: background-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.fan-member-treat-pack-hit:hover {
+  background: color-mix(in srgb, var(--fan-primary, #6366f1) 6%, transparent);
+}
+
+.fan-member-treat-pack-hit:focus-visible {
+  outline: 2px solid var(--fan-primary, #6366f1);
+  outline-offset: 2px;
+}
+
+.fan-member-treat-pack-thumb-wrap {
+  width: 100%;
+  aspect-ratio: 16 / 10;
+  border-radius: 12px;
+  overflow: hidden;
+  margin-bottom: 0.65rem;
+  background: color-mix(in srgb, var(--fan-primary, #6366f1) 8%, #f1f5f9);
+}
+
+.fan-member-treat-pack-thumb-wrap--empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.fan-member-treat-pack-thumb,
+.storefront-guarded-image.fan-member-treat-pack-thumb {
+  width: 100%;
+  height: 100%;
+  min-height: 100%;
+  border-radius: 12px;
+}
+
+.fan-member-treat-pack-thumb-placeholder {
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: color-mix(in srgb, var(--fan-primary, #6366f1) 55%, #64748b);
+}
+
+.fan-member-treat-title--in-hit {
+  margin-bottom: 0.2rem;
+}
+
+.fan-member-treat-pack-view-hint {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: color-mix(in srgb, var(--fan-primary, #6366f1) 72%, #64748b);
+}
+
+.fan-member-treat-desc--clamped {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.fan-member-digital-pack-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 12000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(4px);
+}
+
+.fan-member-digital-pack-modal {
+  position: relative;
+  width: 100%;
+  max-width: 32rem;
+  max-height: min(92vh, 720px);
+  overflow-y: auto;
+  border-radius: 1.25rem;
+  border: 1px solid #e5e7eb;
+  background: linear-gradient(
+    165deg,
+    color-mix(in srgb, var(--fan-primary, #6366f1) 8%, #ffffff) 0%,
+    #ffffff 42%,
+    color-mix(in srgb, var(--fan-primary, #6366f1) 4%, #f8fafc) 100%
+  );
+  box-shadow: 0 24px 48px rgba(15, 23, 42, 0.22);
+  padding: 1.25rem 1.25rem 1.5rem;
+}
+
+.fan-member-digital-pack-modal__accent {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  border-radius: 1.25rem 1.25rem 0 0;
+}
+
+.fan-member-digital-pack-modal__close {
+  position: absolute;
+  top: 0.85rem;
+  right: 0.85rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.4rem;
+  border: none;
+  border-radius: 9999px;
+  background: color-mix(in srgb, white 92%, transparent);
+  color: #64748b;
+  cursor: pointer;
+  z-index: 2;
+}
+
+.fan-member-digital-pack-modal__close:hover {
+  background: color-mix(in srgb, var(--fan-primary, #6366f1) 12%, white);
+  color: var(--fan-primary, #6366f1);
+}
+
+.fan-member-digital-pack-modal__type {
+  margin-top: 0.25rem;
+  padding-right: 2.5rem;
+}
+
+.fan-member-digital-pack-modal__title {
+  margin: 0 0 0.75rem;
+  padding-right: 2.5rem;
+  font-family: var(--fan-serif, "Cormorant Garamond", Georgia, serif);
+  font-size: 1.45rem;
+  font-style: italic;
+  font-weight: 700;
+  line-height: 1.25;
+  color: var(--fan-text, #1f2937);
+}
+
+.fan-member-digital-pack-modal__price {
+  margin-top: 0.75rem;
+}
+
+.fan-member-digital-pack-modal__actions {
+  margin-top: 1rem;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.fan-member-digital-pack-modal__buy {
+  min-width: 10rem;
 }
 
 /* Member purchases — compact row list (minimize) */
