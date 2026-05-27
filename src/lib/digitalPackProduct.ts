@@ -180,6 +180,32 @@ export function productHasDigitalPackFulfillment(
   return isDigitalPackProductType(type) && Array.isArray(fulfillmentItems) && fulfillmentItems.length > 0;
 }
 
+/**
+ * When the storefront product payload still has protected slot URLs but the fan owns the pack,
+ * merge real URLs from order delivery (same indices as fulfillmentItems).
+ */
+export function mergeOwnedDigitalPackFulfillment<T extends TreatProduct>(
+  product: T,
+  deliveryItems: DigitalPackMediaItem[] | undefined
+): T {
+  if (!isDigitalPackProductType(product.type)) return product;
+  const items = parseDigitalPackMediaItems(product.fulfillmentItems);
+  if (items.length === 0) return product;
+  const delivered = parseDigitalPackMediaItems(deliveryItems);
+  if (delivered.length === 0) return product;
+  const hasProtected = items.some((i) => isProtectedPackMediaUrl(i.url));
+  if (!hasProtected) return product;
+  const merged = items.map((item, idx) => {
+    if (!isProtectedPackMediaUrl(item.url)) return item;
+    const slot = delivered[idx];
+    if (slot?.url && !isProtectedPackMediaUrl(slot.url)) {
+      return { ...item, url: slot.url };
+    }
+    return item;
+  });
+  return { ...product, fulfillmentItems: merged } as T;
+}
+
 export function sanitizeTreatProductForPublicView<T extends TreatProduct>(
   product: T,
   options: { isCreator: boolean; fanHasPurchased?: boolean }

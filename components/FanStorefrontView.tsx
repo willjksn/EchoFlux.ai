@@ -46,6 +46,7 @@ import {
   isDigitalPackProductType,
   parseDigitalPackMediaItems,
   orderHasAutoDigitalPackFulfillment,
+  mergeOwnedDigitalPackFulfillment,
 } from "../src/lib/digitalPackProduct";
 import { FanMemberDigitalPackTreatCard } from "./FanMemberDigitalPackTreatCard";
 import { DigitalPackDeliveryGallery } from "./DigitalPackDeliveryGallery";
@@ -1361,6 +1362,7 @@ export const FanStorefrontView: React.FC = () => {
   const [fanPageAdminBypass, setFanPageAdminBypass] = useState(false);
   const [treatsProducts, setTreatsProducts] = useState<TreatProduct[]>([]);
   const [treatsLoading, setTreatsLoading] = useState(false);
+  const [treatsRefreshNonce, setTreatsRefreshNonce] = useState(0);
   const [fanPurchases, setFanPurchases] = useState<FanDeliveryPurchase[]>([]);
   const [fanPurchasesLoading, setFanPurchasesLoading] = useState(false);
   const [fanPurchasesLoadingMore, setFanPurchasesLoadingMore] = useState(false);
@@ -2619,6 +2621,7 @@ export const FanStorefrontView: React.FC = () => {
           return;
         }
         await refetchMemberEntitlement();
+        setTreatsRefreshNonce((n) => n + 1);
         setFanPurchasesRefreshNonce((n) => n + 1);
         const url = new URL(window.location.href);
         url.searchParams.delete("session_id");
@@ -2698,9 +2701,13 @@ export const FanStorefrontView: React.FC = () => {
     if (!creator?.creatorId) return;
     setTreatsLoading(true);
     try {
+      const token = auth.currentUser ? await auth.currentUser.getIdToken() : null;
       const res = await fetch(
         `/api/products?creatorId=${encodeURIComponent(creator.creatorId)}&context=member`,
-        { cache: "no-store" }
+        {
+          cache: "no-store",
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        }
       );
       if (res.ok) {
         const data = await res.json();
@@ -2723,7 +2730,7 @@ export const FanStorefrontView: React.FC = () => {
 
   useEffect(() => {
     if ((activeTab === "treats" || activeTab === "purchases") && creator?.creatorId) fetchTreats();
-  }, [activeTab, creator?.creatorId, fetchTreats]);
+  }, [activeTab, creator?.creatorId, fetchTreats, treatsRefreshNonce, unlockedProductIds]);
 
   const fetchFanPurchases = useCallback(
     async (limitNum: number, mode: "initial" | "more" = "initial") => {
@@ -2886,10 +2893,19 @@ export const FanStorefrontView: React.FC = () => {
   [creator?.creatorId, isLoggedIn, showToast]);
 
   useEffect(() => {
-    if (activeTab === "purchases" && isLoggedIn && creator?.creatorId) {
+    const loadPurchasesForStore =
+      activeTab === "treats" && isLoggedIn && creator?.creatorId && unlockedProductIds.length > 0;
+    if ((activeTab === "purchases" || loadPurchasesForStore) && isLoggedIn && creator?.creatorId) {
       void fetchFanPurchases(FAN_MEMBER_PURCHASES_PAGE, "initial");
     }
-  }, [activeTab, creator?.creatorId, fanPurchasesRefreshNonce, fetchFanPurchases, isLoggedIn]);
+  }, [
+    activeTab,
+    creator?.creatorId,
+    fanPurchasesRefreshNonce,
+    fetchFanPurchases,
+    isLoggedIn,
+    unlockedProductIds.length,
+  ]);
 
   /** True when the signed-in Firebase user is this page's creator (handles legacy compound creatorId). */
   const isViewingOwnStorefront =
@@ -4176,6 +4192,19 @@ export const FanStorefrontView: React.FC = () => {
     const out = new Set<string>();
     for (const o of fanPurchases) {
       if (typeof o.productId === "string" && o.productId.trim()) out.add(o.productId.trim());
+    }
+    return out;
+  }, [fanPurchases]);
+  /** Order delivery URLs for owned digital packs (fallback when /api/products was fetched without auth). */
+  const packDeliveryItemsByProductId = useMemo(() => {
+    const out = new Map<string, import("../types").DigitalPackMediaItem[]>();
+    for (const o of fanPurchases) {
+      const pid = typeof o.productId === "string" ? o.productId.trim() : "";
+      if (!pid) continue;
+      const items = parseDigitalPackMediaItems(o.deliveryItems);
+      if (items.length === 0) continue;
+      const prev = out.get(pid);
+      if (!prev || items.length >= prev.length) out.set(pid, items);
     }
     return out;
   }, [fanPurchases]);
@@ -5625,10 +5654,16 @@ export const FanStorefrontView: React.FC = () => {
                         isPurchasingThis ? "Processing…" : owned ? "Buy again" : "Purchase";
                       const categoryLine = getTreatProductTypeDisplayLabel(p);
                       if (isDigitalPackProductType(p.type)) {
+                        const packProduct = owned
+                          ? mergeOwnedDigitalPackFulfillment(
+                              p,
+                              packDeliveryItemsByProductId.get(productRowId)
+                            )
+                          : p;
                         return (
                           <FanMemberDigitalPackTreatCard
                             key={`member-treat-${productRowId}-${index}`}
-                            product={p}
+                            product={packProduct}
                             categoryLine={categoryLine}
                             owned={owned}
                             soldOut={soldOut}
@@ -5638,6 +5673,7 @@ export const FanStorefrontView: React.FC = () => {
                             remainingLabel={hasLimit ? `${remaining} left` : null}
                             primaryColor={primary}
                             onPurchase={() => handlePurchase(productRowId)}
+                            onOpenPackPreview={owned ? () => setTreatsRefreshNonce((n) => n + 1) : undefined}
                             imageGuardProps={storefrontImageDownloadGuardProps}
                             videoGuardProps={storefrontVideoDownloadGuardProps}
                             audioGuardProps={storefrontAudioDownloadGuardProps}

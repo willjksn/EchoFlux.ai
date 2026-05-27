@@ -170,6 +170,10 @@ export const DigitalPackStorePreview: React.FC<Props> = ({
               !owned && !isPreview && item.type === "image" && item.url && !isProtectedPackMediaUrl(item.url);
             const showPlayableVideo =
               item.type === "video" && isStreamableMediaUrl(item.url) && (owned || (!fanFacing && isPreview));
+            const ownedMissingStreamableMedia =
+              owned &&
+              (item.type === "video" || item.type === "audio") &&
+              !isStreamableMediaUrl(item.url);
             return (
               <div
                 key={`${item.url}-${idx}`}
@@ -177,14 +181,22 @@ export const DigitalPackStorePreview: React.FC<Props> = ({
                   blurredImage ? " digital-pack-slot--blurred" : ""
                 }`}
               >
-                {lockedPlaceholder ? (
+                {lockedPlaceholder || ownedMissingStreamableMedia ? (
                   <div
                     className={`digital-pack-slot__locked${
                       item.type === "video" ? " digital-pack-slot__locked--video" : ""
                     }${item.type === "audio" ? " digital-pack-slot__locked--audio" : ""}`}
                   >
                     <span className="digital-pack-slot__locked-label">
-                      {item.type === "video" ? "Video in pack" : item.type === "audio" ? "Voice in pack" : "Photo in pack"}
+                      {ownedMissingStreamableMedia
+                        ? item.type === "video"
+                          ? "Loading video…"
+                          : "Loading audio…"
+                        : item.type === "video"
+                          ? "Video in pack"
+                          : item.type === "audio"
+                            ? "Voice in pack"
+                            : "Photo in pack"}
                     </span>
                   </div>
                 ) : null}

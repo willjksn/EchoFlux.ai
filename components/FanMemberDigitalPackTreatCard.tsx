@@ -19,6 +19,8 @@ export type FanMemberDigitalPackTreatCardProps = {
   remainingLabel: string | null;
   primaryColor: string;
   onPurchase: () => void;
+  /** Refetch products with auth when opening pack modal (owned packs need real media URLs). */
+  onOpenPackPreview?: () => void;
   imageGuardProps?: GuardImg;
   videoGuardProps?: GuardVideo;
   audioGuardProps?: GuardAudio;
@@ -39,6 +41,7 @@ export const FanMemberDigitalPackTreatCard: React.FC<FanMemberDigitalPackTreatCa
   remainingLabel,
   primaryColor,
   onPurchase,
+  onOpenPackPreview,
   imageGuardProps,
   videoGuardProps,
   audioGuardProps,
@@ -71,7 +74,10 @@ export const FanMemberDigitalPackTreatCard: React.FC<FanMemberDigitalPackTreatCa
         <button
           type="button"
           className="fan-member-treat-pack-open-link"
-          onClick={() => setDetailOpen(true)}
+          onClick={() => {
+            if (owned) onOpenPackPreview?.();
+            setDetailOpen(true);
+          }}
         >
           View pack contents
         </button>
