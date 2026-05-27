@@ -4263,20 +4263,29 @@ button.feed-card-action-count--clickable:hover {
   align-items: center;
   gap: 0.5rem;
   padding: 0.6rem 1.25rem;
-  background: var(--accent, #6366f1);
+  background: var(--fan-primary, var(--accent, #6366f1));
   color: #fff;
   border: none;
   border-radius: 999px;
   font-weight: 600;
   font-size: 0.9rem;
   cursor: pointer;
-  box-shadow: 0 4px 14px rgba(99, 102, 241, 0.35);
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  box-shadow: 0 4px 14px color-mix(in srgb, var(--fan-primary, #6366f1) 35%, transparent);
+  transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
 }
 .treats-add-btn:hover {
   transform: translateY(-1px);
-  box-shadow: 0 6px 20px rgba(99, 102, 241, 0.45);
-  background: var(--accent-hover, #4f46e5);
+  background: var(--fan-accent-hover, var(--accent-hover, var(--fan-primary, #6366f1)));
+  box-shadow: 0 6px 20px color-mix(in srgb, var(--fan-primary, #6366f1) 45%, transparent);
+}
+
+.stormij-theme .treats-add-btn {
+  background: var(--fan-primary, #6366f1);
+  box-shadow: 0 4px 14px color-mix(in srgb, var(--fan-primary, #6366f1) 35%, transparent);
+}
+.stormij-theme .treats-add-btn:hover {
+  background: var(--fan-accent-hover, var(--fan-primary, #6366f1));
+  box-shadow: 0 6px 20px color-mix(in srgb, var(--fan-primary, #6366f1) 45%, transparent);
 }
 
 .treats-load-error {
