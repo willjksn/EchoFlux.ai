@@ -137,21 +137,11 @@ import {
 import { creatorIdFirestoreQueryVariants, normalizeCreatorId } from "../src/lib/creatorIdNormalize";
 import { renderTextWithCustomEmoji, type SjHeartEmojiAccessContext } from "../src/lib/customEmoji";
 
-const storefrontImageDownloadGuardProps = {
-  draggable: false as const,
-  onContextMenu: (e: React.MouseEvent<HTMLImageElement>) => e.preventDefault(),
-};
-
-const storefrontVideoDownloadGuardProps = {
-  controlsList: "nodownload noplaybackrate noremoteplayback" as const,
-  disablePictureInPicture: true,
-  onContextMenu: (e: React.MouseEvent<HTMLVideoElement>) => e.preventDefault(),
-};
-
-const storefrontAudioDownloadGuardProps = {
-  controlsList: "nodownload noplaybackrate noremoteplayback" as const,
-  onContextMenu: (e: React.MouseEvent<HTMLAudioElement>) => e.preventDefault(),
-};
+import {
+  storefrontAudioDownloadGuardProps,
+  storefrontImageDownloadGuardProps,
+  storefrontVideoDownloadGuardProps,
+} from "../src/lib/storefrontMediaGuard";
 
 /** Ensure member-store products have usable Firestore ids (avoids every row showing “Processing…” when id is missing or duplicated). */
 function toOptionalNonNegativeInt(v: unknown): number | undefined {
@@ -5578,6 +5568,7 @@ export const FanStorefrontView: React.FC = () => {
                             <DigitalPackStorePreview
                               product={p}
                               owned={owned}
+                              fanFacing
                               compact
                               imageGuardProps={storefrontImageDownloadGuardProps}
                               videoGuardProps={storefrontVideoDownloadGuardProps}

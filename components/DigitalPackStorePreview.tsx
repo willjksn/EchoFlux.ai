@@ -3,7 +3,6 @@ import type { TreatProduct } from "../types";
 import {
   DIGITAL_PACK_LOCKED_BLUR_PX,
   defaultPackPreviewIndices,
-  derivePackCoverImageUrl,
   isDigitalPackProductType,
   isPackMediaSlotPreview,
   isProtectedPackMediaUrl,
@@ -11,21 +10,52 @@ import {
   parseDigitalPackMediaItems,
 } from "../src/lib/digitalPackProduct";
 import { mediaPreviewBlurFilterStyle } from "../src/lib/feedMediaPreviewBlur";
+import { StorefrontGuardedImage } from "../src/lib/storefrontMediaGuard";
 
 type Props = {
   product: TreatProduct;
   /** Fan already purchased — show full pack sharp in store card. */
   owned?: boolean;
+  /** Fan/member storefront — use guarded media (no native img hover menus). */
+  fanFacing?: boolean;
   imageGuardProps?: React.ImgHTMLAttributes<HTMLImageElement>;
   videoGuardProps?: React.VideoHTMLAttributes<HTMLVideoElement>;
   audioGuardProps?: React.AudioHTMLAttributes<HTMLAudioElement>;
   compact?: boolean;
 };
 
-/** Store card: sharp preview image(s), rest blurred or locked until purchase. */
+function PackPreviewImage({
+  src,
+  fanFacing,
+  imageGuardProps,
+  className,
+  fit = "contain",
+}: {
+  src: string;
+  fanFacing: boolean;
+  imageGuardProps?: React.ImgHTMLAttributes<HTMLImageElement>;
+  className: string;
+  fit?: "contain" | "cover";
+}) {
+  if (fanFacing) {
+    return <StorefrontGuardedImage src={src} className={className} fit={fit} position="top center" />;
+  }
+  return (
+    <img
+      src={src}
+      alt=""
+      loading="lazy"
+      className={className}
+      {...imageGuardProps}
+    />
+  );
+}
+
+/** Store card: sharp preview image(s) in hero; other slots blurred or locked until purchase. */
 export const DigitalPackStorePreview: React.FC<Props> = ({
   product,
   owned = false,
+  fanFacing = false,
   imageGuardProps,
   videoGuardProps,
   audioGuardProps,
@@ -46,43 +76,63 @@ export const DigitalPackStorePreview: React.FC<Props> = ({
 
   if (!isDigitalPackProductType(product.type) || items.length === 0) return null;
 
-  const cover = derivePackCoverImageUrl(items, previewIndices, product.imageUrl);
   const blurStyle = owned ? undefined : mediaPreviewBlurFilterStyle(DIGITAL_PACK_LOCKED_BLUR_PX);
   const salesUrl = product.salesVoiceTeaserUrl?.trim();
-  const gridItems = items.slice(0, compact ? 6 : 8);
+  const previewSet = useMemo(() => new Set(previewIndices), [previewIndices]);
+
+  /** Sharp image slots shown in the hero row (not repeated in the grid below). */
+  const heroPreviewSlots = useMemo(() => {
+    if (owned) return [];
+    return previewIndices
+      .map((idx) => ({ idx, item: items[idx] }))
+      .filter(
+        ({ item }) =>
+          item?.type === "image" && item.url && !isProtectedPackMediaUrl(item.url)
+      );
+  }, [owned, previewIndices, items]);
+
+  const showHero = heroPreviewSlots.length > 0;
+
+  /** Grid shows only non-preview slots so the hero image is not duplicated. */
+  const gridSlots = useMemo(() => {
+    const mapped = items.map((item, idx) => ({ item, idx }));
+    const filtered = showHero
+      ? mapped.filter(({ idx }) => !previewSet.has(idx))
+      : mapped;
+    return filtered.slice(0, compact ? 6 : 8);
+  }, [items, showHero, previewSet, compact]);
+
+  const gridCols =
+    gridSlots.length <= 1 ? "1fr" : gridSlots.length === 2 ? "repeat(2, 1fr)" : "repeat(2, 1fr)";
 
   return (
     <div
       className={`digital-pack-store-preview${compact ? " digital-pack-store-preview--compact" : ""}`}
-      style={{ marginTop: compact ? "0.35rem" : "0.5rem" }}
     >
-      {cover ? (
-        <img
-          src={cover}
-          alt=""
-          loading="lazy"
-          className="digital-pack-store-cover"
-          style={{
-            width: "100%",
-            borderRadius: 10,
-            marginBottom: gridItems.length || salesUrl ? "0.5rem" : 0,
-            maxHeight: compact ? 140 : 220,
-            objectFit: "cover",
-          }}
-          {...imageGuardProps}
-        />
+      {showHero ? (
+        <div
+          className={`digital-pack-store-cover-row${heroPreviewSlots.length > 1 ? " digital-pack-store-cover-row--multi" : ""}`}
+        >
+          {heroPreviewSlots.map(({ item, idx }) => (
+            <PackPreviewImage
+              key={`hero-${idx}`}
+              src={item.url}
+              fanFacing={fanFacing}
+              imageGuardProps={imageGuardProps}
+              className="digital-pack-store-cover"
+              fit="contain"
+            />
+          ))}
+        </div>
       ) : null}
-      {gridItems.length > 0 ? (
+      {gridSlots.length > 0 ? (
         <div
           className="digital-pack-teaser-grid"
           style={{
-            display: "grid",
-            gridTemplateColumns: gridItems.length === 1 ? "1fr" : "repeat(2, 1fr)",
-            gap: "0.35rem",
-            marginBottom: salesUrl ? "0.5rem" : 0,
+            gridTemplateColumns: gridCols,
           }}
         >
-          {gridItems.map((item, idx) => {
+          {gridSlots.map(({ item, idx }) => {
             const isPreview = isPackMediaSlotPreview(idx, previewIndices, owned);
             const locked = !owned && isProtectedPackMediaUrl(item.url);
             return (
@@ -98,18 +148,23 @@ export const DigitalPackStorePreview: React.FC<Props> = ({
                   </div>
                 ) : null}
                 {!locked && item.type === "image" ? (
-                  <img
-                    src={item.url}
-                    alt=""
-                    loading="lazy"
-                    style={{
-                      width: "100%",
-                      aspectRatio: "1",
-                      objectFit: "cover",
-                      ...(isPreview ? {} : blurStyle),
-                    }}
-                    {...imageGuardProps}
-                  />
+                  fanFacing ? (
+                    <StorefrontGuardedImage
+                      src={item.url}
+                      className="digital-pack-slot__media digital-pack-slot__media--image"
+                      fit="cover"
+                      position="center"
+                    />
+                  ) : (
+                    <img
+                      src={item.url}
+                      alt=""
+                      loading="lazy"
+                      className="digital-pack-slot__media digital-pack-slot__media--image"
+                      style={isPreview ? undefined : blurStyle}
+                      {...imageGuardProps}
+                    />
+                  )
                 ) : null}
                 {!locked && item.type === "video" ? (
                   <video
@@ -117,18 +172,14 @@ export const DigitalPackStorePreview: React.FC<Props> = ({
                     muted
                     playsInline
                     preload="metadata"
-                    style={{
-                      width: "100%",
-                      aspectRatio: "1",
-                      objectFit: "cover",
-                      ...(isPreview ? {} : blurStyle),
-                    }}
+                    className="digital-pack-slot__media digital-pack-slot__media--video"
+                    style={isPreview ? undefined : blurStyle}
                     {...videoGuardProps}
                   />
                 ) : null}
                 {!locked && item.type === "audio" ? (
                   <div
-                    className="digital-pack-slot__audio"
+                    className="digital-pack-slot__audio digital-pack-slot__media"
                     style={isPreview ? undefined : blurStyle}
                   >
                     <span>Voice in pack</span>
@@ -146,12 +197,11 @@ export const DigitalPackStorePreview: React.FC<Props> = ({
       ) : null}
       {salesUrl ? (
         <div className="digital-pack-sales-voice">
-          <p style={{ fontSize: "0.75rem", margin: "0 0 0.25rem", opacity: 0.85 }}>Sales teaser</p>
+          <p className="digital-pack-sales-voice__label">Sales teaser</p>
           <audio
             src={salesUrl}
             controls
             preload="metadata"
-            style={{ width: "100%" }}
             onPlay={() => setSalesPlaying(true)}
             onPause={() => setSalesPlaying(false)}
             onEnded={() => setSalesPlaying(false)}

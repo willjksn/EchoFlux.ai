@@ -21,6 +21,11 @@ import { readFanCheckoutFetchResult, FAN_TIP_CHECKOUT_SUCCESS_QS } from "../src/
 import { getTreatProductTypeDisplayLabel } from "../src/lib/treatProductTypeLabel";
 import { isDigitalPackProductType } from "../src/lib/digitalPackProduct";
 import { DigitalPackStorePreview } from "./DigitalPackStorePreview";
+import {
+  storefrontAudioDownloadGuardProps,
+  storefrontImageDownloadGuardProps,
+  storefrontVideoDownloadGuardProps,
+} from "../src/lib/storefrontMediaGuard";
 
 interface FanLandingPageProps {
   creator: {
@@ -525,7 +530,14 @@ export const FanLandingPage: React.FC<FanLandingPageProps> = (props) => {
                           {p.title}
                         </p>
                         {isDigitalPackProductType(p.type) ? (
-                          <DigitalPackStorePreview product={p} compact />
+                          <DigitalPackStorePreview
+                            product={p}
+                            fanFacing
+                            compact
+                            imageGuardProps={storefrontImageDownloadGuardProps}
+                            videoGuardProps={storefrontVideoDownloadGuardProps}
+                            audioGuardProps={storefrontAudioDownloadGuardProps}
+                          />
                         ) : null}
                         {p.description ? (
                           <p className="text-xs mt-1 mb-0" style={{ color: isDarkMode ? "rgba(255,255,255,0.6)" : `${theme?.text || "#1f2937"}99` }}>
