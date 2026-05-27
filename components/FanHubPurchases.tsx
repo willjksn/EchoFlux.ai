@@ -443,6 +443,23 @@ export const FanHubPurchases: React.FC = () => {
   const hiddenStorageKey = user?.id ? `fanhub_hidden_purchases_${user.id}` : null;
   const hubTheme = useCreatorFanHubTheme(user?.id);
 
+  /** Same CSS vars as Fan Hub shell / My Page preview so compact purchase rows match creator primary. */
+  const purchasesPageThemeStyle = useMemo((): React.CSSProperties => {
+    const bridge = tabCtx?.fanHubCssVarBridge;
+    if (bridge && typeof bridge["--fan-primary"] === "string") {
+      return bridge;
+    }
+    return {
+      "--fan-primary": hubTheme.primary,
+      "--fan-accent": hubTheme.primary,
+      "--fan-accent-hover": hubTheme.accentHover,
+      "--fan-bg": hubTheme.background,
+      "--fan-text": hubTheme.text,
+      "--fan-text-muted": hubTheme.textMuted,
+      "--fan-border": hubTheme.border,
+    };
+  }, [tabCtx?.fanHubCssVarBridge, hubTheme]);
+
   const purchasesHelpChrome = useMemo(() => {
     const p = hubTheme.primary;
     const a = hubTheme.accentHover || p;
@@ -1464,7 +1481,7 @@ export const FanHubPurchases: React.FC = () => {
 
   if (!user?.id) {
     return (
-      <div className="purchases-page">
+      <div className="purchases-page" style={purchasesPageThemeStyle}>
         <p className="purchases-empty">Sign in to view purchases.</p>
       </div>
     );
@@ -1482,7 +1499,7 @@ export const FanHubPurchases: React.FC = () => {
   }
 
   return (
-    <div className="purchases-page">
+    <div className="purchases-page" style={purchasesPageThemeStyle}>
       <header className="purchases-header">
         <div className="purchases-header-copy">
           <h1 className="purchases-title">Purchases</h1>

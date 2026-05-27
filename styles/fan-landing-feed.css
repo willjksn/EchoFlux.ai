@@ -3023,7 +3023,8 @@
   text-decoration: none;
 }
 
-.fan-member-purchase-compact {
+/* Member hub minimized purchases — creator Purchases uses .purchases-page rules in stormij-fanhub.css */
+.fan-member-purchases-compact .fan-member-purchase-compact {
   border: 1px solid color-mix(in srgb, var(--fan-primary, #6366f1) 18%, var(--fan-border, #e5e7eb));
   border-radius: 999px;
   background: color-mix(in srgb, var(--fan-primary, #6366f1) 4%, var(--fan-bg, #ffffff));
@@ -3034,13 +3035,13 @@
   margin-top: 0.45rem;
 }
 
-.fan-member-purchase-compact[open] {
+.fan-member-purchases-compact .fan-member-purchase-compact[open] {
   border-radius: 16px;
   background: color-mix(in srgb, var(--fan-primary, #6366f1) 5%, var(--fan-bg, #ffffff));
   box-shadow: 0 2px 14px color-mix(in srgb, var(--fan-primary, #6366f1) 10%, transparent);
 }
 
-.fan-member-purchase-compact-summary {
+.fan-member-purchases-compact .fan-member-purchase-compact-summary {
   list-style: none;
   cursor: pointer;
   display: grid;
@@ -3053,15 +3054,15 @@
   color: var(--fan-text, #1f2937);
 }
 
-.fan-member-purchase-compact-summary::-webkit-details-marker {
+.fan-member-purchases-compact .fan-member-purchase-compact-summary::-webkit-details-marker {
   display: none;
 }
 
-.fan-member-purchase-compact-summary::marker {
+.fan-member-purchases-compact .fan-member-purchase-compact-summary::marker {
   content: "";
 }
 
-.fan-member-purchase-compact-type {
+.fan-member-purchases-compact .fan-member-purchase-compact-type {
   font-size: 0.62rem;
   font-weight: 700;
   text-transform: uppercase;
@@ -3073,7 +3074,7 @@
   min-width: 0;
 }
 
-.fan-member-purchase-compact-title {
+.fan-member-purchases-compact .fan-member-purchase-compact-title {
   font-weight: 600;
   min-width: 0;
   overflow: hidden;
@@ -3081,7 +3082,7 @@
   white-space: nowrap;
 }
 
-.fan-member-purchase-compact-status {
+.fan-member-purchases-compact .fan-member-purchase-compact-status {
   font-size: 0.68rem;
   font-weight: 600;
   color: color-mix(in srgb, var(--fan-primary, #6366f1) 75%, var(--fan-text, #1f2937));
@@ -3092,7 +3093,7 @@
   text-overflow: ellipsis;
 }
 
-.fan-member-purchase-compact-price {
+.fan-member-purchases-compact .fan-member-purchase-compact-price {
   font-variant-numeric: tabular-nums;
   font-weight: 700;
   text-align: right;
@@ -3100,17 +3101,17 @@
   font-size: 0.78rem;
 }
 
-.fan-member-purchase-compact-price--muted {
+.fan-member-purchases-compact .fan-member-purchase-compact-price--muted {
   font-weight: 500;
   opacity: 0.4;
 }
 
-.fan-member-purchase-compact-body {
+.fan-member-purchases-compact .fan-member-purchase-compact-body {
   padding: 0.65rem 0.75rem 0.85rem;
   border-top: 1px solid color-mix(in srgb, var(--fan-primary, #6366f1) 10%, transparent);
 }
 
-.fan-member-purchase-compact-body .fan-member-purchase-expanded-card {
+.fan-member-purchases-compact .fan-member-purchase-compact-body .fan-member-purchase-expanded-card {
   border: none;
   box-shadow: none;
   padding: 0.85rem 0.95rem;
@@ -3206,24 +3207,24 @@ html.dark .fan-member-purchases-compact .fan-member-purchase-unlock-preview-body
 }
 
 @media (max-width: 520px) {
-  .fan-member-purchase-compact-summary {
+  .fan-member-purchases-compact .fan-member-purchase-compact-summary {
     grid-template-columns: 1fr 1fr;
     grid-template-rows: auto auto;
   }
 
-  .fan-member-purchase-compact-type {
+  .fan-member-purchases-compact .fan-member-purchase-compact-type {
     grid-column: 1 / -1;
   }
 
-  .fan-member-purchase-compact-title {
+  .fan-member-purchases-compact .fan-member-purchase-compact-title {
     grid-column: 1 / -1;
   }
 
-  .fan-member-purchase-compact-status {
+  .fan-member-purchases-compact .fan-member-purchase-compact-status {
     text-align: left;
   }
 
-  .fan-member-purchase-compact-price {
+  .fan-member-purchases-compact .fan-member-purchase-compact-price {
     text-align: right;
   }
 }

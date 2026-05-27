@@ -8559,10 +8559,107 @@ button.treat-card:hover:not(:disabled) .treat-card-cta {
   gap: 0;
 }
 
+/* Creator Purchases compact rows — same creator --fan-primary tokens as .purchases-card / Fan Hub tabs */
+.purchases-page .fan-member-purchase-compact {
+  border: 1px solid color-mix(in srgb, var(--fan-primary, #6366f1) 20%, var(--fan-border, #e5e7eb));
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--fan-primary, #6366f1) 4%, var(--fan-bg, #ffffff));
+  overflow: hidden;
+}
+
+.purchases-list--compact .fan-member-purchase-compact + .fan-member-purchase-compact {
+  margin-top: 0.45rem;
+}
+
+.purchases-page .fan-member-purchase-compact[open] {
+  border-radius: 16px;
+  border-color: color-mix(in srgb, var(--fan-primary, #6366f1) 24%, var(--fan-border, #e5e7eb));
+  background: color-mix(in srgb, var(--fan-primary, #6366f1) 5%, var(--fan-bg, #ffffff));
+  box-shadow: 0 2px 14px color-mix(in srgb, var(--fan-primary, #6366f1) 10%, transparent);
+}
+
+.purchases-page .fan-member-purchase-compact-summary {
+  list-style: none;
+  cursor: pointer;
+  display: grid;
+  grid-template-columns: 8.75rem minmax(0, 1fr) 10.75rem minmax(3.25rem, auto);
+  gap: 0.35rem 0.65rem;
+  align-items: center;
+  padding: 0.6rem 0.85rem;
+  font-size: 0.8125rem;
+  color: var(--fan-text, #1f2937);
+}
+
+.purchases-page .fan-member-purchase-compact-summary::-webkit-details-marker {
+  display: none;
+}
+
+.purchases-page .fan-member-purchase-compact-summary::marker {
+  content: "";
+}
+
+.purchases-page .fan-member-purchase-compact-type {
+  font-size: 0.62rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: color-mix(in srgb, var(--fan-text, #1f2937) 52%, transparent);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+.purchases-page .fan-member-purchase-compact-title {
+  font-weight: 600;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.purchases-page .fan-member-purchase-compact-status {
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: color-mix(in srgb, var(--fan-primary, #6366f1) 78%, var(--fan-text, #1f2937));
+  text-align: right;
+  white-space: nowrap;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.purchases-page .fan-member-purchase-compact-price {
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  text-align: right;
+  white-space: nowrap;
+  font-size: 0.78rem;
+}
+
 /* Full-width expanded row body (member compact uses horizontal inset; creators match card mode width) */
 .purchases-page .fan-member-purchase-compact-body {
-  padding-left: 0;
-  padding-right: 0;
+  padding: 0.65rem 0 0.85rem;
+  border-top: 1px solid color-mix(in srgb, var(--fan-primary, #6366f1) 14%, transparent);
+}
+
+@media (max-width: 520px) {
+  .purchases-page .fan-member-purchase-compact-summary {
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: auto auto;
+  }
+
+  .purchases-page .fan-member-purchase-compact-type {
+    grid-column: 1 / -1;
+  }
+
+  .purchases-page .fan-member-purchase-compact-title {
+    grid-column: 1 / -1;
+  }
+
+  .purchases-page .fan-member-purchase-compact-status {
+    text-align: left;
+  }
 }
 
 .purchases-card {
