@@ -13,6 +13,7 @@ import {
   isJointLiveSessionProductId,
   jointSessionKindFromProductId,
 } from "../src/lib/treatSessionClassification.js";
+import { parseDigitalPackMediaItems } from "../src/lib/digitalPackProduct.js";
 
 type Body = {
   orderId?: string;
@@ -23,6 +24,8 @@ type Body = {
   deliveryType?: "video" | "image" | "audio" | "text" | "link" | null;
   deliveryText?: string | null;
   deliveryUrl?: string | null;
+  /** Multiple images/videos/audio for manual delivery (not digital pack auto-fulfill). */
+  deliveryItems?: { type: "image" | "video" | "audio"; url: string; sortOrder?: number }[] | null;
   /** ISO timestamp for the scheduled session start (creator's local picker from Fan Hub Purchases). Used for 5‑minute fan reminders. */
   scheduledStartIso?: string | null;
 };
@@ -88,6 +91,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       productTitle?: string;
       productId?: string;
       type?: string;
+      digitalPackFulfillment?: boolean;
       scheduleStatus?: "pending" | "scheduled" | "completed" | "cancelled";
       scheduledDate?: string | null;
       scheduledTime?: string | null;
@@ -159,6 +163,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (body.deliveryUrl !== undefined) {
       const u = typeof body.deliveryUrl === "string" ? body.deliveryUrl.trim() : "";
       patch.deliveryUrl = u || null;
+    }
+    if (body.deliveryItems !== undefined) {
+      if (data?.digitalPackFulfillment === true) {
+        return res.status(400).json({ error: "Digital pack deliveries are fulfilled automatically." });
+      }
+      if (body.deliveryItems === null) {
+        patch.deliveryItems = null;
+      } else if (Array.isArray(body.deliveryItems)) {
+        const items = parseDigitalPackMediaItems(body.deliveryItems);
+        patch.deliveryItems = items.length > 0 ? items : null;
+        if (items.length > 0) {
+          patch.deliveryType = items[0].type;
+          patch.deliveryUrl = items[0].url;
+        }
+      }
     }
 
     await ref.set(patch, { merge: true });

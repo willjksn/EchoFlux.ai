@@ -3,8 +3,8 @@ import { getAdminDb } from "./_firebaseAdmin.js";
 import { syncRecentFanHubProductCheckouts } from "./_syncRecentFanHubProductCheckouts.js";
 import { verifyAuth } from "./verifyAuth.js";
 import {
+  orderDeliveryMediaItems,
   orderHasAutoDigitalPackFulfillment,
-  parseDigitalPackMediaItems,
 } from "../src/lib/digitalPackProduct.js";
 
 type FanPurchaseType = "product" | "post_unlock" | "unlock" | "tip" | "subscription" | "live_stream_ticket";
@@ -138,7 +138,11 @@ function mapDocToPurchase(id: string, d: Record<string, unknown>): FanPurchase {
     deliveryUrl: typeof d.deliveryUrl === "string" ? d.deliveryUrl : null,
     deliveredAt: typeof d.deliveredAt === "string" ? d.deliveredAt : null,
     deliveryItems: (() => {
-      const items = parseDigitalPackMediaItems(d.deliveryItems);
+      const items = orderDeliveryMediaItems({
+        deliveryItems: d.deliveryItems,
+        deliveryUrl: d.deliveryUrl,
+        deliveryType: d.deliveryType,
+      });
       return items.length > 0 ? items : undefined;
     })(),
     digitalPackFulfillment: orderHasAutoDigitalPackFulfillment(d) ? true : undefined,

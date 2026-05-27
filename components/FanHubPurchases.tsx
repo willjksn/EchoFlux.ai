@@ -23,7 +23,7 @@ import { isJointLiveSessionProductId, jointSessionKindFromProductId } from "../s
 import { usePremiumStudioTab } from "./PremiumStudioLayout";
 import VideoCallRoom from "./VideoCallRoom";
 import { DigitalPackDeliveryGallery } from "./DigitalPackDeliveryGallery";
-import { orderHasAutoDigitalPackFulfillment, parseDigitalPackMediaItems } from "../src/lib/digitalPackProduct";
+import { orderDeliveryMediaItems, parseDigitalPackMediaItems } from "../src/lib/digitalPackProduct";
 import type { DigitalPackMediaItem } from "../types";
 import {
   AUDIO_RECORDER_TIMESLICE_MS,
@@ -196,12 +196,15 @@ function isPostUnlockPurchase(p: Purchase): boolean {
 }
 
 function isAutoFulfilledDigitalPackPurchase(p: Purchase): boolean {
-  return (
-    p.digitalPackFulfillment === true ||
-    (Array.isArray(p.deliveryItems) &&
-      p.deliveryItems.length > 0 &&
-      p.deliveryStatus === "delivered")
-  );
+  return p.digitalPackFulfillment === true;
+}
+
+function purchaseDeliveryItemsForEditor(p: Purchase): DigitalPackMediaItem[] {
+  return orderDeliveryMediaItems({
+    deliveryItems: p.deliveryItems,
+    deliveryUrl: p.deliveryUrl,
+    deliveryType: p.deliveryType,
+  });
 }
 
 const CREATOR_DIGITAL_PACK_TYPE_LABEL = "Digital pack";
@@ -283,7 +286,11 @@ function creatorPurchaseStatusLine(p: Purchase): string {
     if (eff.scheduleStatus === "cancelled") return "Cancelled";
     if (eff.scheduleStatus === "pending") return "Pending";
   }
-  if (eff.deliveryStatus === "delivered") return "Delivered";
+  if (eff.deliveryStatus === "delivered") {
+    const count = digitalPackItemCountLabel(p.deliveryItems);
+    if (count) return `Delivered · ${count}`;
+    return "Delivered";
+  }
   if (eff.scheduleStatus === "pending") return "Needs scheduling";
   if (eff.scheduleStatus === "scheduled") return "Scheduled";
   if (eff.scheduleStatus === "completed") return "Completed";
@@ -385,7 +392,7 @@ export const FanHubPurchases: React.FC = () => {
   const [deliveryEditingId, setDeliveryEditingId] = useState<string | null>(null);
   const [deliveryTypeDraft, setDeliveryTypeDraft] = useState<"video" | "image" | "audio" | "text">("text");
   const [deliveryTextDraft, setDeliveryTextDraft] = useState("");
-  const [deliveryUrlDraft, setDeliveryUrlDraft] = useState("");
+  const [deliveryItemsDraft, setDeliveryItemsDraft] = useState<DigitalPackMediaItem[]>([]);
   const [deliveryUploading, setDeliveryUploading] = useState(false);
   const [deliveryVaultOpen, setDeliveryVaultOpen] = useState(false);
   const [deliveryVaultLoading, setDeliveryVaultLoading] = useState(false);
@@ -632,14 +639,14 @@ export const FanHubPurchases: React.FC = () => {
             isDemo: false,
             orderType,
             deliveryItems: (() => {
-              const items = parseDigitalPackMediaItems(o.deliveryItems);
+              const items = orderDeliveryMediaItems({
+                deliveryItems: o.deliveryItems,
+                deliveryUrl: o.deliveryUrl,
+                deliveryType: o.deliveryType,
+              });
               return items.length > 0 ? items : undefined;
             })(),
-            digitalPackFulfillment:
-              o.digitalPackFulfillment === true ||
-              orderHasAutoDigitalPackFulfillment(o as Record<string, unknown>)
-                ? true
-                : undefined,
+            digitalPackFulfillment: o.digitalPackFulfillment === true ? true : undefined,
           };
         });
         setPurchases(realPurchases);
@@ -969,15 +976,34 @@ export const FanHubPurchases: React.FC = () => {
     showToast?.("Marked as completed.", "success");
   };
 
+  const appendDeliveryItemsDraft = useCallback((next: DigitalPackMediaItem[]) => {
+    if (next.length === 0) return;
+    setDeliveryItemsDraft((prev) => {
+      const merged = [...prev, ...next].map((item, i) => ({ ...item, sortOrder: i }));
+      return merged;
+    });
+  }, []);
+
+  const removeDeliveryItemDraft = useCallback((index: number) => {
+    setDeliveryItemsDraft((prev) =>
+      prev.filter((_, i) => i !== index).map((item, i) => ({ ...item, sortOrder: i }))
+    );
+  }, []);
+
   const openDeliveryEditor = (p: Purchase) => {
     discardPendingDeliveryMedia();
     stopDeliveryArmStreams();
     setDeliveryVideoStream(null);
     setDeliveryRecordArm(null);
     setDeliveryEditingId(p.id);
-    setDeliveryTypeDraft(p.deliveryType || "text");
+    const items = purchaseDeliveryItemsForEditor(p);
+    setDeliveryItemsDraft(items);
+    setDeliveryTypeDraft(
+      p.deliveryType === "video" || p.deliveryType === "image" || p.deliveryType === "audio"
+        ? p.deliveryType
+        : items[0]?.type || "text"
+    );
     setDeliveryTextDraft(p.deliveryText || "");
-    setDeliveryUrlDraft(p.deliveryUrl || "");
   };
 
   const cancelDeliveryEditor = () => {
@@ -996,7 +1022,7 @@ export const FanHubPurchases: React.FC = () => {
     setDeliveryEditingId(null);
     setDeliveryTypeDraft("text");
     setDeliveryTextDraft("");
-    setDeliveryUrlDraft("");
+    setDeliveryItemsDraft([]);
     setDeliveryUploading(false);
     setDeliveryVaultOpen(false);
     setDeliveryVaultItems([]);
@@ -1037,11 +1063,12 @@ export const FanHubPurchases: React.FC = () => {
       const nextType = inferred || draftType;
       if (nextType === "video" || nextType === "image" || nextType === "audio") {
         setDeliveryTypeDraft(nextType);
+        appendDeliveryItemsDraft([{ type: nextType, url }]);
+        showToast?.("Added to delivery. You can attach more files before saving.", "success");
+      } else {
+        showToast?.("Unsupported file type for delivery.", "error");
       }
-      setDeliveryUrlDraft(url);
-      showToast?.("Delivery media uploaded.", "success");
     } catch (e) {
-      setDeliveryUrlDraft("");
       showToast?.(e instanceof Error ? e.message : "Could not upload delivery media.", "error");
     } finally {
       setDeliveryUploading(false);
@@ -1333,12 +1360,16 @@ export const FanHubPurchases: React.FC = () => {
   const saveDelivery = async (p: Purchase) => {
     const nextType = deliveryTypeDraft;
     const nextText = deliveryTextDraft.trim();
-    const nextUrl = String(deliveryUrlDraft ?? "").trim();
+    const mediaItems =
+      nextType === "text"
+        ? []
+        : deliveryItemsDraft.map((item, i) => ({ ...item, sortOrder: i }));
+    const firstMedia = mediaItems[0];
     if (deliveryPendingMedia) {
       showToast?.('Preview your recording, then tap "Upload & attach for delivery", or discard it.', "error");
       return;
     }
-    if ((nextType === "video" || nextType === "image" || nextType === "audio") && !nextUrl) {
+    if ((nextType === "video" || nextType === "image" || nextType === "audio") && mediaItems.length === 0) {
       showToast?.("Upload, record, or select media from Vault before saving delivery.", "error");
       return;
     }
@@ -1361,9 +1392,10 @@ export const FanHubPurchases: React.FC = () => {
         body: JSON.stringify({
           orderId: p.id,
           deliveryStatus: "delivered",
-          deliveryType: nextType,
+          deliveryType: nextType === "text" ? "text" : firstMedia?.type ?? nextType,
           deliveryText: nextType === "text" ? nextText : null,
-          deliveryUrl: nextType === "text" ? null : nextUrl,
+          deliveryUrl: nextType === "text" ? null : firstMedia?.url ?? null,
+          deliveryItems: mediaItems.length > 0 ? mediaItems : null,
           scheduleStatus: nextScheduleStatus,
           scheduledDate: deliveredSchedule.date,
           scheduledTime: deliveredSchedule.time,
@@ -1380,9 +1412,10 @@ export const FanHubPurchases: React.FC = () => {
             ? {
                 ...x,
                 deliveryStatus: "delivered",
-                deliveryType: nextType,
+                deliveryType: nextType === "text" ? "text" : firstMedia?.type ?? nextType,
                 deliveryText: nextType === "text" ? nextText : null,
-                deliveryUrl: nextType === "text" ? null : nextUrl,
+                deliveryUrl: nextType === "text" ? null : firstMedia?.url ?? null,
+                deliveryItems: mediaItems.length > 0 ? mediaItems : undefined,
                 deliveredAt: deliveredNow,
                 scheduleStatus: nextScheduleStatus,
                 scheduledDate: deliveredSchedule.date,
@@ -1392,8 +1425,8 @@ export const FanHubPurchases: React.FC = () => {
         )
       );
       const calendarSynced = await upsertTreatCalendarEvent(p, deliveredNow, "delivered", deliveredSchedule.time, {
-        type: nextType,
-        url: nextType === "text" ? null : nextUrl,
+        type: nextType === "text" ? "text" : firstMedia?.type ?? nextType,
+        url: nextType === "text" ? null : firstMedia?.url ?? null,
         text: nextType === "text" ? nextText : null,
       });
       showToast?.(
@@ -1895,11 +1928,11 @@ export const FanHubPurchases: React.FC = () => {
                   </div>
                 </div>
 
-                {digitalPackPurchase && isDelivered && p.deliveryItems && p.deliveryItems.length > 0 ? (
+                {isDelivered && p.deliveryItems && p.deliveryItems.length > 0 ? (
                   <details className="purchases-pack-delivery-details">
                     <summary className="purchases-pack-delivery-details__summary">
-                      View delivered pack — {p.productName} ({p.deliveryItems.length}{" "}
-                      {p.deliveryItems.length === 1 ? "item" : "items"})
+                      {digitalPackPurchase ? "View delivered pack" : "View delivery"} — {p.productName} (
+                      {p.deliveryItems.length} {p.deliveryItems.length === 1 ? "item" : "items"})
                     </summary>
                     <DigitalPackDeliveryGallery items={p.deliveryItems} />
                   </details>
@@ -2052,7 +2085,11 @@ export const FanHubPurchases: React.FC = () => {
                           <span>Delivery type</span>
                           <select
                             value={deliveryTypeDraft}
-                            onChange={(e) => setDeliveryTypeDraft(e.target.value as "video" | "image" | "audio" | "text")}
+                            onChange={(e) => {
+                              const v = e.target.value as "video" | "image" | "audio" | "text";
+                              setDeliveryTypeDraft(v);
+                              if (v === "text") setDeliveryItemsDraft([]);
+                            }}
                             className="purchases-schedule-input"
                           >
                             <option value="text">Text reply</option>
@@ -2251,9 +2288,9 @@ export const FanHubPurchases: React.FC = () => {
                                 onClick={() => {
                                   discardPendingDeliveryMedia();
                                   setDeliveryTypeDraft(item.type);
-                                  setDeliveryUrlDraft(item.url);
+                                  appendDeliveryItemsDraft([{ type: item.type, url: item.url }]);
                                   setDeliveryVaultOpen(false);
-                                  showToast?.(`Selected ${item.type} from Vault.`, "success");
+                                  showToast?.(`Added ${item.type} from Vault. Attach more or save delivery.`, "success");
                                 }}
                               >
                                 <div style={{ fontSize: 12, opacity: 0.8, marginBottom: 4 }}>{item.type}</div>
@@ -2357,33 +2394,26 @@ export const FanHubPurchases: React.FC = () => {
                         </div>
                       </div>
                     ) : null}
-                    {!deliveryPendingMedia && deliveryTypeDraft === "audio" && deliveryUrlDraft ? (
-                      <div style={{ marginTop: "0.75rem" }}>
-                        <p className="m-0 text-xs opacity-80" style={{ marginBottom: "0.35rem" }}>
-                          Attached audio
+                    {deliveryTypeDraft !== "text" && deliveryItemsDraft.length > 0 ? (
+                      <div className="purchases-delivery-attached" style={{ marginTop: "0.75rem" }}>
+                        <p className="purchases-delivery-section-title">
+                          Attached ({deliveryItemsDraft.length}) — add more files before saving
                         </p>
-                        <audio
-                          key={deliveryUrlDraft}
-                          src={deliveryUrlDraft}
-                          controls
-                          className="w-full purchases-schedule-input"
-                          style={{ maxHeight: 48 }}
-                        />
-                      </div>
-                    ) : null}
-                    {!deliveryPendingMedia && deliveryTypeDraft === "video" && deliveryUrlDraft ? (
-                      <div style={{ marginTop: "0.75rem" }}>
-                        <p className="m-0 text-xs opacity-80" style={{ marginBottom: "0.35rem" }}>
-                          Attached video
-                        </p>
-                        <video
-                          key={deliveryUrlDraft}
-                          src={deliveryUrlDraft}
-                          controls
-                          playsInline
-                          className="w-full purchases-schedule-input"
-                          style={{ borderRadius: 10, maxHeight: 320, background: "#000" }}
-                        />
+                        <ul className="purchases-delivery-attached-list">
+                          {deliveryItemsDraft.map((item, idx) => (
+                            <li key={`${item.url}-${idx}`} className="purchases-delivery-attached-row">
+                              <span className="purchases-delivery-attached-type">{item.type}</span>
+                              <button
+                                type="button"
+                                className="purchases-btn purchases-btn-secondary purchases-delivery-attached-remove"
+                                onClick={() => removeDeliveryItemDraft(idx)}
+                              >
+                                Remove
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                        <DigitalPackDeliveryGallery items={deliveryItemsDraft} />
                       </div>
                     ) : null}
                     {deliveryTypeDraft === "text" ? (
@@ -2398,10 +2428,10 @@ export const FanHubPurchases: React.FC = () => {
                     ) : (
                       <p className="purchases-schedule-hint" style={{ marginTop: "0.5rem" }}>
                         {deliveryPendingMedia
-                          ? "When you are happy with the preview, upload to attach — then save delivery."
-                          : deliveryUrlDraft
-                            ? "Media attached and ready to deliver. Save when you are done."
-                            : "No media attached yet. Use Upload, From Vault, or Record to attach media."}
+                          ? "When you are happy with the preview, upload to attach — then you can add more files."
+                          : deliveryItemsDraft.length > 0
+                            ? "Files stay attached when you add another. Save delivery when you are done."
+                            : "No media attached yet. Use Upload, From Vault, or Record — each file is added to the list."}
                       </p>
                     )}
                     <div className="purchases-schedule-row" style={{ marginTop: "0.5rem" }}>

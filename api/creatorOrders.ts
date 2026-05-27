@@ -4,8 +4,7 @@ import { getAdminDb } from "./_firebaseAdmin.js";
 import { syncRecentFanHubProductCheckouts } from "./_syncRecentFanHubProductCheckouts.js";
 import { verifyAuth } from "./verifyAuth.js";
 import {
-  orderHasAutoDigitalPackFulfillment,
-  parseDigitalPackMediaItems,
+  orderDeliveryMediaItems,
 } from "../src/lib/digitalPackProduct.js";
 
 export type CreatorOrder = {
@@ -236,10 +235,14 @@ function mapDocToOrder(docSnap: QueryDocumentSnapshot): CreatorOrder {
     streamId: streamIdRaw || null,
     postId: postIdRaw || null,
     deliveryItems: (() => {
-      const items = parseDigitalPackMediaItems(d.deliveryItems);
+      const items = orderDeliveryMediaItems({
+        deliveryItems: d.deliveryItems,
+        deliveryUrl: d.deliveryUrl,
+        deliveryType: d.deliveryType,
+      });
       return items.length > 0 ? items : undefined;
     })(),
-    digitalPackFulfillment: orderHasAutoDigitalPackFulfillment(d) ? true : undefined,
+    digitalPackFulfillment: d.digitalPackFulfillment === true ? true : undefined,
   };
 }
 

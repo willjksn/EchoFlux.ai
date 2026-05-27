@@ -261,9 +261,21 @@ export function buildDigitalPackOrderDeliveryPatch(
 }
 
 export function orderHasAutoDigitalPackFulfillment(data: Record<string, unknown>): boolean {
-  if (data.digitalPackFulfillment === true) return true;
+  return data.digitalPackFulfillment === true;
+}
+
+/** Manual or auto delivery rows — `deliveryItems` first, else legacy single `deliveryUrl`. */
+export function orderDeliveryMediaItems(data: {
+  deliveryItems?: unknown;
+  deliveryUrl?: string | null;
+  deliveryType?: string | null;
+}): DigitalPackMediaItem[] {
   const items = parseDigitalPackMediaItems(data.deliveryItems);
-  return items.length > 0 && data.deliveryStatus === "delivered" && data.scheduleStatus === "completed";
+  if (items.length > 0) return items;
+  const url = typeof data.deliveryUrl === "string" ? data.deliveryUrl.trim() : "";
+  const typeRaw = typeof data.deliveryType === "string" ? data.deliveryType.trim().toLowerCase() : "";
+  if (!url || !MEDIA_KINDS.has(typeRaw as DigitalPackMediaKind)) return [];
+  return [{ type: typeRaw as DigitalPackMediaKind, url, sortOrder: 0 }];
 }
 
 export function togglePackPreviewIndex(

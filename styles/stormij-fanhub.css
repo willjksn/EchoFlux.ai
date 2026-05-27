@@ -9229,6 +9229,45 @@ button.treat-card:hover:not(:disabled) .treat-card-cta {
   color: #94a3b8;
 }
 
+.purchases-delivery-attached {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.purchases-delivery-attached-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.purchases-delivery-attached-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.35rem 0.5rem;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--fan-primary, #6366f1) 6%, var(--fan-bg, #fff));
+  border: 1px solid color-mix(in srgb, var(--fan-primary, #6366f1) 12%, transparent);
+}
+
+.purchases-delivery-attached-type {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: color-mix(in srgb, var(--fan-text, #1f2937) 55%, transparent);
+}
+
+.purchases-delivery-attached-remove {
+  padding: 0.28rem 0.55rem;
+  font-size: 0.72rem;
+}
+
 .purchases-btn-recording {
   background-color: #dc2626 !important;
   color: #fff !important;

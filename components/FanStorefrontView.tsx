@@ -45,8 +45,8 @@ import {
   parseTreatProductPackFields,
   isDigitalPackProductType,
   parseDigitalPackMediaItems,
-  orderHasAutoDigitalPackFulfillment,
   mergeOwnedDigitalPackFulfillment,
+  orderDeliveryMediaItems,
 } from "../src/lib/digitalPackProduct";
 import { FanMemberDigitalPackTreatCard } from "./FanMemberDigitalPackTreatCard";
 import { DigitalPackDeliveryGallery } from "./DigitalPackDeliveryGallery";
@@ -672,10 +672,7 @@ function FanPurchaseUnlockedPostBlock({ creatorId, postId }: { creatorId: string
 }
 
 function fanPurchaseIsDigitalPack(o: FanDeliveryPurchase): boolean {
-  return (
-    o.digitalPackFulfillment === true ||
-    (Array.isArray(o.deliveryItems) && o.deliveryItems.length > 0)
-  );
+  return o.digitalPackFulfillment === true;
 }
 
 function fanPurchasePackItemCountLabel(o: FanDeliveryPurchase): string | null {
@@ -740,20 +737,19 @@ function FanMemberPurchaseDeliveryContent({
   o: FanDeliveryPurchase;
   primary: string;
 }) {
-  const packItems = o.deliveryItems && o.deliveryItems.length > 0 ? o.deliveryItems : null;
+  if (o.deliveryStatus !== "delivered") return null;
 
-  if (packItems) {
+  const mediaItems = orderDeliveryMediaItems(o);
+  if (mediaItems.length > 0) {
     return (
       <DigitalPackDeliveryGallery
-        items={packItems}
+        items={mediaItems}
         imageGuardProps={storefrontImageDownloadGuardProps}
         videoGuardProps={storefrontVideoDownloadGuardProps}
         audioGuardProps={storefrontAudioDownloadGuardProps}
       />
     );
   }
-
-  if (o.deliveryStatus !== "delivered") return null;
 
   return (
     <>
@@ -763,41 +759,6 @@ function FanMemberPurchaseDeliveryContent({
             {o.deliveryText}
           </p>
         </div>
-      ) : null}
-      {o.deliveryType === "video" && o.deliveryUrl ? (
-        <div className="digital-pack-delivery-gallery">
-          <div className="digital-pack-delivery-item digital-pack-delivery-item--video">
-            <video
-              src={o.deliveryUrl}
-              controls
-              playsInline
-              preload="metadata"
-              className="digital-pack-delivery-item__video"
-              {...storefrontVideoDownloadGuardProps}
-            />
-          </div>
-        </div>
-      ) : null}
-      {o.deliveryType === "image" && o.deliveryUrl ? (
-        <div className="digital-pack-delivery-gallery">
-          <div className="digital-pack-delivery-item digital-pack-delivery-item--image">
-            <StorefrontGuardedImage
-              src={o.deliveryUrl}
-              className="digital-pack-delivery-item__img"
-              fit="contain"
-              position="top center"
-            />
-          </div>
-        </div>
-      ) : null}
-      {o.deliveryType === "audio" && o.deliveryUrl ? (
-        <audio
-          src={o.deliveryUrl}
-          controls
-          preload="metadata"
-          className="fan-member-purchase-legacy-audio"
-          {...storefrontAudioDownloadGuardProps}
-        />
       ) : null}
       {o.deliveryType === "link" && o.deliveryUrl ? (
         <a
@@ -2895,10 +2856,14 @@ export const FanStorefrontView: React.FC = () => {
             deliveryUrl: typeof raw.deliveryUrl === "string" ? raw.deliveryUrl : null,
             deliveredAt: typeof raw.deliveredAt === "string" ? raw.deliveredAt : null,
             ...(() => {
-              const items = parseDigitalPackMediaItems(raw.deliveryItems);
+              const items = orderDeliveryMediaItems({
+                deliveryItems: raw.deliveryItems,
+                deliveryUrl: raw.deliveryUrl,
+                deliveryType: raw.deliveryType,
+              });
               return {
                 deliveryItems: items.length > 0 ? items : undefined,
-                digitalPackFulfillment: orderHasAutoDigitalPackFulfillment(raw) ? true : undefined,
+                digitalPackFulfillment: raw.digitalPackFulfillment === true ? true : undefined,
               };
             })(),
           });
@@ -2940,10 +2905,14 @@ export const FanStorefrontView: React.FC = () => {
               deliveryUrl: typeof raw.deliveryUrl === "string" ? raw.deliveryUrl : null,
               deliveredAt: typeof raw.deliveredAt === "string" ? raw.deliveredAt : null,
               ...(() => {
-                const items = parseDigitalPackMediaItems(raw.deliveryItems);
+                const items = orderDeliveryMediaItems({
+                  deliveryItems: raw.deliveryItems,
+                  deliveryUrl: raw.deliveryUrl,
+                  deliveryType: raw.deliveryType,
+                });
                 return {
                   deliveryItems: items.length > 0 ? items : undefined,
-                  digitalPackFulfillment: orderHasAutoDigitalPackFulfillment(raw) ? true : undefined,
+                  digitalPackFulfillment: raw.digitalPackFulfillment === true ? true : undefined,
                 };
               })(),
             });
