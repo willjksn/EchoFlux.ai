@@ -2357,6 +2357,24 @@ export const FanStorefrontView: React.FC = () => {
     };
   }, [profileMenuOpen]);
 
+  const reconcileFanMembershipFromStripe = useCallback(async (): Promise<boolean> => {
+    if (!creator?.creatorId || !auth.currentUser || creator.monetization?.freeAccessEnabled === true) {
+      return false;
+    }
+    try {
+      const token = await auth.currentUser.getIdToken(true);
+      const res = await fetch("/api/reconcileFanCreatorSubscription", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ creatorId: creator.creatorId }),
+      });
+      const data = await res.json().catch(() => ({}));
+      return res.ok && !!(data as { reconciled?: boolean }).reconciled;
+    } catch {
+      return false;
+    }
+  }, [creator?.creatorId, creator?.monetization?.freeAccessEnabled]);
+
   useEffect(() => {
     if (!creator?.creatorId || !isLoggedIn) {
       setSubscribed(false);
@@ -2384,8 +2402,30 @@ export const FanStorefrontView: React.FC = () => {
           `/api/getFanEntitlement?creatorId=${encodeURIComponent(creator.creatorId)}`,
           { headers: token ? { Authorization: `Bearer ${token}` } : {} }
         );
-        const data = await res.json().catch(() => ({}));
+        let data = await res.json().catch(() => ({}));
         if (gen !== entitlementFetchGen.current) return;
+        if (
+          res.ok &&
+          !(data as { subscribed?: boolean }).subscribed &&
+          creator.monetization?.freeAccessEnabled !== true
+        ) {
+          const repaired = await reconcileFanMembershipFromStripe();
+          if (gen !== entitlementFetchGen.current) return;
+          if (repaired) {
+            const retryRes = await fetch(
+              `/api/getFanEntitlement?creatorId=${encodeURIComponent(creator.creatorId)}`,
+              { headers: token ? { Authorization: `Bearer ${token}` } : {} }
+            );
+            data = await retryRes.json().catch(() => ({}));
+            if (gen !== entitlementFetchGen.current) return;
+            if (!retryRes.ok) {
+              const msg =
+                typeof (data as { error?: unknown }).error === "string" ? (data as { error: string }).error : "";
+              showToast?.(msg || `Could not verify membership (${retryRes.status}). Refresh and try again.`, "error");
+              return;
+            }
+          }
+        }
         if (!res.ok) {
           const msg = typeof (data as { error?: unknown }).error === "string" ? (data as { error: string }).error : "";
           showToast?.(msg || `Could not verify membership (${res.status}). Refresh and try again.`, "error");
@@ -2439,19 +2479,34 @@ export const FanStorefrontView: React.FC = () => {
         }
       }
     })();
-  }, [creator?.creatorId, isLoggedIn]);
+  }, [creator?.creatorId, isLoggedIn, reconcileFanMembershipFromStripe, creator?.monetization?.freeAccessEnabled]);
 
   const refetchMemberEntitlement = useCallback(async () => {
     if (!creator?.creatorId || !auth.currentUser) return;
     const gen = ++entitlementFetchGen.current;
     try {
       const token = await auth.currentUser.getIdToken(true);
-      const res = await fetch(
-        `/api/getFanEntitlement?creatorId=${encodeURIComponent(creator.creatorId)}`,
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      const data = await res.json().catch(() => ({}));
+      const fetchEntitlement = async () => {
+        const res = await fetch(
+          `/api/getFanEntitlement?creatorId=${encodeURIComponent(creator.creatorId)}`,
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+        return { res, data: await res.json().catch(() => ({})) };
+      };
+      let { res, data } = await fetchEntitlement();
       if (gen !== entitlementFetchGen.current) return;
+      if (
+        res.ok &&
+        !(data as { subscribed?: boolean }).subscribed &&
+        creator.monetization?.freeAccessEnabled !== true
+      ) {
+        const repaired = await reconcileFanMembershipFromStripe();
+        if (gen !== entitlementFetchGen.current) return;
+        if (repaired) {
+          ({ res, data } = await fetchEntitlement());
+          if (gen !== entitlementFetchGen.current) return;
+        }
+      }
       if (!res.ok) {
         return;
       }
@@ -2500,7 +2555,7 @@ export const FanStorefrontView: React.FC = () => {
         entitlementHydratingRef.current = false;
       }
     }
-  }, [creator?.creatorId]);
+  }, [creator?.creatorId, creator?.monetization?.freeAccessEnabled, reconcileFanMembershipFromStripe]);
 
   useEffect(() => {
     if (typeof window === "undefined" || !creator?.creatorId || !isLoggedIn) return;
@@ -4507,7 +4562,14 @@ export const FanStorefrontView: React.FC = () => {
       }
     }
     if (autoSubscribeRedirectingRef.current) return;
-    void startSubscriptionCheckout({ auto: true });
+    void (async () => {
+      const repaired = await reconcileFanMembershipFromStripe();
+      if (repaired) {
+        await refetchMemberEntitlement();
+        return;
+      }
+      void startSubscriptionCheckout({ auto: true });
+    })();
   }, [
     needsPaidUpgrade,
     entitlementLoading,
@@ -4519,6 +4581,8 @@ export const FanStorefrontView: React.FC = () => {
     activeTab,
     creator?.handle,
     creator?.creatorId,
+    reconcileFanMembershipFromStripe,
+    refetchMemberEntitlement,
   ]);
   useEffect(() => {
     if (typeof window === "undefined" || showLanding) return;

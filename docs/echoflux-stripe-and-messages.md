@@ -36,7 +36,9 @@ This document defines the full behavior the Echoflux agent must follow for **Str
 |-------|--------|
 | **checkout.session.completed** (Connect) | If `metadata.type === 'subscription'`: create/update `creatorSubscribers/{creatorId}/subscribers/{fanId}`; set `creatorEntitlements/{creatorId}/grants/{fanId}.subscription = true`. If `metadata.type === 'product'`: create `orders` doc; add `productId` to grant’s `unlockedProductIds`; update `creatorStats/{creatorId}` (totalRevenueCents, totalOrders). If `metadata.type === 'post_unlock'`: order + append `postId` to `unlockedFanPostIds`. If `metadata.type === 'live_stream_ticket'`: order + append `streamId` to `unlockedLiveStreamIds`. Tips and other types: see `api/stripeWebhook` (`processFanHubCheckoutSessionCompleted`). |
 | **customer.subscription.updated** (Connect) | Update `creatorSubscribers` and `creatorEntitlements` from `subscription.metadata.creatorId` / `fanId`. |
-| **customer.subscription.deleted** (Connect) | Set subscriber status to canceled; grant `subscription = false`. |
+| **customer.subscription.deleted** (Connect) | Set subscriber status to canceled; grant `subscription = false`. **Ignore** the event when `subscription.id` does not match the stored `stripeSubscriptionId` (failed first checkout + successful retry). |
+| **customer.subscription.updated** (Connect, non-active) | Same stale-sub guard as deleted when revoking access. |
+| **POST reconcileFanCreatorSubscription** | Fan auth: if Stripe has active/trialing/past_due membership but Firestore is stale, repair subscriber + grant + fan row (used on login before auto-checkout). |
 | **charge.refunded** (Connect) | Find order by `stripePaymentIntentId`; set order `status = 'refunded'`; remove `productId` from grant’s `unlockedProductIds`; decrement `creatorStats` revenue and order count. |
 
 ### Firestore (Stripe-related)

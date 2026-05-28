@@ -22,6 +22,11 @@ import {
 import { applyCreatorAppClaim } from './_creatorAppClaim.js';
 import { pushForAdminAlert } from './_userWebPush.js';
 import { applyDigitalPackFulfillmentIfNeeded } from './_digitalPackFulfillment.js';
+import {
+  applyFanHubSubscriptionFromStripe,
+  fanHubSubscriptionLifecycleEventIsStale,
+  revokeFanHubSubscriptionFromStripe,
+} from './_fanHubSubscriptionLifecycle.js';
 
 // Check STRIPE_USE_TEST_MODE toggle first, then select appropriate key
 // Set STRIPE_USE_TEST_MODE=true in Vercel to use test mode, false or unset for live mode
@@ -1152,66 +1157,20 @@ async function processFanHubSubscriptionUpdated(
   const fanId = subscription.metadata?.fanId;
   if (!creatorId || !fanId) return false;
 
-  const now = new Date().toISOString();
   const raw = subscription.status;
-  let subStatus: string;
-  if (raw === 'active' || raw === 'trialing') {
-    subStatus = raw;
-  } else if (raw === 'canceled' || raw === 'unpaid' || raw === 'incomplete_expired') {
-    subStatus = 'canceled';
-  } else if (raw === 'past_due') {
-    subStatus = 'past_due';
-  } else {
-    subStatus = raw;
-  }
-  const periodEndSec = (subscription as { current_period_end?: number }).current_period_end;
-  const subscriptionCurrentPeriodEnd = periodEndSec
-    ? new Date(periodEndSec * 1000).toISOString()
-    : null;
-  const cancelAtPeriodEnd = !!(subscription as { cancel_at_period_end?: boolean }).cancel_at_period_end;
-  const grantActive = subStatus === 'active' || subStatus === 'trialing';
-
-  const subRef = db.collection('creatorSubscribers').doc(creatorId).collection('subscribers').doc(fanId);
-  await subRef.set(
-    {
-      status: subStatus,
-      stripeSubscriptionId: subscription.id,
-      cancelAtPeriodEnd,
-      currentPeriodEnd: subscriptionCurrentPeriodEnd,
-      updatedAt: now,
-    },
-    { merge: true },
-  );
-  const grantRef = db.collection('creatorEntitlements').doc(creatorId).collection('grants').doc(fanId);
-  const grantSnap = await grantRef.get();
-  const existing = grantSnap.data() as { unlockedProductIds?: string[] } | undefined;
-  await grantRef.set(
-    { subscription: grantActive, unlockedProductIds: existing?.unlockedProductIds ?? [], updatedAt: now },
-    { merge: true },
-  );
-
-  const stripeCustomerId = stripeRefId(subscription.customer);
-  const fanRef = db.collection('creators').doc(creatorId).collection('fans').doc(fanId);
-  const fanSnap = await fanRef.get();
-  if (fanSnap.exists) {
-    const fanPatch: Record<string, unknown> = {
-      subscriptionStatus: subStatus,
-      cancelAtPeriodEnd,
-      subscriptionCurrentPeriodEnd,
-      updatedAt: now,
-    };
-    if (stripeCustomerId && stripeCustomerId.startsWith('cus_')) {
-      fanPatch.stripeCustomerId = stripeCustomerId;
-    }
-    await fanRef.update(fanPatch as any);
-    try {
-      await reconcileFanHubFanPreferenceForMember(db, creatorId, fanId, now, 'stripe_subscription_updated');
-    } catch (e) {
-      console.error('reconcileFanHubFanPreference (subscription updated):', e);
-    }
+  const grantActive = raw === 'active' || raw === 'trialing';
+  if (
+    !grantActive &&
+    (await fanHubSubscriptionLifecycleEventIsStale(db, creatorId, fanId, subscription.id))
+  ) {
+    console.log(
+      `Fan hub: ignore stale subscription.updated (${raw}) sub=${subscription.id} creator=${creatorId} fan=${fanId}`,
+    );
+    return true;
   }
 
-  console.log(`Fan hub: subscription updated creator=${creatorId} fan=${fanId} status=${subStatus}`);
+  await applyFanHubSubscriptionFromStripe(db, subscription, 'stripe_subscription_updated');
+  console.log(`Fan hub: subscription updated creator=${creatorId} fan=${fanId} status=${raw}`);
   return true;
 }
 
@@ -1221,54 +1180,14 @@ async function processFanHubSubscriptionDeleted(db: Firestore, subscription: Str
   const fanId = subscription.metadata?.fanId;
   if (!creatorId || !fanId) return false;
 
-  const now = new Date().toISOString();
-  const subTs = subscription as Stripe.Subscription & { current_period_end?: number; ended_at?: number | null };
-  const cpe = subTs.current_period_end;
-  const endedAt = subTs.ended_at;
-  let periodEndIso: string | null = null;
-  if (typeof cpe === 'number' && Number.isFinite(cpe)) {
-    periodEndIso = new Date(cpe * 1000).toISOString();
-  } else if (typeof endedAt === 'number' && Number.isFinite(endedAt)) {
-    periodEndIso = new Date(endedAt * 1000).toISOString();
+  if (await fanHubSubscriptionLifecycleEventIsStale(db, creatorId, fanId, subscription.id)) {
+    console.log(
+      `Fan hub: ignore stale subscription.deleted sub=${subscription.id} creator=${creatorId} fan=${fanId}`,
+    );
+    return true;
   }
 
-  const subRef = db.collection('creatorSubscribers').doc(creatorId).collection('subscribers').doc(fanId);
-  await subRef.set(
-    {
-      status: 'canceled',
-      updatedAt: now,
-      ...(periodEndIso ? { currentPeriodEnd: periodEndIso } : {}),
-    },
-    { merge: true },
-  );
-  const grantRef = db.collection('creatorEntitlements').doc(creatorId).collection('grants').doc(fanId);
-  const grantSnap = await grantRef.get();
-  const existing = grantSnap.data() as { unlockedProductIds?: string[] } | undefined;
-  await grantRef.set({ subscription: false, unlockedProductIds: existing?.unlockedProductIds ?? [], updatedAt: now }, { merge: true });
-
-  const fanRef = db.collection('creators').doc(creatorId).collection('fans').doc(fanId);
-  const fanSnap = await fanRef.get();
-  if (fanSnap.exists) {
-    // Do not clear subscriptionCurrentPeriodEnd: Fan Hub UI uses it for "X days left (until …)" after cancel.
-    // Stripe's deleted object still includes current_period_end / ended_at; if absent, keep existing Firestore value.
-    const fanUpdate: Record<string, unknown> = {
-      subscriptionStatus: 'canceled',
-      canceledAt: now,
-      cancelAtPeriodEnd: false,
-      updatedAt: now,
-    };
-    if (periodEndIso) {
-      fanUpdate.subscriptionCurrentPeriodEnd = periodEndIso;
-      fanUpdate.subscriptionEndDate = periodEndIso;
-    }
-    await fanRef.update(fanUpdate as any);
-    try {
-      await reconcileFanHubFanPreferenceForMember(db, creatorId, fanId, now, 'stripe_subscription_canceled');
-    } catch (e) {
-      console.error('reconcileFanHubFanPreference (subscription deleted):', e);
-    }
-  }
-
+  await revokeFanHubSubscriptionFromStripe(db, subscription);
   console.log(`Fan hub: subscription deleted creator=${creatorId} fan=${fanId}`);
   return true;
 }
