@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { useAppContext } from "./AppContext";
 import { auth, db } from "../firebaseConfig";
-import { collection, query, getDocs, getDoc, doc, addDoc, setDoc, serverTimestamp, updateDoc, where } from "firebase/firestore";
+import { collection, query, getDocs, getDoc, doc, setDoc, updateDoc, where } from "firebase/firestore";
+import type { TreatProduct } from "../types";
 import {
   formatFanDisplayLabel,
   initialsFromFanLabel,
@@ -521,8 +522,11 @@ export const FanHubUsers: React.FC = () => {
   // Manage user modal state
   const [newPassword, setNewPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
-  const [grantTreatType, setGrantTreatType] = useState("");
+  const [grantProductId, setGrantProductId] = useState("");
   const [grantTreatCount, setGrantTreatCount] = useState(1);
+  const [grantProducts, setGrantProducts] = useState<TreatProduct[]>([]);
+  const [grantProductsLoading, setGrantProductsLoading] = useState(false);
+  const [grantingProduct, setGrantingProduct] = useState(false);
   
   // Grant video minutes state
   const [grantVideoMinutes, setGrantVideoMinutes] = useState(0);
@@ -535,6 +539,32 @@ export const FanHubUsers: React.FC = () => {
   // Empty placeholder - users will be loaded from database
   // Demo users are not shown to new creators
   const DEMO_USERS: FanUser[] = [];
+
+  const loadGrantProducts = useCallback(async () => {
+    if (!creatorId) return;
+    setGrantProductsLoading(true);
+    try {
+      const token = auth.currentUser ? await auth.currentUser.getIdToken() : null;
+      const res = await fetch(
+        `/api/products?creatorId=${encodeURIComponent(creatorId)}&includeArchived=false`,
+        { headers: token ? { Authorization: `Bearer ${token}` } : {} },
+      );
+      if (!res.ok) return;
+      const data = (await res.json()) as { products?: TreatProduct[] };
+      const prods = (data.products || []).filter(
+        (p) => p.visible !== false && !p.archived && p.type !== "subscription",
+      );
+      setGrantProducts(prods);
+    } catch (e) {
+      console.warn("FanHubUsers: load grant products", e);
+    } finally {
+      setGrantProductsLoading(false);
+    }
+  }, [creatorId]);
+
+  useEffect(() => {
+    if (creatorId) void loadGrantProducts();
+  }, [creatorId, loadGrantProducts]);
 
   const loadUsers = useCallback(async () => {
     if (!creatorId) return;
@@ -1501,7 +1531,7 @@ export const FanHubUsers: React.FC = () => {
     setActiveMenu(null);
     setNewPassword("");
     setShowPassword(false);
-    setGrantTreatType("");
+    setGrantProductId("");
     setGrantTreatCount(1);
   };
 
@@ -1607,7 +1637,7 @@ export const FanHubUsers: React.FC = () => {
       setSelectedUser(null);
       setNewPassword("");
       setShowPassword(false);
-      setGrantTreatType("");
+      setGrantProductId("");
       setGrantTreatCount(1);
     } catch (e) {
       console.error("creatorCancelFanSubscription:", e);
@@ -1668,7 +1698,7 @@ export const FanHubUsers: React.FC = () => {
       setSelectedUser(null);
       setNewPassword("");
       setShowPassword(false);
-      setGrantTreatType("");
+      setGrantProductId("");
       setGrantTreatCount(1);
     } catch (e) {
       console.error("creatorReconcileFanMembership:", e);
@@ -1679,22 +1709,48 @@ export const FanHubUsers: React.FC = () => {
   };
 
   const handleGrantTreat = async () => {
-    if (!creatorId || !selectedUser || !grantTreatType) return;
+    if (!creatorId || !selectedUser || !grantProductId) return;
+    const product = grantProducts.find((p) => p.id === grantProductId);
+    if (!product) {
+      showToast?.("Select a product from your store", "error");
+      return;
+    }
+    setGrantingProduct(true);
     try {
-      // Add treat grant to Firestore
-      await addDoc(collection(db, "creators", creatorId, "treatGrants"), {
-        fanEmail: selectedUser.email,
-        fanName: selectedUser.name,
-        treatType: grantTreatType,
-        quantity: grantTreatCount,
-        grantedAt: serverTimestamp(),
+      const token = auth.currentUser ? await auth.currentUser.getIdToken() : null;
+      if (!token) {
+        showToast?.("Please sign in again", "error");
+        return;
+      }
+      const res = await fetch("/api/creatorGrantStoreProduct", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          fanId: selectedUser.id,
+          fanEmail: selectedUser.email,
+          fanName: selectedUser.name,
+          productId: grantProductId,
+          quantity: grantTreatCount,
+        }),
       });
-      showToast?.(`Granted ${grantTreatCount}x ${grantTreatType.replace(/_/g, " ")} to ${selectedUser.name}`, "success");
-      setGrantTreatType("");
+      const data = (await res.json().catch(() => ({}))) as { error?: string; message?: string };
+      if (!res.ok) {
+        throw new Error(data.error || `Request failed (${res.status})`);
+      }
+      showToast?.(
+        data.message || `Granted ${grantTreatCount}× ${product.title} to ${selectedUser.name}`,
+        "success",
+      );
+      setGrantProductId("");
       setGrantTreatCount(1);
     } catch (error) {
-      console.error("Error granting treat:", error);
-      showToast?.("Failed to grant", "error");
+      console.error("creatorGrantStoreProduct:", error);
+      showToast?.(error instanceof Error ? error.message : "Failed to grant", "error");
+    } finally {
+      setGrantingProduct(false);
     }
   };
 
@@ -2537,23 +2593,28 @@ export const FanHubUsers: React.FC = () => {
               <div>
                 <h5 className="text-sm font-semibold text-gray-900 dark:text-white mb-2">Grant store redemption</h5>
                 <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
-                  Select a product and how many to grant. The member will receive an in-app notification.
+                  Free grant — no Stripe charge. Creates a purchase row, notifies the member, and shows in Purchases (schedule deliverables like a normal order).
                 </p>
                 {selectedUser.role === "member" ? (
+                  grantProductsLoading ? (
+                    <p className="text-sm text-gray-500 dark:text-gray-400">Loading store products…</p>
+                  ) : grantProducts.length === 0 ? (
+                    <p className="text-sm text-gray-500 dark:text-gray-400 italic">
+                      No store products yet. Add products in Treats / Store first.
+                    </p>
+                  ) : (
                   <div className="flex items-center gap-2">
                     <select
-                      value={grantTreatType}
-                      onChange={(e) => setGrantTreatType(e.target.value)}
+                      value={grantProductId}
+                      onChange={(e) => setGrantProductId(e.target.value)}
                       className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
                     >
                       <option value="">Select a product…</option>
-                      <option value="tip">Tip</option>
-                      <option value="voice_note_30s">30 sec voice note</option>
-                      <option value="voice_note_60s">60 sec voice note</option>
-                      <option value="private_video_reply">Private video reply</option>
-                      <option value="birthday_message">Birthday message</option>
-                      <option value="live_chat_15m">15 min live chat</option>
-                      <option value="live_chat_30m">30 min live chat</option>
+                      {grantProducts.map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.title}
+                        </option>
+                      ))}
                     </select>
                     <input
                       type="number"
@@ -2566,12 +2627,13 @@ export const FanHubUsers: React.FC = () => {
                     <button
                       type="button"
                       onClick={handleGrantTreat}
-                      disabled={!grantTreatType}
+                      disabled={!grantProductId || grantingProduct}
                       className="px-4 py-2 fh-btn rounded-lg text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                      Grant
+                      {grantingProduct ? "Granting…" : "Grant"}
                     </button>
                   </div>
+                  )
                 ) : (
                   <p className="text-sm text-gray-500 dark:text-gray-400 italic">
                     Only available for members.
@@ -2667,7 +2729,7 @@ export const FanHubUsers: React.FC = () => {
                   setSelectedUser(null);
                   setNewPassword("");
                   setShowPassword(false);
-                  setGrantTreatType("");
+                  setGrantProductId("");
                   setGrantTreatCount(1);
                 }}
                 className="px-6 py-2.5 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg text-sm font-medium transition-colors"
@@ -2681,7 +2743,7 @@ export const FanHubUsers: React.FC = () => {
                   setSelectedUser(null);
                   setNewPassword("");
                   setShowPassword(false);
-                  setGrantTreatType("");
+                  setGrantProductId("");
                   setGrantTreatCount(1);
                 }}
                 className="flex-1 px-6 py-2.5 fh-btn rounded-lg text-sm font-medium"
