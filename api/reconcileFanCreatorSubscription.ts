@@ -44,10 +44,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     const fanEmail =
-      typeof decoded.email === "string" ? decoded.email.trim().toLowerCase() : undefined;
-    const result = await reconcileFanHubPaidSubscriptionFromStripe(db, creatorId, decoded.uid, {
-      fanEmail,
-    });
+      typeof decoded.email === "string" ? decoded.email.trim().toLowerCase() : "";
+    const result = await reconcileFanHubPaidSubscriptionFromStripe(db, creatorId, decoded.uid, fanEmail);
     return res.status(200).json({
       reconciled: result.reconciled,
       subscribed: result.reconciled,

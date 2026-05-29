@@ -16,6 +16,8 @@ export async function readFanCheckoutFetchResult(res: Response): Promise<{
   ok: boolean;
   url?: string;
   error?: string;
+  code?: string;
+  subscribed?: boolean;
 }> {
   const text = await res.text();
   try {
@@ -26,6 +28,8 @@ export async function readFanCheckoutFetchResult(res: Response): Promise<{
           message?: string;
           details?: string;
           hint?: string;
+          code?: string;
+          subscribed?: boolean;
         })
       : {};
     const errStr = typeof data.error === "string" ? data.error.trim() : "";
@@ -41,6 +45,8 @@ export async function readFanCheckoutFetchResult(res: Response): Promise<{
     return {
       ok: res.ok,
       url: typeof data.url === "string" ? data.url : undefined,
+      code: typeof data.code === "string" ? data.code : undefined,
+      subscribed: data.subscribed === true,
       error:
         serverMessage
           ? serverMessage

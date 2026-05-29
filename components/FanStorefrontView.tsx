@@ -3229,7 +3229,20 @@ export const FanStorefrontView: React.FC = () => {
           ...(cancelUrl ? { cancelUrl } : {}),
         }),
       });
-      const { ok, url, error } = await readFanCheckoutFetchResult(res);
+      const { ok, url, error, code, subscribed } = await readFanCheckoutFetchResult(res);
+      if (code === "ALREADY_SUBSCRIBED" || subscribed) {
+        try {
+          sessionStorage.setItem(fanStorefrontSkipAutoSubscribeKey(creator.creatorId), "1");
+        } catch {
+          /* ignore */
+        }
+        await refetchMemberEntitlement();
+        showToast?.(
+          error || "You already have an active membership — opening the member hub.",
+          "success",
+        );
+        return true;
+      }
       if (!ok || !url) throw new Error(error || "Checkout failed");
       window.location.href = url;
       return true;

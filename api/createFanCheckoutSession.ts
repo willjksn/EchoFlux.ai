@@ -389,6 +389,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // ==================== SUBSCRIPTION ====================
     if (type === "subscription") {
+      const { assertFanHubMemberMayStartSubscriptionCheckout } = await import(
+        "./_fanHubSubscriptionLifecycle.js"
+      );
+      const membershipGate = await assertFanHubMemberMayStartSubscriptionCheckout(
+        db,
+        creatorId,
+        fanId,
+        fanEmail,
+      );
+      if (!membershipGate.ok) {
+        return res.status(membershipGate.status).json({
+          error: membershipGate.error,
+          code: membershipGate.code,
+          subscribed: membershipGate.subscribed,
+          subscriptionId: membershipGate.subscriptionId ?? null,
+        });
+      }
+
       const subAmountCents = Math.max(100, Number(subscriptionPriceCents) || DEFAULT_SUBSCRIPTION_CENTS);
 
       const sessionParams: Stripe.Checkout.SessionCreateParams = {
