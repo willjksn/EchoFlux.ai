@@ -21,6 +21,7 @@ export type FanNotificationType =
   | 'session_reminder'
   | 'live_session_scheduled'
   | 'purchase_confirmed'
+  | 'creator_gift_granted'
   | 'content_unlocked';
 
 export interface FanNotification {
@@ -303,7 +304,12 @@ function resolveMemberHubPushLink(
       : `${base}/messages`;
   }
   if (type === "new_post") return `${base}/feed`;
-  if (type === "purchase_confirmed" || type === "content_unlocked" || type === "live_session_scheduled") {
+  if (
+    type === "purchase_confirmed" ||
+    type === "creator_gift_granted" ||
+    type === "content_unlocked" ||
+    type === "live_session_scheduled"
+  ) {
     const orderId = data?.orderId?.trim();
     return orderId ? `${base}/purchases?orderId=${encodeURIComponent(orderId)}` : `${base}/purchases`;
   }

@@ -62,6 +62,7 @@ export function resolveFanHubNotificationTarget(
   }
   if (
     t === 'purchase_confirmed' ||
+    t === 'creator_gift_granted' ||
     t === 'content_unlocked' ||
     t === 'creator_new_purchase' ||
     destination === 'purchases'

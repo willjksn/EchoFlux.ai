@@ -4,6 +4,7 @@ import { isGuestCheckoutFanId } from "../src/lib/fanHubOrderLedger.js";
 import { reconcileFanHubFanPreferenceForMember } from "./_syncFanHubFanPreference.js";
 import { sendCreatorHubNotification, sendFanNotification } from "./_fanNotifications.js";
 import { applyDigitalPackFulfillmentIfNeeded } from "./_digitalPackFulfillment.js";
+import { isJointLiveSessionProductId } from "../src/lib/treatSessionClassification.js";
 
 export type GrantFanHubStoreProductInput = {
   creatorId: string;
@@ -29,6 +30,57 @@ function orderTypeForProduct(productType: string): "tip" | "product" {
 function isNonDeliverableProductType(productType: string): boolean {
   const t = productType.trim().toLowerCase();
   return t === "tip" || t === "subscription";
+}
+
+function productNeedsCreatorScheduling(productType: string, productId: string): boolean {
+  const t = productType.trim().toLowerCase();
+  if (t === "chat_session") return true;
+  return isJointLiveSessionProductId(productId);
+}
+
+function buildFanGrantNotificationCopy(input: {
+  productTitle: string;
+  quantity: number;
+  autoDelivered: boolean;
+  isTip: boolean;
+  needsScheduling: boolean;
+  needsDelivery: boolean;
+}): { type: "purchase_confirmed" | "creator_gift_granted"; title: string; body: string } {
+  const item =
+    input.quantity > 1 ? `${input.quantity}× ${input.productTitle}` : input.productTitle;
+  if (input.autoDelivered) {
+    return {
+      type: "purchase_confirmed",
+      title: "Your gift is ready",
+      body: `Your creator granted you ${item}. Open Purchases to view it now.`,
+    };
+  }
+  if (input.isTip) {
+    return {
+      type: "creator_gift_granted",
+      title: "You received a gift",
+      body: `Your creator granted you ${item}. It's listed in Purchases.`,
+    };
+  }
+  if (input.needsScheduling) {
+    return {
+      type: "creator_gift_granted",
+      title: "Gift added to Purchases",
+      body: `Your creator granted you ${item}. Open Purchases — they'll schedule your session when it's ready.`,
+    };
+  }
+  if (input.needsDelivery) {
+    return {
+      type: "creator_gift_granted",
+      title: "Gift added to Purchases",
+      body: `Your creator granted you ${item}. Open Purchases to track it — they'll deliver it here when it's ready.`,
+    };
+  }
+  return {
+    type: "creator_gift_granted",
+    title: "Gift added to Purchases",
+    body: `Your creator granted you ${item}. Open Purchases for status.`,
+  };
 }
 
 export async function grantFanHubStoreProductToFan(
@@ -172,20 +224,32 @@ export async function grantFanHubStoreProductToFan(
     console.error("grantFanHubStoreProduct: creator notification", notifyErr);
   }
 
+  const autoDelivered = Boolean(packPatch);
+  const needsScheduling =
+    !nonDeliverable && !autoDelivered && productNeedsCreatorScheduling(productType, productId);
+  const needsDelivery =
+    !nonDeliverable && !autoDelivered && !needsScheduling;
+  const fanNotify = buildFanGrantNotificationCopy({
+    productTitle,
+    quantity,
+    autoDelivered,
+    isTip: nonDeliverable && productType.toLowerCase() === "tip",
+    needsScheduling,
+    needsDelivery,
+  });
   try {
     await sendFanNotification({
       fanId,
-      type: "purchase_confirmed",
-      title: "You received a gift",
-      body:
-        quantity > 1
-          ? `Your creator granted you ${quantity}× ${productTitle}. Open Purchases to view.`
-          : `Your creator granted you ${productTitle}. Open Purchases to view.`,
+      type: fanNotify.type,
+      title: fanNotify.title,
+      body: fanNotify.body,
       data: {
         orderId: orderIds[0] || "",
         creatorId,
         productId,
         destination: "purchases",
+        grantedByCreator: "true",
+        readyToView: autoDelivered ? "true" : "false",
       },
     });
   } catch (notifyErr) {

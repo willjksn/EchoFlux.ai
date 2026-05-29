@@ -22,7 +22,12 @@ export function resolveCreatorFanHubPushLink(type: string, data?: Record<string,
     params.set("tab", "sessions");
   } else if (t === "live_session_scheduled") {
     params.set("tab", d.jointKind === "video_call" ? "videoChats" : "sessions");
-  } else if (t === "purchase_confirmed" || t === "content_unlocked" || t === "creator_new_purchase") {
+  } else if (
+    t === "purchase_confirmed" ||
+    t === "creator_gift_granted" ||
+    t === "content_unlocked" ||
+    t === "creator_new_purchase"
+  ) {
     params.set("tab", "purchases");
     const orderId = d.orderId?.trim();
     if (orderId) params.set("orderId", orderId);

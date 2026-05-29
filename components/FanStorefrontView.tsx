@@ -400,6 +400,7 @@ type FanDeliveryPurchase = {
   deliveredAt?: string | null;
   deliveryItems?: import("../types").DigitalPackMediaItem[];
   digitalPackFulfillment?: boolean;
+  grantedByCreator?: boolean;
 };
 
 type DmLiveSession = {
@@ -715,9 +716,13 @@ function storefrontMemberThemeColors(
 }
 
 function fanPurchaseRowStatus(o: FanDeliveryPurchase): string {
-  if (o.type === "tip") return "Tip paid";
+  if (o.type === "tip") return o.grantedByCreator ? "Gift tip" : "Tip paid";
   if (o.type === "subscription") return "Membership active";
   if (o.type === "post_unlock") return "Unlocked";
+  if (o.grantedByCreator && o.deliveryStatus !== "delivered") {
+    if (o.scheduleStatus === "scheduled") return "Gift — session scheduled";
+    return "Gift — awaiting delivery";
+  }
   if (o.scheduleStatus === "cancelled") return "Cancelled";
   if (o.type === "live_stream_ticket") {
     if (o.scheduleStatus === "expired") return "Expired";
@@ -806,6 +811,21 @@ function FanMemberPurchaseItemBody({
   }
   if (o.deliveryStatus === "delivered") {
     return <FanMemberPurchaseDeliveryContent o={o} primary={primary} />;
+  }
+  if (o.grantedByCreator) {
+    if (o.scheduleStatus === "scheduled") {
+      return (
+        <p className="fan-member-purchase-body-note">
+          Your creator granted this gift. Your session is scheduled — details are in Purchases.
+        </p>
+      );
+    }
+    return (
+      <p className="fan-member-purchase-body-note">
+        Your creator granted this gift. It&apos;s in Purchases now — they&apos;ll deliver your{" "}
+        {o.productTitle || "item"} here when it&apos;s ready (you won&apos;t see the video or audio until then).
+      </p>
+    );
   }
   return <p className="fan-member-purchase-body-note">Pending delivery from the creator.</p>;
 }
@@ -2926,6 +2946,7 @@ export const FanStorefrontView: React.FC = () => {
               return {
                 deliveryItems: items.length > 0 ? items : undefined,
                 digitalPackFulfillment: raw.digitalPackFulfillment === true ? true : undefined,
+                grantedByCreator: raw.grantedByCreator === true,
               };
             })(),
           });
@@ -2975,6 +2996,7 @@ export const FanStorefrontView: React.FC = () => {
                 return {
                   deliveryItems: items.length > 0 ? items : undefined,
                   digitalPackFulfillment: raw.digitalPackFulfillment === true ? true : undefined,
+                  grantedByCreator: raw.grantedByCreator === true,
                 };
               })(),
             });
@@ -4740,6 +4762,7 @@ export const FanStorefrontView: React.FC = () => {
       const target = resolveFanHubNotificationTarget(p.type, d);
       if (target.tab === "purchases") {
         if (target.orderId) setHighlightMemberPurchaseOrderId(target.orderId);
+        setFanPurchasesRefreshNonce((n) => n + 1);
         goTab("purchases");
         return;
       }

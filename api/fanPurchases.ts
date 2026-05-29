@@ -34,6 +34,7 @@ type FanPurchase = {
   deliveredAt?: string | null;
   deliveryItems?: { type: "image" | "video" | "audio"; url: string; sortOrder?: number }[];
   digitalPackFulfillment?: boolean;
+  grantedByCreator?: boolean;
 };
 
 function unknownDateToMs(raw: unknown): number | null {
@@ -146,6 +147,7 @@ function mapDocToPurchase(id: string, d: Record<string, unknown>): FanPurchase {
       return items.length > 0 ? items : undefined;
     })(),
     digitalPackFulfillment: orderHasAutoDigitalPackFulfillment(d) ? true : undefined,
+    grantedByCreator: d.grantedByCreator === true,
   };
 }
 
