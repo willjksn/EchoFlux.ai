@@ -1533,6 +1533,7 @@ export const FanHubUsers: React.FC = () => {
     setShowPassword(false);
     setGrantProductId("");
     setGrantTreatCount(1);
+    void loadGrantProducts();
   };
 
   const handleSetPassword = async () => {
