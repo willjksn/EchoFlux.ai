@@ -1,4 +1,5 @@
 import type { Firestore } from "firebase-admin/firestore";
+import { isChatSessionLiveForDmNotify } from "../src/lib/chatSessionLive.js";
 
 type ChatSessionRow = {
   status?: string;
@@ -6,32 +7,6 @@ type ChatSessionRow = {
   createdAt?: string;
   durationMinutes?: number;
 };
-
-function toMs(iso: unknown): number {
-  if (typeof iso !== "string" || !iso.trim()) return 0;
-  const t = Date.parse(iso);
-  return Number.isFinite(t) ? t : 0;
-}
-
-/**
- * Premium chat session still in progress (matches `api/chatSession.ts` expiry rules).
- * Expired rows still marked active/paused are NOT live — DM notifications should fire again.
- */
-export function isChatSessionLiveForDmNotify(data: ChatSessionRow, nowMs = Date.now()): boolean {
-  const st = typeof data.status === "string" ? data.status.trim().toLowerCase() : "";
-  if (st !== "active" && st !== "paused") return false;
-
-  const startedAtMs = toMs(data.startedAt) || toMs(data.createdAt);
-  const durationMinutes =
-    typeof data.durationMinutes === "number" && Number.isFinite(data.durationMinutes)
-      ? Math.max(1, Math.min(180, Math.round(data.durationMinutes)))
-      : 15;
-
-  if (startedAtMs <= 0) return true;
-
-  const endsAtMs = startedAtMs + durationMinutes * 60_000;
-  return nowMs < endsAtMs;
-}
 
 function isExpiredActiveOrPausedSession(data: ChatSessionRow, nowMs: number): boolean {
   const st = typeof data.status === "string" ? data.status.trim().toLowerCase() : "";

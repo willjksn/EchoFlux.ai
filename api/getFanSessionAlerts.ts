@@ -1,6 +1,7 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { getAdminDb } from "./_firebaseAdmin.js";
 import { verifyAuth } from "./verifyAuth.js";
+import { isChatSessionLiveForDmNotify } from "../src/lib/chatSessionLive.js";
 
 type SessionAlertKind = "chat" | "video";
 
@@ -34,14 +35,6 @@ function withinWindow(startsAtIso: string | undefined, nowMs: number, minutesBef
   const startMs = new Date(startsAtIso).getTime();
   if (!Number.isFinite(startMs)) return false;
   return nowMs >= startMs - minutesBefore * 60 * 1000;
-}
-
-function durationToMs(input: unknown): number {
-  const mins =
-    typeof input === "number" && Number.isFinite(input)
-      ? Math.max(1, Math.min(180, Math.round(input)))
-      : 15;
-  return mins * 60 * 1000;
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -122,16 +115,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             (typeof d.fanEmail === "string" && d.fanEmail.trim().toLowerCase() === fanEmail)));
       if (!fanMatch) return;
 
-      const startsAt = tsToIso(d.startedAt) || tsToIso(d.scheduledStart) || tsToIso(d.scheduledFor) || tsToIso(d.createdAt);
       const isActive = status === "active" || status === "paused";
-
-      // For chat sessions, only show when actively live.
       if (!isActive) return;
 
-      const startMs = startsAt ? new Date(startsAt).getTime() : 0;
-      const endsAtMs = startMs > 0 ? startMs + durationToMs(d.durationMinutes) : 0;
-      const isExpired = endsAtMs > 0 && nowMs >= endsAtMs;
-      if (isExpired) {
+      const liveFields = {
+        status,
+        startedAt: tsToIso(d.startedAt) || tsToIso(d.scheduledStart) || tsToIso(d.scheduledFor),
+        createdAt: tsToIso(d.createdAt),
+        durationMinutes: d.durationMinutes,
+      };
+      if (!isChatSessionLiveForDmNotify(liveFields, nowMs)) {
         // Auto-close stale "active" sessions so UI panels disappear without manual cleanup.
         void doc.ref.set(
           {
@@ -143,6 +136,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         );
         return;
       }
+
+      const startsAt =
+        tsToIso(d.startedAt) || tsToIso(d.scheduledStart) || tsToIso(d.scheduledFor) || tsToIso(d.createdAt);
 
       alerts.push({
         id: doc.id,

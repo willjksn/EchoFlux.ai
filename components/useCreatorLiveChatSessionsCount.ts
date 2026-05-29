@@ -2,10 +2,11 @@ import { useEffect, useState } from "react";
 import { collection, limit, onSnapshot, query, where } from "firebase/firestore";
 import { auth, db } from "../firebaseConfig";
 import { onAuthStateChanged } from "firebase/auth";
+import { isChatSessionLiveForDmNotify } from "../src/lib/chatSessionLive";
 
 /**
- * Count of chatSessions for the signed-in creator with status active or paused.
- * Used to badge Fan Hub "Chat Session" tab so live premium sessions are visible without opening Messages.
+ * Count of non-expired chatSessions for the signed-in creator (active/paused and still within duration).
+ * Stale rows left as active in Firestore must not hide Fan Hub message notifications.
  */
 export function useCreatorLiveChatSessionsCount(enabled: boolean): number {
   const [uid, setUid] = useState<string | null>(() => auth.currentUser?.uid ?? null);
@@ -25,14 +26,20 @@ export function useCreatorLiveChatSessionsCount(enabled: boolean): number {
     const off = onSnapshot(
       q,
       (snap) => {
+        const nowMs = Date.now();
         let n = 0;
         snap.forEach((d) => {
-          const st = (d.data() as { status?: string }).status;
-          if (st === "active" || st === "paused") n += 1;
+          const data = d.data() as {
+            status?: string;
+            startedAt?: string;
+            createdAt?: string;
+            durationMinutes?: number;
+          };
+          if (isChatSessionLiveForDmNotify(data, nowMs)) n += 1;
         });
         setCount(n);
       },
-      () => setCount(0)
+      () => setCount(0),
     );
     return () => off();
   }, [enabled, uid]);

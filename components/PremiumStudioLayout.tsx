@@ -103,9 +103,9 @@ export const PremiumStudioLayout: React.FC<PremiumStudioLayoutProps> = ({ childr
 
   const unreadMessagesTabCount = useUnreadNewMessageNotificationCount(isFanHub ? null : false);
   const liveChatSessionsCount = useCreatorLiveChatSessionsCount(Boolean(isFanHub));
-  /** Live premium chat uses the same thread — suppress message tab noise + bell (server also skips new_message notify). */
-  const suppressFanHubDmNotifications = isFanHub && liveChatSessionsCount > 0;
-  const messagesTabBadgeCount = suppressFanHubDmNotifications ? 0 : unreadMessagesTabCount;
+  /** During a truly live premium chat, hide the Messages tab badge only (bell stays visible for purchases, etc.). */
+  const suppressFanHubMessagesTabBadge = isFanHub && liveChatSessionsCount > 0;
+  const messagesTabBadgeCount = suppressFanHubMessagesTabBadge ? 0 : unreadMessagesTabCount;
 
   const handleFanHubNotificationNavigate = useCallback(
     (payload: FanHubNotificationNavigatePayload) => {
@@ -323,7 +323,6 @@ export const PremiumStudioLayout: React.FC<PremiumStudioLayoutProps> = ({ childr
             iconColor={fanHubSurfaceIsDark ? '#e2e8f0' : effectiveFanTheme.text}
             className="shrink-0"
             onNavigate={handleFanHubNotificationNavigate}
-            hidden={suppressFanHubDmNotifications}
             showToast={showToast}
             enablePushOptIn
             pushOptInMode="creator"
