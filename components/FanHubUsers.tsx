@@ -433,12 +433,14 @@ function showStripeSubscriptionCancelInManageModal(u: FanUser): boolean {
   return false;
 }
 
-/** Manage User modal: restore paid access from Stripe when Firestore is stale (failed retry, duplicate checkout). */
+/** Manage User modal: restore paid access from Stripe (including when UI still shows Active but grants/login are stale). */
 function showReconcileMembershipInManageModal(u: FanUser): boolean {
-  if (u.role !== "member" || !u.email?.trim()) return false;
-  const st = (u.subscriptionStatus || "").toLowerCase().trim();
-  if ((st === "active" || st === "trialing") && u.plan === "Active") return false;
-  return true;
+  if (u.role === "admin" || !u.email?.trim()) return false;
+  if (u.role === "member") return true;
+  const st = (u.subscriptionStatus || "").trim();
+  if (st) return true;
+  if ((u.lifetimeMembershipCents ?? 0) > 0) return true;
+  return false;
 }
 
 function getAvatarColor(name: string): string {
@@ -2456,6 +2458,23 @@ export const FanHubUsers: React.FC = () => {
                 </div>
               </div>
 
+              {showReconcileMembershipInManageModal(selectedUser) && (
+                <div>
+                  <h5 className="text-sm font-semibold text-gray-900 dark:text-white mb-2">Restore membership</h5>
+                  <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
+                    Sync their active Stripe subscription into Fan Hub if they paid but still see checkout or cannot log in. Does not charge them again.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={handleCreatorReconcileFanMembership}
+                    disabled={reconcileMembershipLoading}
+                    className="w-full px-4 py-2.5 fh-btn rounded-lg text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {reconcileMembershipLoading ? "Syncing from Stripe…" : "Restore access from Stripe"}
+                  </button>
+                </div>
+              )}
+
               {/* Change Password Section */}
               <div>
                 <h5 className="text-sm font-semibold text-gray-900 dark:text-white mb-3">Change password</h5>
@@ -2495,23 +2514,6 @@ export const FanHubUsers: React.FC = () => {
                   Sends an email to {selectedUser.email} with a secure password reset link through your email provider.
                 </p>
               </div>
-
-              {showReconcileMembershipInManageModal(selectedUser) && (
-                <div>
-                  <h5 className="text-sm font-semibold text-gray-900 dark:text-white mb-2">Restore membership</h5>
-                  <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
-                    If they paid on Stripe but still see checkout or lost access after a failed first attempt, sync their active subscription into Fan Hub. Does not charge them again.
-                  </p>
-                  <button
-                    type="button"
-                    onClick={handleCreatorReconcileFanMembership}
-                    disabled={reconcileMembershipLoading}
-                    className="w-full px-4 py-2.5 fh-btn rounded-lg text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {reconcileMembershipLoading ? "Syncing from Stripe…" : "Restore access from Stripe"}
-                  </button>
-                </div>
-              )}
 
               {/* Cancel Stripe subscription (creator) — between password and grant store; scroll modal if needed */}
               {showStripeSubscriptionCancelInManageModal(selectedUser) && (
