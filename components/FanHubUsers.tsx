@@ -433,6 +433,14 @@ function showStripeSubscriptionCancelInManageModal(u: FanUser): boolean {
   return false;
 }
 
+/** Manage User modal: restore paid access from Stripe when Firestore is stale (failed retry, duplicate checkout). */
+function showReconcileMembershipInManageModal(u: FanUser): boolean {
+  if (u.role !== "member" || !u.email?.trim()) return false;
+  const st = (u.subscriptionStatus || "").toLowerCase().trim();
+  if ((st === "active" || st === "trialing") && u.plan === "Active") return false;
+  return true;
+}
+
 function getAvatarColor(name: string): string {
   const colors = [
     "bg-indigo-500",
@@ -518,6 +526,7 @@ export const FanHubUsers: React.FC = () => {
   const [grantVideoMinutes, setGrantVideoMinutes] = useState(0);
   const [isGrantingMinutes, setIsGrantingMinutes] = useState(false);
   const [cancelSubLoading, setCancelSubLoading] = useState(false);
+  const [reconcileMembershipLoading, setReconcileMembershipLoading] = useState(false);
   const [sendingReset, setSendingReset] = useState(false);
   const [expiredMembersCollapsed, setExpiredMembersCollapsed] = useState(readExpiredMembersCollapsedPreference);
 
@@ -1606,6 +1615,67 @@ export const FanHubUsers: React.FC = () => {
     }
   };
 
+  const handleCreatorReconcileFanMembership = async () => {
+    if (!selectedUser || !creatorId) return;
+    if (!showReconcileMembershipInManageModal(selectedUser)) return;
+    if (
+      !window.confirm(
+        `Restore paid membership for ${selectedUser.name} (${selectedUser.email}) from Stripe? Use this when they paid but still see checkout or cannot log in. No new charge.`
+      )
+    ) {
+      return;
+    }
+    setReconcileMembershipLoading(true);
+    try {
+      const token = auth.currentUser ? await auth.currentUser.getIdToken() : null;
+      if (!token) {
+        showToast?.("Please sign in again", "error");
+        return;
+      }
+      const res = await fetch("/api/creatorReconcileFanMembership", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          fanId: selectedUser.id,
+          fanEmail: selectedUser.email,
+        }),
+      });
+      const data = (await res.json().catch(() => ({}))) as {
+        error?: string;
+        message?: string;
+        reconciled?: boolean;
+        alreadyActive?: boolean;
+      };
+      if (!res.ok) {
+        throw new Error(data.error || `Request failed (${res.status})`);
+      }
+      showToast?.(
+        data.message ||
+          (data.alreadyActive
+            ? "Member already has active access."
+            : data.reconciled
+              ? "Membership restored from Stripe."
+              : "Done."),
+        "success"
+      );
+      await loadUsers();
+      setShowManageModal(false);
+      setSelectedUser(null);
+      setNewPassword("");
+      setShowPassword(false);
+      setGrantTreatType("");
+      setGrantTreatCount(1);
+    } catch (e) {
+      console.error("creatorReconcileFanMembership:", e);
+      showToast?.(e instanceof Error ? e.message : "Failed to restore membership", "error");
+    } finally {
+      setReconcileMembershipLoading(false);
+    }
+  };
+
   const handleGrantTreat = async () => {
     if (!creatorId || !selectedUser || !grantTreatType) return;
     try {
@@ -2425,6 +2495,23 @@ export const FanHubUsers: React.FC = () => {
                   Sends an email to {selectedUser.email} with a secure password reset link through your email provider.
                 </p>
               </div>
+
+              {showReconcileMembershipInManageModal(selectedUser) && (
+                <div>
+                  <h5 className="text-sm font-semibold text-gray-900 dark:text-white mb-2">Restore membership</h5>
+                  <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
+                    If they paid on Stripe but still see checkout or lost access after a failed first attempt, sync their active subscription into Fan Hub. Does not charge them again.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={handleCreatorReconcileFanMembership}
+                    disabled={reconcileMembershipLoading}
+                    className="w-full px-4 py-2.5 fh-btn rounded-lg text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {reconcileMembershipLoading ? "Syncing from Stripe…" : "Restore access from Stripe"}
+                  </button>
+                </div>
+              )}
 
               {/* Cancel Stripe subscription (creator) — between password and grant store; scroll modal if needed */}
               {showStripeSubscriptionCancelInManageModal(selectedUser) && (
