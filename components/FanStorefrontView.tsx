@@ -100,6 +100,7 @@ import { inferIsVideoFromUrl } from "../src/lib/mediaUrlInfer";
 import { fetchCreatorFanPostMedia } from "../src/lib/fetchCreatorFanPostMedia";
 import { isProtectedLockedMediaUrl } from "../src/lib/lockedPostMedia";
 import { FanHubNotificationBell, type FanHubNotificationNavigatePayload } from "./FanHubNotificationBell";
+import { resolveFanHubNotificationTarget } from "../src/lib/fanHubNotificationRouting";
 import { BrowserPushSettings } from "./BrowserPushSettings";
 import {
   clearLocalPushRegistrationState,
@@ -868,7 +869,7 @@ function FanMemberPurchaseRow({
 
   if (!expanded) {
     return (
-      <details className="fan-member-purchase-compact">
+      <details id={`fan-purchase-row-${o.id}`} className="fan-member-purchase-compact">
         <summary className="fan-member-purchase-compact-summary">
           <span className="fan-member-purchase-compact-type">{fanPurchaseTypeLabel(o)}</span>
           <span className="fan-member-purchase-compact-title">{o.productTitle || "Purchase"}</span>
@@ -883,7 +884,10 @@ function FanMemberPurchaseRow({
   }
 
   return (
-    <article className="fan-member-purchase-row fan-member-purchase-row--card fan-member-purchase-row--expanded">
+    <article
+      id={`fan-purchase-row-${o.id}`}
+      className="fan-member-purchase-row fan-member-purchase-row--card fan-member-purchase-row--expanded"
+    >
       <header className="fan-member-purchase-card-header">
         <div className="fan-member-purchase-card-header__main">
           <p className="fan-member-purchase-card-category">{fanPurchaseTypeLabel(o)}</p>
@@ -1408,6 +1412,9 @@ export const FanStorefrontView: React.FC = () => {
   const [treatsLoading, setTreatsLoading] = useState(false);
   const [treatsRefreshNonce, setTreatsRefreshNonce] = useState(0);
   const [fanPurchases, setFanPurchases] = useState<FanDeliveryPurchase[]>([]);
+  const [highlightMemberPurchaseOrderId, setHighlightMemberPurchaseOrderId] = useState<string | null>(
+    null,
+  );
   const [fanPurchasesLoading, setFanPurchasesLoading] = useState(false);
   const [fanPurchasesLoadingMore, setFanPurchasesLoadingMore] = useState(false);
   const [fanPurchasesQueryLimit, setFanPurchasesQueryLimit] = useState(80);
@@ -3965,11 +3972,45 @@ export const FanStorefrontView: React.FC = () => {
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    const threadId = new URLSearchParams(window.location.search).get("threadId")?.trim();
+    const params = new URLSearchParams(window.location.search);
+    const threadId = params.get("threadId")?.trim();
+    const orderId = params.get("orderId")?.trim();
+    if (orderId) {
+      setHighlightMemberPurchaseOrderId(orderId);
+      setActiveTab("purchases");
+      params.delete("orderId");
+      const qs = params.toString();
+      const path = window.location.pathname;
+      window.history.replaceState(null, "", path + (qs ? `?${qs}` : "") + (window.location.hash || ""));
+      return;
+    }
     if (!threadId) return;
     setDmPreferredThreadId(threadId);
     setActiveTab("messages");
   }, []);
+
+  useEffect(() => {
+    const orderId = highlightMemberPurchaseOrderId?.trim();
+    if (!orderId || activeTab !== "purchases" || fanPurchasesLoading) return;
+    const found = fanPurchases.some((o) => o.id === orderId);
+    if (!found) {
+      setHighlightMemberPurchaseOrderId(null);
+      return;
+    }
+    const scrollTo = () => {
+      document.getElementById(`fan-purchase-row-${orderId}`)?.scrollIntoView({
+        behavior: "smooth",
+        block: "center",
+      });
+    };
+    requestAnimationFrame(() => requestAnimationFrame(scrollTo));
+    setHighlightMemberPurchaseOrderId(null);
+  }, [
+    highlightMemberPurchaseOrderId,
+    activeTab,
+    fanPurchasesLoading,
+    fanPurchases,
+  ]);
 
   useEffect(() => {
     if (activeTab === "messages" && creator?.creatorId && isLoggedIn) {
@@ -4666,10 +4707,10 @@ export const FanStorefrontView: React.FC = () => {
       const d = p.data;
       if (d.creatorId && d.creatorId !== cid) return;
 
-      const goTab = (tab: typeof activeTab) => {
+      const goTab = (tab: FanStorefrontMemberTab) => {
         setActiveTab(tab);
         if (typeof window === "undefined" || showLanding || !creator?.handle?.trim()) return;
-        applyFanStorefrontMemberUrl(tab as FanStorefrontMemberTab, {
+        applyFanStorefrontMemberUrl(tab, {
           showLanding,
           creatorHandle: creator.handle,
         });
@@ -4695,26 +4736,31 @@ export const FanStorefrontView: React.FC = () => {
         else goTab("messages");
         return;
       }
-      if (p.type === "creator_new_purchase") {
+
+      const target = resolveFanHubNotificationTarget(p.type, d);
+      if (target.tab === "purchases") {
+        if (target.orderId) setHighlightMemberPurchaseOrderId(target.orderId);
         goTab("purchases");
         return;
       }
-      if (p.type === "purchase_confirmed" || p.type === "content_unlocked") {
-        goTab("purchases");
-        return;
-      }
-      if (p.type === "session_starting" || p.type === "session_reminder") {
-        if (d.threadId?.trim()) {
-          const threadId = d.threadId.trim();
-          setDmPreferredThreadId(threadId);
-          void fetchDmThreadAndMessages({ threadId });
+      if (target.tab === "messages") {
+        if (target.threadId) {
+          setDmPreferredThreadId(target.threadId);
+          void fetchDmThreadAndMessages({ threadId: target.threadId });
         }
-        if (d.sessionId?.trim()) setDmPreferredSessionId(d.sessionId.trim());
         goTab("messages");
         return;
       }
-      if (p.type === "live_session_scheduled") {
-        goTab("purchases");
+      if (target.tab === "videoChats") {
+        goTab("messages");
+        return;
+      }
+      if (target.tab === "sessions") {
+        goTab("messages");
+        return;
+      }
+      if (target.tab === "feed" || target.tab === "posts") {
+        goTab("feed");
         return;
       }
       if (d.threadId?.trim()) {
@@ -4725,7 +4771,7 @@ export const FanStorefrontView: React.FC = () => {
         goTab("messages");
       }
     },
-    [creator?.creatorId, creator?.handle, joinFanVideoSession, showLanding, fetchDmThreadAndMessages]
+    [creator?.creatorId, creator?.handle, joinFanVideoSession, showLanding, fetchDmThreadAndMessages],
   );
 
   /** Fan signed in — sync hub URL/state; does not close FanAuthModal (used before Stripe continuation step). */

@@ -303,7 +303,10 @@ function resolveMemberHubPushLink(
       : `${base}/messages`;
   }
   if (type === "new_post") return `${base}/feed`;
-  if (type === "purchase_confirmed" || type === "content_unlocked") return `${base}/purchases`;
+  if (type === "purchase_confirmed" || type === "content_unlocked" || type === "live_session_scheduled") {
+    const orderId = data?.orderId?.trim();
+    return orderId ? `${base}/purchases?orderId=${encodeURIComponent(orderId)}` : `${base}/purchases`;
+  }
   return `${base}/feed`;
 }
 

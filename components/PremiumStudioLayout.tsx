@@ -42,6 +42,10 @@ export type PremiumStudioTabContextValue = {
   /** Fan Hub Posts: scroll feed to this post id (from post like/comment notifications). */
   pendingFeedPostId: string | null;
   clearPendingFeedPostId: () => void;
+  /** Fan Hub Purchases: open / highlight this order id (from store purchase notifications). */
+  pendingPurchaseOrderId: string | null;
+  clearPendingPurchaseOrderId: () => void;
+  openPurchasesForOrder: (orderId: string) => void;
   /**
    * Fan Hub only: same --fan-* tokens as the outer shell (includes preview theme).
    * Apply on tab content wrappers so nested UI (e.g. Chat Session) isn’t stuck on CSS fallbacks.
@@ -75,6 +79,18 @@ export const PremiumStudioLayout: React.FC<PremiumStudioLayoutProps> = ({ childr
   const clearPendingMessagesThreadId = useCallback(() => setPendingMessagesThreadId(null), []);
   const [pendingFeedPostId, setPendingFeedPostId] = useState<string | null>(null);
   const clearPendingFeedPostId = useCallback(() => setPendingFeedPostId(null), []);
+  const [pendingPurchaseOrderId, setPendingPurchaseOrderId] = useState<string | null>(null);
+  const clearPendingPurchaseOrderId = useCallback(() => setPendingPurchaseOrderId(null), []);
+  const openPurchasesForOrder = useCallback(
+    (orderId: string) => {
+      if (!isFanHub) return;
+      const id = orderId.trim();
+      if (!id) return;
+      setPendingPurchaseOrderId(id);
+      setTab('purchases');
+    },
+    [isFanHub, setTab],
+  );
   const [showPremiumStudioHowItWorks, setShowPremiumStudioHowItWorks] = useState(false);
   const openMessagesForThread = useCallback(
     (threadId: string) => {
@@ -110,15 +126,22 @@ export const PremiumStudioLayout: React.FC<PremiumStudioLayoutProps> = ({ childr
   const handleFanHubNotificationNavigate = useCallback(
     (payload: FanHubNotificationNavigatePayload) => {
       if (!isFanHub) return;
-      const { tab, threadId, postId } = resolveFanHubNotificationTarget(payload.type, payload.data);
+      const { tab, threadId, postId, orderId } = resolveFanHubNotificationTarget(
+        payload.type,
+        payload.data,
+      );
       if (threadId) {
         openMessagesForThread(threadId);
-      } else {
-        if (postId) setPendingFeedPostId(postId);
-        setTab(tab);
+        return;
       }
+      if (orderId && tab === 'purchases') {
+        openPurchasesForOrder(orderId);
+        return;
+      }
+      if (postId) setPendingFeedPostId(postId);
+      setTab(tab);
     },
-    [isFanHub, openMessagesForThread, setTab]
+    [isFanHub, openMessagesForThread, openPurchasesForOrder, setTab],
   );
 
   /** Apply Fan Hub tab/thread after navigating from EchoFlux header Firestore bell. */
@@ -128,13 +151,21 @@ export const PremiumStudioLayout: React.FC<PremiumStudioLayoutProps> = ({ childr
       const raw = sessionStorage.getItem(FAN_HUB_DEEPLINK_STORAGE_KEY);
       if (!raw) return;
       sessionStorage.removeItem(FAN_HUB_DEEPLINK_STORAGE_KEY);
-      const parsed = JSON.parse(raw) as { tab?: string; threadId?: string; postId?: string };
+      const parsed = JSON.parse(raw) as {
+        tab?: string;
+        threadId?: string;
+        postId?: string;
+        orderId?: string;
+      };
       const tabId = typeof parsed.tab === 'string' ? parsed.tab.trim() : '';
       const threadId = typeof parsed.threadId === 'string' ? parsed.threadId.trim() : '';
       const postId = typeof parsed.postId === 'string' ? parsed.postId.trim() : '';
+      const orderId = typeof parsed.orderId === 'string' ? parsed.orderId.trim() : '';
       if (threadId) {
         setPendingMessagesThreadId(threadId);
         setTab('messages');
+      } else if (tabId === 'purchases' && orderId) {
+        openPurchasesForOrder(orderId);
       } else if (tabId && (FAN_HUB_TAB_IDS as readonly string[]).includes(tabId)) {
         setTab(tabId);
         if (postId) setPendingFeedPostId(postId);
@@ -146,7 +177,7 @@ export const PremiumStudioLayout: React.FC<PremiumStudioLayoutProps> = ({ childr
         /* ignore */
       }
     }
-  }, [isFanHub, setTab, setPendingMessagesThreadId]);
+  }, [isFanHub, setTab, setPendingMessagesThreadId, openPurchasesForOrder]);
 
   /** Sync dm_muted_threads mirror so message badges respect conversations muted before this feature. */
   useEffect(() => {
@@ -412,6 +443,9 @@ export const PremiumStudioLayout: React.FC<PremiumStudioLayoutProps> = ({ childr
           openMessagesForThread: isFanHub ? openMessagesForThread : () => {},
           pendingFeedPostId: isFanHub ? pendingFeedPostId : null,
           clearPendingFeedPostId: isFanHub ? clearPendingFeedPostId : () => {},
+          pendingPurchaseOrderId: isFanHub ? pendingPurchaseOrderId : null,
+          clearPendingPurchaseOrderId: isFanHub ? clearPendingPurchaseOrderId : () => {},
+          openPurchasesForOrder: isFanHub ? openPurchasesForOrder : () => {},
           fanHubCssVarBridge: isFanHub ? fanHubCssVarBridge : null,
         }}
       >

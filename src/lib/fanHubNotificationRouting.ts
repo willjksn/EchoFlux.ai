@@ -12,22 +12,38 @@ export function captureFanHubPushDeeplinkFromUrl(): void {
     const threadId = params.get('threadId')?.trim() || '';
     const postId = params.get('postId')?.trim() || '';
     const fanId = params.get('fanId')?.trim() || '';
-    if (!tab && !threadId && !postId && !fanId) return;
+    const orderId = params.get('orderId')?.trim() || '';
+    if (!tab && !threadId && !postId && !fanId && !orderId) return;
     sessionStorage.setItem(
       FAN_HUB_DEEPLINK_STORAGE_KEY,
-      JSON.stringify({ tab: tab || undefined, threadId: threadId || undefined, postId: postId || undefined, fanId: fanId || undefined }),
+      JSON.stringify({
+        tab: tab || undefined,
+        threadId: threadId || undefined,
+        postId: postId || undefined,
+        fanId: fanId || undefined,
+        orderId: orderId || undefined,
+      }),
     );
   } catch {
     /* ignore */
   }
 }
 
+export type FanHubNotificationTarget = {
+  tab: string;
+  threadId?: string;
+  postId?: string;
+  orderId?: string;
+};
+
 export function resolveFanHubNotificationTarget(
   type: string,
   data: Record<string, string>
-): { tab: string; threadId?: string; postId?: string } {
+): FanHubNotificationTarget {
   const t = (type || '').trim();
   const d = data;
+  const orderId = d.orderId?.trim() || undefined;
+  const destination = d.destination?.trim().toLowerCase();
   if (t === 'post_liked' || t === 'post_comment') {
     const postId = d.postId?.trim();
     return postId ? { tab: 'posts', postId } : { tab: 'posts' };
@@ -44,8 +60,13 @@ export function resolveFanHubNotificationTarget(
   if (t === 'live_session_scheduled') {
     return d.jointKind === 'video_call' ? { tab: 'videoChats' } : { tab: 'sessions' };
   }
-  if (t === 'purchase_confirmed' || t === 'content_unlocked' || t === 'creator_new_purchase') {
-    return { tab: 'purchases' };
+  if (
+    t === 'purchase_confirmed' ||
+    t === 'content_unlocked' ||
+    t === 'creator_new_purchase' ||
+    destination === 'purchases'
+  ) {
+    return { tab: 'purchases', orderId };
   }
   if (t === 'new_member') {
     return { tab: 'fans' };

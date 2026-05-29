@@ -24,6 +24,8 @@ export function resolveCreatorFanHubPushLink(type: string, data?: Record<string,
     params.set("tab", d.jointKind === "video_call" ? "videoChats" : "sessions");
   } else if (t === "purchase_confirmed" || t === "content_unlocked" || t === "creator_new_purchase") {
     params.set("tab", "purchases");
+    const orderId = d.orderId?.trim();
+    if (orderId) params.set("orderId", orderId);
   } else if (t === "new_member") {
     params.set("tab", "fans");
     const fanId = d.fanId?.trim();

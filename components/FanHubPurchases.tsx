@@ -788,6 +788,37 @@ export const FanHubPurchases: React.FC = () => {
     setScheduleTime(p.scheduledTime ?? "12:00");
   };
 
+  useEffect(() => {
+    const orderId = tabCtx?.pendingPurchaseOrderId?.trim();
+    if (!orderId || loading) return;
+    const match = purchases.find((p) => p.id === orderId);
+    if (!match) {
+      tabCtx?.clearPendingPurchaseOrderId?.();
+      return;
+    }
+    setFilterStatus("all");
+    setShowHidden(true);
+    const eff = purchaseEffectiveForUi(match);
+    const needsSchedule =
+      eff.scheduleStatus === "pending" && eff.deliveryStatus !== "delivered";
+    if (needsSchedule) {
+      startEdit(match);
+    }
+    const scrollTo = () => {
+      document.getElementById(`purchase-row-${orderId}`)?.scrollIntoView({
+        behavior: "smooth",
+        block: "center",
+      });
+    };
+    requestAnimationFrame(() => requestAnimationFrame(scrollTo));
+    tabCtx?.clearPendingPurchaseOrderId?.();
+  }, [
+    tabCtx?.pendingPurchaseOrderId,
+    tabCtx?.clearPendingPurchaseOrderId,
+    purchases,
+    loading,
+  ]);
+
   const cancelEdit = () => {
     setEditingId(null);
     setScheduleDate("");
@@ -2455,7 +2486,7 @@ export const FanHubPurchases: React.FC = () => {
               </>
             );
             return creatorPurchasesListCompact ? (
-              <details key={p.id} className="fan-member-purchase-compact">
+              <details key={p.id} id={`purchase-row-${p.id}`} className="fan-member-purchase-compact">
                 <summary className="fan-member-purchase-compact-summary">
                   <span className="fan-member-purchase-compact-type">{creatorPurchaseTypeLabel(p)}</span>
                   <span className="fan-member-purchase-compact-title">{p.productName}</span>
@@ -2467,7 +2498,7 @@ export const FanHubPurchases: React.FC = () => {
                 </div>
               </details>
             ) : (
-              <div key={p.id} className={cardClassName}>
+              <div key={p.id} id={`purchase-row-${p.id}`} className={cardClassName}>
                 {cardBody}
               </div>
             );
