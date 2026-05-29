@@ -17,7 +17,7 @@ import {
   sendCreatorHubNotification,
   sendFanNotification,
 } from "./_fanNotifications.js";
-import type { Firestore } from "firebase-admin/firestore";
+import { hasLiveChatSessionForDmThread } from "./_chatSessionDmNotifyGuard.js";
 
 /** Vercel usually parses JSON; some proxies / versions may leave a string or Buffer. */
 function parseFanDmRequestBody(req: VercelRequest): Record<string, unknown> {
@@ -47,21 +47,6 @@ function parseFanDmRequestBody(req: VercelRequest): Record<string, unknown> {
   }
   if (typeof b === "object" && !Array.isArray(b)) return b as Record<string, unknown>;
   return {};
-}
-
-async function hasActiveOrPausedChatSessionForThread(db: Firestore, creatorId: string, threadId: string): Promise<boolean> {
-  const snap = await db
-    .collection("chatSessions")
-    .where("creatorId", "==", creatorId)
-    .where("threadId", "==", threadId)
-    .limit(40)
-    .get();
-  let live = false;
-  snap.forEach((d) => {
-    const st = (d.data() as { status?: string }).status;
-    if (st === "active" || st === "paused") live = true;
-  });
-  return live;
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -237,7 +222,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const creatorMutedThisThread =
       recipientId === creatorIdFinal && threadAfter?.creatorInboxMuted === true;
 
-    const skipNotifyForLiveSession = await hasActiveOrPausedChatSessionForThread(db, creatorIdFinal, threadId);
+    const skipNotifyForLiveSession = await hasLiveChatSessionForDmThread(db, creatorIdFinal, threadId);
 
     try {
       if (!creatorMutedThisThread && !skipNotifyForLiveSession) {

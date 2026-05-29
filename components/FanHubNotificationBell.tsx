@@ -255,7 +255,7 @@ export const FanHubNotificationBell: React.FC<FanHubNotificationBellProps> = ({
       }
     );
     return () => off();
-  }, [uid]);
+  }, [uid, hidden]);
 
   const unread = useMemo(() => {
     return rows.filter((r) => {

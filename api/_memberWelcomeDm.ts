@@ -15,6 +15,7 @@ import {
   type DmAttachmentItem,
 } from "../src/lib/fanDmAttachments.js";
 import { sendFanNotification } from "./_fanNotifications.js";
+import { hasLiveChatSessionForDmThread } from "./_chatSessionDmNotifyGuard.js";
 
 export type AutomatedMemberWelcomeSource = "paid_subscription" | "free_membership";
 
@@ -67,25 +68,6 @@ export function finalizeAutomatedWelcomeText(template: string, includeMemberFirs
   const fn = firstName?.trim();
   if (!fn) return stripWelcomeNamePlaceholder(template);
   return template.replace(/\{\{\s*name\s*\}\}/gi, fn);
-}
-
-async function hasActiveOrPausedChatSessionForThread(
-  db: Firestore,
-  creatorId: string,
-  threadId: string,
-): Promise<boolean> {
-  const snap = await db
-    .collection("chatSessions")
-    .where("creatorId", "==", creatorId)
-    .where("threadId", "==", threadId)
-    .limit(40)
-    .get();
-  let live = false;
-  snap.forEach((d) => {
-    const st = (d.data() as { status?: string }).status;
-    if (st === "active" || st === "paused") live = true;
-  });
-  return live;
 }
 
 function normalizeWelcomeAttachments(raw: unknown): DmAttachmentItem[] {
@@ -216,7 +198,7 @@ export async function maybeSendAutomatedMemberWelcomeDm(
     );
   });
 
-  const skipNotifyForLiveSession = await hasActiveOrPausedChatSessionForThread(db, creatorId, threadId);
+  const skipNotifyForLiveSession = await hasLiveChatSessionForDmThread(db, creatorId, threadId);
 
   try {
     if (!skipNotifyForLiveSession) {
