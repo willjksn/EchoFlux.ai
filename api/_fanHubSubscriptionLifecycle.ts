@@ -286,6 +286,42 @@ async function listCustomerSubscriptions(
   return found;
 }
 
+async function findStripeCustomerIdByEmail(
+  stripe: Stripe,
+  email: string,
+  attempts: StripeAttempt[],
+): Promise<string | null> {
+  const normalized = email.trim().toLowerCase();
+  if (!normalized) return null;
+  for (const attempt of attempts) {
+    try {
+      const opts = attempt.accountId ? { stripeAccount: attempt.accountId } : undefined;
+      const page = await attempt.stripe.customers.list({ email: normalized, limit: 5 }, opts);
+      const match = page.data.find(
+        (c) => typeof c.email === "string" && c.email.trim().toLowerCase() === normalized,
+      );
+      if (match?.id) return match.id;
+    } catch (e) {
+      if (!isMissingStripeResource(e)) throw e;
+    }
+  }
+  return null;
+}
+
+export async function findCreatorIdByStripeConnectAccount(
+  db: Firestore,
+  connectAccountId: string,
+): Promise<string | null> {
+  const acct = connectAccountId.trim();
+  if (!acct.startsWith("acct_")) return null;
+  const fields = ["stripeConnectAccountId", "stripeAccountId", "connectedStripeAccountId"] as const;
+  for (const field of fields) {
+    const snap = await db.collection("creators").where(field, "==", acct).limit(1).get();
+    if (!snap.empty) return snap.docs[0].id;
+  }
+  return null;
+}
+
 async function retrieveSubscriptionById(
   stripe: Stripe,
   subscriptionId: string,
@@ -306,10 +342,18 @@ async function retrieveSubscriptionById(
  * If Stripe has an active Fan Hub subscription for this fan+creator but Firestore is stale,
  * repair subscriber + grant + fan row. Returns the subscription id when reconciled.
  */
+export type ReconcileFanHubSubscriptionOptions = {
+  /** When Firestore still points at a canceled first-attempt subscription. */
+  preferSubscriptionId?: string;
+  /** Resolve Stripe customer when fan row has no stripeCustomerId yet. */
+  fanEmail?: string;
+};
+
 export async function reconcileFanHubPaidSubscriptionFromStripe(
   db: Firestore,
   creatorId: string,
   fanId: string,
+  options?: ReconcileFanHubSubscriptionOptions,
 ): Promise<{ reconciled: boolean; subscriptionId: string | null; stripeStatus: string | null }> {
   const stripe = getPlatformStripe();
   if (!stripe) {
@@ -342,19 +386,40 @@ export async function reconcileFanHubPaidSubscriptionFromStripe(
   const fallbackAccountId = isPlatform ? connectId : null;
   const attempts = buildStripeAttempts(stripe, preferredAccountId, fallbackAccountId);
 
-  const fanData = fanSnap.data() as { stripeCustomerId?: string } | undefined;
+  const fanData = fanSnap.data() as { stripeCustomerId?: string; email?: string } | undefined;
   const subData = subSnap.data() as { stripeSubscriptionId?: string; stripeCustomerId?: string } | undefined;
-  const customerId =
+  let customerId =
     (typeof fanData?.stripeCustomerId === "string" ? fanData.stripeCustomerId.trim() : "") ||
     (typeof subData?.stripeCustomerId === "string" ? subData.stripeCustomerId.trim() : "") ||
     "";
 
+  const fanEmail =
+    (typeof options?.fanEmail === "string" ? options.fanEmail.trim().toLowerCase() : "") ||
+    (typeof fanData?.email === "string" ? fanData.email.trim().toLowerCase() : "");
+  if (!customerId.startsWith("cus_") && fanEmail) {
+    const fromStripe = await findStripeCustomerIdByEmail(stripe, fanEmail, attempts);
+    if (fromStripe) customerId = fromStripe;
+  }
+
+  const preferSubId =
+    typeof options?.preferSubscriptionId === "string" ? options.preferSubscriptionId.trim() : "";
   const storedSubId =
     typeof subData?.stripeSubscriptionId === "string" ? subData.stripeSubscriptionId.trim() : "";
 
   let best: Stripe.Subscription | null = null;
 
-  if (storedSubId) {
+  if (preferSubId) {
+    const retrieved = await retrieveSubscriptionById(stripe, preferSubId, attempts);
+    if (retrieved && isPaidLikeStripeStatus(retrieved.status)) {
+      const metaCreator = (retrieved.metadata?.creatorId || "").trim();
+      const metaFan = (retrieved.metadata?.fanId || "").trim();
+      if ((!metaCreator || metaCreator === creatorId) && (!metaFan || metaFan === fanId)) {
+        best = retrieved;
+      }
+    }
+  }
+
+  if (!best && storedSubId) {
     const retrieved = await retrieveSubscriptionById(stripe, storedSubId, attempts);
     if (retrieved && subscriptionMatchesFanHub(retrieved, creatorId, fanId) && isPaidLikeStripeStatus(retrieved.status)) {
       best = retrieved;
@@ -371,7 +436,12 @@ export async function reconcileFanHubPaidSubscriptionFromStripe(
         continue;
       }
       for (const sub of subs) {
-        if (!subscriptionMatchesFanHub(sub, creatorId, fanId)) continue;
+        const metaCreator = (sub.metadata?.creatorId || "").trim();
+        const metaFan = (sub.metadata?.fanId || "").trim();
+        const metaMatch =
+          subscriptionMatchesFanHub(sub, creatorId, fanId) ||
+          (metaCreator === creatorId && (!metaFan || metaFan === fanId));
+        if (!metaMatch) continue;
         if (!isPaidLikeStripeStatus(sub.status)) continue;
         if (!best) {
           best = sub;
