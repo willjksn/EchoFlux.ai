@@ -470,7 +470,12 @@ export async function processFanHubCheckoutSessionCompleted(
     } else {
     // If this session already exists but points at a different fan id, repair to the
     // current canonical UID (common after auth-account merges/migrations).
-    if (type === 'subscription') {
+    const repairCheckoutIdentity =
+      type === 'subscription' ||
+      type === 'post_unlock' ||
+      type === 'product' ||
+      type === 'live_stream_ticket';
+    if (repairCheckoutIdentity) {
       const existingFanId = typeof existing?.fanId === 'string' ? existing.fanId : '';
       if (existingFanId && existingFanId !== fanId) {
         try {
@@ -486,14 +491,16 @@ export async function processFanHubCheckoutSessionCompleted(
           console.warn('Fan hub duplicate session identity repair failed', session.id, e);
         }
       }
-      const canonFanId =
-        typeof existing?.fanId === 'string' && existing.fanId.trim() ? existing.fanId.trim() : fanId;
-      try {
-        await maybeSendAutomatedMemberWelcomeDm(db, creatorId, canonFanId, now, {
-          source: 'paid_subscription',
-        });
-      } catch (e) {
-        console.warn('maybeSendAutomatedMemberWelcomeDm (subscription duplicate session replay):', e);
+      if (type === 'subscription') {
+        const canonFanId =
+          typeof existing?.fanId === 'string' && existing.fanId.trim() ? existing.fanId.trim() : fanId;
+        try {
+          await maybeSendAutomatedMemberWelcomeDm(db, creatorId, canonFanId, now, {
+            source: 'paid_subscription',
+          });
+        } catch (e) {
+          console.warn('maybeSendAutomatedMemberWelcomeDm (subscription duplicate session replay):', e);
+        }
       }
     }
     console.log(`Fan hub: skip duplicate checkout.session.completed session=${session.id}`);

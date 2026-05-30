@@ -594,10 +594,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
       const unlockAmount = Math.min(100_000, priceCents);
 
-      const grantRef = db.collection("creatorEntitlements").doc(creatorId).collection("grants").doc(fanId);
-      const grantSnap = await grantRef.get();
-      const existingUnlocks = (grantSnap.data() as { unlockedFanPostIds?: string[] } | undefined)?.unlockedFanPostIds;
-      if (Array.isArray(existingUnlocks) && existingUnlocks.includes(postIdStr)) {
+      const { readFanGrantUnlockFields, collectPaidPostUnlockIdsFromOrders } = await import(
+        "./_fanUnlockEntitlements.js"
+      );
+      const grantUnlocks = await readFanGrantUnlockFields(db, creatorId, fanId, fanEmail, {
+        migrateToCanonical: true,
+      });
+      const orderUnlocks = await collectPaidPostUnlockIdsFromOrders(db, creatorId, fanId, fanEmail);
+      const alreadyUnlocked =
+        grantUnlocks.unlockedFanPostIds.includes(postIdStr) || orderUnlocks.includes(postIdStr);
+      if (alreadyUnlocked) {
         return res.status(400).json({ error: "You already unlocked this post" });
       }
 

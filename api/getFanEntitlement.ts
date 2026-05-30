@@ -3,9 +3,14 @@ import { applyBrowserApiCors } from "./_browserApiCors.js";
 import { getAdminDb } from "./_firebaseAdmin.js";
 import { verifyAuth } from "./verifyAuth.js";
 import { shouldGrantFanPageAdminMemberAccess } from "../src/lib/fanPageAdminBypass.js";
+import {
+  collectPaidPostUnlockIdsFromOrders,
+  normalizedFanEmail,
+  readFanGrantUnlockFields,
+} from "./_fanUnlockEntitlements.js";
 
 function normalizedEmail(raw: unknown): string {
-  return typeof raw === "string" ? raw.trim().toLowerCase() : "";
+  return normalizedFanEmail(raw);
 }
 
 function isPaidLikeStatus(status: unknown): boolean {
@@ -250,76 +255,47 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
     }
 
-    // Load creatorEntitlements grant for unlocked products
     const grantsCol = db
       .collection("creatorEntitlements")
       .doc(creatorId)
       .collection("grants");
     const grantRef = grantsCol.doc(fanId);
-    let grantSnap = await grantRef.get();
-    let grantData: {
-      unlockedProductIds?: string[];
-      unlockedFanPostIds?: string[];
-      unlockedLiveStreamIds?: string[];
-      subscription?: boolean;
-      membershipType?: string;
-    } | undefined = grantSnap.exists
+    const grantSnap = await grantRef.get();
+    const grantData = grantSnap.exists
       ? (grantSnap.data() as {
-          unlockedProductIds?: string[];
-          unlockedFanPostIds?: string[];
-          unlockedLiveStreamIds?: string[];
           subscription?: boolean;
           membershipType?: string;
         } | undefined)
       : undefined;
-    if (!grantData) {
-      const fallbackGrantIds = Array.from(
-        new Set([fanEmail, legacyFanDocId, fanEmail ? `${fanId}-${fanEmail}` : ""].filter((x): x is string => !!x))
-      );
-      for (const legacyId of fallbackGrantIds) {
-        try {
-          const s = await grantsCol.doc(legacyId).get();
-          if (!s.exists) continue;
-          grantData = s.data() as {
-            unlockedProductIds?: string[];
-            unlockedFanPostIds?: string[];
-            unlockedLiveStreamIds?: string[];
-            subscription?: boolean;
-            membershipType?: string;
-          } | undefined;
-          if (grantData) {
-            await grantRef.set(
-              { ...(grantData || {}), updatedAt: nowIso, migratedFromFanDocId: legacyId },
-              { merge: true }
-            );
-            grantSnap = await grantRef.get();
-            break;
-          }
-        } catch {
-          // Keep entitlement endpoint resilient; skip malformed legacy grant docs.
-        }
+
+    const grantUnlockFields = await readFanGrantUnlockFields(db, creatorId, fanId, fanEmail, {
+      migrateToCanonical: true,
+      legacyFanDocId,
+    });
+    let unlockedProductIds = grantUnlockFields.unlockedProductIds;
+    let unlockedFanPostIds = grantUnlockFields.unlockedFanPostIds;
+    let unlockedLiveStreamIds = grantUnlockFields.unlockedLiveStreamIds;
+
+    const orderPostUnlockIds = await collectPaidPostUnlockIdsFromOrders(
+      db,
+      creatorId,
+      fanId,
+      fanEmail,
+      legacyFanDocId,
+    );
+    if (orderPostUnlockIds.length > 0) {
+      const mergedPosts = Array.from(new Set([...unlockedFanPostIds, ...orderPostUnlockIds]));
+      if (mergedPosts.length > unlockedFanPostIds.length) {
+        unlockedFanPostIds = mergedPosts;
+        await grantRef.set(
+          { unlockedFanPostIds: mergedPosts, updatedAt: nowIso },
+          { merge: true },
+        );
       }
     }
 
-    let unlockedProductIds: string[] = [];
-    let unlockedFanPostIds: string[] = [];
-    let unlockedLiveStreamIds: string[] = [];
-    if (grantData || grantSnap.exists) {
-      const effectiveGrantData = grantData || (grantSnap.data() as {
-        unlockedProductIds?: string[];
-        unlockedFanPostIds?: string[];
-        unlockedLiveStreamIds?: string[];
-        subscription?: boolean;
-        membershipType?: string;
-      } | undefined);
-      unlockedProductIds = Array.isArray(effectiveGrantData?.unlockedProductIds) ? effectiveGrantData.unlockedProductIds : [];
-      unlockedFanPostIds = Array.isArray(effectiveGrantData?.unlockedFanPostIds) ? effectiveGrantData.unlockedFanPostIds : [];
-      unlockedLiveStreamIds = Array.isArray(effectiveGrantData?.unlockedLiveStreamIds)
-        ? effectiveGrantData.unlockedLiveStreamIds
-        : [];
-      if (unlockedProductIds.length > 0 || unlockedFanPostIds.length > 0 || unlockedLiveStreamIds.length > 0) {
-        limitedMemberAccess = true;
-      }
+    if (unlockedProductIds.length > 0 || unlockedFanPostIds.length > 0 || unlockedLiveStreamIds.length > 0) {
+      limitedMemberAccess = true;
     }
 
     // Member username (global fan handle) — server read; clients cannot write username on users/*

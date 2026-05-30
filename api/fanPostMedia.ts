@@ -1,7 +1,8 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import type { DocumentSnapshot, Firestore } from "firebase-admin/firestore";
+import type { DocumentSnapshot } from "firebase-admin/firestore";
 import { applyBrowserApiCors } from "./_browserApiCors.js";
 import { getAdminDb } from "./_firebaseAdmin.js";
+import { fanHasPaidPostUnlock, normalizedFanEmail } from "./_fanUnlockEntitlements.js";
 import { verifyAuth } from "./verifyAuth.js";
 
 function stringParam(raw: unknown): string {
@@ -23,36 +24,6 @@ function isPublishedFanPostStatus(raw: unknown): boolean {
 const PROTECTED_LOCKED_MEDIA_PREFIX = "protected://fan-post-media/";
 function isProtectedLockedMediaUrl(url: string): boolean {
   return typeof url === "string" && url.startsWith(PROTECTED_LOCKED_MEDIA_PREFIX);
-}
-
-async function hasUnlockedPost(
-  db: Firestore,
-  creatorId: string,
-  fanId: string,
-  postId: string,
-): Promise<boolean> {
-  const grantSnap = await db
-    .collection("creatorEntitlements")
-    .doc(creatorId)
-    .collection("grants")
-    .doc(fanId)
-    .get();
-  const grant = grantSnap.data() as { unlockedFanPostIds?: unknown } | undefined;
-  const unlocked = normalizeStringArray(grant?.unlockedFanPostIds);
-  if (unlocked.includes(postId)) return true;
-
-  const orderSnap = await db
-    .collection("orders")
-    .where("creatorId", "==", creatorId)
-    .where("fanId", "==", fanId)
-    .where("postId", "==", postId)
-    .where("type", "==", "post_unlock")
-    .limit(1)
-    .get()
-    .catch(() => null);
-  if (!orderSnap || orderSnap.empty) return false;
-  const status = String(orderSnap.docs[0].data().status || "paid").trim().toLowerCase();
-  return status !== "refunded";
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -100,7 +71,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (!isCreator && !isPublishedFanPostStatus(post.status)) {
       return res.status(404).json({ error: "Post not found" });
     }
-    const canView = isCreator || !locked?.enabled || (await hasUnlockedPost(db, creatorId, decoded.uid, postId));
+    const fanEmail = normalizedFanEmail(decoded.email);
+    const canView =
+      isCreator ||
+      !locked?.enabled ||
+      (await fanHasPaidPostUnlock(db, creatorId, decoded.uid, fanEmail, postId));
     if (!canView) {
       return res.status(403).json({ error: "Post is locked" });
     }
