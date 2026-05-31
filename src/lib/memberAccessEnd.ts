@@ -232,6 +232,14 @@ export function mergeFanHubFanMirrorRowsForAccess(rows: Record<string, unknown>[
     if (end && (!mergedAccessEnd || end.getTime() > mergedAccessEnd.getTime())) mergedAccessEnd = end;
   }
 
+  /** Scheduled cancel: period end may live only on `creatorSubscribers` mirror, not on stale `fans` rows. */
+  if (mergedAccessEnd == null && mergedCancelAtPeriodEnd && mergedRank >= 3) {
+    for (const fd of rows) {
+      const end = pickLatestMemberAccessEnd(fd);
+      if (end && (!mergedAccessEnd || end.getTime() > mergedAccessEnd.getTime())) mergedAccessEnd = end;
+    }
+  }
+
   /** When the winning rows never mirrored period end, fall back only for terminal statuses (not active/trialing). */
   if (mergedAccessEnd == null) {
     const stLow = String(mergedStatus || "").toLowerCase();

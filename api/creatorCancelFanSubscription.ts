@@ -5,6 +5,7 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { getPlatformStripe } from "./_stripeConnect.js";
 import { getAdminDb } from "./_firebaseAdmin.js";
+import { applyFanHubSubscriptionFromStripe } from "./_fanHubSubscriptionLifecycle.js";
 import { verifyAuth } from "./verifyAuth.js";
 
 const PLATFORM_OWNER_IDS = (process.env.PLATFORM_OWNER_CREATOR_IDS || "")
@@ -119,6 +120,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const subscription = await stripe.subscriptions.retrieve(subscriptionId, stripeOpts);
     const subCpe = (subscription as { current_period_end?: number }).current_period_end;
     if (subscription.cancel_at_period_end) {
+      try {
+        await applyFanHubSubscriptionFromStripe(db, subscription, "creator_cancel_fan_subscription", {
+          creatorId,
+          fanId,
+        });
+      } catch (syncErr) {
+        console.error("creatorCancelFanSubscription Firestore sync (already scheduled):", syncErr);
+      }
       return res.status(200).json({
         ok: true,
         message: "Already set to cancel at the end of the billing period",
@@ -127,9 +136,26 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
     }
 
-    await stripe.subscriptions.update(subscriptionId, { cancel_at_period_end: true }, stripeOpts);
+    const updated = await stripe.subscriptions.update(
+      subscriptionId,
+      { cancel_at_period_end: true },
+      stripeOpts,
+    );
     const periodEnd =
-      typeof subCpe === "number" && Number.isFinite(subCpe) ? new Date(subCpe * 1000).toISOString() : null;
+      typeof (updated as { current_period_end?: number }).current_period_end === "number" &&
+      Number.isFinite((updated as { current_period_end?: number }).current_period_end)
+        ? new Date((updated as { current_period_end: number }).current_period_end * 1000).toISOString()
+        : typeof subCpe === "number" && Number.isFinite(subCpe)
+          ? new Date(subCpe * 1000).toISOString()
+          : null;
+    try {
+      await applyFanHubSubscriptionFromStripe(db, updated, "creator_cancel_fan_subscription", {
+        creatorId,
+        fanId,
+      });
+    } catch (syncErr) {
+      console.error("creatorCancelFanSubscription Firestore sync:", syncErr);
+    }
 
     return res.status(200).json({
       ok: true,

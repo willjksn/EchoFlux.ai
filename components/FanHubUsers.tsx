@@ -874,11 +874,43 @@ export const FanHubUsers: React.FC = () => {
         getDocs(legacySubRef).catch(() => null),
         getDocs(manualUsersRef).catch(() => null),
       ]);
+      /** Stripe billing period end from `creatorSubscribers` — must survive fan-only mirror merge below. */
+      const subscriberMirrorByAuthUid = new Map<string, Record<string, unknown>>();
       if (legacySubSnapOutcome) {
         legacySubSnapOutcome.docs.forEach((docSnap) => {
           const data = docSnap.data();
           const fanId = docSnap.id;
           const legacyPeriodEnd = pickLatestMemberAccessEnd(data as Record<string, unknown>);
+          const authKey = authUidFromFanDocId(fanId) || fanId;
+          const subMirror: Record<string, unknown> = {
+            subscriptionStatus: typeof data.status === "string" ? data.status : null,
+            cancelAtPeriodEnd: parseCancelAtPeriodEndFromDoc(data as Record<string, unknown>),
+            cancel_at_period_end: parseCancelAtPeriodEndFromDoc(data as Record<string, unknown>),
+          };
+          if (legacyPeriodEnd && Number.isFinite(legacyPeriodEnd.getTime())) {
+            const iso = legacyPeriodEnd.toISOString();
+            subMirror.subscriptionCurrentPeriodEnd = iso;
+            subMirror.currentPeriodEnd = iso;
+            subMirror.current_period_end = iso;
+          }
+          const prev = subscriberMirrorByAuthUid.get(authKey);
+          if (!prev) {
+            subscriberMirrorByAuthUid.set(authKey, subMirror);
+          } else {
+            const merged = mergeFanHubFanMirrorRowsForAccess([prev, subMirror]);
+            subscriberMirrorByAuthUid.set(authKey, {
+              subscriptionStatus: merged.subscriptionStatus,
+              cancelAtPeriodEnd: merged.cancelAtPeriodEnd,
+              cancel_at_period_end: merged.cancelAtPeriodEnd,
+              ...(merged.accessEnd
+                ? {
+                    subscriptionCurrentPeriodEnd: merged.accessEnd.toISOString(),
+                    currentPeriodEnd: merged.accessEnd.toISOString(),
+                    current_period_end: merged.accessEnd.toISOString(),
+                  }
+                : {}),
+            });
+          }
           if (!userMap.has(fanId)) {
             const subscribedAt = data.updatedAt ? new Date(data.updatedAt) : null;
             userMap.set(fanId, {
@@ -1050,9 +1082,11 @@ export const FanHubUsers: React.FC = () => {
       }
       for (const row of userMap.values()) {
         const auth = authUidFromFanDocId(row.id);
-        const mirrors = mirrorsByAuthUid.get(auth);
-        if (mirrors && mirrors.length > 0) {
-          applyMergedSubscriptionToMapRow(row, mirrors);
+        const fanMirrors = mirrorsByAuthUid.get(auth) || [];
+        const subMirror = subscriberMirrorByAuthUid.get(auth);
+        const allMirrors = subMirror ? fanMirrors.concat([subMirror]) : fanMirrors;
+        if (allMirrors.length > 0) {
+          applyMergedSubscriptionToMapRow(row, allMirrors);
         }
       }
 

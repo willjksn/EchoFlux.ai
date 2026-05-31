@@ -52,9 +52,10 @@ export async function applyFanHubSubscriptionFromStripe(
   db: Firestore,
   subscription: Stripe.Subscription,
   reconcileSource: string,
+  ids?: { creatorId: string; fanId: string },
 ): Promise<boolean> {
-  const creatorId = subscription.metadata?.creatorId;
-  const fanId = subscription.metadata?.fanId;
+  const creatorId = ids?.creatorId || subscription.metadata?.creatorId;
+  const fanId = ids?.fanId || subscription.metadata?.fanId;
   if (!creatorId || !fanId) return false;
 
   const now = new Date().toISOString();
