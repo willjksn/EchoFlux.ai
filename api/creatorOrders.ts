@@ -303,6 +303,74 @@ function dedupeFanHubTipLedgerRows(rows: CreatorOrderLedgerRow[]): CreatorOrderL
   return [...nonTips, ...tipPick.values()];
 }
 
+/** Store/treat rows: one abandoned `checkout_pending` + one `paid` session is a single purchase. */
+function dedupeFanHubProductLedgerRows(rows: CreatorOrderLedgerRow[]): CreatorOrderLedgerRow[] {
+  const nonProducts: CreatorOrderLedgerRow[] = [];
+  const productPick = new Map<string, CreatorOrderLedgerRow>();
+
+  const statusRank = (st: string): number => {
+    if (st === "paid") return 3;
+    if (st === "checkout_pending") return 1;
+    return 2;
+  };
+
+  const priority = (id: string): number => {
+    if (id.startsWith("cs_")) return 100;
+    if (id.startsWith("legacy_purchase_")) return 40;
+    return 55;
+  };
+
+  const fingerprint = (row: CreatorOrderLedgerRow): string | null => {
+    const typ = (row.type || "").trim().toLowerCase();
+    if (typ !== "product") return null;
+    const st = (row.status || "").trim().toLowerCase();
+    if (st === "refunded") return null;
+
+    const pi =
+      typeof row.stripePaymentIntentId === "string" && row.stripePaymentIntentId.startsWith("pi_")
+        ? row.stripePaymentIntentId
+        : null;
+    if (pi) return `pi:${pi}`;
+
+    const sid =
+      typeof row.stripeSessionId === "string" && row.stripeSessionId.startsWith("cs_")
+        ? row.stripeSessionId
+        : row.id.startsWith("cs_")
+          ? row.id
+          : null;
+    if (sid) return `cs:${sid}`;
+
+    const pid = (row.productId || "").trim();
+    const fid = (row.fanId || "").trim();
+    const email = (row.fanEmail || "").trim().toLowerCase();
+    const amt = Math.round(row.amountCents || 0);
+    const bucket = Math.floor((row.__createdAtMs || 0) / 300000);
+    if (pid && amt > 0 && (fid || email)) {
+      return `p:${pid}:${amt}:${fid || email}:${bucket}`;
+    }
+    return `id:${row.id}`;
+  };
+
+  const pickBetter = (a: CreatorOrderLedgerRow, b: CreatorOrderLedgerRow): CreatorOrderLedgerRow => {
+    const rankA = statusRank((a.status || "").trim().toLowerCase());
+    const rankB = statusRank((b.status || "").trim().toLowerCase());
+    if (rankA !== rankB) return rankA > rankB ? a : b;
+    return priority(a.id) >= priority(b.id) ? a : b;
+  };
+
+  for (const row of rows) {
+    const fp = fingerprint(row);
+    if (!fp) {
+      nonProducts.push(row);
+      continue;
+    }
+    const prev = productPick.get(fp);
+    productPick.set(fp, prev ? pickBetter(prev, row) : row);
+  }
+
+  return [...nonProducts, ...productPick.values()];
+}
+
 /** UTC date/time parts for purchases UI — mirrors api/_syncLiveStreamTicketOrders.ts */
 function schedulePartsFromIso(scheduledStart: string): { date: string; time: string } | null {
   const t = Date.parse(scheduledStart);
@@ -861,7 +929,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       );
     }
 
-    orderRows = dedupeFanHubTipLedgerRows(orderRows);
+    orderRows = dedupeFanHubProductLedgerRows(dedupeFanHubTipLedgerRows(orderRows));
 
     try {
       const subSnap = await db

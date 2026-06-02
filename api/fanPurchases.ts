@@ -1,6 +1,7 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { getAdminDb } from "./_firebaseAdmin.js";
 import { syncRecentFanHubProductCheckouts } from "./_syncRecentFanHubProductCheckouts.js";
+import { isRevenueCountableFanHubOrder } from "../src/lib/fanHubOrderLedger.js";
 import { verifyAuth } from "./verifyAuth.js";
 import {
   orderDeliveryMediaItems,
@@ -212,8 +213,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
     }
 
-    let purchases = Array.from(docsById.values())
-      .filter((o) => o.status !== "refunded")
+    let purchases = Array.from(docsById.values()).filter((o) =>
+      isRevenueCountableFanHubOrder({ status: o.status }),
+    )
       .filter(
         (o) =>
           o.type === "product" ||

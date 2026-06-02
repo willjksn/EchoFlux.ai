@@ -18,7 +18,11 @@ import {
 } from "../src/lib/memberAccessEnd";
 import { authUidFromFanDocId, parseCompoundFanDocumentId } from "../src/lib/compoundFanDocId";
 import { buildCreatorImageUrlSet, fanAvatarUrlOrUndefined } from "../src/lib/fanAvatar";
-import { classifyFanHubOrderLedgerKind, isGuestCheckoutFanId } from "../src/lib/fanHubOrderLedger";
+import {
+  classifyFanHubOrderLedgerKind,
+  isGuestCheckoutFanId,
+  isRevenueCountableFanHubOrder,
+} from "../src/lib/fanHubOrderLedger";
 import { useCreatorHandle } from "../src/hooks/useCreatorHandle";
 import { stormijMembershipDisplayFloorCents } from "../src/lib/stormijMembershipDisplayFloors";
 
@@ -788,6 +792,7 @@ export const FanHubUsers: React.FC = () => {
 
       // Merge order data into user map
       orders.forEach((o: any) => {
+        if (!isRevenueCountableFanHubOrder(o as Record<string, unknown>)) return;
         const fanId = o.fanId || o.fanEmail || "unknown";
         const fanEmail = o.fanEmail || null;
         const amount = o.amountCents || 0;
