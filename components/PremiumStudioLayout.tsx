@@ -15,7 +15,11 @@ import {
 } from './useUnreadNewMessageNotifications';
 import { useCreatorLiveChatSessionsCount } from './useCreatorLiveChatSessionsCount';
 import { EchoFluxHowItWorksModal } from './EchoFluxHowItWorksModal';
-import { isBrowserPushEnabled, listenForForegroundPush } from '../src/lib/fanPushNotifications';
+import {
+  isBrowserPushEnabled,
+  listenForForegroundPush,
+  reinforceWebPushForCurrentUser,
+} from '../src/lib/fanPushNotifications';
 import { fanHubThemeBackgroundIsDark } from '../src/lib/fanHubTheme';
 
 const FAN_HUB_PREVIEW_THEME_STORAGE_KEY = 'echoflux:fanhub-preview-theme';
@@ -195,6 +199,17 @@ export const PremiumStudioLayout: React.FC<PremiumStudioLayoutProps> = ({ childr
         /* ignore */
       }
     })();
+  }, [isFanHub]);
+
+  /** Refresh this device's push token when creators open Fan Hub (in-app bell can work while push is stale). */
+  useEffect(() => {
+    if (!isFanHub) return;
+    void reinforceWebPushForCurrentUser();
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') void reinforceWebPushForCurrentUser();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
   }, [isFanHub]);
 
   useEffect(() => {

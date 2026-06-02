@@ -16,6 +16,7 @@ import {
   isWebPushSupported,
   PUSH_STATE_EVENT,
   registerWebPush,
+  reinforceWebPushForCurrentUser,
 } from "../src/lib/fanPushNotifications";
 
 /** Writes go through Vercel + Admin SDK so client Firestore rules cannot block mark-read / delete. */
@@ -211,8 +212,13 @@ export const FanHubNotificationBell: React.FC<FanHubNotificationBellProps> = ({
   const pushOptInCreatorLabel = pushOptInCreatorName.trim() || "this creator";
   const pushOptInDescription =
     pushOptInMode === "creator"
-      ? "Get browser alerts when fans message you, buy from your store, or when sessions are coming up. Manage anytime in Settings."
+      ? "The bell shows history here; browser alerts reach your phone. Enable on this device, or use Settings → Browser notifications if alerts stop."
       : `Get browser alerts when ${pushOptInCreatorLabel} posts, messages you, or schedules live sessions. Manage anytime in Profile.`;
+
+  useEffect(() => {
+    if (!open) return;
+    void reinforceWebPushForCurrentUser();
+  }, [open]);
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, (u) => setUid(u?.uid ?? null));

@@ -7,6 +7,7 @@ import {
   isWebPushSupported,
   PUSH_STATE_EVENT,
   registerWebPush,
+  reinforceWebPushForCurrentUser,
 } from "../src/lib/fanPushNotifications";
 
 type BrowserPushSettingsProps = {
@@ -66,6 +67,12 @@ export const BrowserPushSettings: React.FC<BrowserPushSettingsProps> = ({
     void isWebPushSupported().then(setSupported);
     sync();
   }, [sync]);
+
+  /** Keep server token aligned when browser permission is already granted. */
+  useEffect(() => {
+    if (permission !== "granted") return;
+    void reinforceWebPushForCurrentUser();
+  }, [permission]);
 
   useEffect(() => {
     window.addEventListener(PUSH_STATE_EVENT, sync);
@@ -132,11 +139,11 @@ export const BrowserPushSettings: React.FC<BrowserPushSettingsProps> = ({
 
   const enabledHelp = isMember
     ? `You’ll get browser alerts when ${creatorLabel} posts, messages you, or schedules live sessions. Your in-app bell keeps the full history.`
-    : "You’ll get browser alerts for Fan Hub activity, account reminders, and admin alerts (when applicable). In-app bells still show your full history.";
+    : "Browser alerts are separate from the Fan Hub bell. If your bell updates but your phone stays quiet, use Refresh this device below.";
 
   const disabledHelp = isMember
     ? `Enable to receive browser alerts when ${creatorLabel} posts or messages you.`
-    : "Enable to receive browser alerts for Fan Hub posts, messages, purchases, and account reminders. You can also enable from the EchoFlux header bell.";
+    : "Turn on to get phone and desktop alerts for Fan Hub messages, purchases, and sessions. The in-app bell still keeps full history.";
 
   const statusHelp = permissionDenied
     ? "Notifications are blocked in your browser. Open your browser or device settings, allow notifications for this site, then return here and turn the toggle on."
@@ -149,7 +156,30 @@ export const BrowserPushSettings: React.FC<BrowserPushSettingsProps> = ({
       ? serverDeviceCount > 0
         ? `This device is registered (${serverDeviceCount} device${serverDeviceCount === 1 ? "" : "s"} on your account).`
         : "Browser permission is on, but this device is not registered yet — turn the toggle off and on to retry."
-      : null;
+      : permission === "granted" && !enabled
+        ? "Browser permission is on — turn the toggle on to register this device for alerts."
+        : null;
+
+  const handleRefreshDevice = async () => {
+    if (loading || permissionDenied) return;
+    setLoading(true);
+    try {
+      const token = await registerWebPush({ force: true });
+      if (token) {
+        showToast?.("This device was re-registered for browser alerts", "success");
+      } else {
+        showToast?.("Could not refresh push on this device", "error");
+      }
+      sync();
+    } catch (e) {
+      console.error("[BrowserPushSettings] refresh", e);
+      const msg = e instanceof Error ? e.message : "Could not refresh browser notifications";
+      showToast?.(msg, "error");
+      sync();
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <div className="space-y-2">
@@ -219,6 +249,15 @@ export const BrowserPushSettings: React.FC<BrowserPushSettingsProps> = ({
           }`}
         >
           I updated browser settings — check again
+        </button>
+      ) : enabled && !isMember ? (
+        <button
+          type="button"
+          disabled={loading}
+          onClick={() => void handleRefreshDevice()}
+          className="text-xs font-medium text-primary-600 dark:text-primary-400 hover:underline disabled:opacity-50"
+        >
+          {loading ? "Refreshing…" : "Refresh this device"}
         </button>
       ) : null}
     </div>

@@ -9,6 +9,8 @@ const PUSH_REGISTERED_KEY = "echoflux:push-token-registered";
 const PUSH_REGISTERED_UID_KEY = "echoflux:push-registered-uid";
 const PUSH_TOKEN_KEY = "echoflux:push-fcm-token";
 const PUSH_SYNC_THROTTLE_MS = 60_000;
+/** Re-register FCM on this device (keeps server token fresh when bell works but push is quiet). */
+const PUSH_REINFORCE_THROTTLE_MS = 3 * 60_000;
 export const PUSH_STATE_EVENT = "echoflux:push-state-changed";
 const SW_READY_MS = 25_000;
 const FCM_TOKEN_MS = 25_000;
@@ -120,17 +122,24 @@ export function clearLocalPushRegistrationState(): void {
  * Re-attach this device's FCM token to the signed-in user when notifications are allowed.
  * Idempotent (arrayUnion on server); throttled to avoid hammering getToken on every render.
  */
-export async function syncWebPushForCurrentUser(): Promise<string | null> {
+async function registerPushIfGranted(options?: {
+  throttleKey: string;
+  throttleMs: number;
+  bypassThrottle?: boolean;
+}): Promise<string | null> {
   if (!(await isWebPushSupported())) return null;
   if (typeof Notification === "undefined" || Notification.permission !== "granted") return null;
   const user = auth.currentUser;
   if (!user) return null;
   if (localStorage.getItem(PUSH_DECLINED_KEY) === "1") return null;
 
-  const throttleKey = `echoflux:push-sync-at:${user.uid}`;
-  const last = Number(sessionStorage.getItem(throttleKey) || 0);
+  const throttleKey = options?.throttleKey ?? `echoflux:push-sync-at:${user.uid}`;
+  const throttleMs = options?.throttleMs ?? PUSH_SYNC_THROTTLE_MS;
   const now = Date.now();
-  if (now - last < PUSH_SYNC_THROTTLE_MS) return null;
+  if (!options?.bypassThrottle) {
+    const last = Number(sessionStorage.getItem(throttleKey) || 0);
+    if (now - last < throttleMs) return null;
+  }
   sessionStorage.setItem(throttleKey, String(now));
 
   try {
@@ -139,6 +148,31 @@ export async function syncWebPushForCurrentUser(): Promise<string | null> {
     sessionStorage.removeItem(throttleKey);
     return null;
   }
+}
+
+export async function syncWebPushForCurrentUser(): Promise<string | null> {
+  const user = auth.currentUser;
+  if (!user) return null;
+  return registerPushIfGranted({
+    throttleKey: `echoflux:push-sync-at:${user.uid}`,
+    throttleMs: PUSH_SYNC_THROTTLE_MS,
+  });
+}
+
+/**
+ * Re-attach this device's FCM token when the user already allowed notifications.
+ * Use on Fan Hub / Settings so stale tokens do not leave creators with in-app bells only.
+ */
+export async function reinforceWebPushForCurrentUser(options?: {
+  bypassThrottle?: boolean;
+}): Promise<string | null> {
+  const user = auth.currentUser;
+  if (!user) return null;
+  return registerPushIfGranted({
+    throttleKey: `echoflux:push-reinforce-at:${user.uid}`,
+    throttleMs: PUSH_REINFORCE_THROTTLE_MS,
+    bypassThrottle: options?.bypassThrottle,
+  });
 }
 
 /**
