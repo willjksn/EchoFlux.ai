@@ -14,7 +14,11 @@ import {
     type FanPurchaseIdentity,
     type MinimalOrderForFanMatch,
 } from '../src/lib/fanHubFanPurchaseIdentity';
-import { classifyFanHubOrderLedgerKind } from '../src/lib/fanHubOrderLedger';
+import {
+    classifyFanHubOrderLedgerKind,
+    dedupeFanHubProductLedgerRows,
+    isRevenueCountableFanHubOrder,
+} from '../src/lib/fanHubOrderLedger';
 import {
     spendingLevelFromLifetimeSpendDollars,
     FAN_HUB_SPENDING_LEVEL_SCALE_ONE_LINER,
@@ -663,7 +667,28 @@ export const OnlyFansFans: React.FC = () => {
                     if (!res.ok) throw new Error('creatorOrders failed');
                     data = (await res.json()) as { orders?: Record<string, unknown>[] };
                 }
-                const orders = data.orders || [];
+                const rawOrders = (data.orders || []) as Record<string, unknown>[];
+                const countable = rawOrders.filter((o) => isRevenueCountableFanHubOrder(o));
+                const deduped = dedupeFanHubProductLedgerRows(
+                    countable.map((o) => ({
+                        id: String(o.id ?? ''),
+                        type: String(o.type ?? ''),
+                        status: String(o.status ?? ''),
+                        amountCents: typeof o.amountCents === 'number' ? o.amountCents : 0,
+                        productId: typeof o.productId === 'string' ? o.productId : null,
+                        productTitle: typeof o.productTitle === 'string' ? o.productTitle : undefined,
+                        fanId: typeof o.fanId === 'string' ? o.fanId : undefined,
+                        fanEmail: typeof o.fanEmail === 'string' ? o.fanEmail : undefined,
+                        stripePaymentIntentId:
+                            typeof o.stripePaymentIntentId === 'string' ? o.stripePaymentIntentId : null,
+                        stripeSessionId: typeof o.stripeSessionId === 'string' ? o.stripeSessionId : null,
+                        __createdAtMs: Number.isFinite(Date.parse(String(o.createdAt ?? '')))
+                            ? Date.parse(String(o.createdAt))
+                            : 0,
+                    })),
+                );
+                const keepIds = new Set(deduped.map((d) => d.id));
+                const orders = rawOrders.filter((o) => keepIds.has(String(o.id ?? '')));
                 const next: Record<string, FanSpendSummary> = {};
                 for (const fan of fansList) {
                     const pid = fan.purchaseIdentity;
@@ -677,8 +702,6 @@ export const OnlyFansFans: React.FC = () => {
                         latestPaidOrderAtMs: 0,
                     };
                     for (const raw of orders) {
-                        const st = String(raw.status ?? '').trim().toLowerCase();
-                        if (st === 'refunded') continue;
                         if (!orderMatchesFanPurchaseIdentity(raw as MinimalOrderForFanMatch, pid)) continue;
                         const kind = classifyFanHubOrderLedgerKind(raw);
                         const amt =

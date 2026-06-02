@@ -12,7 +12,12 @@ import {
 import { formatFanDisplayLabel } from "../src/lib/fanHubDisplay";
 import { inferIsAudioFromUrl, inferIsVideoFromUrl, normalizePostMediaTypes } from "../src/lib/mediaUrlInfer";
 import { hasLiveStreamAccess } from "../src/utils/planAccess";
-import { classifyFanHubOrderLedgerKind, isGuestCheckoutFanId } from "../src/lib/fanHubOrderLedger";
+import {
+  classifyFanHubOrderLedgerKind,
+  dedupeFanHubProductLedgerRows,
+  isGuestCheckoutFanId,
+  isRevenueCountableFanHubOrder,
+} from "../src/lib/fanHubOrderLedger";
 import {
   buildPostRevenueFromOrders,
   buildStreamIdToPostIdMap,
@@ -905,7 +910,28 @@ export const FanHubAnalytics: React.FC = () => {
           );
           if (!ordersRes.ok) return [];
           const data = await ordersRes.json();
-          return data.orders || [];
+          const raw = (data.orders || []) as Record<string, unknown>[];
+          const countable = raw.filter((o) => isRevenueCountableFanHubOrder(o));
+          const deduped = dedupeFanHubProductLedgerRows(
+            countable.map((o) => ({
+              id: String(o.id ?? ""),
+              type: String(o.type ?? ""),
+              status: String(o.status ?? ""),
+              amountCents: typeof o.amountCents === "number" ? o.amountCents : 0,
+              productId: typeof o.productId === "string" ? o.productId : null,
+              productTitle: typeof o.productTitle === "string" ? o.productTitle : undefined,
+              fanId: typeof o.fanId === "string" ? o.fanId : undefined,
+              fanEmail: typeof o.fanEmail === "string" ? o.fanEmail : undefined,
+              stripePaymentIntentId:
+                typeof o.stripePaymentIntentId === "string" ? o.stripePaymentIntentId : null,
+              stripeSessionId: typeof o.stripeSessionId === "string" ? o.stripeSessionId : null,
+              __createdAtMs: Number.isFinite(Date.parse(String(o.createdAt ?? "")))
+                ? Date.parse(String(o.createdAt))
+                : 0,
+            })),
+          );
+          const keepIds = new Set(deduped.map((d) => d.id));
+          return raw.filter((o) => keepIds.has(String(o.id ?? "")));
         })(),
         (async (): Promise<Map<string, { createdAt: Date | null; updatedAt: Date | null }>> => {
           const m = new Map<string, { createdAt: Date | null; updatedAt: Date | null }>();
