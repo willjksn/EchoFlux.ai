@@ -18,6 +18,7 @@ import {
   sendFanNotification,
 } from "./_fanNotifications.js";
 import { hasLiveChatSessionForDmThread } from "./_chatSessionDmNotifyGuard.js";
+import { fanHasActiveHubMembershipForCreator } from "./_fanHubMemberAccess.js";
 
 /** Vercel usually parses JSON; some proxies / versions may leave a string or Buffer. */
 function parseFanDmRequestBody(req: VercelRequest): Record<string, unknown> {
@@ -169,6 +170,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // Ban check: if fan is sending to creator, ensure fan is not blocked
     if (uid === fanIdFinal && (await isFanBlocked(db, creatorIdFinal, fanIdFinal))) {
       return res.status(403).json({ error: "You cannot message this creator" });
+    }
+
+    if (uid === fanIdFinal) {
+      const hasMembership = await fanHasActiveHubMembershipForCreator(db, creatorIdFinal, fanIdFinal);
+      if (!hasMembership) {
+        return res.status(403).json({
+          error: "Your membership has ended. Resubscribe on this creator's page to send messages.",
+          code: "MEMBERSHIP_EXPIRED",
+        });
+      }
     }
 
     const now = new Date().toISOString();

@@ -8,6 +8,7 @@ import {
   normalizedFanEmail,
   readFanGrantUnlockFields,
 } from "./_fanUnlockEntitlements.js";
+import { fanHubPaidMembershipStillActive } from "./_fanHubMemberAccess.js";
 
 function normalizedEmail(raw: unknown): string {
   return normalizedFanEmail(raw);
@@ -110,6 +111,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     let limitedMemberAccess = false;
     const nowIso = new Date().toISOString();
     let legacyFanDocId: string | null = null;
+    let subscriberRowData: Record<string, unknown> | undefined;
 
     // First check the primary fans collection (includes both paid and free members)
     const fanRef = db.collection("creators").doc(creatorId).collection("fans").doc(fanId);
@@ -253,6 +255,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         subscribed = true;
         membershipType = 'paid';
       }
+      if (subscriberSnap.exists) {
+        subscriberRowData = (subscriberSnap.data() || {}) as Record<string, unknown>;
+      }
+    }
+
+    if (subscribed && membershipType === "paid") {
+      const fanRow = fanSnap.exists ? ((fanSnap.data() || {}) as Record<string, unknown>) : undefined;
+      if (!fanHubPaidMembershipStillActive(fanRow, subscriberRowData)) {
+        subscribed = false;
+        membershipType = null;
+      }
     }
 
     const grantsCol = db
@@ -267,6 +280,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           membershipType?: string;
         } | undefined)
       : undefined;
+
+    if (grantData?.subscription === true && !subscribed && membershipType !== "paid") {
+      await grantRef.set({ subscription: false, updatedAt: nowIso }, { merge: true });
+    }
 
     const grantUnlockFields = await readFanGrantUnlockFields(db, creatorId, fanId, fanEmail, {
       migrateToCanonical: true,

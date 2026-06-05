@@ -148,13 +148,13 @@ export function formatRemainingAccessForFanRow(input: {
   }
 
   if (st === "active" || st === "trialing" || inferActive) {
+    /** Period ended but Stripe/Firestore still say active until webhooks reconcile. */
+    if (endMs != null && endMs <= now) {
+      return `Expired on ${formatShortAccessDate(endMs)}`;
+    }
     if (input.cancelAtPeriodEnd) {
       const u = untilPhrase();
       if (u) return u;
-      /** Period already ended but doc can still say active + cancel_at_period_end until webhooks sync. */
-      if (endMs != null && endMs <= now) {
-        return `Expired on ${formatShortAccessDate(endMs)}`;
-      }
       if (canceledAtMs != null) {
         return `Cancelling — period end not synced (updated ${formatShortAccessDate(canceledAtMs)})`;
       }
@@ -301,4 +301,16 @@ export function isHubMembershipAccessExpired(input: {
   /** No explicit status but a mirrored period end exists and has passed (partial webhook / CRM data). */
   if (!st && endMs != null && endMs <= now) return true;
   return false;
+}
+
+/** True while paid/free Fan Hub membership still includes hub + fan→creator messaging. */
+export function hasActiveFanHubMembershipAccess(input: {
+  subscriptionStatus: string | null | undefined;
+  cancelAtPeriodEnd?: boolean;
+  accessEnd?: Date | null;
+  canceledAt?: Date | null;
+}): boolean {
+  const st = String(input.subscriptionStatus || "").toLowerCase();
+  if (st === "free") return true;
+  return !isHubMembershipAccessExpired(input);
 }

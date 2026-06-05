@@ -1249,7 +1249,13 @@ export const FanHubUsers: React.FC = () => {
           subStatusNormalized !== "cancelled" &&
           subStatusNormalized !== "past_due" &&
           subStatusNormalized !== "unpaid" &&
-          subStatusNormalized !== "incomplete_expired";
+          subStatusNormalized !== "incomplete_expired" &&
+          !isHubMembershipAccessExpired({
+            subscriptionStatus: data.subscriptionStatus,
+            cancelAtPeriodEnd: cancelAtEnd,
+            accessEnd: data.subscriptionCurrentPeriodEnd ?? null,
+            canceledAt: data.canceledAt ?? null,
+          });
         let remainingAccess = formatRemainingAccessForFanRow({
           subscriptionStatus: data.subscriptionStatus,
           cancelAtPeriodEnd: cancelAtEnd,
@@ -1293,27 +1299,6 @@ export const FanHubUsers: React.FC = () => {
         );
 
         const stPlan = (data.subscriptionStatus || "").toLowerCase();
-        /** Badge: treat as scheduled cancel if flag is set OR remaining-access copy implies it (handles stale client reads). */
-        const cancelScheduled =
-          cancelAtEnd ||
-          ((stPlan === "active" || stPlan === "trialing") &&
-            (/\bday left\b/i.test(remainingAccess) || /\buntil\b/i.test(remainingAccess)));
-        const plan = resolveFanHubMemberPlanBadge({
-          subscriptionStatus: data.subscriptionStatus,
-          cancelScheduled,
-          remainingAccess,
-          membershipOrderCents: membership,
-          fanDocMembershipCents: lifetimeMembershipCents,
-          orderSumCents,
-          baselineCents,
-        });
-        const signupDate =
-          earlierDate(earlierDate(data.subscribedAt, data.firstOrder), data.profileSignupAt ?? null) ??
-          data.subscribedAt ??
-          data.firstOrder ??
-          data.profileSignupAt ??
-          null;
-        const authUid = authUidFromFanDocId(data.id);
         const membershipAccessExpired =
           role === "member" &&
           isHubMembershipAccessExpired({
@@ -1322,6 +1307,30 @@ export const FanHubUsers: React.FC = () => {
             accessEnd: data.subscriptionCurrentPeriodEnd ?? null,
             canceledAt: data.canceledAt ?? null,
           });
+        /** Badge: treat as scheduled cancel if flag is set OR remaining-access copy implies it (handles stale client reads). */
+        const cancelScheduled =
+          cancelAtEnd ||
+          ((stPlan === "active" || stPlan === "trialing") &&
+            (/\bday left\b/i.test(remainingAccess) || /\buntil\b/i.test(remainingAccess)));
+        const plan =
+          membershipAccessExpired
+            ? "Expired"
+            : resolveFanHubMemberPlanBadge({
+                subscriptionStatus: data.subscriptionStatus,
+                cancelScheduled,
+                remainingAccess,
+                membershipOrderCents: membership,
+                fanDocMembershipCents: lifetimeMembershipCents,
+                orderSumCents,
+                baselineCents,
+              });
+        const signupDate =
+          earlierDate(earlierDate(data.subscribedAt, data.firstOrder), data.profileSignupAt ?? null) ??
+          data.subscribedAt ??
+          data.firstOrder ??
+          data.profileSignupAt ??
+          null;
+        const authUid = authUidFromFanDocId(data.id);
         return {
           id: data.id,
           name,

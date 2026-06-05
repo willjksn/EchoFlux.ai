@@ -75,7 +75,10 @@ export async function applyFanHubSubscriptionFromStripe(
     ? new Date(periodEndSec * 1000).toISOString()
     : null;
   const cancelAtPeriodEnd = !!(subscription as { cancel_at_period_end?: boolean }).cancel_at_period_end;
-  const grantActive = subStatus === "active" || subStatus === "trialing";
+  const periodEndMs = subscriptionCurrentPeriodEnd ? Date.parse(subscriptionCurrentPeriodEnd) : null;
+  const grantActive =
+    (subStatus === "active" || subStatus === "trialing") &&
+    (periodEndMs == null || !Number.isFinite(periodEndMs) || periodEndMs > Date.now());
 
   const subRef = db.collection("creatorSubscribers").doc(creatorId).collection("subscribers").doc(fanId);
   await subRef.set(
