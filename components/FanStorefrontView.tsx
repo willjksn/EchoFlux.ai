@@ -132,6 +132,11 @@ import {
   stripFanStorefrontLandingQueryParam,
 } from "../src/lib/fanStorefrontLandingIntent";
 import {
+  clearFanStorefrontLapsedMembershipIntent,
+  peekFanStorefrontLapsedMembershipIntent,
+  primeFanStorefrontLapsedMembershipIntent,
+} from "../src/lib/fanStorefrontLapsedMembership";
+import {
   applyWitmeTabIcons,
   isWitmePublicSiteHostname,
   restoreEchoFluxTabIcons,
@@ -1412,6 +1417,8 @@ export const FanStorefrontView: React.FC = () => {
   const entitlementFetchGen = useRef(0);
   /** Paid-creator fan auth: pick Home vs Purchases after `getFanEntitlement` (expired / free tier → store). */
   const fanAuthPendingHubNavRef = useRef(false);
+  const resubscribeAuthFlowRef = useRef(false);
+  const lapsedEnforcementInFlightRef = useRef(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [geoBlocked, setGeoBlocked] = useState(false);
@@ -1483,6 +1490,7 @@ export const FanStorefrontView: React.FC = () => {
   const [fanAuthView, setFanAuthView] = useState<"login" | "signup">("login");
   /** Paid landing: user is already signed in — open auth on the “finish joining” step before Stripe. */
   const [fanAuthPaidDetailsStep, setFanAuthPaidDetailsStep] = useState(false);
+  const [lapsedMembershipResubscribeOpen, setLapsedMembershipResubscribeOpen] = useState(false);
   const [dmThread, setDmThread] = useState<FanDmThread | null>(null);
   const [dmMessages, setDmMessages] = useState<FanDmMessage[]>([]);
   const [dmLabels, setDmLabels] = useState<{ fan: string; creator: string } | null>(null);
@@ -2403,6 +2411,43 @@ export const FanStorefrontView: React.FC = () => {
   }, [creator?.creatorId, creator?.monetization?.freeAccessEnabled]);
 
   useEffect(() => {
+    if (!creator?.creatorId) return;
+    if (peekFanStorefrontLapsedMembershipIntent(creator.creatorId)) {
+      setLapsedMembershipResubscribeOpen(true);
+    }
+  }, [creator?.creatorId]);
+
+  const applyLapsedMembershipEnforcement = useCallback(async (): Promise<boolean> => {
+    if (previewMember || resubscribeAuthFlowRef.current || !creator?.creatorId) return false;
+    if (lapsedEnforcementInFlightRef.current) return false;
+    lapsedEnforcementInFlightRef.current = true;
+    try {
+      primeFanStorefrontLapsedMembershipIntent(creator.creatorId);
+      setLapsedMembershipResubscribeOpen(true);
+      fanAuthPendingHubNavRef.current = false;
+      clearLocalPushRegistrationState();
+      await auth.signOut();
+      setIsLoggedIn(false);
+      setAuthResolved(true);
+      setFanAuthUid(undefined);
+      setSubscribed(false);
+      setMembershipType(null);
+      setBilledSubscriptionPriceCents(null);
+      setMemberUsernameRequired(false);
+      setUnlockedProductIds([]);
+      setUnlockedFanPostIds([]);
+      setUnlockedLiveStreamIds([]);
+      setLimitedMemberAccess(false);
+      setFanPageAdminBypass(false);
+      return true;
+    } catch {
+      return false;
+    } finally {
+      lapsedEnforcementInFlightRef.current = false;
+    }
+  }, [creator?.creatorId, previewMember]);
+
+  useEffect(() => {
     if (!creator?.creatorId || !isLoggedIn) {
       setSubscribed(false);
       setMembershipType(null);
@@ -2458,6 +2503,16 @@ export const FanStorefrontView: React.FC = () => {
           showToast?.(msg || `Could not verify membership (${res.status}). Refresh and try again.`, "error");
           return;
         }
+        if ((data as { membershipLapsedNoPurchases?: boolean }).membershipLapsedNoPurchases) {
+          if (gen === entitlementFetchGen.current) {
+            setEntitlementLoading(false);
+            setEntitlementBootstrapResolved(true);
+            entitlementHydratingRef.current = false;
+          }
+          if (gen !== entitlementFetchGen.current) return;
+          await applyLapsedMembershipEnforcement();
+          return;
+        }
         const nextUnlockedProducts = Array.isArray((data as { unlockedProductIds?: string[] }).unlockedProductIds)
           ? (data as { unlockedProductIds: string[] }).unlockedProductIds
           : [];
@@ -2487,6 +2542,10 @@ export const FanStorefrontView: React.FC = () => {
             nextUnlockedStreams.length > 0
         );
         setFanPageAdminBypass(!!(data as { fanPageAdminBypass?: boolean }).fanPageAdminBypass);
+        if ((data as { subscribed?: boolean }).subscribed && creator?.creatorId) {
+          clearFanStorefrontLapsedMembershipIntent(creator.creatorId);
+          setLapsedMembershipResubscribeOpen(false);
+        }
       } catch {
         if (gen === entitlementFetchGen.current) {
           setSubscribed(false);
@@ -2506,7 +2565,13 @@ export const FanStorefrontView: React.FC = () => {
         }
       }
     })();
-  }, [creator?.creatorId, isLoggedIn, reconcileFanMembershipFromStripe, creator?.monetization?.freeAccessEnabled]);
+  }, [
+    creator?.creatorId,
+    isLoggedIn,
+    reconcileFanMembershipFromStripe,
+    creator?.monetization?.freeAccessEnabled,
+    applyLapsedMembershipEnforcement,
+  ]);
 
   const refetchMemberEntitlement = useCallback(async () => {
     if (!creator?.creatorId || !auth.currentUser) return;
@@ -2535,6 +2600,10 @@ export const FanStorefrontView: React.FC = () => {
         }
       }
       if (!res.ok) {
+        return;
+      }
+      if ((data as { membershipLapsedNoPurchases?: boolean }).membershipLapsedNoPurchases) {
+        await applyLapsedMembershipEnforcement();
         return;
       }
       const nextUnlockedProducts = Array.isArray((data as { unlockedProductIds?: string[] }).unlockedProductIds)
@@ -2568,6 +2637,10 @@ export const FanStorefrontView: React.FC = () => {
           nextUnlockedStreams.length > 0
       );
       setFanPageAdminBypass(!!(data as { fanPageAdminBypass?: boolean }).fanPageAdminBypass);
+      if ((data as { subscribed?: boolean }).subscribed && creator?.creatorId) {
+        clearFanStorefrontLapsedMembershipIntent(creator.creatorId);
+        setLapsedMembershipResubscribeOpen(false);
+      }
     } catch {
       /* keep prior entitlement on transient failures */
     } finally {
@@ -2582,7 +2655,12 @@ export const FanStorefrontView: React.FC = () => {
         entitlementHydratingRef.current = false;
       }
     }
-  }, [creator?.creatorId, creator?.monetization?.freeAccessEnabled, reconcileFanMembershipFromStripe]);
+  }, [
+    creator?.creatorId,
+    creator?.monetization?.freeAccessEnabled,
+    reconcileFanMembershipFromStripe,
+    applyLapsedMembershipEnforcement,
+  ]);
 
   useEffect(() => {
     if (typeof window === "undefined" || !creator?.creatorId || !isLoggedIn) return;
@@ -3265,6 +3343,8 @@ export const FanStorefrontView: React.FC = () => {
         } catch {
           /* ignore */
         }
+        clearFanStorefrontLapsedMembershipIntent(creator.creatorId);
+        setLapsedMembershipResubscribeOpen(false);
         await refetchMemberEntitlement();
         showToast?.(
           error || "You already have an active membership — opening the member hub.",
@@ -5209,10 +5289,66 @@ export const FanStorefrontView: React.FC = () => {
           privacyHref={storefrontPrivacyPath}
           homeHref={storefrontHomePath}
         />
+        {lapsedMembershipResubscribeOpen && creator ? (
+          <div
+            className="fixed inset-0 z-[120] flex items-center justify-center p-4"
+            style={{ backgroundColor: "rgba(0,0,0,0.6)" }}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="fan-lapsed-membership-title"
+          >
+            <div
+              className="w-full max-w-md rounded-2xl p-6 shadow-xl"
+              style={{
+                backgroundColor: "#fff",
+                color: creator.theme?.text || "#1f2937",
+              }}
+            >
+              <h2 id="fan-lapsed-membership-title" className="text-xl font-bold mb-2">
+                Membership expired
+              </h2>
+              <p className="text-sm mb-4 opacity-90 leading-relaxed">
+                Your paid access to {displayName} has ended. Resubscribe to unlock the member hub again
+                {typeof creator.monetization?.monthlyPrice === "number"
+                  ? ` ($${(creator.monetization.monthlyPrice / 100).toFixed(2)}/mo)`
+                  : ""}
+                .
+              </p>
+              <div className="flex flex-col gap-3">
+                <button
+                  type="button"
+                  className="w-full px-4 py-3 rounded-xl text-sm font-semibold text-white border-0 disabled:opacity-50"
+                  style={{ backgroundColor: creator.theme?.primary || "#6366f1" }}
+                  disabled={subscribing}
+                  onClick={() => {
+                    resubscribeAuthFlowRef.current = true;
+                    setFanAuthPaidDetailsStep(true);
+                    setFanAuthView("login");
+                    setFanAuthOpen(true);
+                  }}
+                >
+                  {subscribing ? "Opening…" : "Resubscribe"}
+                </button>
+                <button
+                  type="button"
+                  className="w-full px-4 py-2 rounded-xl text-sm font-medium border"
+                  style={{
+                    borderColor: `${creator.theme?.primary || "#6366f1"}66`,
+                    color: creator.theme?.primary || "#6366f1",
+                  }}
+                  onClick={() => setLapsedMembershipResubscribeOpen(false)}
+                >
+                  Browse public page
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : null}
         {fanAuthOpen && (
           <FanAuthModal
             isOpen={fanAuthOpen}
             onClose={() => {
+              resubscribeAuthFlowRef.current = false;
               setFanAuthOpen(false);
               setFanAuthPaidDetailsStep(false);
             }}
@@ -5222,17 +5358,59 @@ export const FanStorefrontView: React.FC = () => {
                 : async () => startSubscriptionCheckout({ auto: true })
             }
             startPaidMembershipDetailsStep={fanAuthPaidDetailsStep}
-            onAuthSessionReady={syncFanAuthSessionToHub}
-            onSuccess={() => {
-              syncFanAuthSessionToHub();
-              /** Free storefront: entitlement fetch can lag behind join; without this, showLanding stays true and fans stay on the landing page after "You're in!". */
-              if (creator.monetization?.freeAccessEnabled === true) {
-                setSubscribed(true);
-                setMembershipType("free");
+            onAuthSessionReady={() => {
+              if (auth.currentUser) {
+                setAuthResolved(true);
+                setFanAuthUid(auth.currentUser.uid);
+                setIsLoggedIn(true);
               }
-              void refetchMemberEntitlement();
-              setFanAuthOpen(false);
-              setFanAuthPaidDetailsStep(false);
+            }}
+            onSuccess={() => {
+              void (async () => {
+                if (creator.monetization?.freeAccessEnabled === true) {
+                  syncFanAuthSessionToHub();
+                  setSubscribed(true);
+                  setMembershipType("free");
+                  await refetchMemberEntitlement();
+                  setFanAuthOpen(false);
+                  setFanAuthPaidDetailsStep(false);
+                  return;
+                }
+                if (auth.currentUser) {
+                  setAuthResolved(true);
+                  setFanAuthUid(auth.currentUser.uid);
+                  setIsLoggedIn(true);
+                }
+                try {
+                  const token = await auth.currentUser?.getIdToken(true);
+                  if (token && creator.creatorId) {
+                    const entRes = await fetch(
+                      `/api/getFanEntitlement?creatorId=${encodeURIComponent(creator.creatorId)}`,
+                      { headers: { Authorization: `Bearer ${token}` } }
+                    );
+                    const data = await entRes.json().catch(() => ({}));
+                    if ((data as { membershipLapsedNoPurchases?: boolean }).membershipLapsedNoPurchases) {
+                      if (resubscribeAuthFlowRef.current) {
+                        resubscribeAuthFlowRef.current = false;
+                        setFanAuthOpen(false);
+                        setFanAuthPaidDetailsStep(false);
+                        await startSubscriptionCheckout();
+                        return;
+                      }
+                      await applyLapsedMembershipEnforcement();
+                      setFanAuthOpen(false);
+                      setFanAuthPaidDetailsStep(false);
+                      return;
+                    }
+                  }
+                } catch {
+                  /* fall through to normal hub entry */
+                }
+                syncFanAuthSessionToHub();
+                await refetchMemberEntitlement();
+                setFanAuthOpen(false);
+                setFanAuthPaidDetailsStep(false);
+              })();
             }}
             initialView={fanAuthView}
             creatorId={creator.creatorId}

@@ -8,7 +8,10 @@ import {
   normalizedFanEmail,
   readFanGrantUnlockFields,
 } from "./_fanUnlockEntitlements.js";
-import { fanHubPaidMembershipStillActive } from "./_fanHubMemberAccess.js";
+import {
+  fanHadPriorPaidMembership,
+  fanHubPaidMembershipStillActive,
+} from "./_fanHubMemberAccess.js";
 
 function normalizedEmail(raw: unknown): string {
   return normalizedFanEmail(raw);
@@ -437,6 +440,34 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
     }
 
+    const fanRowForLapsed = fanSnap.exists
+      ? ((fanSnap.data() || {}) as Record<string, unknown>)
+      : undefined;
+    if (!subscriberRowData) {
+      const subSnap = await db
+        .collection("creatorSubscribers")
+        .doc(creatorId)
+        .collection("subscribers")
+        .doc(fanId)
+        .get();
+      if (subSnap.exists) {
+        subscriberRowData = (subSnap.data() || {}) as Record<string, unknown>;
+      }
+    }
+
+    let membershipLapsedNoPurchases = false;
+    const creatorSnap = await db.collection("creators").doc(creatorId).get();
+    const monetization = creatorSnap.data()?.monetization as { freeAccessEnabled?: boolean } | undefined;
+    if (
+      monetization?.freeAccessEnabled !== true &&
+      !subscribed &&
+      !limitedMemberAccess &&
+      fanHadPriorPaidMembership(fanRowForLapsed, subscriberRowData) &&
+      !fanHubPaidMembershipStillActive(fanRowForLapsed, subscriberRowData)
+    ) {
+      membershipLapsedNoPurchases = true;
+    }
+
     return res.status(200).json({
       subscribed,
       membershipType,
@@ -447,6 +478,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       memberUsername,
       memberUsernameRequired,
       billedSubscriptionPriceCents,
+      membershipLapsedNoPurchases,
     });
   } catch (error: unknown) {
     console.error("getFanEntitlement error:", error);

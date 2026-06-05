@@ -17,6 +17,34 @@ function cancelAtPeriodEndFromDoc(d: Record<string, unknown>): boolean {
   return false;
 }
 
+/** True when Firestore shows the fan previously paid for membership (not tips-only). */
+export function fanHadPriorPaidMembership(
+  fanRow: Record<string, unknown> | undefined,
+  subRow: Record<string, unknown> | undefined,
+): boolean {
+  const merged = { ...(subRow || {}), ...(fanRow || {}) };
+  const stripeSub =
+    typeof merged.stripeSubscriptionId === "string" &&
+    merged.stripeSubscriptionId.trim().startsWith("sub_");
+  const membershipCents =
+    typeof merged.totalMembershipCents === "number" &&
+    Number.isFinite(merged.totalMembershipCents) &&
+    merged.totalMembershipCents > 0;
+  const membershipPayments =
+    typeof merged.membershipPaymentCount === "number" &&
+    Number.isFinite(merged.membershipPaymentCount) &&
+    merged.membershipPaymentCount > 0;
+  if (stripeSub || membershipCents || membershipPayments) return true;
+  if (subRow && Object.keys(subRow).length > 0) {
+    const status = typeof subRow.status === "string" ? subRow.status.trim().toLowerCase() : "";
+    if (status && status !== "free") return true;
+  }
+  const fanStatus =
+    typeof fanRow?.subscriptionStatus === "string" ? fanRow.subscriptionStatus.trim().toLowerCase() : "";
+  if (fanStatus && fanStatus !== "free" && fanStatus !== "none") return true;
+  return false;
+}
+
 export function fanHubPaidMembershipStillActive(
   fanRow: Record<string, unknown> | undefined,
   subRow: Record<string, unknown> | undefined,
