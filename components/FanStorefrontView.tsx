@@ -4866,6 +4866,10 @@ export const FanStorefrontView: React.FC = () => {
         goTab("feed");
         return;
       }
+      if (target.tab === "treats") {
+        goTab("treats");
+        return;
+      }
       if (d.threadId?.trim()) {
         const threadId = d.threadId.trim();
         setDmPreferredThreadId(threadId);

@@ -11,6 +11,7 @@ import {
   parseTreatProductPackFields,
   sanitizeTreatProductForPublicView,
 } from "../src/lib/digitalPackProduct.js";
+import { notifyCreatorMembersNewTreat } from "./_notifyCreatorNewTreat.js";
 
 const COLLECTION = "products";
 
@@ -282,6 +283,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       Object.assign(doc, packFieldsFromBody(body));
       await ref.set(doc);
       const product = toProduct(await ref.get());
+      try {
+        await notifyCreatorMembersNewTreat({
+          creatorId: decoded.uid,
+          productId: product.id,
+          title: product.title || title,
+          visible: product.visible,
+          archived: product.archived,
+          showInMemberStore: product.showInMemberStore !== false,
+        });
+      } catch (notifyErr) {
+        console.warn("products create notification failed:", notifyErr);
+      }
       return res.status(201).json({ product });
     } catch (e: unknown) {
       console.error("products create error:", e);

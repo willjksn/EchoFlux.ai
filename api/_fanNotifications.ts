@@ -17,6 +17,7 @@ export type FanNotificationType =
   | 'video_chat_reminder'
   | 'new_message'
   | 'new_post'
+  | 'new_treat'
   | 'session_starting'
   | 'session_reminder'
   | 'live_session_scheduled'
@@ -304,6 +305,7 @@ function resolveMemberHubPushLink(
       : `${base}/messages`;
   }
   if (type === "new_post") return `${base}/feed`;
+  if (type === "new_treat") return `${base}/store`;
   if (
     type === "purchase_confirmed" ||
     type === "creator_gift_granted" ||

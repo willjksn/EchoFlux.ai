@@ -72,6 +72,9 @@ export function resolveFanHubNotificationTarget(
   if (t === 'new_member') {
     return { tab: 'fans' };
   }
+  if (t === 'new_treat' || destination === 'treats' || destination === 'store') {
+    return { tab: 'treats' };
+  }
   if (d.threadId?.trim()) {
     return { tab: 'messages', threadId: d.threadId.trim() };
   }
