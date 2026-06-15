@@ -2,6 +2,7 @@ import type { Firestore } from "firebase-admin/firestore";
 import {
   hasActiveFanHubMembershipAccess,
   parseDateLike,
+  pickPastDueAccessEnd,
   pickLatestMemberAccessEnd,
 } from "../src/lib/memberAccessEnd.js";
 
@@ -58,6 +59,7 @@ export function fanHubPaidMembershipStillActive(
     cancelAtPeriodEnd: cancelAtPeriodEndFromDoc(merged),
     accessEnd: pickLatestMemberAccessEnd(merged),
     canceledAt: parseDateLike(merged.canceledAt),
+    pastDueAccessEndsAt: pickPastDueAccessEnd(merged),
   });
 }
 

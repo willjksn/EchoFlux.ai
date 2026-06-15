@@ -67,6 +67,11 @@ const ACCESS_END_KEYS = [
   "subscriptionEndDate",
 ] as const;
 
+const PAST_DUE_ACCESS_END_KEYS = [
+  "pastDueAccessEndsAt",
+  "past_due_access_ends_at",
+] as const;
+
 /**
  * Latest non-null date among known fields on a doc (or merged view).
  */
@@ -78,6 +83,14 @@ export function pickLatestMemberAccessEnd(d: Record<string, unknown>): Date | nu
     if (!best || parsed.getTime() > best.getTime()) best = parsed;
   }
   return best;
+}
+
+export function pickPastDueAccessEnd(d: Record<string, unknown>): Date | null {
+  for (const key of PAST_DUE_ACCESS_END_KEYS) {
+    const parsed = parseDateLike(d[key]);
+    if (parsed) return parsed;
+  }
+  return null;
 }
 
 function formatShortAccessDate(ms: number): string {
@@ -98,6 +111,7 @@ export function formatRemainingAccessForFanRow(input: {
   accessEnd: Date | null;
   /** Fan doc `canceledAt` when subscription ended but `subscriptionCurrentPeriodEnd` was never stored */
   canceledAt?: Date | null;
+  pastDueAccessEndsAt?: Date | null;
   /**
    * Fan doc missing `subscriptionStatus` but orders / Stripe show a current paying member
    * (User Management plan badge uses the same inference).
@@ -131,7 +145,16 @@ export function formatRemainingAccessForFanRow(input: {
     return `${daysPart} (until ${dateStr})`;
   };
 
-  if (st === "past_due") return "Past Due";
+  if (st === "past_due") {
+    const pastDueEndMs =
+      input.pastDueAccessEndsAt && Number.isFinite(input.pastDueAccessEndsAt.getTime())
+        ? input.pastDueAccessEndsAt.getTime()
+        : null;
+    if (pastDueEndMs != null && pastDueEndMs > now) {
+      return `Past Due — access until ${formatShortAccessDate(pastDueEndMs)}`;
+    }
+    return "Past Due — access restricted";
+  }
 
   if (st === "free") return "Active";
 
@@ -204,14 +227,22 @@ export function mergeFanHubFanMirrorRowsForAccess(rows: Record<string, unknown>[
   cancelAtPeriodEnd: boolean;
   accessEnd: Date | null;
   canceledAt: Date | null;
+  pastDueAccessEndsAt: Date | null;
 } {
   if (rows.length === 0) {
-    return { subscriptionStatus: null, cancelAtPeriodEnd: false, accessEnd: null, canceledAt: null };
+    return {
+      subscriptionStatus: null,
+      cancelAtPeriodEnd: false,
+      accessEnd: null,
+      canceledAt: null,
+      pastDueAccessEndsAt: null,
+    };
   }
 
   let mergedStatus: string | null = null;
   let mergedCancelAtPeriodEnd = false;
   let mergedCanceledAt: Date | null = null;
+  let mergedPastDueAccessEndsAt: Date | null = null;
 
   for (const fd of rows) {
     const st = subscriptionStatusFromFanMirrorRow(fd);
@@ -221,6 +252,10 @@ export function mergeFanHubFanMirrorRowsForAccess(rows: Record<string, unknown>[
     if (cancelAtPeriodEndFromFanMirrorRow(fd)) mergedCancelAtPeriodEnd = true;
     const ca = parseDateLike(fd.canceledAt);
     if (ca && (!mergedCanceledAt || ca.getTime() > mergedCanceledAt.getTime())) mergedCanceledAt = ca;
+    const pd = pickPastDueAccessEnd(fd);
+    if (pd && (!mergedPastDueAccessEndsAt || pd.getTime() < mergedPastDueAccessEndsAt.getTime())) {
+      mergedPastDueAccessEndsAt = pd;
+    }
   }
 
   const mergedRank = subscriptionStatusRankForFanMirror(mergedStatus);
@@ -262,6 +297,7 @@ export function mergeFanHubFanMirrorRowsForAccess(rows: Record<string, unknown>[
     cancelAtPeriodEnd: mergedCancelAtPeriodEnd,
     accessEnd: mergedAccessEnd,
     canceledAt: mergedCanceledAt,
+    pastDueAccessEndsAt: mergedPastDueAccessEndsAt,
   };
 }
 
@@ -279,6 +315,7 @@ export function isHubMembershipAccessExpired(input: {
   accessEnd: Date | null;
   /** Fan doc `canceledAt` from webhooks when period end is missing or stale */
   canceledAt?: Date | null;
+  pastDueAccessEndsAt?: Date | null;
 }): boolean {
   const st = String(input.subscriptionStatus || "").toLowerCase();
   const now = Date.now();
@@ -288,6 +325,14 @@ export function isHubMembershipAccessExpired(input: {
       : null;
 
   if (st === "expired" || st === "unpaid" || st === "incomplete_expired") return true;
+
+  if (st === "past_due") {
+    const pastDueEndMs =
+      input.pastDueAccessEndsAt && Number.isFinite(input.pastDueAccessEndsAt.getTime())
+        ? input.pastDueAccessEndsAt.getTime()
+        : null;
+    return pastDueEndMs != null ? pastDueEndMs <= now : false;
+  }
 
   if (st === "canceled" || st === "cancelled") {
     if (endMs != null) return endMs <= now;
@@ -309,8 +354,15 @@ export function hasActiveFanHubMembershipAccess(input: {
   cancelAtPeriodEnd?: boolean;
   accessEnd?: Date | null;
   canceledAt?: Date | null;
+  pastDueAccessEndsAt?: Date | null;
 }): boolean {
   const st = String(input.subscriptionStatus || "").toLowerCase();
   if (st === "free") return true;
-  return !isHubMembershipAccessExpired(input);
+  return !isHubMembershipAccessExpired({
+    subscriptionStatus: input.subscriptionStatus,
+    cancelAtPeriodEnd: input.cancelAtPeriodEnd === true,
+    accessEnd: input.accessEnd ?? null,
+    canceledAt: input.canceledAt ?? null,
+    pastDueAccessEndsAt: input.pastDueAccessEndsAt ?? null,
+  });
 }

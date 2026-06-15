@@ -11,6 +11,7 @@ import {
 } from "../src/lib/fanHubDisplay";
 import {
   pickLatestMemberAccessEnd,
+  pickPastDueAccessEnd,
   formatRemainingAccessForFanRow,
   isHubMembershipAccessExpired,
   mergeFanHubFanMirrorRowsForAccess,
@@ -330,9 +331,13 @@ function mapRowToFanMirrorRecord(row: {
   cancelAtPeriodEnd?: boolean;
   canceledAt?: Date | null;
   subscriptionCurrentPeriodEnd?: Date | null;
+  pastDueAccessEndsAt?: Date | null;
 }): Record<string, unknown> {
   const end = row.subscriptionCurrentPeriodEnd;
   const endIso = end && Number.isFinite(end.getTime()) ? end.toISOString() : undefined;
+  const pastDueEnd = row.pastDueAccessEndsAt;
+  const pastDueEndIso =
+    pastDueEnd && Number.isFinite(pastDueEnd.getTime()) ? pastDueEnd.toISOString() : undefined;
   return {
     subscriptionStatus: row.subscriptionStatus,
     cancelAtPeriodEnd: row.cancelAtPeriodEnd,
@@ -341,6 +346,7 @@ function mapRowToFanMirrorRecord(row: {
     subscriptionCurrentPeriodEnd: endIso,
     accessEndsAt: endIso,
     current_period_end: endIso,
+    pastDueAccessEndsAt: pastDueEndIso,
   };
 }
 
@@ -350,6 +356,7 @@ function applyMergedSubscriptionToMapRow(
     cancelAtPeriodEnd?: boolean;
     canceledAt?: Date | null;
     subscriptionCurrentPeriodEnd?: Date | null;
+    pastDueAccessEndsAt?: Date | null;
   },
   mirrors: Record<string, unknown>[],
 ): void {
@@ -359,6 +366,7 @@ function applyMergedSubscriptionToMapRow(
   row.cancelAtPeriodEnd = merged.cancelAtPeriodEnd;
   row.canceledAt = merged.canceledAt;
   row.subscriptionCurrentPeriodEnd = merged.accessEnd;
+  row.pastDueAccessEndsAt = merged.pastDueAccessEndsAt;
 }
 
 function pickCanonicalFanMapRowId(map: Map<string, { subscriptionStatus: string | null; treats: number; tips: number; unlocks: number; membership?: number }>, ids: string[]): string {
@@ -633,6 +641,7 @@ export const FanHubUsers: React.FC = () => {
           cancelAtPeriodEnd?: boolean;
           canceledAt?: Date | null;
           subscriptionCurrentPeriodEnd?: Date | null;
+          pastDueAccessEndsAt?: Date | null;
           profileSignupAt?: Date | null;
         }
       >();
@@ -739,6 +748,7 @@ export const FanHubUsers: React.FC = () => {
           const subscribedAt =
             firestoreDate(data.subscribedAt) ?? firestoreDate(data.createdAt) ?? null;
           const subscriptionCurrentPeriodEnd = pickLatestMemberAccessEnd(data);
+          const pastDueAccessEndsAt = pickPastDueAccessEnd(data);
 
           const rawUsernameFromDoc =
             (typeof data.username === "string" && data.username.trim()) ||
@@ -786,6 +796,7 @@ export const FanHubUsers: React.FC = () => {
             cancelAtPeriodEnd: parseCancelAtPeriodEndFromDoc(data),
             canceledAt: firestoreDate(data.canceledAt),
             subscriptionCurrentPeriodEnd,
+            pastDueAccessEndsAt,
           });
         });
       }
@@ -886,6 +897,7 @@ export const FanHubUsers: React.FC = () => {
           const data = docSnap.data();
           const fanId = docSnap.id;
           const legacyPeriodEnd = pickLatestMemberAccessEnd(data as Record<string, unknown>);
+          const legacyPastDueAccessEnd = pickPastDueAccessEnd(data as Record<string, unknown>);
           const authKey = authUidFromFanDocId(fanId) || fanId;
           const subMirror: Record<string, unknown> = {
             subscriptionStatus: typeof data.status === "string" ? data.status : null,
@@ -897,6 +909,9 @@ export const FanHubUsers: React.FC = () => {
             subMirror.subscriptionCurrentPeriodEnd = iso;
             subMirror.currentPeriodEnd = iso;
             subMirror.current_period_end = iso;
+          }
+          if (legacyPastDueAccessEnd && Number.isFinite(legacyPastDueAccessEnd.getTime())) {
+            subMirror.pastDueAccessEndsAt = legacyPastDueAccessEnd.toISOString();
           }
           const prev = subscriberMirrorByAuthUid.get(authKey);
           if (!prev) {
@@ -912,6 +927,11 @@ export const FanHubUsers: React.FC = () => {
                     subscriptionCurrentPeriodEnd: merged.accessEnd.toISOString(),
                     currentPeriodEnd: merged.accessEnd.toISOString(),
                     current_period_end: merged.accessEnd.toISOString(),
+                  }
+                : {}),
+              ...(merged.pastDueAccessEndsAt
+                ? {
+                    pastDueAccessEndsAt: merged.pastDueAccessEndsAt.toISOString(),
                   }
                 : {}),
             });
@@ -940,6 +960,7 @@ export const FanHubUsers: React.FC = () => {
               firstOrder: subscribedAt,
               cancelAtPeriodEnd: parseCancelAtPeriodEndFromDoc(data as Record<string, unknown>),
               subscriptionCurrentPeriodEnd: legacyPeriodEnd,
+              pastDueAccessEndsAt: legacyPastDueAccessEnd,
             });
           } else {
             const existing = userMap.get(fanId)!;
@@ -947,6 +968,7 @@ export const FanHubUsers: React.FC = () => {
               subscriptionStatus: typeof data.status === "string" ? data.status : null,
               cancelAtPeriodEnd: parseCancelAtPeriodEndFromDoc(data as Record<string, unknown>),
               subscriptionCurrentPeriodEnd: legacyPeriodEnd?.toISOString(),
+              pastDueAccessEndsAt: legacyPastDueAccessEnd?.toISOString(),
             };
             applyMergedSubscriptionToMapRow(existing, [
               mapRowToFanMirrorRecord(existing),
@@ -1255,12 +1277,14 @@ export const FanHubUsers: React.FC = () => {
             cancelAtPeriodEnd: cancelAtEnd,
             accessEnd: data.subscriptionCurrentPeriodEnd ?? null,
             canceledAt: data.canceledAt ?? null,
+            pastDueAccessEndsAt: data.pastDueAccessEndsAt ?? null,
           });
         let remainingAccess = formatRemainingAccessForFanRow({
           subscriptionStatus: data.subscriptionStatus,
           cancelAtPeriodEnd: cancelAtEnd,
           accessEnd: data.subscriptionCurrentPeriodEnd ?? null,
           canceledAt: data.canceledAt ?? null,
+          pastDueAccessEndsAt: data.pastDueAccessEndsAt ?? null,
           treatAsActiveMember,
         });
         /** "Inactive" is for members with no sub and stale activity — not staff rows (no subscriptionStatus is normal). */
@@ -1306,6 +1330,7 @@ export const FanHubUsers: React.FC = () => {
             cancelAtPeriodEnd: cancelAtEnd,
             accessEnd: data.subscriptionCurrentPeriodEnd ?? null,
             canceledAt: data.canceledAt ?? null,
+            pastDueAccessEndsAt: data.pastDueAccessEndsAt ?? null,
           });
         /** Badge: treat as scheduled cancel if flag is set OR remaining-access copy implies it (handles stale client reads). */
         const cancelScheduled =
@@ -1324,12 +1349,8 @@ export const FanHubUsers: React.FC = () => {
                 orderSumCents,
                 baselineCents,
               });
-        const signupDate =
-          earlierDate(earlierDate(data.subscribedAt, data.firstOrder), data.profileSignupAt ?? null) ??
-          data.subscribedAt ??
-          data.firstOrder ??
-          data.profileSignupAt ??
-          null;
+        const memberSignupDate = earlierDate(data.subscribedAt, data.firstOrder);
+        const signupDate = memberSignupDate ?? data.profileSignupAt ?? null;
         const authUid = authUidFromFanDocId(data.id);
         return {
           id: data.id,

@@ -5,7 +5,7 @@
  * subscription. A late `customer.subscription.deleted` for the failed sub must not
  * revoke access for the active subscription stored in Firestore.
  */
-import type { Firestore } from "firebase-admin/firestore";
+import { FieldValue, type Firestore } from "firebase-admin/firestore";
 import type Stripe from "stripe";
 import {
   getPlatformStripe,
@@ -13,12 +13,81 @@ import {
 } from "./_stripeConnect.js";
 import { reconcileFanHubFanPreferenceForMember } from "./_syncFanHubFanPreference.js";
 
+const FAN_HUB_PAST_DUE_GRACE_TIME_ZONE =
+  process.env.FAN_HUB_PAST_DUE_GRACE_TIME_ZONE || "America/New_York";
+
 function stripeRefId(
   value: string | Stripe.Customer | Stripe.Subscription | Stripe.DeletedCustomer | null | undefined,
 ): string {
   if (!value) return "";
   if (typeof value === "string") return value;
   return typeof value.id === "string" ? value.id : "";
+}
+
+function parseDateLike(value: unknown): Date | null {
+  if (value == null) return null;
+  if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : value;
+  if (typeof value === "number") {
+    const ms = value < 1e12 ? value * 1000 : value;
+    const d = new Date(ms);
+    return Number.isNaN(d.getTime()) ? null : d;
+  }
+  if (typeof value === "string") {
+    const d = new Date(value);
+    return Number.isNaN(d.getTime()) ? null : d;
+  }
+  if (typeof value === "object") {
+    const o = value as { toDate?: () => Date; seconds?: number; _seconds?: number };
+    if (typeof o.toDate === "function") {
+      try {
+        const d = o.toDate();
+        return d instanceof Date && !Number.isNaN(d.getTime()) ? d : null;
+      } catch {
+        /* ignore */
+      }
+    }
+    const sec = typeof o.seconds === "number" ? o.seconds : typeof o._seconds === "number" ? o._seconds : null;
+    if (sec != null && Number.isFinite(sec)) {
+      const d = new Date(sec * 1000);
+      return Number.isNaN(d.getTime()) ? null : d;
+    }
+  }
+  return null;
+}
+
+function timeZoneParts(date: Date, timeZone: string): { year: number; month: number; day: number } {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(date);
+  const get = (type: string) => Number(parts.find((p) => p.type === type)?.value || 0);
+  return { year: get("year"), month: get("month"), day: get("day") };
+}
+
+function timeZoneOffsetMs(date: Date, timeZone: string): number {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    hourCycle: "h23",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  }).formatToParts(date);
+  const get = (type: string) => Number(parts.find((p) => p.type === type)?.value || 0);
+  const asUtc = Date.UTC(get("year"), get("month") - 1, get("day"), get("hour"), get("minute"), get("second"));
+  return asUtc - date.getTime();
+}
+
+function nextMidnightInTimeZoneIso(now: Date, timeZone: string): string {
+  const { year, month, day } = timeZoneParts(now, timeZone);
+  const targetLocalAsUtc = Date.UTC(year, month - 1, day + 1, 0, 0, 0);
+  const firstPass = new Date(targetLocalAsUtc - timeZoneOffsetMs(new Date(targetLocalAsUtc), timeZone));
+  const secondPass = new Date(targetLocalAsUtc - timeZoneOffsetMs(firstPass, timeZone));
+  return secondPass.toISOString();
 }
 
 export async function fanHubStoredStripeSubscriptionId(
@@ -76,17 +145,42 @@ export async function applyFanHubSubscriptionFromStripe(
     : null;
   const cancelAtPeriodEnd = !!(subscription as { cancel_at_period_end?: boolean }).cancel_at_period_end;
   const periodEndMs = subscriptionCurrentPeriodEnd ? Date.parse(subscriptionCurrentPeriodEnd) : null;
-  const grantActive =
-    (subStatus === "active" || subStatus === "trialing") &&
-    (periodEndMs == null || !Number.isFinite(periodEndMs) || periodEndMs > Date.now());
 
   const subRef = db.collection("creatorSubscribers").doc(creatorId).collection("subscribers").doc(fanId);
+  const fanRef = db.collection("creators").doc(creatorId).collection("fans").doc(fanId);
+  const [subSnap, fanSnap] = await Promise.all([subRef.get(), fanRef.get()]);
+  const existingSub = subSnap.data() as Record<string, unknown> | undefined;
+  const existingFan = fanSnap.data() as Record<string, unknown> | undefined;
+  const existingPastDueAccessEnd =
+    parseDateLike(existingSub?.pastDueAccessEndsAt) ||
+    parseDateLike(existingFan?.pastDueAccessEndsAt);
+  const pastDueAccessEndsAt =
+    subStatus === "past_due"
+      ? (existingPastDueAccessEnd || parseDateLike(nextMidnightInTimeZoneIso(new Date(), FAN_HUB_PAST_DUE_GRACE_TIME_ZONE)))?.toISOString()
+      : null;
+  const pastDueAccessEndMs = pastDueAccessEndsAt ? Date.parse(pastDueAccessEndsAt) : null;
+  const grantActive =
+    ((subStatus === "active" || subStatus === "trialing") &&
+      (periodEndMs == null || !Number.isFinite(periodEndMs) || periodEndMs > Date.now())) ||
+    (subStatus === "past_due" &&
+      pastDueAccessEndMs != null &&
+      Number.isFinite(pastDueAccessEndMs) &&
+      pastDueAccessEndMs > Date.now());
   await subRef.set(
     {
       status: subStatus,
       stripeSubscriptionId: subscription.id,
       cancelAtPeriodEnd,
       currentPeriodEnd: subscriptionCurrentPeriodEnd,
+      ...(pastDueAccessEndsAt
+        ? {
+            pastDueAccessEndsAt,
+            pastDueSince: existingSub?.pastDueSince || now,
+          }
+        : {
+            pastDueAccessEndsAt: FieldValue.delete(),
+            pastDueSince: FieldValue.delete(),
+          }),
       updatedAt: now,
     },
     { merge: true },
@@ -101,14 +195,21 @@ export async function applyFanHubSubscriptionFromStripe(
   );
 
   const stripeCustomerId = stripeRefId(subscription.customer);
-  const fanRef = db.collection("creators").doc(creatorId).collection("fans").doc(fanId);
-  const fanSnap = await fanRef.get();
   if (fanSnap.exists) {
     const fanPatch: Record<string, unknown> = {
       subscriptionStatus: subStatus,
       cancelAtPeriodEnd,
       subscriptionCurrentPeriodEnd,
       stripeSubscriptionId: subscription.id,
+      ...(pastDueAccessEndsAt
+        ? {
+            pastDueAccessEndsAt,
+            pastDueSince: existingFan?.pastDueSince || now,
+          }
+        : {
+            pastDueAccessEndsAt: FieldValue.delete(),
+            pastDueSince: FieldValue.delete(),
+          }),
       updatedAt: now,
     };
     if (stripeCustomerId && stripeCustomerId.startsWith("cus_")) {

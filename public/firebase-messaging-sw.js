@@ -3,7 +3,14 @@ importScripts("https://www.gstatic.com/firebasejs/12.12.1/firebase-app-compat.js
 importScripts("https://www.gstatic.com/firebasejs/12.12.1/firebase-messaging-compat.js");
 
 /*__FIREBASE_MESSAGING_CONFIG__*/
-const FIREBASE_MESSAGING_CONFIG = null;
+const FIREBASE_MESSAGING_CONFIG = {
+  "apiKey": "AIzaSyDELlBoSYwj8SDMTbBEbrUtJo7F3z1VKHE",
+  "authDomain": "engageai-8f76f.firebaseapp.com",
+  "projectId": "engageai-8f76f",
+  "storageBucket": "engageai-8f76f.firebasestorage.app",
+  "messagingSenderId": "771601258972",
+  "appId": "1:771601258972:web:c3e71e2280b50b1954d719"
+};
 
 let messagingReady = false;
 let configLoadPromise = null;

@@ -277,7 +277,8 @@ type CustomDeliveryType = 'video' | 'image' | 'audio' | 'text' | 'link' | 'other
 
 export const OnlyFansFans: React.FC = () => {
     const { user, showToast } = useAppContext();
-    const creatorHandle = useCreatorHandle(user?.id);
+    const creatorId = auth.currentUser?.uid ?? user?.id ?? '';
+    const creatorHandle = useCreatorHandle(creatorId || undefined);
     const fanHubTab = usePremiumStudioTab();
     const [fans, setFans] = useState<Fan[]>([]);
     const [selectedFan, setSelectedFan] = useState<Fan | null>(null);
@@ -370,11 +371,11 @@ export const OnlyFansFans: React.FC = () => {
     };
 
     const saveCustomContentNote = async (itemId: string) => {
-        if (!user?.id || !selectedFan) return;
+        if (!creatorId || !selectedFan) return;
         setSavingCustomContentNoteId(itemId);
         try {
             const note = getCustomContentNote(itemId).trim();
-            const fanRef = doc(db, 'users', user.id, 'onlyfans_fan_preferences', selectedFan.id);
+            const fanRef = doc(db, 'users', creatorId, 'onlyfans_fan_preferences', selectedFan.id);
             if (note) {
                 await setDoc(
                     fanRef,
@@ -499,11 +500,11 @@ export const OnlyFansFans: React.FC = () => {
 
     // Calendar custom events + Fan Hub store product orders (same data as User Management / Purchases)
     const loadCustomContent = async (fanId: string, fanEmail?: string | null) => {
-        if (!user?.id) return;
+        if (!creatorId) return;
         setIsLoadingCustomContent(true);
-        const purchaseIdentity = await loadFanPurchaseIdentityForCard(fanId, fanEmail, user.id);
+        const purchaseIdentity = await loadFanPurchaseIdentityForCard(fanId, fanEmail, creatorId);
         try {
-            const eventsSnap = await getDocs(collection(db, 'users', user.id, 'onlyfans_calendar_events'));
+            const eventsSnap = await getDocs(collection(db, 'users', creatorId, 'onlyfans_calendar_events'));
             const calendarItems = eventsSnap.docs
                 .map((d) => {
                     const data = d.data();
@@ -640,7 +641,7 @@ export const OnlyFansFans: React.FC = () => {
             fansList: Fan[],
             prefetchedOrders?: Promise<{ orders?: Record<string, unknown>[] }>
         ) => {
-            if (!user?.id || fansList.length === 0) {
+            if (!creatorId || fansList.length === 0) {
                 setFanSpendSummaries({});
                 setFanSpendLoading(false);
                 return;
@@ -745,12 +746,12 @@ export const OnlyFansFans: React.FC = () => {
                 setFanSpendLoading(false);
             }
         },
-        [user?.id, creatorHandle]
+        [creatorId, creatorHandle]
     );
 
     // Load fans (enrich from users/{fanId} + creators/.../fans so labels match User Management / ab5360d rules)
     const loadFans = async () => {
-        if (!user?.id) return;
+        if (!creatorId) return;
         setIsLoading(true);
         const prefetchedOrdersJson = (async (): Promise<{ orders?: Record<string, unknown>[] }> => {
             const token = auth.currentUser ? await auth.currentUser.getIdToken() : null;
@@ -763,12 +764,12 @@ export const OnlyFansFans: React.FC = () => {
 
         try {
             const [fansSnap, creatorImageUrls] = await Promise.all([
-                getDocs(collection(db, 'users', user.id, 'onlyfans_fan_preferences')),
+                getDocs(collection(db, 'users', creatorId, 'onlyfans_fan_preferences')),
                 (async (): Promise<Set<string>> => {
                     try {
                         const [creatorUserSnap, creatorDocSnap] = await Promise.all([
-                            getDoc(doc(db, 'users', user.id)),
-                            getDoc(doc(db, 'creators', user.id)),
+                            getDoc(doc(db, 'users', creatorId)),
+                            getDoc(doc(db, 'creators', creatorId)),
                         ]);
                         return buildCreatorImageUrlSet(
                             creatorUserSnap.exists() ? (creatorUserSnap.data() as Record<string, unknown>) : undefined,
@@ -802,7 +803,7 @@ export const OnlyFansFans: React.FC = () => {
                         let hubMembershipExpired = false;
 
                         try {
-                            if (fanId !== user.id) {
+                            if (fanId !== creatorId) {
                                 const prefEmailNorm =
                                     typeof data.email === 'string' && data.email.trim()
                                         ? data.email.trim().toLowerCase()
@@ -838,7 +839,7 @@ export const OnlyFansFans: React.FC = () => {
                                 const emailsForFanQuery = [...emailNorms].filter(Boolean).slice(0, 10);
                                 if (emailsForFanQuery.length > 0) {
                                     try {
-                                        const fanColl = collection(db, 'creators', user.id, 'fans');
+                                        const fanColl = collection(db, 'creators', creatorId, 'fans');
                                         const mailSnap = await getDocs(
                                             query(fanColl, where('email', 'in', emailsForFanQuery), limit(20))
                                         );
@@ -851,7 +852,7 @@ export const OnlyFansFans: React.FC = () => {
                                 let fSnap: Awaited<ReturnType<typeof getDoc>> | null = null;
                                 const hubFanMirrorRows: Record<string, unknown>[] = [];
                                 const candSnaps = await Promise.all(
-                                    fanDocCandidates.map((cand) => getDoc(doc(db, 'creators', user.id, 'fans', cand)))
+                                    fanDocCandidates.map((cand) => getDoc(doc(db, 'creators', creatorId, 'fans', cand)))
                                 );
                                 for (const s of candSnaps) {
                                     if (!s.exists()) continue;
@@ -888,7 +889,7 @@ export const OnlyFansFans: React.FC = () => {
                                     if (fAv) {
                                         const cleaned = fanAvatarUrlOrUndefined(fAv, {
                                             fanAuthUid: fanId,
-                                            creatorId: user.id,
+                                            creatorId,
                                             creatorImageUrls,
                                         });
                                         if (cleaned) avatarUrl = cleaned;
@@ -924,7 +925,7 @@ export const OnlyFansFans: React.FC = () => {
                                     if (uAv) {
                                         const cleaned = fanAvatarUrlOrUndefined(uAv, {
                                             fanAuthUid: fanId,
-                                            creatorId: user.id,
+                                            creatorId,
                                             creatorImageUrls,
                                         });
                                         if (cleaned) avatarUrl = cleaned;
@@ -945,7 +946,7 @@ export const OnlyFansFans: React.FC = () => {
 
                         const resolvedAvatar = fanAvatarUrlOrUndefined(avatarUrl || prefAvatarRaw || null, {
                             fanAuthUid: fanId,
-                            creatorId: user.id,
+                            creatorId,
                             creatorImageUrls,
                         });
 
@@ -955,7 +956,7 @@ export const OnlyFansFans: React.FC = () => {
                             avatarUrl: resolvedAvatar,
                             hubMembershipExpired,
                             purchaseIdentity:
-                                user?.id && fanId !== user.id
+                                creatorId && fanId !== creatorId
                                     ? buildFanPurchaseIdentity({
                                           fanUid: fanId,
                                           prefEmail: typeof data.email === 'string' ? data.email : null,
@@ -1066,7 +1067,7 @@ export const OnlyFansFans: React.FC = () => {
 
     // Load session history from database
     const loadSessionHistory = async (fanId: string, forceExpand: boolean = false) => {
-        if (!user?.id) return;
+        if (!creatorId) return;
         
         // If already loaded, just toggle (unless forceExpand is true)
         if (sessionHistory[fanId] && !forceExpand) {
@@ -1077,7 +1078,7 @@ export const OnlyFansFans: React.FC = () => {
         setIsLoadingSessionHistory({ ...isLoadingSessionHistory, [fanId]: true });
         try {
             const sessionsSnap = await getDocs(query(
-                collection(db, 'users', user.id, 'onlyfans_sexting_sessions'),
+                collection(db, 'users', creatorId, 'onlyfans_sexting_sessions'),
                 where('fanId', '==', fanId),
                 orderBy('createdAt', 'desc'),
                 limit(15)
@@ -1111,19 +1112,19 @@ export const OnlyFansFans: React.FC = () => {
 
     // Delete session
     const handleDeleteSession = async (sessionId: string, fanId: string) => {
-        if (!user?.id) return;
+        if (!creatorId) return;
         
         if (!confirm('Are you sure you want to delete this session? This action cannot be undone.')) {
             return;
         }
 
         try {
-            await deleteDoc(doc(db, 'users', user.id, 'onlyfans_sexting_sessions', sessionId));
+            await deleteDoc(doc(db, 'users', creatorId, 'onlyfans_sexting_sessions', sessionId));
             
             // Find the fan to update their count
             const fan = fans.find(f => f.id === fanId);
             if (fan && fan.preferences.totalSessions && fan.preferences.totalSessions > 0) {
-                const fanRef = doc(db, 'users', user.id, 'onlyfans_fan_preferences', fanId);
+                const fanRef = doc(db, 'users', creatorId, 'onlyfans_fan_preferences', fanId);
                 await updateDoc(fanRef, {
                     totalSessions: fan.preferences.totalSessions - 1,
                 });
@@ -1145,7 +1146,7 @@ export const OnlyFansFans: React.FC = () => {
 
     // Load fan activity
     const loadFanActivity = async (fanId: string) => {
-        if (!user?.id) return;
+        if (!creatorId) return;
         try {
             const activities: FanActivity[] = [];
 
@@ -1166,7 +1167,7 @@ export const OnlyFansFans: React.FC = () => {
             // Load actual session history from onlyfans_sexting_sessions collection
             try {
                 const sessionsSnap = await getDocs(query(
-                    collection(db, 'users', user.id, 'onlyfans_sexting_sessions'),
+                    collection(db, 'users', creatorId, 'onlyfans_sexting_sessions'),
                     where('fanId', '==', fanId),
                     orderBy('createdAt', 'desc'),
                     limit(50)
@@ -1192,7 +1193,7 @@ export const OnlyFansFans: React.FC = () => {
             // Load from saved session plans
             try {
                 const sessionPlansSnap = await getDocs(query(
-                    collection(db, 'users', user.id, 'onlyfans_saved_session_plans'),
+                    collection(db, 'users', creatorId, 'onlyfans_saved_session_plans'),
                     orderBy('savedAt', 'desc'),
                     limit(100)
                 ));
@@ -1223,7 +1224,7 @@ export const OnlyFansFans: React.FC = () => {
 
     useEffect(() => {
         loadFans();
-    }, [user?.id]);
+    }, [creatorId]);
 
     useEffect(() => {
         if (selectedFan) {
@@ -1317,14 +1318,14 @@ export const OnlyFansFans: React.FC = () => {
     const handleDeleteFan = async (fanId: string, fanName: string, e: React.MouseEvent) => {
         e.stopPropagation(); // Prevent card selection when clicking delete
         
-        if (!user?.id) return;
+        if (!creatorId) return;
         
         if (!confirm(`Are you sure you want to delete ${fanName}? This action cannot be undone.`)) {
             return;
         }
 
         try {
-            await deleteDoc(doc(db, 'users', user.id, 'onlyfans_fan_preferences', fanId));
+            await deleteDoc(doc(db, 'users', creatorId, 'onlyfans_fan_preferences', fanId));
             showToast('Fan deleted successfully', 'success');
             
             // Clear selection if deleted fan was selected
@@ -1354,7 +1355,7 @@ export const OnlyFansFans: React.FC = () => {
 
     // Save scheduled session
     const handleSaveScheduledSession = async () => {
-        if (!user?.id || !sessionFan || !sessionDate || !sessionTime) {
+        if (!creatorId || !sessionFan || !sessionDate || !sessionTime) {
             showToast('Please fill in all required fields', 'error');
             return;
         }
@@ -1370,13 +1371,13 @@ export const OnlyFansFans: React.FC = () => {
                 reminderType: 'post' as const,
                 contentType: 'paid' as const,
                 createdAt: new Date().toISOString(),
-                userId: user.id,
+                userId: creatorId,
                 fanId: sessionFan.id,
                 fanName: sessionFan.name,
                 ...(sessionTime ? { reminderTime: sessionTime } : {}),
             };
 
-            await setDoc(doc(db, 'users', user.id, 'onlyfans_calendar_events', eventId), eventData);
+            await setDoc(doc(db, 'users', creatorId, 'onlyfans_calendar_events', eventId), eventData);
             showToast(`Session scheduled with ${sessionFan.name}!`, 'success');
             setShowScheduleSessionModal(false);
             setSessionFan(null);
@@ -1420,7 +1421,7 @@ export const OnlyFansFans: React.FC = () => {
 
     // Save edited fan
     const handleSaveEditedFan = async () => {
-        if (!user?.id || !editingFan || !newFanName.trim()) {
+        if (!creatorId || !editingFan || !newFanName.trim()) {
             showToast('Fan name is required', 'error');
             return;
         }
@@ -1467,7 +1468,7 @@ export const OnlyFansFans: React.FC = () => {
                 fanData.boundariesChecklist = newFanBoundariesChecklist;
             }
 
-            await setDoc(doc(db, 'users', user.id, 'onlyfans_fan_preferences', editingFan.id), fanData, { merge: true });
+            await setDoc(doc(db, 'users', creatorId, 'onlyfans_fan_preferences', editingFan.id), fanData, { merge: true });
             
             // Close modal and reset form first
             setShowEditFanModal(false);
@@ -1948,11 +1949,11 @@ export const OnlyFansFans: React.FC = () => {
                         <textarea
                             value={selectedFan.preferences.notes || ''}
                             onChange={async (e) => {
-                                if (!user?.id) return;
+                                if (!creatorId) return;
                                 const updatedNotes = e.target.value;
                                 try {
                                     await setDoc(
-                                        doc(db, 'users', user.id, 'onlyfans_fan_preferences', selectedFan.id),
+                                        doc(db, 'users', creatorId, 'onlyfans_fan_preferences', selectedFan.id),
                                         { notes: updatedNotes, updatedAt: Timestamp.now() },
                                         { merge: true }
                                     );
@@ -2122,9 +2123,9 @@ export const OnlyFansFans: React.FC = () => {
                                                 <div className="flex gap-2">
                                                     <button
                                                         onClick={async () => {
-                                                            if (!user?.id) return;
+                                                            if (!creatorId) return;
                                                             try {
-                                                                const eventRef = doc(db, 'users', user.id, 'onlyfans_calendar_events', item.id);
+                                                                const eventRef = doc(db, 'users', creatorId, 'onlyfans_calendar_events', item.id);
                                                                 await updateDoc(eventRef, {
                                                                     title: editCustomTitle,
                                                                     description: editCustomDescription,
@@ -2337,9 +2338,9 @@ export const OnlyFansFans: React.FC = () => {
                                                         </button>
                                                         <button
                                                             onClick={async () => {
-                                                                if (!user?.id || !confirm('Are you sure you want to delete this custom content?')) return;
+                                                                if (!creatorId || !confirm('Are you sure you want to delete this custom content?')) return;
                                                                 try {
-                                                                    await deleteDoc(doc(db, 'users', user.id, 'onlyfans_calendar_events', item.id));
+                                                                    await deleteDoc(doc(db, 'users', creatorId, 'onlyfans_calendar_events', item.id));
                                                                     await loadCustomContent(selectedFan.id, selectedFan.preferences.email ?? null);
                                                                     showToast?.('Custom content deleted', 'success');
                                                                 } catch (error) {
@@ -2787,7 +2788,7 @@ export const OnlyFansFans: React.FC = () => {
                                         return;
                                     }
 
-                                    if (!user?.id) {
+                                    if (!creatorId) {
                                         showToast?.('You must be logged in to add fans', 'error');
                                         return;
                                     }
@@ -2798,7 +2799,7 @@ export const OnlyFansFans: React.FC = () => {
                                         const fanId = newFanName.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
                                         
                                         // Check if fan already exists
-                                        const existingFanDoc = await getDoc(doc(db, 'users', user.id, 'onlyfans_fan_preferences', fanId));
+                                        const existingFanDoc = await getDoc(doc(db, 'users', creatorId, 'onlyfans_fan_preferences', fanId));
                                         if (existingFanDoc.exists()) {
                                             showToast?.('A fan with this name already exists', 'error');
                                             setIsSavingFan(false);
@@ -2842,7 +2843,7 @@ export const OnlyFansFans: React.FC = () => {
                                             fanData.boundariesChecklist = newFanBoundariesChecklist;
                                         }
 
-                                        await setDoc(doc(db, 'users', user.id, 'onlyfans_fan_preferences', fanId), fanData);
+                                        await setDoc(doc(db, 'users', creatorId, 'onlyfans_fan_preferences', fanId), fanData);
                                         
                                         // Clear form and close modal first
                                         setShowAddFanModal(false);
