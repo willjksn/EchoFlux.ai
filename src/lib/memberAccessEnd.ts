@@ -331,7 +331,7 @@ export function isHubMembershipAccessExpired(input: {
       input.pastDueAccessEndsAt && Number.isFinite(input.pastDueAccessEndsAt.getTime())
         ? input.pastDueAccessEndsAt.getTime()
         : null;
-    return pastDueEndMs != null ? pastDueEndMs <= now : false;
+    return pastDueEndMs != null ? pastDueEndMs <= now : true;
   }
 
   if (st === "canceled" || st === "cancelled") {

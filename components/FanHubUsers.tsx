@@ -212,7 +212,7 @@ function categoryFilterLabel(f: FanHubUsersCategoryFilter): string {
     admins: "Admins",
     members: "Members — active",
     members_ending_soon: "Members ending soon",
-    members_expired: "Members expired",
+    members_expired: "Members expired/restricted",
     tippers: "Tippers",
   };
   return labels[f];
@@ -1905,7 +1905,7 @@ export const FanHubUsers: React.FC = () => {
   );
   const filteredUsers = searchFiltered.filter((u) => fanMatchesUserCategory(u, userCategoryFilter));
 
-  // Group users by role; members split into active / expiring soon / expired access
+  // Group users by role; members split into active / expiring soon / expired or restricted access.
   const showAdminsSection = userCategoryFilter === "all" || userCategoryFilter === "admins";
   const showMembersActiveSection = userCategoryFilter === "all" || userCategoryFilter === "members";
   const showMembersExpiringSection =
@@ -2204,7 +2204,7 @@ export const FanHubUsers: React.FC = () => {
               <option value="admins">Admins</option>
               <option value="members">Members — active</option>
               <option value="members_ending_soon">Members ending soon</option>
-              <option value="members_expired">Members expired</option>
+              <option value="members_expired">Members expired/restricted</option>
               <option value="tippers">Tippers</option>
             </select>
           </div>
@@ -2375,11 +2375,11 @@ export const FanHubUsers: React.FC = () => {
                   </>
                 )}
 
-                {/* Members — expired access (billing period ended) */}
+                {/* Members — expired/restricted access (billing period ended or past-due grace elapsed) */}
                 {showMembersExpiredSection && membersExpired.length > 0 && (
                   <>
                     <SectionHeader
-                      title="Members — expired"
+                      title="Members — expired/restricted"
                       count={membersExpired.length}
                       collapsible
                       collapsed={expiredMembersCollapsed}
