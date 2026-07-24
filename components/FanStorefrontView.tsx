@@ -95,7 +95,9 @@ import {
 } from "../src/lib/browserMediaRecording";
 import { AudioLevelMeter } from "./AudioLevelMeter";
 import { RecordingDurationLabel } from "./RecordingDurationLabel";
+import { formatRecordingClock } from "../src/hooks/useRecordingElapsed";
 import { DmMessageAttachmentStack } from "./DmMessageAttachmentStack";
+import { DmAudioPlayer } from "./DmAudioPlayer";
 import { inferIsVideoFromUrl } from "../src/lib/mediaUrlInfer";
 import { fetchCreatorFanPostMedia } from "../src/lib/fetchCreatorFanPostMedia";
 import { isProtectedLockedMediaUrl } from "../src/lib/lockedPostMedia";
@@ -1531,6 +1533,9 @@ export const FanStorefrontView: React.FC = () => {
   const [dmRecordingVoice, setDmRecordingVoice] = useState(false);
   const [dmVoiceMeterStream, setDmVoiceMeterStream] = useState<MediaStream | null>(null);
   const [dmVoiceMeterKey, setDmVoiceMeterKey] = useState(0);
+  const dmVoiceRecordStartedAtRef = useRef(0);
+  /** Recorded length per staged voice URL — MediaRecorder blobs often report Infinity duration. */
+  const [dmPendingVoiceSeconds, setDmPendingVoiceSeconds] = useState<Record<string, number>>({});
   const [fanBanned, setFanBanned] = useState(false);
   const profileMenuRef = useRef<HTMLDivElement | null>(null);
   const [profileDraft, setProfileDraft] = useState<{
@@ -4328,6 +4333,14 @@ export const FanStorefrontView: React.FC = () => {
   };
 
   const removeDmPendingAttachmentAt = (index: number) => {
+    const removed = dmPendingAttachments[index];
+    if (removed?.type === "audio") {
+      setDmPendingVoiceSeconds((secs) => {
+        const next = { ...secs };
+        delete next[removed.url];
+        return next;
+      });
+    }
     setDmPendingAttachments((prev) => prev.filter((_, i) => i !== index));
   };
 
@@ -4398,6 +4411,10 @@ export const FanStorefrontView: React.FC = () => {
         dmMediaRecorderRef.current = null;
         const chunks = dmMediaChunksRef.current;
         dmMediaChunksRef.current = [];
+        const recordedSeconds = Math.max(
+          1,
+          Math.round((Date.now() - dmVoiceRecordStartedAtRef.current) / 1000),
+        );
         const uid = auth.currentUser?.uid;
         if (!chunks.length || !uid) return;
         const blobType = effectiveBlobType(rec, requestedMime);
@@ -4408,6 +4425,7 @@ export const FanStorefrontView: React.FC = () => {
         const file = new File([blob], `voice-${Date.now()}.${ext}`, { type: fileType });
         try {
           const { url } = await uploadFanDmAttachment(uid, file);
+          setDmPendingVoiceSeconds((secs) => ({ ...secs, [url]: recordedSeconds }));
           setDmPendingAttachments((prev) => {
             if (prev.length >= DM_MAX_ATTACHMENTS_PER_MESSAGE) {
               showToast?.(`Max ${DM_MAX_ATTACHMENTS_PER_MESSAGE} attachments per message.`, "info");
@@ -4420,6 +4438,7 @@ export const FanStorefrontView: React.FC = () => {
         }
       };
       dmMediaRecorderRef.current = rec;
+      dmVoiceRecordStartedAtRef.current = Date.now();
       rec.start(AUDIO_RECORDER_TIMESLICE_MS);
       setDmRecordingVoice(true);
     } catch {
@@ -4430,6 +4449,13 @@ export const FanStorefrontView: React.FC = () => {
   const toggleDmVoice = () => {
     if (dmRecordingVoice) stopDmRecording();
     else void startDmVoiceRecording();
+  };
+
+  /** Discard a staged voice note and immediately start a fresh recording. */
+  const reRecordDmPendingVoiceAt = (index: number) => {
+    if (dmRecordingVoice || dmPendingAttachmentUploading) return;
+    removeDmPendingAttachmentAt(index);
+    void startDmVoiceRecording();
   };
 
   /* Neutral theme defaults - creators should customize */
@@ -6370,7 +6396,11 @@ export const FanStorefrontView: React.FC = () => {
                     <div className="fan-member-messages-compose-wrap">
                       {dmRecordingVoice && dmVoiceMeterStream ? (
                         <div className="w-full space-y-1">
-                          <RecordingDurationLabel active={dmRecordingVoice} />
+                          <div className="fh-dm-recording-status">
+                            <span className="fh-dm-recording-status__dot" aria-hidden />
+                            <span className="fh-dm-recording-status__text">Recording</span>
+                            <RecordingDurationLabel active={dmRecordingVoice} />
+                          </div>
                           <AudioLevelMeter key={`dm-fan-voice-${dmVoiceMeterKey}`} stream={dmVoiceMeterStream} barColor={primary} />
                         </div>
                       ) : null}
@@ -6401,14 +6431,27 @@ export const FanStorefrontView: React.FC = () => {
                                     {...storefrontVideoDownloadGuardProps}
                                   />
                                 ) : (
-                                  <div className="fh-dm-pending-attach__voice-label">
-                                    <span className="fh-dm-pending-attach__voice-icon" aria-hidden>
-                                      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2">
-                                        <path d="M12 14a3 3 0 0 0 3-3V5a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3z" />
-                                        <path d="M19 10v1a7 7 0 0 1-14 0v-1" />
-                                      </svg>
-                                    </span>
-                                    Voice
+                                  <div className="fh-dm-pending-attach__voice">
+                                    <DmAudioPlayer
+                                      src={a.url}
+                                      variant="voiceNote"
+                                      className="fh-dm-pending-attach__voice-player"
+                                    />
+                                    <div className="fh-dm-pending-attach__voice-meta">
+                                      {dmPendingVoiceSeconds[a.url] ? (
+                                        <span className="fh-dm-pending-attach__voice-time">
+                                          {formatRecordingClock(dmPendingVoiceSeconds[a.url])}
+                                        </span>
+                                      ) : null}
+                                      <button
+                                        type="button"
+                                        className="fh-dm-pending-attach__rerecord"
+                                        onClick={() => reRecordDmPendingVoiceAt(idx)}
+                                        disabled={dmSending || dmRecordingVoice || dmPendingAttachmentUploading}
+                                      >
+                                        Re-record
+                                      </button>
+                                    </div>
                                   </div>
                                 )}
                                 <button

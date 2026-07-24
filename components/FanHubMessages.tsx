@@ -34,6 +34,7 @@ import {
 } from "../src/lib/browserMediaRecording";
 import { AudioLevelMeter } from "./AudioLevelMeter";
 import { RecordingDurationLabel } from "./RecordingDurationLabel";
+import { formatRecordingClock } from "../src/hooks/useRecordingElapsed";
 import { DmAudioPlayer } from "./DmAudioPlayer";
 import { usePremiumStudioTab } from "./PremiumStudioLayout";
 import { renderTextWithCustomEmoji, type SjHeartEmojiAccessContext } from "../src/lib/customEmoji";
@@ -265,6 +266,9 @@ export const FanHubMessages: React.FC = () => {
   const [isRecordingVoice, setIsRecordingVoice] = useState(false);
   const [voiceMeterStream, setVoiceMeterStream] = useState<MediaStream | null>(null);
   const [voiceMeterKey, setVoiceMeterKey] = useState(0);
+  const voiceRecordStartedAtRef = useRef(0);
+  /** Recorded length per staged voice URL — MediaRecorder blobs often report Infinity duration. */
+  const [pendingVoiceSeconds, setPendingVoiceSeconds] = useState<Record<string, number>>({});
   const [threadRowMenuOpenId, setThreadRowMenuOpenId] = useState<string | null>(null);
   const [inboxActionThreadId, setInboxActionThreadId] = useState<string | null>(null);
   /** Firestore `creators/{id}` — Auth `user` often lacks displayName for bubble headers. */
@@ -827,6 +831,14 @@ export const FanHubMessages: React.FC = () => {
   };
 
   const removePendingAttachmentAt = (index: number) => {
+    const removed = pendingAttachments[index];
+    if (removed?.type === "audio") {
+      setPendingVoiceSeconds((secs) => {
+        const next = { ...secs };
+        delete next[removed.url];
+        return next;
+      });
+    }
     setPendingAttachments((prev) => prev.filter((_, i) => i !== index));
   };
 
@@ -898,6 +910,10 @@ export const FanHubMessages: React.FC = () => {
         mediaRecorderRef.current = null;
         const chunks = mediaChunksRef.current;
         mediaChunksRef.current = [];
+        const recordedSeconds = Math.max(
+          1,
+          Math.round((Date.now() - voiceRecordStartedAtRef.current) / 1000),
+        );
         if (!chunks.length || !creatorId || !selectedThread) return;
         const blobType = effectiveBlobType(rec, requestedMime);
         const blob = new Blob(chunks, { type: blobType });
@@ -910,6 +926,7 @@ export const FanHubMessages: React.FC = () => {
         const file = new File([blob], `voice-${Date.now()}.${ext}`, { type: fileType });
         try {
           const { url } = await uploadFanDmAttachment(creatorId, file);
+          setPendingVoiceSeconds((secs) => ({ ...secs, [url]: recordedSeconds }));
           setPendingAttachments((prev) => {
             if (prev.length >= DM_MAX_ATTACHMENTS_PER_MESSAGE) {
               showToast?.(`Max ${DM_MAX_ATTACHMENTS_PER_MESSAGE} attachments per message.`, "info");
@@ -922,6 +939,7 @@ export const FanHubMessages: React.FC = () => {
         }
       };
       mediaRecorderRef.current = rec;
+      voiceRecordStartedAtRef.current = Date.now();
       rec.start(AUDIO_RECORDER_TIMESLICE_MS);
       setIsRecordingVoice(true);
     } catch {
@@ -933,6 +951,13 @@ export const FanHubMessages: React.FC = () => {
   const toggleVoiceRecording = () => {
     if (isRecordingVoice) stopRecordingAndSend();
     else void startVoiceRecording();
+  };
+
+  /** Discard a staged voice note and immediately start a fresh recording. */
+  const reRecordPendingVoiceAt = (index: number) => {
+    if (isRecordingVoice || pendingAttachmentUploading) return;
+    removePendingAttachmentAt(index);
+    void startVoiceRecording();
   };
 
   const openFanOnFansTab = async () => {
@@ -1613,7 +1638,11 @@ export const FanHubMessages: React.FC = () => {
               <div className="fh-dm-thread-compose p-4 border-t border-gray-200 dark:border-gray-700 space-y-2 shrink-0">
                 {isRecordingVoice && voiceMeterStream ? (
                   <div className="space-y-1 w-full max-w-md">
-                    <RecordingDurationLabel active={isRecordingVoice} />
+                    <div className="fh-dm-recording-status">
+                      <span className="fh-dm-recording-status__dot" aria-hidden />
+                      <span className="fh-dm-recording-status__text">Recording</span>
+                      <RecordingDurationLabel active={isRecordingVoice} />
+                    </div>
                     <AudioLevelMeter key={`dm-creator-voice-${voiceMeterKey}`} stream={voiceMeterStream} className="w-full max-w-md" />
                   </div>
                 ) : null}
@@ -1630,14 +1659,27 @@ export const FanHubMessages: React.FC = () => {
                           ) : a.type === "video" ? (
                             <video src={a.url} className="fh-dm-pending-attach__thumb" muted playsInline />
                           ) : (
-                            <div className="fh-dm-pending-attach__voice-label px-2 py-1">
-                              <span className="fh-dm-pending-attach__voice-icon" aria-hidden>
-                                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2">
-                                  <path d="M12 14a3 3 0 0 0 3-3V5a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3z" />
-                                  <path d="M19 10v1a7 7 0 0 1-14 0v-1" />
-                                </svg>
-                              </span>
-                              Voice
+                            <div className="fh-dm-pending-attach__voice">
+                              <DmAudioPlayer
+                                src={a.url}
+                                variant="voiceNote"
+                                className="fh-dm-pending-attach__voice-player"
+                              />
+                              <div className="fh-dm-pending-attach__voice-meta">
+                                {pendingVoiceSeconds[a.url] ? (
+                                  <span className="fh-dm-pending-attach__voice-time">
+                                    {formatRecordingClock(pendingVoiceSeconds[a.url])}
+                                  </span>
+                                ) : null}
+                                <button
+                                  type="button"
+                                  className="fh-dm-pending-attach__rerecord"
+                                  onClick={() => reRecordPendingVoiceAt(idx)}
+                                  disabled={sending || isRecordingVoice || pendingAttachmentUploading}
+                                >
+                                  Re-record
+                                </button>
+                              </div>
                             </div>
                           )}
                           <button
